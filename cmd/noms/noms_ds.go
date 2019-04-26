@@ -34,10 +34,10 @@ func setupDsFlags() *flag.FlagSet {
 	return dsFlagSet
 }
 
-func runDs(args []string) int {
+func runDs(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	if toDelete != "" {
-		db, set, err := cfg.GetDataset(context.Background(), toDelete)
+		db, set, err := cfg.GetDataset(ctx, toDelete)
 		d.CheckError(err)
 		defer db.Close()
 
@@ -46,7 +46,7 @@ func runDs(args []string) int {
 			d.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
 
-		_, err = set.Database().Delete(context.Background(), set)
+		_, err = set.Database().Delete(ctx, set)
 		d.CheckError(err)
 
 		fmt.Printf("Deleted %v (was #%v)\n", toDelete, oldCommitRef.TargetHash().String())
@@ -55,11 +55,11 @@ func runDs(args []string) int {
 		if len(args) >= 1 {
 			dbSpec = args[0]
 		}
-		store, err := cfg.GetDatabase(context.Background(), dbSpec)
+		store, err := cfg.GetDatabase(ctx, dbSpec)
 		d.CheckError(err)
 		defer store.Close()
 
-		store.Datasets(context.Background()).IterAll(context.Background(), func(k, v types.Value) {
+		store.Datasets(ctx).IterAll(ctx, func(k, v types.Value) {
 			fmt.Println(k)
 		})
 	}

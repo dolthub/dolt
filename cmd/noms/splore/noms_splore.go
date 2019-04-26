@@ -56,7 +56,7 @@ type nodeChild struct {
 	Value nodeInfo `json:"value"`
 }
 
-func Cmd(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
+func Cmd(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
 	splore := noms.Command("splore", `Interactively explore a Noms database using a web browser.
 See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the path argument.
 `)
@@ -64,40 +64,40 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 	browser := splore.Flag("browser", "Immediately open a web browser.").Short('b').Bool()
 	spec := splore.Arg("database or path", "The noms database or path to splore.").Required().String()
 	return splore, func(input string) (exitCode int) {
-		return run(&http.ServeMux{}, *port, *browser, *spec)
+		return run(ctx, &http.ServeMux{}, *port, *browser, *spec)
 	}
 }
 
-func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
+func run(ctx context.Context, mux *http.ServeMux, port int, browser bool, spStr string) int {
 	var sp spec.Spec
 	var getValue func() types.Value
 
 	cfg := config.NewResolver()
 	if pathSp, err := spec.ForPath(cfg.ResolvePathSpec(spStr)); err == nil {
 		sp = pathSp
-		getValue = func() types.Value { return sp.GetValue(context.Background()) }
+		getValue = func() types.Value { return sp.GetValue(ctx) }
 	} else if dbSp, err := spec.ForDatabase(cfg.ResolveDbSpec(spStr)); err == nil {
 		sp = dbSp
-		getValue = func() types.Value { return sp.GetDatabase(context.Background()).Datasets(context.Background()) }
+		getValue = func() types.Value { return sp.GetDatabase(ctx).Datasets(ctx) }
 	} else {
 		d.CheckError(fmt.Errorf("Not a path or database: %s", spStr))
 	}
 
 	defer sp.Close()
 
-	req := func(w http.ResponseWriter, contentType string) {
-		sp.GetDatabase(context.Background()).Rebase(context.Background())
+	req := func(ctx context.Context, w http.ResponseWriter, contentType string) {
+		sp.GetDatabase(ctx).Rebase(ctx)
 		w.Header().Add("Content-Type", contentType)
 		w.Header().Add("Cache-Control", "max-age=0,no-cache")
 	}
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		req(w, "text/html")
+		req(r.Context(), w, "text/html")
 		fmt.Fprintf(w, indexHtml, sp.String())
 	})
 
 	mux.HandleFunc("/out.js", func(w http.ResponseWriter, r *http.Request) {
-		req(w, "application/javascript")
+		req(r.Context(), w, "application/javascript")
 		// To develop JS, uncomment this line and run `yarn start`:
 		//http.ServeFile(w, r, "splore/out.js")
 		// To build noms-splore. uncomment this line and run `yarn buildgo`:
@@ -105,7 +105,7 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 	})
 
 	mux.HandleFunc("/getNode", func(w http.ResponseWriter, r *http.Request) {
-		req(w, "application/json")
+		req(r.Context(), w, "application/json")
 		r.ParseForm()
 		id := r.Form.Get("id")
 
@@ -116,10 +116,10 @@ func run(mux *http.ServeMux, port int, browser bool, spStr string) int {
 		case id[0] == '#':
 			abspath, err := spec.NewAbsolutePath(id)
 			d.PanicIfError(err)
-			v = abspath.Resolve(r.Context(), sp.GetDatabase(context.Background()))
+			v = abspath.Resolve(r.Context(), sp.GetDatabase(r.Context()))
 		default:
 			path := types.MustParsePath(id)
-			v = path.Resolve(r.Context(), getValue(), sp.GetDatabase(context.Background()))
+			v = path.Resolve(r.Context(), getValue(), sp.GetDatabase(r.Context()))
 		}
 
 		if v == nil {

@@ -40,13 +40,13 @@ func setupServeFlags() *flag.FlagSet {
 	return serveFlagSet
 }
 
-func runServe(args []string) int {
+func runServe(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	db := ""
 	if len(args) > 0 {
 		db = args[0]
 	}
-	cs, err := cfg.GetChunkStore(context.Background(), db)
+	cs, err := cfg.GetChunkStore(ctx, db)
 	d.CheckError(err)
 	server := datas.NewRemoteDatabaseServer(cs, port)
 

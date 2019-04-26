@@ -20,10 +20,10 @@ import (
 	humanize "github.com/dustin/go-humanize"
 )
 
-func nomsBlobGet(ds string, filePath string) int {
+func nomsBlobGet(ctx context.Context, ds string, filePath string) int {
 	cfg := config.NewResolver()
 	var blob types.Blob
-	if db, val, err := cfg.GetPath(context.Background(), ds); err != nil {
+	if db, val, err := cfg.GetPath(ctx, ds); err != nil {
 		d.CheckErrorNoUsage(err)
 	} else if val == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at %s", ds))
@@ -37,7 +37,7 @@ func nomsBlobGet(ds string, filePath string) int {
 	defer profile.MaybeStartProfile().Stop()
 
 	if filePath == "" {
-		blob.Copy(context.Background(), os.Stdout)
+		blob.Copy(ctx, os.Stdout)
 		return 0
 	}
 
@@ -53,7 +53,7 @@ func nomsBlobGet(ds string, filePath string) int {
 	preader, pwriter := io.Pipe()
 
 	go func() {
-		blob.Copy(context.Background(), pwriter)
+		blob.Copy(ctx, pwriter)
 		pwriter.Close()
 	}()
 

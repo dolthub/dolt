@@ -4,7 +4,10 @@
 
 package util
 
-import "github.com/attic-labs/kingpin"
+import (
+	"context"
+	"github.com/attic-labs/kingpin"
+)
 
 type KingpinHandler func(input string) (exitCode int)
-type KingpinCommand func(*kingpin.Application) (*kingpin.CmdClause, KingpinHandler)
+type KingpinCommand func(context.Context, *kingpin.Application) (*kingpin.CmdClause, KingpinHandler)

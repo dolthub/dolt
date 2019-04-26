@@ -39,9 +39,9 @@ func setupCommitFlags() *flag.FlagSet {
 	return commitFlagSet
 }
 
-func runCommit(args []string) int {
+func runCommit(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(context.Background(), args[len(args)-1])
+	db, ds, err := cfg.GetDataset(ctx, args[len(args)-1])
 	d.CheckError(err)
 	defer db.Close()
 
@@ -56,7 +56,7 @@ func runCommit(args []string) int {
 	absPath, err := spec.NewAbsolutePath(path)
 	d.CheckError(err)
 
-	value := absPath.Resolve(context.Background(), db)
+	value := absPath.Resolve(ctx, db)
 	if value == nil {
 		d.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}
@@ -70,10 +70,10 @@ func runCommit(args []string) int {
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(context.Background(), db, "", "", nil, nil)
+	meta, err := spec.CreateCommitMetaStruct(ctx, db, "", "", nil, nil)
 	d.CheckErrorNoUsage(err)
 
-	ds, err = db.Commit(context.Background(), ds, value, datas.CommitOptions{Meta: meta})
+	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})
 	d.CheckErrorNoUsage(err)
 
 	if oldCommitExists {
