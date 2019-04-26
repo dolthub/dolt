@@ -98,7 +98,7 @@ func readSchema(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (types.Value,
 		return nil, errhand.BuildDError("Invalid schema does not have a primary key.").Build()
 	}
 
-	schVal, err := encoding.MarshalAsNomsValue(dEnv.DoltDB.ValueReadWriter(), sch)
+	schVal, err := encoding.MarshalAsNomsValue(context.TODO(), dEnv.DoltDB.ValueReadWriter(), sch)
 
 	if err != nil {
 		//I dont really understand the cases where this would happen.

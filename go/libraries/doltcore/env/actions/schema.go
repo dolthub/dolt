@@ -43,7 +43,7 @@ func RenameColumnOfSchema(ctx context.Context, oldName string, newName string, t
 	newSch := schema.SchemaFromCols(colColl)
 
 	vrw := doltDB.ValueReadWriter()
-	schemaVal, err := encoding.MarshalAsNomsValue(vrw, newSch)
+	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSch)
 
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func RemoveColumnFromTable(ctx context.Context, colName string, tbl *doltdb.Tabl
 	newSch := schema.SchemaFromCols(colColl)
 
 	vrw := doltDB.ValueReadWriter()
-	schemaVal, err := encoding.MarshalAsNomsValue(vrw, newSch)
+	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSch)
 
 	if err != nil {
 		return nil, err
