@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/attic-labs/noms/go/util/sizecache"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
 )
@@ -223,12 +225,12 @@ type failingFakeS3 struct {
 	numSuccesses int
 }
 
-func (m *failingFakeS3) UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOutput, error) {
+func (m *failingFakeS3) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.numSuccesses > 0 {
 		m.numSuccesses--
-		return m.fakeS3.UploadPart(input)
+		return m.fakeS3.UploadPartWithContext(ctx, input)
 	}
 	return nil, mockAWSError("MalformedXML")
 }

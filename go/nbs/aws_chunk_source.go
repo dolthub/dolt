@@ -36,7 +36,7 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 		size := indexSize(chunkCount) + footerSize
 		buff := make([]byte, size)
 
-		n, err := s3.ReadFromEnd(name, buff, stats)
+		n, err := s3.ReadFromEnd(ctx, name, buff, stats)
 		d.PanicIfError(err)
 		d.PanicIfFalse(size == uint64(n))
 		return buff, &s3TableReaderAt{s3: s3, h: name}
