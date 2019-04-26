@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/gizak/termui/v3"
@@ -23,7 +24,7 @@ func rowToUiPos(n int) int {
 	return (n * 2) + 3
 }
 
-type KBInput func(termui.Event) (exit, render, releaseFocus bool)
+type KBInput func(context.Context, termui.Event) (exit, render, releaseFocus bool)
 
 func getHeaders(sch schema.Schema) ([]string, []uint64) {
 	pkCols := sch.GetPKCols()
@@ -58,7 +59,7 @@ type Dim struct {
 	inFocus KBInput
 }
 
-func New(sch schema.Schema, rowData types.Map) *Dim {
+func New(ctx context.Context, sch schema.Schema, rowData types.Map) *Dim {
 	toUntypedMapping := rowconv.TypedToUntypedMapping(sch)
 	toUntyped, err := rowconv.NewRowConverter(toUntypedMapping)
 
@@ -73,7 +74,7 @@ func New(sch schema.Schema, rowData types.Map) *Dim {
 		panic(err)
 	}
 
-	dw := NewDataWindow(1, rowData, toUntyped, toTyped)
+	dw := NewDataWindow(ctx, 1, rowData, toUntyped, toTyped)
 	tr := NewRenderer(dw, sch)
 	re := NewRowEditor(tr.dw.dimRows[0], 0, 0, 0)
 
@@ -83,7 +84,7 @@ func New(sch schema.Schema, rowData types.Map) *Dim {
 	return dim
 }
 
-func (dim *Dim) Run() types.Map {
+func (dim *Dim) Run(ctx context.Context) types.Map {
 	if err := termui.Init(); err != nil {
 		log.Fatalf("failed to initialize termui: %v\n", err)
 	}
@@ -92,14 +93,14 @@ func (dim *Dim) Run() types.Map {
 
 	termui.Theme.Table.Text = termui.NewStyle(termui.ColorBlack, termui.ColorBlack)
 
-	dim.eventLoop()
+	dim.eventLoop(ctx)
 
 	return dim.dw.data
 }
 
-func (dim *Dim) eventLoop() {
+func (dim *Dim) eventLoop(ctx context.Context) {
 	width, height := termui.TerminalDimensions()
-	dim.dw.Resize(uiWinHeightToRowCount(height), 0)
+	dim.dw.Resize(ctx, uiWinHeightToRowCount(height), 0)
 	dim.re.Resize(rowToUiPos(0), height-1)
 
 	shouldRender := true
@@ -126,7 +127,7 @@ func (dim *Dim) eventLoop() {
 			width = newSize.Width
 			height = newSize.Height
 
-			dim.selRow = dim.dw.Resize(uiWinHeightToRowCount(height), dim.selRow)
+			dim.selRow = dim.dw.Resize(ctx, uiWinHeightToRowCount(height), dim.selRow)
 			dim.re.Resize(rowToUiPos(dim.selRow), height-1)
 
 			shouldRender = true
@@ -134,7 +135,7 @@ func (dim *Dim) eventLoop() {
 
 		} else if e.Type == termui.KeyboardEvent {
 			var releaseFocus bool
-			exit, shouldRender, releaseFocus = dim.inFocus(e)
+			exit, shouldRender, releaseFocus = dim.inFocus(ctx, e)
 
 			if releaseFocus {
 				dim.inFocus = dim.AppInput
@@ -143,13 +144,13 @@ func (dim *Dim) eventLoop() {
 	}
 }
 
-func (dim *Dim) AppInput(e termui.Event) (exit, render, releaseFocus bool) {
+func (dim *Dim) AppInput(ctx context.Context, e termui.Event) (exit, render, releaseFocus bool) {
 	switch e.ID {
 	case "k", "<Up>":
 		dim.PrevRow()
 		return false, true, false
 	case "j", "<Down>":
-		dim.NextRow()
+		dim.NextRow(ctx)
 		return false, true, false
 	case "l", "<Right>":
 		if dim.selCol+1 < len(dim.tr.headers) {
@@ -184,10 +185,10 @@ func (dim *Dim) AppInput(e termui.Event) (exit, render, releaseFocus bool) {
 	return false, false, false
 }
 
-func (dim *Dim) NextRow() {
+func (dim *Dim) NextRow(ctx context.Context) {
 	dim.updateDWFromRE()
 	if dim.dw.CanMoveDown() && dim.selRow == dim.dw.Size()/2 {
-		dim.dw.MoveDown()
+		dim.dw.MoveDown(ctx)
 		dim.changeSelectedRow()
 	} else if dim.selRow < dim.dw.Size()-1 && dim.selRow < len(dim.dw.dimRows)-1 {
 		dim.selRow++
@@ -223,8 +224,8 @@ func (dim *Dim) changeSelectedRow() {
 	dim.re = NewRowEditor(dr, rowToUiPos(dim.selRow), height-1, dim.selCol)
 }
 
-func (dim *Dim) FlushEdits() {
-	dim.dw.FlushEdits()
+func (dim *Dim) FlushEdits(ctx context.Context) {
+	dim.dw.FlushEdits(ctx)
 }
 
 func (dim *Dim) HasEdits() bool {
