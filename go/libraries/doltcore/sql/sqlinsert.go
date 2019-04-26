@@ -157,7 +157,7 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 		column := columns[i]
 		switch val := expr.(type) {
 		case *sqlparser.SQLVal:
-			nomsVal, err := extractNomsValueFromSQLVal(val, column)
+			nomsVal, err := extractNomsValueFromSQLVal(val, column.Kind)
 			if err != nil {
 				return nil, err
 			}

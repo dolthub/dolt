@@ -216,7 +216,7 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 					}
 				} else {
 					var err error
-					tableName, tableSch, err = findSchemaForColumn(colName, selectStmt)
+					tableName, tableSch, err = findSchemaForColumn(colName, selectStmt.inputSchemas)
 					if err != nil {
 						return err
 					}
@@ -244,31 +244,6 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 	return nil
 }
 
-// Finds the schema that contains the column name given among the tables given. Returns an error if no schema contains
-// such a column name, or if multiple do. This method is only used for naked column names, not qualified ones. Assumes
-// that table names have already been verified to exist.
-func findSchemaForColumn(colName string, statement *SelectStatement) (string, schema.Schema, error) {
-	schemas := statement.inputSchemas
-
-	var colSchema schema.Schema
-	var tableName string
-	for tbl, sch := range schemas {
-		if _, ok := sch.GetAllCols().GetByName(colName); ok {
-			if colSchema != nil {
-				return "", nil, errFmt("Ambiguous column: %v", colName)
-			}
-			colSchema = sch
-			tableName = tbl
-		}
-	}
-
-	if colSchema == nil {
-		return "", nil, errFmt("Unknown column '%v'", colName)
-	}
-
-	return tableName, colSchema, nil
-}
-
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
 func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
 	tbl, _:= root.GetTable(tableName)
@@ -278,14 +253,7 @@ func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
 // Processes the where clause by applying an appropriate filter fn to the SelectStatement given. Returns an error if the
 // where clause can't be processed.
 func processWhereClause(selectStmt *SelectStatement, s *sqlparser.Select) error {
-	// TODO: make work for more than 1 table
-	var tableSch schema.Schema
-	for _, sch := range selectStmt.inputSchemas {
-		tableSch = sch
-		break
-	}
-
-	filter, err := createFilterForWhere(s.Where, tableSch, selectStmt.aliases)
+	filter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases)
 	if err != nil {
 		return err
 	}
@@ -340,7 +308,8 @@ func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeli
 	}
 
 	results := make([]resultset.TableResult, 0)
-	for tableName, result := range pipelines {
+	for _, tableName := range statement.inputTables {
+		result := pipelines[tableName]
 		if err := result.p.Wait(); err != nil || result.err != nil {
 			return nil, err
 		}
@@ -402,7 +371,6 @@ func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.R
 // Returns a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
 // from the individual table schemas.
 func createResultSetSchema(statement *SelectStatement) error {
-
 	// Iterate over the columns twice: first to get an ordered list to use to create an output schema with
 	cols := make([]schema.Column, 0, len(statement.selectedCols))
 	for _, selectedCol := range statement.selectedCols {

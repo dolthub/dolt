@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/xwb1989/sqlparser"
 	"io"
@@ -47,7 +48,7 @@ func ExecuteDelete(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Delet
 	tableSch := table.GetSchema()
 
 	// TODO: support aliases
-	filter, err := createFilterForWhere(s.Where, tableSch, NewAliases())
+	filter, err := createFilterForWhere(s.Where, map[string]schema.Schema{tableName: tableSch}, NewAliases())
 	if err != nil {
 		return errDelete(err.Error())
 	}

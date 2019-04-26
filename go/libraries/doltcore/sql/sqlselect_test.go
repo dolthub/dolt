@@ -310,37 +310,6 @@ func TestExecuteSelect(t *testing.T) {
 				"u", types.UUIDKind, "n", types.UintKind),
 		},
 		{
-			name:  "Test selecting from multiple tables",
-			query: `select * from people, episodes`,
-			expectedRows: rs(
-				concatRows(peopleTestSchema, homer, episodesTestSchema, ep1),
-				concatRows(peopleTestSchema, homer, episodesTestSchema, ep2),
-				concatRows(peopleTestSchema, homer, episodesTestSchema, ep3),
-				concatRows(peopleTestSchema, homer, episodesTestSchema, ep4),
-				concatRows(peopleTestSchema, marge, episodesTestSchema, ep1),
-				concatRows(peopleTestSchema, marge, episodesTestSchema, ep2),
-				concatRows(peopleTestSchema, marge, episodesTestSchema, ep3),
-				concatRows(peopleTestSchema, marge, episodesTestSchema, ep4),
-				concatRows(peopleTestSchema, bart, episodesTestSchema, ep1),
-				concatRows(peopleTestSchema, bart, episodesTestSchema, ep2),
-				concatRows(peopleTestSchema, bart, episodesTestSchema, ep3),
-				concatRows(peopleTestSchema, bart, episodesTestSchema, ep4),
-				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep1),
-				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep2),
-				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep3),
-				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep4),
-				concatRows(peopleTestSchema, moe, episodesTestSchema, ep1),
-				concatRows(peopleTestSchema, moe, episodesTestSchema, ep2),
-				concatRows(peopleTestSchema, moe, episodesTestSchema, ep3),
-				concatRows(peopleTestSchema, moe, episodesTestSchema, ep4),
-				concatRows(peopleTestSchema, barney, episodesTestSchema, ep1),
-				concatRows(peopleTestSchema, barney, episodesTestSchema, ep2),
-				concatRows(peopleTestSchema, barney, episodesTestSchema, ep3),
-				concatRows(peopleTestSchema, barney, episodesTestSchema, ep4),
-			),
-			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
-		},
-		{
 			name:           "Test select *, not equals",
 			query:          "select * from people where age <> 40",
 			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa, moe),
@@ -373,6 +342,103 @@ func TestExecuteSelect(t *testing.T) {
 			name: "type mismatch in where clause",
 			query: `select * from people where id = "0"`,
 			expectedErr: true,
+		},
+	}
+	for _, tt := range tests {
+		dEnv := dtestutils.CreateTestEnv()
+		createTestDatabase(dEnv, t)
+		root, _ := dEnv.WorkingRoot()
+
+		sqlStatement, _ := sqlparser.Parse(tt.query)
+		s := sqlStatement.(*sqlparser.Select)
+
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.expectedRows != nil && tt.expectedSchema == nil {
+				assert.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
+				t.FailNow()
+			}
+
+			rows, sch, err := ExecuteSelect(root, s)
+			if err != nil {
+				assert.True(t, tt.expectedErr, err.Error())
+			} else {
+				assert.False(t, tt.expectedErr, "unexpected error")
+			}
+			assert.Equal(t, tt.expectedRows, rows)
+			assert.Equal(t, tt.expectedSchema, sch)
+		})
+	}
+}
+
+func TestJoins(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectedRows   []row.Row
+		expectedSchema schema.Schema
+		expectedErr    bool
+	}{
+		{
+			name:  "Test full cross product",
+			query: `select * from people, episodes`,
+			expectedRows: rs(
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep4),
+			),
+			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
+		},
+		{
+			name:  "Test natural join with where clause",
+			query: `select * from people p, appearances a where a.character_id = p.id`,
+			expectedRows: rs(
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, homer, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, marge, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, bart, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, lisa, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, moe, episodesTestSchema, ep4),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep1),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep2),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep3),
+				concatRows(peopleTestSchema, barney, episodesTestSchema, ep4),
+			),
+			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
 		},
 	}
 	for _, tt := range tests {

@@ -2,8 +2,6 @@ package sql
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/xwb1989/sqlparser"
 	"testing"
@@ -13,8 +11,6 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
-		expectedRows   []row.Row
-		expectedSchema schema.Schema
 		expectedErr    string
 	}{
 		{
@@ -93,6 +89,7 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 			expectedErr: "Type mismatch:",
 		},
 	}
+
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
@@ -102,21 +99,12 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 		s := sqlStatement.(*sqlparser.Select)
 
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.expectedRows != nil && tt.expectedSchema == nil {
-				assert.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
-				t.FailNow()
-			}
-
-			rows, sch, err := ExecuteSelect(root, s)
-			if tt.expectedErr != "" {
-				assert.NotNil(t, err)
+			_, _, err := ExecuteSelect(root, s)
+			if err != nil {
 				assert.Contains(t, err.Error(), tt.expectedErr)
 			} else {
-				assert.Nil(t, err)
+				assert.Equal(t,"", tt.expectedErr)
 			}
-			untypedRows := convertRows(t, tt.expectedRows, peopleTestSchema, tt.expectedSchema)
-			assert.Equal(t, untypedRows, rows)
-			assert.Equal(t, tt.expectedSchema, sch)
 		})
 	}
 }
