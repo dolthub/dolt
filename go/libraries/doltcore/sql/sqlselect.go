@@ -184,7 +184,7 @@ func processFromClause(root *doltdb.RootValue, selectStmt *SelectStatement, from
 }
 
 // Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
-// or returns an error if it cannot. All aliases must be established in the SelectStatement.
+// or returns an error if it cannot. All table aliases must be established in the SelectStatement.
 func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
 	var columns []QualifiedColumn
 	for _, colSelection := range colSelections {
@@ -199,10 +199,8 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 				})
 			}
 		case *sqlparser.AliasedExpr:
-			colAlias := selectExpr.As.String()
 			switch colExpr := selectExpr.Expr.(type) {
 			case *sqlparser.ColName:
-
 				var tableSch schema.Schema
 				var tableName string
 				colName := colExpr.Name.String()
@@ -212,14 +210,15 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 					if tableName, ok = selectStmt.aliases.TablesByAlias[columnTableName]; ok{
 						tableSch = mustGetSchema(root, tableName)
 					} else {
-						return errFmt("unknown table " + columnTableName)
+						return errFmt("Unknown table " + columnTableName)
 					}
 				} else {
-					var err error
-					tableName, tableSch, err = findSchemaForColumn(colName, selectStmt.inputSchemas)
+					qc, err := resolveColumn(colName, selectStmt.inputSchemas, selectStmt.aliases)
 					if err != nil {
 						return err
 					}
+					tableName = qc.TableName
+					tableSch = selectStmt.inputSchemas[tableName]
 				}
 
 				_, ok := tableSch.GetAllCols().GetByName(colName)
@@ -228,8 +227,8 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 				}
 
 				// an absent column alias will be empty
-				if colAlias != "" {
-					selectStmt.aliases.AddColumnAlias(tableName, colName, colAlias)
+				if selectExpr.As.String() != "" {
+					selectStmt.aliases.AddColumnAlias(tableName, colName, selectExpr.As.String())
 				}
 				columns = append(columns, QualifiedColumn{tableName, colName})
 			default:
@@ -274,7 +273,7 @@ func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeli
 
 	if len(statement.inputSchemas) == 1 {
 		var tableName string
-		for name, _ := range statement.inputSchemas {
+		for name := range statement.inputSchemas {
 			tableName = name
 		}
 		return createSingleTablePipeline(root, statement, tableName, true)
@@ -323,7 +322,9 @@ func createPipeline(root *doltdb.RootValue, statement *SelectStatement) (*pipeli
 	source := sourceFuncForRows(crossProduct)
 
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
-	// TODO: join conditions here
+	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
+	selTrans.noMoreCallback = func() { p.NoMore() }
+	p.AddStage(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
 
 	return p, nil
 }
@@ -345,19 +346,18 @@ func createSingleTablePipeline(root *doltdb.RootValue, statement *SelectStatemen
 	tblSch := statement.inputSchemas[tableName]
 	tbl, _ := root.GetTable(tableName)
 
-	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
-	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
-	if isTerminal {
-		transforms.AppendTransforms(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
-	}
-
 	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(rd)
+	p := pipeline.NewPartialPipeline(rdProcFunc, &pipeline.TransformCollection{})
+	p.RunAfter(func() { rd.Close() })
 
-	p := pipeline.NewPartialPipeline(rdProcFunc, transforms)
+	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
 	selTrans.noMoreCallback = func() {p.NoMore()}
 
-	p.RunAfter(func() { rd.Close() })
+	if isTerminal {
+		p.AddStage(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
+		p.AddStage(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
+	}
 
 	return p, nil
 }
