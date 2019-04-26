@@ -200,7 +200,7 @@ func (ts tableSet) Flatten() (flattened tableSet) {
 
 // Rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
-func (ts tableSet) Rebase(specs []tableSpec, stats *Stats) tableSet {
+func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) tableSet {
 	merged := tableSet{
 		novel:    make(chunkSources, 0, len(ts.novel)),
 		upstream: make(chunkSources, 0, len(specs)),
@@ -230,7 +230,7 @@ func (ts tableSet) Rebase(specs []tableSpec, stats *Stats) tableSet {
 	for _, spec := range tablesToOpen {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			merged.upstream[idx] = ts.p.Open(spec.name, spec.chunkCount, stats)
+			merged.upstream[idx] = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
 			wg.Done()
 		}(i, spec)
 		i++

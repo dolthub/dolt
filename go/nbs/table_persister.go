@@ -31,7 +31,7 @@ type tablePersister interface {
 	ConjoinAll(sources chunkSources, stats *Stats) chunkSource
 
 	// Open a table named |name|, containing |chunkCount| chunks.
-	Open(name addr, chunkCount uint32, stats *Stats) chunkSource
+	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource
 }
 
 // indexCache provides sized storage for table indices. While getting and/or
