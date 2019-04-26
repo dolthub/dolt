@@ -29,9 +29,9 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 	return !types.IsPrimitiveKind(kind) && kind != types.TupleKind && kind == v2.Kind() && kind != types.RefKind
 }
 
-func (ad *AsyncDiffer) Start(v1, v2 types.Value) {
+func (ad *AsyncDiffer) Start(ctx context.Context, v1, v2 types.Value) {
 	go func() {
-		diff.Diff(context.TODO(), v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
+		diff.Diff(ctx, v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
 		close(ad.diffChan)
 	}()
 }
