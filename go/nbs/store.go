@@ -153,7 +153,7 @@ func (nbs *NomsBlockStore) UpdateManifest(updates map[hash.Hash]uint32) Manifest
 	defer nbs.mu.Unlock()
 
 	var stats Stats
-	ok, contents := nbs.mm.Fetch(&stats)
+	ok, contents := nbs.mm.Fetch(context.TODO(), &stats)
 
 	if !ok {
 		contents = manifestContents{vers: constants.NomsVersion}
@@ -178,7 +178,7 @@ func (nbs *NomsBlockStore) UpdateManifest(updates map[hash.Hash]uint32) Manifest
 		return contents
 	}
 
-	updatedContents := nbs.mm.Update(contents.lock, contents, &stats, nil)
+	updatedContents := nbs.mm.Update(context.TODO(), contents.lock, contents, &stats, nil)
 
 	nbs.upstream = updatedContents
 	nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
@@ -239,7 +239,7 @@ func newNomsBlockStore(mm manifestManager, p tablePersister, c conjoiner, memTab
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
-	if exists, contents := nbs.mm.Fetch(nbs.stats); exists {
+	if exists, contents := nbs.mm.Fetch(context.TODO(), nbs.stats); exists {
 		nbs.upstream = contents
 		nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
 	}
@@ -281,7 +281,7 @@ func (nbs *NomsBlockStore) addChunk(h addr, data []byte) bool {
 		nbs.mt = newMemTable(nbs.mtSize)
 	}
 	if !nbs.mt.addChunk(h, data) {
-		nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
+		nbs.tables = nbs.tables.Prepend(context.TODO(), nbs.mt, nbs.stats)
 		nbs.mt = newMemTable(nbs.mtSize)
 		return nbs.mt.addChunk(h, data)
 	}
@@ -481,7 +481,7 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	if exists, contents := nbs.mm.Fetch(nbs.stats); exists {
+	if exists, contents := nbs.mm.Fetch(ctx, nbs.stats); exists {
 		nbs.upstream = contents
 		nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
 	}
@@ -519,7 +519,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		defer nbs.mu.Unlock()
 
 		if nbs.mt != nil && nbs.mt.count() > preflushChunkCount {
-			nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
+			nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
 			nbs.mt = nil
 		}
 	}()
@@ -564,12 +564,12 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 	}
 
 	if nbs.mt != nil && nbs.mt.count() > 0 {
-		nbs.tables = nbs.tables.Prepend(nbs.mt, nbs.stats)
+		nbs.tables = nbs.tables.Prepend(context.TODO(), nbs.mt, nbs.stats)
 		nbs.mt = nil
 	}
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
-		nbs.upstream = nbs.c.Conjoin(nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		nbs.upstream = nbs.c.Conjoin(context.TODO(), nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 		nbs.tables = nbs.tables.Rebase(nbs.upstream.specs, nbs.stats)
 		return errOptimisticLockFailedTables
 	}
@@ -581,7 +581,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 		lock:  generateLockHash(current, specs),
 		specs: specs,
 	}
-	upstream := nbs.mm.Update(nbs.upstream.lock, newContents, nbs.stats, nil)
+	upstream := nbs.mm.Update(context.TODO(), nbs.upstream.lock, newContents, nbs.stats, nil)
 	if newContents.lock != upstream.lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		return handleOptimisticLockFailure(upstream)

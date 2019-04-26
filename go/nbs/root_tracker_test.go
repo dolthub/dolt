@@ -182,7 +182,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, fetched = mm.Fetch(nil)
+			_, fetched = mm.Fetch(context.Background(), nil)
 		}()
 	}
 
@@ -252,7 +252,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunks ...[]byte) (newRoot hash.Hash, persisted [][]byte) {
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of(rootChunk)
 	persisted = append(chunks, rootChunk)
-	src := p.Persist(createMemTable(persisted), nil, &Stats{})
+	src := p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 	return
 }
@@ -282,7 +282,7 @@ func (fm *fakeManifest) Name() string { return fm.name }
 
 // ParseIfExists returns any fake manifest data the caller has injected using
 // Update() or set(). It treats an empty |fm.lock| as a non-existent manifest.
-func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 	if fm.contents.lock != (addr{}) {
@@ -296,7 +296,7 @@ func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists boo
 // to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
 // replace |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
 // fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
@@ -324,7 +324,7 @@ type fakeTablePersister struct {
 	mu      *sync.RWMutex
 }
 
-func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
 	if mt.count() > 0 {
 		name, data, chunkCount := mt.write(haver, stats)
 		if chunkCount > 0 {

@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/binary"
 	"sort"
@@ -23,7 +24,7 @@ import (
 type tablePersister interface {
 	// Persist makes the contents of mt durable. Chunks already present in
 	// |haver| may be dropped in the process.
-	Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource
+	Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource
 
 	// ConjoinAll conjoins all chunks in |sources| into a single, new
 	// chunkSource.

@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"os"
@@ -31,7 +32,7 @@ func (ftp *fsTablePersister) Open(name addr, chunkCount uint32, stats *Stats) ch
 	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache, ftp.fc)
 }
 
-func (ftp *fsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
 	name, data, chunkCount := mt.write(haver, stats)
 	return ftp.persistTable(name, data, chunkCount, stats)
 }

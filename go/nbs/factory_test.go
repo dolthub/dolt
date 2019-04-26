@@ -33,7 +33,7 @@ func TestLocalStoreFactory(t *testing.T) {
 	assert.True(store.Commit(context.Background(), c.Hash(), hash.Hash{}))
 
 	dbDir := filepath.Join(dir, dbName)
-	exists, contents := fileManifest{dbDir}.ParseIfExists(stats, nil)
+	exists, contents := fileManifest{dbDir}.ParseIfExists(context.Background(), stats, nil)
 	assert.True(exists)
 	assert.Len(contents.specs, 1)
 

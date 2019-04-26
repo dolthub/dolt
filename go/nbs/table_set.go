@@ -158,14 +158,14 @@ func (ts tableSet) Upstream() int {
 
 // Prepend adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) Prepend(mt *memTable, stats *Stats) tableSet {
+func (ts tableSet) Prepend(ctx context.Context, mt *memTable, stats *Stats) tableSet {
 	newTs := tableSet{
 		novel:    make(chunkSources, len(ts.novel)+1),
 		upstream: make(chunkSources, len(ts.upstream)),
 		p:        ts.p,
 		rl:       ts.rl,
 	}
-	newTs.novel[0] = newPersistingChunkSource(mt, ts, ts.p, ts.rl, stats)
+	newTs.novel[0] = newPersistingChunkSource(ctx, mt, ts, ts.p, ts.rl, stats)
 	copy(newTs.novel[1:], ts.novel)
 	copy(newTs.upstream, ts.upstream)
 	return newTs

@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/url"
 	"sort"
@@ -73,7 +74,7 @@ type s3UploadedPart struct {
 	etag string
 }
 
-func (s3p awsTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
 	name, data, chunkCount := mt.write(haver, stats)
 	if chunkCount == 0 {
 		return emptyChunkSource{}

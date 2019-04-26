@@ -14,7 +14,7 @@ import (
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 
 func TestTableSetPrependEmpty(t *testing.T) {
-	ts := newFakeTableSet().Prepend(newMemTable(testMemTableSize), &Stats{})
+	ts := newFakeTableSet().Prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
 	assert.Empty(t, ts.ToSpecs())
 }
 
@@ -24,7 +24,7 @@ func TestTableSetPrepend(t *testing.T) {
 	assert.Empty(ts.ToSpecs())
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	firstSpecs := ts.ToSpecs()
 	assert.Len(firstSpecs, 1)
@@ -32,7 +32,7 @@ func TestTableSetPrepend(t *testing.T) {
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	secondSpecs := ts.ToSpecs()
 	assert.Len(secondSpecs, 2)
@@ -45,15 +45,15 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert.Empty(ts.ToSpecs())
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	mt = newMemTable(testMemTableSize)
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	specs := ts.ToSpecs()
 	assert.Len(specs, 2)
@@ -65,15 +65,15 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert.Empty(ts.ToSpecs())
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	mt = newMemTable(testMemTableSize)
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	ts = ts.Flatten()
 	assert.EqualValues(ts.Size(), 2)
@@ -87,13 +87,13 @@ func TestTableSetExtract(t *testing.T) {
 	// Put in one table
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	// Put in a second
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	chunkChan := make(chan extractRecord)
 	go func() { defer close(chunkChan); ts.extract(context.Background(), chunkChan) }()
@@ -115,7 +115,7 @@ func TestTableSetRebase(t *testing.T) {
 		for _, c := range chunks {
 			mt := newMemTable(testMemTableSize)
 			mt.addChunk(computeAddr(c), c)
-			ts = ts.Prepend(mt, &Stats{})
+			ts = ts.Prepend(context.Background(), mt, &Stats{})
 		}
 		return ts
 	}
@@ -140,12 +140,12 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	assert.Empty(ts.ToSpecs())
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	mt = newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[1]), testChunks[1])
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
-	ts = ts.Prepend(mt, &Stats{})
+	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	assert.True(ts.physicalLen() > indexSize(ts.count()))
 }
