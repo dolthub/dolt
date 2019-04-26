@@ -181,7 +181,7 @@ func (nbs *NomsBlockStore) UpdateManifest(updates map[hash.Hash]uint32) Manifest
 	updatedContents := nbs.mm.Update(context.TODO(), contents.lock, contents, &stats, nil)
 
 	nbs.upstream = updatedContents
-	nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
+	nbs.tables = nbs.tables.Rebase(context.TODO(), contents.specs, nbs.stats)
 
 	return updatedContents
 }
@@ -241,7 +241,7 @@ func newNomsBlockStore(mm manifestManager, p tablePersister, c conjoiner, memTab
 
 	if exists, contents := nbs.mm.Fetch(context.TODO(), nbs.stats); exists {
 		nbs.upstream = contents
-		nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
+		nbs.tables = nbs.tables.Rebase(context.TODO(), contents.specs, nbs.stats)
 	}
 
 	return nbs
@@ -260,7 +260,7 @@ func newNomsBlockStoreWithContents(mm manifestManager, mc manifestContents, p ta
 		stats:  stats,
 
 		upstream: mc,
-		tables:   newTableSet(p).Rebase(mc.specs, stats),
+		tables:   newTableSet(p).Rebase(context.TODO(), mc.specs, stats),
 	}
 }
 
@@ -483,7 +483,7 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) {
 	defer nbs.mu.Unlock()
 	if exists, contents := nbs.mm.Fetch(ctx, nbs.stats); exists {
 		nbs.upstream = contents
-		nbs.tables = nbs.tables.Rebase(contents.specs, nbs.stats)
+		nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 	}
 }
 
@@ -550,7 +550,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
 		nbs.upstream = upstream
-		nbs.tables = nbs.tables.Rebase(upstream.specs, nbs.stats)
+		nbs.tables = nbs.tables.Rebase(context.TODO(), upstream.specs, nbs.stats)
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
@@ -570,7 +570,7 @@ func (nbs *NomsBlockStore) updateManifest(current, last hash.Hash) error {
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
 		nbs.upstream = nbs.c.Conjoin(context.TODO(), nbs.upstream, nbs.mm, nbs.p, nbs.stats)
-		nbs.tables = nbs.tables.Rebase(nbs.upstream.specs, nbs.stats)
+		nbs.tables = nbs.tables.Rebase(context.TODO(), nbs.upstream.specs, nbs.stats)
 		return errOptimisticLockFailedTables
 	}
 

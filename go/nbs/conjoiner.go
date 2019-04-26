@@ -48,7 +48,7 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 
 	for {
 		if conjoinees == nil {
-			conjoined, conjoinees, keepers = conjoinTables(p, upstream.specs, stats)
+			conjoined, conjoinees, keepers = conjoinTables(ctx, p, upstream.specs, stats)
 		}
 
 		specs := append(make([]tableSpec, 0, len(keepers)+1), conjoined)
@@ -89,14 +89,14 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 	}
 }
 
-func conjoinTables(p tablePersister, upstream []tableSpec, stats *Stats) (conjoined tableSpec, conjoinees, keepers []tableSpec) {
+func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, stats *Stats) (conjoined tableSpec, conjoinees, keepers []tableSpec) {
 	// Open all the upstream tables concurrently
 	sources := make(chunkSources, len(upstream))
 	wg := sync.WaitGroup{}
 	for i, spec := range upstream {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			sources[idx] = p.Open(spec.name, spec.chunkCount, stats)
+			sources[idx] = p.Open(ctx, spec.name, spec.chunkCount, stats)
 			wg.Done()
 		}(i, spec)
 		i++

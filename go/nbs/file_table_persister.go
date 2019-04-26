@@ -28,7 +28,7 @@ type fsTablePersister struct {
 	indexCache *indexCache
 }
 
-func (ftp *fsTablePersister) Open(name addr, chunkCount uint32, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
 	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache, ftp.fc)
 }
 
@@ -56,7 +56,7 @@ func (ftp *fsTablePersister) persistTable(name addr, data []byte, chunkCount uin
 	}()
 	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
 	d.PanicIfError(err)
-	return ftp.Open(name, chunkCount, stats)
+	return ftp.Open(context.TODO(), name, chunkCount, stats)
 }
 
 func (ftp *fsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chunkSource {
@@ -91,5 +91,5 @@ func (ftp *fsTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chun
 	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
 	d.PanicIfError(err)
 
-	return ftp.Open(name, plan.chunkCount, stats)
+	return ftp.Open(context.TODO(), name, plan.chunkCount, stats)
 }

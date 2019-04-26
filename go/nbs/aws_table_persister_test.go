@@ -56,7 +56,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			tc.storeWG.Wait()
 
 			// Now, open the table that should have been cached by the above Persist() and read out all the chunks. All the reads should be serviced from tc.
-			rdr := s3p.Open(src.hash(), src.count(), &Stats{})
+			rdr := s3p.Open(context.Background(), src.hash(), src.count(), &Stats{})
 			baseline := s3svc.getCount
 			ch := make(chan extractRecord)
 			go func() { defer close(ch); rdr.extract(context.Background(), ch) }()
@@ -144,7 +144,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			tableData, name := buildTable(testChunks)
 			ddb.putData(fmtTableName(name), tableData)
 
-			src := s3p.Open(name, uint32(len(testChunks)), &Stats{})
+			src := s3p.Open(context.Background(), name, uint32(len(testChunks)), &Stats{})
 			if assert.True(src.count() > 0) {
 				if r := ddb.readerForTable(src.hash()); assert.NotNil(r) {
 					assertChunksInReader(testChunks, r, assert)

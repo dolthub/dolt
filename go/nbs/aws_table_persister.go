@@ -57,7 +57,7 @@ func (al awsLimits) tableMayBeInDynamo(chunkCount uint32) bool {
 	return chunkCount <= al.chunkMax
 }
 
-func (s3p awsTablePersister) Open(name addr, chunkCount uint32, stats *Stats) chunkSource {
+func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
 	return newAWSChunkSource(
 		s3p.ddb,
 		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc},
