@@ -133,7 +133,7 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 
 	cli.Println("Updating", cm1.HashOf().String()+".."+cm2.HashOf().String())
 
-	if ok, err := cm1.CanFastForwardTo(cm2); ok {
+	if ok, err := cm1.CanFastForwardTo(context.TODO(), cm2); ok {
 		return executeFFMerge(dEnv, cm2)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")

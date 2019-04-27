@@ -101,18 +101,18 @@ func (c *Commit) GetRootValue() *RootValue {
 
 var ErrNoCommonAnscestor = errors.New("no common anscestor")
 
-func GetCommitAnscestor(cm1, cm2 *Commit) (*Commit, error) {
+func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	ref1, ref2 := types.NewRef(cm1.commitSt), types.NewRef(cm2.commitSt)
 
 	var ancestorSt types.Struct
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		ref, err := getCommitAncestorRef(context.TODO(), ref1, ref2, cm1.vrw)
+		ref, err := getCommitAncestorRef(ctx, ref1, ref2, cm1.vrw)
 
 		if err != nil {
 			return err
 		}
 
-		ancestorSt, _ = ref.TargetValue(context.TODO(), cm1.vrw).(types.Struct)
+		ancestorSt, _ = ref.TargetValue(ctx, cm1.vrw).(types.Struct)
 		return nil
 	})
 
@@ -133,8 +133,8 @@ func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw types.V
 	return ancestorRef, nil
 }
 
-func (c *Commit) CanFastForwardTo(new *Commit) (bool, error) {
-	ancestor, err := GetCommitAnscestor(c, new)
+func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
+	ancestor, err := GetCommitAnscestor(ctx, c, new)
 
 	if err != nil {
 		return false, err
@@ -152,8 +152,8 @@ func (c *Commit) CanFastForwardTo(new *Commit) (bool, error) {
 	return false, nil
 }
 
-func (c *Commit) CanFastReverseTo(new *Commit) (bool, error) {
-	ancestor, err := GetCommitAnscestor(c, new)
+func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error) {
+	ancestor, err := GetCommitAnscestor(ctx, c, new)
 
 	if err != nil {
 		return false, err

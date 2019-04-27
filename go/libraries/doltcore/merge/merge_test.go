@@ -320,7 +320,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 
 func TestMergeCommits(t *testing.T) {
 	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupMergeTest()
-	merger, err := NewMerger(commit, mergeCommit, vrw)
+	merger, err := NewMerger(context.Background(), commit, mergeCommit, vrw)
 
 	if err != nil {
 		t.Fatal(err)

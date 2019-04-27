@@ -15,7 +15,7 @@ var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
 
-func MoveBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
 	err := CopyBranch(dEnv, oldBranch, newBranch, force)
 
 	if err != nil {
@@ -31,7 +31,7 @@ func MoveBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) erro
 		}
 	}
 
-	return DeleteBranch(dEnv, oldBranch, true)
+	return DeleteBranch(ctx, dEnv, oldBranch, true)
 }
 
 func CopyBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -53,7 +53,7 @@ func CopyBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) erro
 	return dEnv.DoltDB.NewBranchAtCommit(newBranch, cm)
 }
 
-func DeleteBranch(dEnv *env.DoltEnv, brName string, force bool) error {
+func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	if !dEnv.DoltDB.HasBranch(brName) {
 		return doltdb.ErrBranchNotFound
 	} else if dEnv.RepoState.Branch == brName {
@@ -85,7 +85,7 @@ func DeleteBranch(dEnv *env.DoltEnv, brName string, force bool) error {
 	}
 
 	if !force {
-		if isMerged, _ := master.CanFastReverseTo(cm); !isMerged {
+		if isMerged, _ := master.CanFastReverseTo(ctx, cm); !isMerged {
 			return ErrUnmergedBranchDelete
 		}
 	}

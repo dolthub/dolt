@@ -260,7 +260,7 @@ func (ddb *DoltDB) CanFastForward(branch string, new *Commit) (bool, error) {
 		return false, err
 	}
 
-	return current.CanFastForwardTo(new)
+	return current.CanFastForwardTo(context.TODO(), new)
 }
 
 // CommitWithParents commits the value hash given to the branch given, using the list of parent hashes given. Returns an
