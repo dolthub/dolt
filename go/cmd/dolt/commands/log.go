@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"strings"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -102,7 +103,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	}
 
 	for _, comm := range commits {
-		loggerFunc(comm.GetCommitMeta(), comm.ParentHashes(), comm.HashOf())
+		loggerFunc(comm.GetCommitMeta(), comm.ParentHashes(context.TODO()), comm.HashOf())
 	}
 
 	return 0
