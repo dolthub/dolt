@@ -44,11 +44,11 @@ func (c *Commit) GetCommitMeta() *CommitMeta {
 	panic(c.HashOf().String() + " is a commit without the required metadata.")
 }
 
-func (c *Commit) ParentHashes() []hash.Hash {
+func (c *Commit) ParentHashes(ctx context.Context) []hash.Hash {
 	parentSet := c.getParents()
 
 	hashes := make([]hash.Hash, 0, parentSet.Len())
-	parentSet.IterAll(context.TODO(), func(parentVal types.Value) {
+	parentSet.IterAll(ctx, func(parentVal types.Value) {
 		parentRef := parentVal.(types.Ref)
 		parentHash := parentRef.TargetHash()
 		hashes = append(hashes, parentHash)
