@@ -22,14 +22,14 @@ type Merger struct {
 	vrw         types.ValueReadWriter
 }
 
-func NewMerger(commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*Merger, error) {
-	ancestor, err := doltdb.GetCommitAnscestor(commit, mergeCommit)
+func NewMerger(ctx context.Context, commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*Merger, error) {
+	ancestor, err := doltdb.GetCommitAnscestor(ctx, commit, mergeCommit)
 
 	if err != nil {
 		return nil, err
 	}
 
-	ff, err := commit.CanFastForwardTo(mergeCommit)
+	ff, err := commit.CanFastForwardTo(ctx, mergeCommit)
 	if err != nil {
 		return nil, err
 	} else if ff {

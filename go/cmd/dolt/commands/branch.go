@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -131,7 +132,7 @@ func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.MoveBranch(dEnv, src, apr.Arg(1), force)
+	err := actions.MoveBranch(context.TODO(), dEnv, src, apr.Arg(1), force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -196,7 +197,7 @@ func handleDeleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usa
 
 	brName := apr.Arg(0)
 
-	err := actions.DeleteBranch(dEnv, brName, force)
+	err := actions.DeleteBranch(context.TODO(), dEnv, brName, force)
 
 	var verr errhand.VerboseError
 	if err != nil {

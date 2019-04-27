@@ -8,7 +8,7 @@ import (
 )
 
 func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Commit) (*doltdb.RootValue, map[string]*merge.MergeStats, error) {
-	merger, err := merge.NewMerger(cm1, cm2, ddb.ValueReadWriter())
+	merger, err := merge.NewMerger(ctx, cm1, cm2, ddb.ValueReadWriter())
 
 	if err != nil {
 		return nil, nil, err
