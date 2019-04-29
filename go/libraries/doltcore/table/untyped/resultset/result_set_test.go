@@ -1,6 +1,7 @@
 package resultset
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -318,6 +319,111 @@ func TestNewFromSourceSchemas(t *testing.T) {
 		assert.Equal(t, expectedMapping, rss.mapping)
 		assert.Equal(t, destSch, rss.destSch)
 	})
+}
+
+func mustGetCol(sch schema.Schema, colName string) schema.Column {
+	col, ok := sch.GetAllCols().GetByName(colName)
+	if !ok {
+		panic("No column " + colName)
+	}
+	return col
+}
+
+func TestNewFromColumns(t *testing.T) {
+	t.Run("Test cross product", func(t *testing.T) {
+		cols := []schema.Column{
+			mustGetCol(episodesTestSchema, "id"),
+			mustGetCol(peopleTestSchema, "id"),
+			mustGetCol(episodesTestSchema, "name"),
+			mustGetCol(peopleTestSchema, "first"),
+			mustGetCol(peopleTestSchema, "last"),
+		}
+
+		rss, err := NewFromColumns(cols...)
+		if err != nil {
+			assert.FailNow(t, err.Error())
+		}
+		assert.Nil(t, rss.AddColumn(episodesTestSchema, mustGetCol(episodesTestSchema, "id")))
+		assert.Nil(t, rss.AddColumn(peopleTestSchema, mustGetCol(peopleTestSchema, "id")))
+		assert.Nil(t, rss.AddColumn(episodesTestSchema, mustGetCol(episodesTestSchema, "name")))
+		assert.Nil(t, rss.AddColumn(peopleTestSchema, mustGetCol(peopleTestSchema, "first")))
+		assert.Nil(t, rss.AddColumn(peopleTestSchema, mustGetCol(peopleTestSchema, "last")))
+
+		peopleToDestMapping := map[uint64]uint64{
+			0: 1,
+			1: 3,
+			2: 4,
+		}
+		episodesToDestMapping := map[uint64]uint64{
+			0: 0,
+			1: 2,
+		}
+
+		expectedMapping := make(map[schema.Schema]*rowconv.FieldMapping)
+		expectedMapping[peopleTestSchema], err = rowconv.NewFieldMapping(peopleTestSchema, rss.destSch, peopleToDestMapping)
+		assert.Nil(t, err)
+		expectedMapping[episodesTestSchema], err = rowconv.NewFieldMapping(episodesTestSchema, rss.destSch, episodesToDestMapping)
+		assert.Nil(t, err)
+
+		assert.Equal(t, expectedMapping, rss.mapping)
+
+		tables := []TableResult{
+			{Rows: rs(homer, marge), Schema: peopleTestSchema},
+			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
+		}
+
+		expectedResult := rs(
+			newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag)),
+			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag)),
+			newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
+			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
+		)
+
+		result := rss.CrossProduct(tables)
+		assert.Equal(t, expectedResult, result)
+	})
+}
+
+// Creates a new row for a result set specified by the given values
+func newResultSetRow(colVals ...types.Value) row.Row {
+
+	taggedVals := make(row.TaggedValues)
+	cols := make([]schema.Column, len(colVals))
+	for i := 0; i < len(colVals); i++ {
+		taggedVals[uint64(i)] = colVals[i]
+		nomsKind := colVals[i].Kind()
+		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	sch := schema.UnkeyedSchemaFromCols(collection)
+
+	return row.New(sch, taggedVals)
+}
+
+// Creates a new schema for a result set specified by the given pairs of column names and types. Column names are
+// strings, types are NomsKinds.
+func newResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
+
+	if len(colNamesAndTypes) % 2 != 0 {
+		panic("Non-even number of inputs passed to newResultSetSchema")
+	}
+
+	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	for i := 0; i < len(colNamesAndTypes); i += 2 {
+		name := colNamesAndTypes[i].(string)
+		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
+		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	return schema.UnkeyedSchemaFromCols(collection)
 }
 
 // Returns all the columns from all 3 test schemas as a single column collection.
