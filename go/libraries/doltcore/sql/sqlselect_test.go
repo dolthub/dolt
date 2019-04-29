@@ -433,7 +433,32 @@ func TestJoins(t *testing.T) {
 			expectedSchema: newResultSetSchema("id", types.IntKind, "id", types.IntKind,
 				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
 		},
+		{
+			name:  "Test natural join with where clause and column aliases",
+			query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
+			expectedRows: rs(
+				newResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
+				newResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
+				newResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
+				newResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
+			),
+			expectedSchema: newResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
+				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
+		},
+		{
+			name:  "Test natural join with where clause and quoted column alias",
+			query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
+			expectedRows: rs(
+				newResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
+				newResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
+				newResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
+				newResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
+			),
+			expectedSchema: newResultSetSchema("eid", types.IntKind, "p.id", types.IntKind,
+				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
+		},
 	}
+
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
