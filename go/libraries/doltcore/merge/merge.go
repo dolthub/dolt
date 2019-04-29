@@ -79,7 +79,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 	mergeRows := mergeTbl.GetRowData()
 	ancRows := ancTbl.GetRowData()
 
-	mergedRowData, conflicts, stats, err := mergeTableData(schemaUnion, rows, mergeRows, ancRows, merger.vrw)
+	mergedRowData, conflicts, stats, err := mergeTableData(ctx, schemaUnion, rows, mergeRows, ancRows, merger.vrw)
 
 	if err != nil {
 		return nil, nil, err
@@ -107,20 +107,20 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 	}
 }
 
-func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
+func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
 	//changeChan1, changeChan2 := make(chan diff.Difference, 32), make(chan diff.Difference, 32)
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 	stopChan, mergeStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
 	go func() {
 		//diff.Diff(rows1, ancRows, changeChan1, stopChan1, true, dontDescend)
-		rows.Diff(context.TODO(), ancRows, changeChan, stopChan)
+		rows.Diff(ctx, ancRows, changeChan, stopChan)
 		close(changeChan)
 	}()
 
 	go func() {
 		//diff.Diff(rows2, ancRows, changeChan2, stopChan2, true, dontDescend)
-		mergeRows.Diff(context.TODO(), ancRows, mergeChangeChan, mergeStopChan)
+		mergeRows.Diff(ctx, ancRows, mergeChangeChan, mergeStopChan)
 		close(mergeChangeChan)
 	}()
 
@@ -128,7 +128,7 @@ func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw t
 	defer stopAndDrain(mergeStopChan, mergeChangeChan)
 
 	conflictValChan := make(chan types.Value)
-	conflictMapChan := types.NewStreamingMap(context.TODO(), vrw, conflictValChan)
+	conflictMapChan := types.NewStreamingMap(ctx, vrw, conflictValChan)
 	mapEditor := rows.Edit()
 
 	stats := &MergeStats{Operation: TableModified}
@@ -174,7 +174,7 @@ func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw t
 
 	close(conflictValChan)
 	conflicts := <-conflictMapChan
-	mergedData := mapEditor.Map(context.TODO())
+	mergedData := mapEditor.Map(ctx)
 
 	return mergedData, conflicts, stats, nil
 }

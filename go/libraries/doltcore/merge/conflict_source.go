@@ -35,7 +35,7 @@ type ConflictReader struct {
 	currIdx      int
 }
 
-func NewConflictReader(tbl *doltdb.Table) (*ConflictReader, error) {
+func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader, error) {
 	base, sch, mergeSch, err := tbl.GetConflictSchemas()
 
 	if err != nil {
@@ -73,7 +73,7 @@ func NewConflictReader(tbl *doltdb.Table) (*ConflictReader, error) {
 		return nil, err
 	}
 
-	confItr := confData.Iterator(context.TODO())
+	confItr := confData.Iterator(ctx)
 
 	baseConv, err := rowconv.NewRowConverter(baseMapping)
 	conv, err := rowconv.NewRowConverter(mapping)
@@ -96,10 +96,10 @@ func (cr *ConflictReader) GetSchema() schema.Schema {
 
 // NextConflict reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (cr *ConflictReader) NextConflict() (row.Row, pipeline.ImmutableProperties, error) {
+func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.ImmutableProperties, error) {
 	for {
 		if cr.currIdx == 0 {
-			key, value := cr.confItr.Next(context.TODO())
+			key, value := cr.confItr.Next(ctx)
 
 			if key == nil {
 				return nil, pipeline.NoProps, io.EOF
