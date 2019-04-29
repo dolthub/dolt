@@ -30,7 +30,7 @@ func (rss *ResultSetSchema) Mapping(sch schema.Schema) *rowconv.FieldMapping {
 
 // Creates a new result set schema for the destination schema given. Successive calls to AddSchema will flesh out the
 // mapping values for all source schemas.
-func NewFromDestSchema(sch schema.Schema) (*ResultSetSchema, error) {
+func newFromDestSchema(sch schema.Schema) (*ResultSetSchema, error) {
 	maxTag, err := validateSchema(sch)
 	if err != nil {
 		return nil, err
@@ -73,21 +73,21 @@ func Identity(sch schema.Schema) *ResultSetSchema {
 }
 
 // Creates a new result set schema for the source schemas given and fills in schema values as necessary.
-func NewFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, error) {
+func newFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, error) {
 	var sch schema.Schema
 	var rss *ResultSetSchema
 	var err error
 
-	if sch, err = ConcatSchemas(sourceSchemas...); err != nil {
+	if sch, err = concatSchemas(sourceSchemas...); err != nil {
 		return nil, err
 	}
 
-	if rss, err = NewFromDestSchema(sch); err != nil {
+	if rss, err = newFromDestSchema(sch); err != nil {
 		return nil, err
 	}
 
 	for _, ss := range sourceSchemas {
-		if err = rss.AddSchema(ss); err != nil {
+		if err = rss.addSchema(ss); err != nil {
 			return nil, err
 		}
 	}
@@ -95,32 +95,64 @@ func NewFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, err
 	return rss, nil
 }
 
+// Adds a schema to the result set mapping
+func (rss *ResultSetSchema) addSchema(sch schema.Schema) error {
+	if rss.maxAssignedTag + uint64(len(sch.GetAllCols().GetColumns()) - 1) > rss.maxSchTag {
+		return errors.New("No room for additional schema in mapping, result set schema too small")
+	}
+
+	fieldMapping := make(map[uint64]uint64)
+	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+		fieldMapping[tag] = rss.maxAssignedTag
+		rss.maxAssignedTag++
+		return false
+	})
+
+	mapping, err := rowconv.NewFieldMapping(sch, rss.destSch, fieldMapping)
+	if err != nil {
+		return err
+	}
+
+	rss.mapping[sch] = mapping
+	return nil
+}
+
+
 // Creates a new result set schema for columns given. Tag numbers in the result schema will be rewritten as necessary,
 // starting from 0.
-func NewFromColumns(columns ...schema.Column) (*ResultSetSchema, error) {
+func NewFromColumns(columns ...ColWithSchema) (*ResultSetSchema, error) {
 	var sch schema.Schema
 	var rss *ResultSetSchema
 	var err error
 
+	cols := make([]schema.Column, len(columns))
 	for i, _ := range columns {
-		columns[i].Tag = uint64(i)
+		col := columns[i].Col
+		col.Tag = uint64(i)
+		cols[i] = col
 	}
-	colColl, err := schema.NewColCollection(columns...)
+	colColl, err := schema.NewColCollection(cols...)
 	if err != nil {
 		return nil, err
 	}
 
 	sch = schema.UnkeyedSchemaFromCols(colColl)
 
-	if rss, err = NewFromDestSchema(sch); err != nil {
+	if rss, err = newFromDestSchema(sch); err != nil {
 		return nil, err
+	}
+
+	for _, col := range columns {
+		if err = rss.addColumn(col.Sch, col.Col); err != nil {
+			return nil, err
+		}
 	}
 
 	return rss, nil
 }
 
 // Adds a single column to the result set schema, from the source schema given.
-func (rss *ResultSetSchema) AddColumn(sourceSchema schema.Schema, column schema.Column) error {
+func (rss *ResultSetSchema) addColumn(sourceSchema schema.Schema, column schema.Column) error {
 	if rss.maxAssignedTag > rss.maxSchTag {
 		return errors.New("No room for additional column in mapping, result set schema too small")
 	}
@@ -154,31 +186,9 @@ func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
 	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
-// Adds a schema to the result set mapping
-func (rss *ResultSetSchema) AddSchema(sch schema.Schema) error {
-	if rss.maxAssignedTag + uint64(len(sch.GetAllCols().GetColumns()) - 1) > rss.maxSchTag {
-		return errors.New("No room for additional schema in mapping, result set schema too small")
-	}
-
-	fieldMapping := make(map[uint64]uint64)
-	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
-		fieldMapping[tag] = rss.maxAssignedTag
-		rss.maxAssignedTag++
-		return false
-	})
-
-	mapping, err := rowconv.NewFieldMapping(sch, rss.destSch, fieldMapping)
-	if err != nil {
-		return err
-	}
-
-	rss.mapping[sch] = mapping
-	return nil
-}
-
 // Concatenates the given schemas together into a new one. This rewrites the tag numbers to be contiguous and
 // starting from zero, and removes all keys and constraints. Types are preserved.
-func ConcatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
+func concatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
 	cols := make([]schema.Column, 0)
 	var itag uint64
 	for _, col := range srcSchemas {
@@ -215,14 +225,14 @@ func (rss *ResultSetSchema) cph(r RowWithSchema, tables []TableResult) []row.Row
 	resultSet := make([]row.Row, 0)
 	table := tables[0]
 	for _, r2 := range table.Rows {
-		partialRow := rss.CombineRows(r, RowWithSchema{r2, table.Schema})
+		partialRow := rss.combineRows(r, RowWithSchema{r2, table.Schema})
 		resultSet = append(resultSet, rss.cph(partialRow, tables[1:])...)
 	}
 	return resultSet
 }
 
 // CombineRows writes all values from r2 into r1 and returns it. r1 must have the same schema as the result set.
-func (rss *ResultSetSchema) CombineRows(r1 RowWithSchema, r2 RowWithSchema) RowWithSchema {
+func (rss *ResultSetSchema) combineRows(r1 RowWithSchema, r2 RowWithSchema) RowWithSchema {
 	if !schema.SchemasAreEqual(r1.Schema, rss.destSch) {
 		panic("Cannot call CombineRows on a row with a different schema than the result set schema")
 	}
@@ -247,9 +257,9 @@ func (rss *ResultSetSchema) CombineRows(r1 RowWithSchema, r2 RowWithSchema) RowW
 }
 
 // CombineRows writes all values from other rows into r1 and returns it. r1 must have the same schema as the result set.
-func (rss *ResultSetSchema) CombineAllRows(r1 RowWithSchema, rows ...RowWithSchema) RowWithSchema {
+func (rss *ResultSetSchema) combineAllRows(r1 RowWithSchema, rows ...RowWithSchema) RowWithSchema {
 	for _, r2 := range rows {
-		r1 = rss.CombineRows(r1, r2)
+		r1 = rss.combineRows(r1, r2)
 	}
 	return r1
 }
