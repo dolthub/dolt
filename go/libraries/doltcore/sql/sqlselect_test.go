@@ -430,8 +430,8 @@ func TestJoins(t *testing.T) {
 				newResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
 				newResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 			),
-			expectedSchema: newResultSetSchema("e.id", types.IntKind, "p.id", types.IntKind,
-				"e.name", types.StringKind, "p.first", types.StringKind, "p.last", types.StringKind),
+			expectedSchema: newResultSetSchema("id", types.IntKind, "id", types.IntKind,
+				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
 		},
 	}
 	for _, tt := range tests {

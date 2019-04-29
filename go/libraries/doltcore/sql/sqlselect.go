@@ -384,9 +384,8 @@ func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.R
 // Returns a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
 // from the individual table schemas.
 func createResultSetSchema(statement *SelectStatement) error {
-	// Iterate over the columns twice: first to get an ordered list to use to create an output schema with
-	cols := make([]schema.Column, 0, len(statement.selectedCols))
-	for _, selectedCol := range statement.selectedCols {
+	cols := make([]resultset.ColWithSchema, len(statement.selectedCols))
+	for i, selectedCol := range statement.selectedCols {
 		colName := selectedCol.ColumnName
 		tableName := selectedCol.TableName
 
@@ -399,7 +398,7 @@ func createResultSetSchema(statement *SelectStatement) error {
 				if alias, ok := statement.aliases.AliasesByColumn[selectedCol]; ok {
 					col.Name = alias
 				}
-				cols = append(cols, col)
+				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}
 			}
 		}
 	}
@@ -409,19 +408,6 @@ func createResultSetSchema(statement *SelectStatement) error {
 		return err
 	}
 
-	// Then a second time, to create a mapping from the source schema to the column in the result set.
-	for _, selectedCol := range statement.selectedCols {
-		tableSch := statement.inputSchemas[selectedCol.TableName]
-		col, _ := tableSch.GetAllCols().GetByName(selectedCol.ColumnName)
-
-		err = rss.AddColumn(tableSch, col)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Finally set the result set schema in the statement
 	statement.ResultSetSchema = rss
-
 	return nil
 }
