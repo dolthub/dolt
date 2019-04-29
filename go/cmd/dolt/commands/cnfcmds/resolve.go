@@ -116,13 +116,13 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 	}
 
 	tbl, _ := root.GetTable(context.TODO(), tblName)
-	keysToResolve, err := cli.ParseKeyValues(tbl.GetSchema(), args[1:])
+	keysToResolve, err := cli.ParseKeyValues(tbl.GetSchema(context.TODO()), args[1:])
 
 	if err != nil {
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
 	}
 
-	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(context.Background(), keysToResolve)
+	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(context.TODO(), keysToResolve)
 
 	if err != nil {
 		verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
@@ -136,7 +136,7 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 		}
 
 		if updatedTbl.HashOf() != tbl.HashOf() {
-			root := root.PutTable(context.Background(), dEnv.DoltDB, tblName, updatedTbl)
+			root := root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
 			verr = commands.UpdateWorkingWithVErr(dEnv, root)
 		}
 	}

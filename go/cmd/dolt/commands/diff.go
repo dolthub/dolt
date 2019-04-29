@@ -147,13 +147,13 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 		rowData2 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
 
 		if ok1 {
-			sch1 = tbl1.GetSchema()
-			rowData1 = tbl1.GetRowData()
+			sch1 = tbl1.GetSchema(context.TODO())
+			rowData1 = tbl1.GetRowData(context.TODO())
 		}
 
 		if ok2 {
-			sch2 = tbl2.GetSchema()
-			rowData2 = tbl2.GetRowData()
+			sch2 = tbl2.GetSchema(context.TODO())
+			rowData2 = tbl2.GetRowData(context.TODO())
 		}
 
 		verr := diffRows(rowData1, rowData2, sch1, sch2)

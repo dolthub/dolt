@@ -241,7 +241,7 @@ func findSchemaForColumn(ctx context.Context, root *doltdb.RootValue, colName st
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
 func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string) schema.Schema {
 	tbl, _ := root.GetTable(ctx, tableName)
-	return tbl.GetSchema()
+	return tbl.GetSchema(ctx)
 }
 
 // Processes the where clause by applying an appropriate filter fn to the selectStatement given. Returns an error if the
@@ -269,7 +269,7 @@ func errSelect(fmtMsg string, args ...interface{}) (*pipeline.Pipeline, schema.S
 // an output set, and must be supplied one before execution.
 func createPipeline(ctx context.Context, root *doltdb.RootValue, statement *selectStatement) (*pipeline.Pipeline, schema.Schema, errhand.VerboseError) {
 	tbl, _ := root.GetTable(ctx, statement.tableNames[0])
-	tblSch := tbl.GetSchema()
+	tblSch := tbl.GetSchema(ctx)
 
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
@@ -279,7 +279,7 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, statement *sele
 		return nil, nil, verr
 	}
 
-	rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(), tblSch)
+	rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
 
 	p := pipeline.NewPartialPipeline(rdProcFunc, transforms)

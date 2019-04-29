@@ -28,7 +28,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errInsert("Unknown table %v", tableName)
 	}
 	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema()
+	tableSch := table.GetSchema(ctx)
 
 	// Parser supports overwrite on insert with both the replace keyword (from MySQL) as well as the ignore keyword
 	replace := s.Action == sqlparser.ReplaceStr
@@ -76,7 +76,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	// Perform the insert
-	rowData := table.GetRowData()
+	rowData := table.GetRowData(ctx)
 	me := rowData.Edit()
 	var result InsertResult
 

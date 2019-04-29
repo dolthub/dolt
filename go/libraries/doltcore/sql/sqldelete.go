@@ -45,7 +45,7 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errDelete("Unknown table '%s'", tableName)
 	}
 	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema()
+	tableSch := table.GetSchema(ctx)
 
 	// TODO: support aliases
 	filter, err := createFilterForWhere(s.Where, tableSch, NewAliases())
@@ -55,7 +55,7 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 	// Perform the delete
 	var result DeleteResult
-	rowData := table.GetRowData()
+	rowData := table.GetRowData(ctx)
 	me := rowData.Edit()
 	rowReader := noms.NewNomsMapReader(ctx, rowData, tableSch)
 

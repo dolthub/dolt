@@ -32,13 +32,13 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		return nil, err
 	}
 
-	schemas, conflicts, err := tbl.GetConflicts()
+	schemas, conflicts, err := tbl.GetConflicts(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	rowEditor := tbl.GetRowData().Edit()
+	rowEditor := tbl.GetRowData(ctx).Edit()
 
 	var itrErr error
 	conflicts.Iter(ctx, func(key, value types.Value) (stop bool) {

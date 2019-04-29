@@ -187,7 +187,7 @@ func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseErro
 	}
 
 	tbl, _ := root.GetTable(context.TODO(), selArgs.tblName)
-	tblSch := tbl.GetSchema()
+	tblSch := tbl.GetSchema(context.TODO())
 	whereFn, err := parseWhere(tblSch, selArgs.whereClause)
 
 	if err != nil {
@@ -222,7 +222,7 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	colNames := schema.ExtractAllColNames(outSch)
 	addSizingTransform(outSch, transforms)
 
-	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(), tblSch)
+	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(context.TODO()), tblSch)
 	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
 
 	badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
@@ -293,7 +293,7 @@ func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltd
 		_, confSchema := untyped.NewUntypedSchemaWithFirstTag(cnfTag, cnfColName)
 		schWithConf, _ := typed.TypedSchemaUnion(confSchema, tblSch)
 
-		_, confData, _ := tbl.GetConflicts()
+		_, confData, _ := tbl.GetConflicts(context.TODO())
 
 		cnfTransform := pipeline.NewNamedTransform(transCnfSetName, CnfTransformer(tblSch, schWithConf, confData))
 		transColl.AppendTransforms(cnfTransform)

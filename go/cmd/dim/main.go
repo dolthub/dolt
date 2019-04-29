@@ -88,8 +88,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	data := tbl.GetRowData()
-	sch := tbl.GetSchema()
+	data := tbl.GetRowData(ctx)
+	sch := tbl.GetSchema(ctx)
 
 	dim := New(ctx, sch, data)
 	updatedRows := dim.Run(ctx)

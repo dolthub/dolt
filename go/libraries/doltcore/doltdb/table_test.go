@@ -68,7 +68,7 @@ func TestTables(t *testing.T) {
 	badUUID, _ := uuid.NewRandom()
 	ids := []types.Value{types.UUID(id0), types.UUID(id1), types.UUID(id2), types.UUID(id3), types.UUID(badUUID)}
 
-	readRow0, ok := tbl.GetRowByPKVals(row.TaggedValues{idTag: ids[0]}, tSchema)
+	readRow0, ok := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: ids[0]}, tSchema)
 
 	if !ok {
 		t.Error("Could not find row 0 in table")
@@ -76,14 +76,14 @@ func TestTables(t *testing.T) {
 		t.Error(row.Fmt(context.Background(), readRow0, tSchema), "!=", row.Fmt(context.Background(), rows[0], tSchema))
 	}
 
-	_, ok = tbl.GetRowByPKVals(row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
+	_, ok = tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
 
 	if ok {
 		t.Error("GetRow should have returned false.")
 	}
 
 	idItr := SingleColPKItr(idTag, ids)
-	readRows, missing := tbl.GetRows(idItr, -1, tSchema)
+	readRows, missing := tbl.GetRows(context.Background(), idItr, -1, tSchema)
 
 	if len(readRows) != len(rows) {
 		t.Error("Did not find all the expected rows")
