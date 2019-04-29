@@ -16,7 +16,7 @@ func TestLog(t *testing.T) {
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	commit, _ := dEnv.DoltDB.Resolve(cs)
+	commit, _ := dEnv.DoltDB.Resolve(context.Background(), cs)
 
 	cli.Println(commit)
 }

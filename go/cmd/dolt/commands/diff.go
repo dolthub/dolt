@@ -63,7 +63,7 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 	i := 0
 	for _, arg := range args {
 		if cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.Branch); err == nil {
-			if cm, err := dEnv.DoltDB.Resolve(cs); err == nil {
+			if cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs); err == nil {
 				roots[i] = cm.GetRootValue()
 				i++
 				continue
@@ -107,7 +107,7 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 		return "", nil, bdr.AddCause(err).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 	if err != nil {
 		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()

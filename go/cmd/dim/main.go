@@ -58,7 +58,9 @@ func main() {
 	flag.BoolVar(&verboseOut, "v", false, "output verbose logging after completion")
 	flag.Parse()
 
-	dEnv := env.Load(env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
+	ctx := context.Background()
+
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 
 	if !dEnv.HasDoltDataDir() {
 		fmt.Fprintf(os.Stderr, "fatal: not a dolt data repository.")
@@ -72,7 +74,6 @@ func main() {
 
 		os.Exit(1)
 	}
-	ctx := context.Background()
 
 	tableName := flag.Arg(0)
 	root, err := dEnv.WorkingRoot(ctx)

@@ -146,7 +146,7 @@ func getRoots(ctx context.Context, dEnv *env.DoltEnv, rootTypes ...RootType) (ma
 		case WorkingRoot:
 			root, err = dEnv.WorkingRoot(ctx)
 		case HeadRoot:
-			root, err = dEnv.HeadRoot()
+			root, err = dEnv.HeadRoot(ctx)
 		default:
 			panic("Method does not support this root type.")
 		}

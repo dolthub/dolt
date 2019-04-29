@@ -93,9 +93,9 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 	return err
 }
 
-func TimeSortedCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
+func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
 	hashToCommit := make(map[hash.Hash]*doltdb.Commit)
-	err := AddCommits(ddb, commit, hashToCommit, n)
+	err := AddCommits(ctx, ddb, commit, hashToCommit, n)
 
 	if err != nil {
 		return nil, err
@@ -115,19 +115,19 @@ func TimeSortedCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*dol
 	return uniqueCommits, nil
 }
 
-func AddCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
+func AddCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
 	hash := commit.HashOf()
 	hashToCommit[hash] = commit
 
 	numParents := commit.NumParents()
 	for i := 0; i < numParents && len(hashToCommit) != n; i++ {
-		parentCommit, err := ddb.ResolveParent(commit, i)
+		parentCommit, err := ddb.ResolveParent(ctx, commit, i)
 
 		if err != nil {
 			return err
 		}
 
-		err = AddCommits(ddb, parentCommit, hashToCommit, n)
+		err = AddCommits(ctx, ddb, parentCommit, hashToCommit, n)
 
 		if err != nil {
 			return err

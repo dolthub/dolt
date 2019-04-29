@@ -53,11 +53,11 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	fs.WriteFile("schema.json", []byte(testSchema))
-	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
+	ddb := doltdb.LoadDoltDB(context.Background(), doltdb.InMemDoltDB)
 	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	commit, _ := ddb.Resolve(cs)
+	commit, _ := ddb.Resolve(context.Background(), cs)
 	root := commit.GetRootValue()
 
 	return ddb, root, fs

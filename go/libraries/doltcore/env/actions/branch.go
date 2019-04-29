@@ -16,7 +16,7 @@ var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
 
 func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
-	err := CopyBranch(dEnv, oldBranch, newBranch, force)
+	err := CopyBranch(ctx, dEnv, oldBranch, newBranch, force)
 
 	if err != nil {
 		return err
@@ -34,27 +34,27 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 	return DeleteBranch(ctx, dEnv, oldBranch, true)
 }
 
-func CopyBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
-	if !dEnv.DoltDB.HasBranch(oldBranch) {
+func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+	if !dEnv.DoltDB.HasBranch(ctx, oldBranch) {
 		return doltdb.ErrBranchNotFound
-	} else if !force && dEnv.DoltDB.HasBranch(newBranch) {
+	} else if !force && dEnv.DoltDB.HasBranch(ctx, newBranch) {
 		return ErrAlreadyExists
 	} else if !doltdb.IsValidUserBranchName(newBranch) {
 		return doltdb.ErrInvBranchName
 	}
 
 	cs, _ := doltdb.NewCommitSpec("head", oldBranch)
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(newBranch, cm)
+	return dEnv.DoltDB.NewBranchAtCommit(ctx, newBranch, cm)
 }
 
 func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
-	if !dEnv.DoltDB.HasBranch(brName) {
+	if !dEnv.DoltDB.HasBranch(ctx, brName) {
 		return doltdb.ErrBranchNotFound
 	} else if dEnv.RepoState.Branch == brName {
 		return ErrCOBranchDelete
@@ -66,7 +66,7 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force b
 		return err
 	}
 
-	master, err := dEnv.DoltDB.Resolve(ms)
+	master, err := dEnv.DoltDB.Resolve(ctx, ms)
 
 	if err != nil {
 		return err
@@ -78,7 +78,7 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force b
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
@@ -90,11 +90,11 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force b
 		}
 	}
 
-	return dEnv.DoltDB.DeleteBranch(brName)
+	return dEnv.DoltDB.DeleteBranch(ctx, brName)
 }
 
-func CreateBranch(dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
-	if !force && dEnv.DoltDB.HasBranch(newBranch) {
+func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
+	if !force && dEnv.DoltDB.HasBranch(ctx, newBranch) {
 		return ErrAlreadyExists
 	}
 
@@ -108,17 +108,17 @@ func CreateBranch(dEnv *env.DoltEnv, newBranch, startingPoint string, force bool
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(newBranch, cm)
+	return dEnv.DoltDB.NewBranchAtCommit(ctx, newBranch, cm)
 }
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
-	if !dEnv.DoltDB.HasBranch(brName) {
+	if !dEnv.DoltDB.HasBranch(ctx, brName) {
 		return doltdb.ErrBranchNotFound
 	}
 
@@ -138,7 +138,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return RootValueUnreadable{HeadRoot, err}
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
@@ -286,14 +286,14 @@ func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, Ro
 		return false, nil, err
 	}
 
-	return dEnv.DoltDB.HasBranch(str), rootsWithTbl, nil
+	return dEnv.DoltDB.HasBranch(ctx, str), rootsWithTbl, nil
 }
 
-func MaybeGetCommit(dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
+func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.Branch)
 
 	if err == nil {
-		cm, err := dEnv.DoltDB.Resolve(cs)
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 		switch err {
 		case nil:

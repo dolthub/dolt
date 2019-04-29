@@ -215,7 +215,7 @@ func init() {
 }
 
 func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
-	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
+	ddb := doltdb.LoadDoltDB(context.Background(), doltdb.InMemDoltDB)
 	vrw := ddb.ValueReadWriter()
 
 	err := ddb.WriteEmptyRepo(context.Background(), name, email)
@@ -225,7 +225,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	}
 
 	masterHeadSpec, _ := doltdb.NewCommitSpec("head", "master")
-	masterHead, err := ddb.Resolve(masterHeadSpec)
+	masterHead, err := ddb.Resolve(context.Background(), masterHeadSpec)
 
 	if err != nil {
 		panic(err)
@@ -312,7 +312,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	initialCommit, _ := ddb.Commit(context.Background(), masterHash, "master", meta)
 	commit, _ := ddb.Commit(context.Background(), hash, "master", meta)
 
-	ddb.NewBranchAtCommit("to-merge", initialCommit)
+	ddb.NewBranchAtCommit(context.Background(), "to-merge", initialCommit)
 	mergeCommit, _ := ddb.Commit(context.Background(), mergeHash, "to-merge", meta)
 
 	return vrw, commit, mergeCommit, expectedRows, expectedConflicts
