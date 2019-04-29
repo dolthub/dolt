@@ -9,6 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
@@ -77,7 +78,7 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 			}
 
 			tbl, _ := root.GetTable(context.TODO(), tblName)
-			cnfRd, err := merge.NewConflictReader(tbl)
+			cnfRd, err := merge.NewConflictReader(context.TODO(), tbl)
 
 			if err == doltdb.ErrNoConflicts {
 				return
@@ -95,7 +96,8 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 				pipeline.NamedTransform{Name: "fwt", Func: fwtTr.TransformToFWT},
 			)
 
-			srcProcFunc := pipeline.ProcFuncForSourceFunc(cnfRd.NextConflict)
+			// TODO: Pipeline should be contextified.
+			srcProcFunc := pipeline.ProcFuncForSourceFunc(func() (row.Row, pipeline.ImmutableProperties, error) { return cnfRd.NextConflict(context.TODO()) })
 			sinkProcFunc := pipeline.ProcFuncForSinkFunc(cnfWr.ProcRowWithProps)
 			p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, func(failure *pipeline.TransformRowFailure) (quit bool) {
 				panic("")
