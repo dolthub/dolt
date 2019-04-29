@@ -186,13 +186,26 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
-
-			for _, tableName := range selectStmt.inputTables {
-				tableSch := selectStmt.inputSchemas[tableName]
+			if !selectExpr.TableName.IsEmpty() {
+				var targetTable string
+				if aliasedTableName, ok := selectStmt.aliases.TablesByAlias[selectExpr.TableName.Name.String()]; ok {
+					targetTable = aliasedTableName
+				} else {
+					targetTable = selectExpr.TableName.Name.String()
+				}
+				tableSch := selectStmt.inputSchemas[targetTable]
 				tableSch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
-					columns = append(columns, QualifiedColumn{tableName, col.Name})
+					columns = append(columns, QualifiedColumn{targetTable, col.Name})
 					return false
 				})
+			} else {
+				for _, tableName := range selectStmt.inputTables {
+					tableSch := selectStmt.inputSchemas[tableName]
+					tableSch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+						columns = append(columns, QualifiedColumn{tableName, col.Name})
+						return false
+					})
+				}
 			}
 		case *sqlparser.AliasedExpr:
 			switch colExpr := selectExpr.Expr.(type) {
