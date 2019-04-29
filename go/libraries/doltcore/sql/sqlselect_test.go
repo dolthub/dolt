@@ -128,180 +128,192 @@ func TestExecuteSelect(t *testing.T) {
 		expectedErr    bool
 	}{
 		{
-			name:           "Test select * ",
+			name:           "select * ",
 			query:          "select * from people",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where < int",
+			name:           "select *, where < int",
 			query:          "select * from people where age < 40",
 			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where > int reversed",
+			name:           "select *, where > int reversed",
 			query:          "select * from people where 40 > age",
 			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where <= int",
+			name:           "select *, where <= int",
 			query:          "select * from people where age <= 40",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where >= int reversed",
+			name:           "select *, where >= int reversed",
 			query:          "select * from people where 40 >= age",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where > int",
+			name:           "select *, where > int",
 			query:          "select * from people where age > 40",
 			expectedRows:   compressRows(peopleTestSchema, moe),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where < int reversed",
+			name:           "select *, where < int reversed",
 			query:          "select * from people where 40 < age",
 			expectedRows:   compressRows(peopleTestSchema, moe),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where >= int",
+			name:           "select *, where >= int",
 			query:          "select * from people where age >= 40",
 			expectedRows:   compressRows(peopleTestSchema, homer, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where <= int reversed",
+			name:           "select *, where <= int reversed",
 			query:          "select * from people where 40 <= age",
 			expectedRows:   compressRows(peopleTestSchema, homer, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where > string",
+			name:           "select *, where > string",
 			query:          "select * from people where last > 'Simpson'",
 			expectedRows:   compressRows(peopleTestSchema, moe),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where < string",
+			name:           "select *, where < string",
 			query:          "select * from people where last < 'Simpson'",
 			expectedRows:   compressRows(peopleTestSchema, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where = string",
+			name:           "select *, where = string",
 			query:          "select * from people where last = 'Simpson'",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where > float",
+			name:           "select *, where > float",
 			query:          "select * from people where rating > 8.0",
 			expectedRows:   compressRows(peopleTestSchema, homer, bart, lisa),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where < float",
+			name:           "select *, where < float",
 			query:          "select * from people where rating < 8.0",
 			expectedRows:   compressRows(peopleTestSchema, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where = float",
+			name:           "select *, where = float",
 			query:          "select * from people where rating = 8.0",
 			expectedRows:   compressRows(peopleTestSchema, marge),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where < float reversed",
+			name:           "select *, where < float reversed",
 			query:          "select * from people where 8.0 < rating",
 			expectedRows:   compressRows(peopleTestSchema, homer, bart, lisa),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where > float reversed",
+			name:           "select *, where > float reversed",
 			query:          "select * from people where 8.0 > rating",
 			expectedRows:   compressRows(peopleTestSchema, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where = float reversed",
+			name:           "select *, where = float reversed",
 			query:          "select * from people where 8.0 = rating",
 			expectedRows:   compressRows(peopleTestSchema, marge),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where bool = ",
+			name:           "select *, where bool = ",
 			query:          "select * from people where is_married = true",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where bool = false ",
+			name:           "select *, where bool = false ",
 			query:          "select * from people where is_married = false",
 			expectedRows:   compressRows(peopleTestSchema, bart, lisa, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where bool <> ",
+			name:           "select *, where bool <> ",
 			query:          "select * from people where is_married <> false",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test select *, where bool",
+			name:           "select *, where bool",
 			query:          "select * from people where is_married",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:  "Test select subset of cols",
+			name:           "select *, and clause",
+			query:          "select * from people where is_married and age > 38",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, or clause",
+			query:          "select * from people where is_married or age < 20",
+			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:  "select subset of cols",
 			query: "select first, last from people where age >= 40",
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), homer, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema,"first", "last"),
 		},
 		{
-			name:  "Test column aliases",
+			name:  "column aliases",
 			query: "select first as f, last as l from people where age >= 40",
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), homer, moe, barney),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
 		{
-			name:  "Test column aliases in where clause",
+			name:  "column aliases in where clause",
 			query: `select first as f, last as l from people where f = "Homer"`,
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), homer),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
 		{
-			name:  "Test column aliases in where clause, >",
+			name:  "column aliases in where clause, >",
 			query: `select first as f, last as l from people where l > "Simpson"`,
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), moe),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
 		{
-			name:  "Test column aliases in where clause, <",
+			name:  "column aliases in where clause, <",
 			query: `select first as f, last as l from people where "Simpson" < l`,
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), moe),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
 		{
-			name:  "Test table aliases",
+			name:  "table aliases",
 			query: "select p.first as f, people.last as l from people p where p.f = 'Homer'",
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), homer),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
 		{
-			name:  "Test table aliases with bad alias",
+			name:  "table aliases with bad alias",
 			query: "select m.first as f, p.last as l from people p where p.f = 'Homer'",
 			expectedErr: true,
 		},
 		{
-			name:  "Test column aliases, all columns",
+			name:  "column aliases, all columns",
 			query: `select id as i, first as f, last as l, is_married as m, age as a,
 				rating as r, uuid as u, num_episodes as n from people
 				where age >= 40`,
@@ -311,30 +323,30 @@ func TestExecuteSelect(t *testing.T) {
 				"u", types.UUIDKind, "n", types.UintKind),
 		},
 		{
-			name:           "Test select *, not equals",
+			name:           "select *, not equals",
 			query:          "select * from people where age <> 40",
 			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa, moe),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "Test empty result set",
+			name:           "empty result set",
 			query:          "select * from people where age > 80",
 			expectedRows:   rs(),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:  "Test empty result set with columns",
+			name:  "empty result set with columns",
 			query: "select id, age from people where age > 80",
 			expectedRows: rs(),
 			expectedSchema: compressSchema(peopleTestSchema, "id", "age"),
 		},
 		{
-			name:  "Test select * unknown column",
+			name:  "select * unknown column",
 			query: "select * from people where dne > 8.0",
 			expectedErr: true,
 		},
 		{
-			name:  "Test unsupported comparison",
+			name:  "unsupported comparison",
 			query: "select * from people where first in ('Homer')",
 			expectedRows: nil, // not the same as empty result set
 			expectedErr: true,
@@ -380,7 +392,7 @@ func TestJoins(t *testing.T) {
 		expectedErr    bool
 	}{
 		{
-			name:  "Test full cross product",
+			name:  "Full cross product",
 			query: `select * from people, episodes`,
 			expectedRows: rs(
 				concatRows(peopleTestSchema, homer, episodesTestSchema, ep1),
@@ -411,7 +423,7 @@ func TestJoins(t *testing.T) {
 			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
 		},
 		{
-			name:  "Test natural join with where clause",
+			name:  "Natural join with where clause",
 			query: `select * from people p, episodes e where e.id = p.id`,
 			expectedRows: rs(
 				concatRows(peopleTestSchema, marge, episodesTestSchema, ep1),
@@ -421,8 +433,26 @@ func TestJoins(t *testing.T) {
 			),
 			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
 		},
+		// TODO: make work
+		//{
+		//	name:  "Three table natural join with where clause",
+		//	query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
+		//	expectedRows: rs(
+		//		concatRows(peopleTestSchema, homer, episodesTestSchema, ep1),
+		//		concatRows(peopleTestSchema, marge, episodesTestSchema, ep1),
+		//		concatRows(peopleTestSchema, homer, episodesTestSchema, ep2),
+		//		concatRows(peopleTestSchema, bart, episodesTestSchema, ep2),
+		//		concatRows(peopleTestSchema, lisa, episodesTestSchema, ep2),
+		//		concatRows(peopleTestSchema, moe, episodesTestSchema, ep2),
+		//		concatRows(peopleTestSchema, homer, episodesTestSchema, ep3),
+		//		concatRows(peopleTestSchema, marge, episodesTestSchema, ep3),
+		//		concatRows(peopleTestSchema, lisa, episodesTestSchema, ep3),
+		//		concatRows(peopleTestSchema, barney, episodesTestSchema, ep3),
+		//	),
+		//	expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
+		//},
 		{
-			name:  "Test natural join with where clause, select subset of columns",
+			name:  "Natural join with where clause, select subset of columns",
 			query: `select e.id, p.id, e.name, p.first, p.last from people p, episodes e where e.id = p.id`,
 			expectedRows: rs(
 				newResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
@@ -434,7 +464,7 @@ func TestJoins(t *testing.T) {
 				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
 		},
 		{
-			name:  "Test natural join with where clause and column aliases",
+			name:  "Natural join with where clause and column aliases",
 			query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
 			expectedRows: rs(
 				newResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
@@ -446,7 +476,7 @@ func TestJoins(t *testing.T) {
 				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
 		},
 		{
-			name:  "Test natural join with where clause and quoted column alias",
+			name:  "Natural join with where clause and quoted column alias",
 			query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
 			expectedRows: rs(
 				newResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
@@ -457,6 +487,7 @@ func TestJoins(t *testing.T) {
 			expectedSchema: newResultSetSchema("eid", types.IntKind, "p.id", types.IntKind,
 				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
 		},
+
 	}
 
 	for _, tt := range tests {
