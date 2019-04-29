@@ -238,7 +238,12 @@ func nodeToString(node sqlparser.SQLNode) string {
 // with the full (unaliased) name of the table and column being referenced.  Returns an error if no schema contains such
 // a column name, or if multiple do.
 func resolveColumn(colName string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
-	// First try getting the table from the column name string itself, eg. "t.col"
+	// First try matching any known aliases directly
+	if qc, ok := aliases.ColumnsByAlias[colName]; ok {
+		return qc, nil
+	}
+
+	// Then try getting the table from the column name string itself, eg. "t.col"
 	qc := parseColumnAlias(colName)
 	if qc.TableName != "" {
 		tableName := aliases.TablesByAlias[qc.TableName]
@@ -250,11 +255,6 @@ func resolveColumn(colName string, schemas map[string]schema.Schema, aliases *Al
 		} else {
 			return QualifiedColumn{}, errFmt("Unrecognized table name: '%v'", tableName)
 		}
-	}
-
-	// Then try matching it with known aliases
-	if qc, ok := aliases.ColumnsByAlias[colName]; ok {
-		return qc, nil
 	}
 
 	// Finally, look through all input schemas to see if there's an exact match and dying if there's any ambiguity
@@ -315,9 +315,6 @@ func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schem
 	switch e := expr.(type) {
 	case *sqlparser.ColName:
 		colNameStr := getColumnNameString(e)
-		if col, ok := aliases.ColumnsByAlias[colNameStr]; ok {
-			colNameStr = col.ColumnName
-		}
 
 		qc, err := resolveColumn(colNameStr, inputSchemas, aliases)
 		if err != nil {
@@ -381,7 +378,7 @@ func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schem
 
 func getColumnNameString(e *sqlparser.ColName) string {
 	var b strings.Builder
-	if !e.Qualifier.IsEmpty() {
+	if !e.Qualifier.Name.IsEmpty() {
 		b.WriteString(e.Qualifier.Name.String())
 		b.WriteString(".")
 	}
