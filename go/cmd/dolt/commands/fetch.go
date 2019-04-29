@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"path"
 	"runtime/debug"
 
@@ -53,14 +54,14 @@ func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch strin
 		}
 	}()
 
-	srcDB := r.GetRemoteDB()
+	srcDB := r.GetRemoteDB(context.TODO())
 
-	if !srcDB.HasBranch(branch) {
+	if !srcDB.HasBranch(context.TODO(), branch) {
 		verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
 	} else {
 
 		cs, _ := doltdb.NewCommitSpec("HEAD", branch)
-		cm, err := srcDB.Resolve(cs)
+		cm, err := srcDB.Resolve(context.TODO(), cs)
 
 		if err != nil {
 			verr = errhand.BuildDError("error: unable to find %v", branch).Build()
@@ -69,7 +70,7 @@ func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch strin
 			stopChan := make(chan struct{})
 			go progFunc(progChan, stopChan)
 
-			err = actions.Fetch(path.Join("remotes", remoteName, branch), srcDB, dEnv.DoltDB, cm, progChan)
+			err = actions.Fetch(context.TODO(), path.Join("remotes", remoteName, branch), srcDB, dEnv.DoltDB, cm, progChan)
 			close(progChan)
 			<-stopChan
 

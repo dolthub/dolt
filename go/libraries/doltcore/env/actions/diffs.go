@@ -53,7 +53,7 @@ func (td *TableDiffs) Len() int {
 }
 
 func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
-	headRoot, err := dEnv.HeadRoot()
+	headRoot, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
 		return nil, nil, RootValueUnreadable{HeadRoot, err}

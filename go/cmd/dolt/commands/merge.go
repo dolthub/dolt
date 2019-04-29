@@ -65,13 +65,13 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		branchName := apr.Arg(0)
-		if !dEnv.DoltDB.HasBranch(branchName) {
+		if !dEnv.DoltDB.HasBranch(context.TODO(), branchName) {
 			cli.PrintErrln(color.RedString("unknown branch: %s", branchName))
 			usage()
 			return 1
 		}
 
-		isUnchanged, _ := dEnv.IsUnchangedFromHead()
+		isUnchanged, _ := dEnv.IsUnchangedFromHead(context.TODO())
 
 		if !isUnchanged {
 			cli.Println("error: Your local changes would be overwritten.")
@@ -154,7 +154,7 @@ func executeFFMerge(dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError 
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 	}
 
-	err = dEnv.DoltDB.FastForward(dEnv.RepoState.Branch, cm2)
+	err = dEnv.DoltDB.FastForward(context.TODO(), dEnv.RepoState.Branch, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()

@@ -99,7 +99,7 @@ func getStagedAndHead(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, 
 		return nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
 	}
 
-	headRoot, err := dEnv.HeadRoot()
+	headRoot, err := dEnv.HeadRoot(context.TODO())
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()

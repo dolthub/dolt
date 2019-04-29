@@ -1,6 +1,7 @@
 package env
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 )
 
@@ -18,7 +19,7 @@ func IsInsecure(r Remote) bool {
 	return r.Insecure != nil && *r.Insecure
 }
 
-func (r *Remote) GetRemoteDB() *doltdb.DoltDB {
+func (r *Remote) GetRemoteDB(ctx context.Context) *doltdb.DoltDB {
 	remoteLocStr := DoltNomsProtocolID + ":" + r.Name
-	return doltdb.LoadDoltDB(doltdb.Location(remoteLocStr))
+	return doltdb.LoadDoltDB(ctx, doltdb.Location(remoteLocStr))
 }

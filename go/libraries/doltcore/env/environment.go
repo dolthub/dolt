@@ -45,10 +45,10 @@ type DoltEnv struct {
 }
 
 // Load loads the DoltEnv for the current directory of the cli
-func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.Location) *DoltEnv {
+func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.Location) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	ddb := doltdb.LoadDoltDB(loc)
+	ddb := doltdb.LoadDoltDB(ctx, loc)
 
 	dEnv := &DoltEnv{
 		config,
@@ -130,7 +130,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { /
 	return err
 }
 
-func (dEnv *DoltEnv) InitRepoWithNoData() error {
+func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -143,7 +143,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData() error {
 		dEnv.bestEffortDeleteAll(doltdb.DoltDir)
 	}
 
-	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
+	dEnv.DoltDB = doltdb.LoadDoltDB(ctx, dEnv.loc)
 
 	return err
 }
@@ -175,7 +175,7 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 }
 
 func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) error {
-	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
+	dEnv.DoltDB = doltdb.LoadDoltDB(ctx, dEnv.loc)
 	err := dEnv.DoltDB.WriteEmptyRepo(ctx, name, email)
 
 	if err != nil {
@@ -183,7 +183,7 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) err
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	commit, _ := dEnv.DoltDB.Resolve(cs)
+	commit, _ := dEnv.DoltDB.Resolve(ctx, cs)
 
 	rootHash := commit.GetRootValue().HashOf()
 	dEnv.RepoState, err = CreateRepoState(dEnv.FS, "master", rootHash)
@@ -219,9 +219,9 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 	return nil
 }
 
-func (dEnv *DoltEnv) HeadRoot() (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	cs, _ := doltdb.NewCommitSpec("head", dEnv.RepoState.Branch)
-	commit, err := dEnv.DoltDB.Resolve(cs)
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return nil, err
@@ -292,8 +292,8 @@ func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, erro
 	return root.TablesInConflict(ctx), nil
 }
 
-func (dEnv *DoltEnv) IsUnchangedFromHead() (bool, error) {
-	root, err := dEnv.HeadRoot()
+func (dEnv *DoltEnv) IsUnchangedFromHead(ctx context.Context) (bool, error) {
+	root, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
 		return false, err

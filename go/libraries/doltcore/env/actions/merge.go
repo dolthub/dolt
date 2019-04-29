@@ -47,7 +47,7 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
 	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
 
-	headRoot, err = dEnv.HeadRoot()
+	headRoot, err = dEnv.HeadRoot(ctx)
 
 	if err != nil {
 		return

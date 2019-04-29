@@ -52,8 +52,8 @@ func TestPutRow(t *testing.T) {
 		if result == 0 {
 			root, _ := dEnv.WorkingRoot(context.Background())
 			tbl, _ := root.GetTable(context.Background(), tableName)
-			sch := tbl.GetSchema(context.TODO())
-			row, exists := tbl.GetRowByPKVals(context.TODO(), row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
+			sch := tbl.GetSchema(context.Background())
+			row, exists := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
 
 			if !exists {
 				t.Fatal("Could not find row")

@@ -82,7 +82,7 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr, cwb string) (*doltdb.Com
 		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 	if err != nil {
 		if err == doltdb.ErrInvalidAnscestorSpec {
@@ -100,7 +100,7 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr, cwb string) (*doltdb.Com
 }
 
 func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Commit, errhand.VerboseError) {
-	cm, err := actions.MaybeGetCommit(dEnv, maybeCommit)
+	cm, err := actions.MaybeGetCommit(context.TODO(), dEnv, maybeCommit)
 
 	if err != nil {
 		bdr := errhand.BuildDError("fatal: Unable to read from data repository.")

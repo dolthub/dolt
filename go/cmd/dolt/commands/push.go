@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"runtime/debug"
 	"time"
@@ -41,7 +42,7 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if remote, ok := remotes[remoteName]; !ok {
 			verr = errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
-		} else if !dEnv.DoltDB.HasBranch(branch) {
+		} else if !dEnv.DoltDB.HasBranch(context.TODO(), branch) {
 			verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
 		} else {
 			verr = pushToRemoteBranch(dEnv, remote, branch)
@@ -60,20 +61,20 @@ func pushToRemoteBranch(dEnv *env.DoltEnv, r env.Remote, branch string) (verr er
 	}()
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 	if err != nil {
 		verr = errhand.BuildDError("error: unable to find %v", branch).Build()
 	} else {
 
-		destDB := r.GetRemoteDB()
+		destDB := r.GetRemoteDB(context.TODO())
 
 		progChan := make(chan datas.PullProgress, 16)
 		stopChan := make(chan struct{})
 		go progFunc(progChan, stopChan)
 
 		remoteBranch := doltdb.LongRemoteBranchName(r.Name, branch)
-		err = actions.Push(branch, remoteBranch, dEnv.DoltDB, destDB, cm, progChan)
+		err = actions.Push(context.TODO(), branch, remoteBranch, dEnv.DoltDB, destDB, cm, progChan)
 		close(progChan)
 		<-stopChan
 

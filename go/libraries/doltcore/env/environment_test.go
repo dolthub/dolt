@@ -45,7 +45,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 	}
 
 	fs := filesys.NewInMemFS(initialDirs, initialFiles, workingDir)
-	dEnv := Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB)
 
 	return dEnv
 }
