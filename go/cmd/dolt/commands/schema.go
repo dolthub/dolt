@@ -152,7 +152,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 
 func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	//schStr, err := encoding.MarshalAsJson(sch)
 	schStr, err := sql.SchemaAsCreateStmt(tblName, sch)
 	if err != nil {
@@ -185,7 +185,7 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 }
 
 func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	jsonSchStr, err := encoding.MarshalAsJson(sch)
 	if err != nil {
 		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
@@ -206,7 +206,7 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	}
 
 	tbl, _ := root.GetTable(context.TODO(), tblName)
-	tblSch := tbl.GetSchema()
+	tblSch := tbl.GetSchema(context.TODO())
 	newFieldName := apr.Arg(1)
 
 	var defaultVal *string
@@ -249,7 +249,7 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 
 	notNull := apr.Contains(notNullFlag)
 
-	if notNull && defaultVal == nil && tbl.GetRowData().Len() > 0 {
+	if notNull && defaultVal == nil && tbl.GetRowData(context.TODO()).Len() > 0 {
 		return errhand.BuildDError("When adding a column that may not be null to a table with existing rows, a default value must be provided.").Build()
 	}
 
@@ -271,7 +271,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 		col = schema.NewColumn(name, tag, kind, false)
 	}
 
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	updatedCols, err := sch.GetAllCols().Append(col)
 
 	if err != nil {
@@ -287,16 +287,16 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 	}
 
 	if defaultVal == nil {
-		newTable := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, tbl.GetRowData())
+		newTable := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, tbl.GetRowData(context.TODO()))
 		return newTable, nil
 	}
 
-	rowData := tbl.GetRowData()
+	rowData := tbl.GetRowData(context.TODO())
 	me := rowData.Edit()
 	defVal, _ := doltcore.StringToValue(*defaultVal, kind)
 
 	rowData.Iter(context.TODO(), func(k, v types.Value) (stop bool) {
-		oldRow, _ := tbl.GetRow(k.(types.Tuple), newSchema)
+		oldRow, _ := tbl.GetRow(context.TODO(), k.(types.Tuple), newSchema)
 		newRow, err := oldRow.SetColVal(tag, defVal, newSchema)
 
 		if err != nil {

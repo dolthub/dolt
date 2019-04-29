@@ -44,7 +44,7 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 		for _, tblName := range tbls {
 			tbl, _ := working.GetTable(ctx, tblName)
 
-			if tbl.NumRowsInConflict() > 0 {
+			if tbl.NumRowsInConflict(ctx) > 0 {
 				if !allowConflicts {
 					inConflict = append(inConflict, tblName)
 				}
@@ -59,7 +59,7 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	for _, tblName := range tbls {
 		tbl, _ := working.GetTable(ctx, tblName)
 
-		if tbl.HasConflicts() && tbl.NumRowsInConflict() == 0 {
+		if tbl.HasConflicts() && tbl.NumRowsInConflict(ctx) == 0 {
 			working = working.PutTable(ctx, dEnv.DoltDB, tblName, tbl.ClearConflicts())
 		}
 	}

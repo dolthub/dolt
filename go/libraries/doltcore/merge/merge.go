@@ -67,17 +67,17 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		}
 	}
 
-	tblSchema := tbl.GetSchema()
-	mergeTblSchema := mergeTbl.GetSchema()
+	tblSchema := tbl.GetSchema(ctx)
+	mergeTblSchema := mergeTbl.GetSchema(ctx)
 	schemaUnion, err := typed.TypedSchemaUnion(tblSchema, mergeTblSchema)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rows := tbl.GetRowData()
-	mergeRows := mergeTbl.GetRowData()
-	ancRows := ancTbl.GetRowData()
+	rows := tbl.GetRowData(ctx)
+	mergeRows := mergeTbl.GetRowData(ctx)
+	ancRows := ancTbl.GetRowData(ctx)
 
 	mergedRowData, conflicts, stats, err := mergeTableData(ctx, schemaUnion, rows, mergeRows, ancRows, merger.vrw)
 

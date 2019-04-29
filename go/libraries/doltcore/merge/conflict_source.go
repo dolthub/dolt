@@ -36,7 +36,7 @@ type ConflictReader struct {
 }
 
 func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader, error) {
-	base, sch, mergeSch, err := tbl.GetConflictSchemas()
+	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx)
 
 	if err != nil {
 		return nil, err
@@ -67,7 +67,7 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	_, confData, err := tbl.GetConflicts()
+	_, confData, err := tbl.GetConflicts(ctx)
 
 	if err != nil {
 		return nil, err

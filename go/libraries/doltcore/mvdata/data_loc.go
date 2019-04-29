@@ -132,8 +132,8 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 			return nil, false, doltdb.ErrTableNotFound
 		}
 
-		sch := tbl.GetSchema()
-		rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(), sch)
+		sch := tbl.GetSchema(ctx)
+		rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), sch)
 		return rd, true, nil
 	} else {
 		exists, isDir := fs.Exists(dl.Path)
@@ -239,7 +239,7 @@ func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *dolt
 			return nil, errors.New("Could not find table " + tableName)
 		}
 
-		m := tbl.GetRowData()
+		m := tbl.GetRowData(ctx)
 		return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
 
 	case CsvFile, PsvFile, JsonFile, XlsxFile:

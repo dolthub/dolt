@@ -108,11 +108,11 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	row, verr := createRow(sch, prArgs)
 
 	if verr == nil {
-		me := tbl.GetRowData().Edit()
+		me := tbl.GetRowData(context.TODO()).Edit()
 		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map(context.TODO())
 		tbl = tbl.UpdateRows(context.Background(), updated)
 		root = root.PutTable(context.Background(), dEnv.DoltDB, prArgs.TableName, tbl)

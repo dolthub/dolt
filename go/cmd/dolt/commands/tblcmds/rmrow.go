@@ -57,7 +57,7 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	root, tbl, verr := getRootAndTable(dEnv, rmArgs.TableName)
 
 	if verr == nil {
-		pkVals, err := cli.ParseKeyValues(tbl.GetSchema(), rmArgs.PKs)
+		pkVals, err := cli.ParseKeyValues(tbl.GetSchema(context.TODO()), rmArgs.PKs)
 
 		if err != nil {
 			verr = errhand.BuildDError("error parsing keys to delete").AddCause(err).Build()
@@ -91,7 +91,7 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 }
 
 func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblName string, pkVals []types.Value, dEnv *env.DoltEnv) errhand.VerboseError {
-	m := tbl.GetRowData()
+	m := tbl.GetRowData(context.TODO())
 
 	updates := 0
 	for _, pk := range pkVals {

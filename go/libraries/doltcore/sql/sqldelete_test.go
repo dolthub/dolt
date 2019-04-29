@@ -129,7 +129,7 @@ func TestExecuteDelete(t *testing.T) {
 				deletedIdx := findRowIndex(r, tt.deletedRows)
 
 				key := r.NomsMapKey(peopleTestSchema)
-				_, ok := table.GetRow(key.(types.Tuple), peopleTestSchema)
+				_, ok := table.GetRow(context.Background(), key.(types.Tuple), peopleTestSchema)
 				if deletedIdx >= 0 {
 					assert.False(t, ok, "Row not deleted: %v", r)
 				} else {

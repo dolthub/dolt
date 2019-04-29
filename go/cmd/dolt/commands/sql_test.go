@@ -207,7 +207,7 @@ func TestInsert(t *testing.T) {
 					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
-					_, ok := table.GetRow(key, dtestutils.TypedSchema)
+					_, ok := table.GetRow(context.Background(), key, dtestutils.TypedSchema)
 					assert.True(t, ok, "expected id not found")
 				}
 			}
@@ -278,7 +278,7 @@ func TestUpdate(t *testing.T) {
 					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
-					row, ok := table.GetRow(key, dtestutils.TypedSchema)
+					row, ok := table.GetRow(context.Background(), key, dtestutils.TypedSchema)
 					assert.True(t, ok, "expected id not found")
 					ageVal, _ := row.GetColVal(dtestutils.AgeTag)
 					assert.Equal(t, test.expectedAges[i], uint(ageVal.(types.Uint)))
@@ -343,7 +343,7 @@ func TestDelete(t *testing.T) {
 					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
-					_, ok := table.GetRow(key, dtestutils.TypedSchema)
+					_, ok := table.GetRow(context.Background(), key, dtestutils.TypedSchema)
 					assert.False(t, ok, "row not deleted")
 				}
 			}

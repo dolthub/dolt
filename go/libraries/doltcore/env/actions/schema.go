@@ -15,7 +15,7 @@ func RenameColumnOfSchema(ctx context.Context, oldName string, newName string, t
 		panic("invalid parameters")
 	}
 
-	tblSch := tbl.GetSchema()
+	tblSch := tbl.GetSchema(ctx)
 	allCols := tblSch.GetAllCols()
 	col, ok := allCols.GetByName(oldName)
 
@@ -49,7 +49,7 @@ func RenameColumnOfSchema(ctx context.Context, oldName string, newName string, t
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData())
+	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData(ctx))
 
 	return newTable, nil
 }
@@ -60,7 +60,7 @@ func RemoveColumnFromTable(ctx context.Context, colName string, tbl *doltdb.Tabl
 		panic("invalid parameters")
 	}
 
-	tblSch := tbl.GetSchema()
+	tblSch := tbl.GetSchema(ctx)
 	allCols := tblSch.GetAllCols()
 	_, ok := allCols.GetByName(colName)
 
@@ -86,7 +86,7 @@ func RemoveColumnFromTable(ctx context.Context, colName string, tbl *doltdb.Tabl
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData())
+	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData(ctx))
 
 	return newTable, nil
 }

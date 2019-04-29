@@ -50,7 +50,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errUpdate("Unknown table '%s'", tableName)
 	}
 	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema()
+	tableSch := table.GetSchema(ctx)
 
 	// map of column tag to value
 	setVals := make(map[uint64]types.Value)
@@ -141,7 +141,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 	// Perform the update
 	var result UpdateResult
-	rowData := table.GetRowData()
+	rowData := table.GetRowData(ctx)
 	me := rowData.Edit()
 	rowReader := noms.NewNomsMapReader(ctx, rowData, tableSch)
 
