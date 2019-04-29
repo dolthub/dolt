@@ -88,7 +88,7 @@ func ExecuteSelect(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Sel
 func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Select, query string) (*pipeline.Pipeline, schema.Schema, error) {
 	selectStmt := &selectStatement{aliases: NewAliases()}
 
-	if err := processFromClause(root, selectStmt, s.From, query); err != nil {
+	if err := processFromClause(ctx, root, selectStmt, s.From, query); err != nil {
 		return nil, nil, err
 	}
 
@@ -119,7 +119,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
-func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from sqlparser.TableExprs, query string) error {
+func processFromClause(ctx context.Context, root *doltdb.RootValue, selectStmt *selectStatement, from sqlparser.TableExprs, query string) error {
 	for _, tableExpr := range from {
 		var tableName string
 		switch te := tableExpr.(type) {
@@ -147,7 +147,7 @@ func processFromClause(root *doltdb.RootValue, selectStmt *selectStatement, from
 			return errFmt("Unsupported select statement: %v", query)
 		}
 
-		if !root.HasTable(context.TODO(), tableName) {
+		if !root.HasTable(ctx, tableName) {
 			return errFmt("Unknown table '%s'", tableName)
 		}
 	}
@@ -279,13 +279,13 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, statement *sele
 		return nil, nil, verr
 	}
 
-	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(), tblSch)
-	rdProcFunc := pipeline.ProcFuncForReader(context.TODO(), rd)
+	rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(), tblSch)
+	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
 
 	p := pipeline.NewPartialPipeline(rdProcFunc, transforms)
 	selTrans.noMoreCallback = func() { p.NoMore() }
 
-	p.RunAfter(func() { rd.Close(context.TODO()) })
+	p.RunAfter(func() { rd.Close(ctx) })
 
 	return p, outSchema, nil
 }
