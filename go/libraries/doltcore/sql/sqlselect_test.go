@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
@@ -420,6 +421,18 @@ func TestJoins(t *testing.T) {
 			),
 			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
 		},
+		{
+			name:  "Test natural join with where clause, select subset of columns",
+			query: `select e.id, p.id, e.name, p.first, p.last from people p, episodes e where e.id = p.id`,
+			expectedRows: rs(
+				newResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
+				newResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
+				newResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
+				newResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
+			),
+			expectedSchema: newResultSetSchema("e.id", types.IntKind, "p.id", types.IntKind,
+				"e.name", types.StringKind, "p.first", types.StringKind, "p.last", types.StringKind),
+		},
 	}
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
@@ -567,6 +580,26 @@ func compressSchemas(schs ...schema.Schema) schema.Schema {
 	}
 
 	return schema.UnkeyedSchemaFromCols(colCol)
+}
+
+// Creates a new row for a result set specified by the given values
+func newResultSetRow(colVals ...types.Value) row.Row {
+
+	taggedVals := make(row.TaggedValues)
+	cols := make([]schema.Column, len(colVals))
+	for i := 0; i < len(colVals); i++ {
+		taggedVals[uint64(i)] = colVals[i]
+		nomsKind := colVals[i].Kind()
+		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	sch := schema.UnkeyedSchemaFromCols(collection)
+
+	return row.New(sch, taggedVals)
 }
 
 // Creates a new schema for a result set specified by the given pairs of column names and types. Column names are
