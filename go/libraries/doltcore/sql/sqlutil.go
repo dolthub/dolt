@@ -386,6 +386,119 @@ func getColumnNameString(e *sqlparser.ColName) string {
 	return b.String()
 }
 
+// resolveColumnsInWhereClause returns the qualified columns referenced by the where clause
+func resolveColumnsInWhereClause(whereClause *sqlparser.Where, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
+		return nil, errFmt("Having clause not supported")
+	}
+
+	if whereClause == nil {
+		return nil, nil
+	}
+
+	return resolveColumnsInWhereExpr(whereClause.Expr, inputSchemas, aliases)
+}
+
+// resolveColumnsInWhereExpr is the helper function for resolveColumnsInWhereExpr, which can be used recursively on sub
+// expressions. Supported parser types here must be kept in sync with createFilterForWhereExpr
+func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+
+	cols := make([]QualifiedColumn, 0)
+	switch expr := whereExpr.(type) {
+	case *sqlparser.ComparisonExpr:
+		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, leftCols...)
+		cols = append(cols, rightCols...)
+	case *sqlparser.ColName:
+		colNameStr := getColumnNameString(expr)
+		qc, err := resolveColumn(colNameStr, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, qc)
+	case *sqlparser.AndExpr:
+		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, leftCols...)
+		cols = append(cols, rightCols...)
+	case *sqlparser.OrExpr:
+		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, leftCols...)
+		cols = append(cols, rightCols...)
+	case *sqlparser.SQLVal, sqlparser.BoolVal:
+		// No columns, just a SQL literal
+	case *sqlparser.NotExpr:
+		return nil, errFmt("Not expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ParenExpr:
+		return nil, errFmt("Parenthetical expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.RangeCond:
+		return nil, errFmt("Range expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.IsExpr:
+		return nil, errFmt("Is expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ExistsExpr:
+		return nil, errFmt("Exists expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.NullVal:
+		return nil, errFmt("NULL expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ValTuple:
+		return nil, errFmt("Tuple expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.Subquery:
+		return nil, errFmt("Subquery expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ListArg:
+		return nil, errFmt("List expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.BinaryExpr:
+		return nil, errFmt("Binary expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.UnaryExpr:
+		return nil, errFmt("Unary expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.IntervalExpr:
+		return nil, errFmt("Interval expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.CollateExpr:
+		return nil, errFmt("Collate expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.FuncExpr:
+		return nil, errFmt("Function expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.CaseExpr:
+		return nil, errFmt("Case expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ValuesFuncExpr:
+		return nil, errFmt("Values func expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ConvertExpr:
+		return nil, errFmt("Conversion expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.SubstrExpr:
+		return nil, errFmt("Substr expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ConvertUsingExpr:
+		return nil, errFmt("Convert expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.MatchExpr:
+		return nil, errFmt("Match expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.GroupConcatExpr:
+		return nil, errFmt("Group concat expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.Default:
+		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
+	default:
+		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
+	}
+
+	return cols, nil
+}
+
+// createFilterForWhere creates a filter function from the where clause given, or returns an error if it cannot
 func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
 	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
 		return nil, errFmt("Having clause not supported")
@@ -400,9 +513,9 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 	}
 }
 
-// createFilter creates a filter function from the where clause given, or returns an error if it cannot
+// createFilterForWhereExpr is the helper function for createFilterForWhere, which can be used recursively on sub
+// expressions. Supported parser types here must be kept in sync with resolveColumnsInWhereExpr
 func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
-
 	var filter rowFilterFn
 	switch expr := whereExpr.(type) {
 	case *sqlparser.ComparisonExpr:

@@ -25,6 +25,8 @@ type SelectStatement struct {
 	inputSchemas map[string]schema.Schema
 	// Columns to be selected
 	selectedCols []QualifiedColumn
+	// Referenced columns (selected or in where / having clause)
+	referencedCols []QualifiedColumn
 	// Aliases for columns and tables
 	aliases *Aliases
 	// Filter function for the result set
@@ -104,6 +106,10 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 		return nil, nil, err
 	}
 
+	if err := processReferencedColumns(selectStmt, s.Where); err != nil {
+		return nil, nil, err
+	}
+
 	if err := processLimitClause(s, selectStmt); err != nil {
 		return nil, nil, err
 	}
@@ -118,6 +124,35 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 	}
 
 	return p, selectStmt, nil
+}
+
+// Processes the referenced columns, those appearing either in the select list or the where clause.
+func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Where) error {
+	cols := make([]QualifiedColumn, 0)
+	cols = append(cols, selectStmt.selectedCols...)
+
+	referencedCols, err := resolveColumnsInWhereClause(where, selectStmt.inputSchemas, selectStmt.aliases)
+	if err != nil {
+		return err
+	}
+
+	for _, col := range referencedCols {
+		if !contains(col, cols) {
+			cols = append(cols, col)
+		}
+	}
+
+	selectStmt.referencedCols = cols
+	return nil
+}
+
+func contains(column QualifiedColumn, cols []QualifiedColumn) bool {
+	for _, col := range cols {
+		if AreColumnsEqual(col, column) {
+			return true
+		}
+	}
+	return false
 }
 
 // Processed the limit clause of the SQL select statement given, storing the result of the analysis in the selectStmt
