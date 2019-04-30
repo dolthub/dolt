@@ -39,3 +39,8 @@ func (a *Aliases) AddTableAlias(tableName, alias string) {
 	a.AliasesByTable[tableName] = alias
 	a.TablesByAlias[alias] = tableName
 }
+
+// Returns whether the two columns given are equal
+func AreColumnsEqual(c1, c2 QualifiedColumn) bool {
+	return c1.TableName == c2.TableName && c1.ColumnName == c2.ColumnName
+}
