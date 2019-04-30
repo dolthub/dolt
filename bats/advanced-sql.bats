@@ -29,6 +29,18 @@ teardown() {
     [ "${#lines[@]}" -eq 8 ]
 }
 
+@test "ambiguous column name" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Ambiguous column: c1" ]
+}
+
+@test "select with and and or clauses" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where pk=0 and pk1=0 or pk2=1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 13 ]
+}
+
 @test "select the same column twice using column aliases" {
     run dolt sql -q "select pk,c1 as foo,c1 as bar from one_pk"
     [ "$status" -eq 0 ]
