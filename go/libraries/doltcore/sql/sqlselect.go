@@ -19,6 +19,8 @@ import (
 type SelectStatement struct {
 	// Result set schema
 	ResultSetSchema *resultset.ResultSetSchema
+	// Intermediate result set schema, used for processing results
+	intermediateRss *resultset.ResultSetSchema
 	// Input tables in order of selection
 	inputTables []string
 	// Input table schemas, keyed by table name
@@ -360,12 +362,6 @@ func createPipeline(root *doltdb.RootValue, s *sqlparser.Select, selectStmt *Sel
 		p.Start()
 	}
 
-	// The where clause for multiple table selects operate on the result set schema. This won't work for every possible query.
-	// TODO: make work for all queries
-	if err := processWhereClause(selectStmt, s, selectStmt.ResultSetSchema); err != nil {
-		return nil, err
-	}
-
 	results := make([]resultset.TableResult, 0)
 	for _, tableName := range selectStmt.inputTables {
 		result := pipelines[tableName]
@@ -378,15 +374,36 @@ func createPipeline(root *doltdb.RootValue, s *sqlparser.Select, selectStmt *Sel
 		})
 	}
 
-	crossProduct := selectStmt.ResultSetSchema.CrossProduct(results)
+	crossProduct := selectStmt.intermediateRss.CrossProduct(results)
 	source := sourceFuncForRows(crossProduct)
+
+	if err := processWhereClause(selectStmt, s, selectStmt.intermediateRss); err != nil {
+		return nil, err
+	}
 
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 	selTrans := &selectTransform{nil, selectStmt.filterFn, selectStmt.limit, 0}
 	selTrans.noMoreCallback = func() { p.NoMore() }
 	p.AddStage(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
 
+	reductionTransform, err := schemaReductionTransform(selectStmt)
+	if err != nil {
+		return nil, err
+	}
+	p.AddStage(reductionTransform)
+
 	return p, nil
+}
+
+// Returns a transform stage to reduce the intermediate schema to the final one.
+// TODO: this is unnecessary for many queries and could be skipped.
+func schemaReductionTransform(selectStmt *SelectStatement) (pipeline.NamedTransform, error) {
+	mapping, err := rowconv.TagMapping(selectStmt.intermediateRss.Schema(), selectStmt.ResultSetSchema.Schema())
+	if err != nil {
+		return pipeline.NamedTransform{}, err
+	}
+	rConv, _ := rowconv.NewRowConverter(mapping)
+	return pipeline.NewNamedTransform("transform to result schema", rowconv.GetRowConvTransformFunc(rConv)), nil
 }
 
 // Returns a source func that yields the rows given in order.
@@ -429,21 +446,40 @@ func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.R
 	return pipeline.NewNamedTransform("mapToResultSet", rowconv.GetRowConvTransformFunc(rConv))
 }
 
-// Returns a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
-// from the individual table schemas.
+// Fills in a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
+// from the individual table schemas. Also fills in an intermediate schema, which for some queries contains additional
+// columns necessary to evaluate where clauses but not part of the final result set.
 func createResultSetSchema(statement *SelectStatement) error {
-	cols := make([]resultset.ColWithSchema, len(statement.selectedCols))
-	for i, selectedCol := range statement.selectedCols {
+	rss, err := rssFromColumns(statement.selectedCols, statement.inputSchemas, statement.aliases)
+	if err != nil {
+		return err
+	}
+	statement.ResultSetSchema = rss
+
+	rss, err = rssFromColumns(statement.referencedCols, statement.inputSchemas, statement.aliases)
+	if err != nil {
+		return err
+	}
+	statement.intermediateRss = rss
+
+	return nil
+}
+
+// Returns a result set schema created from the columns given
+func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Schema, aliases *Aliases) (*resultset.ResultSetSchema, error) {
+	cols := make([]resultset.ColWithSchema, len(columns))
+	for i, selectedCol := range columns {
 		colName := selectedCol.ColumnName
 		tableName := selectedCol.TableName
 
-		if tableSch, ok := statement.inputSchemas[tableName]; !ok {
-			panic ("Unknown table " + tableName)
+		if tableSch, ok := inputSchemas[tableName]; !ok {
+			panic("Unknown table " + tableName)
 		} else {
 			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
 				panic("Unknown column " + colName)
 			} else {
-				if alias, ok := statement.aliases.AliasesByColumn[selectedCol]; ok {
+				// TODO: this might not be necessary, full column names are filled in already here
+				if alias, ok := aliases.AliasesByColumn[selectedCol]; ok {
 					col.Name = alias
 				}
 				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}
@@ -451,11 +487,5 @@ func createResultSetSchema(statement *SelectStatement) error {
 		}
 	}
 
-	rss, err := resultset.NewFromColumns(cols...)
-	if err != nil {
-		return err
-	}
-
-	statement.ResultSetSchema = rss
-	return nil
+	return resultset.NewFromColumns(cols...)
 }
