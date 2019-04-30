@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
@@ -206,11 +207,11 @@ type extractRecord struct {
 type chunkReader interface {
 	has(h addr) bool
 	hasMany(addrs []hasRecord) bool
-	get(h addr, stats *Stats) []byte
-	getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
+	get(ctx context.Context, h addr, stats *Stats) []byte
+	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
 	count() uint32
 	uncompressedLen() uint64
-	extract(chunks chan<- extractRecord)
+	extract(ctx context.Context, chunks chan<- extractRecord)
 }
 
 type chunkReadPlanner interface {
@@ -230,7 +231,7 @@ type chunkSource interface {
 	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool)
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader() io.Reader
+	reader(context.Context) io.Reader
 	index() tableIndex
 }
 

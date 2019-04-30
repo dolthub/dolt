@@ -5,6 +5,7 @@
 package diff
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -80,7 +81,7 @@ type differ struct {
 //    for dif := range dChan {
 //        <some code>
 //    }
-func Diff(v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, leftRight bool, descFunc ShouldDescFunc) {
+func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, leftRight bool, descFunc ShouldDescFunc) {
 	if descFunc == nil {
 		descFunc = ShouldDescend
 	}
@@ -90,32 +91,32 @@ func Diff(v1, v2 types.Value, dChan chan<- Difference, stopChan chan struct{}, l
 		if !d.shouldDescend(v1, v2) {
 			d.sendDiff(Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
 		} else {
-			d.diff(nil, v1, v2)
+			d.diff(ctx, nil, v1, v2)
 		}
 	}
 }
 
-func (d differ) diff(p types.Path, v1, v2 types.Value) bool {
+func (d differ) diff(ctx context.Context, p types.Path, v1, v2 types.Value) bool {
 	switch v1.Kind() {
 	case types.ListKind:
-		return d.diffLists(p, v1.(types.List), v2.(types.List))
+		return d.diffLists(ctx, p, v1.(types.List), v2.(types.List))
 	case types.MapKind:
-		return d.diffMaps(p, v1.(types.Map), v2.(types.Map))
+		return d.diffMaps(ctx, p, v1.(types.Map), v2.(types.Map))
 	case types.SetKind:
-		return d.diffSets(p, v1.(types.Set), v2.(types.Set))
+		return d.diffSets(ctx, p, v1.(types.Set), v2.(types.Set))
 	case types.StructKind:
-		return d.diffStructs(p, v1.(types.Struct), v2.(types.Struct))
+		return d.diffStructs(ctx, p, v1.(types.Struct), v2.(types.Struct))
 	default:
 		panic("Unrecognized type in diff function")
 	}
 }
 
-func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
+func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) (stop bool) {
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1s, so this won't block if diff already finished
 
 	go func() {
-		v2.Diff(v1, spliceChan, stopChan)
+		v2.Diff(ctx, v1, spliceChan, stopChan)
 		close(spliceChan)
 	}()
 
@@ -126,14 +127,14 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 		if splice.SpRemoved == splice.SpAdded {
 			// Heuristic: list only has modifications.
 			for i := uint64(0); i < splice.SpRemoved; i++ {
-				lastEl := v1.Get(splice.SpAt + i)
-				newEl := v2.Get(splice.SpFrom + i)
+				lastEl := v1.Get(ctx, splice.SpAt+i)
+				newEl := v2.Get(ctx, splice.SpFrom+i)
 				if d.shouldDescend(lastEl, newEl) {
 					idx := types.Float(splice.SpAt + i)
-					stop = d.diff(append(p, types.NewIndexPath(idx)), lastEl, newEl)
+					stop = d.diff(ctx, append(p, types.NewIndexPath(idx)), lastEl, newEl)
 				} else {
 					p1 := p.Append(types.NewIndexPath(types.Float(splice.SpAt + i)))
-					dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: v1.Get(splice.SpAt + i), NewValue: v2.Get(splice.SpFrom + i)}
+					dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: v1.Get(ctx, splice.SpAt+i), NewValue: v2.Get(ctx, splice.SpFrom+i)}
 					stop = !d.sendDiff(dif)
 				}
 			}
@@ -143,12 +144,12 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 		// Heuristic: list only has additions/removals.
 		for i := uint64(0); i < splice.SpRemoved && !stop; i++ {
 			p1 := p.Append(types.NewIndexPath(types.Float(splice.SpAt + i)))
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1.Get(splice.SpAt + i), NewValue: nil}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeRemoved, OldValue: v1.Get(ctx, splice.SpAt+i), NewValue: nil}
 			stop = !d.sendDiff(dif)
 		}
 		for i := uint64(0); i < splice.SpAdded && !stop; i++ {
 			p1 := p.Append(types.NewIndexPath(types.Float(splice.SpFrom + i)))
-			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2.Get(splice.SpFrom + i)}
+			dif := Difference{Path: p1, ChangeType: types.DiffChangeAdded, OldValue: nil, NewValue: v2.Get(ctx, splice.SpFrom+i)}
 			stop = !d.sendDiff(dif)
 		}
 	}
@@ -162,8 +163,8 @@ func (d differ) diffLists(p types.Path, v1, v2 types.List) (stop bool) {
 	return
 }
 
-func (d differ) diffMaps(p types.Path, v1, v2 types.Map) bool {
-	return d.diffOrdered(p,
+func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) bool {
+	return d.diffOrdered(ctx, p,
 		func(v types.Value) types.PathPart {
 			if types.ValueCanBePathIndex(v) {
 				return types.NewIndexPath(v)
@@ -173,22 +174,22 @@ func (d differ) diffMaps(p types.Path, v1, v2 types.Map) bool {
 		},
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 			if d.leftRight {
-				v2.DiffLeftRight(v1, cc, sc)
+				v2.DiffLeftRight(ctx, v1, cc, sc)
 			} else {
-				v2.DiffHybrid(v1, cc, sc)
+				v2.DiffHybrid(ctx, v1, cc, sc)
 			}
 		},
 		func(k types.Value) types.Value { return k },
-		func(k types.Value) types.Value { return v1.Get(k) },
-		func(k types.Value) types.Value { return v2.Get(k) },
+		func(k types.Value) types.Value { return v1.Get(ctx, k) },
+		func(k types.Value) types.Value { return v2.Get(ctx, k) },
 	)
 }
 
-func (d differ) diffStructs(p types.Path, v1, v2 types.Struct) bool {
+func (d differ) diffStructs(ctx context.Context, p types.Path, v1, v2 types.Struct) bool {
 	str := func(v types.Value) string {
 		return string(v.(types.String))
 	}
-	return d.diffOrdered(p,
+	return d.diffOrdered(ctx, p,
 		func(v types.Value) types.PathPart { return types.NewFieldPath(str(v)) },
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 			v2.Diff(v1, cc, sc)
@@ -199,8 +200,8 @@ func (d differ) diffStructs(p types.Path, v1, v2 types.Struct) bool {
 	)
 }
 
-func (d differ) diffSets(p types.Path, v1, v2 types.Set) bool {
-	return d.diffOrdered(p,
+func (d differ) diffSets(ctx context.Context, p types.Path, v1, v2 types.Set) bool {
+	return d.diffOrdered(ctx, p,
 		func(v types.Value) types.PathPart {
 			if types.ValueCanBePathIndex(v) {
 				return types.NewIndexPath(v)
@@ -209,9 +210,9 @@ func (d differ) diffSets(p types.Path, v1, v2 types.Set) bool {
 		},
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 			if d.leftRight {
-				v2.DiffLeftRight(v1, cc, sc)
+				v2.DiffLeftRight(ctx, v1, cc, sc)
 			} else {
-				v2.DiffHybrid(v1, cc, sc)
+				v2.DiffHybrid(ctx, v1, cc, sc)
 			}
 		},
 		func(k types.Value) types.Value { return k },
@@ -220,7 +221,7 @@ func (d differ) diffSets(p types.Path, v1, v2 types.Set) bool {
 	)
 }
 
-func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1, v2 valueFunc) (stop bool) {
+func (d differ) diffOrdered(ctx context.Context, p types.Path, ppf pathPartFunc, df diffFunc, kf, v1, v2 valueFunc) (stop bool) {
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
@@ -247,7 +248,7 @@ func (d differ) diffOrdered(p types.Path, ppf pathPartFunc, df diffFunc, kf, v1,
 		case types.DiffChangeModified:
 			c1, c2 := v1(change.Key), v2(change.Key)
 			if d.shouldDescend(c1, c2) {
-				stop = d.diff(p1, c1, c2)
+				stop = d.diff(ctx, p1, c1, c2)
 			} else {
 				dif := Difference{Path: p1, ChangeType: types.DiffChangeModified, OldValue: c1, NewValue: c2, KeyValue: change.Key}
 				stop = !d.sendDiff(dif)

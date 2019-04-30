@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -23,11 +24,11 @@ func (le *ListEditor) Kind() NomsKind {
 	return ListKind
 }
 
-func (le *ListEditor) Value() Value {
-	return le.List()
+func (le *ListEditor) Value(ctx context.Context) Value {
+	return le.List(ctx)
 }
 
-func (le *ListEditor) List() List {
+func (le *ListEditor) List(ctx context.Context) List {
 	if le.edits == nil {
 		return le.l // no edits
 	}
@@ -47,7 +48,7 @@ func (le *ListEditor) List() List {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtIndex(seq, edit.idx)
+				cc <- newCursorAtIndex(ctx, seq, edit.idx)
 			}()
 
 			sc := make(chan listEdit, 1)
@@ -64,7 +65,7 @@ func (le *ListEditor) List() List {
 				idx, val := i, v
 				wg.Add(1)
 				go func() {
-					edit.inserted[idx] = val.Value()
+					edit.inserted[idx] = val.Value(ctx)
 					wg.Done()
 				}()
 			}
@@ -89,14 +90,14 @@ func (le *ListEditor) List() List {
 		sp := <-<-spliceChan
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 		} else {
-			ch.advanceTo(cur)
+			ch.advanceTo(ctx, cur)
 		}
 
 		dc := sp.removed
 		for dc > 0 {
-			ch.Skip()
+			ch.Skip(ctx)
 			dc--
 		}
 
@@ -105,11 +106,11 @@ func (le *ListEditor) List() List {
 				continue
 			}
 
-			ch.Append(v)
+			ch.Append(ctx, v)
 		}
 	}
 
-	return newList(ch.Done())
+	return newList(ch.Done(ctx))
 }
 
 func collapseListEdit(newEdit, edit *listEdit) bool {
@@ -253,12 +254,12 @@ func adjustIdx(idx uint64, e *listEdit) uint64 {
 	return idx + e.removed - uint64(len(e.inserted))
 }
 
-func (le *ListEditor) Get(idx uint64) Valuable {
+func (le *ListEditor) Get(ctx context.Context, idx uint64) Valuable {
 	edit := le.edits
 	for edit != nil {
 		if edit.idx > idx {
 			// idx is before next splice
-			return le.l.Get(idx)
+			return le.l.Get(ctx, idx)
 		}
 
 		if edit.idx <= idx && idx < (edit.idx+uint64(len(edit.inserted))) {
@@ -270,7 +271,7 @@ func (le *ListEditor) Get(idx uint64) Valuable {
 		edit = edit.next
 	}
 
-	return le.l.Get(idx)
+	return le.l.Get(ctx, idx)
 }
 
 type listEdit struct {

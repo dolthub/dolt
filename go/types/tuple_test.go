@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"github.com/google/uuid"
 	"testing"
 )
@@ -104,7 +105,7 @@ func TestTupleLess(t *testing.T) {
 		actual := tpl1.Less(tpl2)
 
 		if actual != test.expected {
-			t.Error("tpl1:", EncodedValue(tpl1), "tpl2:", EncodedValue(tpl2), "expected", test.expected, "actual:", actual)
+			t.Error("tpl1:", EncodedValue(context.Background(), tpl1), "tpl2:", EncodedValue(context.Background(), tpl2), "expected", test.expected, "actual:", actual)
 		}
 	}
 }

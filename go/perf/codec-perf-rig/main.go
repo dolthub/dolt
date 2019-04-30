@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"time"
@@ -55,10 +56,10 @@ func main() {
 			// Build One-Time
 			storage := &chunks.MemoryStorage{}
 			db := datas.NewDatabase(storage.NewView())
-			ds := db.GetDataset("test")
+			ds := db.GetDataset(context.Background(), "test")
 			t1 := time.Now()
 			col := buildFns[i](db, buildCount, valueFn)
-			ds, err := db.CommitValue(ds, col)
+			ds, err := db.CommitValue(context.Background(), ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
@@ -71,10 +72,10 @@ func main() {
 			// Build Incrementally
 			storage = &chunks.MemoryStorage{}
 			db = datas.NewDatabase(storage.NewView())
-			ds = db.GetDataset("test")
+			ds = db.GetDataset(context.Background(), "test")
 			t1 = time.Now()
 			col = buildIncrFns[i](db, insertCount, valueFn)
-			ds, err = db.CommitValue(ds, col)
+			ds, err = db.CommitValue(context.Background(), ds, col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
 
@@ -91,20 +92,20 @@ func main() {
 
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
-	ds := db.GetDataset("test")
+	ds := db.GetDataset(context.Background(), "test")
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
-	blob := types.NewBlob(db, bytes.NewReader(blobBytes))
-	db.CommitValue(ds, blob)
+	blob := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
+	db.CommitValue(context.Background(), ds, blob)
 	buildDuration := time.Since(t1)
 
 	db = datas.NewDatabase(storage.NewView())
-	ds = db.GetDataset("test")
+	ds = db.GetDataset(context.Background(), "test")
 	t1 = time.Now()
 	blob = ds.HeadValue().(types.Blob)
 	buff := &bytes.Buffer{}
-	blob.Copy(buff)
+	blob.Copy(context.Background(), buff)
 	outBytes := buff.Bytes()
 	readDuration := time.Since(t1)
 	d.PanicIfFalse(bytes.Compare(blobBytes, outBytes) == 0)
@@ -168,20 +169,20 @@ func buildList(vrw types.ValueReadWriter, count uint64, createFn createValueFn) 
 		values[i] = createFn(i)
 	}
 
-	return types.NewList(vrw, values...)
+	return types.NewList(context.Background(), vrw, values...)
 }
 
 func buildListIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	l := types.NewList(vrw).Edit()
+	l := types.NewList(context.Background(), vrw).Edit()
 	for i := uint64(0); i < count; i++ {
 		l.Append(createFn(i))
 	}
 
-	return l.List()
+	return l.List(context.Background())
 }
 
 func readList(c types.Collection) {
-	c.(types.List).IterAll(func(v types.Value, idx uint64) {
+	c.(types.List).IterAll(context.Background(), func(v types.Value, idx uint64) {
 	})
 }
 
@@ -191,20 +192,20 @@ func buildSet(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewSet(vrw, values...)
+	return types.NewSet(context.Background(), vrw, values...)
 }
 
 func buildSetIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	s := types.NewSet(vrw).Edit()
+	s := types.NewSet(context.Background(), vrw).Edit()
 	for i := uint64(0); i < count; i++ {
 		s.Insert(createFn(i))
 	}
 
-	return s.Set()
+	return s.Set(context.Background())
 }
 
 func readSet(c types.Collection) {
-	c.(types.Set).IterAll(func(v types.Value) {
+	c.(types.Set).IterAll(context.Background(), func(v types.Value) {
 	})
 }
 
@@ -214,20 +215,20 @@ func buildMap(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewMap(vrw, values...)
+	return types.NewMap(context.Background(), vrw, values...)
 }
 
 func buildMapIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	me := types.NewMap(vrw).Edit()
+	me := types.NewMap(context.Background(), vrw).Edit()
 
 	for i := uint64(0); i < count*2; i += 2 {
 		me.Set(createFn(i), createFn(i+1))
 	}
 
-	return me.Map()
+	return me.Map(context.Background())
 }
 
 func readMap(c types.Collection) {
-	c.(types.Map).IterAll(func(k types.Value, v types.Value) {
+	c.(types.Map).IterAll(context.Background(), func(k types.Value, v types.Value) {
 	})
 }

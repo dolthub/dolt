@@ -4,7 +4,10 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/hash"
+import (
+	"context"
+	"github.com/attic-labs/noms/go/hash"
+)
 
 type SkipValueCallback func(v Value) bool
 
@@ -19,7 +22,7 @@ type valueRec struct {
 const maxRefCount = 1 << 12 // ~16MB of data
 
 // WalkValues recursively walks over all types.Values reachable from r and calls cb on them.
-func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
+func WalkValues(ctx context.Context, target Value, vr ValueReader, cb SkipValueCallback) {
 	visited := hash.HashSet{}
 	refs := map[hash.Hash]bool{}
 	values := []valueRec{{target, true}}
@@ -50,7 +53,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 				continue
 			}
 
-			v.WalkValues(func(sv Value) {
+			v.WalkValues(ctx, func(sv Value) {
 				values = append(values, valueRec{sv, true})
 			})
 		}
@@ -77,7 +80,7 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 		}
 
 		if len(hs) > 0 {
-			readValues := vr.ReadManyValues(hs)
+			readValues := vr.ReadManyValues(ctx, hs)
 			for i, sv := range readValues {
 				values = append(values, valueRec{sv, oldRefs[hs[i]]})
 			}
@@ -85,14 +88,14 @@ func WalkValues(target Value, vr ValueReader, cb SkipValueCallback) {
 	}
 }
 
-func mightContainStructs(t *Type) (mightHaveStructs bool) {
+func mightContainStructs(ctx context.Context, t *Type) (mightHaveStructs bool) {
 	if t.TargetKind() == StructKind || t.TargetKind() == ValueKind {
 		mightHaveStructs = true
 		return
 	}
 
-	t.WalkValues(func(v Value) {
-		mightHaveStructs = mightHaveStructs || mightContainStructs(v.(*Type))
+	t.WalkValues(ctx, func(v Value) {
+		mightHaveStructs = mightHaveStructs || mightContainStructs(ctx, v.(*Type))
 	})
 
 	return

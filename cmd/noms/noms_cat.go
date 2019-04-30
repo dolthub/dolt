@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base32"
 	"encoding/binary"
 	"encoding/hex"
@@ -77,7 +78,7 @@ type chunkData struct {
 	decompSuccess bool
 }
 
-func runCat(args []string) int {
+func runCat(ctx context.Context, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "Not enough arguments")
 		return 0
@@ -133,7 +134,7 @@ func runCat(args []string) int {
 
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
-		db := sp.GetDatabase()
+		db := sp.GetDatabase(ctx)
 		value := types.DecodeValue(chunk, db)
 
 		fmt.Printf("        chunk[%d].raw.len:     %d\n", cidx, len(currCD.compressed))
@@ -152,7 +153,7 @@ func runCat(args []string) int {
 
 		fmt.Printf("        chunk[%d].value.kind:  %s\n", cidx, value.Kind())
 		fmt.Printf("        chunk[%d].value:\n\n", cidx)
-		printValue(os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)
+		printValue(ctx, os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)
 		fmt.Println()
 
 		fmt.Println()
@@ -268,7 +269,7 @@ func parseChunks(bytes []byte, pos int, sizes []int) (int, []chunkData) {
 	return pos, cd
 }
 
-func printValue(w io.Writer, v types.Value, valSpec string) {
+func printValue(ctx context.Context, w io.Writer, v types.Value, valSpec string) {
 	defer func() {
 		if r := recover(); r != nil {
 			msg := "   Failed to write the value " + valSpec + "\n"
@@ -276,7 +277,7 @@ func printValue(w io.Writer, v types.Value, valSpec string) {
 		}
 	}()
 
-	types.WriteEncodedValue(w, v)
+	types.WriteEncodedValue(ctx, w, v)
 }
 
 func hexStr(bytes []byte) string {

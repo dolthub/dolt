@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -29,13 +30,13 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	sp, err := spec.ForDatabase(s.TempDir)
 	s.NoError(err)
 	defer sp.Close()
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	blobBytes := []byte("hello")
-	blob := types.NewBlob(db, bytes.NewBuffer(blobBytes))
+	blob := types.NewBlob(context.Background(), db, bytes.NewBuffer(blobBytes))
 
-	ref := db.WriteValue(blob)
-	_, err = db.CommitValue(db.GetDataset("datasetID"), ref)
+	ref := db.WriteValue(context.Background(), blob)
+	_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), ref)
 	s.NoError(err)
 
 	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, ref.TargetHash().String())

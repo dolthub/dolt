@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 	}
 
 	for i := 0; i < rounds; i++ {
-		b := NewBlob(vs)
+		b := NewBlob(context.Background(), vs)
 
 		f, _ := ioutil.TempFile("", "buff")
 		be := b.Edit()
@@ -51,7 +52,7 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 				ac := make([]byte, l)
 
 				f.Read(ex)
-				be.Read(ac)
+				be.Read(context.Background(), ac)
 				assert.True(t, bytes.Compare(ex, ac) == 0)
 			} else {
 				// randon write
@@ -67,13 +68,13 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 			}
 			if j%flushEvery == 0 {
 				// Flush
-				b = be.Blob()
+				b = be.Blob(context.Background())
 				be = b.Edit()
 			}
 		}
 
 		f.Sync()
-		b = be.Blob()
+		b = be.Blob(context.Background())
 
 		f.Seek(0, 0)
 		info, err := f.Stat()
@@ -83,7 +84,7 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 		assert.NoError(t, err)
 
 		actual := make([]byte, b.Len())
-		b.ReadAt(actual, 0)
+		b.ReadAt(context.Background(), actual, 0)
 
 		assert.True(t, bytes.Compare(expect, actual) == 0)
 	}

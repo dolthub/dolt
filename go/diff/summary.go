@@ -5,6 +5,7 @@
 package diff
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -14,7 +15,7 @@ import (
 )
 
 // Summary prints a summary of the diff between two values to stdout.
-func Summary(value1, value2 types.Value) {
+func Summary(ctx context.Context, value1, value2 types.Value) {
 	if datas.IsCommit(value1) && datas.IsCommit(value2) {
 		fmt.Println("Comparing commit values")
 		value1 = value1.(types.Struct).Get(datas.ValueField)
@@ -38,7 +39,7 @@ func Summary(value1, value2 types.Value) {
 
 	ch := make(chan diffSummaryProgress)
 	go func() {
-		diffSummary(ch, value1, value2)
+		diffSummary(ctx, ch, value1, value2)
 		close(ch)
 	}()
 
@@ -61,20 +62,20 @@ type diffSummaryProgress struct {
 	Adds, Removes, Changes, NewSize, OldSize uint64
 }
 
-func diffSummary(ch chan diffSummaryProgress, v1, v2 types.Value) {
+func diffSummary(ctx context.Context, ch chan diffSummaryProgress, v1, v2 types.Value) {
 	if !v1.Equals(v2) {
 		if ShouldDescend(v1, v2) {
 			switch v1.Kind() {
 			case types.ListKind:
-				diffSummaryList(ch, v1.(types.List), v2.(types.List))
+				diffSummaryList(ctx, ch, v1.(types.List), v2.(types.List))
 			case types.MapKind:
-				diffSummaryMap(ch, v1.(types.Map), v2.(types.Map))
+				diffSummaryMap(ctx, ch, v1.(types.Map), v2.(types.Map))
 			case types.SetKind:
-				diffSummarySet(ch, v1.(types.Set), v2.(types.Set))
+				diffSummarySet(ctx, ch, v1.(types.Set), v2.(types.Set))
 			case types.StructKind:
 				diffSummaryStructs(ch, v1.(types.Struct), v2.(types.Struct))
 			default:
-				panic("Unrecognized type in diff function: " + types.TypeOf(v1).Describe() + " and " + types.TypeOf(v2).Describe())
+				panic("Unrecognized type in diff function: " + types.TypeOf(v1).Describe(ctx) + " and " + types.TypeOf(v2).Describe(ctx))
 			}
 		} else {
 			ch <- diffSummaryProgress{Adds: 1, Removes: 1, NewSize: 1, OldSize: 1}
@@ -82,14 +83,14 @@ func diffSummary(ch chan diffSummaryProgress, v1, v2 types.Value) {
 	}
 }
 
-func diffSummaryList(ch chan<- diffSummaryProgress, v1, v2 types.List) {
+func diffSummaryList(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 types.List) {
 	ch <- diffSummaryProgress{OldSize: v1.Len(), NewSize: v2.Len()}
 
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
 	go func() {
-		v2.Diff(v1, spliceChan, stopChan)
+		v2.Diff(ctx, v1, spliceChan, stopChan)
 		close(spliceChan)
 	}()
 
@@ -102,15 +103,15 @@ func diffSummaryList(ch chan<- diffSummaryProgress, v1, v2 types.List) {
 	}
 }
 
-func diffSummaryMap(ch chan<- diffSummaryProgress, v1, v2 types.Map) {
+func diffSummaryMap(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 types.Map) {
 	diffSummaryValueChanged(ch, v1.Len(), v2.Len(), func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {
-		v2.Diff(v1, changeChan, stopChan)
+		v2.Diff(ctx, v1, changeChan, stopChan)
 	})
 }
 
-func diffSummarySet(ch chan<- diffSummaryProgress, v1, v2 types.Set) {
+func diffSummarySet(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 types.Set) {
 	diffSummaryValueChanged(ch, v1.Len(), v2.Len(), func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {
-		v2.Diff(v1, changeChan, stopChan)
+		v2.Diff(ctx, v1, changeChan, stopChan)
 	})
 }
 

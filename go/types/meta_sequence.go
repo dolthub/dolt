@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -64,8 +65,8 @@ func (mt metaTuple) numLeaves() uint64 {
 	return dec.readCount()
 }
 
-func (mt metaTuple) getChildSequence(vr ValueReader) sequence {
-	return mt.ref().TargetValue(vr).(Collection).asSequence()
+func (mt metaTuple) getChildSequence(ctx context.Context, vr ValueReader) sequence {
+	return mt.ref().TargetValue(ctx, vr).(Collection).asSequence()
 }
 
 func (mt metaTuple) writeTo(w nomsWriter) {
@@ -292,25 +293,25 @@ func (ms metaSequence) isLeaf() bool {
 }
 
 // metaSequence interface
-func (ms metaSequence) getChildSequence(idx int) sequence {
+func (ms metaSequence) getChildSequence(ctx context.Context, idx int) sequence {
 	mt := ms.getItem(idx).(metaTuple)
 	// TODO: IsZeroValue?
 	if mt.buff == nil {
 		return nil
 	}
-	return mt.getChildSequence(ms.vrw)
+	return mt.getChildSequence(ctx, ms.vrw)
 }
 
 // Returns the sequences pointed to by all items[i], s.t. start <= i < end, and returns the
 // concatentation as one long composite sequence
-func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence {
 	level := ms.treeLevel()
 	d.PanicIfFalse(level > 0)
 	if length == 0 {
 		return emptySequence{level - 1}
 	}
 
-	output := ms.getChildren(start, start+length)
+	output := ms.getChildren(ctx, start, start+length)
 
 	if level > 1 {
 		var metaItems []metaTuple
@@ -345,7 +346,7 @@ func (ms metaSequence) getCompositeChildSequence(start uint64, length uint64) se
 }
 
 // fetches child sequences from start (inclusive) to end (exclusive).
-func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
+func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) (seqs []sequence) {
 	d.Chk.True(end <= uint64(ms.seqLen()))
 	d.Chk.True(start <= end)
 
@@ -363,7 +364,7 @@ func (ms metaSequence) getChildren(start, end uint64) (seqs []sequence) {
 	}
 
 	// Fetch committed child sequences in a single batch
-	readValues := ms.vrw.ReadManyValues(hs)
+	readValues := ms.vrw.ReadManyValues(ctx, hs)
 	for i, v := range readValues {
 		seqs[i] = v.(Collection).asSequence()
 	}
@@ -418,7 +419,7 @@ func (es emptySequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("empty sequence")
 }
 
-func (es emptySequence) getChildSequence(i int) sequence {
+func (es emptySequence) getChildSequence(ctx context.Context, i int) sequence {
 	return nil
 }
 
@@ -430,7 +431,7 @@ func (es emptySequence) typeOf() *Type {
 	panic("empty sequence")
 }
 
-func (es emptySequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+func (es emptySequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence {
 	d.PanicIfFalse(es.level > 0)
 	d.PanicIfFalse(start == 0)
 	d.PanicIfFalse(length == 0)

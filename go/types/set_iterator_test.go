@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"math"
 	"testing"
 
@@ -17,44 +18,44 @@ func TestSetIterator(t *testing.T) {
 	vs := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
-	s := NewSet(vs, numbers...)
-	i := s.Iterator()
+	s := NewSet(context.Background(), vs, numbers...)
+	i := s.Iterator(context.Background())
 	vals := iterToSlice(i)
 	assert.True(vals.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
-	i = s.Iterator()
-	assert.Panics(func() { i.SkipTo(nil) })
-	assert.Equal(Float(0), i.SkipTo(Float(-20)))
-	assert.Equal(Float(2), i.SkipTo(Float(2)))
-	assert.Equal(Float(3), i.SkipTo(Float(-20)))
-	assert.Equal(Float(5), i.SkipTo(Float(5)))
-	assert.Equal(Float(6), i.Next())
-	assert.Equal(Float(7), i.SkipTo(Float(6)))
-	assert.Equal(Float(20), i.SkipTo(Float(15)))
-	assert.Nil(i.SkipTo(Float(30)))
-	assert.Nil(i.SkipTo(Float(30)))
-	assert.Nil(i.SkipTo(Float(1)))
+	i = s.Iterator(context.Background())
+	assert.Panics(func() { i.SkipTo(context.Background(), nil) })
+	assert.Equal(Float(0), i.SkipTo(context.Background(), Float(-20)))
+	assert.Equal(Float(2), i.SkipTo(context.Background(), Float(2)))
+	assert.Equal(Float(3), i.SkipTo(context.Background(), Float(-20)))
+	assert.Equal(Float(5), i.SkipTo(context.Background(), Float(5)))
+	assert.Equal(Float(6), i.Next(context.Background()))
+	assert.Equal(Float(7), i.SkipTo(context.Background(), Float(6)))
+	assert.Equal(Float(20), i.SkipTo(context.Background(), Float(15)))
+	assert.Nil(i.SkipTo(context.Background(), Float(30)))
+	assert.Nil(i.SkipTo(context.Background(), Float(30)))
+	assert.Nil(i.SkipTo(context.Background(), Float(1)))
 
-	i = s.Iterator()
-	assert.Equal(Float(0), i.Next())
-	assert.Equal(Float(1), i.Next())
-	assert.Equal(Float(3), i.SkipTo(Float(3)))
-	assert.Equal(Float(4), i.Next())
+	i = s.Iterator(context.Background())
+	assert.Equal(Float(0), i.Next(context.Background()))
+	assert.Equal(Float(1), i.Next(context.Background()))
+	assert.Equal(Float(3), i.SkipTo(context.Background(), Float(3)))
+	assert.Equal(Float(4), i.Next(context.Background()))
 
-	empty := NewSet(vs)
-	assert.Nil(empty.Iterator().Next())
-	assert.Nil(empty.Iterator().SkipTo(Float(-30)))
+	empty := NewSet(context.Background(), vs)
+	assert.Nil(empty.Iterator(context.Background()).Next(context.Background()))
+	assert.Nil(empty.Iterator(context.Background()).SkipTo(context.Background(), Float(-30)))
 
-	single := NewSet(vs, Float(42)).Iterator()
-	assert.Equal(Float(42), single.SkipTo(Float(42)))
-	assert.Equal(nil, single.SkipTo(Float(42)))
+	single := NewSet(context.Background(), vs, Float(42)).Iterator(context.Background())
+	assert.Equal(Float(42), single.SkipTo(context.Background(), Float(42)))
+	assert.Equal(nil, single.SkipTo(context.Background(), Float(42)))
 
-	single = NewSet(vs, Float(42)).Iterator()
-	assert.Equal(Float(42), single.SkipTo(Float(42)))
-	assert.Equal(nil, single.Next())
+	single = NewSet(context.Background(), vs, Float(42)).Iterator(context.Background())
+	assert.Equal(Float(42), single.SkipTo(context.Background(), Float(42)))
+	assert.Equal(nil, single.Next(context.Background()))
 
-	single = NewSet(vs, Float(42)).Iterator()
-	assert.Equal(Float(42), single.SkipTo(Float(21)))
+	single = NewSet(context.Background(), vs, Float(42)).Iterator(context.Background())
+	assert.Equal(Float(42), single.SkipTo(context.Background(), Float(21)))
 }
 
 func TestSetIteratorAt(t *testing.T) {
@@ -63,16 +64,16 @@ func TestSetIteratorAt(t *testing.T) {
 	vs := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(5), Float(10))
-	s := NewSet(vs, numbers...)
-	i := s.IteratorAt(0)
+	s := NewSet(context.Background(), vs, numbers...)
+	i := s.IteratorAt(context.Background(), 0)
 	vals := iterToSlice(i)
 	assert.True(vals.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
-	i = s.IteratorAt(2)
+	i = s.IteratorAt(context.Background(), 2)
 	vals = iterToSlice(i)
 	assert.True(vals.Equals(numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
 
-	i = s.IteratorAt(10)
+	i = s.IteratorAt(context.Background(), 10)
 	vals = iterToSlice(i)
 	assert.True(vals.Equals(nil), "Expected: %v != actual: %v", nil, vs)
 }
@@ -83,29 +84,29 @@ func TestSetIteratorFrom(t *testing.T) {
 	vs := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(5), Float(10), Float(20))
-	s := NewSet(vs, numbers...)
-	i := s.IteratorFrom(Float(0))
+	s := NewSet(context.Background(), vs, numbers...)
+	i := s.IteratorFrom(context.Background(), Float(0))
 	vals := iterToSlice(i)
 	assert.True(vals.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
-	i = s.IteratorFrom(Float(2))
+	i = s.IteratorFrom(context.Background(), Float(2))
 	vals = iterToSlice(i)
 	assert.True(vals.Equals(numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
 
-	i = s.IteratorFrom(Float(10))
+	i = s.IteratorFrom(context.Background(), Float(10))
 	vals = iterToSlice(i)
 	assert.True(vals.Equals(ValueSlice{Float(10), Float(20)}), "Expected: %v != actual: %v", nil, vs)
 
-	i = s.IteratorFrom(Float(20))
+	i = s.IteratorFrom(context.Background(), Float(20))
 	vals = iterToSlice(i)
 	assert.True(vals.Equals(ValueSlice{Float(20)}), "Expected: %v != actual: %v", nil, vs)
 
-	i = s.IteratorFrom(Float(100))
+	i = s.IteratorFrom(context.Background(), Float(100))
 	vals = iterToSlice(i)
 	assert.True(vals.Equals(nil), "Expected: %v != actual: %v", nil, vs)
 
 	// Not present. Starts at next larger.
-	i = s.IteratorFrom(Float(15))
+	i = s.IteratorFrom(context.Background(), Float(15))
 	vals = iterToSlice(i)
 	assert.True(vals.Equals(ValueSlice{Float(20)}), "Expected: %v != actual: %v", nil, vs)
 }
@@ -115,45 +116,45 @@ func TestUnionIterator(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	set1 := NewSet(vs, generateNumbersAsValuesFromToBy(0, 10, 1)...)
-	set2 := NewSet(vs, generateNumbersAsValuesFromToBy(5, 15, 1)...)
-	set3 := NewSet(vs, generateNumbersAsValuesFromToBy(10, 20, 1)...)
-	set4 := NewSet(vs, generateNumbersAsValuesFromToBy(15, 25, 1)...)
+	set1 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 10, 1)...)
+	set2 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(5, 15, 1)...)
+	set3 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(10, 20, 1)...)
+	set4 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(15, 25, 1)...)
 
-	ui1 := NewUnionIterator(set1.Iterator(), set2.Iterator())
+	ui1 := NewUnionIterator(context.Background(), set1.Iterator(context.Background()), set2.Iterator(context.Background()))
 	vals := iterToSlice(ui1)
 	expectedRes := generateNumbersAsValues(15)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	ui1 = NewUnionIterator(set1.Iterator(), set4.Iterator())
-	ui2 := NewUnionIterator(set3.Iterator(), set2.Iterator())
-	ui3 := NewUnionIterator(ui1, ui2)
+	ui1 = NewUnionIterator(context.Background(), set1.Iterator(context.Background()), set4.Iterator(context.Background()))
+	ui2 := NewUnionIterator(context.Background(), set3.Iterator(context.Background()), set2.Iterator(context.Background()))
+	ui3 := NewUnionIterator(context.Background(), ui1, ui2)
 	vals = iterToSlice(ui3)
 	expectedRes = generateNumbersAsValues(25)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	ui1 = NewUnionIterator(set1.Iterator(), set4.Iterator())
-	ui2 = NewUnionIterator(set3.Iterator(), set2.Iterator())
-	ui3 = NewUnionIterator(ui1, ui2)
+	ui1 = NewUnionIterator(context.Background(), set1.Iterator(context.Background()), set4.Iterator(context.Background()))
+	ui2 = NewUnionIterator(context.Background(), set3.Iterator(context.Background()), set2.Iterator(context.Background()))
+	ui3 = NewUnionIterator(context.Background(), ui1, ui2)
 
-	assert.Panics(func() { ui3.SkipTo(nil) })
-	assert.Equal(Float(0), ui3.SkipTo(Float(-5)))
-	assert.Equal(Float(5), ui3.SkipTo(Float(5)))
-	assert.Equal(Float(8), ui3.SkipTo(Float(8)))
-	assert.Equal(Float(9), ui3.SkipTo(Float(8)))
-	assert.Equal(Float(10), ui3.SkipTo(Float(8)))
-	assert.Equal(Float(11), ui3.SkipTo(Float(7)))
-	assert.Equal(Float(12), ui3.Next())
-	assert.Equal(Float(15), ui3.SkipTo(Float(15)))
-	assert.Equal(Float(24), ui3.SkipTo(Float(24)))
-	assert.Nil(ui3.SkipTo(Float(25)))
+	assert.Panics(func() { ui3.SkipTo(context.Background(), nil) })
+	assert.Equal(Float(0), ui3.SkipTo(context.Background(), Float(-5)))
+	assert.Equal(Float(5), ui3.SkipTo(context.Background(), Float(5)))
+	assert.Equal(Float(8), ui3.SkipTo(context.Background(), Float(8)))
+	assert.Equal(Float(9), ui3.SkipTo(context.Background(), Float(8)))
+	assert.Equal(Float(10), ui3.SkipTo(context.Background(), Float(8)))
+	assert.Equal(Float(11), ui3.SkipTo(context.Background(), Float(7)))
+	assert.Equal(Float(12), ui3.Next(context.Background()))
+	assert.Equal(Float(15), ui3.SkipTo(context.Background(), Float(15)))
+	assert.Equal(Float(24), ui3.SkipTo(context.Background(), Float(24)))
+	assert.Nil(ui3.SkipTo(context.Background(), Float(25)))
 
-	singleElemSet := NewSet(vs, Float(4))
-	emptySet := NewSet(vs)
+	singleElemSet := NewSet(context.Background(), vs, Float(4))
+	emptySet := NewSet(context.Background(), vs)
 
-	ui10 := NewUnionIterator(singleElemSet.Iterator(), singleElemSet.Iterator())
-	ui20 := NewUnionIterator(emptySet.Iterator(), emptySet.Iterator())
-	ui30 := NewUnionIterator(ui10, ui20)
+	ui10 := NewUnionIterator(context.Background(), singleElemSet.Iterator(context.Background()), singleElemSet.Iterator(context.Background()))
+	ui20 := NewUnionIterator(context.Background(), emptySet.Iterator(context.Background()), emptySet.Iterator(context.Background()))
+	ui30 := NewUnionIterator(context.Background(), ui10, ui20)
 	vals = iterToSlice(ui30)
 	expectedRes = ValueSlice{Float(4)}
 	assert.True(vals.Equals(expectedRes), "%v != %v\n", expectedRes, vs)
@@ -164,31 +165,31 @@ func TestIntersectionIterator(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	byTwos := NewSet(vs, generateNumbersAsValuesFromToBy(0, 200, 2)...)
-	byThrees := NewSet(vs, generateNumbersAsValuesFromToBy(0, 200, 3)...)
-	byFives := NewSet(vs, generateNumbersAsValuesFromToBy(0, 200, 5)...)
+	byTwos := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 200, 2)...)
+	byThrees := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 200, 3)...)
+	byFives := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 200, 5)...)
 
-	i1 := NewIntersectionIterator(byTwos.Iterator(), byThrees.Iterator())
+	i1 := NewIntersectionIterator(context.Background(), byTwos.Iterator(context.Background()), byThrees.Iterator(context.Background()))
 	vals := iterToSlice(i1)
 	expectedRes := generateNumbersAsValuesFromToBy(0, 200, 6)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	it1 := NewIntersectionIterator(byTwos.Iterator(), byThrees.Iterator())
-	it2 := NewIntersectionIterator(it1, byFives.Iterator())
+	it1 := NewIntersectionIterator(context.Background(), byTwos.Iterator(context.Background()), byThrees.Iterator(context.Background()))
+	it2 := NewIntersectionIterator(context.Background(), it1, byFives.Iterator(context.Background()))
 	vals = iterToSlice(it2)
 	expectedRes = generateNumbersAsValuesFromToBy(0, 200, 30)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	it1 = NewIntersectionIterator(byThrees.Iterator(), byFives.Iterator())
-	it2 = NewIntersectionIterator(it1, byTwos.Iterator())
+	it1 = NewIntersectionIterator(context.Background(), byThrees.Iterator(context.Background()), byFives.Iterator(context.Background()))
+	it2 = NewIntersectionIterator(context.Background(), it1, byTwos.Iterator(context.Background()))
 
-	assert.Panics(func() { it2.SkipTo(nil) })
-	assert.Equal(Float(30), it2.SkipTo(Float(5)))
-	assert.Equal(Float(60), it2.SkipTo(Float(60)))
-	assert.Equal(Float(90), it2.SkipTo(Float(5)))
-	assert.Equal(Float(120), it2.Next())
-	assert.Equal(Float(150), it2.SkipTo(Float(150)))
-	assert.Nil(it2.SkipTo(Float(40000)))
+	assert.Panics(func() { it2.SkipTo(context.Background(), nil) })
+	assert.Equal(Float(30), it2.SkipTo(context.Background(), Float(5)))
+	assert.Equal(Float(60), it2.SkipTo(context.Background(), Float(60)))
+	assert.Equal(Float(90), it2.SkipTo(context.Background(), Float(5)))
+	assert.Equal(Float(120), it2.Next(context.Background()))
+	assert.Equal(Float(150), it2.SkipTo(context.Background(), Float(150)))
+	assert.Nil(it2.SkipTo(context.Background(), Float(40000)))
 }
 
 func TestCombinationIterator(t *testing.T) {
@@ -196,21 +197,21 @@ func TestCombinationIterator(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	byTwos := NewSet(vs, generateNumbersAsValuesFromToBy(0, 70, 2)...)
-	byThrees := NewSet(vs, generateNumbersAsValuesFromToBy(0, 70, 3)...)
-	byFives := NewSet(vs, generateNumbersAsValuesFromToBy(0, 70, 5)...)
-	bySevens := NewSet(vs, generateNumbersAsValuesFromToBy(0, 70, 7)...)
+	byTwos := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 2)...)
+	byThrees := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 3)...)
+	byFives := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 5)...)
+	bySevens := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 7)...)
 
-	it1 := NewIntersectionIterator(byTwos.Iterator(), bySevens.Iterator())
-	it2 := NewIntersectionIterator(byFives.Iterator(), byThrees.Iterator())
-	ut1 := NewUnionIterator(it1, it2)
+	it1 := NewIntersectionIterator(context.Background(), byTwos.Iterator(context.Background()), bySevens.Iterator(context.Background()))
+	it2 := NewIntersectionIterator(context.Background(), byFives.Iterator(context.Background()), byThrees.Iterator(context.Background()))
+	ut1 := NewUnionIterator(context.Background(), it1, it2)
 	vals := iterToSlice(ut1)
 	expectedRes := intsToValueSlice(0, 14, 15, 28, 30, 42, 45, 56, 60)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
-	ut1 = NewUnionIterator(byTwos.Iterator(), bySevens.Iterator())
-	it2 = NewIntersectionIterator(byFives.Iterator(), byThrees.Iterator())
-	ut2 := NewIntersectionIterator(ut1, it2)
+	ut1 = NewUnionIterator(context.Background(), byTwos.Iterator(context.Background()), bySevens.Iterator(context.Background()))
+	it2 = NewIntersectionIterator(context.Background(), byFives.Iterator(context.Background()), byThrees.Iterator(context.Background()))
+	ut2 := NewIntersectionIterator(context.Background(), ut1, it2)
 	vals = iterToSlice(ut2)
 	expectedRes = intsToValueSlice(0, 30, 60)
 	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
@@ -221,18 +222,18 @@ type UnionTestIterator struct {
 	cntr *int
 }
 
-func (ui *UnionTestIterator) Next() Value {
+func (ui *UnionTestIterator) Next(ctx context.Context) Value {
 	*ui.cntr++
-	return ui.UnionIterator.Next()
+	return ui.UnionIterator.Next(ctx)
 }
 
-func (ui *UnionTestIterator) SkipTo(v Value) Value {
+func (ui *UnionTestIterator) SkipTo(ctx context.Context, v Value) Value {
 	*ui.cntr++
-	return ui.UnionIterator.SkipTo(v)
+	return ui.UnionIterator.SkipTo(ctx, v)
 }
 
 func NewUnionTestIterator(i1, i2 SetIterator, cntr *int) SetIterator {
-	ui := NewUnionIterator(i1, i2).(*UnionIterator)
+	ui := NewUnionIterator(context.Background(), i1, i2).(*UnionIterator)
 	return &UnionTestIterator{ui, cntr}
 }
 
@@ -270,18 +271,18 @@ type IntersectionTestIterator struct {
 	cntr *int
 }
 
-func (i *IntersectionTestIterator) Next() Value {
+func (i *IntersectionTestIterator) Next(ctx context.Context) Value {
 	*i.cntr++
-	return i.IntersectionIterator.Next()
+	return i.IntersectionIterator.Next(ctx)
 }
 
-func (i *IntersectionTestIterator) SkipTo(v Value) Value {
+func (i *IntersectionTestIterator) SkipTo(ctx context.Context, v Value) Value {
 	*i.cntr++
-	return i.IntersectionIterator.SkipTo(v)
+	return i.IntersectionIterator.SkipTo(ctx, v)
 }
 
 func NewIntersectionTestIterator(i1, i2 SetIterator, cntr *int) SetIterator {
-	ui := NewIntersectionIterator(i1, i2).(*IntersectionIterator)
+	ui := NewIntersectionIterator(context.Background(), i1, i2).(*IntersectionIterator)
 	return &IntersectionTestIterator{ui, cntr}
 }
 
@@ -322,8 +323,8 @@ func createSetsWithDistinctNumbers(vrw ValueReadWriter, numSets, numElemsPerSet 
 		for j := 0; j < numElemsPerSet; j++ {
 			vals = append(vals, Float(i+(numSets*j)))
 		}
-		s := NewSet(vrw, vals...)
-		iterSlice = append(iterSlice, s.Iterator())
+		s := NewSet(context.Background(), vrw, vals...)
+		iterSlice = append(iterSlice, s.Iterator(context.Background()))
 	}
 	return iterSlice
 }
@@ -335,7 +336,7 @@ func createSetsWithSameNumbers(vrw ValueReadWriter, numSets, numElemsPerSet int)
 	}
 	iterSlice := []SetIterator{}
 	for i := 0; i < numSets; i++ {
-		iterSlice = append(iterSlice, NewSet(vrw, vs...).Iterator())
+		iterSlice = append(iterSlice, NewSet(context.Background(), vrw, vs...).Iterator(context.Background()))
 	}
 	return iterSlice
 }

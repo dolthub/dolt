@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/kingpin"
@@ -16,7 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-func nomsList(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
+func nomsList(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
 	list := noms.Command("list", "interact with lists")
 
 	listNew := list.Command("new", "creates a new list")
@@ -40,51 +41,51 @@ func nomsList(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandle
 	return list, func(input string) int {
 		switch input {
 		case listNew.FullCommand():
-			return nomsListNew(*newDb, *newEntries)
+			return nomsListNew(ctx, *newDb, *newEntries)
 		case listAppend.FullCommand():
-			return nomsListAppend(*appendSpec, *appendEntries)
+			return nomsListAppend(ctx, *appendSpec, *appendEntries)
 		case listInsert.FullCommand():
-			return nomsListInsert(*insertSpec, *insertAt, *insertEntries)
+			return nomsListInsert(ctx, *insertSpec, *insertAt, *insertEntries)
 		case listDel.FullCommand():
-			return nomsListDel(*delSpec, *delPos, *delLen)
+			return nomsListDel(ctx, *delSpec, *delPos, *delLen)
 		}
 		d.Panic("notreached")
 		return 1
 	}
 }
 
-func nomsListNew(dbStr string, args []string) int {
+func nomsListNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyListInserts(sp, types.NewList(sp.GetDatabase()), nil, 0, args)
+	applyListInserts(ctx, sp, types.NewList(ctx, sp.GetDatabase(ctx)), nil, 0, args)
 	return 0
 }
 
-func nomsListAppend(specStr string, args []string) int {
+func nomsListAppend(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(sp)
+	rootVal, basePath := splitPath(ctx, sp)
 	if list, ok := rootVal.(types.List); ok {
-		applyListInserts(sp, rootVal, basePath, list.Len(), args)
+		applyListInserts(ctx, sp, rootVal, basePath, list.Len(), args)
 	} else {
 		d.CheckErrorNoUsage(fmt.Errorf("%s is not a list", specStr))
 	}
 	return 0
 }
 
-func nomsListInsert(specStr string, pos uint64, args []string) int {
+func nomsListInsert(ctx context.Context, specStr string, pos uint64, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(sp)
-	applyListInserts(sp, rootVal, basePath, pos, args)
+	rootVal, basePath := splitPath(ctx, sp)
+	applyListInserts(ctx, sp, rootVal, basePath, pos, args)
 	return 0
 }
 
-func nomsListDel(specStr string, pos uint64, len uint64) int {
+func nomsListDel(ctx context.Context, specStr string, pos uint64, len uint64) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 
-	rootVal, basePath := splitPath(sp)
+	rootVal, basePath := splitPath(ctx, sp)
 	patch := diff.Patch{}
 	// TODO: if len-pos is large this will start to become problematic
 	for i := pos; i < pos+len; i++ {
@@ -94,19 +95,19 @@ func nomsListDel(specStr string, pos uint64, len uint64) int {
 		})
 	}
 
-	appplyPatch(sp, rootVal, basePath, patch)
+	appplyPatch(ctx, sp, rootVal, basePath, patch)
 	return 0
 }
 
-func applyListInserts(sp spec.Spec, rootVal types.Value, basePath types.Path, pos uint64, args []string) {
+func applyListInserts(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, pos uint64, args []string) {
 	if rootVal == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
-		vv, err := argumentToValue(args[i], db)
+		vv, err := argumentToValue(ctx, args[i], db)
 		if err != nil {
 			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i], i, err))
 		}
@@ -116,5 +117,5 @@ func applyListInserts(sp spec.Spec, rootVal types.Value, basePath types.Path, po
 			NewValue:   vv,
 		})
 	}
-	appplyPatch(sp, rootVal, basePath, patch)
+	appplyPatch(ctx, sp, rootVal, basePath, patch)
 }

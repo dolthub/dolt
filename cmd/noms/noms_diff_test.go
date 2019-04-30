@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"strings"
@@ -28,7 +29,7 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 	s.NoError(err)
 	defer sp.Close()
 
-	ds, err := addCommit(sp.GetDataset(), "first commit")
+	ds, err := addCommit(sp.GetDataset(context.Background()), "first commit")
 	s.NoError(err)
 	r1 := spec.CreateValueSpecString("nbs", s.DBDir, "#"+ds.HeadRef().TargetHash().String())
 
@@ -45,9 +46,9 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
-	ds, err := addCommit(sp.GetDataset(), "first commit")
+	ds, err := addCommit(sp.GetDataset(context.Background()), "first commit")
 	s.NoError(err)
 	r1 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash())
 
@@ -62,11 +63,11 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 	out, _ = s.MustRun(main, []string{"diff", "--stat", r1 + ".value", r2 + ".value"})
 	s.NotContains(out, "Comparing commit values")
 
-	ds, err = db.CommitValue(ds, types.NewList(db, types.Float(1), types.Float(2), types.Float(3), types.Float(4)))
+	ds, err = db.CommitValue(context.Background(), ds, types.NewList(context.Background(), db, types.Float(1), types.Float(2), types.Float(3), types.Float(4)))
 	s.NoError(err)
 	r3 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
 
-	ds, err = db.CommitValue(ds, types.NewList(db, types.Float(1), types.Float(222), types.Float(4)))
+	ds, err = db.CommitValue(context.Background(), ds, types.NewList(context.Background(), db, types.Float(1), types.Float(222), types.Float(4)))
 	s.NoError(err)
 	r4 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
 

@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"sort"
 	"sync"
 	"time"
@@ -26,7 +27,7 @@ type conjoiner interface {
 	// process actor has already landed a conjoin of its own. Callers must
 	// handle this, likely by rebasing against upstream and re-evaluating the
 	// situation.
-	Conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents
+	Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents
 }
 
 type inlineConjoiner struct {
@@ -37,17 +38,17 @@ func (c inlineConjoiner) ConjoinRequired(ts tableSet) bool {
 	return ts.Size() > c.maxTables
 }
 
-func (c inlineConjoiner) Conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
-	return conjoin(upstream, mm, p, stats)
+func (c inlineConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
+	return conjoin(ctx, upstream, mm, p, stats)
 }
 
-func conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
+func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
 	var conjoined tableSpec
 	var conjoinees, keepers []tableSpec
 
 	for {
 		if conjoinees == nil {
-			conjoined, conjoinees, keepers = conjoinTables(p, upstream.specs, stats)
+			conjoined, conjoinees, keepers = conjoinTables(ctx, p, upstream.specs, stats)
 		}
 
 		specs := append(make([]tableSpec, 0, len(keepers)+1), conjoined)
@@ -59,7 +60,7 @@ func conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, st
 			lock:  generateLockHash(upstream.root, specs),
 			specs: specs,
 		}
-		upstream = mm.Update(upstream.lock, newContents, stats, nil)
+		upstream = mm.Update(ctx, upstream.lock, newContents, stats, nil)
 
 		if newContents.lock == upstream.lock {
 			return upstream // Success!
@@ -88,14 +89,14 @@ func conjoin(upstream manifestContents, mm manifestUpdater, p tablePersister, st
 	}
 }
 
-func conjoinTables(p tablePersister, upstream []tableSpec, stats *Stats) (conjoined tableSpec, conjoinees, keepers []tableSpec) {
+func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, stats *Stats) (conjoined tableSpec, conjoinees, keepers []tableSpec) {
 	// Open all the upstream tables concurrently
 	sources := make(chunkSources, len(upstream))
 	wg := sync.WaitGroup{}
 	for i, spec := range upstream {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			sources[idx] = p.Open(spec.name, spec.chunkCount, stats)
+			sources[idx] = p.Open(ctx, spec.name, spec.chunkCount, stats)
 			wg.Done()
 		}(i, spec)
 		i++
@@ -105,7 +106,7 @@ func conjoinTables(p tablePersister, upstream []tableSpec, stats *Stats) (conjoi
 	t1 := time.Now()
 
 	toConjoin, toKeep := chooseConjoinees(sources)
-	conjoinedSrc := p.ConjoinAll(toConjoin, stats)
+	conjoinedSrc := p.ConjoinAll(ctx, toConjoin, stats)
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))

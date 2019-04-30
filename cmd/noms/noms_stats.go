@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/kingpin"
@@ -14,13 +15,13 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
-func nomsStats(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
+func nomsStats(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
 	stats := noms.Command("stats", "Shows stats summary for a Noms Database")
 	database := stats.Arg("database", "See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the database argument.").Required().String()
 
 	return stats, func(input string) int {
 		cfg := config.NewResolver()
-		store, err := cfg.GetDatabase(*database)
+		store, err := cfg.GetDatabase(ctx, *database)
 		d.CheckError(err)
 		defer store.Close()
 

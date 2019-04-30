@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -12,7 +13,7 @@ import (
 type Bool bool
 
 // Value interface
-func (b Bool) Value() Value {
+func (b Bool) Value(ctx context.Context) Value {
 	return b
 }
 
@@ -31,7 +32,7 @@ func (b Bool) Hash() hash.Hash {
 	return getHash(b)
 }
 
-func (b Bool) WalkValues(cb ValueCallback) {
+func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (b Bool) WalkRefs(cb RefCallback) {

@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -47,9 +48,9 @@ func setupShowFlags() *flag.FlagSet {
 	return showFlagSet
 }
 
-func runShow(args []string) int {
+func runShow(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	database, value, err := cfg.GetPath(args[0])
+	database, value, err := cfg.GetPath(ctx, args[0])
 	d.CheckErrorNoUsage(err)
 	defer database.Close()
 
@@ -72,7 +73,7 @@ func runShow(args []string) int {
 	}
 
 	if showStats {
-		types.WriteValueStats(os.Stdout, value, database)
+		types.WriteValueStats(ctx, os.Stdout, value, database)
 		return 0
 	}
 
@@ -83,10 +84,10 @@ func runShow(args []string) int {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
 
-		types.WriteEncodedValue(pgr.Writer, value)
+		types.WriteEncodedValue(ctx, pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
-		types.WriteEncodedValue(os.Stdout, value)
+		types.WriteEncodedValue(ctx, os.Stdout, value)
 	}
 
 	return 0

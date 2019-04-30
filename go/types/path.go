@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
@@ -31,7 +32,7 @@ var annotationRe = regexp.MustCompile(`^([a-z]+)(\(([\w\-"']*)\))?`)
 type Path []PathPart
 
 type PathPart interface {
-	Resolve(v Value, vr ValueReader) Value
+	Resolve(ctx context.Context, v Value, vr ValueReader) Value
 	String() string
 }
 
@@ -148,13 +149,13 @@ func constructPath(p Path, str string) (Path, error) {
 
 // Resolve resolves a path relative to some value.
 // A ValueReader is required to resolve paths that contain the @target annotation.
-func (p Path) Resolve(v Value, vr ValueReader) (resolved Value) {
+func (p Path) Resolve(ctx context.Context, v Value, vr ValueReader) (resolved Value) {
 	resolved = v
 	for _, part := range p {
 		if resolved == nil {
 			break
 		}
-		resolved = part.Resolve(resolved, vr)
+		resolved = part.Resolve(ctx, resolved, vr)
 	}
 
 	return
@@ -201,7 +202,7 @@ func NewFieldPath(name string) FieldPath {
 	return FieldPath{name}
 }
 
-func (fp FieldPath) Resolve(v Value, vr ValueReader) Value {
+func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	switch v := v.(type) {
 	case Struct:
 		if sv, ok := v.MaybeGet(fp.Name); ok {
@@ -253,7 +254,7 @@ func newIndexPath(idx Value, intoKey bool) IndexPath {
 	return IndexPath{idx, intoKey}
 }
 
-func (ip IndexPath) Resolve(v Value, vr ValueReader) Value {
+func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	seqIndex := func(getter func(i uint64) Value) Value {
 		n, ok := ip.Index.(Float)
 		if !ok {
@@ -275,16 +276,16 @@ func (ip IndexPath) Resolve(v Value, vr ValueReader) Value {
 
 	switch v := v.(type) {
 	case List:
-		return seqIndex(func(i uint64) Value { return v.Get(i) })
+		return seqIndex(func(i uint64) Value { return v.Get(ctx, i) })
 	case *Type:
 		if cd, ok := v.Desc.(CompoundDesc); ok {
 			return seqIndex(func(i uint64) Value { return cd.ElemTypes[i] })
 		}
 	case Map:
 		if !ip.IntoKey {
-			return v.Get(ip.Index)
+			return v.Get(ctx, ip.Index)
 		}
-		if v.Has(ip.Index) {
+		if v.Has(ctx, ip.Index) {
 			return ip.Index
 		}
 	}
@@ -293,7 +294,7 @@ func (ip IndexPath) Resolve(v Value, vr ValueReader) Value {
 }
 
 func (ip IndexPath) String() (str string) {
-	str = fmt.Sprintf("[%s]", EncodedIndexValue(ip.Index))
+	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), ip.Index))
 	if ip.IntoKey {
 		str += "@key"
 	}
@@ -332,7 +333,7 @@ func newHashIndexPath(h hash.Hash, intoKey bool) HashIndexPath {
 	return HashIndexPath{h, intoKey}
 }
 
-func (hip HashIndexPath) Resolve(v Value, vr ValueReader) (res Value) {
+func (hip HashIndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (res Value) {
 	var seq orderedSequence
 	var getCurrentValue func(cur *sequenceCursor) Value
 
@@ -352,7 +353,7 @@ func (hip HashIndexPath) Resolve(v Value, vr ValueReader) (res Value) {
 		return nil
 	}
 
-	cur := newCursorAt(seq, orderedKeyFromHash(hip.Hash), false, false)
+	cur := newCursorAt(ctx, seq, orderedKeyFromHash(hip.Hash), false, false)
 	if !cur.valid() {
 		return nil
 	}
@@ -445,7 +446,7 @@ Switch:
 type TypeAnnotation struct {
 }
 
-func (ann TypeAnnotation) Resolve(v Value, vr ValueReader) Value {
+func (ann TypeAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	return TypeOf(v)
 }
 
@@ -457,12 +458,12 @@ func (ann TypeAnnotation) String() string {
 type TargetAnnotation struct {
 }
 
-func (ann TargetAnnotation) Resolve(v Value, vr ValueReader) Value {
+func (ann TargetAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	if vr == nil {
 		d.Panic("@target annotation requires a database to resolve against")
 	}
 	if r, ok := v.(Ref); ok {
-		return r.TargetValue(vr)
+		return r.TargetValue(ctx, vr)
 	} else {
 		return nil
 	}
@@ -491,7 +492,7 @@ func NewAtAnnotationIntoKeyPath(idx int64) AtAnnotation {
 	return AtAnnotation{idx, true}
 }
 
-func (ann AtAnnotation) Resolve(v Value, vr ValueReader) Value {
+func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	ai, ok := getAbsoluteIndex(v, ann.Index)
 	if !ok {
 		return nil
@@ -500,12 +501,12 @@ func (ann AtAnnotation) Resolve(v Value, vr ValueReader) Value {
 	switch v := v.(type) {
 	case List:
 		if !ann.IntoKey {
-			return v.Get(ai)
+			return v.Get(ctx, ai)
 		}
 	case Set:
-		return v.At(ai)
+		return v.At(ctx, ai)
 	case Map:
-		k, mapv := v.At(ai)
+		k, mapv := v.At(ctx, ai)
 		if ann.IntoKey {
 			return k
 		}

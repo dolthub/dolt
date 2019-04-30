@@ -5,6 +5,7 @@
 package spec
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -36,28 +37,28 @@ func TestAbsolutePaths(t *testing.T) {
 	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(db, s0, s1)
-	emptySet := types.NewSet(db)
+	list := types.NewList(context.Background(), db, s0, s1)
+	emptySet := types.NewSet(context.Background(), db)
 
-	db.WriteValue(s0)
-	db.WriteValue(s1)
-	db.WriteValue(list)
-	db.WriteValue(emptySet)
+	db.WriteValue(context.Background(), s0)
+	db.WriteValue(context.Background(), s1)
+	db.WriteValue(context.Background(), list)
+	db.WriteValue(context.Background(), emptySet)
 
 	var err error
-	ds := db.GetDataset("ds")
-	ds, err = db.CommitValue(ds, list)
+	ds := db.GetDataset(context.Background(), "ds")
+	ds, err = db.CommitValue(context.Background(), ds, list)
 	assert.NoError(err)
 	head := ds.Head()
 
 	resolvesTo := func(exp types.Value, str string) {
 		p, err := NewAbsolutePath(str)
 		assert.NoError(err)
-		act := p.Resolve(db)
+		act := p.Resolve(context.Background(), db)
 		if exp == nil {
 			assert.Nil(act)
 		} else {
-			assert.True(exp.Equals(act), "%s Expected %s Actual %s", str, types.EncodedValue(exp), types.EncodedValue(act))
+			assert.True(exp.Equals(act), "%s Expected %s Actual %s", str, types.EncodedValue(context.Background(), exp), types.EncodedValue(context.Background(), act))
 		}
 	}
 
@@ -81,30 +82,31 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(nil, "#"+types.String("baz").Hash().String()+"[0]")
 }
 
+
 func TestReadAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(db, s0, s1)
+	list := types.NewList(context.Background(), db, s0, s1)
 
-	ds := db.GetDataset("ds")
-	_, err := db.CommitValue(ds, list)
+	ds := db.GetDataset(context.Background(), "ds")
+	_, err := db.CommitValue(context.Background(), ds, list)
 	assert.NoError(err)
 
-	vals, err := ReadAbsolutePaths(db, "ds.value[0]", "ds.value[1]")
+	vals, err := ReadAbsolutePaths(context.Background(), db, "ds.value[0]", "ds.value[1]")
 	assert.NoError(err)
 
 	assert.Equal(2, len(vals))
 	assert.Equal("foo", string(vals[0].(types.String)))
 	assert.Equal("bar", string(vals[1].(types.String)))
 
-	vals, err = ReadAbsolutePaths(db, "!!#")
+	vals, err = ReadAbsolutePaths(context.Background(), db, "!!#")
 	assert.Nil(vals)
 	assert.Equal("Invalid input path '!!#'", err.Error())
 
-	vals, err = ReadAbsolutePaths(db, "invalid.monkey")
+	vals, err = ReadAbsolutePaths(context.Background(), db, "invalid.monkey")
 	assert.Nil(vals)
 	assert.Equal("Input path 'invalid.monkey' does not exist in database", err.Error())
 }

@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -30,11 +31,11 @@ func (me *MapEditor) Kind() NomsKind {
 	return MapKind
 }
 
-func (me *MapEditor) Value() Value {
-	return me.Map()
+func (me *MapEditor) Value(ctx context.Context) Value {
+	return me.Map(ctx)
 }
 
-func (me *MapEditor) Map() Map {
+func (me *MapEditor) Map(ctx context.Context) Map {
 	if len(me.edits) == 0 {
 		return me.m // no edits
 	}
@@ -60,7 +61,7 @@ func (me *MapEditor) Map() Map {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(seq, edit.key, true, false)
+				cc <- newCursorAtValue(ctx, seq, edit.key, true, false)
 			}()
 
 			kvc := make(chan mapEntry, 1)
@@ -77,7 +78,7 @@ func (me *MapEditor) Map() Map {
 			}
 
 			go func() {
-				sv := edit.value.Value()
+				sv := edit.value.Value(ctx)
 				if e, ok := sv.(Emptyable); ok {
 					if e.Empty() {
 						sv = nil
@@ -114,16 +115,16 @@ func (me *MapEditor) Map() Map {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 		} else {
-			ch.advanceTo(cur)
+			ch.advanceTo(ctx, cur)
 		}
 
 		if existingValue != nil {
-			ch.Skip()
+			ch.Skip(ctx)
 		}
 		if kv.value != nil {
-			ch.Append(kv)
+			ch.Append(ctx, kv)
 		}
 	}
 
@@ -131,7 +132,7 @@ func (me *MapEditor) Map() Map {
 		return me.m // no edits required application
 	}
 
-	return newMap(ch.Done().(orderedSequence))
+	return newMap(ch.Done(ctx).(orderedSequence))
 }
 
 func (me *MapEditor) Set(k Value, v Valuable) *MapEditor {
@@ -154,7 +155,7 @@ func (me *MapEditor) Remove(k Value) *MapEditor {
 	return me
 }
 
-func (me *MapEditor) Get(k Value) Valuable {
+func (me *MapEditor) Get(ctx context.Context, k Value) Valuable {
 	if idx, found := me.findEdit(k); found {
 		v := me.edits[idx].value
 		if v != nil {
@@ -162,15 +163,15 @@ func (me *MapEditor) Get(k Value) Valuable {
 		}
 	}
 
-	return me.m.Get(k)
+	return me.m.Get(ctx, k)
 }
 
-func (me *MapEditor) Has(k Value) bool {
+func (me *MapEditor) Has(ctx context.Context, k Value) bool {
 	if idx, found := me.findEdit(k); found {
 		return me.edits[idx].value != nil
 	}
 
-	return me.m.Has(k)
+	return me.m.Has(ctx, k)
 }
 
 func (me *MapEditor) set(k Value, v Valuable) {

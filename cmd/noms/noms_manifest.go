@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 	"os"
@@ -54,7 +55,7 @@ func setupManifestFlags() *flag.FlagSet {
 	return flagSet
 }
 
-func runManifest(args []string) int {
+func runManifest(ctx context.Context, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "Not enough arguments")
 		return 0

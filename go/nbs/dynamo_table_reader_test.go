@@ -5,9 +5,12 @@
 package nbs
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/util/sizecache"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 )
@@ -28,11 +31,11 @@ func TestDynamoTableReaderAt(t *testing.T) {
 		t.Run("ReadTable", func(t *testing.T) {
 			test := func(dts *ddbTableStore) {
 				assert := assert.New(t)
-				data, err := dts.ReadTable(h, &Stats{})
+				data, err := dts.ReadTable(context.Background(), h, &Stats{})
 				assert.NoError(err)
 				assert.Equal(tableData, data)
 
-				data, err = dts.ReadTable(computeAddr([]byte{}), &Stats{})
+				data, err = dts.ReadTable(context.Background(), computeAddr([]byte{}), &Stats{})
 				assert.Error(err)
 				assert.IsType(tableNotInDynamoErr{}, err)
 				assert.Nil(data)
@@ -53,7 +56,7 @@ func TestDynamoTableReaderAt(t *testing.T) {
 
 				// Table should have been cached on read
 				baseline := ddb.numGets
-				_, err := dts.ReadTable(h, &Stats{})
+				_, err := dts.ReadTable(context.Background(), h, &Stats{})
 				assert.NoError(t, err)
 				assert.Zero(t, ddb.numGets-baseline)
 			})
@@ -64,9 +67,9 @@ func TestDynamoTableReaderAt(t *testing.T) {
 				assert := assert.New(t)
 
 				dts := &ddbTableStore{makeFakeDDB(t), "table", nil, nil}
-				assert.NoError(dts.Write(h, tableData))
+				assert.NoError(dts.Write(context.Background(), h, tableData))
 
-				data, err := dts.ReadTable(h, &Stats{})
+				data, err := dts.ReadTable(context.Background(), h, &Stats{})
 				assert.NoError(err)
 				assert.Equal(tableData, data)
 			})
@@ -76,11 +79,11 @@ func TestDynamoTableReaderAt(t *testing.T) {
 
 				tc := sizecache.New(uint64(2 * len(tableData)))
 				dts := &ddbTableStore{makeFakeDDB(t), "table", nil, tc}
-				assert.NoError(dts.Write(h, tableData))
+				assert.NoError(dts.Write(context.Background(), h, tableData))
 
 				// Table should have been cached on write
 				baseline := ddb.numGets
-				data, err := dts.ReadTable(h, &Stats{})
+				data, err := dts.ReadTable(context.Background(), h, &Stats{})
 				assert.NoError(err)
 				assert.Equal(tableData, data)
 				assert.Zero(ddb.numGets - baseline)
@@ -98,13 +101,13 @@ func TestDynamoTableReaderAt(t *testing.T) {
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData)/4)
 		baseline := ddb.numGets
-		_, err := tra.ReadAtWithStats(scratch, 0, stats)
+		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
 		assert.NoError(err)
 		assert.True(ddb.numGets > baseline)
 
 		// Table should have been cached on read so read again, a different slice this time
 		baseline = ddb.numGets
-		_, err = tra.ReadAtWithStats(scratch, int64(len(scratch)), stats)
+		_, err = tra.ReadAtWithStats(context.Background(), scratch, int64(len(scratch)), stats)
 		assert.NoError(err)
 		assert.Zero(ddb.numGets - baseline)
 	})
@@ -114,9 +117,9 @@ type eventuallyConsistentDDB struct {
 	ddbsvc
 }
 
-func (ec *eventuallyConsistentDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+func (ec *eventuallyConsistentDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error) {
 	if input.ConsistentRead != nil && *(input.ConsistentRead) {
-		return ec.ddbsvc.GetItem(input)
+		return ec.ddbsvc.GetItemWithContext(ctx, input)
 	}
 	return &dynamodb.GetItemOutput{}, nil
 }

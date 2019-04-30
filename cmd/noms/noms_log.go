@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -65,7 +66,7 @@ func setupLogFlags() *flag.FlagSet {
 	return logFlagSet
 }
 
-func runLog(args []string) int {
+func runLog(ctx context.Context, args []string) int {
 	useColor = shouldUseColor()
 	cfg := config.NewResolver()
 
@@ -77,13 +78,13 @@ func runLog(args []string) int {
 	d.CheckErrorNoUsage(err)
 	defer sp.Close()
 
-	pinned, ok := sp.Pin()
+	pinned, ok := sp.Pin(ctx)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Cannot resolve spec: %s\n", args[0])
 		return 1
 	}
 	defer pinned.Close()
-	database := pinned.GetDatabase()
+	database := pinned.GetDatabase(ctx)
 
 	absPath := pinned.Path
 	path := absPath.Path
@@ -91,7 +92,7 @@ func runLog(args []string) int {
 		path = types.MustParsePath(".value")
 	}
 
-	origCommit, ok := database.ReadValue(absPath.Hash).(types.Struct)
+	origCommit, ok := database.ReadValue(ctx, absPath.Hash).(types.Struct)
 	if !ok || !datas.IsCommit(origCommit) {
 		d.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
@@ -107,13 +108,13 @@ func runLog(args []string) int {
 	var done = false
 
 	go func() {
-		for ln, ok := iter.Next(); !done && ok && displayed < maxCommits; ln, ok = iter.Next() {
+		for ln, ok := iter.Next(ctx); !done && ok && displayed < maxCommits; ln, ok = iter.Next(ctx) {
 			ch := make(chan []byte)
 			bytesChan <- ch
 
 			go func(ch chan []byte, node LogNode) {
 				buff := &bytes.Buffer{}
-				printCommit(node, path, buff, database, tz)
+				printCommit(ctx, node, path, buff, database, tz)
 				ch <- buff.Bytes()
 			}(ch, ln)
 
@@ -141,7 +142,7 @@ func runLog(args []string) int {
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
-func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
+func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
 	maxMetaFieldNameLength := func(commit types.Struct) int {
 		maxLen := 0
 		if m, ok := commit.MaybeGet(datas.MetaField); ok {
@@ -162,7 +163,7 @@ func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database, 
 
 	parentLabel := "Parent"
 	parentValue := "None"
-	parents := commitRefsFromSet(node.commit.Get(datas.ParentsField).(types.Set))
+	parents := commitRefsFromSet(ctx, node.commit.Get(datas.ParentsField).(types.Set))
 	if len(parents) > 1 {
 		pstrings := make([]string, len(parents))
 		for i, p := range parents {
@@ -187,16 +188,16 @@ func printCommit(node LogNode, path types.Path, w io.Writer, db datas.Database, 
 	lineno := 1
 
 	if maxLines != 0 {
-		lineno, err = writeMetaLines(node, maxLines, lineno, maxFieldNameLen, w, tz)
+		lineno, err = writeMetaLines(ctx, node, maxLines, lineno, maxFieldNameLen, w, tz)
 		if err != nil && err != writers.MaxLinesErr {
 			fmt.Fprintf(w, "error: %s\n", err)
 			return
 		}
 
 		if showValue {
-			_, err = writeCommitLines(node, path, maxLines, lineno, w, db)
+			_, err = writeCommitLines(ctx, node, path, maxLines, lineno, w, db)
 		} else {
-			_, err = writeDiffLines(node, path, db, maxLines, lineno, w)
+			_, err = writeDiffLines(ctx, node, path, db, maxLines, lineno, w)
 		}
 	}
 	return
@@ -255,7 +256,7 @@ func genGraph(node LogNode, lineno int) string {
 	return string(buf)
 }
 
-func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
+func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
 	if m, ok := node.commit.MaybeGet(datas.MetaField); ok {
 		genPrefix := func(w *writers.PrefixWriter) []byte {
 			return []byte(genGraph(node, int(w.NumLines)))
@@ -271,10 +272,10 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 				// field of type datetime.DateTimeType
 				if types.TypeOf(v).Equals(datetime.DateTimeType) {
 					var dt datetime.DateTime
-					dt.UnmarshalNoms(v)
+					dt.UnmarshalNoms(ctx, v)
 					fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
 				} else {
-					types.WriteEncodedValue(pw, v)
+					types.WriteEncodedValue(ctx, pw, v)
 				}
 				fmt.Fprintln(pw)
 			})
@@ -284,17 +285,17 @@ func writeMetaLines(node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer
 	return lineno, nil
 }
 
-func writeCommitLines(node LogNode, path types.Path, maxLines, lineno int, w io.Writer, db datas.Database) (lineCnt int, err error) {
+func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLines, lineno int, w io.Writer, db datas.Database) (lineCnt int, err error) {
 	genPrefix := func(pw *writers.PrefixWriter) []byte {
 		return []byte(genGraph(node, int(pw.NumLines)+1))
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	v := path.Resolve(node.commit, db)
+	v := path.Resolve(ctx, node.commit, db)
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
 	} else {
-		err = types.WriteEncodedValue(pw, v)
+		err = types.WriteEncodedValue(ctx, pw, v)
 		mlw.MaxLines = 0
 		if err != nil {
 			d.PanicIfNotType(writers.MaxLinesErr, err)
@@ -313,7 +314,7 @@ func writeCommitLines(node LogNode, path types.Path, maxLines, lineno int, w io.
 	return int(pw.NumLines), err
 }
 
-func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
+func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
 	genPrefix := func(w *writers.PrefixWriter) []byte {
 		return []byte(genGraph(node, int(w.NumLines)+1))
 	}
@@ -322,18 +323,18 @@ func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, 
 	parents := node.commit.Get(datas.ParentsField).(types.Set)
 	var parent types.Value
 	if parents.Len() > 0 {
-		parent = parents.First()
+		parent = parents.First(ctx)
 	}
 	if parent == nil {
 		_, err = fmt.Fprint(pw, "\n")
 		return 1, err
 	}
 
-	parentCommit := parent.(types.Ref).TargetValue(db).(types.Struct)
+	parentCommit := parent.(types.Ref).TargetValue(ctx, db).(types.Struct)
 	var old, neu types.Value
 	functions.All(
-		func() { old = path.Resolve(parentCommit, db) },
-		func() { neu = path.Resolve(node.commit, db) },
+		func() { old = path.Resolve(ctx, parentCommit, db) },
+		func() { neu = path.Resolve(ctx, node.commit, db) },
 	)
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization
@@ -346,7 +347,7 @@ func writeDiffLines(node LogNode, path types.Path, db datas.Database, maxLines, 
 	}
 
 	if old != nil && neu != nil {
-		err = diff.PrintDiff(pw, old, neu, true)
+		err = diff.PrintDiff(ctx, pw, old, neu, true)
 		mlw.MaxLines = 0
 		if err != nil {
 			d.PanicIfNotType(err, writers.MaxLinesErr)

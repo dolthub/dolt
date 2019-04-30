@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 	"math"
 
@@ -16,7 +17,7 @@ import (
 type Float float64
 
 // Value interface
-func (v Float) Value() Value {
+func (v Float) Value(ctx context.Context) Value {
 	return v
 }
 
@@ -35,7 +36,7 @@ func (v Float) Hash() hash.Hash {
 	return getHash(v)
 }
 
-func (v Float) WalkValues(cb ValueCallback) {
+func (v Float) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (v Float) WalkRefs(cb RefCallback) {

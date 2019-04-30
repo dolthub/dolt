@@ -254,9 +254,9 @@ func (sp Spec) String() string {
 // GetDatabase returns the Database instance that this Spec's DatabaseName
 // describes. The same Database instance is returned every time, unless Close
 // is called. If the Spec is closed, it is re-opened with a new Database.
-func (sp Spec) GetDatabase() datas.Database {
+func (sp Spec) GetDatabase(ctx context.Context) datas.Database {
 	if *sp.db == nil {
-		*sp.db = sp.createDatabase()
+		*sp.db = sp.createDatabase(ctx)
 	}
 	return *sp.db
 }
@@ -265,16 +265,16 @@ func (sp Spec) GetDatabase() datas.Database {
 // DatabaseName describes. It's unusual to call this method, GetDatabase is
 // more useful. Unlike GetDatabase, a new ChunkStore instance is returned every
 // time. If there is no ChunkStore, for example remote databases, returns nil.
-func (sp Spec) NewChunkStore() chunks.ChunkStore {
+func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	switch sp.Protocol {
 	case "http", "https":
 		return nil
 	case "aws":
-		return parseAWSSpec(sp.Href(), sp.Options)
+		return parseAWSSpec(ctx, sp.Href(), sp.Options)
 	case "gs":
-		return parseGCSSpec(sp.Href(), sp.Options)
+		return parseGCSSpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		return nbs.NewLocalStore(sp.DatabaseName, 1<<28)
+		return nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return storage.NewView()
@@ -289,7 +289,7 @@ func (sp Spec) NewChunkStore() chunks.ChunkStore {
 	}
 }
 
-func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
+func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunks.ChunkStore {
 	fmt.Println(awsURL, options)
 
 	u, _ := url.Parse(awsURL)
@@ -322,10 +322,10 @@ func parseAWSSpec(awsURL string, options SpecOptions) chunks.ChunkStore {
 	}
 
 	sess := session.Must(session.NewSession(awsConfig))
-	return nbs.NewAWSStore(parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+	return nbs.NewAWSStore(ctx, parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 }
 
-func parseGCSSpec(gcsURL string, options SpecOptions) chunks.ChunkStore {
+func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunks.ChunkStore {
 	u, err := url.Parse(gcsURL)
 	d.PanicIfError(err)
 
@@ -334,7 +334,6 @@ func parseGCSSpec(gcsURL string, options SpecOptions) chunks.ChunkStore {
 	bucket := u.Host
 	path := u.Path
 
-	ctx := context.Background()
 	gcs, err := storage.NewClient(ctx)
 
 	if err != nil {
@@ -348,18 +347,18 @@ func parseGCSSpec(gcsURL string, options SpecOptions) chunks.ChunkStore {
 // GetDataset is live, so if Commit is called on this Spec's Database later, a
 // new up-to-date Dataset will returned on the next call to GetDataset.  If
 // this is not a Dataset spec, returns nil.
-func (sp Spec) GetDataset() (ds datas.Dataset) {
+func (sp Spec) GetDataset(ctx context.Context) (ds datas.Dataset) {
 	if sp.Path.Dataset != "" {
-		ds = sp.GetDatabase().GetDataset(sp.Path.Dataset)
+		ds = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
 	}
 	return
 }
 
 // GetValue returns the Value at this Spec's Path within its Database, or nil
 // if this isn't a Path Spec or if that path isn't found.
-func (sp Spec) GetValue() (val types.Value) {
+func (sp Spec) GetValue(ctx context.Context) (val types.Value) {
 	if !sp.Path.IsEmpty() {
-		val = sp.Path.Resolve(sp.GetDatabase())
+		val = sp.Path.Resolve(ctx, sp.GetDatabase(ctx))
 	}
 	return
 }
@@ -381,7 +380,7 @@ func (sp Spec) Href() string {
 // with the hash of the HEAD of that dataset. This "pins" the path to the state
 // of the database at the current moment in time.  Returns itself if the
 // PathSpec is already "pinned".
-func (sp Spec) Pin() (Spec, bool) {
+func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
 	var ds datas.Dataset
 
 	if !sp.Path.IsEmpty() {
@@ -390,9 +389,9 @@ func (sp Spec) Pin() (Spec, bool) {
 			return sp, true
 		}
 
-		ds = sp.GetDatabase().GetDataset(sp.Path.Dataset)
+		ds = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
 	} else {
-		ds = sp.GetDataset()
+		ds = sp.GetDataset(ctx)
 	}
 
 	commit, ok := ds.MaybeHead()
@@ -417,17 +416,17 @@ func (sp Spec) Close() error {
 	return db.Close()
 }
 
-func (sp Spec) createDatabase() datas.Database {
+func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 	switch sp.Protocol {
 	case "http", "https":
-		return datas.NewDatabase(datas.NewHTTPChunkStore(sp.Href(), sp.Options.Authorization))
+		return datas.NewDatabase(datas.NewHTTPChunkStore(ctx, sp.Href(), sp.Options.Authorization))
 	case "aws":
-		return datas.NewDatabase(parseAWSSpec(sp.Href(), sp.Options))
+		return datas.NewDatabase(parseAWSSpec(ctx, sp.Href(), sp.Options))
 	case "gs":
-		return datas.NewDatabase(parseGCSSpec(sp.Href(), sp.Options))
+		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
-		return datas.NewDatabase(nbs.NewLocalStore(sp.DatabaseName, 1<<28))
+		return datas.NewDatabase(nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28))
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return datas.NewDatabase(storage.NewView())

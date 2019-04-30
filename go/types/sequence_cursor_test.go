@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -32,7 +33,7 @@ func (ts testSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	panic("not reached")
 }
 
-func (ts testSequence) getCompositeChildSequence(start uint64, length uint64) sequence {
+func (ts testSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence {
 	panic("not reached")
 }
 
@@ -59,7 +60,7 @@ func (ts testSequence) writeTo(nomsWriter) {
 	panic("not reached")
 }
 
-func (ts testSequence) getChildSequence(idx int) sequence {
+func (ts testSequence) getChildSequence(ctx context.Context, idx int) sequence {
 	child := ts.items[idx]
 	return testSequence{child.([]interface{})}
 }
@@ -146,53 +147,53 @@ func TestTestCursor(t *testing.T) {
 	// Test retreating past the start.
 	reset()
 	expect(0, 0, true, sequenceItem(100))
-	assert.False(cur.retreat())
+	assert.False(cur.retreat(context.Background()))
 	expect(-1, 0, false, nil)
-	assert.False(cur.retreat())
+	assert.False(cur.retreat(context.Background()))
 	expect(-1, 0, false, nil)
 
 	// Test retreating past the start, then advanding past the end.
 	reset()
-	assert.False(cur.retreat())
-	assert.True(cur.advance())
+	assert.False(cur.retreat(context.Background()))
+	assert.True(cur.advance(context.Background()))
 	expect(0, 0, true, sequenceItem(100))
-	assert.True(cur.advance())
+	assert.True(cur.advance(context.Background()))
 	expect(1, 0, true, sequenceItem(101))
-	assert.True(cur.advance())
+	assert.True(cur.advance(context.Background()))
 	expect(0, 1, true, sequenceItem(102))
-	assert.False(cur.advance())
+	assert.False(cur.advance(context.Background()))
 	expect(1, 1, false, nil)
-	assert.False(cur.advance())
+	assert.False(cur.advance(context.Background()))
 	expect(1, 1, false, nil)
 
 	// Test advancing past the end.
 	reset()
-	assert.True(cur.advance())
+	assert.True(cur.advance(context.Background()))
 	expect(1, 0, true, sequenceItem(101))
-	assert.True(cur.retreat())
+	assert.True(cur.retreat(context.Background()))
 	expect(0, 0, true, sequenceItem(100))
-	assert.False(cur.retreat())
+	assert.False(cur.retreat(context.Background()))
 	expect(-1, 0, false, nil)
-	assert.False(cur.retreat())
+	assert.False(cur.retreat(context.Background()))
 	expect(-1, 0, false, nil)
 
 	// Test advancing past the end, then retreating past the start.
 	reset()
-	assert.True(cur.advance())
-	assert.True(cur.advance())
+	assert.True(cur.advance(context.Background()))
+	assert.True(cur.advance(context.Background()))
 	expect(0, 1, true, sequenceItem(102))
-	assert.False(cur.advance())
+	assert.False(cur.advance(context.Background()))
 	expect(1, 1, false, nil)
-	assert.False(cur.advance())
+	assert.False(cur.advance(context.Background()))
 	expect(1, 1, false, nil)
-	assert.True(cur.retreat())
+	assert.True(cur.retreat(context.Background()))
 	expect(0, 1, true, sequenceItem(102))
-	assert.True(cur.retreat())
+	assert.True(cur.retreat(context.Background()))
 	expect(1, 0, true, sequenceItem(101))
-	assert.True(cur.retreat())
+	assert.True(cur.retreat(context.Background()))
 	expect(0, 0, true, sequenceItem(100))
-	assert.False(cur.retreat())
+	assert.False(cur.retreat(context.Background()))
 	expect(-1, 0, false, nil)
-	assert.False(cur.retreat())
+	assert.False(cur.retreat(context.Background()))
 	expect(-1, 0, false, nil)
 }

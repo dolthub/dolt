@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -169,6 +170,6 @@ func TestContainCommonSupertype(t *testing.T) {
 
 	for i, c := range cases {
 		act := ContainCommonSupertype(c.a, c.b)
-		assert.Equal(t, c.out, act, "Test case at position %d; \n\ta:%s\n\tb:%s", i, c.a.Describe(), c.b.Describe())
+		assert.Equal(t, c.out, act, "Test case at position %d; \n\ta:%s\n\tb:%s", i, c.a.Describe(context.Background()), c.b.Describe(context.Background()))
 	}
 }

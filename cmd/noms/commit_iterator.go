@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -29,7 +30,7 @@ func NewCommitIterator(db datas.Database, commit types.Struct) *CommitIterator {
 // parents, new branches are added to the branchlist so that they can be traversed in order. When
 // more than one branch contains the same node, that indicates that the branches are converging and so
 // the branchlist will have branches removed to reflect that.
-func (iter *CommitIterator) Next() (LogNode, bool) {
+func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	if iter.branches.IsEmpty() {
 		return LogNode{}, false
 	}
@@ -48,9 +49,9 @@ func (iter *CommitIterator) Next() (LogNode, bool) {
 	// If this commit has parents, then a branch is splitting. Create a branch for each of the parents
 	// and splice that into the iterators list of branches.
 	branches := branchList{}
-	parents := commitRefsFromSet(br.commit.Get(datas.ParentsField).(types.Set))
+	parents := commitRefsFromSet(ctx, br.commit.Get(datas.ParentsField).(types.Set))
 	for _, p := range parents {
-		b := branch{cr: p, commit: iter.db.ReadValue(p.TargetHash()).(types.Struct)}
+		b := branch{cr: p, commit: iter.db.ReadValue(ctx, p.TargetHash()).(types.Struct)}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)
@@ -155,9 +156,9 @@ func (bl branchList) RemoveBranches(indexes []int) branchList {
 	return bl
 }
 
-func commitRefsFromSet(set types.Set) []types.Ref {
+func commitRefsFromSet(ctx context.Context, set types.Set) []types.Ref {
 	res := []types.Ref{}
-	set.IterAll(func(v types.Value) {
+	set.IterAll(ctx, func(v types.Value) {
 		res = append(res, v.(types.Ref))
 	})
 	return res

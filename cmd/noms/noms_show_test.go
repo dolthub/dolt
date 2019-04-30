@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -41,9 +42,9 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 	sp := s.spec(str)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
-	r1 := db.WriteValue(value)
-	_, err := db.CommitValue(sp.GetDataset(), r1)
+	db := sp.GetDatabase(context.Background())
+	r1 := db.WriteValue(context.Background(), value)
+	_, err := db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 	s.NoError(err)
 
 	return r1
@@ -64,7 +65,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	sp := s.spec(str)
 	defer sp.Close()
-	list := types.NewList(sp.GetDatabase(), types.String("elem1"), types.Float(2), types.String("elem3"))
+	list := types.NewList(context.Background(), sp.GetDatabase(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
 	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
@@ -93,13 +94,13 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	// Put a value into the db, get its raw serialization, then deserialize it and ensure it comes
 	// out to same thing.
 	test := func(in types.Value) {
-		r1 := db.WriteValue(in)
-		db.CommitValue(sp.GetDataset(), r1)
+		r1 := db.WriteValue(context.Background(), in)
+		db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))
@@ -111,14 +112,14 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	test(types.String("hello"))
 
 	// Ref (one child chunk)
-	test(db.WriteValue(types.Float(42)))
+	test(db.WriteValue(context.Background(), types.Float(42)))
 
 	// Prolly tree with multiple child chunks
 	items := make([]types.Value, 10000)
 	for i := 0; i < len(items); i++ {
 		items[i] = types.Float(i)
 	}
-	l := types.NewList(db, items...)
+	l := types.NewList(context.Background(), db, items...)
 	numChildChunks := 0
 	l.WalkRefs(func(r types.Ref) {
 		numChildChunks++

@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 
@@ -17,10 +18,10 @@ const (
 	defaultCacheMemTableSize uint64 = 1 << 27 // 128MiB
 )
 
-func NewCache() *NomsBlockCache {
+func NewCache(ctx context.Context) *NomsBlockCache {
 	dir, err := ioutil.TempDir("", "")
 	d.PanicIfError(err)
-	store := NewLocalStore(dir, defaultCacheMemTableSize)
+	store := NewLocalStore(ctx, dir, defaultCacheMemTableSize)
 	d.Chk.NoError(err, "opening put cache in %s", dir)
 	return &NomsBlockCache{store, dir}
 }
@@ -32,38 +33,38 @@ type NomsBlockCache struct {
 }
 
 // Insert stores c in the cache.
-func (nbc *NomsBlockCache) Insert(c chunks.Chunk) {
-	d.PanicIfFalse(nbc.chunks.addChunk(addr(c.Hash()), c.Data()))
+func (nbc *NomsBlockCache) Insert(ctx context.Context, c chunks.Chunk) {
+	d.PanicIfFalse(nbc.chunks.addChunk(ctx, addr(c.Hash()), c.Data()))
 }
 
 // Has checks if the chunk referenced by hash is in the cache.
-func (nbc *NomsBlockCache) Has(hash hash.Hash) bool {
-	return nbc.chunks.Has(hash)
+func (nbc *NomsBlockCache) Has(ctx context.Context, hash hash.Hash) bool {
+	return nbc.chunks.Has(ctx, hash)
 }
 
 // HasMany returns a set containing the members of hashes present in the
 // cache.
-func (nbc *NomsBlockCache) HasMany(hashes hash.HashSet) hash.HashSet {
-	return nbc.chunks.HasMany(hashes)
+func (nbc *NomsBlockCache) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
+	return nbc.chunks.HasMany(ctx, hashes)
 }
 
 // Get retrieves the chunk referenced by hash. If the chunk is not present,
 // Get returns the empty Chunk.
-func (nbc *NomsBlockCache) Get(hash hash.Hash) chunks.Chunk {
-	return nbc.chunks.Get(hash)
+func (nbc *NomsBlockCache) Get(ctx context.Context, hash hash.Hash) chunks.Chunk {
+	return nbc.chunks.Get(ctx, hash)
 }
 
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (nbc *NomsBlockCache) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
-	nbc.chunks.GetMany(hashes, foundChunks)
+func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+	nbc.chunks.GetMany(ctx, hashes, foundChunks)
 }
 
 // ExtractChunks writes the entire contents of the cache to chunkChan. The
 // chunks are extracted in insertion order.
-func (nbc *NomsBlockCache) ExtractChunks(chunkChan chan *chunks.Chunk) {
-	nbc.chunks.extractChunks(chunkChan)
+func (nbc *NomsBlockCache) ExtractChunks(ctx context.Context, chunkChan chan *chunks.Chunk) {
+	nbc.chunks.extractChunks(ctx, chunkChan)
 }
 
 // Count returns the number of items in the cache.

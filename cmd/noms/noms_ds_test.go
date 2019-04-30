@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -26,7 +27,7 @@ type nomsDsTestSuite struct {
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	dir := s.DBDir
 
-	cs := nbs.NewLocalStore(dir, clienttest.DefaultMemTableSize)
+	cs := nbs.NewLocalStore(context.Background(), dir, clienttest.DefaultMemTableSize)
 	ds := datas.NewDatabase(cs)
 
 	ds.Close()
@@ -39,17 +40,17 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
-	cs := nbs.NewLocalStore(dir, clienttest.DefaultMemTableSize)
+	cs := nbs.NewLocalStore(context.Background(), dir, clienttest.DefaultMemTableSize)
 	db := datas.NewDatabase(cs)
 
 	id := "testdataset"
-	set := db.GetDataset(id)
-	set, err := db.CommitValue(set, types.String("Commit Value"))
+	set := db.GetDataset(context.Background(), id)
+	set, err := db.CommitValue(context.Background(), set, types.String("Commit Value"))
 	s.NoError(err)
 
 	id2 := "testdataset2"
-	set2 := db.GetDataset(id2)
-	set2, err = db.CommitValue(set2, types.String("Commit Value2"))
+	set2 := db.GetDataset(context.Background(), id2)
+	set2, err = db.CommitValue(context.Background(), set2, types.String("Commit Value2"))
 	s.NoError(err)
 
 	err = db.Close()

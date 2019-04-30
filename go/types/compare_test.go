@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"testing"
 
@@ -25,7 +26,7 @@ func TestCompareTotalOrdering(t *testing.T) {
 		String("a"), String("b"), String("c"),
 
 		// The order of these are done by the hash.
-		NewSet(vrw, Float(0), Float(1), Float(2), Float(3)),
+		NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3)),
 		BoolType,
 
 		// Value - values cannot be value
@@ -64,11 +65,11 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nums := ValueSlice{Float(1), Float(2), Float(3)}
 	words := ValueSlice{String("k1"), String("v1")}
 
-	blob := NewBlob(vrw, bytes.NewBuffer([]byte{1, 2, 3}))
-	nList := NewList(vrw, nums...)
-	nMap := NewMap(vrw, words...)
+	blob := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{1, 2, 3}))
+	nList := NewList(context.Background(), vrw, nums...)
+	nMap := NewMap(context.Background(), vrw, words...)
 	nRef := NewRef(blob)
-	nSet := NewSet(vrw, nums...)
+	nSet := NewSet(context.Background(), vrw, nums...)
 	nStruct := NewStruct("teststruct", map[string]Value{"f1": Float(1)})
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}

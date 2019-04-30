@@ -5,6 +5,7 @@
 package diff
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -99,17 +100,17 @@ func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 			"ms2":     mustMarshal(map[testKey]int{{1, 1}: 1, {4, 4}: 4, {5, 5}: 5}),
 		}
 
-		vm["mh1"] = types.NewMap(vrw, vfk("k1", "struct1", "k2", "l1")...)
-		vm["mh2"] = types.NewMap(vrw, vfk("k1", "n1", "k2", "l2", "k3", "l3")...)
-		vm["set1"] = types.NewSet(vrw)
-		vm["set2"] = types.NewSet(vrw, vfk("s1", "s2")...)
-		vm["set3"] = types.NewSet(vrw, vfk("s1", "s2", "s3")...)
-		vm["set1"] = types.NewSet(vrw, vfk("s2")...)
-		vm["seth1"] = types.NewSet(vrw, vfk("struct1", "struct2", "struct3")...)
-		vm["seth2"] = types.NewSet(vrw, vfk("struct2", "struct3")...)
-		vm["setj3"] = types.NewSet(vrw, vfk("struct1")...)
-		vm["mk1"] = types.NewMap(vrw, vfk("struct1", "s1", "struct2", "s2")...)
-		vm["mk2"] = types.NewMap(vrw, vfk("struct1", "s3", "struct4", "s4")...)
+		vm["mh1"] = types.NewMap(context.Background(), vrw, vfk("k1", "struct1", "k2", "l1")...)
+		vm["mh2"] = types.NewMap(context.Background(), vrw, vfk("k1", "n1", "k2", "l2", "k3", "l3")...)
+		vm["set1"] = types.NewSet(context.Background(), vrw)
+		vm["set2"] = types.NewSet(context.Background(), vrw, vfk("s1", "s2")...)
+		vm["set3"] = types.NewSet(context.Background(), vrw, vfk("s1", "s2", "s3")...)
+		vm["set1"] = types.NewSet(context.Background(), vrw, vfk("s2")...)
+		vm["seth1"] = types.NewSet(context.Background(), vrw, vfk("struct1", "struct2", "struct3")...)
+		vm["seth2"] = types.NewSet(context.Background(), vrw, vfk("struct2", "struct3")...)
+		vm["setj3"] = types.NewSet(context.Background(), vrw, vfk("struct1")...)
+		vm["mk1"] = types.NewMap(context.Background(), vrw, vfk("struct1", "s1", "struct2", "s2")...)
+		vm["mk2"] = types.NewMap(context.Background(), vrw, vfk("struct1", "s3", "struct4", "s4")...)
 	}
 	return vm
 }
@@ -123,7 +124,7 @@ func getPatch(g1, g2 types.Value) Patch {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(g1, g2, dChan, sChan, true, nil)
+		Diff(context.Background(), g1, g2, dChan, sChan, true, nil)
 		close(dChan)
 	}()
 
@@ -136,7 +137,7 @@ func getPatch(g1, g2 types.Value) Patch {
 
 func checkApplyPatch(assert *assert.Assertions, g1, expectedG2 types.Value, k1, k2 string) {
 	patch := getPatch(g1, expectedG2)
-	g2 := Apply(g1, patch)
+	g2 := Apply(context.Background(), g1, patch)
 	assert.True(expectedG2.Equals(g2), "failed to apply diffs for k1: %s and k2: %s", k1, k2)
 }
 
@@ -168,8 +169,8 @@ func TestNestedLists(t *testing.T) {
 	ol2 := mustMarshal([]int{2, 3})
 	nl2 := mustMarshal([]int{1, 2, 3, 4})
 	nl3 := mustMarshal([]bool{true, false, true})
-	g1 := types.NewList(vs, ol1, ol2)
-	g2 := types.NewList(vs, nl1, nl2, nl3)
+	g1 := types.NewList(context.Background(), vs, ol1, ol2)
+	g2 := types.NewList(context.Background(), vs, nl1, nl2, nl3)
 	checkApplyPatch(assert, g1, g2, "g1", "g2")
 }
 
@@ -182,7 +183,7 @@ func TestUpdateNode(t *testing.T) {
 	doTest := func(pp types.PathPart, parent, ov, nv, exp types.Value, f testFunc) {
 		stack := &patchStack{}
 		se := &stackElem{path: []types.PathPart{pp}, pathPart: pp, changeType: types.DiffChangeModified, oldValue: ov, newValue: nv}
-		updated := stack.updateNode(se, parent)
+		updated := stack.updateNode(context.Background(), se, parent)
 		testVal := f(updated)
 		assert.True(exp.Equals(testVal), "%s != %s", nv, testVal)
 	}
@@ -197,37 +198,37 @@ func TestUpdateNode(t *testing.T) {
 		return parent.(types.Struct).Get("f2")
 	})
 
-	l1 := types.NewList(vs, types.String("one"), oldVal, types.String("three"))
+	l1 := types.NewList(context.Background(), vs, types.String("one"), oldVal, types.String("three"))
 	pp = types.IndexPath{Index: types.Float(1)}
 	doTest(pp, l1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
-		return parent.(types.List).Get(1)
+		return parent.(types.List).Get(context.Background(), 1)
 	})
 
-	m1 := types.NewMap(vs, types.String("k1"), types.Float(1), types.String("k2"), oldVal)
+	m1 := types.NewMap(context.Background(), vs, types.String("k1"), types.Float(1), types.String("k2"), oldVal)
 	pp = types.IndexPath{Index: types.String("k2")}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
-		return parent.(types.Map).Get(types.String("k2"))
+		return parent.(types.Map).Get(context.Background(), types.String("k2"))
 	})
 
 	k1 := types.NewStruct("Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
-	vs.WriteValue(k1)
-	m1 = types.NewMap(vs, k1, oldVal)
+	vs.WriteValue(context.Background(), k1)
+	m1 = types.NewMap(context.Background(), vs, k1, oldVal)
 	pp = types.HashIndexPath{Hash: k1.Hash()}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
-		return parent.(types.Map).Get(k1)
+		return parent.(types.Map).Get(context.Background(), k1)
 	})
 
-	set1 := types.NewSet(vs, oldVal, k1)
+	set1 := types.NewSet(context.Background(), vs, oldVal, k1)
 	pp = types.IndexPath{Index: oldVal}
-	exp := types.NewSet(vs, newVal, k1)
+	exp := types.NewSet(context.Background(), vs, newVal, k1)
 	doTest(pp, set1, oldVal, newVal, exp, func(parent types.Value) types.Value {
 		return parent
 	})
 
 	k2 := types.NewStruct("Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
-	set1 = types.NewSet(vs, oldVal, k1)
+	set1 = types.NewSet(context.Background(), vs, oldVal, k1)
 	pp = types.HashIndexPath{Hash: k1.Hash()}
-	exp = types.NewSet(vs, oldVal, k2)
+	exp = types.NewSet(context.Background(), vs, oldVal, k2)
 	doTest(pp, set1, k1, k2, exp, func(parent types.Value) types.Value {
 		return parent
 	})
@@ -237,7 +238,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(n1, n2, dChan, sChan, leftRight, nil)
+		Diff(context.Background(), n1, n2, dChan, sChan, leftRight, nil)
 		close(dChan)
 	}()
 
@@ -246,7 +247,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 		difs = append(difs, dif)
 	}
 
-	res := Apply(n1, difs)
+	res := Apply(context.Background(), n1, difs)
 	a.True(n2.Equals(res))
 }
 
@@ -350,8 +351,8 @@ func TestUpdateSet(t *testing.T) {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	a1 := types.NewSet(vs, types.Float(1), types.String("two"), mustMarshal([]string{"one", "two", "three"}))
-	a2 := types.NewSet(vs, types.Float(3), types.String("three"), mustMarshal([]string{"one", "two", "three", "four"}))
+	a1 := types.NewSet(context.Background(), vs, types.Float(1), types.String("two"), mustMarshal([]string{"one", "two", "three"}))
+	a2 := types.NewSet(context.Background(), vs, types.Float(3), types.String("three"), mustMarshal([]string{"one", "two", "three", "four"}))
 
 	checkApplyDiffs(a, a1, a2, true)
 	checkApplyDiffs(a, a1, a2, false)
@@ -363,7 +364,7 @@ func mustMarshal(v interface{}) types.Value {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	v1, err := marshal.Marshal(vs, v)
+	v1, err := marshal.Marshal(context.Background(), vs, v)
 	d.Chk.NoError(err)
 	return v1
 }

@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -21,7 +22,7 @@ func TestChunkStoreZeroValue(t *testing.T) {
 	defer store.Close()
 
 	// No manifest file gets written until the first call to Commit(). Prior to that, Root() will simply return hash.Hash{}.
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -32,7 +33,7 @@ func TestChunkStoreVersion(t *testing.T) {
 
 	assert.Equal(constants.NomsVersion, store.Version())
 	newRoot := hash.Of([]byte("new root"))
-	if assert.True(store.Commit(newRoot, hash.Hash{})) {
+	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
 		assert.Equal(constants.NomsVersion, store.Version())
 	}
 }
@@ -42,20 +43,20 @@ func TestChunkStoreRebase(t *testing.T) {
 	fm, p, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	// state in store shouldn't change
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 
-	store.Rebase()
+	store.Rebase(context.Background())
 
 	// NOW it should
-	assert.Equal(newRoot, store.Root())
+	assert.Equal(newRoot, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
@@ -65,23 +66,23 @@ func TestChunkStoreCommit(t *testing.T) {
 	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 
 	newRootChunk := chunks.NewChunk([]byte("new root"))
 	newRoot := newRootChunk.Hash()
-	store.Put(newRootChunk)
-	if assert.True(store.Commit(newRoot, hash.Hash{})) {
-		assert.True(store.Has(newRoot))
-		assert.Equal(newRoot, store.Root())
+	store.Put(context.Background(), newRootChunk)
+	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
+		assert.True(store.Has(context.Background(), newRoot))
+		assert.Equal(newRoot, store.Root(context.Background()))
 	}
 
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
-	store.Put(secondRootChunk)
-	if assert.True(store.Commit(secondRoot, newRoot)) {
-		assert.Equal(secondRoot, store.Root())
-		assert.True(store.Has(newRoot))
-		assert.True(store.Has(secondRoot))
+	store.Put(context.Background(), secondRootChunk)
+	if assert.True(store.Commit(context.Background(), secondRoot, newRoot)) {
+		assert.Equal(secondRoot, store.Root(context.Background()))
+		assert.True(store.Has(context.Background(), newRoot))
+		assert.True(store.Has(context.Background(), secondRoot))
 	}
 }
 
@@ -90,14 +91,14 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	fm, p, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	// state in store shouldn't change
-	assert.Equal(hash.Hash{}, store.Root())
+	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -110,10 +111,10 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
-	store := newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	defer store.Close()
 
-	assert.Equal(newRoot, store.Root())
+	assert.Equal(newRoot, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
@@ -127,9 +128,9 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	newRoot2 := hash.Of([]byte("new root 2"))
-	assert.False(store.Commit(newRoot2, hash.Hash{}))
+	assert.False(store.Commit(context.Background(), newRoot2, hash.Hash{}))
 	assertDataInStore(chunks, store, assert)
-	assert.True(store.Commit(newRoot2, newRoot))
+	assert.True(store.Commit(context.Background(), newRoot2, newRoot))
 }
 
 func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
@@ -139,27 +140,27 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
 	defer store.Close()
 
 	// Simulate another goroutine writing a manifest behind store's back.
-	interloper := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	interloper := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
 	defer interloper.Close()
 
 	chunk := chunks.NewChunk([]byte("hello"))
-	interloper.Put(chunk)
-	assert.True(interloper.Commit(chunk.Hash(), hash.Hash{}))
+	interloper.Put(context.Background(), chunk)
+	assert.True(interloper.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 
 	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
 	chunk = chunks.NewChunk([]byte("goodbye"))
-	store.Put(chunk)
+	store.Put(context.Background(), chunk)
 	assert.NotNil(store.mt)
-	assert.False(store.Commit(chunk.Hash(), hash.Hash{}))
+	assert.False(store.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 	assert.NotNil(store.mt)
 
-	assert.True(store.Commit(chunk.Hash(), store.Root()))
+	assert.True(store.Commit(context.Background(), chunk.Hash(), store.Root(context.Background())))
 	assert.Nil(store.mt)
-	assert.Equal(chunk.Hash(), store.Root())
+	assert.Equal(chunk.Hash(), store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -171,7 +172,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store := newNomsBlockStore(mm, p, c, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
 	defer store.Close()
 
 	// store.Commit() should lock out calls to mm.Fetch()
@@ -181,16 +182,16 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, fetched = mm.Fetch(nil)
+			_, fetched = mm.Fetch(context.Background(), nil)
 		}()
 	}
 
 	rootChunk := chunks.NewChunk([]byte("new root"))
-	store.Put(rootChunk)
-	assert.True(store.Commit(rootChunk.Hash(), store.Root()))
+	store.Put(context.Background(), rootChunk)
+	assert.True(store.Commit(context.Background(), rootChunk.Hash(), store.Root(context.Background())))
 
 	wg.Wait()
-	assert.Equal(store.Root(), fetched.root)
+	assert.Equal(store.Root(context.Background()), fetched.root)
 }
 
 func TestChunkStoreSerializeCommits(t *testing.T) {
@@ -202,7 +203,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store := newNomsBlockStore(manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
+	store := newNomsBlockStore(context.Background(), manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
 	defer store.Close()
 
 	storeChunk := chunks.NewChunk([]byte("store"))
@@ -210,6 +211,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	updateCount := 0
 
 	interloper := newNomsBlockStore(
+		context.Background(),
 		manifestManager{
 			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
 		},
@@ -223,27 +225,27 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			interloper.Put(interloperChunk)
-			assert.True(interloper.Commit(interloper.Root(), interloper.Root()))
+			interloper.Put(context.Background(), interloperChunk)
+			assert.True(interloper.Commit(context.Background(), interloper.Root(context.Background()), interloper.Root(context.Background())))
 		}()
 
 		updateCount++
 	}
 
-	store.Put(storeChunk)
-	assert.True(store.Commit(store.Root(), store.Root()))
+	store.Put(context.Background(), storeChunk)
+	assert.True(store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background())))
 
 	wg.Wait()
 	assert.Equal(2, updateCount)
-	assert.True(interloper.Has(storeChunk.Hash()))
-	assert.True(interloper.Has(interloperChunk.Hash()))
+	assert.True(interloper.Has(context.Background(), storeChunk.Hash()))
+	assert.True(interloper.Has(context.Background(), interloperChunk.Hash()))
 }
 
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store *NomsBlockStore) {
 	fm = &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	p = newFakeTablePersister()
-	store = newNomsBlockStore(mm, p, inlineConjoiner{defaultMaxTables}, 0)
+	store = newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, 0)
 	return
 }
 
@@ -251,7 +253,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunks ...[]byte) (newRoot hash.Hash, persisted [][]byte) {
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of(rootChunk)
 	persisted = append(chunks, rootChunk)
-	src := p.Persist(createMemTable(persisted), nil, &Stats{})
+	src := p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 	return
 }
@@ -266,7 +268,7 @@ func createMemTable(chunks [][]byte) *memTable {
 
 func assertDataInStore(slices [][]byte, store chunks.ChunkStore, assert *assert.Assertions) {
 	for _, data := range slices {
-		assert.True(store.Has(chunks.NewChunk(data).Hash()))
+		assert.True(store.Has(context.Background(), chunks.NewChunk(data).Hash()))
 	}
 }
 
@@ -281,7 +283,7 @@ func (fm *fakeManifest) Name() string { return fm.name }
 
 // ParseIfExists returns any fake manifest data the caller has injected using
 // Update() or set(). It treats an empty |fm.lock| as a non-existent manifest.
-func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 	if fm.contents.lock != (addr{}) {
@@ -295,7 +297,7 @@ func (fm *fakeManifest) ParseIfExists(stats *Stats, readHook func()) (exists boo
 // to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
 // replace |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
 // fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
@@ -323,7 +325,7 @@ type fakeTablePersister struct {
 	mu      *sync.RWMutex
 }
 
-func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
 	if mt.count() > 0 {
 		name, data, chunkCount := mt.write(haver, stats)
 		if chunkCount > 0 {
@@ -336,7 +338,7 @@ func (ftp fakeTablePersister) Persist(mt *memTable, haver chunkReader, stats *St
 	return emptyChunkSource{}
 }
 
-func (ftp fakeTablePersister) ConjoinAll(sources chunkSources, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
 	name, data, chunkCount := compactSourcesToBuffer(sources)
 	if chunkCount > 0 {
 		ftp.mu.Lock()
@@ -371,7 +373,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 					chunks <- extractRecord{a: src.hash(), err: r}
 				}
 			}()
-			src.extract(chunks)
+			src.extract(context.Background(), chunks)
 		}()
 		for rec := range chunks {
 			if rec.err != nil {
@@ -389,7 +391,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 	return name, buff[:tableSize], chunkCount
 }
 
-func (ftp fakeTablePersister) Open(name addr, chunkCount uint32, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
 	ftp.mu.RLock()
 	defer ftp.mu.RUnlock()
 	return chunkSourceAdapter{ftp.sources[name], name}

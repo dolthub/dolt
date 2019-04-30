@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,7 @@ const (
 	lengthOfNumbersTest = 1000
 )
 
-type diffFn func(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool
+type diffFn func(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool
 
 type diffTestSuite struct {
 	suite.Suite
@@ -43,7 +44,7 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 	changes := make(chan ValueChanged)
 	closeChan := make(chan struct{})
 	go func() {
-		df(o1, o2, changes, closeChan)
+		df(context.Background(), o1, o2, changes, closeChan)
 		close(changes)
 	}()
 	for change := range changes {
@@ -94,13 +95,13 @@ func (suite *diffTestSuite) TestDiff() {
 		runTestDf(name, vf, cf, orderedSequenceDiffBest)
 	}
 
-	newSetAsCol := func(vals []Value) Collection { return NewSet(vs, vals...) }
-	newMapAsCol := func(vals []Value) Collection { return NewMap(vs, vals...) }
+	newSetAsCol := func(vals []Value) Collection { return NewSet(context.Background(), vs, vals...) }
+	newMapAsCol := func(vals []Value) Collection { return NewMap(context.Background(), vs, vals...) }
 
 	rw := func(col Collection) Collection {
-		h := vs.WriteValue(col).TargetHash()
-		vs.Commit(vs.Root(), vs.Root())
-		return vs.ReadValue(h).(Collection)
+		h := vs.WriteValue(context.Background(), col).TargetHash()
+		vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+		return vs.ReadValue(context.Background(), h).(Collection)
 	}
 	newSetAsColRw := func(vs []Value) Collection { return rw(newSetAsCol(vs)) }
 	newMapAsColRw := func(vs []Value) Collection { return rw(newMapAsCol(vs)) }
@@ -160,16 +161,16 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 	vs := newTestValueStore()
 
 	runTest := func(df diffFn) {
-		s1 := NewSet(vs).orderedSequence
+		s1 := NewSet(context.Background(), vs).orderedSequence
 		// A single item should be enough, but generate lots anyway.
-		s2 := NewSet(vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
+		s2 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
 
 		changeChan := make(chan ValueChanged)
 		closeChan := make(chan struct{})
 		stopChan := make(chan struct{})
 
 		go func() {
-			df(s1, s2, changeChan, closeChan)
+			df(context.Background(), s1, s2, changeChan, closeChan)
 			stopChan <- struct{}{}
 		}()
 
@@ -190,7 +191,7 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	newSetSequenceMt := func(v ...Value) metaTuple {
 		seq := newSetLeafSequence(vrw, v...)
 		set := newSet(seq)
-		return newMetaTuple(vrw.WriteValue(set), newOrderedKey(v[len(v)-1]), uint64(len(v)))
+		return newMetaTuple(vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1]), uint64(len(v)))
 	}
 
 	m1 := newSetSequenceMt(Float(1), Float(2))
@@ -202,9 +203,9 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	runTest := func(df diffFn) {
 		changes := make(chan ValueChanged)
 		go func() {
-			df(s1, s2, changes, nil)
+			df(context.Background(), s1, s2, changes, nil)
 			changes <- ValueChanged{}
-			df(s2, s1, changes, nil)
+			df(context.Background(), s2, s1, changes, nil)
 			close(changes)
 		}()
 

@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -34,7 +35,7 @@ func (suite *WalkAllTestSuite) SetupTest() {
 
 func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
 	actual := 0
-	WalkValues(v, suite.vs, func(c Value) (stop bool) {
+	WalkValues(context.Background(), v, suite.vs, func(c Value) (stop bool) {
 		actual++
 		return
 	})
@@ -43,7 +44,7 @@ func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
 
 func (suite *WalkAllTestSuite) assertVisitedOnce(root, v Value) {
 	actual := 0
-	WalkValues(v, suite.vs, func(c Value) bool {
+	WalkValues(context.Background(), v, suite.vs, func(c Value) bool {
 		if c == v {
 			actual++
 		}
@@ -61,18 +62,18 @@ func (suite *WalkAllTestSuite) TestWalkValuesDuplicates() {
 
 func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 	buff := randomBuff(16)
-	blob := NewBlob(suite.vs, bytes.NewReader(buff))
-	r := suite.vs.WriteValue(blob)
+	blob := NewBlob(context.Background(), suite.vs, bytes.NewReader(buff))
+	r := suite.vs.WriteValue(context.Background(), blob)
 	suite.True(r.Height() > 1)
-	outBlob := suite.vs.ReadValue(r.TargetHash()).(Blob)
+	outBlob := suite.vs.ReadValue(context.Background(), r.TargetHash()).(Blob)
 	suite.Equal(suite.ts.Reads, 0)
 	suite.assertCallbackCount(outBlob, 1)
 	suite.Equal(suite.ts.Reads, 0)
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
-	suite.assertCallbackCount(suite.vs.WriteValue(Float(0.0)), 2)
-	suite.assertCallbackCount(suite.vs.WriteValue(String("hello")), 2)
+	suite.assertCallbackCount(suite.vs.WriteValue(context.Background(), Float(0.0)), 2)
+	suite.assertCallbackCount(suite.vs.WriteValue(context.Background(), String("hello")), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
@@ -90,12 +91,12 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	for i := 0; i < count; i++ {
 		nums[i] = Float(i)
 	}
-	l := NewList(suite.vs, nums...)
+	l := NewList(context.Background(), suite.vs, nums...)
 	suite.True(NewRef(l).Height() > 1)
 	suite.assertCallbackCount(l, count+1)
 
-	r := suite.vs.WriteValue(l)
-	outList := suite.vs.ReadValue(r.TargetHash())
+	r := suite.vs.WriteValue(context.Background(), l)
+	outList := suite.vs.ReadValue(context.Background(), r.TargetHash())
 	suite.assertCallbackCount(outList, count+1)
 }
 
@@ -159,7 +160,7 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 }
 
 func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
-	WalkValues(composite, suite.vs, func(v Value) bool {
+	WalkValues(context.Background(), composite, suite.vs, func(v Value) bool {
 		suite.False(v.Equals(suite.deadValue), "Should never have reached %+v", suite.deadValue)
 		reached = append(reached, v)
 		return v.Equals(suite.mustSkip)
@@ -169,7 +170,7 @@ func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
 
 // Skipping a sub-tree must allow other items in the list to be processed.
 func (suite *WalkTestSuite) TestSkipListElement() {
-	wholeList := NewList(suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
+	wholeList := NewList(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeList)
 	for _, v := range []Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -178,7 +179,7 @@ func (suite *WalkTestSuite) TestSkipListElement() {
 }
 
 func (suite *WalkTestSuite) TestSkipSetElement() {
-	wholeSet := NewSet(suite.vs, suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set()
+	wholeSet := NewSet(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set(context.Background())
 	reached := suite.skipWorker(wholeSet)
 	for _, v := range []Value{wholeSet, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -188,8 +189,8 @@ func (suite *WalkTestSuite) TestSkipSetElement() {
 
 func (suite *WalkTestSuite) TestSkipMapValue() {
 	shouldAlsoSeeItem := String("Also good")
-	shouldAlsoSee := NewSet(suite.vs, shouldAlsoSeeItem)
-	wholeMap := NewMap(suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
+	shouldAlsoSee := NewSet(context.Background(), suite.vs, shouldAlsoSeeItem)
+	wholeMap := NewMap(context.Background(), suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.shouldSee, suite.shouldSeeItem, suite.mustSkip, shouldAlsoSee, shouldAlsoSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -198,7 +199,7 @@ func (suite *WalkTestSuite) TestSkipMapValue() {
 }
 
 func (suite *WalkTestSuite) TestSkipMapKey() {
-	wholeMap := NewMap(suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
+	wholeMap := NewMap(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
@@ -207,18 +208,18 @@ func (suite *WalkTestSuite) TestSkipMapKey() {
 }
 
 func (suite *WalkAllTestSuite) NewList(vs ...Value) Ref {
-	v := NewList(suite.vs, vs...)
-	return suite.vs.WriteValue(v)
+	v := NewList(context.Background(), suite.vs, vs...)
+	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) NewMap(vs ...Value) Ref {
-	v := NewMap(suite.vs, vs...)
-	return suite.vs.WriteValue(v)
+	v := NewMap(context.Background(), suite.vs, vs...)
+	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) NewSet(vs ...Value) Ref {
-	v := NewSet(suite.vs, vs...)
-	return suite.vs.WriteValue(v)
+	v := NewSet(context.Background(), suite.vs, vs...)
+	return suite.vs.WriteValue(context.Background(), v)
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
@@ -255,7 +256,7 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.ts = storage.NewView()
 	suite.vs = NewValueStore(suite.ts)
 	suite.shouldSeeItem = String("zzz")
-	suite.shouldSee = NewList(suite.vs, suite.shouldSeeItem)
+	suite.shouldSee = NewList(context.Background(), suite.vs, suite.shouldSeeItem)
 	suite.deadValue = Float(0xDEADBEEF)
-	suite.mustSkip = NewList(suite.vs, suite.deadValue)
+	suite.mustSkip = NewList(context.Background(), suite.vs, suite.deadValue)
 }

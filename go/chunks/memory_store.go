@@ -5,6 +5,7 @@
 package chunks
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/constants"
@@ -31,7 +32,7 @@ func (ms *MemoryStorage) NewView() ChunkStore {
 
 // Get retrieves the Chunk with the Hash h, returning EmptyChunk if it's not
 // present.
-func (ms *MemoryStorage) Get(h hash.Hash) Chunk {
+func (ms *MemoryStorage) Get(ctx context.Context, h hash.Hash) Chunk {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.data[h]; ok {
@@ -42,7 +43,7 @@ func (ms *MemoryStorage) Get(h hash.Hash) Chunk {
 
 // Has returns true if the Chunk with the Hash h is present in ms.data, false
 // if not.
-func (ms *MemoryStorage) Has(r hash.Hash) bool {
+func (ms *MemoryStorage) Has(ctx context.Context, r hash.Hash) bool {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	_, ok := ms.data[r]
@@ -57,7 +58,7 @@ func (ms *MemoryStorage) Len() int {
 }
 
 // Root returns the currently "persisted" root hash of this in-memory store.
-func (ms *MemoryStorage) Root() hash.Hash {
+func (ms *MemoryStorage) Root(ctx context.Context) hash.Hash {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.rootHash
@@ -95,18 +96,18 @@ type MemoryStoreView struct {
 	storage *MemoryStorage
 }
 
-func (ms *MemoryStoreView) Get(h hash.Hash) Chunk {
+func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) Chunk {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.pending[h]; ok {
 		return c
 	}
-	return ms.storage.Get(h)
+	return ms.storage.Get(ctx, h)
 }
 
-func (ms *MemoryStoreView) GetMany(hashes hash.HashSet, foundChunks chan *Chunk) {
+func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) {
 	for h := range hashes {
-		c := ms.Get(h)
+		c := ms.Get(ctx, h)
 		if !c.IsEmpty() {
 			foundChunks <- &c
 		}
@@ -114,19 +115,19 @@ func (ms *MemoryStoreView) GetMany(hashes hash.HashSet, foundChunks chan *Chunk)
 	return
 }
 
-func (ms *MemoryStoreView) Has(h hash.Hash) bool {
+func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) bool {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if _, ok := ms.pending[h]; ok {
 		return true
 	}
-	return ms.storage.Has(h)
+	return ms.storage.Has(ctx, h)
 }
 
-func (ms *MemoryStoreView) HasMany(hashes hash.HashSet) hash.HashSet {
+func (ms *MemoryStoreView) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
 	absent := hash.HashSet{}
 	for h := range hashes {
-		if !ms.Has(h) {
+		if !ms.Has(ctx, h) {
 			absent.Insert(h)
 		}
 	}
@@ -137,7 +138,7 @@ func (ms *MemoryStoreView) Version() string {
 	return constants.NomsVersion
 }
 
-func (ms *MemoryStoreView) Put(c Chunk) {
+func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if ms.pending == nil {
@@ -152,19 +153,19 @@ func (ms *MemoryStoreView) Len() int {
 	return len(ms.pending) + ms.storage.Len()
 }
 
-func (ms *MemoryStoreView) Rebase() {
+func (ms *MemoryStoreView) Rebase(ctx context.Context) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
-	ms.rootHash = ms.storage.Root()
+	ms.rootHash = ms.storage.Root(ctx)
 }
 
-func (ms *MemoryStoreView) Root() hash.Hash {
+func (ms *MemoryStoreView) Root(ctx context.Context) hash.Hash {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	return ms.rootHash
 }
 
-func (ms *MemoryStoreView) Commit(current, last hash.Hash) bool {
+func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) bool {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if last != ms.rootHash {
@@ -175,7 +176,7 @@ func (ms *MemoryStoreView) Commit(current, last hash.Hash) bool {
 	if success {
 		ms.pending = nil
 	}
-	ms.rootHash = ms.storage.Root()
+	ms.rootHash = ms.storage.Root(ctx)
 	return success
 }
 
@@ -200,11 +201,11 @@ func NewMemoryStoreFactory() Factory {
 	return &memoryStoreFactory{map[string]*MemoryStorage{}, &sync.Mutex{}}
 }
 
-func (f *memoryStoreFactory) CreateStoreFromCache(ns string) ChunkStore {
-	return f.CreateStore(ns)
+func (f *memoryStoreFactory) CreateStoreFromCache(ctx context.Context, ns string) ChunkStore {
+	return f.CreateStore(ctx, ns)
 }
 
-func (f *memoryStoreFactory) CreateStore(ns string) ChunkStore {
+func (f *memoryStoreFactory) CreateStore(ctx context.Context, ns string) ChunkStore {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 

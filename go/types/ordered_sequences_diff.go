@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/d"
@@ -37,7 +38,7 @@ func sendChange(changes chan<- ValueChanged, stopChan <-chan struct{}, change Va
 // The left-right diff is expected to return results earlier, whereas the top-down approach is faster overall. This "best" algorithm runs both:
 // - early results from left-right are sent to |changes|.
 // - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
-func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	lrChanges := make(chan ValueChanged)
 	tdChanges := make(chan ValueChanged)
 	// Give the stop channels a buffer size of 1 so that they won't block (see below).
@@ -57,12 +58,12 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		orderedSequenceDiffLeftRight(last, current, lrChanges, lrStopChan)
+		orderedSequenceDiffLeftRight(ctx, last, current, lrChanges, lrStopChan)
 		close(lrChanges)
 	}()
 	go func() {
 		defer wg.Done()
-		orderedSequenceDiffTopDown(last, current, tdChanges, tdStopChan)
+		orderedSequenceDiffTopDown(ctx, last, current, tdChanges, tdStopChan)
 		close(tdChanges)
 	}()
 
@@ -109,24 +110,24 @@ func orderedSequenceDiffBest(last orderedSequence, current orderedSequence, chan
 
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.
 // Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
-func orderedSequenceDiffTopDown(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	return orderedSequenceDiffInternalNodes(last, current, changes, stopChan)
+func orderedSequenceDiffTopDown(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+	return orderedSequenceDiffInternalNodes(ctx, last, current, changes, stopChan)
 }
 
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	if last.treeLevel() > current.treeLevel() {
-		lastChild := last.getCompositeChildSequence(0, uint64(last.seqLen())).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(lastChild, current, changes, stopChan)
+		lastChild := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen())).(orderedSequence)
+		return orderedSequenceDiffInternalNodes(ctx, lastChild, current, changes, stopChan)
 	}
 
 	if current.treeLevel() > last.treeLevel() {
-		currentChild := current.getCompositeChildSequence(0, uint64(current.seqLen())).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(last, currentChild, changes, stopChan)
+		currentChild := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen())).(orderedSequence)
+		return orderedSequenceDiffInternalNodes(ctx, last, currentChild, changes, stopChan)
 	}
 
 	if last.isLeaf() && current.isLeaf() {
-		return orderedSequenceDiffLeftRight(last, current, changes, stopChan)
+		return orderedSequenceDiffLeftRight(ctx, last, current, changes, stopChan)
 	}
 
 	compareFn := last.getCompareFn(current)
@@ -137,13 +138,13 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 		var lastChild, currentChild orderedSequence
 		functions.All(
 			func() {
-				lastChild = last.getCompositeChildSequence(splice.SpAt, splice.SpRemoved).(orderedSequence)
+				lastChild = last.getCompositeChildSequence(ctx, splice.SpAt, splice.SpRemoved).(orderedSequence)
 			},
 			func() {
-				currentChild = current.getCompositeChildSequence(splice.SpFrom, splice.SpAdded).(orderedSequence)
+				currentChild = current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded).(orderedSequence)
 			},
 		)
-		if ok := orderedSequenceDiffInternalNodes(lastChild, currentChild, changes, stopChan); !ok {
+		if ok := orderedSequenceDiffInternalNodes(ctx, lastChild, currentChild, changes, stopChan); !ok {
 			return false
 		}
 	}
@@ -153,12 +154,12 @@ func orderedSequenceDiffInternalNodes(last orderedSequence, current orderedSeque
 
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
-func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	lastCur := newCursorAt(last, emptyKey, false, false)
-	currentCur := newCursorAt(current, emptyKey, false, false)
+func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+	lastCur := newCursorAt(ctx, last, emptyKey, false, false)
+	currentCur := newCursorAt(ctx, current, emptyKey, false, false)
 
 	for lastCur.valid() && currentCur.valid() {
-		fastForward(lastCur, currentCur)
+		fastForward(ctx, lastCur, currentCur)
 
 		for lastCur.valid() && currentCur.valid() &&
 			!lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx) {
@@ -168,18 +169,18 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v, nil, getMapValue(currentCur)}) {
 					return false
 				}
-				currentCur.advance()
+				currentCur.advance(ctx)
 			} else if lastKey.Less(currentKey) {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, getMapValue(lastCur), nil}) {
 					return false
 				}
-				lastCur.advance()
+				lastCur.advance(ctx)
 			} else {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v, getMapValue(lastCur), getMapValue(currentCur)}) {
 					return false
 				}
-				lastCur.advance()
-				currentCur.advance()
+				lastCur.advance(ctx)
+				currentCur.advance(ctx)
 			}
 		}
 	}
@@ -188,13 +189,13 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, getCurrentKey(lastCur).v, getMapValue(lastCur), nil}) {
 			return false
 		}
-		lastCur.advance()
+		lastCur.advance(ctx)
 	}
 	for currentCur.valid() {
 		if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, getCurrentKey(currentCur).v, nil, getMapValue(currentCur)}) {
 			return false
 		}
-		currentCur.advance()
+		currentCur.advance(ctx)
 	}
 
 	return true
@@ -203,14 +204,14 @@ func orderedSequenceDiffLeftRight(last orderedSequence, current orderedSequence,
 /**
  * Advances |a| and |b| past their common sequence of equal values.
  */
-func fastForward(a *sequenceCursor, b *sequenceCursor) {
+func fastForward(ctx context.Context, a *sequenceCursor, b *sequenceCursor) {
 	if a.valid() && b.valid() {
-		doFastForward(true, a, b)
+		doFastForward(ctx, true, a, b)
 	}
 }
 
-func syncWithIdx(cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
-	cur.sync()
+func syncWithIdx(ctx context.Context, cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
+	cur.sync(ctx)
 	if hasMore {
 		cur.idx = 0
 	} else if allowPastEnd {
@@ -223,7 +224,7 @@ func syncWithIdx(cur *sequenceCursor, hasMore bool, allowPastEnd bool) {
 /*
  * Returns an array matching |a| and |b| respectively to whether that cursor has more values.
  */
-func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHasMore bool, bHasMore bool) {
+func doFastForward(ctx context.Context, allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHasMore bool, bHasMore bool) {
 	d.PanicIfFalse(a.valid())
 	d.PanicIfFalse(b.valid())
 	aHasMore = true
@@ -233,12 +234,12 @@ func doFastForward(allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHa
 		if nil != a.parent && nil != b.parent && isCurrentEqual(a.parent, b.parent) {
 			// Key optimisation: if the sequences have common parents, then entire chunks can be
 			// fast-forwarded without reading unnecessary data.
-			aHasMore, bHasMore = doFastForward(false, a.parent, b.parent)
-			syncWithIdx(a, aHasMore, allowPastEnd)
-			syncWithIdx(b, bHasMore, allowPastEnd)
+			aHasMore, bHasMore = doFastForward(ctx, false, a.parent, b.parent)
+			syncWithIdx(ctx, a, aHasMore, allowPastEnd)
+			syncWithIdx(ctx, b, bHasMore, allowPastEnd)
 		} else {
-			aHasMore = a.advanceMaybeAllowPastEnd(allowPastEnd)
-			bHasMore = b.advanceMaybeAllowPastEnd(allowPastEnd)
+			aHasMore = a.advanceMaybeAllowPastEnd(ctx, allowPastEnd)
+			bHasMore = b.advanceMaybeAllowPastEnd(ctx, allowPastEnd)
 		}
 	}
 	return aHasMore, bHasMore

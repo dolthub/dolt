@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,14 +26,14 @@ func TestLocalStoreFactory(t *testing.T) {
 	stats := &Stats{}
 
 	dbName := "db"
-	store := f.CreateStore(dbName)
+	store := f.CreateStore(context.Background(), dbName)
 
 	c := chunks.NewChunk([]byte{0xff})
-	store.Put(c)
-	assert.True(store.Commit(c.Hash(), hash.Hash{}))
+	store.Put(context.Background(), c)
+	assert.True(store.Commit(context.Background(), c.Hash(), hash.Hash{}))
 
 	dbDir := filepath.Join(dir, dbName)
-	exists, contents := fileManifest{dbDir}.ParseIfExists(stats, nil)
+	exists, contents := fileManifest{dbDir}.ParseIfExists(context.Background(), stats, nil)
 	assert.True(exists)
 	assert.Len(contents.specs, 1)
 
@@ -45,6 +46,6 @@ func TestLocalStoreFactory(t *testing.T) {
 	err = clobberManifest(dbDir, strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot.String(), contents.specs[0].name.String(), "1"}, ":"))
 	assert.NoError(err)
 
-	cached := f.CreateStoreFromCache(dbName)
-	assert.Equal(c.Hash(), cached.Root())
+	cached := f.CreateStoreFromCache(context.Background(), dbName)
+	assert.Equal(c.Hash(), cached.Root(context.Background()))
 }

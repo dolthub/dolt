@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/google/uuid"
 )
@@ -11,7 +12,7 @@ const (
 
 type UUID uuid.UUID
 
-func (v UUID) Value() Value {
+func (v UUID) Value(ctx context.Context) Value {
 	return v
 }
 
@@ -39,7 +40,7 @@ func (v UUID) Hash() hash.Hash {
 	return getHash(v)
 }
 
-func (v UUID) WalkValues(cb ValueCallback) {
+func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (v UUID) WalkRefs(cb RefCallback) {

@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,8 +79,8 @@ func TestGenericStructSet(t *testing.T) {
 	).Equals(TypeOf(s5)))
 
 	// Subtype is not equal.
-	s6 := NewStruct("", StructData{"l": NewList(vs, Float(0), Float(1), Bool(false), Bool(true))})
-	s7 := s6.Set("l", NewList(vs, Float(2), Float(3)))
+	s6 := NewStruct("", StructData{"l": NewList(context.Background(), vs, Float(0), Float(1), Bool(false), Bool(true))})
+	s7 := s6.Set("l", NewList(context.Background(), vs, Float(2), Float(3)))
 	t7 := MakeStructTypeFromFields("", FieldMap{
 		"l": MakeListType(FloaTType),
 	})
@@ -109,16 +110,16 @@ func TestGenericStructDelete(t *testing.T) {
 
 func assertValueChangeEqual(assert *assert.Assertions, c1, c2 ValueChanged) {
 	assert.Equal(c1.ChangeType, c2.ChangeType)
-	assert.Equal(EncodedValue(c1.Key), EncodedValue(c2.Key))
+	assert.Equal(EncodedValue(context.Background(), c1.Key), EncodedValue(context.Background(), c2.Key))
 	if c1.NewValue == nil {
 		assert.Nil(c2.NewValue)
 	} else {
-		assert.Equal(EncodedValue(c1.NewValue), EncodedValue(c2.NewValue))
+		assert.Equal(EncodedValue(context.Background(), c1.NewValue), EncodedValue(context.Background(), c2.NewValue))
 	}
 	if c1.OldValue == nil {
 		assert.Nil(c2.OldValue)
 	} else {
-		assert.Equal(EncodedValue(c1.OldValue), EncodedValue(c2.OldValue))
+		assert.Equal(EncodedValue(context.Background(), c1.OldValue), EncodedValue(context.Background(), c2.OldValue))
 	}
 }
 
@@ -171,46 +172,46 @@ func TestStructDiff(t *testing.T) {
 		s1, NewStruct("NewType", StructData{"a": Bool(true), "c": Float(4), "d": Float(5)}))
 
 	s2 := NewStruct("", StructData{
-		"a": NewList(vs, Float(0), Float(1)),
-		"b": NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true)),
-		"c": NewSet(vs, Float(0), Float(1), String("foo")),
+		"a": NewList(context.Background(), vs, Float(0), Float(1)),
+		"b": NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)),
+		"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
 	})
 
 	assertDiff([]ValueChanged{},
 		s2, NewStruct("", StructData{
-			"a": NewList(vs, Float(0), Float(1)),
-			"b": NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(vs, Float(0), Float(1), String("foo")),
+			"a": NewList(context.Background(), vs, Float(0), Float(1)),
+			"b": NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "a", NewList(vs, Float(1), Float(1)), NewList(vs, Float(0), Float(1))),
-		vc(DiffChangeModified, "b", NewMap(vs, String("foo"), Bool(true), String("bar"), Bool(true)), NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true))),
+		vc(DiffChangeModified, "a", NewList(context.Background(), vs, Float(1), Float(1)), NewList(context.Background(), vs, Float(0), Float(1))),
+		vc(DiffChangeModified, "b", NewMap(context.Background(), vs, String("foo"), Bool(true), String("bar"), Bool(true)), NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
 	},
 		s2, NewStruct("", StructData{
-			"a": NewList(vs, Float(1), Float(1)),
-			"b": NewMap(vs, String("foo"), Bool(true), String("bar"), Bool(true)),
-			"c": NewSet(vs, Float(0), Float(1), String("foo")),
+			"a": NewList(context.Background(), vs, Float(1), Float(1)),
+			"b": NewMap(context.Background(), vs, String("foo"), Bool(true), String("bar"), Bool(true)),
+			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "a", NewList(vs, Float(0)), NewList(vs, Float(0), Float(1))),
-		vc(DiffChangeModified, "c", NewSet(vs, Float(0), Float(2), String("foo")), NewSet(vs, Float(0), Float(1), String("foo"))),
+		vc(DiffChangeModified, "a", NewList(context.Background(), vs, Float(0)), NewList(context.Background(), vs, Float(0), Float(1))),
+		vc(DiffChangeModified, "c", NewSet(context.Background(), vs, Float(0), Float(2), String("foo")), NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
 	},
 		s2, NewStruct("", StructData{
-			"a": NewList(vs, Float(0)),
-			"b": NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(vs, Float(0), Float(2), String("foo")),
+			"a": NewList(context.Background(), vs, Float(0)),
+			"b": NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(context.Background(), vs, Float(0), Float(2), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		vc(DiffChangeModified, "b", NewMap(vs, String("boo"), Bool(false), String("bar"), Bool(true)), NewMap(vs, String("foo"), Bool(false), String("bar"), Bool(true))),
-		vc(DiffChangeModified, "c", NewSet(vs, Float(0), Float(1), String("bar")), NewSet(vs, Float(0), Float(1), String("foo"))),
+		vc(DiffChangeModified, "b", NewMap(context.Background(), vs, String("boo"), Bool(false), String("bar"), Bool(true)), NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
+		vc(DiffChangeModified, "c", NewSet(context.Background(), vs, Float(0), Float(1), String("bar")), NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
 	},
 		s2, NewStruct("", StructData{
-			"a": NewList(vs, Float(0), Float(1)),
-			"b": NewMap(vs, String("boo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(vs, Float(0), Float(1), String("bar")),
+			"a": NewList(context.Background(), vs, Float(0), Float(1)),
+			"b": NewMap(context.Background(), vs, String("boo"), Bool(false), String("bar"), Bool(true)),
+			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("bar")),
 		}))
 }
 

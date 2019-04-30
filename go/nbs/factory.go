@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -38,7 +39,7 @@ type AWSStoreFactory struct {
 // NewAWSStoreFactory returns a ChunkStore factory that vends NomsBlockStore
 // instances that store manifests in the named DynamoDB table, and chunk data
 // in the named S3 bucket. All connections to AWS services share |sess|.
-func NewAWSStoreFactory(sess *session.Session, table, bucket string, maxOpenFiles int, indexCacheSize, tableCacheSize uint64, tableCacheDir string) chunks.Factory {
+func NewAWSStoreFactory(ctx context.Context, sess *session.Session, table, bucket string, maxOpenFiles int, indexCacheSize, tableCacheSize uint64, tableCacheDir string) chunks.Factory {
 	var indexCache *indexCache
 	if indexCacheSize > 0 {
 		indexCache = newIndexCache(indexCacheSize)
@@ -68,17 +69,17 @@ func NewAWSStoreFactory(sess *session.Session, table, bucket string, maxOpenFile
 	}
 }
 
-func (asf *AWSStoreFactory) CreateStore(ns string) chunks.ChunkStore {
+func (asf *AWSStoreFactory) CreateStore(ctx context.Context, ns string) chunks.ChunkStore {
 	mm := manifestManager{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache, asf.manifestLocks}
-	return newNomsBlockStore(mm, asf.persister, asf.conjoiner, defaultMemTableSize)
+	return newNomsBlockStore(ctx, mm, asf.persister, asf.conjoiner, defaultMemTableSize)
 }
 
-func (asf *AWSStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
+func (asf *AWSStoreFactory) CreateStoreFromCache(ctx context.Context, ns string) chunks.ChunkStore {
 	mm := manifestManager{newDynamoManifest(asf.table, ns, asf.ddb), asf.manifestCache, asf.manifestLocks}
 
 	contents, _, present := asf.manifestCache.Get(mm.Name())
 	if present {
-		return newNomsBlockStoreWithContents(mm, contents, asf.persister, asf.conjoiner, defaultMemTableSize)
+		return newNomsBlockStoreWithContents(ctx, mm, contents, asf.persister, asf.conjoiner, defaultMemTableSize)
 	}
 	return nil
 }
@@ -125,16 +126,16 @@ func NewLocalStoreFactory(dir string, indexCacheSize uint64, maxOpenFiles int) c
 	}
 }
 
-func (lsf *LocalStoreFactory) CreateStore(ns string) chunks.ChunkStore {
+func (lsf *LocalStoreFactory) CreateStore(ctx context.Context, ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
 	d.PanicIfError(os.MkdirAll(path, 0777))
 
 	mm := manifestManager{fileManifest{path}, lsf.manifestCache, lsf.manifestLocks}
 	p := newFSTablePersister(path, lsf.fc, lsf.indexCache)
-	return newNomsBlockStore(mm, p, lsf.conjoiner, defaultMemTableSize)
+	return newNomsBlockStore(ctx, mm, p, lsf.conjoiner, defaultMemTableSize)
 }
 
-func (lsf *LocalStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore {
+func (lsf *LocalStoreFactory) CreateStoreFromCache(ctx context.Context, ns string) chunks.ChunkStore {
 	path := path.Join(lsf.dir, ns)
 	mm := manifestManager{fileManifest{path}, lsf.manifestCache, lsf.manifestLocks}
 
@@ -143,7 +144,7 @@ func (lsf *LocalStoreFactory) CreateStoreFromCache(ns string) chunks.ChunkStore 
 		_, err := os.Stat(path)
 		d.PanicIfTrue(os.IsNotExist(err))
 		p := newFSTablePersister(path, lsf.fc, lsf.indexCache)
-		return newNomsBlockStoreWithContents(mm, contents, p, lsf.conjoiner, defaultMemTableSize)
+		return newNomsBlockStoreWithContents(ctx, mm, contents, p, lsf.conjoiner, defaultMemTableSize)
 	}
 	return nil
 }

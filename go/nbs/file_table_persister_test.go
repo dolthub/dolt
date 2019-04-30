@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
@@ -35,14 +36,14 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 			names = append(names, name)
 		}
 		for _, name := range names {
-			fts.Open(name, 1, nil)
+			fts.Open(context.Background(), name, 1, nil)
 		}
 		removeTables(dir, names...)
 	}()
 
 	// Tables should still be cached, even though they're gone from disk
 	for i, name := range names {
-		src := fts.Open(name, 1, nil)
+		src := fts.Open(context.Background(), name, 1, nil)
 		h := computeAddr([]byte{byte(i)})
 		assert.True(src.has(h))
 	}
@@ -50,7 +51,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	// Kick a table out of the cache
 	name, err := writeTableData(dir, []byte{0xff})
 	assert.NoError(err)
-	fts.Open(name, 1, nil)
+	fts.Open(context.Background(), name, 1, nil)
 
 	present := fc.reportEntries()
 	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
@@ -113,7 +114,7 @@ func persistTableData(p tablePersister, chunx ...[]byte) (src chunkSource, err e
 			return nil, fmt.Errorf("memTable too full to add %s", computeAddr(c))
 		}
 	}
-	return p.Persist(mt, nil, &Stats{}), nil
+	return p.Persist(context.Background(), mt, nil, &Stats{}), nil
 }
 
 func TestFSTablePersisterPersistNoData(t *testing.T) {
@@ -132,7 +133,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
 
-	src := fts.Persist(mt, existingTable, &Stats{})
+	src := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	assert.True(src.count() == 0)
 
 	_, err := os.Stat(filepath.Join(dir, src.hash().String()))
@@ -156,7 +157,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	}()
 
 	// Table should still be cached, even though it's gone from disk
-	src := fts.Open(name, uint32(len(testChunks)), nil)
+	src := fts.Open(context.Background(), name, uint32(len(testChunks)), nil)
 	assertChunksInReader(testChunks, src, assert)
 
 	// Evict |name| from cache
@@ -185,10 +186,10 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		assert.NoError(err)
 		name, err := writeTableData(dir, c, randChunk)
 		assert.NoError(err)
-		sources[i] = fts.Open(name, 2, nil)
+		sources[i] = fts.Open(context.Background(), name, 2, nil)
 	}
 
-	src := fts.ConjoinAll(sources, &Stats{})
+	src := fts.ConjoinAll(context.Background(), sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
@@ -217,9 +218,9 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		for _, c := range testChunks {
 			mt.addChunk(computeAddr(c), c)
 		}
-		sources[i] = fts.Persist(mt, nil, &Stats{})
+		sources[i] = fts.Persist(context.Background(), mt, nil, &Stats{})
 	}
-	src := fts.ConjoinAll(sources, &Stats{})
+	src := fts.ConjoinAll(context.Background(), sources, &Stats{})
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
