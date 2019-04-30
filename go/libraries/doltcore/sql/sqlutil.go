@@ -399,6 +399,35 @@ func resolveColumnsInWhereClause(whereClause *sqlparser.Where, inputSchemas map[
 	return resolveColumnsInWhereExpr(whereClause.Expr, inputSchemas, aliases)
 }
 
+// resolveColumnsInJoins returns the qualified columns referenced by the join expressions given
+func resolveColumnsInJoins(joinExprs []*sqlparser.JoinTableExpr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	cols := make([]QualifiedColumn, 0)
+	for _, je := range joinExprs {
+		if joinCols, err := resolveColumnsInJoin(je, inputSchemas, aliases); err != nil {
+			return nil, err
+		} else {
+			cols = append(cols, joinCols...)
+		}
+	}
+
+	return cols, nil
+}
+
+// resolveColumnsInJoin returns the qualified columsn referenced by the join expression given
+func resolveColumnsInJoin(expr *sqlparser.JoinTableExpr, schemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	if expr.Condition.Using != nil {
+		return nil, errFmt("Using expression not supported: %v", nodeToString(expr.Condition.Using))
+	}
+
+	if expr.Condition.On == nil {
+		return nil, nil
+	}
+
+	// This may not work in all cases -- not sure if there are expressions that are valid in where clauses but not in
+	// join conditions or vice versa.
+	return resolveColumnsInWhereExpr(expr.Condition.On, schemas, aliases)
+}
+
 // resolveColumnsInWhereExpr is the helper function for resolveColumnsInWhereExpr, which can be used recursively on sub
 // expressions. Supported parser types here must be kept in sync with createFilterForWhereExpr
 func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
@@ -511,6 +540,43 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 	} else {
 		return createFilterForWhereExpr(whereClause.Expr, inputSchemas, aliases, rss)
 	}
+}
+
+// createFilterForWhere creates a filter function from the joins given
+func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
+
+	filterFns := make([]rowFilterFn, 0)
+	for _, je := range joins {
+		if filterFn, err := createFilterForJoin(je, inputSchemas, aliases, rss); err != nil {
+			return nil, err
+		} else if filterFn != nil {
+			filterFns = append(filterFns, filterFn)
+		}
+	}
+
+	return func(r row.Row) (matchesFilter bool) {
+		for _, fn := range filterFns {
+			if !fn(r) {
+				return false
+			}
+		}
+		return true
+	}, nil
+}
+
+// createFilterForJoin creates a row filter function for the join expression given
+func createFilterForJoin(expr *sqlparser.JoinTableExpr, schemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
+	if expr.Condition.Using != nil {
+		return nil, errFmt("Using expression not supported: %v", nodeToString(expr.Condition.Using))
+	}
+
+	if expr.Condition.On == nil {
+		return nil, nil
+	}
+
+	// This may not work in all cases -- not sure if there are expressions that are valid in where clauses but not in
+	// join conditions or vice versa.
+	return createFilterForWhereExpr(expr.Condition.On, schemas, aliases, rss)
 }
 
 // createFilterForWhereExpr is the helper function for createFilterForWhere, which can be used recursively on sub
