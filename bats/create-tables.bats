@@ -298,3 +298,21 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
+
+@test "create table with sql and dolt table create table. match success/failure" {
+    run dolt sql -q "create table 1pk (pk int not null, c1 int, primary key(pk))"
+    [ "$status" -eq 1 ]
+    skip "This case needs a lot of work."
+    [ "$output" = "Invalid table name. Table names cannot start with digits." ] 
+    skip "dolt table create should fail on invalid table name" 
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema 1pk
+    [ "$status" -eq 1 ]
+    [ "$output" = "Invalid table name. Table names cannot start with digits." ]
+    run dolt sql -q "create table one-pk (pk int not null, c1 int, primary key(pk))"
+    [ "$status" -eq 1 ]
+    skip "Need better error message"
+    [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema 1pk
+    [ "$status" -eq 1 ]
+    [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
+}
