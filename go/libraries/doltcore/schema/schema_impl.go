@@ -1,5 +1,10 @@
 package schema
 
+import (
+	"strconv"
+	"strings"
+)
+
 // EmptySchema is an instance of a schema with no columns.
 var EmptySchema = &schemaImpl{
 	EmptyColColl,
@@ -43,6 +48,7 @@ func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {
 
 	for _, c := range allCols.cols {
 		c.IsPartOfPK = false
+		c.Constraints = nil
 		nonPKCols = append(nonPKCols, c)
 	}
 
@@ -102,3 +108,24 @@ func (si *schemaImpl) GetNonPKCols() *ColCollection {
 func (si *schemaImpl) GetPKCols() *ColCollection {
 	return si.pkCols
 }
+
+func (si *schemaImpl) String() string {
+	var b strings.Builder
+	b.WriteString("pkCols: [")
+	writeColFn := func(tag uint64, col Column) (stop bool) {
+		b.WriteString("tag: ")
+		b.WriteString(strconv.FormatUint(tag, 10))
+		b.WriteString(", name: ")
+		b.WriteString(col.Name)
+		b.WriteString(", type: ")
+		b.WriteString(col.KindString())
+		b.WriteString(",\n")
+		return false
+	}
+	si.pkCols.IterInSortedOrder(writeColFn)
+	b.WriteString("]\nnonPkCols: [")
+	si.nonPKCols.IterInSortedOrder(writeColFn)
+	b.WriteString("]")
+	return b.String()
+}
+

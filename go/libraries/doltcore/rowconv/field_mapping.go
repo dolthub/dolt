@@ -105,6 +105,15 @@ func NewFieldMappingFromNameMap(srcSch, destSch schema.Schema, inNameToOutName m
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
+// Returns the identity mapping for the schema given.
+func IdentityMapping(sch schema.Schema) *FieldMapping {
+	fieldMapping, err := TagMapping(sch, sch)
+	if err != nil {
+		panic("Error creating identity mapping")
+	}
+	return fieldMapping
+}
+
 // TagMapping takes a source schema and a destination schema and maps all columns which have a matching tag in the
 // source and destination schemas.
 func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {

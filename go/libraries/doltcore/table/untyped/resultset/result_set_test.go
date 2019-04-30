@@ -1,6 +1,7 @@
 package resultset
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -15,7 +16,7 @@ func TestConcatSchemas(t *testing.T) {
 		colColl := getAllSchemaColumns(t)
 
 		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
-		sch, _ := ConcatSchemas(
+		sch, _ := concatSchemas(
 			untyped.UnkeySchema(peopleTestSchema),
 			untyped.UnkeySchema(episodesTestSchema),
 			untyped.UnkeySchema(appearancesTestSchema))
@@ -39,7 +40,7 @@ func TestConcatSchemas(t *testing.T) {
 		)
 
 		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
-		sch, _ := ConcatSchemas(
+		sch, _ := concatSchemas(
 			untyped.UnkeySchema(peopleTestSchema),
 			untyped.UnkeySchema(appearancesTestSchema))
 		assert.Equal(t, expectedSch, sch)
@@ -58,7 +59,34 @@ func TestConcatSchemas(t *testing.T) {
 		)
 
 		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
-		sch, _ := ConcatSchemas(untyped.UnkeySchema(peopleTestSchema))
+		sch, _ := concatSchemas(untyped.UnkeySchema(peopleTestSchema))
+		assert.Equal(t, expectedSch, sch)
+	})
+}
+
+func TestSubsetSchema(t *testing.T) {
+	t.Run("Test subset schema", func(t *testing.T) {
+		colColl, _ := schema.NewColCollection(
+			schema.NewColumn("id", idTag, types.IntKind, true),
+			schema.NewColumn("last", lastTag, types.StringKind, false),
+			schema.NewColumn("age", ageTag, types.IntKind, false),
+			schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
+		)
+
+		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
+		sch := SubsetSchema(peopleTestSchema, "id", "last", "age", "uuid")
+		assert.Equal(t, expectedSch, sch)
+	})
+
+	t.Run("Test subset unknown column", func(t *testing.T) {
+		assert.Panics(t, func() {
+			SubsetSchema(peopleTestSchema, "unknown")
+		})
+	})
+
+	t.Run("Test subset no columns", func(t *testing.T) {
+		expectedSch := schema.UnkeyedSchemaFromCols(schema.EmptyColColl)
+		sch := SubsetSchema(peopleTestSchema)
 		assert.Equal(t, expectedSch, sch)
 	})
 }
@@ -68,12 +96,12 @@ func TestNewFromSchema(t *testing.T) {
 		colColl := getAllSchemaColumns(t)
 		destSch := schema.UnkeyedSchemaFromCols(colColl)
 
-		rss, err := NewFromDestSchema(destSch)
+		rss, err := newFromDestSchema(destSch)
 		assert.Nil(t, err)
 
-		assert.Nil(t, rss.AddSchema(peopleTestSchema))
-		assert.Nil(t, rss.AddSchema(episodesTestSchema))
-		assert.Nil(t, rss.AddSchema(appearancesTestSchema))
+		assert.Nil(t, rss.addSchema(peopleTestSchema))
+		assert.Nil(t, rss.addSchema(episodesTestSchema))
+		assert.Nil(t, rss.addSchema(appearancesTestSchema))
 
 		peopleToDestMapping := map[uint64]uint64{
 			0: 0,
@@ -131,12 +159,12 @@ func TestNewFromSchema(t *testing.T) {
 		assert.Nil(t, err)
 		destSch := schema.UnkeyedSchemaFromCols(colColl)
 
-		rss, err := NewFromDestSchema(destSch)
+		rss, err := newFromDestSchema(destSch)
 		assert.Nil(t, err)
 
-		assert.Nil(t, rss.AddSchema(appearancesTestSchema))
-		assert.Nil(t, rss.AddSchema(episodesTestSchema))
-		assert.Nil(t, rss.AddSchema(peopleTestSchema))
+		assert.Nil(t, rss.addSchema(appearancesTestSchema))
+		assert.Nil(t, rss.addSchema(episodesTestSchema))
+		assert.Nil(t, rss.addSchema(peopleTestSchema))
 
 		appsToDestMapping := map[uint64]uint64{
 			0: 0,
@@ -184,11 +212,11 @@ func TestNewFromSchema(t *testing.T) {
 			schema.NewColumn("uuid", 6, types.UUIDKind, false),
 		)
 		destSch := schema.UnkeyedSchemaFromCols(colColl)
-		rss, err := NewFromDestSchema(destSch)
+		rss, err := newFromDestSchema(destSch)
 		assert.Nil(t, err)
 
 		// One more column than we're expecting
-		assert.NotNil(t, rss.AddSchema(peopleTestSchema))
+		assert.NotNil(t, rss.addSchema(peopleTestSchema))
 	})
 }
 
@@ -197,7 +225,7 @@ func TestNewFromSourceSchemas(t *testing.T) {
 		colColl := getAllSchemaColumns(t)
 		destSch := schema.UnkeyedSchemaFromCols(colColl)
 
-		rss, err := NewFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 		peopleToDestMapping := map[uint64]uint64{
 			0: 0,
@@ -255,7 +283,7 @@ func TestNewFromSourceSchemas(t *testing.T) {
 		assert.Nil(t, err)
 		destSch := schema.UnkeyedSchemaFromCols(colColl)
 
-		rss, err := NewFromSourceSchemas(appearancesTestSchema, episodesTestSchema, peopleTestSchema)
+		rss, err := newFromSourceSchemas(appearancesTestSchema, episodesTestSchema, peopleTestSchema)
 		assert.Nil(t, err)
 		appsToDestMapping := map[uint64]uint64{
 			0: 0,
@@ -293,6 +321,109 @@ func TestNewFromSourceSchemas(t *testing.T) {
 	})
 }
 
+func mustGetCol(sch schema.Schema, colName string) schema.Column {
+	col, ok := sch.GetAllCols().GetByName(colName)
+	if !ok {
+		panic("No column " + colName)
+	}
+	return col
+}
+
+func TestNewFromColumns(t *testing.T) {
+	t.Run("Test cross product", func(t *testing.T) {
+		cols := []ColWithSchema{
+			{mustGetCol(episodesTestSchema, "id"), episodesTestSchema},
+			{mustGetCol(peopleTestSchema, "id"), peopleTestSchema},
+			{mustGetCol(episodesTestSchema, "name"), episodesTestSchema},
+			{mustGetCol(peopleTestSchema, "first"), peopleTestSchema},
+			{mustGetCol(peopleTestSchema, "last"), peopleTestSchema},
+		}
+
+		rss, err := NewFromColumns(cols...)
+		if err != nil {
+			assert.FailNow(t, err.Error())
+		}
+
+		peopleToDestMapping := map[uint64]uint64{
+			0: 1,
+			1: 3,
+			2: 4,
+		}
+		episodesToDestMapping := map[uint64]uint64{
+			0: 0,
+			1: 2,
+		}
+
+		expectedMapping := make(map[schema.Schema]*rowconv.FieldMapping)
+		expectedMapping[peopleTestSchema], err = rowconv.NewFieldMapping(peopleTestSchema, rss.destSch, peopleToDestMapping)
+		assert.Nil(t, err)
+		expectedMapping[episodesTestSchema], err = rowconv.NewFieldMapping(episodesTestSchema, rss.destSch, episodesToDestMapping)
+		assert.Nil(t, err)
+		expectedDestSchema := newResultSetSchema("id", types.IntKind, "id", types.IntKind,
+			"name", types.StringKind, "first", types.StringKind, "last", types.StringKind)
+
+		assert.Equal(t, expectedMapping, rss.mapping)
+		assert.Equal(t, expectedDestSchema, rss.Schema())
+
+		tables := []TableResult{
+			{Rows: rs(homer, marge), Schema: peopleTestSchema},
+			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
+		}
+
+		expectedResult := rs(
+			newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag)),
+			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag)),
+			newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
+			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
+		)
+
+		result := rss.CrossProduct(tables)
+		assert.Equal(t, expectedResult, result)
+	})
+}
+
+// Creates a new row for a result set specified by the given values
+func newResultSetRow(colVals ...types.Value) row.Row {
+
+	taggedVals := make(row.TaggedValues)
+	cols := make([]schema.Column, len(colVals))
+	for i := 0; i < len(colVals); i++ {
+		taggedVals[uint64(i)] = colVals[i]
+		nomsKind := colVals[i].Kind()
+		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	sch := schema.UnkeyedSchemaFromCols(collection)
+
+	return row.New(sch, taggedVals)
+}
+
+// Creates a new schema for a result set specified by the given pairs of column names and types. Column names are
+// strings, types are NomsKinds.
+func newResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
+
+	if len(colNamesAndTypes) % 2 != 0 {
+		panic("Non-even number of inputs passed to newResultSetSchema")
+	}
+
+	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	for i := 0; i < len(colNamesAndTypes); i += 2 {
+		name := colNamesAndTypes[i].(string)
+		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
+		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	return schema.UnkeyedSchemaFromCols(collection)
+}
+
 // Returns all the columns from all 3 test schemas as a single column collection.
 func getAllSchemaColumns(t *testing.T) *schema.ColCollection {
 	colColl, err := schema.NewColCollection(
@@ -324,13 +455,13 @@ func TestNewFromDestSchema(t *testing.T) {
 
 	t.Run("Untyped schema", func(t *testing.T) {
 		expectedSch := untyped.UntypeUnkeySchema(schema.UnkeyedSchemaFromCols(colColl))
-		sch, _ := ConcatSchemas(untypedPeopleSch, untypedEpisodesSch, untypedAppearacesSch)
+		sch, _ := concatSchemas(untypedPeopleSch, untypedEpisodesSch, untypedAppearacesSch)
 		assert.Equal(t, expectedSch, sch)
 	})
 
 	t.Run("Typed schema", func(t *testing.T) {
 		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
-		sch, _ := ConcatSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
+		sch, _ := concatSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Equal(t, expectedSch, sch)
 	})
 
@@ -338,13 +469,13 @@ func TestNewFromDestSchema(t *testing.T) {
 
 func TestCombineRows(t *testing.T) {
 	t.Run("Combine all schemas", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
 		r := RowWithSchema{row.New(rss.destSch, nil), rss.destSch}
-		r = rss.CombineRows(r, RowWithSchema{homer, peopleTestSchema})
-		r = rss.CombineRows(r, RowWithSchema{ep1, episodesTestSchema})
-		r = rss.CombineRows(r, RowWithSchema{app1, appearancesTestSchema})
+		r = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
+		r = rss.combineRows(r, RowWithSchema{ep1, episodesTestSchema})
+		r = rss.combineRows(r, RowWithSchema{app1, appearancesTestSchema})
 
 		expectedRow := row.New(rss.destSch, row.TaggedValues{
 			0: mustGetColVal(homer, idTag),
@@ -368,14 +499,14 @@ func TestCombineRows(t *testing.T) {
 	})
 
 	t.Run("Combine all schemas in opposite order", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
 		// combine the rows in the opposite order that their schemas were declared
 		r := RowWithSchema{row.New(rss.destSch, nil), rss.destSch}
-		r = rss.CombineRows(r, RowWithSchema{app1, appearancesTestSchema})
-		r = rss.CombineRows(r, RowWithSchema{ep1, episodesTestSchema})
-		r = rss.CombineRows(r, RowWithSchema{homer, peopleTestSchema})
+		r = rss.combineRows(r, RowWithSchema{app1, appearancesTestSchema})
+		r = rss.combineRows(r, RowWithSchema{ep1, episodesTestSchema})
+		r = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
 
 		expectedRow := row.New(rss.destSch, row.TaggedValues{
 			0: mustGetColVal(homer, idTag),
@@ -399,11 +530,11 @@ func TestCombineRows(t *testing.T) {
 	})
 
 	t.Run("Combine one schema", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema)
 		assert.Nil(t, err)
 
 		r := RowWithSchema{row.New(rss.destSch, nil), rss.destSch}
-		r = rss.CombineRows(r, RowWithSchema{homer, peopleTestSchema})
+		r = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
 
 		expectedRow := row.New(rss.destSch, row.TaggedValues{
 			0: mustGetColVal(homer, idTag),
@@ -420,7 +551,7 @@ func TestCombineRows(t *testing.T) {
 
 func TestCrossProduct(t *testing.T) {
 	t.Run("3x2 cross product", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
 		tables := []TableResult{
@@ -431,14 +562,14 @@ func TestCrossProduct(t *testing.T) {
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
 		expectedResult := rs(
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
 		)
 
 		result := rss.CrossProduct(tables)
@@ -446,7 +577,7 @@ func TestCrossProduct(t *testing.T) {
 	})
 
 	t.Run("3x1 cross product", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
 		tables := []TableResult{
@@ -457,7 +588,7 @@ func TestCrossProduct(t *testing.T) {
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
 		expectedResult := rs(
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
 		)
 
 		result := rss.CrossProduct(tables)
@@ -465,7 +596,7 @@ func TestCrossProduct(t *testing.T) {
 	})
 
 	t.Run("2x2 cross product", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema, episodesTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema)
 		assert.Nil(t, err)
 
 		tables := []TableResult{
@@ -475,10 +606,10 @@ func TestCrossProduct(t *testing.T) {
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
 		expectedResult := rs(
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
 		)
 
 		result := rss.CrossProduct(tables)
@@ -486,7 +617,7 @@ func TestCrossProduct(t *testing.T) {
 	})
 
 	t.Run("1x3 cross product", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema)
 		assert.Nil(t, err)
 
 		tables := []TableResult{
@@ -495,9 +626,9 @@ func TestCrossProduct(t *testing.T) {
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
 		expectedResult := rs(
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}).Row,
-			rss.CombineAllRows(resultRow.Copy(), RowWithSchema{bart, peopleTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}).Row,
+			rss.combineAllRows(resultRow.Copy(), RowWithSchema{bart, peopleTestSchema}).Row,
 		)
 
 		result := rss.CrossProduct(tables)
@@ -505,7 +636,7 @@ func TestCrossProduct(t *testing.T) {
 	})
 
 	t.Run("2x0 cross product", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas(peopleTestSchema, episodesTestSchema)
+		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema)
 		assert.Nil(t, err)
 
 		tables := []TableResult{
@@ -520,7 +651,7 @@ func TestCrossProduct(t *testing.T) {
 	})
 
 	t.Run("nil cross product", func(t *testing.T) {
-		rss, err := NewFromSourceSchemas()
+		rss, err := newFromSourceSchemas()
 		assert.Nil(t, err)
 
 		tables := []TableResult{}

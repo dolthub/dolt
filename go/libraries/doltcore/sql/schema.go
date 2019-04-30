@@ -20,18 +20,9 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) (string, error) {
 			sb.WriteString(",\n")
 		}
 
-		fmt.Fprintf(sb, "  %s %s", col.Name, DoltToSQLType[col.Kind])
+		s := FmtCol(2, 0, 0, col)
+		sb.WriteString(s)
 
-		for _, cnst := range col.Constraints {
-			switch cnst.GetConstraintType() {
-			case schema.NotNullConstraintType:
-				sb.WriteString(" not null")
-			default:
-				panic("SchemaAsCreateStmt doesn't know how to format constraint type: " + cnst.GetConstraintType())
-			}
-		}
-
-		fmt.Fprintf(sb, " comment 'tag:%d'", tag)
 		return false
 	})
 
@@ -49,4 +40,29 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) (string, error) {
 
 	sb.WriteString(")\n);")
 	return sb.String(), nil
+}
+
+// FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
+// typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
+func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
+	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, DoltToSQLType[col.Kind], col)
+}
+
+// FmtColWithNameAndType creates a string representing a column within a sql create table statement with a given indent
+// space count, name width, and type width.  If nameWidth or typeWidth are 0 or less than the length of the name or
+// type, then the length of the name or type will be used.
+func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr string, col schema.Column) string {
+	fmtStr := fmt.Sprintf("%%%ds%%%ds %%%ds", indent, nameWidth, typeWidth)
+	colStr := fmt.Sprintf(fmtStr, "", colName, typeStr)
+
+	for _, cnst := range col.Constraints {
+		switch cnst.GetConstraintType() {
+		case schema.NotNullConstraintType:
+			colStr += " not null"
+		default:
+			panic("FmtColWithNameAndType doesn't know how to format constraint type: " + cnst.GetConstraintType())
+		}
+	}
+
+	return colStr + fmt.Sprintf(" comment 'tag:%d'", col.Tag)
 }
