@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
@@ -26,29 +27,29 @@ func createTestRowData(vrw types.ValueReadWriter, sch schema.Schema) (types.Map,
 	rows[3] = row.New(sch, row.TaggedValues{
 		idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)})
 
-	ed := types.NewMap(vrw).Edit()
+	ed := types.NewMap(context.Background(), vrw).Edit()
 	for _, r := range rows {
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
 	}
 
-	return ed.Map(), rows
+	return ed.Map(context.Background()), rows
 }
 
 func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	schemaVal, err := encoding.MarshalAsNomsValue(vrw, tSchema)
+	schemaVal, err := encoding.MarshalAsNomsValue(context.Background(), vrw, tSchema)
 
 	if err != nil {
 		return nil, err
 	}
 
-	tbl := NewTable(vrw, schemaVal, rowData)
+	tbl := NewTable(context.Background(), vrw, schemaVal, rowData)
 
 	return tbl, nil
 }
 
 func TestTables(t *testing.T) {
 	dbSPec, _ := spec.ForDatabase("mem")
-	db := dbSPec.GetDatabase()
+	db := dbSPec.GetDatabase(context.Background())
 
 	tSchema := createTestSchema()
 	rowData, rows := createTestRowData(db, tSchema)
@@ -67,22 +68,22 @@ func TestTables(t *testing.T) {
 	badUUID, _ := uuid.NewRandom()
 	ids := []types.Value{types.UUID(id0), types.UUID(id1), types.UUID(id2), types.UUID(id3), types.UUID(badUUID)}
 
-	readRow0, ok := tbl.GetRowByPKVals(row.TaggedValues{idTag: ids[0]}, tSchema)
+	readRow0, ok := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: ids[0]}, tSchema)
 
 	if !ok {
 		t.Error("Could not find row 0 in table")
 	} else if !row.AreEqual(readRow0, rows[0], tSchema) {
-		t.Error(row.Fmt(readRow0, tSchema), "!=", row.Fmt(rows[0], tSchema))
+		t.Error(row.Fmt(context.Background(), readRow0, tSchema), "!=", row.Fmt(context.Background(), rows[0], tSchema))
 	}
 
-	_, ok = tbl.GetRowByPKVals(row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
+	_, ok = tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
 
 	if ok {
 		t.Error("GetRow should have returned false.")
 	}
 
 	idItr := SingleColPKItr(idTag, ids)
-	readRows, missing := tbl.GetRows(idItr, -1, tSchema)
+	readRows, missing := tbl.GetRows(context.Background(), idItr, -1, tSchema)
 
 	if len(readRows) != len(rows) {
 		t.Error("Did not find all the expected rows")
@@ -92,7 +93,7 @@ func TestTables(t *testing.T) {
 
 	for i, r := range rows {
 		if !row.AreEqual(r, readRows[i], tSchema) {
-			t.Error(row.Fmt(readRows[i], tSchema), "!=", row.Fmt(r, tSchema))
+			t.Error(row.Fmt(context.Background(), readRows[i], tSchema), "!=", row.Fmt(context.Background(), r, tSchema))
 		}
 	}
 }

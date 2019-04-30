@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -33,9 +34,9 @@ func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(dEnv, false)
+		err = actions.StageAllTables(context.Background(), dEnv, false)
 	} else {
-		err = actions.StageTables(dEnv, apr.Args(), false)
+		err = actions.StageTables(context.Background(), dEnv, apr.Args(), false)
 	}
 
 	if err != nil {

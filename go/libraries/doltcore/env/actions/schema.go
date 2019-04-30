@@ -1,20 +1,21 @@
 package actions
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 )
 
 // RenameColumnOfSchema takes a table and renames a column from oldName to newName
-func RenameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
+func RenameColumnOfSchema(ctx context.Context, oldName string, newName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
 	if newName == oldName {
 		return tbl, nil
 	} else if tbl == nil || doltDB == nil {
 		panic("invalid parameters")
 	}
 
-	tblSch := tbl.GetSchema()
+	tblSch := tbl.GetSchema(ctx)
 	allCols := tblSch.GetAllCols()
 	col, ok := allCols.GetByName(oldName)
 
@@ -42,24 +43,24 @@ func RenameColumnOfSchema(oldName string, newName string, tbl *doltdb.Table, dol
 	newSch := schema.SchemaFromCols(colColl)
 
 	vrw := doltDB.ValueReadWriter()
-	schemaVal, err := encoding.MarshalAsNomsValue(vrw, newSch)
+	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(vrw, schemaVal, tbl.GetRowData())
+	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData(ctx))
 
 	return newTable, nil
 }
 
 // RemoveColumnFromTable takes a table and removes a column
-func RemoveColumnFromTable(colName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
+func RemoveColumnFromTable(ctx context.Context, colName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
 	if tbl == nil || doltDB == nil {
 		panic("invalid parameters")
 	}
 
-	tblSch := tbl.GetSchema()
+	tblSch := tbl.GetSchema(ctx)
 	allCols := tblSch.GetAllCols()
 	_, ok := allCols.GetByName(colName)
 
@@ -79,13 +80,13 @@ func RemoveColumnFromTable(colName string, tbl *doltdb.Table, doltDB *doltdb.Dol
 	newSch := schema.SchemaFromCols(colColl)
 
 	vrw := doltDB.ValueReadWriter()
-	schemaVal, err := encoding.MarshalAsNomsValue(vrw, newSch)
+	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(vrw, schemaVal, tbl.GetRowData())
+	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData(ctx))
 
 	return newTable, nil
 }

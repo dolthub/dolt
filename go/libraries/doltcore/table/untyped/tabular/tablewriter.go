@@ -2,6 +2,7 @@ package tabular
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -97,7 +98,7 @@ func (ttw *TextTableWriter) GetSchema() schema.Schema {
 }
 
 // WriteRow will write a row to a table
-func (ttw *TextTableWriter) WriteRow(r row.Row) error {
+func (ttw *TextTableWriter) WriteRow(ctx context.Context, r row.Row) error {
 	// If this is the first row we've written, assume it's the column list
 	if ttw.colWidths == nil {
 		return ttw.writeTableHeader(r)
@@ -116,14 +117,14 @@ func (ttw *TextTableWriter) WriteRow(r row.Row) error {
 			if !ok {
 				panic("No column width recorded for tag " + string(tag))
 			}
-			for i := 0; i < colWidth - len(sql.PRINTED_NULL); i++ {
+			for i := 0; i < colWidth-len(sql.PRINTED_NULL); i++ {
 				rowVals.WriteString(" ")
 			}
 		} else {
 			if val.Kind() == types.StringKind {
 				rowVals.WriteString(string(val.(types.String)))
 			} else {
-				rowVals.WriteString(types.EncodedValue(val))
+				rowVals.WriteString(types.EncodedValue(ctx, val))
 			}
 		}
 
@@ -136,7 +137,7 @@ func (ttw *TextTableWriter) WriteRow(r row.Row) error {
 }
 
 // Close should flush all writes, release resources being held
-func (ttw *TextTableWriter) Close() error {
+func (ttw *TextTableWriter) Close(ctx context.Context) error {
 	if ttw.closer != nil {
 		// Write the table footer to finish the table off
 		errFt := ttw.writeTableFooter()

@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -21,7 +22,7 @@ type UpdateResult struct {
 	// TODO: update ignore not supported by parser yet
 }
 
-func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Update, query string)  (*UpdateResult, error) {
+func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Update, query string) (*UpdateResult, error) {
 	tableExprs := s.TableExprs
 	if len(tableExprs) != 1 {
 		return errUpdate("Exactly one table to update must be specified")
@@ -47,11 +48,11 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 		return errUpdate("Unsupported update statement %v", query)
 	}
 
-	if !root.HasTable(tableName) {
+	if !root.HasTable(ctx, tableName) {
 		return errUpdate("Unknown table '%s'", tableName)
 	}
-	table, _:= root.GetTable(tableName)
-	tableSch := table.GetSchema()
+	table, _ := root.GetTable(ctx, tableName)
+	tableSch := table.GetSchema(ctx)
 
 	// map of column tag to value
 	setVals := make(map[uint64]types.Value)
@@ -142,19 +143,19 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 
 	// Perform the update
 	var result UpdateResult
-	rowData := table.GetRowData()
+	rowData := table.GetRowData(ctx)
 	me := rowData.Edit()
-	rowReader := noms.NewNomsMapReader(rowData, tableSch)
+	rowReader := noms.NewNomsMapReader(ctx, rowData, tableSch)
 
 	for {
-		r, err := rowReader.ReadRow()
+		r, err := rowReader.ReadRow(ctx)
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
 			return nil, err
 		}
-		
+
 		if !filter(r) {
 			continue
 		}
@@ -188,7 +189,7 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 		key := r.NomsMapKey(tableSch)
 		// map editor reaches into the underlying table if there isn't an edit with this key
 		// this logic isn't correct for all possible queries, but works for now
-		if primaryKeyColChanged && me.Get(key) != nil {
+		if primaryKeyColChanged && me.Get(ctx, key) != nil {
 			return errUpdate("Update results in duplicate primary key %v", key)
 		}
 		if anyColChanged {
@@ -199,12 +200,12 @@ func ExecuteUpdate(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Updat
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(me.Map())
+	table = table.UpdateRows(ctx, me.Map(ctx))
 
-	result.Root = root.PutTable(db, tableName, table)
+	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil
 }
 
-func errUpdate(errorFmt string, args... interface{})  (*UpdateResult, error) {
+func errUpdate(errorFmt string, args ...interface{}) (*UpdateResult, error) {
 	return nil, errors.New(fmt.Sprintf(errorFmt, args...))
 }

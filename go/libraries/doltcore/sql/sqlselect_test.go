@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
@@ -13,7 +14,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/xwb1989/sqlparser"
 )
-
 
 // Tests that the basic SelectAndLimit
 func Test_selectTransform_limitAndFilter(t *testing.T) {
@@ -360,7 +360,7 @@ func TestExecuteSelect(t *testing.T) {
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)
 		s := sqlStatement.(*sqlparser.Select)
@@ -371,7 +371,7 @@ func TestExecuteSelect(t *testing.T) {
 				t.FailNow()
 			}
 
-			rows, sch, err := ExecuteSelect(root, s)
+			rows, sch, err := ExecuteSelect(context.Background(), root, s)
 			if err != nil {
 				assert.True(t, tt.expectedErr, err.Error())
 			} else {
@@ -555,7 +555,7 @@ func TestJoins(t *testing.T) {
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)
 		s := sqlStatement.(*sqlparser.Select)
@@ -566,7 +566,7 @@ func TestJoins(t *testing.T) {
 				t.FailNow()
 			}
 
-			rows, sch, err := ExecuteSelect(root, s)
+			rows, sch, err := ExecuteSelect(context.Background(), root, s)
 			if err != nil {
 				assert.True(t, tt.expectedErr, err.Error())
 			} else {
@@ -765,13 +765,13 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)
 		s := sqlStatement.(*sqlparser.Select)
 
 		t.Run(tt.name, func(t *testing.T) {
-			p, statement, _ := BuildSelectQueryPipeline(root, s)
+			p, statement, _ := BuildSelectQueryPipeline(context.Background(), root, s)
 			var outputRows int
 			p.SetOutput(pipeline.ProcFuncForSinkFunc(
 				func(r row.Row, props pipeline.ReadableMap) error {

@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"strings"
 
 	"github.com/attic-labs/noms/go/types"
@@ -93,28 +94,28 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get working value."))
 		return 1
 	}
 
-	tbl, ok := root.GetTable(prArgs.TableName)
+	tbl, ok := root.GetTable(context.TODO(), prArgs.TableName)
 
 	if !ok {
 		cli.PrintErrln(color.RedString("Unknown table %s", prArgs.TableName))
 		return 1
 	}
 
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	row, verr := createRow(sch, prArgs)
 
 	if verr == nil {
-		me := tbl.GetRowData().Edit()
-		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map()
-		tbl = tbl.UpdateRows(updated)
-		root = root.PutTable(dEnv.DoltDB, prArgs.TableName, tbl)
+		me := tbl.GetRowData(context.TODO()).Edit()
+		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map(context.TODO())
+		tbl = tbl.UpdateRows(context.Background(), updated)
+		root = root.PutTable(context.Background(), dEnv.DoltDB, prArgs.TableName, tbl)
 
 		verr = commands.UpdateWorkingWithVErr(dEnv, root)
 	}

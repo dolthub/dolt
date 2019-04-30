@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"regexp"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -37,9 +38,9 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores the schema and the row data
-func NewTable(vrw types.ValueReadWriter, schema types.Value, rowData types.Map) *Table {
-	schemaRef := writeValAndGetRef(vrw, schema)
-	rowDataRef := writeValAndGetRef(vrw, rowData)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map) *Table {
+	schemaRef := writeValAndGetRef(ctx, vrw, schema)
+	rowDataRef := writeValAndGetRef(ctx, vrw, rowData)
 
 	sd := types.StructData{
 		schemaRefKey: schemaRef,
@@ -50,8 +51,8 @@ func NewTable(vrw types.ValueReadWriter, schema types.Value, rowData types.Map) 
 	return &Table{vrw, tableStruct}
 }
 
-func (t *Table) SetConflicts(schemas Conflict, conflictData types.Map) *Table {
-	conflictsRef := writeValAndGetRef(t.vrw, conflictData)
+func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) *Table {
+	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflictData)
 
 	updatedSt := t.tableStruct.Set(conflictSchemasKey, schemas.ToNomsList(t.vrw))
 	updatedSt = updatedSt.Set(conflictsKey, conflictsRef)
@@ -59,7 +60,7 @@ func (t *Table) SetConflicts(schemas Conflict, conflictData types.Map) *Table {
 	return &Table{t.vrw, updatedSt}
 }
 
-func (t *Table) GetConflicts() (Conflict, types.Map, error) {
+func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
 	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
 
 	if !ok {
@@ -72,7 +73,7 @@ func (t *Table) GetConflicts() (Conflict, types.Map, error) {
 	confMap := types.EmptyMap
 	if conflictsVal != nil {
 		confMapRef := conflictsVal.(types.Ref)
-		confMap = confMapRef.TargetValue(t.vrw).(types.Map)
+		confMap = confMapRef.TargetValue(ctx, t.vrw).(types.Map)
 	}
 
 	return schemas, confMap, nil
@@ -88,7 +89,7 @@ func (t *Table) HasConflicts() bool {
 	return ok
 }
 
-func (t *Table) NumRowsInConflict() uint64 {
+func (t *Table) NumRowsInConflict(ctx context.Context) uint64 {
 	if t == nil {
 		return 0
 	}
@@ -102,7 +103,7 @@ func (t *Table) NumRowsInConflict() uint64 {
 	confMap := types.EmptyMap
 	if conflictsVal != nil {
 		confMapRef := conflictsVal.(types.Ref)
-		confMap = confMapRef.TargetValue(t.vrw).(types.Map)
+		confMap = confMapRef.TargetValue(ctx, t.vrw).(types.Map)
 	}
 
 	return confMap.Len()
@@ -115,7 +116,7 @@ func (t *Table) ClearConflicts() *Table {
 	return &Table{t.vrw, tSt}
 }
 
-func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err error) {
+func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
 	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
 
 	if ok {
@@ -126,9 +127,9 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err err
 
 		var err error
 		var baseSch, sch, mergeSch schema.Schema
-		if baseSch, err = refToSchema(t.vrw, baseRef); err == nil {
-			if sch, err = refToSchema(t.vrw, valRef); err == nil {
-				mergeSch, err = refToSchema(t.vrw, mergeRef)
+		if baseSch, err = refToSchema(ctx, t.vrw, baseRef); err == nil {
+			if sch, err = refToSchema(ctx, t.vrw, valRef); err == nil {
+				mergeSch, err = refToSchema(ctx, t.vrw, mergeRef)
 			}
 		}
 
@@ -137,13 +138,13 @@ func (t *Table) GetConflictSchemas() (base, sch, mergeSch schema.Schema, err err
 	return nil, nil, nil, ErrNoConflicts
 }
 
-func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
+func refToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
 	var schema schema.Schema
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		schemaVal := ref.TargetValue(vrw)
+		schemaVal := ref.TargetValue(ctx, vrw)
 
 		var err error
-		schema, err = encoding.UnmarshalNomsValue(schemaVal)
+		schema, err = encoding.UnmarshalNomsValue(ctx, schemaVal)
 
 		if err != nil {
 			return err
@@ -156,10 +157,10 @@ func refToSchema(vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error
 }
 
 // GetSchema will retrieve the schema being referenced from the table in noms and unmarshal it.
-func (t *Table) GetSchema() schema.Schema {
+func (t *Table) GetSchema(ctx context.Context) schema.Schema {
 	schemaRefVal := t.tableStruct.Get(schemaRefKey)
 	schemaRef := schemaRefVal.(types.Ref)
-	schema, _ := refToSchema(t.vrw, schemaRef)
+	schema, _ := refToSchema(ctx, t.vrw, schemaRef)
 
 	return schema
 }
@@ -184,16 +185,16 @@ func (t *Table) HashOf() hash.Hash {
 	return t.tableStruct.Hash()
 }
 
-func (t *Table) GetRowByPKVals(pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {
+func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {
 	pkTuple := pkVals.NomsTupleForTags(sch.GetPKCols().Tags, true)
-	return t.GetRow(pkTuple, sch)
+	return t.GetRow(ctx, pkTuple, sch)
 }
 
 // GetRow uses the noms Map containing the row data to lookup a row by primary key.  If a valid row exists with this pk
 // then the supplied TableRowFactory will be used to create a TableRow using the row data.
-func (t *Table) GetRow(pk types.Tuple, sch schema.Schema) (row.Row, bool) {
-	rowMap := t.GetRowData()
-	fieldsVal := rowMap.Get(pk)
+func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (row.Row, bool) {
+	rowMap := t.GetRowData(ctx)
+	fieldsVal := rowMap.Get(ctx, pk)
 
 	if fieldsVal == nil {
 		return nil, false
@@ -207,7 +208,7 @@ func (t *Table) GetRow(pk types.Tuple, sch schema.Schema) (row.Row, bool) {
 // slice. If row data does not exist for a given pk it will be added to the missing slice.  The numPKs argument, if
 // known helps allocate the right amount of memory for the results, but if the number of pks being requested isn't
 // known then 0 can be used.
-func (t *Table) GetRows(pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value) {
+func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value) {
 	if numPKs < 0 {
 		numPKs = 0
 	}
@@ -215,10 +216,10 @@ func (t *Table) GetRows(pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.
 	rows = make([]row.Row, 0, numPKs)
 	missing = make([]types.Value, 0, numPKs)
 
-	rowMap := t.GetRowData()
+	rowMap := t.GetRowData(ctx)
 
 	for pk, ok := pkItr(); ok; pk, ok = pkItr() {
-		fieldsVal := rowMap.Get(pk)
+		fieldsVal := rowMap.Get(ctx, pk)
 
 		if fieldsVal == nil {
 			missing = append(missing, pk)
@@ -233,17 +234,17 @@ func (t *Table) GetRows(pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.
 
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
-func (t *Table) UpdateRows(updatedRows types.Map) *Table {
-	rowDataRef := writeValAndGetRef(t.vrw, updatedRows)
+func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) *Table {
+	rowDataRef := writeValAndGetRef(ctx, t.vrw, updatedRows)
 	updatedSt := t.tableStruct.Set(tableRowsKey, rowDataRef)
 
 	return &Table{t.vrw, updatedSt}
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
-func (t *Table) GetRowData() types.Map {
+func (t *Table) GetRowData(ctx context.Context) types.Map {
 	rowMapRef := t.tableStruct.Get(tableRowsKey).(types.Ref)
-	rowMap := rowMapRef.TargetValue(t.vrw).(types.Map)
+	rowMap := rowMapRef.TargetValue(ctx, t.vrw).(types.Map)
 	return rowMap
 }
 
@@ -285,9 +286,9 @@ func (t *Table) GetRowData() types.Map {
 	}
 }*/
 
-func (t *Table) ResolveConflicts(pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
+func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
-	_, confData, err := t.GetConflicts()
+	_, confData, err := t.GetConflicts(ctx)
 
 	if err != nil {
 		return nil, nil, nil, err
@@ -295,7 +296,7 @@ func (t *Table) ResolveConflicts(pkTuples []types.Value) (invalid, notFound []ty
 
 	confEdit := confData.Edit()
 	for _, pkTupleVal := range pkTuples {
-		if confEdit.Has(pkTupleVal) {
+		if confEdit.Has(ctx, pkTupleVal) {
 			removed++
 			confEdit.Remove(pkTupleVal)
 		} else {
@@ -307,8 +308,8 @@ func (t *Table) ResolveConflicts(pkTuples []types.Value) (invalid, notFound []ty
 		return invalid, notFound, tbl, nil
 	}
 
-	conflicts := confEdit.Map()
-	conflictsRef := writeValAndGetRef(t.vrw, conflicts)
+	conflicts := confEdit.Map(ctx)
+	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflicts)
 	updatedSt := t.tableStruct.Set(conflictsKey, conflictsRef)
 
 	return invalid, notFound, &Table{t.vrw, updatedSt}, nil

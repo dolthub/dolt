@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -61,12 +62,12 @@ func (dmce *DataMoverCreationError) String() string {
 	return string(dmce.ErrType) + ": " + dmce.Cause.Error()
 }
 
-func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions) (*DataMover, *DataMoverCreationError) {
+func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions) (*DataMover, *DataMoverCreationError) {
 	var rd table.TableReadCloser
 	var err error
 	transforms := pipeline.NewTransformCollection()
 
-	rd, srcIsSorted, err := mvOpts.Src.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+	rd, srcIsSorted, err := mvOpts.Src.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -74,11 +75,11 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 
 	defer func() {
 		if rd != nil {
-			rd.Close()
+			rd.Close(ctx)
 		}
 	}()
 
-	outSch, err := getOutSchema(rd.GetSchema(), root, fs, mvOpts)
+	outSch, err := getOutSchema(ctx, rd.GetSchema(), root, fs, mvOpts)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid noms kind") {
@@ -108,9 +109,9 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 
 	var wr table.TableWriteCloser
 	if mvOpts.Operation == OverwriteOp {
-		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(root, fs, srcIsSorted, outSch)
+		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, root, fs, srcIsSorted, outSch)
 	} else {
-		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(root, fs, srcIsSorted, outSch)
+		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(ctx, root, fs, srcIsSorted, outSch)
 	}
 
 	if err != nil {
@@ -129,9 +130,9 @@ func NewDataMover(root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOption
 	return imp, nil
 }
 
-func (imp *DataMover) Move() error {
-	defer imp.Rd.Close()
-	defer imp.Wr.Close()
+func (imp *DataMover) Move(ctx context.Context) error {
+	defer imp.Rd.Close(ctx)
+	defer imp.Wr.Close(ctx)
 
 	var rowErr error
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
@@ -143,7 +144,11 @@ func (imp *DataMover) Move() error {
 		return true
 	}
 
-	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForReader(imp.Rd), pipeline.ProcFuncForWriter(imp.Wr), imp.Transforms, badRowCB)
+	p := pipeline.NewAsyncPipeline(
+		pipeline.ProcFuncForReader(ctx, imp.Rd),
+		pipeline.ProcFuncForWriter(ctx, imp.Wr),
+		imp.Transforms,
+		badRowCB)
 	p.Start()
 
 	err := p.Wait()
@@ -180,17 +185,17 @@ func maybeSort(wr table.TableWriteCloser, outSch schema.Schema, srcIsSorted bool
 	return wr, nil
 }
 
-func getOutSchema(inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
+func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
 
-		rd, _, err := mvOpts.Dest.CreateReader(root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+		rd, _, err := mvOpts.Dest.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
 
 		if err != nil {
 			return nil, err
 		}
 
-		defer rd.Close()
+		defer rd.Close(ctx)
 
 		return rd.GetSchema(), nil
 	} else {

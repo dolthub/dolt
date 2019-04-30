@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -282,12 +283,12 @@ func TestExecuteInsert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			createTestDatabase(dEnv, t)
-			root, _ := dEnv.WorkingRoot()
+			root, _ := dEnv.WorkingRoot(context.Background())
 
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Insert)
 
-			result, err := ExecuteInsert(dEnv.DoltDB, root, s, tt.query)
+			result, err := ExecuteInsert(context.Background(), dEnv.DoltDB, root, s, tt.query)
 			if tt.expectedErr {
 				assert.NotNil(t, err,"expected error")
 				assert.Equal(t, InsertResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
@@ -301,11 +302,11 @@ func TestExecuteInsert(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)
 
-			table, ok := result.Root.GetTable(peopleTableName)
+			table, ok := result.Root.GetTable(context.Background(), peopleTableName)
 			assert.True(t, ok)
 
 			for _, expectedRow := range tt.insertedValues {
-				foundRow, ok := table.GetRow(expectedRow.NomsMapKey(peopleTestSchema).(types.Tuple), peopleTestSchema)
+				foundRow, ok := table.GetRow(context.Background(), expectedRow.NomsMapKey(peopleTestSchema).(types.Tuple), peopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
 				opts := cmp.Options{cmp.AllowUnexported(expectedRow), floatComparer}
 				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))

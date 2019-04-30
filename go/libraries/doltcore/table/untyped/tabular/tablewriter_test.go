@@ -1,6 +1,7 @@
 package tabular
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -90,9 +91,9 @@ func TestWriter(t *testing.T) {
 	expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 	for _, r := range rows {
-		tableWr.WriteRow(r)
+		tableWr.WriteRow(context.Background(), r)
 	}
-	tableWr.Close()
+	tableWr.Close(context.Background())
 
 	assert.Equal(t, expectedTableString, stringWr.String())
 }

@@ -2,6 +2,7 @@ package json
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 
@@ -66,7 +67,7 @@ func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, s
 }
 
 // Close should release resources being held
-func (jsonr *JSONReader) Close() error {
+func (jsonr *JSONReader) Close(ctx context.Context) error {
 	if jsonr.closer != nil {
 		err := jsonr.closer.Close()
 		jsonr.closer = nil
@@ -82,7 +83,7 @@ func (jsonr *JSONReader) GetSchema() schema.Schema {
 
 }
 
-func (jsonr *JSONReader) ReadRow() (row.Row, error) {
+func (jsonr *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 	rows := jsonr.info.Rows
 
 	if jsonr.ind == len(rows) {

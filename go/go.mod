@@ -3,7 +3,7 @@ module github.com/liquidata-inc/ld/dolt/go
 require (
 	cloud.google.com/go v0.35.1 // indirect
 	github.com/attic-labs/noms v0.0.0-20181127201811-95e8b35cc96f
-	github.com/aws/aws-sdk-go v1.16.26
+	github.com/aws/aws-sdk-go v1.16.26 // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/gizak/termui/v3 v3.0.0
@@ -27,4 +27,4 @@ require (
 	gopkg.in/square/go-jose.v2 v2.2.2
 )
 
-replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190408232856-671acb36001e
+replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190430222847-bb824ab74025

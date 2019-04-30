@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -40,7 +41,7 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		tbls := apr.Args()
 
 		if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
-			tbls = actions.AllTables(stagedRoot, headRoot)
+			tbls = actions.AllTables(context.TODO(), stagedRoot, headRoot)
 		}
 
 		verr = ValidateTablesWithVErr(tbls, stagedRoot, headRoot)
@@ -61,13 +62,13 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
-	working, err := dEnv.WorkingRoot()
+	working, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		return
 	}
 
-	notStaged := actions.NewTableDiffs(working, staged)
+	notStaged := actions.NewTableDiffs(context.TODO(), working, staged)
 
 	if notStaged.NumRemoved+notStaged.NumModified > 0 {
 		cli.Println("Unstaged changes after reset:")
@@ -86,19 +87,19 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 }
 
 func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
-	updatedRoot := staged.UpdateTablesFromOther(tbls, head)
+	updatedRoot := staged.UpdateTablesFromOther(context.TODO(), tbls, head)
 
 	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)
 }
 
 func getStagedAndHead(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
-	stagedRoot, err := dEnv.StagedRoot()
+	stagedRoot, err := dEnv.StagedRoot(context.Background())
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
 	}
 
-	headRoot, err := dEnv.HeadRoot()
+	headRoot, err := dEnv.HeadRoot(context.TODO())
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()

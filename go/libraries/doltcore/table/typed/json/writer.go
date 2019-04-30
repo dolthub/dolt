@@ -2,6 +2,7 @@ package json
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -58,7 +59,7 @@ func (jsonw *JSONWriter) GetSchema() schema.Schema {
 }
 
 // WriteRow will write a row to a table
-func (jsonw *JSONWriter) WriteRow(r row.Row) error {
+func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := jsonw.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
@@ -89,7 +90,7 @@ func (jsonw *JSONWriter) WriteRow(r row.Row) error {
 }
 
 // Close should flush all writes, release resources being held
-func (jsonw *JSONWriter) Close() error {
+func (jsonw *JSONWriter) Close(ctx context.Context) error {
 	if jsonw.closer != nil {
 		err := iohelp.WriteAll(jsonw.bWr, []byte(jsonFooter))
 

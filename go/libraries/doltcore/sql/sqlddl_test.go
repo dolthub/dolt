@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/stretchr/testify/assert"
@@ -94,14 +95,14 @@ func TestExecuteCreate(t *testing.T) {
 
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 		sqlStatement, err := sqlparser.Parse(tt.query)
 		assert.Nil(t, err)
 
 		s := sqlStatement.(*sqlparser.DDL)
 
 		t.Run(tt.name, func(t *testing.T) {
-			updatedRoot, sch, err := ExecuteCreate(dEnv.DoltDB, root, s, tt.query)
+			updatedRoot, sch, err := ExecuteCreate(context.Background(), dEnv.DoltDB, root, s, tt.query)
 
 			assert.Equal(t, tt.expectedErr, err != nil, "unexpected error condition")
 			if !tt.expectedErr {

@@ -42,7 +42,7 @@ func (rs RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChu
 
 	hashes, hashToIndex := remotestorage.ParseByteSlices(req.Hashes)
 
-	absent := cs.HasMany(hashes)
+	absent := cs.HasMany(ctx, hashes)
 	indices := make([]int32, len(absent))
 
 	logger(fmt.Sprintf("missing chunks: %v", indices))
@@ -117,7 +117,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
 	hashes, _ := remotestorage.ParseByteSlices(req.Hashes)
-	absent := cs.HasMany(hashes)
+	absent := cs.HasMany(ctx, hashes)
 
 	var locs []*remotesapi.UploadLoc
 	for h := range hashes {
@@ -157,7 +157,7 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
 	err := pantoerr.PanicToError("Rebase failed", func() error {
-		cs.Rebase()
+		cs.Rebase(ctx)
 		return nil
 	})
 
@@ -182,7 +182,7 @@ func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootReques
 
 	var h hash.Hash
 	err := pantoerr.PanicToError("Root failed", func() error {
-		h = cs.Root()
+		h = cs.Root(ctx)
 		return nil
 	})
 
@@ -213,14 +213,14 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 		updates[hash.New(cti.Hash)] = cti.ChunkCount
 	}
 
-	cs.UpdateManifest(updates)
+	cs.UpdateManifest(ctx, updates)
 
 	currHash := hash.New(req.Current)
 	lastHash := hash.New(req.Last)
 
 	var ok bool
 	err := pantoerr.PanicToError("Commit failed", func() error {
-		ok = cs.Commit(currHash, lastHash)
+		ok = cs.Commit(ctx, currHash, lastHash)
 		return nil
 	})
 

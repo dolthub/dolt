@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"os"
 	"path"
@@ -96,8 +97,8 @@ func clonedEnv(dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseErr
 		return nil, errhand.BuildDError("error: unable to access directory " + dir).Build()
 	}
 
-	dEnv := env.Load(env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB)
-	err = dEnv.InitRepoWithNoData()
+	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB)
+	err = dEnv.InitRepoWithNoData(context.TODO())
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to initialize repo without data").AddCause(err).Build()
@@ -123,7 +124,7 @@ func createRemote(remoteName, remoteUrlIn string, insecure bool, dEnv *env.DoltE
 		return nil, errhand.BuildDError("error: unable to create repo state with remote " + remoteName).AddCause(err).Build()
 	}
 
-	return r.GetRemoteDB(), nil
+	return r.GetRemoteDB(context.TODO()), nil
 }
 
 func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs filesys.Filesys) (verr errhand.VerboseError) {
@@ -142,11 +143,11 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 		srcDB, verr = createRemote(remoteName, remoteUrl, insecure, dEnv)
 
 		if verr == nil {
-			if !srcDB.HasBranch(branch) {
+			if !srcDB.HasBranch(context.TODO(), branch) {
 				verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
 			} else {
 				cs, _ := doltdb.NewCommitSpec("HEAD", branch)
-				cm, err := srcDB.Resolve(cs)
+				cm, err := srcDB.Resolve(context.TODO(), cs)
 
 				if err != nil {
 					verr = errhand.BuildDError("error: unable to find %v", branch).Build()
@@ -157,7 +158,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 					go progFunc(progChan, stopChan)
 
 					remoteBranch := path.Join("remotes", remoteName, branch)
-					err = actions.Fetch(remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
+					err = actions.Fetch(context.TODO(), remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
 					close(progChan)
 					<-stopChan
 
@@ -165,15 +166,15 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 						verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 					} else {
 
-						err = dEnv.DoltDB.NewBranchAtCommit(branch, cm)
+						err = dEnv.DoltDB.NewBranchAtCommit(context.TODO(), branch, cm)
 
 						if err != nil {
 							verr = errhand.BuildDError("error: failed to create branch " + branch).Build()
 						} else {
 
 							localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
-							localCommit, _ := dEnv.DoltDB.Resolve(localCommitSpec)
-							h, err := dEnv.DoltDB.WriteRootValue(localCommit.GetRootValue())
+							localCommit, _ := dEnv.DoltDB.Resolve(context.TODO(), localCommitSpec)
+							h, err := dEnv.DoltDB.WriteRootValue(context.Background(), localCommit.GetRootValue())
 
 							dEnv.RepoState.Branch = branch
 							dEnv.RepoState.Staged = h.String()

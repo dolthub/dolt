@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"testing"
@@ -110,7 +111,7 @@ func TestDataMover(t *testing.T) {
 
 		src := test.mvOpts.Src
 
-		seedWr, err := src.CreateOverwritingDataWriter(root, fs, true, fakeSchema)
+		seedWr, err := src.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema)
 
 		if err != nil {
 			t.Fatal(err.Error())
@@ -118,9 +119,9 @@ func TestDataMover(t *testing.T) {
 
 		imtRd := table.NewInMemTableReader(imt)
 
-		_, _, err = table.PipeRows(imtRd, seedWr, false)
-		seedWr.Close()
-		imtRd.Close()
+		_, _, err = table.PipeRows(context.Background(), imtRd, seedWr, false)
+		seedWr.Close(context.Background())
+		imtRd.Close(context.Background())
 
 		if err != nil {
 			t.Fatal(err)
@@ -128,13 +129,13 @@ func TestDataMover(t *testing.T) {
 
 		encoding.UnmarshalJson(test.schemaJSON)
 
-		dm, crDMErr := NewDataMover(root, fs, test.mvOpts)
+		dm, crDMErr := NewDataMover(context.Background(), root, fs, test.mvOpts)
 
 		if crDMErr != nil {
 			t.Fatal(crDMErr.String())
 		}
 
-		err = dm.Move()
+		err = dm.Move(context.Background())
 
 		if err != nil {
 			t.Fatal(err)

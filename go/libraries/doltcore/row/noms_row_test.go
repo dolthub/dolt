@@ -1,6 +1,7 @@
 package row
 
 import (
+	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -84,7 +85,7 @@ func validateRow(t *testing.T, r Row, expected TaggedValues) {
 		if !ok {
 			t.Error("missing value")
 		} else if val != nil && !val.Equals(expVal) {
-			t.Error(types.EncodedValue(val), "!=", types.EncodedValue(expVal))
+			t.Error(types.EncodedValue(context.Background(), val), "!=", types.EncodedValue(context.Background(), expVal))
 		}
 	}
 
@@ -132,8 +133,8 @@ func TestConvToAndFromTuple(t *testing.T) {
 
 	r2 := FromNoms(sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
 
-	fmt.Println(Fmt(r, sch))
-	fmt.Println(Fmt(r2, sch))
+	fmt.Println(Fmt(context.Background(), r, sch))
+	fmt.Println(Fmt(context.Background(), r2, sch))
 
 	if !AreEqual(r, r2, sch) {
 		t.Error("Failed to convert to a noms tuple, and then convert back to the same row")

@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"sort"
@@ -22,8 +23,8 @@ type TableDiffs struct {
 	Tables      []string
 }
 
-func NewTableDiffs(newer, older *doltdb.RootValue) *TableDiffs {
-	added, modified, removed := newer.TableDiff(older)
+func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) *TableDiffs {
+	added, modified, removed := newer.TableDiff(ctx, older)
 
 	var tbls []string
 	tbls = append(tbls, added...)
@@ -51,27 +52,27 @@ func (td *TableDiffs) Len() int {
 	return len(td.Tables)
 }
 
-func GetTableDiffs(dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
-	headRoot, err := dEnv.HeadRoot()
+func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableDiffs, error) {
+	headRoot, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
 		return nil, nil, RootValueUnreadable{HeadRoot, err}
 	}
 
-	stagedRoot, err := dEnv.StagedRoot()
+	stagedRoot, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return nil, nil, RootValueUnreadable{StagedRoot, err}
 	}
 
-	workingRoot, err := dEnv.WorkingRoot()
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return nil, nil, RootValueUnreadable{WorkingRoot, err}
 	}
 
-	stagedDiffs := NewTableDiffs(stagedRoot, headRoot)
-	notStagedDiffs := NewTableDiffs(workingRoot, stagedRoot)
+	stagedDiffs := NewTableDiffs(ctx, stagedRoot, headRoot)
+	notStagedDiffs := NewTableDiffs(ctx, workingRoot, stagedRoot)
 
 	return stagedDiffs, notStagedDiffs, nil
 }

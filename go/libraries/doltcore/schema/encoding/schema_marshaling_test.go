@@ -1,6 +1,7 @@
 package encoding
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -38,14 +39,14 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Fatal("Could not create in mem noms db.")
 	}
 
-	db := dbSpec.GetDatabase()
-	val, err := MarshalAsNomsValue(db, tSchema)
+	db := dbSpec.GetDatabase(context.Background())
+	val, err := MarshalAsNomsValue(context.Background(), db, tSchema)
 
 	if err != nil {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
 	}
 
-	unMarshalled, err := UnmarshalNomsValue(val)
+	unMarshalled, err := UnmarshalNomsValue(context.Background(), val)
 
 	if err != nil {
 		t.Fatal("Failed to unmarshal types.Value as Schema")

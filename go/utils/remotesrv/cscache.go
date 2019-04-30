@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"path/filepath"
@@ -44,7 +45,7 @@ func (cache *DBCache) Get(org, repo string) (*nbs.NomsBlockStore, error) {
 			return nil, err
 		}
 
-		newCS = nbs.NewLocalStore(id, defaultMemTableSize)
+		newCS = nbs.NewLocalStore(context.TODO(), id, defaultMemTableSize)
 	}
 
 	cache.dbs[id] = newCS

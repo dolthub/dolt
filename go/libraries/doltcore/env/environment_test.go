@@ -1,6 +1,7 @@
 package env
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -44,7 +45,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 	}
 
 	fs := filesys.NewInMemFS(initialDirs, initialFiles, workingDir)
-	dEnv := Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB)
 
 	return dEnv
 }
@@ -119,19 +120,19 @@ func TestRepoDirNoLocal(t *testing.T) {
 
 func TestInitRepo(t *testing.T) {
 	dEnv := createTestEnv(false, false)
-	err := dEnv.InitRepo("aoeu aoeu", "aoeu@aoeu.org")
+	err := dEnv.InitRepo(context.Background(), "aoeu aoeu", "aoeu@aoeu.org")
 
 	if err != nil {
 		t.Error("Failed to init repo.", err.Error())
 	}
 
-	_, err = dEnv.WorkingRoot()
+	_, err = dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		t.Error("Failed to get working root value.")
 	}
 
-	_, err = dEnv.StagedRoot()
+	_, err = dEnv.StagedRoot(context.Background())
 
 	if err != nil {
 		t.Error("Failed to get staged root value.")

@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
@@ -49,10 +50,10 @@ func TestPutRow(t *testing.T) {
 		}
 
 		if result == 0 {
-			root, _ := dEnv.WorkingRoot()
-			tbl, _ := root.GetTable(tableName)
-			sch := tbl.GetSchema()
-			row, exists := tbl.GetRowByPKVals(row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
+			root, _ := dEnv.WorkingRoot(context.Background())
+			tbl, _ := root.GetTable(context.Background(), tableName)
+			sch := tbl.GetSchema(context.Background())
+			row, exists := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
 
 			if !exists {
 				t.Fatal("Could not find row")
@@ -80,17 +81,17 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	imt, sch := dtestutils.CreateTestDataTable(true)
 
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)
+	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
 
-	_, _, err := table.PipeRows(rd, wr, false)
-	rd.Close()
-	wr.Close()
+	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
+	rd.Close(context.Background())
+	wr.Close(context.Background())
 
 	if err != nil {
 		t.Error("Failed to seed initial data", err)
 	}
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
 
 	if err != nil {
 		t.Error("Unable to put initial value of table in in mem noms db", err)

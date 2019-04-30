@@ -1,6 +1,7 @@
 package cnfcmds
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -79,9 +80,9 @@ func autoResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Verb
 	var err error
 	tbls := apr.Args()
 	if len(tbls) == 1 && tbls[0] == "." {
-		err = actions.AutoResolveAll(dEnv, autoResolveFunc)
+		err = actions.AutoResolveAll(context.Background(), dEnv, autoResolveFunc)
 	} else {
-		err = actions.AutoResolveTables(dEnv, autoResolveFunc, tbls)
+		err = actions.AutoResolveTables(context.Background(), dEnv, autoResolveFunc, tbls)
 	}
 
 	if err != nil {
@@ -110,18 +111,18 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 	}
 
 	tblName := args[0]
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError("error: table '%s' not found", tblName).Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
-	keysToResolve, err := cli.ParseKeyValues(tbl.GetSchema(), args[1:])
+	tbl, _ := root.GetTable(context.TODO(), tblName)
+	keysToResolve, err := cli.ParseKeyValues(tbl.GetSchema(context.TODO()), args[1:])
 
 	if err != nil {
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
 	}
 
-	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(keysToResolve)
+	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(context.TODO(), keysToResolve)
 
 	if err != nil {
 		verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
@@ -135,7 +136,7 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 		}
 
 		if updatedTbl.HashOf() != tbl.HashOf() {
-			root := root.PutTable(dEnv.DoltDB, tblName, updatedTbl)
+			root := root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
 			verr = commands.UpdateWorkingWithVErr(dEnv, root)
 		}
 	}

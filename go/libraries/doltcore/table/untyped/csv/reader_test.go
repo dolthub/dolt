@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
@@ -93,7 +94,7 @@ func TestReader(t *testing.T) {
 			for i, r := range rows {
 				expectedRow := test.expectedRows[i]
 				if !row.AreEqual(r, expectedRow, sch) {
-					t.Error(row.Fmt(r, sch), "!=", row.Fmt(expectedRow, sch))
+					t.Error(row.Fmt(context.Background(), r, sch), "!=", row.Fmt(context.Background(), expectedRow, sch))
 				}
 			}
 		}
@@ -106,7 +107,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
 	csvR, err := OpenCSVReader(path, fs, info)
-	defer csvR.Close()
+	defer csvR.Close(context.Background())
 
 	if err != nil {
 		t.Fatal("Could not open reader", err)
@@ -115,7 +116,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 	badRows := 0
 	var rows []row.Row
 	for {
-		row, err := csvR.ReadRow()
+		row, err := csvR.ReadRow(context.Background())
 
 		if err != io.EOF && err != nil && !table.IsBadRow(err) {
 			return nil, -1, err

@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -56,12 +57,12 @@ func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		if verr == nil {
-			tbl, ok := root.GetTable(old)
+			tbl, ok := root.GetTable(context.TODO(), old)
 			if ok {
-				if !force && working.HasTable(new) {
+				if !force && working.HasTable(context.TODO(), new) {
 					verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
 				} else {
-					working = working.PutTable(dEnv.DoltDB, new, tbl)
+					working = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
 					verr = commands.UpdateWorkingWithVErr(dEnv, working)
 				}
 			} else {

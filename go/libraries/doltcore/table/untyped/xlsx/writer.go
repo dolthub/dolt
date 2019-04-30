@@ -2,6 +2,7 @@ package xlsx
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
 	"path/filepath"
@@ -49,7 +50,7 @@ func (xlsxw *XLSXWriter) GetSchema() schema.Schema {
 	return xlsxw.sch
 }
 
-func (xlsxw *XLSXWriter) WriteRow(r row.Row) error {
+func (xlsxw *XLSXWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := xlsxw.sch.GetAllCols()
 
 	i := 0
@@ -63,7 +64,7 @@ func (xlsxw *XLSXWriter) WriteRow(r row.Row) error {
 			if val.Kind() == types.StringKind {
 				colValStrs[0] = string(val.(types.String))
 			} else {
-				colValStrs[0] = types.EncodedValue(val)
+				colValStrs[0] = types.EncodedValue(ctx, val)
 			}
 		}
 
@@ -79,7 +80,7 @@ func (xlsxw *XLSXWriter) WriteRow(r row.Row) error {
 }
 
 // Close should flush all writes, release resources being held
-func (xlsxw *XLSXWriter) Close() error {
+func (xlsxw *XLSXWriter) Close(ctx context.Context) error {
 	if xlsxw.closer != nil {
 		errFl := xlsxw.bWr.Flush()
 		errCl := xlsxw.closer.Close()
