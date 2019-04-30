@@ -29,6 +29,8 @@ type SelectStatement struct {
 	selectedCols []QualifiedColumn
 	// Referenced columns (selected or in where / having clause)
 	referencedCols []QualifiedColumn
+	// Join expressions
+	joins []*sqlparser.JoinTableExpr
 	// Aliases for columns and tables
 	aliases *Aliases
 	// Filter function for the result set
@@ -98,7 +100,11 @@ func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, sche
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
 func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pipeline.Pipeline, *SelectStatement, error) {
-	selectStmt := &SelectStatement{aliases: NewAliases(), inputSchemas: make(map[string]schema.Schema)}
+	selectStmt := &SelectStatement{
+		aliases: NewAliases(),
+		inputSchemas: make(map[string]schema.Schema),
+		joins: make([]*sqlparser.JoinTableExpr, 0),
+	}
 
 	if err := processFromClause(root, selectStmt, s.From); err != nil {
 		return nil, nil, err
@@ -128,7 +134,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 	return p, selectStmt, nil
 }
 
-// Processes the referenced columns, those appearing either in the select list or the where clause.
+// Processes the referenced columns, those appearing either in the select list, the where clause, or the join statement.
 func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Where) error {
 	cols := make([]QualifiedColumn, 0)
 	cols = append(cols, selectStmt.selectedCols...)
@@ -138,7 +144,17 @@ func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Wher
 		return err
 	}
 
+	joinCols, err := resolveColumnsInJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
+	if err != nil {
+		return err
+	}
+
 	for _, col := range referencedCols {
+		if !contains(col, cols) {
+			cols = append(cols, col)
+		}
+	}
+	for _, col := range joinCols {
 		if !contains(col, cols) {
 			cols = append(cols, col)
 		}
@@ -181,36 +197,61 @@ func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error 
 // returning any error encountered.
 func processFromClause(root *doltdb.RootValue, selectStmt *SelectStatement, from sqlparser.TableExprs) error {
 	for _, tableExpr := range from {
-		var tableName string
-		switch te := tableExpr.(type) {
-		case *sqlparser.AliasedTableExpr:
-			switch e := te.Expr.(type) {
-			case sqlparser.TableName:
-				tableName = e.Name.String()
-			case *sqlparser.Subquery:
-				return errFmt("Subqueries are not supported: %v.", nodeToString(e))
-			default:
-				return errFmt("Unrecognized expression: %v", nodeToString(e))
-			}
-
-			if !root.HasTable(tableName) {
-				return errFmt("Unknown table '%s'", tableName)
-			}
-
-			if !te.As.IsEmpty() {
-				selectStmt.aliases.AddTableAlias(tableName, te.As.String())
-			}
-			selectStmt.aliases.AddTableAlias(tableName, tableName)
-			selectStmt.inputSchemas[tableName] = mustGetSchema(root, tableName)
-			selectStmt.inputTables = append(selectStmt.inputTables, tableName)
-
-		case *sqlparser.ParenTableExpr:
-			return errFmt("Parenthetical table expressions are not supported: %v,", nodeToString(te))
-		case *sqlparser.JoinTableExpr:
-			return errFmt("Joins expressions are not supported: %v,", nodeToString(te))
-		default:
-			return errFmt("Unsupported select statement: %v", nodeToString(te))
+		if err := processTableExpression(root, selectStmt, tableExpr); err != nil {
+			return err
 		}
+	}
+
+	return nil
+}
+
+// Processes the a single table expression from a from (or join) clause
+func processTableExpression(root *doltdb.RootValue, selectStmt *SelectStatement, expr sqlparser.TableExpr) error {
+	switch te := expr.(type) {
+	case *sqlparser.AliasedTableExpr:
+		var tableName string
+		switch e := te.Expr.(type) {
+		case sqlparser.TableName:
+			tableName = e.Name.String()
+		case *sqlparser.Subquery:
+			return errFmt("Subqueries are not supported: %v.", nodeToString(e))
+		default:
+			return errFmt("Unrecognized expression: %v", nodeToString(e))
+		}
+
+		if !root.HasTable(tableName) {
+			return errFmt("Unknown table '%s'", tableName)
+		}
+
+		if !te.As.IsEmpty() {
+			selectStmt.aliases.AddTableAlias(tableName, te.As.String())
+		}
+		selectStmt.aliases.AddTableAlias(tableName, tableName)
+
+		selectStmt.inputSchemas[tableName] = mustGetSchema(root, tableName)
+		selectStmt.inputTables = append(selectStmt.inputTables, tableName)
+
+	case *sqlparser.JoinTableExpr:
+		switch te.Join {
+		case sqlparser.JoinStr: // ok
+		default:
+			return errFmt("Unsupported join type: %v", te.Join)
+		}
+
+		// We'll need the full condition when filtering results later in the analysis
+		selectStmt.joins = append(selectStmt.joins, te)
+
+		// Join expressions can also define aliases, which we will fill in here recursively
+		if err := processTableExpression(root, selectStmt, te.LeftExpr); err != nil {
+			return err
+		}
+		if err := processTableExpression(root, selectStmt, te.RightExpr); err != nil {
+			return err
+		}
+	case *sqlparser.ParenTableExpr:
+		return errFmt("Parenthetical table expressions are not supported: %v,", nodeToString(te))
+	default:
+		return errFmt("Unsupported table expression: %v", nodeToString(te))
 	}
 
 	return nil
@@ -295,18 +336,30 @@ func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
 	return tbl.GetSchema()
 }
 
-// Processes the where clause by applying an appropriate filter fn to the SelectStatement given. Returns an error if the
-// where clause can't be processed.
-func processWhereClause(selectStmt *SelectStatement, s *sqlparser.Select, rss *resultset.ResultSetSchema) error {
-	filter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases, rss)
+// Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
+func createResultSetFilter(selectStmt *SelectStatement, s *sqlparser.Select, rss *resultset.ResultSetSchema) error {
+	var rowFilter rowFilterFn
+	whereFilter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases, rss)
 	if err != nil {
 		return err
 	}
+	rowFilter = whereFilter
 
-	selectStmt.filterFn = filter
+	if len(selectStmt.joins) > 0 {
+		joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases, rss)
+		if err != nil {
+			return err
+		}
+		rowFilter = func(r row.Row) (matchesFilter bool) {
+			return whereFilter(r) && joinFilter(r)
+		}
+	}
+
+	selectStmt.filterFn = rowFilter
 	return nil
 }
 
+// The result of running a single select pipeline.
 type singleTablePipelineResult struct {
 	p    *pipeline.Pipeline
 	rows []row.Row
@@ -328,7 +381,7 @@ func createPipeline(root *doltdb.RootValue, s *sqlparser.Select, selectStmt *Sel
 		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
 		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
 		// table for where clause filtering, then convert those rows to the result set schema.
-		if err := processWhereClause(selectStmt, s, resultset.Identity(tableSch)); err != nil {
+		if err := createResultSetFilter(selectStmt, s, resultset.Identity(tableSch)); err != nil {
 			return nil, err
 		}
 
@@ -377,7 +430,7 @@ func createPipeline(root *doltdb.RootValue, s *sqlparser.Select, selectStmt *Sel
 	crossProduct := selectStmt.intermediateRss.CrossProduct(results)
 	source := sourceFuncForRows(crossProduct)
 
-	if err := processWhereClause(selectStmt, s, selectStmt.intermediateRss); err != nil {
+	if err := createResultSetFilter(selectStmt, s, selectStmt.intermediateRss); err != nil {
 		return nil, err
 	}
 
@@ -478,7 +531,8 @@ func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Sc
 			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
 				panic("Unknown column " + colName)
 			} else {
-				// TODO: this might not be necessary, full column names are filled in already here
+				// Rename any aliased columns for output. Column names only matter for the end result, not any
+				// intermediate ones.
 				if alias, ok := aliases.AliasesByColumn[selectedCol]; ok {
 					col.Name = alias
 				}
