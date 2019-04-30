@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -25,29 +26,29 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return String("hi") },
 		func() Value { return String("bye") },
 		func() Value {
-			return NewBlob(vrw, &bytes.Buffer{})
+			return NewBlob(context.Background(), vrw, &bytes.Buffer{})
 		},
 		func() Value {
-			return NewBlob(vrw, bytes.NewBufferString("hi"))
+			return NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
 		},
 		func() Value {
-			return NewBlob(vrw, bytes.NewBufferString("bye"))
+			return NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
 		},
 		func() Value {
-			b1 := NewBlob(vrw, bytes.NewBufferString("hi"))
-			b2 := NewBlob(vrw, bytes.NewBufferString("bye"))
+			b1 := NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
+			b2 := NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
 			return newBlob(newBlobMetaSequence(1, []metaTuple{
 				newMetaTuple(NewRef(b1), orderedKeyFromInt(2), 2),
 				newMetaTuple(NewRef(b2), orderedKeyFromInt(5), 5),
 			}, nil))
 		},
-		func() Value { return NewList(vrw) },
-		func() Value { return NewList(vrw, String("foo")) },
-		func() Value { return NewList(vrw, String("bar")) },
-		func() Value { return NewMap(vrw) },
-		func() Value { return NewMap(vrw, String("a"), String("a")) },
-		func() Value { return NewSet(vrw) },
-		func() Value { return NewSet(vrw, String("hi")) },
+		func() Value { return NewList(context.Background(), vrw) },
+		func() Value { return NewList(context.Background(), vrw, String("foo")) },
+		func() Value { return NewList(context.Background(), vrw, String("bar")) },
+		func() Value { return NewMap(context.Background(), vrw) },
+		func() Value { return NewMap(context.Background(), vrw, String("a"), String("a")) },
+		func() Value { return NewSet(context.Background(), vrw) },
+		func() Value { return NewSet(context.Background(), vrw, String("hi")) },
 
 		func() Value { return BoolType },
 		func() Value { return StringType },

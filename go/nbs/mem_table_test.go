@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"io/ioutil"
 	"os"
@@ -59,12 +60,12 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 	assertChunksInReader(chunks, mt, assert)
 
 	for _, c := range chunks {
-		assert.Equal(bytes.Compare(c, mt.get(computeAddr(c), &Stats{})), 0)
+		assert.Equal(bytes.Compare(c, mt.get(context.Background(), computeAddr(c), &Stats{})), 0)
 	}
 
 	notPresent := []byte("nope")
 	assert.False(mt.has(computeAddr(notPresent)))
-	assert.Nil(mt.get(computeAddr(notPresent), &Stats{}))
+	assert.Nil(mt.get(context.Background(), computeAddr(notPresent), &Stats{}))
 }
 
 func TestMemTableAddOverflowChunk(t *testing.T) {
@@ -134,7 +135,7 @@ func tableReaderAtFromBytes(b []byte) tableReaderAt {
 	return tableReaderAtAdapter{bytes.NewReader(b)}
 }
 
-func (adapter tableReaderAtAdapter) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+func (adapter tableReaderAtAdapter) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	return adapter.ReadAt(p, off)
 }
 
@@ -183,9 +184,9 @@ func (crg chunkReaderGroup) has(h addr) bool {
 	return false
 }
 
-func (crg chunkReaderGroup) get(h addr, stats *Stats) []byte {
+func (crg chunkReaderGroup) get(ctx context.Context, h addr, stats *Stats) []byte {
 	for _, haver := range crg {
-		if data := haver.get(h, stats); data != nil {
+		if data := haver.get(ctx, h, stats); data != nil {
 			return data
 		}
 	}
@@ -201,9 +202,9 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (remaining bool) {
 	return true
 }
 
-func (crg chunkReaderGroup) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
+func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	for _, haver := range crg {
-		if !haver.getMany(reqs, foundChunks, wg, stats) {
+		if !haver.getMany(ctx, reqs, foundChunks, wg, stats) {
 			return false
 		}
 	}
@@ -224,8 +225,8 @@ func (crg chunkReaderGroup) uncompressedLen() (data uint64) {
 	return
 }
 
-func (crg chunkReaderGroup) extract(chunks chan<- extractRecord) {
+func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRecord) {
 	for _, haver := range crg {
-		haver.extract(chunks)
+		haver.extract(ctx, chunks)
 	}
 }

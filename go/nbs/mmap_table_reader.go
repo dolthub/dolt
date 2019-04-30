@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"github.com/edsrzf/mmap-go"
 	"io"
 	"math"
@@ -88,7 +89,7 @@ type cacheReaderAt struct {
 	fc   *fdCache
 }
 
-func (cra *cacheReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
+func (cra *cacheReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	var r io.ReaderAt
 	t1 := time.Now()
 

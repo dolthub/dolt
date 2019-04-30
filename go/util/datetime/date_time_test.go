@@ -5,6 +5,7 @@
 package datetime
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -24,11 +25,11 @@ func TestBasics(t *testing.T) {
 	// Since we are using float64 in noms we cannot represent all possible times.
 	dt := DateTime{time.Unix(1234567, 1234567)}
 
-	nomsValue, err := marshal.Marshal(vs, dt)
+	nomsValue, err := marshal.Marshal(context.Background(), vs, dt)
 	assert.NoError(err)
 
 	var dt2 DateTime
-	err = marshal.Unmarshal(nomsValue, &dt2)
+	err = marshal.Unmarshal(context.Background(), nomsValue, &dt2)
 	assert.NoError(err)
 
 	assert.True(dt.Equal(dt2.Time))
@@ -39,7 +40,7 @@ func TestUnmarshal(t *testing.T) {
 
 	test := func(v types.Struct, t time.Time) {
 		var dt DateTime
-		err := marshal.Unmarshal(v, &dt)
+		err := marshal.Unmarshal(context.Background(), v, &dt)
 		assert.NoError(err)
 		assert.True(dt.Equal(t))
 	}
@@ -61,7 +62,7 @@ func TestUnmarshalInvalid(t *testing.T) {
 
 	test := func(v types.Value) {
 		var dt DateTime
-		err := marshal.Unmarshal(v, &dt)
+		err := marshal.Unmarshal(context.Background(), v, &dt)
 		assert.Error(err)
 	}
 
@@ -85,7 +86,7 @@ func TestMarshal(t *testing.T) {
 	defer vs.Close()
 
 	test := func(dt DateTime, expected float64) {
-		v, err := marshal.Marshal(vs, dt)
+		v, err := marshal.Marshal(context.Background(), vs, dt)
 		assert.NoError(err)
 
 		assert.True(types.NewStruct("DateTime", types.StructData{
@@ -109,10 +110,10 @@ func TestMarshalType(t *testing.T) {
 	defer vs.Close()
 
 	dt := DateTime{time.Unix(0, 0)}
-	typ := marshal.MustMarshalType(dt)
+	typ := marshal.MustMarshalType(context.Background(), dt)
 	assert.Equal(DateTimeType, typ)
 
-	v := marshal.MustMarshal(vs, dt)
+	v := marshal.MustMarshal(context.Background(), vs, dt)
 	assert.Equal(typ, types.TypeOf(v))
 }
 
@@ -133,11 +134,11 @@ func TestZeroValues(t *testing.T) {
 	nomsDate, _ := dt1.MarshalNoms(vs)
 
 	dt2 := DateTime{}
-	marshal.Unmarshal(nomsDate, &dt2)
+	marshal.Unmarshal(context.Background(), nomsDate, &dt2)
 	assert.True(dt2.IsZero())
 
 	dt3 := DateTime{}
-	dt3.UnmarshalNoms(nomsDate)
+	dt3.UnmarshalNoms(context.Background(), nomsDate)
 	assert.True(dt3.IsZero())
 }
 
@@ -158,18 +159,18 @@ func TestHRSComment(t *testing.T) {
 	vs := newTestValueStore()
 
 	dt := Now()
-	mdt := marshal.MustMarshal(vs, dt)
+	mdt := marshal.MustMarshal(context.Background(), vs, dt)
 
 	exp := dt.Format(time.RFC3339)
-	s1 := types.EncodedValue(mdt)
+	s1 := types.EncodedValue(context.Background(), mdt)
 	a.True(strings.Contains(s1, "{ // "+exp))
 
 	RegisterHRSCommenter(time.UTC)
 	exp = dt.In(time.UTC).Format((time.RFC3339))
-	s1 = types.EncodedValue(mdt)
+	s1 = types.EncodedValue(context.Background(), mdt)
 	a.True(strings.Contains(s1, "{ // "+exp))
 
 	types.UnregisterHRSCommenter(datetypename, hrsEncodingName)
-	s1 = types.EncodedValue(mdt)
+	s1 = types.EncodedValue(context.Background(), mdt)
 	a.False(strings.Contains(s1, "{ // 20"))
 }

@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -23,23 +24,23 @@ func newFileBlockStore(w io.WriteCloser) chunks.ChunkStore {
 	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}
 }
 
-func (fb fileBlockStore) Get(h hash.Hash) chunks.Chunk {
+func (fb fileBlockStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Has(h hash.Hash) bool {
+func (fb fileBlockStore) Has(ctx context.Context, h hash.Hash) bool {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) HasMany(hashes hash.HashSet) (present hash.HashSet) {
+func (fb fileBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (present hash.HashSet) {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Put(c chunks.Chunk) {
+func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk) {
 	io.Copy(fb.bw, bytes.NewReader(c.Data()))
 }
 
@@ -52,7 +53,7 @@ func (fb fileBlockStore) Close() error {
 	return nil
 }
 
-func (fb fileBlockStore) Rebase() {}
+func (fb fileBlockStore) Rebase(ctx context.Context) {}
 
 func (fb fileBlockStore) Stats() interface{} {
 	return nil
@@ -62,11 +63,11 @@ func (fb fileBlockStore) StatsSummary() string {
 	return "Unsupported"
 }
 
-func (fb fileBlockStore) Root() hash.Hash {
+func (fb fileBlockStore) Root(ctx context.Context) hash.Hash {
 	return hash.Hash{}
 }
 
-func (fb fileBlockStore) Commit(current, last hash.Hash) bool {
+func (fb fileBlockStore) Commit(ctx context.Context, current, last hash.Hash) bool {
 	fb.bw.Flush()
 	return true
 }

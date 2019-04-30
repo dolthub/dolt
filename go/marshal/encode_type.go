@@ -8,6 +8,7 @@
 package marshal
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -22,12 +23,12 @@ import (
 //
 // If a Go struct contains a noms tag with original the field is skipped since
 // the Noms type depends on the original Noms value which is not available.
-func MarshalType(v interface{}) (nt *types.Type, err error) {
-	return MarshalTypeOpt(v, Opt{})
+func MarshalType(ctx context.Context, v interface{}) (nt *types.Type, err error) {
+	return MarshalTypeOpt(ctx, v, Opt{})
 }
 
 // MarshalTypeOpt is like MarshalType but with additional options.
-func MarshalTypeOpt(v interface{}, opt Opt) (nt *types.Type, err error) {
+func MarshalTypeOpt(ctx context.Context, v interface{}, opt Opt) (nt *types.Type, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -40,23 +41,23 @@ func MarshalTypeOpt(v interface{}, opt Opt) (nt *types.Type, err error) {
 			}
 		}
 	}()
-	nt = MustMarshalTypeOpt(v, opt)
+	nt = MustMarshalTypeOpt(ctx, v, opt)
 	return
 }
 
 // MustMarshalType computes a Noms type from a Go type or panics if there is an
 // error.
-func MustMarshalType(v interface{}) (nt *types.Type) {
-	return MustMarshalTypeOpt(v, Opt{})
+func MustMarshalType(ctx context.Context, v interface{}) (nt *types.Type) {
+	return MustMarshalTypeOpt(ctx, v, Opt{})
 }
 
 // MustMarshalTypeOpt is like MustMarshalType but provides additional options.
-func MustMarshalTypeOpt(v interface{}, opt Opt) (nt *types.Type) {
+func MustMarshalTypeOpt(ctx context.Context, v interface{}, opt Opt) (nt *types.Type) {
 	rv := reflect.ValueOf(v)
 	tags := nomsTags{
 		set: opt.Set,
 	}
-	nt = encodeType(rv.Type(), map[string]reflect.Type{}, tags)
+	nt = encodeType(ctx, rv.Type(), map[string]reflect.Type{}, tags)
 
 	if nt == nil {
 		panic(&UnsupportedTypeError{Type: rv.Type()})
@@ -77,7 +78,7 @@ type TypeMarshaler interface {
 var typeOfTypesType = reflect.TypeOf((*types.Type)(nil))
 var typeMarshalerInterface = reflect.TypeOf((*TypeMarshaler)(nil)).Elem()
 
-func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) *types.Type {
+func encodeType(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) *types.Type {
 	if t.Implements(typeMarshalerInterface) {
 		v := reflect.Zero(t)
 		typ, err := v.Interface().(TypeMarshaler).MarshalNomsType()
@@ -137,9 +138,9 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 	case reflect.String:
 		return types.StringType
 	case reflect.Struct:
-		return structEncodeType(t, seenStructs)
+		return structEncodeType(ctx, t, seenStructs)
 	case reflect.Array, reflect.Slice:
-		elemType := encodeType(t.Elem(), seenStructs, nomsTags{})
+		elemType := encodeType(ctx, t.Elem(), seenStructs, nomsTags{})
 		if elemType == nil {
 			break
 		}
@@ -148,7 +149,7 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 		}
 		return types.MakeListType(elemType)
 	case reflect.Map:
-		keyType := encodeType(t.Key(), seenStructs, nomsTags{})
+		keyType := encodeType(ctx, t.Key(), seenStructs, nomsTags{})
 		if keyType == nil {
 			break
 		}
@@ -157,7 +158,7 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 			return types.MakeSetType(keyType)
 		}
 
-		valueType := encodeType(t.Elem(), seenStructs, nomsTags{})
+		valueType := encodeType(ctx, t.Elem(), seenStructs, nomsTags{})
 		if valueType != nil {
 			return types.MakeMapType(keyType, valueType)
 		}
@@ -172,7 +173,7 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 // the type but we also need to look at the value. In these cases this returns
 // nil and we have to wait until we have a value to be able to determine the
 // type.
-func structEncodeType(t reflect.Type, seenStructs map[string]reflect.Type) *types.Type {
+func structEncodeType(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type) *types.Type {
 	name := getStructName(t)
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
@@ -181,7 +182,7 @@ func structEncodeType(t reflect.Type, seenStructs map[string]reflect.Type) *type
 		seenStructs[name] = t
 	}
 
-	fields, knownShape, _ := typeFields(t, seenStructs, true, false)
+	fields, knownShape, _ := typeFields(ctx, t, seenStructs, true, false)
 
 	var structType *types.Type
 	if knownShape {

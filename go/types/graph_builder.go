@@ -40,6 +40,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
 
@@ -55,13 +56,13 @@ type GraphBuilder struct {
 }
 
 // NewGraphBuilder returns an new GraphBuilder object.
-func NewGraphBuilder(vrw ValueReadWriter, rootKind NomsKind) *GraphBuilder {
-	return newGraphBuilder(vrw, newLdbOpCacheStore(vrw), rootKind)
+func NewGraphBuilder(ctx context.Context, vrw ValueReadWriter, rootKind NomsKind) *GraphBuilder {
+	return newGraphBuilder(ctx, vrw, newLdbOpCacheStore(vrw), rootKind)
 }
 
-func newGraphBuilder(vrw ValueReadWriter, opcStore opCacheStore, rootKind NomsKind) *GraphBuilder {
+func newGraphBuilder(ctx context.Context, vrw ValueReadWriter, opcStore opCacheStore, rootKind NomsKind) *GraphBuilder {
 	b := &GraphBuilder{oc: opcStore.opCache(), opcStore: opcStore, vrw: vrw}
-	b.pushNewKeyOnStack(String("ROOT"), rootKind)
+	b.pushNewKeyOnStack(ctx, String("ROOT"), rootKind)
 	return b
 }
 
@@ -108,7 +109,7 @@ type graphOpContainer struct {
 // have completed. It is the caller's responsibility to ensure that this is
 // the case. Build() will panic if called more than once on any GraphBuilder
 // object.
-func (b *GraphBuilder) Build() Value {
+func (b *GraphBuilder) Build(ctx context.Context) Value {
 	var opc opCache
 	var opcStore opCacheStore
 
@@ -152,7 +153,7 @@ func (b *GraphBuilder) Build() Value {
 		if idx == -1 {
 			// no keys have changed we're working on same coll as previous
 			// iteration, just append to sequenceChunker at top of stack
-			b.appendItemToCurrentTopOfStack(kind, item)
+			b.appendItemToCurrentTopOfStack(ctx, kind, item)
 			continue
 		}
 
@@ -161,23 +162,23 @@ func (b *GraphBuilder) Build() Value {
 		// those keys from the stack. This will cause any popped cols to be
 		// closed and added to their parents.
 		for idx < b.stack.lastIdx() {
-			b.popKeyFromStack()
+			b.popKeyFromStack(ctx)
 		}
 
 		// We may have popped some keys off of the stack and are left with
 		// an item to append to the stack of a previously existing key.
 		if b.stack.lastIdx() == len(keys) {
-			b.appendItemToCurrentTopOfStack(kind, item)
+			b.appendItemToCurrentTopOfStack(ctx, kind, item)
 		}
 
 		// Or we may have some new keys to add to the stack. Add those keys
 		// and then append the item to the top element.
 		for b.stack.lastIdx() < len(keys) {
 			if b.stack.lastIdx() < len(keys)-1 {
-				b.pushNewKeyOnStack(keys[b.stack.lastIdx()], MapKind)
+				b.pushNewKeyOnStack(ctx, keys[b.stack.lastIdx()], MapKind)
 			} else {
-				b.pushNewKeyOnStack(keys[b.stack.lastIdx()], kind)
-				b.appendItemToCurrentTopOfStack(kind, item)
+				b.pushNewKeyOnStack(ctx, keys[b.stack.lastIdx()], kind)
+				b.appendItemToCurrentTopOfStack(ctx, kind, item)
 			}
 		}
 	}
@@ -185,9 +186,9 @@ func (b *GraphBuilder) Build() Value {
 	// We're done adding elements. Pop any intermediate keys off the stack and
 	// fold their results into their parent map.
 	for b.stack.len() > 1 {
-		b.popKeyFromStack()
+		b.popKeyFromStack(ctx)
 	}
-	res := b.stack.pop().done()
+	res := b.stack.pop().done(ctx)
 	return res
 
 }
@@ -195,15 +196,15 @@ func (b *GraphBuilder) Build() Value {
 // pushNewKeyOnStack() creates a new graphStackElem node and pushes it on the
 // stack. The new element contains the |key| and a new sequenceChunker that will
 // be appended to to build this node in the graph.
-func (b *GraphBuilder) pushNewKeyOnStack(key Value, kind NomsKind) {
+func (b *GraphBuilder) pushNewKeyOnStack(ctx context.Context, key Value, kind NomsKind) {
 	var ch *sequenceChunker
 	switch kind {
 	case MapKind:
-		ch = newEmptyMapSequenceChunker(b.vrw)
+		ch = newEmptyMapSequenceChunker(ctx, b.vrw)
 	case SetKind:
-		ch = newEmptySetSequenceChunker(b.vrw)
+		ch = newEmptySetSequenceChunker(ctx, b.vrw)
 	case ListKind:
-		ch = newEmptyListSequenceChunker(b.vrw)
+		ch = newEmptyListSequenceChunker(ctx, b.vrw)
 	default:
 		panic("bad 'kind' value in GraphBuilder, newElem()")
 	}
@@ -213,19 +214,19 @@ func (b *GraphBuilder) pushNewKeyOnStack(key Value, kind NomsKind) {
 // popKeyFromStack() pops the last element off the stack, calls done() to
 // finish any sequenceChunking that is in progress, and then assigns the
 // finished collection it's parent map.
-func (b *GraphBuilder) popKeyFromStack() {
+func (b *GraphBuilder) popKeyFromStack(ctx context.Context) {
 	elem := b.stack.pop()
-	col := elem.done()
+	col := elem.done(ctx)
 	top := b.stack.top()
-	top.ch.Append(mapEntry{elem.key, col})
+	top.ch.Append(ctx, mapEntry{elem.key, col})
 }
 
 // appendItemToCurrentTopOfStack() adds the current item to the sequenceChunker
 // that's on the top of the stack.
-func (b *GraphBuilder) appendItemToCurrentTopOfStack(kind NomsKind, item sequenceItem) {
+func (b *GraphBuilder) appendItemToCurrentTopOfStack(ctx context.Context, kind NomsKind, item sequenceItem) {
 	top := b.stack.top()
 	d.PanicIfTrue(top.kind != kind)
-	top.ch.Append(item)
+	top.ch.Append(ctx, item)
 }
 
 type graphStackElem struct {
@@ -271,14 +272,14 @@ func (s graphStack) String() string {
 }
 
 // done() creates the appropriate collection for this element and returns it
-func (e *graphStackElem) done() Collection {
+func (e *graphStackElem) done(ctx context.Context) Collection {
 	switch e.kind {
 	case MapKind:
-		return newMap(e.ch.Done().(orderedSequence))
+		return newMap(e.ch.Done(ctx).(orderedSequence))
 	case SetKind:
-		return newSet(e.ch.Done().(orderedSequence))
+		return newSet(e.ch.Done(ctx).(orderedSequence))
 	case ListKind:
-		return newList(e.ch.Done())
+		return newList(e.ch.Done(ctx))
 	}
 	panic("unreachable")
 }
@@ -307,5 +308,6 @@ func commonPrefixCount(stack graphStack, keys ValueSlice) int {
 }
 
 func (e *graphStackElem) String() string {
-	return fmt.Sprintf("key: %s, kind: %s, seq: %p", EncodedValue(e.key), e.kind, e.ch)
+	// TODO: Sometimes you just gotta do some I/O in your `String()`.
+	return fmt.Sprintf("key: %s, kind: %s, seq: %p", EncodedValue(context.Background(), e.key), e.kind, e.ch)
 }

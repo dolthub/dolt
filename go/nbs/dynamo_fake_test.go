@@ -10,6 +10,7 @@ import (
 
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 )
@@ -41,7 +42,7 @@ func (m *fakeDDB) readerForTable(name addr) chunkReader {
 	return nil
 }
 
-func (m *fakeDDB) GetItem(input *dynamodb.GetItemInput) (*dynamodb.GetItemOutput, error) {
+func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error) {
 	key := input.Key[dbAttr].S
 	assert.NotNil(m.t, key, "key should have been a String: %+v", input.Key[dbAttr])
 
@@ -73,7 +74,7 @@ func (m *fakeDDB) putData(k string, d []byte) {
 	m.data[k] = d
 }
 
-func (m *fakeDDB) PutItem(input *dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error) {
+func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInput, opts ...request.Option) (*dynamodb.PutItemOutput, error) {
 	assert.NotNil(m.t, input.Item[dbAttr], "%s should have been present", dbAttr)
 	assert.NotNil(m.t, input.Item[dbAttr].S, "key should have been a String: %+v", input.Item[dbAttr])
 	key := *input.Item[dbAttr].S

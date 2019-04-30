@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -42,9 +43,9 @@ func setupSyncFlags() *flag.FlagSet {
 	return syncFlagSet
 }
 
-func runSync(args []string) int {
+func runSync(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	sourceStore, sourceObj, err := cfg.GetPath(args[0])
+	sourceStore, sourceObj, err := cfg.GetPath(ctx, args[0])
 	d.CheckError(err)
 	defer sourceStore.Close()
 
@@ -52,7 +53,7 @@ func runSync(args []string) int {
 		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	sinkDB, sinkDataset, err := cfg.GetDataset(args[1])
+	sinkDB, sinkDataset, err := cfg.GetDataset(ctx, args[1])
 	d.CheckError(err)
 	defer sinkDB.Close()
 
@@ -83,12 +84,12 @@ func runSync(args []string) int {
 	nonFF := false
 	err = d.Try(func() {
 		defer profile.MaybeStartProfile().Stop()
-		datas.Pull(sourceStore, sinkDB, sourceRef, progressCh)
+		datas.Pull(ctx, sourceStore, sinkDB, sourceRef, progressCh)
 
 		var err error
-		sinkDataset, err = sinkDB.FastForward(sinkDataset, sourceRef)
+		sinkDataset, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
 		if err == datas.ErrMergeNeeded {
-			sinkDataset, err = sinkDB.SetHead(sinkDataset, sourceRef)
+			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, sourceRef)
 			nonFF = true
 		}
 		d.PanicIfError(err)

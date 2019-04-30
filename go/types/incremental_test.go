@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -17,11 +18,11 @@ func getTestVals(vrw ValueReadWriter) []Value {
 		Bool(true),
 		Float(1),
 		String("hi"),
-		NewBlob(vrw, bytes.NewReader([]byte("hi"))),
+		NewBlob(context.Background(), vrw, bytes.NewReader([]byte("hi"))),
 		// compoundBlob
-		NewSet(vrw, String("hi")),
-		NewList(vrw, String("hi")),
-		NewMap(vrw, String("hi"), String("hi")),
+		NewSet(context.Background(), vrw, String("hi")),
+		NewList(context.Background(), vrw, String("hi")),
+		NewMap(context.Background(), vrw, String("hi"), String("hi")),
 	}
 }
 
@@ -39,11 +40,11 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewList(vs, getTestVals(vs)...)
-	hash := vs.WriteValue(expected).TargetHash()
-	vs.Commit(vs.Root(), vs.Root())
+	expected := NewList(context.Background(), vs, getTestVals(vs)...)
+	hash := vs.WriteValue(context.Background(), expected).TargetHash()
+	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
-	actualVar := vs.ReadValue(hash)
+	actualVar := vs.ReadValue(context.Background(), hash)
 	actual := actualVar.(List)
 
 	expectedCount := cs.Reads
@@ -51,14 +52,14 @@ func TestIncrementalLoadList(t *testing.T) {
 	// There will be one read per chunk.
 	chunkReads := make([]int, expected.Len())
 	for i := uint64(0); i < expected.Len(); i++ {
-		v := actual.Get(i)
-		assert.True(expected.Get(i).Equals(v))
+		v := actual.Get(context.Background(), i)
+		assert.True(expected.Get(context.Background(), i).Equals(v))
 
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
-		_ = actual.Get(i)
+		_ = actual.Get(context.Background(), i)
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 	}
 }
@@ -69,15 +70,15 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewSet(vs, getTestVals(vs)...)
-	ref := vs.WriteValue(expected).TargetHash()
+	expected := NewSet(context.Background(), vs, getTestVals(vs)...)
+	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
-	actualVar := vs.ReadValue(ref)
+	actualVar := vs.ReadValue(context.Background(), ref)
 	actual := actualVar.(Set)
 
 	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
-	actual.Iter(func(v Value) (stop bool) {
+	actual.Iter(context.Background(), func(v Value) (stop bool) {
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount, cs.Reads)
 		return
@@ -90,15 +91,15 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewMap(vs, getTestVals(vs)...)
-	ref := vs.WriteValue(expected).TargetHash()
+	expected := NewMap(context.Background(), vs, getTestVals(vs)...)
+	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
-	actualVar := vs.ReadValue(ref)
+	actualVar := vs.ReadValue(context.Background(), ref)
 	actual := actualVar.(Map)
 
 	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
-	actual.Iter(func(k, v Value) (stop bool) {
+	actual.Iter(context.Background(), func(k, v Value) (stop bool) {
 		expectedCount += isEncodedOutOfLine(k)
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount, cs.Reads)
@@ -113,22 +114,22 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	vs := NewValueStore(cs)
 
 	expectedItem := Float(42)
-	ref := vs.WriteValue(expectedItem)
+	ref := vs.WriteValue(context.Background(), expectedItem)
 
-	expected := NewList(vs, ref)
-	ref = vs.WriteValue(expected)
-	actualVar := vs.ReadValue(ref.TargetHash())
+	expected := NewList(context.Background(), vs, ref)
+	ref = vs.WriteValue(context.Background(), expected)
+	actualVar := vs.ReadValue(context.Background(), ref.TargetHash())
 
 	assert.Equal(1, cs.Reads)
 	assert.True(expected.Equals(actualVar))
 
 	actual := actualVar.(List)
-	actualItem := actual.Get(0)
+	actualItem := actual.Get(context.Background(), 0)
 	assert.Equal(2, cs.Reads)
 	assert.True(expectedItem.Equals(actualItem))
 
 	// do it again to make sure caching works.
-	actualItem = actual.Get(0)
+	actualItem = actual.Get(context.Background(), 0)
 	assert.Equal(2, cs.Reads)
 	assert.True(expectedItem.Equals(actualItem))
 }

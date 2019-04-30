@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -32,7 +33,7 @@ import (
 
 // Function type for commenter functions
 type HRSCommenter interface {
-	Comment(Value) string
+	Comment(context.Context, Value) string
 }
 
 var (
@@ -170,7 +171,7 @@ func (w *hexWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (w *hrsWriter) Write(v Value) {
+func (w *hrsWriter) Write(ctx context.Context, v Value) {
 	if v == nil {
 		w.write("nil")
 		return
@@ -189,18 +190,18 @@ func (w *hrsWriter) Write(v Value) {
 		w.write("blob {")
 		blob := v.(Blob)
 		encoder := &hexWriter{hrs: w, size: blob.Len()}
-		_, w.err = io.Copy(encoder, blob.Reader())
+		_, w.err = io.Copy(encoder, blob.Reader(ctx))
 		w.write("}")
 
 	case ListKind:
 		w.write("[")
 		w.writeSize(v)
 		w.indent()
-		v.(List).Iter(func(v Value, i uint64) bool {
+		v.(List).Iter(ctx, func(v Value, i uint64) bool {
 			if i == 0 {
 				w.newLine()
 			}
-			w.Write(v)
+			w.Write(ctx, v)
 			w.write(",")
 			w.newLine()
 			return w.err != nil
@@ -214,7 +215,7 @@ func (w *hrsWriter) Write(v Value) {
 			if i != 0 {
 				w.write(",")
 			}
-			w.Write(v)
+			w.Write(ctx, v)
 			return w.err != nil
 		})
 		w.outdent()
@@ -227,10 +228,10 @@ func (w *hrsWriter) Write(v Value) {
 		if !v.(Map).Empty() {
 			w.newLine()
 		}
-		v.(Map).Iter(func(key, val Value) bool {
-			w.Write(key)
+		v.(Map).Iter(ctx, func(key, val Value) bool {
+			w.Write(ctx, key)
 			w.write(": ")
-			w.Write(val)
+			w.Write(ctx, val)
 			w.write(",")
 			w.newLine()
 			return w.err != nil
@@ -249,8 +250,8 @@ func (w *hrsWriter) Write(v Value) {
 		if !v.(Set).Empty() {
 			w.newLine()
 		}
-		v.(Set).Iter(func(v Value) bool {
-			w.Write(v)
+		v.(Set).Iter(ctx, func(v Value) bool {
+			w.Write(ctx, v)
 			w.write(",")
 			w.newLine()
 			return w.err != nil
@@ -262,7 +263,7 @@ func (w *hrsWriter) Write(v Value) {
 		w.writeType(v.(*Type), map[*Type]struct{}{})
 
 	case StructKind:
-		w.writeStruct(v.(Struct))
+		w.writeStruct(ctx, v.(Struct))
 
 	case UUIDKind:
 		id, _ := v.(UUID)
@@ -288,7 +289,7 @@ type hrsStructWriter struct {
 	v Struct
 }
 
-func (w hrsStructWriter) name(n string) {
+func (w hrsStructWriter) name(ctx context.Context, n string) {
 	w.write("struct ")
 	if n != "" {
 		w.write(n)
@@ -297,7 +298,7 @@ func (w hrsStructWriter) name(n string) {
 	w.write("{")
 	commenters := GetHRSCommenters(n)
 	for _, commenter := range commenters {
-		if comment := commenter.Comment(w.v); comment != "" {
+		if comment := commenter.Comment(ctx, w.v); comment != "" {
 			w.write(" // " + comment)
 			break
 		}
@@ -317,8 +318,8 @@ func (w hrsStructWriter) fieldName(n string) {
 	w.write(": ")
 }
 
-func (w hrsStructWriter) fieldValue(v Value) {
-	w.Write(v)
+func (w hrsStructWriter) fieldValue(ctx context.Context, v Value) {
+	w.Write(ctx, v)
 	w.write(",")
 	w.newLine()
 }
@@ -328,8 +329,8 @@ func (w hrsStructWriter) end() {
 	w.write("}")
 }
 
-func (w *hrsWriter) writeStruct(v Struct) {
-	v.iterParts(hrsStructWriter{w, v})
+func (w *hrsWriter) writeStruct(ctx context.Context, v Struct) {
+	v.iterParts(ctx, hrsStructWriter{w, v})
 }
 
 func (w *hrsWriter) writeSize(v Value) {
@@ -425,52 +426,52 @@ func (w *hrsWriter) writeStructType(t *Type, seenStructs map[*Type]struct{}) {
 	w.write("}")
 }
 
-func encodedValueFormatMaxLines(v Value, floatFormat byte, maxLines uint32) string {
+func encodedValueFormatMaxLines(ctx context.Context, v Value, floatFormat byte, maxLines uint32) string {
 	var buf bytes.Buffer
 	mlw := &writers.MaxLineWriter{Dest: &buf, MaxLines: maxLines}
 	w := &hrsWriter{w: mlw, floatFormat: floatFormat}
-	w.Write(v)
+	w.Write(ctx, v)
 	if w.err != nil {
 		d.Chk.IsType(writers.MaxLinesError{}, w.err, "Unexpected error: %s", w.err)
 	}
 	return buf.String()
 }
 
-func encodedValueFormat(v Value, floatFormat byte) string {
+func encodedValueFormat(ctx context.Context, v Value, floatFormat byte) string {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf, floatFormat: floatFormat}
-	w.Write(v)
+	w.Write(ctx, v)
 	d.Chk.NoError(w.err)
 	return buf.String()
 }
 
-func EncodedIndexValue(v Value) string {
-	return encodedValueFormat(v, 'f')
+func EncodedIndexValue(ctx context.Context, v Value) string {
+	return encodedValueFormat(ctx, v, 'f')
 }
 
 // EncodedValue returns a string containing the serialization of a value.
-func EncodedValue(v Value) string {
-	return encodedValueFormat(v, 'g')
+func EncodedValue(ctx context.Context, v Value) string {
+	return encodedValueFormat(ctx, v, 'g')
 }
 
 // EncodedValueMaxLines returns a string containing the serialization of a value.
 // The string is truncated at |maxLines|.
-func EncodedValueMaxLines(v Value, maxLines uint32) string {
-	return encodedValueFormatMaxLines(v, 'g', maxLines)
+func EncodedValueMaxLines(ctx context.Context, v Value, maxLines uint32) string {
+	return encodedValueFormatMaxLines(ctx, v, 'g', maxLines)
 }
 
 // WriteEncodedValue writes the serialization of a value
-func WriteEncodedValue(w io.Writer, v Value) error {
+func WriteEncodedValue(ctx context.Context, w io.Writer, v Value) error {
 	hrs := &hrsWriter{w: w, floatFormat: 'g'}
-	hrs.Write(v)
+	hrs.Write(ctx, v)
 	return hrs.err
 }
 
 // WriteEncodedValueMaxLines writes the serialization of a value. Writing will be
 // stopped and an error returned after |maxLines|.
-func WriteEncodedValueMaxLines(w io.Writer, v Value, maxLines uint32) error {
+func WriteEncodedValueMaxLines(ctx context.Context, w io.Writer, v Value, maxLines uint32) error {
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: maxLines}
 	hrs := &hrsWriter{w: mlw, floatFormat: 'g'}
-	hrs.Write(v)
+	hrs.Write(ctx, v)
 	return hrs.err
 }

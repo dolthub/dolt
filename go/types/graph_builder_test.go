@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -177,11 +178,11 @@ func createTestMap(vrw ValueReadWriter, levels, avgSize int, valGen func() Value
 			if numElems%2 != 0 {
 				numElems--
 			}
-			return NewMap(vrw, elems[:numElems]...)
+			return NewMap(context.Background(), vrw, elems[:numElems]...)
 		case 1:
-			return NewSet(vrw, elems...)
+			return NewSet(context.Background(), vrw, elems...)
 		case 2:
-			return NewList(vrw, elems...)
+			return NewList(context.Background(), vrw, elems...)
 		}
 		panic("unreachable")
 	}
@@ -203,7 +204,7 @@ func createTestMap(vrw ValueReadWriter, levels, avgSize int, valGen func() Value
 				}
 			}
 		}
-		return NewMap(vrw, kvs...)
+		return NewMap(context.Background(), vrw, kvs...)
 	}
 
 	return genChildren(0)
@@ -248,7 +249,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 	defer vs.Close()
 
 	expected := createTestMap(vs, 3, 4, valGen)
-	b := NewGraphBuilder(vs, MapKind)
+	b := NewGraphBuilder(context.Background(), vs, MapKind)
 
 	ops := []testGraphOp{}
 
@@ -259,7 +260,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 	generateOps = func(keys []Value, col Value) {
 		switch c := col.(type) {
 		case Map:
-			c.Iter(func(k, v Value) bool {
+			c.Iter(context.Background(), func(k, v Value) bool {
 				if isNomsCollectionKind(v.Kind()) {
 					newKeys := append(keys, k)
 					generateOps(newKeys, v)
@@ -270,13 +271,13 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 				return false
 			})
 		case List:
-			c.Iter(func(v Value, idx uint64) bool {
+			c.Iter(context.Background(), func(v Value, idx uint64) bool {
 				tgo := testGraphOp{keys: dupSlice(keys), kind: ListKind, item: v}
 				ops = append(ops, tgo)
 				return false
 			})
 		case Set:
-			c.Iter(func(v Value) bool {
+			c.Iter(context.Background(), func(v Value) bool {
 				tgo := testGraphOp{keys: dupSlice(keys), kind: SetKind, item: v}
 				ops = append(ops, tgo)
 				return false
@@ -297,7 +298,7 @@ func TestGraphBuilderNestedMapSet(t *testing.T) {
 		}
 	}
 
-	v := b.Build()
+	v := b.Build(context.Background())
 	assert.NotNil(v)
 	assert.True(expected.Equals(v))
 }
@@ -306,7 +307,7 @@ func ExampleGraphBuilder_Build() {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	gb := NewGraphBuilder(vs, MapKind)
+	gb := NewGraphBuilder(context.Background(), vs, MapKind)
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("John"))
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("Mary"))
 	gb.SetInsert([]Value{String("parent"), String("children")}, String("Frieda"))
@@ -317,6 +318,6 @@ func ExampleGraphBuilder_Build() {
 	gb.ListAppend([]Value{String("parent"), String("chores")}, String("Make breakfast"))
 	gb.ListAppend([]Value{String("parent"), String("chores")}, String("Wash dishes"))
 	gb.MapSet([]Value{String("parent")}, String("combinedAge"), Float(86))
-	m := gb.Build()
-	fmt.Println("map:", EncodedValue(m))
+	m := gb.Build(context.Background())
+	fmt.Println("map:", EncodedValue(context.Background(), m))
 }

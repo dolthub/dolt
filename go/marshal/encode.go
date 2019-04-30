@@ -8,6 +8,7 @@
 package marshal
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sort"
@@ -91,12 +92,12 @@ import (
 //
 // Go pointers, complex, function are not supported. Attempting to encode such a
 // value causes Marshal to return an UnsupportedTypeError.
-func Marshal(vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
-	return MarshalOpt(vrw, v, Opt{})
+func Marshal(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	return MarshalOpt(ctx, vrw, v, Opt{})
 }
 
 // MarshalOpt is like Marshal but provides additional options.
-func MarshalOpt(vrw types.ValueReadWriter, v interface{}, opt Opt) (nomsValue types.Value, err error) {
+func MarshalOpt(ctx context.Context, vrw types.ValueReadWriter, v interface{}, opt Opt) (nomsValue types.Value, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -109,23 +110,23 @@ func MarshalOpt(vrw types.ValueReadWriter, v interface{}, opt Opt) (nomsValue ty
 			}
 		}
 	}()
-	nomsValue = MustMarshalOpt(vrw, v, opt)
+	nomsValue = MustMarshalOpt(ctx, vrw, v, opt)
 	return
 }
 
 // MustMarshal marshals a Go value to a Noms value using the same rules as
 // Marshal(). Panics on failure.
-func MustMarshal(vrw types.ValueReadWriter, v interface{}) types.Value {
-	return MustMarshalOpt(vrw, v, Opt{})
+func MustMarshal(ctx context.Context, vrw types.ValueReadWriter, v interface{}) types.Value {
+	return MustMarshalOpt(ctx, vrw, v, Opt{})
 }
 
 // MustMarshalOpt is like MustMarshal, but with additional options.
-func MustMarshalOpt(vrw types.ValueReadWriter, v interface{}, opt Opt) types.Value {
+func MustMarshalOpt(ctx context.Context, vrw types.ValueReadWriter, v interface{}, opt Opt) types.Value {
 	rv := reflect.ValueOf(v)
 	nt := nomsTags{
 		set: opt.Set,
 	}
-	encoder := typeEncoder(rv.Type(), map[string]reflect.Type{}, nt)
+	encoder := typeEncoder(ctx, rv.Type(), map[string]reflect.Type{}, nt)
 	return encoder(rv, vrw)
 }
 
@@ -236,7 +237,7 @@ func marshalerEncoder(t reflect.Type) encoderFunc {
 	}
 }
 
-func typeEncoder(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) encoderFunc {
+func typeEncoder(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) encoderFunc {
 	if t.Implements(marshalerInterface) {
 		return marshalerEncoder(t)
 	}
@@ -253,22 +254,22 @@ func typeEncoder(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsT
 	case reflect.String:
 		return stringEncoder
 	case reflect.Struct:
-		return structEncoder(t, seenStructs)
+		return structEncoder(ctx, t, seenStructs)
 	case reflect.Slice, reflect.Array:
 		if shouldEncodeAsSet(t, tags) {
-			return setFromListEncoder(t, seenStructs)
+			return setFromListEncoder(ctx, t, seenStructs)
 		}
-		return listEncoder(t, seenStructs)
+		return listEncoder(ctx, t, seenStructs)
 	case reflect.Map:
 		if shouldEncodeAsSet(t, tags) {
-			return setEncoder(t, seenStructs)
+			return setEncoder(ctx, t, seenStructs)
 		}
-		return mapEncoder(t, seenStructs)
+		return mapEncoder(ctx, t, seenStructs)
 	case reflect.Interface:
 		return func(v reflect.Value, vrw types.ValueReadWriter) types.Value {
 			// Get the dynamic type.
 			v2 := reflect.ValueOf(v.Interface())
-			return typeEncoder(v2.Type(), seenStructs, tags)(v2, vrw)
+			return typeEncoder(ctx, v2.Type(), seenStructs, tags)(v2, vrw)
 		}
 	case reflect.Ptr:
 		// Allow implementations of types.Value (like *types.Type)
@@ -289,7 +290,7 @@ func getStructName(t reflect.Type) string {
 	return strings.Title(t.Name())
 }
 
-func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func structEncoder(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	if t.Implements(nomsValueInterface) {
 		return nomsValueEncoder
 	}
@@ -302,7 +303,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 	structName := getStructName(t)
 
 	seenStructs[t.Name()] = t
-	fields, knownShape, originalFieldIndex := typeFields(t, seenStructs, false, false)
+	fields, knownShape, originalFieldIndex := typeFields(ctx, t, seenStructs, false, false)
 	if knownShape {
 		fieldNames := make([]string, len(fields))
 		for i, f := range fields {
@@ -461,7 +462,7 @@ func validateField(f reflect.StructField, t reflect.Type) {
 	}
 }
 
-func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, knownShape bool, originalFieldIndex []int) {
+func typeFields(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, knownShape bool, originalFieldIndex []int) {
 	knownShape = true
 	for i := 0; i < t.NumField(); i++ {
 		index := make([]int, 1)
@@ -478,7 +479,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		}
 
 		if f.Anonymous && f.PkgPath == "" && !tags.hasName {
-			embeddedFields, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(f.Type, seenStructs, computeType, true)
+			embeddedFields, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(ctx, f.Type, seenStructs, computeType, true)
 			if embeddedOriginalFieldIndex != nil {
 				originalFieldIndex = append(index, embeddedOriginalFieldIndex...)
 			}
@@ -495,7 +496,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		var nt *types.Type
 		validateField(f, t)
 		if computeType {
-			nt = encodeType(f.Type, seenStructs, tags)
+			nt = encodeType(ctx, f.Type, seenStructs, tags)
 			if nt == nil {
 				knownShape = false
 			}
@@ -507,7 +508,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 
 		fields = append(fields, field{
 			name:      tags.name,
-			encoder:   typeEncoder(f.Type, seenStructs, tags),
+			encoder:   typeEncoder(ctx, f.Type, seenStructs, tags),
 			index:     index,
 			nomsType:  nt,
 			omitEmpty: tags.omitEmpty,
@@ -522,7 +523,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 	return
 }
 
-func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func listEncoder(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := encoderCache.get(t)
 	if e != nil {
 		return e
@@ -540,16 +541,16 @@ func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFun
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(v.Index(i), vrw)
 		}
-		return types.NewList(vrw, values...)
+		return types.NewList(ctx, vrw, values...)
 	}
 
 	encoderCache.set(t, e)
-	elemEncoder = typeEncoder(t.Elem(), seenStructs, nomsTags{})
+	elemEncoder = typeEncoder(ctx, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
 // Encode set from array or slice
-func setFromListEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setFromListEncoder(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := setEncoderCache.get(t)
 	if e != nil {
 		return e
@@ -567,15 +568,15 @@ func setFromListEncoder(t reflect.Type, seenStructs map[string]reflect.Type) enc
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(v.Index(i), vrw)
 		}
-		return types.NewSet(vrw, values...)
+		return types.NewSet(ctx, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
-	elemEncoder = typeEncoder(t.Elem(), seenStructs, nomsTags{})
+	elemEncoder = typeEncoder(ctx, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
-func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setEncoder(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := setEncoderCache.get(t)
 	if e != nil {
 		return e
@@ -593,15 +594,15 @@ func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 		for i, k := range v.MapKeys() {
 			values[i] = encoder(k, vrw)
 		}
-		return types.NewSet(vrw, values...)
+		return types.NewSet(ctx, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
-	encoder = typeEncoder(t.Key(), seenStructs, nomsTags{})
+	encoder = typeEncoder(ctx, t.Key(), seenStructs, nomsTags{})
 	return e
 }
 
-func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func mapEncoder(ctx context.Context, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := encoderCache.get(t)
 	if e != nil {
 		return e
@@ -622,12 +623,12 @@ func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 			kvs[2*i] = keyEncoder(k, vrw)
 			kvs[2*i+1] = valueEncoder(v.MapIndex(k), vrw)
 		}
-		return types.NewMap(vrw, kvs...)
+		return types.NewMap(ctx, vrw, kvs...)
 	}
 
 	encoderCache.set(t, e)
-	keyEncoder = typeEncoder(t.Key(), seenStructs, nomsTags{})
-	valueEncoder = typeEncoder(t.Elem(), seenStructs, nomsTags{})
+	keyEncoder = typeEncoder(ctx, t.Key(), seenStructs, nomsTags{})
+	valueEncoder = typeEncoder(ctx, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 

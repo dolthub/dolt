@@ -4,6 +4,8 @@
 
 package types
 
+import "context"
+
 func sendSpliceChange(changes chan<- Splice, closeChan <-chan struct{}, splice Splice) bool {
 	select {
 	case changes <- splice:
@@ -13,15 +15,15 @@ func sendSpliceChange(changes chan<- Splice, closeChan <-chan struct{}, splice S
 	return true
 }
 
-func indexedSequenceDiff(last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
+func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
 	if last.treeLevel() > current.treeLevel() {
-		lastChild := last.getCompositeChildSequence(0, uint64(last.seqLen()))
-		return indexedSequenceDiff(lastChild, lastOffset, current, currentOffset, changes, closeChan, maxSpliceMatrixSize)
+		lastChild := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
+		return indexedSequenceDiff(ctx, lastChild, lastOffset, current, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	if current.treeLevel() > last.treeLevel() {
-		currentChild := current.getCompositeChildSequence(0, uint64(current.seqLen()))
-		return indexedSequenceDiff(last, lastOffset, currentChild, currentOffset, changes, closeChan, maxSpliceMatrixSize)
+		currentChild := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
+		return indexedSequenceDiff(ctx, last, lastOffset, currentChild, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	compareFn := last.getCompareFn(current)
@@ -76,8 +78,8 @@ func indexedSequenceDiff(last sequence, lastOffset uint64, current sequence, cur
 		}
 
 		// Meta sequence splice which includes removed & added sub-sequences. Must recurse down.
-		lastChild := last.getCompositeChildSequence(splice.SpAt, splice.SpRemoved)
-		currentChild := current.getCompositeChildSequence(splice.SpFrom, splice.SpAdded)
+		lastChild := last.getCompositeChildSequence(ctx, splice.SpAt, splice.SpRemoved)
+		currentChild := current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded)
 		lastChildOffset := lastOffset
 		if splice.SpAt > 0 {
 			lastChildOffset += last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
@@ -86,7 +88,7 @@ func indexedSequenceDiff(last sequence, lastOffset uint64, current sequence, cur
 		if splice.SpFrom > 0 {
 			currentChildOffset += current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
 		}
-		if ok := indexedSequenceDiff(lastChild, lastChildOffset, currentChild, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
+		if ok := indexedSequenceDiff(ctx, lastChild, lastChildOffset, currentChild, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
 			return false
 		}
 	}

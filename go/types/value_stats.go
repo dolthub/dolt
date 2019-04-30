@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -17,12 +18,12 @@ type ValueStats interface {
 	String() string
 }
 
-func WriteValueStats(w io.Writer, v Value, vr ValueReader) {
+func WriteValueStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) {
 	switch v.Kind() {
 	case BoolKind, FloatKind, StringKind, RefKind, StructKind, TypeKind, TupleKind:
 		writeUnchunkedValueStats(w, v, vr)
 	case BlobKind, ListKind, MapKind, SetKind:
-		writePtreeStats(w, v, vr)
+		writePtreeStats(ctx, w, v, vr)
 	}
 }
 
@@ -34,7 +35,7 @@ const treeRowFormat = "%5s%20s%20s%20s\n"
 
 var treeLevelHeader = fmt.Sprintf(treeRowFormat, "Level", "Nodes", "Values/Node", "Size/Node")
 
-func writePtreeStats(w io.Writer, v Value, vr ValueReader) {
+func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) {
 	totalCompressedSize := uint64(0)
 	totalChunks := uint64(0)
 
@@ -71,7 +72,7 @@ func writePtreeStats(w io.Writer, v Value, vr ValueReader) {
 
 		printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
 
-		nodes = loadNextLevel(children, vr)
+		nodes = loadNextLevel(ctx, children, vr)
 		level--
 		totalCompressedSize += byteSize
 		totalChunks += chunkCount
@@ -95,12 +96,12 @@ func compressedSize(v Value) uint64 {
 	return uint64(len(compressed))
 }
 
-func loadNextLevel(refs RefSlice, vr ValueReader) ValueSlice {
+func loadNextLevel(ctx context.Context, refs RefSlice, vr ValueReader) ValueSlice {
 	hs := make(hash.HashSlice, len(refs))
 	for i, r := range refs {
 		hs[i] = r.TargetHash()
 	}
 
 	// Fetch committed child sequences in a single batch
-	return vr.ReadManyValues(hs)
+	return vr.ReadManyValues(ctx, hs)
 }

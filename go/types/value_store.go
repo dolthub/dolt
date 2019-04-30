@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -18,15 +19,15 @@ import (
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value reading.
 type ValueReader interface {
-	ReadValue(h hash.Hash) Value
-	ReadManyValues(hashes hash.HashSlice) ValueSlice
+	ReadValue(ctx context.Context, h hash.Hash) Value
+	ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice
 }
 
 // ValueWriter is an interface that knows how to write Noms Values, e.g.
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value writing.
 type ValueWriter interface {
-	WriteValue(v Value) Ref
+	WriteValue(ctx context.Context, v Value) Ref
 }
 
 // ValueReadWriter is an interface that knows how to read and write Noms
@@ -57,8 +58,8 @@ type ValueStore struct {
 	versOnce sync.Once
 }
 
-func PanicIfDangling(unresolved hash.HashSet, cs chunks.ChunkStore) {
-	absent := cs.HasMany(unresolved)
+func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) {
+	absent := cs.HasMany(ctx, unresolved)
 	if len(absent) != 0 {
 		d.Panic("Found dangling references to %v", absent)
 	}
@@ -116,7 +117,7 @@ func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 // ReadValue reads and decodes a value from lvs. It is not considered an error
 // for the requested chunk to be empty; in this case, the function simply
 // returns nil.
-func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
+func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 	lvs.versOnce.Do(lvs.expectVersion)
 	if v, ok := lvs.decodedChunks.Get(h); ok {
 		d.PanicIfTrue(v == nil)
@@ -132,7 +133,7 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 		return chunks.EmptyChunk
 	}()
 	if chunk.IsEmpty() {
-		chunk = lvs.cs.Get(h)
+		chunk = lvs.cs.Get(ctx, h)
 	}
 	if chunk.IsEmpty() {
 		return nil
@@ -147,7 +148,7 @@ func (lvs *ValueStore) ReadValue(h hash.Hash) Value {
 // ReadManyValues reads and decodes Values indicated by |hashes| from lvs and
 // returns the found Values in the same order. Any non-present Values will be
 // represented by nil.
-func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
+func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice {
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) Value {
 		v := DecodeValue(*chunk, lvs)
@@ -188,7 +189,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
 		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 		foundChunks := make(chan *chunks.Chunk, 16)
 
-		go func() { lvs.cs.GetMany(remaining, foundChunks); close(foundChunks) }()
+		go func() { lvs.cs.GetMany(ctx, remaining, foundChunks); close(foundChunks) }()
 		for c := range foundChunks {
 			h := c.Hash()
 			foundValues[h] = decode(h, c)
@@ -205,7 +206,7 @@ func (lvs *ValueStore) ReadManyValues(hashes hash.HashSlice) ValueSlice {
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns
 // an appropriately-typed types.Ref. v is not guaranteed to be actually
 // written until after Flush().
-func (lvs *ValueStore) WriteValue(v Value) Ref {
+func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) Ref {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 
@@ -214,7 +215,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 	h := c.Hash()
 	height := maxChunkHeight(v) + 1
 	r := constructRef(h, TypeOf(v), height)
-	lvs.bufferChunk(v, c, height)
+	lvs.bufferChunk(ctx, v, c, height)
 	return r
 }
 
@@ -228,7 +229,7 @@ func (lvs *ValueStore) WriteValue(v Value) Ref {
 //    flushed).
 // 2. The total data occupied by buffered chunks does not exceed
 //    lvs.bufferedChunksMax
-func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
+func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
 
@@ -240,7 +241,7 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	}
 
 	put := func(h hash.Hash, c chunks.Chunk) {
-		lvs.cs.Put(c)
+		lvs.cs.Put(ctx, c)
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		delete(lvs.bufferedChunks, h)
 	}
@@ -301,12 +302,12 @@ func (lvs *ValueStore) bufferChunk(v Value, c chunks.Chunk, height uint64) {
 	}
 }
 
-func (lvs *ValueStore) Root() hash.Hash {
-	return lvs.cs.Root()
+func (lvs *ValueStore) Root(ctx context.Context) hash.Hash {
+	return lvs.cs.Root(ctx)
 }
 
-func (lvs *ValueStore) Rebase() {
-	lvs.cs.Rebase()
+func (lvs *ValueStore) Rebase(ctx context.Context) {
+	lvs.cs.Rebase(ctx)
 }
 
 // Commit() flushes all bufferedChunks into the ChunkStore, with best-effort
@@ -315,13 +316,13 @@ func (lvs *ValueStore) Rebase() {
 // opened, or last Rebased(), it will return false and will have internally
 // rebased. Until Commit() succeeds, no work of the ValueStore will be visible
 // to other readers of the underlying ChunkStore.
-func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
+func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) bool {
 	return func() bool {
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
 
 		put := func(h hash.Hash, chunk chunks.Chunk) {
-			lvs.cs.Put(chunk)
+			lvs.cs.Put(ctx, chunk)
 			delete(lvs.bufferedChunks, h)
 			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
 		}
@@ -338,7 +339,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 		}
 		for _, c := range lvs.bufferedChunks {
 			// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-			lvs.cs.Put(c)
+			lvs.cs.Put(ctx, c)
 			lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		}
 		d.PanicIfFalse(lvs.bufferedChunkSize == 0)
@@ -346,7 +347,7 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 
 		if lvs.enforceCompleteness {
-			if (current != hash.Hash{} && current != lvs.Root()) {
+			if (current != hash.Hash{} && current != lvs.Root(ctx)) {
 				if _, ok := lvs.bufferedChunks[current]; !ok {
 					// If the client is attempting to move the root and the referenced
 					// value isn't still buffered, we need to ensure that it is contained
@@ -355,10 +356,10 @@ func (lvs *ValueStore) Commit(current, last hash.Hash) bool {
 				}
 			}
 
-			PanicIfDangling(lvs.unresolvedRefs, lvs.cs)
+			PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
 		}
 
-		if !lvs.cs.Commit(current, last) {
+		if !lvs.cs.Commit(ctx, current, last) {
 			return false
 		}
 

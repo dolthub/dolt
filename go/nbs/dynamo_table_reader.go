@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -35,8 +36,8 @@ func (t tableNotInDynamoErr) Error() string {
 	return fmt.Sprintf("NBS table %s not present in DynamoDB table %s", t.nbs, t.dynamo)
 }
 
-func (dtra *dynamoTableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
-	data, err := dtra.ddb.ReadTable(dtra.h, stats)
+func (dtra *dynamoTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
+	data, err := dtra.ddb.ReadTable(ctx, dtra.h, stats)
 	d.PanicIfError(err)
 	n = copy(p, data[off:])
 	if n < len(p) {
@@ -52,7 +53,7 @@ type ddbTableStore struct {
 	cache  *sizecache.SizeCache // TODO: merge this with tableCache as part of BUG 3601
 }
 
-func (dts *ddbTableStore) ReadTable(name addr, stats *Stats) (data []byte, err error) {
+func (dts *ddbTableStore) ReadTable(ctx context.Context, name addr, stats *Stats) (data []byte, err error) {
 	t1 := time.Now()
 	if dts.cache != nil {
 		if i, present := dts.cache.Get(name); present {
@@ -65,7 +66,7 @@ func (dts *ddbTableStore) ReadTable(name addr, stats *Stats) (data []byte, err e
 		}
 	}
 
-	data, err = dts.readTable(name)
+	data, err = dts.readTable(ctx, name)
 	if data != nil {
 		defer func() {
 			stats.DynamoBytesPerRead.Sample(uint64(len(data)))
@@ -79,7 +80,7 @@ func (dts *ddbTableStore) ReadTable(name addr, stats *Stats) (data []byte, err e
 	return data, err
 }
 
-func (dts *ddbTableStore) readTable(name addr) (data []byte, err error) {
+func (dts *ddbTableStore) readTable(ctx context.Context, name addr) (data []byte, err error) {
 	try := func(input *dynamodb.GetItemInput) (data []byte, err error) {
 		if dts.readRl != nil {
 			dts.readRl <- struct{}{}
@@ -87,7 +88,7 @@ func (dts *ddbTableStore) readTable(name addr) (data []byte, err error) {
 				<-dts.readRl
 			}()
 		}
-		result, rerr := dts.ddb.GetItem(input)
+		result, rerr := dts.ddb.GetItemWithContext(ctx, input)
 		if rerr != nil {
 			return nil, rerr
 		} else if len(result.Item) == 0 {
@@ -117,8 +118,8 @@ func fmtTableName(name addr) string {
 	return tablePrefix + name.String()
 }
 
-func (dts *ddbTableStore) Write(name addr, data []byte) error {
-	_, err := dts.ddb.PutItem(&dynamodb.PutItemInput{
+func (dts *ddbTableStore) Write(ctx context.Context, name addr, data []byte) error {
+	_, err := dts.ddb.PutItemWithContext(ctx, &dynamodb.PutItemInput{
 		TableName: aws.String(dts.table),
 		Item: map[string]*dynamodb.AttributeValue{
 			dbAttr:   {S: aws.String(fmtTableName(name))},

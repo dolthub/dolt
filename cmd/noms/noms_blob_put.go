@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -16,7 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/util/profile"
 )
 
-func nomsBlobPut(filePath string, dsPath string, concurrency int) int {
+func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrency int) int {
 	info, err := os.Stat(filePath)
 	if err != nil {
 		d.CheckError(errors.New("couldn't stat file"))
@@ -45,16 +46,16 @@ func nomsBlobPut(filePath string, dsPath string, concurrency int) int {
 	}
 
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(dsPath)
+	db, ds, err := cfg.GetDataset(ctx, dsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return 1
 	}
 	defer db.Close()
 
-	blob := types.NewBlob(db, readers...)
+	blob := types.NewBlob(ctx, db, readers...)
 
-	_, err = db.CommitValue(ds, blob)
+	_, err = db.CommitValue(ctx, ds, blob)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return 1

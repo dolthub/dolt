@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/spec"
@@ -28,13 +29,13 @@ func (s *nomsRootTestSuite) TestBasic() {
 	s.NoError(err)
 	defer sp.Close()
 
-	ds := sp.GetDataset()
+	ds := sp.GetDataset(context.Background())
 	dbSpecStr := spec.CreateDatabaseSpecString("nbs", s.DBDir)
-	ds, _ = ds.Database().CommitValue(ds, types.String("hello!"))
+	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("hello!"))
 	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal("5te45oue1g918rpcvmc3d2emqkse4fhq\n", c1)
 
-	ds, _ = ds.Database().CommitValue(ds, types.String("goodbye"))
+	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("goodbye"))
 	c2, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal("nm81pr21t66nec3v8jts5e37njg5ab1g\n", c2)
 

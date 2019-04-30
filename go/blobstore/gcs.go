@@ -15,22 +15,21 @@ const (
 
 // GCSBlobstore provides a GCS implementation of the Blobstore interface
 type GCSBlobstore struct {
-	ctx    context.Context
 	bucket *storage.BucketHandle
 	prefix string
 }
 
 // NewGCSBlobstore creates a new instance of a GCSBlobstare
-func NewGCSBlobstore(ctx context.Context, bucket *storage.BucketHandle, prefix string) *GCSBlobstore {
-	return &GCSBlobstore{ctx, bucket, prefix}
+func NewGCSBlobstore(bucket *storage.BucketHandle, prefix string) *GCSBlobstore {
+	return &GCSBlobstore{bucket, prefix}
 }
 
 // Exists returns true if a blob exists for the given key, and false if it does not.
 // For InMemoryBlobstore instances error should never be returned (though other
 // implementations of this interface can)
-func (bs *GCSBlobstore) Exists(key string) (bool, error) {
+func (bs *GCSBlobstore) Exists(ctx context.Context, key string) (bool, error) {
 	oh := bs.bucket.Object(bs.prefix + key)
-	_, err := oh.Attrs(bs.ctx)
+	_, err := oh.Attrs(ctx)
 
 	if err == storage.ErrObjectNotExist {
 		return false, nil
@@ -41,9 +40,9 @@ func (bs *GCSBlobstore) Exists(key string) (bool, error) {
 
 // Get retrieves an io.reader for the portion of a blob specified by br along with
 // its version
-func (bs *GCSBlobstore) Get(key string, br BlobRange) (io.ReadCloser, string, error) {
+func (bs *GCSBlobstore) Get(ctx context.Context, key string, br BlobRange) (io.ReadCloser, string, error) {
 	oh := bs.bucket.Object(bs.prefix + key)
-	attrs, err := oh.Attrs(bs.ctx)
+	attrs, err := oh.Attrs(ctx)
 
 	if err == storage.ErrObjectNotExist {
 		return nil, "", NotFound{key}
@@ -55,10 +54,10 @@ func (bs *GCSBlobstore) Get(key string, br BlobRange) (io.ReadCloser, string, er
 
 	var reader *storage.Reader
 	if br.isAllRange() {
-		reader, err = oh.Generation(generation).NewReader(bs.ctx)
+		reader, err = oh.Generation(generation).NewReader(ctx)
 	} else {
 		posBr := br.positiveRange(attrs.Size)
-		reader, err = oh.Generation(generation).NewRangeReader(bs.ctx, posBr.offset, posBr.length)
+		reader, err = oh.Generation(generation).NewRangeReader(ctx, posBr.offset, posBr.length)
 	}
 
 	if err != nil {
@@ -90,17 +89,17 @@ func writeObj(writer *storage.Writer, reader io.Reader) (string, error) {
 }
 
 // Put sets the blob and the version for a key
-func (bs *GCSBlobstore) Put(key string, reader io.Reader) (string, error) {
+func (bs *GCSBlobstore) Put(ctx context.Context, key string, reader io.Reader) (string, error) {
 	absKey := bs.prefix + key
 	oh := bs.bucket.Object(absKey)
-	writer := oh.NewWriter(bs.ctx)
+	writer := oh.NewWriter(ctx)
 
 	return writeObj(writer, reader)
 }
 
 // CheckAndPut will check the current version of a blob against an expectedVersion, and if the
 // versions match it will update the data and version associated with the key
-func (bs *GCSBlobstore) CheckAndPut(expectedVersion, key string, reader io.Reader) (string, error) {
+func (bs *GCSBlobstore) CheckAndPut(ctx context.Context, expectedVersion, key string, reader io.Reader) (string, error) {
 	oh := bs.bucket.Object(bs.prefix + key)
 
 	var conditionalHandle *storage.ObjectHandle
@@ -116,7 +115,7 @@ func (bs *GCSBlobstore) CheckAndPut(expectedVersion, key string, reader io.Reade
 		conditionalHandle = oh.If(storage.Conditions{DoesNotExist: true})
 	}
 
-	writer := conditionalHandle.NewWriter(bs.ctx)
+	writer := conditionalHandle.NewWriter(ctx)
 
 	ver, err := writeObj(writer, reader)
 

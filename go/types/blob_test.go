@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -34,7 +35,7 @@ func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 
 	length := 1 << size
 	buff := randomBuff(size)
-	blob := NewBlob(vrw, bytes.NewReader(buff))
+	blob := NewBlob(context.Background(), vrw, bytes.NewReader(buff))
 	return &blobTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    blob,
@@ -46,20 +47,20 @@ func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 			validate: func(v2 Collection) bool {
 				b2 := v2.(Blob)
 				outBuff := &bytes.Buffer{}
-				b2.Copy(outBuff)
+				b2.Copy(context.Background(), outBuff)
 				return bytes.Compare(outBuff.Bytes(), buff) == 0
 			},
 			prependOne: func() Collection {
 				dup := make([]byte, length+1)
 				dup[0] = 0
 				copy(dup[1:], buff)
-				return NewBlob(vrw, bytes.NewReader(dup))
+				return NewBlob(context.Background(), vrw, bytes.NewReader(dup))
 			},
 			appendOne: func() Collection {
 				dup := make([]byte, length+1)
 				copy(dup, buff)
 				dup[len(dup)-1] = 0
-				return NewBlob(vrw, bytes.NewReader(dup))
+				return NewBlob(context.Background(), vrw, bytes.NewReader(dup))
 			},
 		},
 		buff: buff,
@@ -85,7 +86,7 @@ func TestBlobSuite1M(t *testing.T) {
 // Checks the first 1/2 of the bytes, then 1/2 of the remainder, then 1/2 of the remainder, etc...
 func (suite *blobTestSuite) TestRandomRead() {
 	buffReader := bytes.NewReader(suite.buff)
-	blobReader := suite.col.(Blob).Reader()
+	blobReader := suite.col.(Blob).Reader(context.Background())
 
 	readByteRange := func(r io.ReadSeeker, start, rel, count int64) []byte {
 		bytes := make([]byte, count)
@@ -168,10 +169,10 @@ func TestBlobFromReaderThatReturnsDataAndError(t *testing.T) {
 	vrw := newTestValueStore()
 	tr := &testReader{buf: &bytes.Buffer{}}
 
-	b := NewBlob(vrw, tr)
+	b := NewBlob(context.Background(), vrw, tr)
 
 	actual := &bytes.Buffer{}
-	io.Copy(actual, b.Reader())
+	io.Copy(actual, b.Reader(context.Background()))
 
 	assert.True(bytes.Equal(actual.Bytes(), tr.buf.Bytes()))
 	assert.Equal(byte(2), actual.Bytes()[len(actual.Bytes())-1])
@@ -184,24 +185,24 @@ func TestBlobSplice(t *testing.T) {
 	blob := NewEmptyBlob(vrw)
 	buf := new(bytes.Buffer)
 
-	blob = blob.Edit().Splice(0, 0, []byte("I'll do anything")).Blob()
+	blob = blob.Edit().Splice(0, 0, []byte("I'll do anything")).Blob(context.Background())
 	buf.Reset()
-	buf.ReadFrom(blob.Reader())
+	buf.ReadFrom(blob.Reader(context.Background()))
 	assert.Equal(buf.String(), "I'll do anything")
 
-	blob = blob.Edit().Splice(16, 0, []byte(" for arv")).Blob()
+	blob = blob.Edit().Splice(16, 0, []byte(" for arv")).Blob(context.Background())
 	buf.Reset()
-	buf.ReadFrom(blob.Reader())
+	buf.ReadFrom(blob.Reader(context.Background()))
 	assert.Equal(buf.String(), "I'll do anything for arv")
 
-	blob = blob.Edit().Splice(0, 0, []byte("Yes, ")).Blob()
+	blob = blob.Edit().Splice(0, 0, []byte("Yes, ")).Blob(context.Background())
 	buf.Reset()
-	buf.ReadFrom(blob.Reader())
+	buf.ReadFrom(blob.Reader(context.Background()))
 	assert.Equal(buf.String(), "Yes, I'll do anything for arv")
 
-	blob = blob.Edit().Splice(5, 20, []byte("it's hard to satisfy")).Blob()
+	blob = blob.Edit().Splice(5, 20, []byte("it's hard to satisfy")).Blob(context.Background())
 	buf.Reset()
-	buf.ReadFrom(blob.Reader())
+	buf.ReadFrom(blob.Reader(context.Background()))
 	assert.Equal(buf.String(), "Yes, it's hard to satisfy arv")
 }
 
@@ -213,37 +214,37 @@ func TestBlobConcat(t *testing.T) {
 
 	vs := newTestValueStore()
 	reload := func(b Blob) Blob {
-		return vs.ReadValue(vs.WriteValue(b).TargetHash()).(Blob)
+		return vs.ReadValue(context.Background(), vs.WriteValue(context.Background(), b).TargetHash()).(Blob)
 	}
 
 	split := func(b Blob, at int64) (Blob, Blob) {
-		read1, read2 := b.Reader(), b.Reader()
-		b1 := NewBlob(vs, &io.LimitedReader{read1, at})
+		read1, read2 := b.Reader(context.Background()), b.Reader(context.Background())
+		b1 := NewBlob(context.Background(), vs, &io.LimitedReader{read1, at})
 		read2.Seek(at, 0)
-		b2 := NewBlob(vs, read2)
+		b2 := NewBlob(context.Background(), vs, read2)
 		return reload(b1), reload(b2)
 	}
 
 	// Random 1MB Blob.
 	// Note that List.Concat is exhaustively tested, don't worry here.
 	r := rand.New(rand.NewSource(0))
-	b := NewBlob(vs, &io.LimitedReader{r, 1e6})
+	b := NewBlob(context.Background(), vs, &io.LimitedReader{r, 1e6})
 	b = reload(b)
 
-	b1 := NewEmptyBlob(vs).Concat(b)
+	b1 := NewEmptyBlob(vs).Concat(context.Background(), b)
 	assert.True(b.Equals(b1))
 
-	b2 := b.Concat(NewEmptyBlob(vs))
+	b2 := b.Concat(context.Background(), NewEmptyBlob(vs))
 	assert.True(b.Equals(b2))
 
 	b3, b4 := split(b, 10)
-	assert.True(b.Equals(b3.Concat(b4)))
+	assert.True(b.Equals(b3.Concat(context.Background(), b4)))
 
 	b5, b6 := split(b, 1e6-10)
-	assert.True(b.Equals(b5.Concat(b6)))
+	assert.True(b.Equals(b5.Concat(context.Background(), b6)))
 
 	b7, b8 := split(b, 1e6/2)
-	assert.True(b.Equals(b7.Concat(b8)))
+	assert.True(b.Equals(b7.Concat(context.Background(), b8)))
 }
 
 func TestBlobNewParallel(t *testing.T) {
@@ -251,18 +252,18 @@ func TestBlobNewParallel(t *testing.T) {
 	vrw := newTestValueStore()
 
 	readAll := func(b Blob) []byte {
-		data, err := ioutil.ReadAll(b.Reader())
+		data, err := ioutil.ReadAll(b.Reader(context.Background()))
 		assert.NoError(err)
 		return data
 	}
 
-	b := NewBlob(vrw)
+	b := NewBlob(context.Background(), vrw)
 	assert.True(b.Len() == 0)
 
-	b = NewBlob(vrw, strings.NewReader("abc"))
+	b = NewBlob(context.Background(), vrw, strings.NewReader("abc"))
 	assert.Equal("abc", string(readAll(b)))
 
-	b = NewBlob(vrw, strings.NewReader("abc"), strings.NewReader("def"))
+	b = NewBlob(context.Background(), vrw, strings.NewReader("abc"), strings.NewReader("def"))
 	assert.Equal("abcdef", string(readAll(b)))
 
 	p, size := 100, 1024
@@ -276,7 +277,7 @@ func TestBlobNewParallel(t *testing.T) {
 		readers[i] = bytes.NewBuffer(data[i*size : (i+1)*size])
 	}
 
-	b = NewBlob(vrw, readers...)
+	b = NewBlob(context.Background(), vrw, readers...)
 	assert.Equal(data, readAll(b))
 }
 
@@ -293,8 +294,8 @@ func TestStreamingParallelBlob(t *testing.T) {
 	}
 
 	vs := newTestValueStore()
-	blob := NewBlob(vs, readers...)
+	blob := NewBlob(context.Background(), vs, readers...)
 	outBuff := &bytes.Buffer{}
-	blob.Copy(outBuff)
+	blob.Copy(context.Background(), outBuff)
 	assert.True(bytes.Compare(buff, outBuff.Bytes()) == 0)
 }

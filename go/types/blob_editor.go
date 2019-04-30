@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"errors"
 
 	"io"
@@ -28,11 +29,11 @@ func (be *BlobEditor) Kind() NomsKind {
 	return BlobKind
 }
 
-func (be *BlobEditor) Value() Value {
-	return be.Blob()
+func (be *BlobEditor) Value(ctx context.Context) Value {
+	return be.Blob(ctx)
 }
 
-func (be *BlobEditor) Blob() Blob {
+func (be *BlobEditor) Blob(ctx context.Context) Blob {
 	if be.edits == nil {
 		return be.b // no edits
 	}
@@ -48,7 +49,7 @@ func (be *BlobEditor) Blob() Blob {
 		cc := make(chan *sequenceCursor, 1)
 		curs = append(curs, cc)
 		go func() {
-			cc <- newCursorAtIndex(seq, edit.idx)
+			cc <- newCursorAtIndex(ctx, seq, edit.idx)
 		}()
 	}
 
@@ -59,23 +60,23 @@ func (be *BlobEditor) Blob() Blob {
 		idx++
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 		} else {
-			ch.advanceTo(cur)
+			ch.advanceTo(ctx, cur)
 		}
 
 		dc := edit.removed
 		for dc > 0 {
-			ch.Skip()
+			ch.Skip(ctx)
 			dc--
 		}
 
 		for _, v := range edit.inserted {
-			ch.Append(v)
+			ch.Append(ctx, v)
 		}
 	}
 
-	return newBlob(ch.Done())
+	return newBlob(ch.Done(ctx))
 }
 
 func collapseBlobEdit(newEdit, edit *blobEdit) bool {
@@ -216,7 +217,7 @@ func (be *BlobEditor) Seek(offset int64, whence int) (int64, error) {
 	return abs, nil
 }
 
-func (be *BlobEditor) Read(p []byte) (n int, err error) {
+func (be *BlobEditor) Read(ctx context.Context, p []byte) (n int, err error) {
 	startIdx := uint64(be.pos)
 	endIdx := startIdx + uint64(len(p))
 	if endIdx > be.Len() {
@@ -233,7 +234,7 @@ func (be *BlobEditor) Read(p []byte) (n int, err error) {
 		to := p[:length]
 		wg.Add(1)
 		go func() {
-			be.b.ReadAt(to, idx)
+			be.b.ReadAt(ctx, to, idx)
 			wg.Done()
 		}()
 

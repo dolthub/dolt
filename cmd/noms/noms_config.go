@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -27,7 +28,7 @@ func setupConfigFlags() *flag.FlagSet {
 	return flag.NewFlagSet("config", flag.ExitOnError)
 }
 
-func runConfig(args []string) int {
+func runConfig(ctx context.Context, args []string) int {
 	c, err := config.FindNomsConfig()
 	if err == config.NoConfig {
 		fmt.Fprintf(os.Stdout, "no config active\n")

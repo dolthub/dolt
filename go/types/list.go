@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sync/atomic"
 
 	"github.com/attic-labs/noms/go/d"
@@ -31,26 +32,26 @@ func newList(seq sequence) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated
 // with values, chunking if and when needed.
-func NewList(vrw ValueReadWriter, values ...Value) List {
-	ch := newEmptyListSequenceChunker(vrw)
+func NewList(ctx context.Context, vrw ValueReadWriter, values ...Value) List {
+	ch := newEmptyListSequenceChunker(ctx, vrw)
 	for _, v := range values {
-		ch.Append(v)
+		ch.Append(ctx, v)
 	}
-	return newList(ch.Done())
+	return newList(ch.Done(ctx))
 }
 
 // NewStreamingList creates a new List, populated with values, chunking if and when needed. As
 // chunks are created, they're written to vrw -- including the root chunk of the list. Once the
 // caller has closed values, the caller can read the completed List from the returned channel.
-func NewStreamingList(vrw ValueReadWriter, values <-chan Value) <-chan List {
+func NewStreamingList(ctx context.Context, vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List, 1)
 	go func() {
 		defer close(out)
-		ch := newEmptyListSequenceChunker(vrw)
+		ch := newEmptyListSequenceChunker(ctx, vrw)
 		for v := range values {
-			ch.Append(v)
+			ch.Append(ctx, v)
 		}
-		out <- newList(ch.Done())
+		out <- newList(ch.Done(ctx))
 	}()
 	return out
 }
@@ -66,40 +67,40 @@ func (l List) asSequence() sequence {
 }
 
 // Value interface
-func (l List) Value() Value {
+func (l List) Value(ctx context.Context) Value {
 	return l
 }
 
-func (l List) WalkValues(cb ValueCallback) {
-	iterAll(l, func(v Value, idx uint64) {
+func (l List) WalkValues(ctx context.Context, cb ValueCallback) {
+	iterAll(ctx, l, func(v Value, idx uint64) {
 		cb(v)
 	})
 }
 
 // Get returns the value at the given index. If this list has been chunked then this will have to
 // descend into the prolly-tree which leads to Get being O(depth).
-func (l List) Get(idx uint64) Value {
+func (l List) Get(ctx context.Context, idx uint64) Value {
 	d.PanicIfFalse(idx < l.Len())
-	cur := newCursorAtIndex(l.sequence, idx)
+	cur := newCursorAtIndex(ctx, l.sequence, idx)
 	return cur.current().(Value)
 }
 
 // Concat returns a new List comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
-func (l List) Concat(other List) List {
-	seq := concat(l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-		return l.newChunker(cur, vrw)
+func (l List) Concat(ctx context.Context, other List) List {
+	seq := concat(ctx, l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+		return l.newChunker(ctx, cur, vrw)
 	})
 	return newList(seq)
 }
 
 // Iter iterates over the list and calls f for every element in the list. If f returns true then the
 // iteration stops.
-func (l List) Iter(f func(v Value, index uint64) (stop bool)) {
+func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool)) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(l.sequence, idx)
-	cur.iter(func(v interface{}) bool {
+	cur := newCursorAtIndex(ctx, l.sequence, idx)
+	cur.iter(ctx, func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
 		}
@@ -108,22 +109,22 @@ func (l List) Iter(f func(v Value, index uint64) (stop bool)) {
 	})
 }
 
-func (l List) IterRange(startIdx, endIdx uint64, f func(v Value, idx uint64)) {
+func (l List) IterRange(ctx context.Context, startIdx, endIdx uint64, f func(v Value, idx uint64)) {
 	idx := uint64(startIdx)
 	cb := func(v Value) {
 		f(v, idx)
 		idx++
 	}
-	iterRange(l, startIdx, endIdx, cb)
+	iterRange(ctx, l, startIdx, endIdx, cb)
 }
 
 // IterAll iterates over the list and calls f for every element in the list. Unlike Iter there is no
 // way to stop the iteration and all elements are visited.
-func (l List) IterAll(f func(v Value, index uint64)) {
-	iterAll(l, f)
+func (l List) IterAll(ctx context.Context, f func(v Value, index uint64)) {
+	iterAll(ctx, l, f)
 }
 
-func iterAll(col Collection, f func(v Value, index uint64)) {
+func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64)) {
 	concurrency := 6
 	vcChan := make(chan chan Value, concurrency)
 
@@ -147,7 +148,7 @@ func iterAll(col Collection, f func(v Value, index uint64)) {
 			vcChan <- vc
 
 			go func() {
-				numBytes := iterRange(col, start, start+blockLength, func(v Value) {
+				numBytes := iterRange(ctx, col, start, start+blockLength, func(v Value) {
 					vc <- v
 				})
 				close(vc)
@@ -180,14 +181,14 @@ func iterAll(col Collection, f func(v Value, index uint64)) {
 	}
 }
 
-func iterRange(col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
+func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
 	l := col.Len()
 	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
 	if startIdx == endIdx {
 		return
 	}
 
-	leaves, localStart := LoadLeafNodes([]Collection{col}, startIdx, endIdx)
+	leaves, localStart := LoadLeafNodes(ctx, []Collection{col}, startIdx, endIdx)
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 	numValues := 0
@@ -210,29 +211,29 @@ func iterRange(col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBy
 }
 
 // Iterator returns a ListIterator which can be used to iterate efficiently over a list.
-func (l List) Iterator() ListIterator {
-	return l.IteratorAt(0)
+func (l List) Iterator(ctx context.Context) ListIterator {
+	return l.IteratorAt(ctx, 0)
 }
 
 // IteratorAt returns a ListIterator starting at index. If index is out of bound the iterator will
 // have reached its end on creation.
-func (l List) IteratorAt(index uint64) ListIterator {
+func (l List) IteratorAt(ctx context.Context, index uint64) ListIterator {
 	return ListIterator{
-		newCursorAtIndex(l.sequence, index),
+		newCursorAtIndex(ctx, l.sequence, index),
 	}
 }
 
 // Diff streams the diff from last to the current list to the changes channel. Caller can close
 // closeChan to cancel the diff operation.
-func (l List) Diff(last List, changes chan<- Splice, closeChan <-chan struct{}) {
-	l.DiffWithLimit(last, changes, closeChan, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
+func (l List) Diff(ctx context.Context, last List, changes chan<- Splice, closeChan <-chan struct{}) {
+	l.DiffWithLimit(ctx, last, changes, closeChan, DEFAULT_MAX_SPLICE_MATRIX_SIZE)
 }
 
 // DiffWithLimit streams the diff from last to the current list to the changes channel. Caller can
 // close closeChan to cancel the diff operation.
 // The maxSpliceMatrixSize determines the how big of an edit distance matrix we are willing to
 // compute versus just saying the thing changed.
-func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) {
+func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) {
 	if l.Equals(last) {
 		return
 	}
@@ -246,11 +247,11 @@ func (l List) DiffWithLimit(last List, changes chan<- Splice, closeChan <-chan s
 		return
 	}
 
-	indexedSequenceDiff(last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
+	indexedSequenceDiff(ctx, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
-func (l List) newChunker(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-	return newSequenceChunker(cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	return newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }
 
 func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
@@ -267,6 +268,6 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	}
 }
 
-func newEmptyListSequenceChunker(vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+func newEmptyListSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }

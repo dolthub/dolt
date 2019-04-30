@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -57,12 +58,12 @@ type httpChunkStore struct {
 	version string
 }
 
-func NewHTTPChunkStore(baseURL, auth string) chunks.ChunkStore {
+func NewHTTPChunkStore(ctx context.Context, baseURL, auth string) chunks.ChunkStore {
 	// Custom http.Client to give control of idle connections and timeouts
-	return newHTTPChunkStoreWithClient(baseURL, auth, &http.Client{Transport: &customHTTPTransport})
+	return newHTTPChunkStoreWithClient(ctx, baseURL, auth, &http.Client{Transport: &customHTTPTransport})
 }
 
-func newHTTPChunkStoreWithClient(baseURL, auth string, client httpDoer) *httpChunkStore {
+func newHTTPChunkStoreWithClient(ctx context.Context, baseURL, auth string, client httpDoer) *httpChunkStore {
 	u, err := url.Parse(baseURL)
 	d.PanicIfError(err)
 	if u.Scheme != "http" && u.Scheme != "https" {
@@ -78,7 +79,7 @@ func newHTTPChunkStoreWithClient(baseURL, auth string, client httpDoer) *httpChu
 		rateLimit:     make(chan struct{}, httpChunkStoreConcurrency),
 		workerWg:      &sync.WaitGroup{},
 		cacheMu:       &sync.RWMutex{},
-		unwrittenPuts: nbs.NewCache(),
+		unwrittenPuts: nbs.NewCache(ctx),
 		rootMu:        &sync.RWMutex{},
 	}
 	hcs.root, hcs.version = hcs.getRoot(false)
@@ -133,11 +134,11 @@ func (hcs *httpChunkStore) StatsSummary() string {
 	return string(data)
 }
 
-func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
+func (hcs *httpChunkStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 	checkCache := func(h hash.Hash) chunks.Chunk {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
-		return hcs.unwrittenPuts.Get(h)
+		return hcs.unwrittenPuts.Get(ctx, h)
 	}
 	if pending := checkCache(h); !pending.IsEmpty() {
 		return pending
@@ -155,13 +156,13 @@ func (hcs *httpChunkStore) Get(h hash.Hash) chunks.Chunk {
 	return *(<-ch)
 }
 
-func (hcs *httpChunkStore) GetMany(hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (hcs *httpChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	cachedChunks := make(chan *chunks.Chunk)
 	go func() {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
 		defer close(cachedChunks)
-		hcs.unwrittenPuts.GetMany(hashes, cachedChunks)
+		hcs.unwrittenPuts.GetMany(ctx, hashes, cachedChunks)
 	}()
 	remaining := hash.HashSet{}
 	for h := range hashes {
@@ -189,11 +190,11 @@ func (hcs *httpChunkStore) batchGetRequests() {
 	hcs.batchReadRequests(hcs.getQueue, hcs.getRefs)
 }
 
-func (hcs *httpChunkStore) Has(h hash.Hash) bool {
+func (hcs *httpChunkStore) Has(ctx context.Context, h hash.Hash) bool {
 	checkCache := func(h hash.Hash) bool {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
-		return hcs.unwrittenPuts.Has(h)
+		return hcs.unwrittenPuts.Has(ctx, h)
 	}
 	if checkCache(h) {
 		return true
@@ -210,12 +211,12 @@ func (hcs *httpChunkStore) Has(h hash.Hash) bool {
 	return <-ch
 }
 
-func (hcs *httpChunkStore) HasMany(hashes hash.HashSet) (absent hash.HashSet) {
+func (hcs *httpChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet) {
 	var remaining hash.HashSet
 	func() {
 		hcs.cacheMu.RLock()
 		defer hcs.cacheMu.RUnlock()
-		remaining = hcs.unwrittenPuts.HasMany(hashes)
+		remaining = hcs.unwrittenPuts.HasMany(ctx, hashes)
 	}()
 	if len(remaining) == 0 {
 		return remaining
@@ -371,7 +372,7 @@ func resBodyReader(res *http.Response) (reader io.ReadCloser) {
 	return
 }
 
-func (hcs *httpChunkStore) Put(c chunks.Chunk) {
+func (hcs *httpChunkStore) Put(ctx context.Context, c chunks.Chunk) {
 	hcs.cacheMu.RLock()
 	defer hcs.cacheMu.RUnlock()
 	select {
@@ -379,13 +380,13 @@ func (hcs *httpChunkStore) Put(c chunks.Chunk) {
 		d.Panic("Tried to Put %s into closed ChunkStore", c.Hash())
 	default:
 	}
-	hcs.unwrittenPuts.Insert(c)
+	hcs.unwrittenPuts.Insert(ctx, c)
 }
 
-func sendWriteRequest(u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli httpDoer) {
+func sendWriteRequest(ctx context.Context, u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli httpDoer) {
 	chunkChan := make(chan *chunks.Chunk, 1024)
 	go func() {
-		p.ExtractChunks(chunkChan)
+		p.ExtractChunks(ctx, chunkChan)
 		close(chunkChan)
 	}()
 
@@ -405,13 +406,13 @@ func sendWriteRequest(u url.URL, auth, vers string, p *nbs.NomsBlockCache, cli h
 	}
 }
 
-func (hcs *httpChunkStore) Root() hash.Hash {
+func (hcs *httpChunkStore) Root(ctx context.Context) hash.Hash {
 	hcs.rootMu.RLock()
 	defer hcs.rootMu.RUnlock()
 	return hcs.root
 }
 
-func (hcs *httpChunkStore) Rebase() {
+func (hcs *httpChunkStore) Rebase(ctx context.Context) {
 	root, _ := hcs.getRoot(true)
 	hcs.rootMu.Lock()
 	defer hcs.rootMu.Unlock()
@@ -435,7 +436,7 @@ func (hcs *httpChunkStore) getRoot(checkVers bool) (root hash.Hash, vers string)
 	return hash.Parse(string(data)), res.Header.Get(NomsVersionHeader)
 }
 
-func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
+func (hcs *httpChunkStore) Commit(ctx context.Context, current, last hash.Hash) bool {
 	hcs.rootMu.Lock()
 	defer hcs.rootMu.Unlock()
 	hcs.cacheMu.Lock()
@@ -452,10 +453,10 @@ func (hcs *httpChunkStore) Commit(current, last hash.Hash) bool {
 		url := *hcs.host
 		url.Path = httprouter.CleanPath(hcs.host.Path + constants.WriteValuePath)
 		verbose.Log("Sending %d chunks", count)
-		sendWriteRequest(url, hcs.auth, hcs.version, hcs.unwrittenPuts, hcs.httpClient)
+		sendWriteRequest(ctx, url, hcs.auth, hcs.version, hcs.unwrittenPuts, hcs.httpClient)
 		verbose.Log("Finished sending %d hashes", count)
 		hcs.unwrittenPuts.Destroy()
-		hcs.unwrittenPuts = nbs.NewCache()
+		hcs.unwrittenPuts = nbs.NewCache(ctx)
 	}
 
 	// POST http://<host>/root?current=<ref>&last=<ref>. Response will be 200 on success, 409 if current is outdated. Regardless, the server returns its current root for this store

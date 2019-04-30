@@ -5,6 +5,7 @@
 package suite
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -34,8 +35,8 @@ func (s *testSuite) TestNonEmptyPaths() {
 func (s *testSuite) TestDatabase() {
 	assert := s.NewAssert()
 	val := types.Bool(true)
-	r := s.Database.WriteValue(val)
-	assert.True(s.Database.ReadValue(r.TargetHash()).Equals(val))
+	r := s.Database.WriteValue(context.Background(), val)
+	assert.True(s.Database.ReadValue(context.Background(), r.TargetHash()).Equals(val))
 }
 
 func (s *testSuite) TestTempFile() {
@@ -192,7 +193,7 @@ func runTestSuite(t *testing.T, mem bool) {
 	sp, err := spec.ForDataset(ldbDir + "::ds")
 	assert.NoError(err)
 	defer sp.Close()
-	head := sp.GetDataset().HeadValue().(types.Struct)
+	head := sp.GetDataset(context.Background()).HeadValue().(types.Struct)
 
 	// These tests mostly assert that the structure of the results is correct. Specific values are hard.
 
@@ -223,10 +224,10 @@ func runTestSuite(t *testing.T, mem bool) {
 	assert.True(ok)
 	assert.Equal(*perfRepeatFlag, int(reps.Len()))
 
-	reps.IterAll(func(rep types.Value, _ uint64) {
+	reps.IterAll(context.Background(), func(rep types.Value, _ uint64) {
 		i := 0
 
-		rep.(types.Map).IterAll(func(k, timesVal types.Value) {
+		rep.(types.Map).IterAll(context.Background(), func(k, timesVal types.Value) {
 			if assert.True(i < len(expectedTests)) {
 				assert.Equal(expectedTests[i], string(k.(types.String)))
 			}
@@ -270,13 +271,13 @@ func TestPrefixFlag(t *testing.T) {
 	sp, err := spec.ForDataset(ldbDir + "::my-prefix/test")
 	assert.NoError(err)
 	defer sp.Close()
-	_, ok := sp.GetDataset().MaybeHead()
+	_, ok := sp.GetDataset(context.Background()).MaybeHead()
 	assert.False(ok)
 
 	sp, err = spec.ForDataset(ldbDir + "::foo/my-prefix/test")
 	assert.NoError(err)
 	defer sp.Close()
-	_, ok = sp.GetDataset().HeadValue().(types.Struct)
+	_, ok = sp.GetDataset(context.Background()).HeadValue().(types.Struct)
 	assert.True(ok)
 }
 

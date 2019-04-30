@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
@@ -16,7 +17,7 @@ func listOfInts(vrw ValueReadWriter, vals ...int) List {
 	for _, v := range vals {
 		vs = append(vs, Float(v))
 	}
-	return NewList(vrw, vs...)
+	return NewList(context.Background(), vrw, vs...)
 }
 
 func testEditor(vrw ValueReadWriter, vals ...int) *ListEditor {
@@ -35,7 +36,7 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 	assert.Equal(t, uint64(len(expectItems)), le.Len())
 
 	for i, v := range expectItems {
-		assert.Equal(t, Float(v), le.Get(uint64(i)))
+		assert.Equal(t, Float(v), le.Get(context.Background(), uint64(i)))
 	}
 
 	actualEditCount := 0
@@ -45,7 +46,7 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 
 	assert.Equal(t, expectEditCount, actualEditCount)
 
-	assert.True(t, listOfInts(vrw, expectItems...).Equals(le.List()))
+	assert.True(t, listOfInts(vrw, expectItems...).Equals(le.List(context.Background())))
 }
 
 func TestListEditorBasic(t *testing.T) {
@@ -89,10 +90,10 @@ func TestListEditorBasic(t *testing.T) {
 		le := testEditor(vrw, 0, 1, 2)
 		le.Append(NullValue)
 		le.Append(Float(4))
-		l := le.List()
+		l := le.List(context.Background())
 
-		assert.True(t, IsNull(l.Get(3)))
-		assert.True(t, l.Get(4).Equals(Float(4)))
+		assert.True(t, IsNull(l.Get(context.Background(), 3)))
+		assert.True(t, l.Get(context.Background(), 4).Equals(Float(4)))
 	})
 }
 
@@ -227,7 +228,7 @@ func TestListSpliceFuzzer(t *testing.T) {
 			le.Splice(idx, removed, AsValuables(insert)...)
 		}
 		expect := tl.toList(vrw)
-		actual := le.List()
+		actual := le.List(context.Background())
 		assert.True(t, expect.Equals(actual))
 	}
 }

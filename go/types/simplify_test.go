@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -62,7 +63,7 @@ func TestSimplifyType(t *testing.T) {
 	run := func(intersectStructs bool) {
 		test := func(in, exp *Type) {
 			act := simplifyType(in, intersectStructs)
-			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", exp.Describe(), act.Describe())
+			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", exp.Describe(context.Background()), act.Describe(context.Background()))
 		}
 		testSame := func(t *Type) {
 			test(t, t)
@@ -202,7 +203,7 @@ func TestSimplifyType(t *testing.T) {
 				makeCompoundType(ListKind, MakeCycleType("A")))
 			exp := makeCompoundType(ListKind, MakeCycleType("A"))
 			act := simplifyType(in, intersectStructs)
-			assert.Equal(exp, act, "Expected: %s\nActual: %s", exp.Describe(), act.Describe())
+			assert.Equal(exp, act, "Expected: %s\nActual: %s", exp.Describe(context.Background()), act.Describe(context.Background()))
 		}
 
 		testSame(makeStructType("A", nil))

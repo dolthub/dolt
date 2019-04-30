@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/attic-labs/noms/go/d"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jpillora/backoff"
 )
@@ -29,17 +31,17 @@ type s3TableReaderAt struct {
 }
 
 type s3svc interface {
-	AbortMultipartUpload(input *s3.AbortMultipartUploadInput) (*s3.AbortMultipartUploadOutput, error)
-	CreateMultipartUpload(input *s3.CreateMultipartUploadInput) (*s3.CreateMultipartUploadOutput, error)
-	UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOutput, error)
-	UploadPartCopy(input *s3.UploadPartCopyInput) (*s3.UploadPartCopyOutput, error)
-	CompleteMultipartUpload(input *s3.CompleteMultipartUploadInput) (*s3.CompleteMultipartUploadOutput, error)
-	GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error)
-	PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error)
+	AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error)
+	CreateMultipartUploadWithContext(ctx aws.Context, input *s3.CreateMultipartUploadInput, opts ...request.Option) (*s3.CreateMultipartUploadOutput, error)
+	UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error)
+	UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPartCopyInput, opts ...request.Option) (*s3.UploadPartCopyOutput, error)
+	CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.CompleteMultipartUploadInput, opts ...request.Option) (*s3.CompleteMultipartUploadOutput, error)
+	GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error)
+	PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error)
 }
 
-func (s3tra *s3TableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
-	return s3tra.s3.ReadAt(s3tra.h, p, off, stats)
+func (s3tra *s3TableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
+	return s3tra.s3.ReadAt(ctx, s3tra.h, p, off, stats)
 }
 
 // TODO: Bring all the multipart upload and remote-conjoin stuff over here and make this a better analogue to ddbTableStore
@@ -50,7 +52,7 @@ type s3ObjectReader struct {
 	tc     tableCache
 }
 
-func (s3or *s3ObjectReader) ReadAt(name addr, p []byte, off int64, stats *Stats) (n int, err error) {
+func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off int64, stats *Stats) (n int, err error) {
 	t1 := time.Now()
 
 	if s3or.tc != nil {
@@ -69,7 +71,7 @@ func (s3or *s3ObjectReader) ReadAt(name addr, p []byte, off int64, stats *Stats)
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
 		stats.S3ReadLatency.SampleTimeSince(t1)
 	}()
-	return s3or.readRange(name, p, s3RangeHeader(off, int64(len(p))))
+	return s3or.readRange(ctx, name, p, s3RangeHeader(off, int64(len(p))))
 }
 
 func s3RangeHeader(off, length int64) string {
@@ -77,16 +79,16 @@ func s3RangeHeader(off, length int64) string {
 	return fmt.Sprintf("%s=%d-%d", s3RangePrefix, off, lastByte)
 }
 
-func (s3or *s3ObjectReader) ReadFromEnd(name addr, p []byte, stats *Stats) (n int, err error) {
+func (s3or *s3ObjectReader) ReadFromEnd(ctx context.Context, name addr, p []byte, stats *Stats) (n int, err error) {
 	// TODO: enable this to use the tableCache. The wrinkle is the tableCache currently just returns a ReaderAt, which doesn't give you the length of the object that backs it, so you can't calculate an offset if all you know is that you want the last N bytes.
 	defer func(t1 time.Time) {
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
 		stats.S3ReadLatency.SampleTimeSince(t1)
 	}(time.Now())
-	return s3or.readRange(name, p, fmt.Sprintf("%s=-%d", s3RangePrefix, len(p)))
+	return s3or.readRange(ctx, name, p, fmt.Sprintf("%s=-%d", s3RangePrefix, len(p)))
 }
 
-func (s3or *s3ObjectReader) readRange(name addr, p []byte, rangeHeader string) (n int, err error) {
+func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, rangeHeader string) (n int, err error) {
 	read := func() (int, error) {
 		if s3or.readRl != nil {
 			s3or.readRl <- struct{}{}
@@ -100,7 +102,7 @@ func (s3or *s3ObjectReader) readRange(name addr, p []byte, rangeHeader string) (
 			Key:    aws.String(name.String()),
 			Range:  aws.String(rangeHeader),
 		}
-		result, err := s3or.s3.GetObject(input)
+		result, err := s3or.s3.GetObjectWithContext(ctx, input)
 		d.PanicIfError(err)
 		d.PanicIfFalse(*result.ContentLength == int64(len(p)))
 

@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -30,7 +31,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	defer os.RemoveAll(fm.dir)
 	stats := &Stats{}
 
-	exists, upstream := fm.ParseIfExists(stats, nil)
+	exists, upstream := fm.ParseIfExists(context.Background(), stats, nil)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
@@ -41,7 +42,7 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, upstream = fm.ParseIfExists(stats, nil)
+	exists, upstream = fm.ParseIfExists(context.Background(), stats, nil)
 	assert.True(exists)
 	assert.Equal("0", upstream.vers)
 	assert.Equal(jerk, upstream.lock)
@@ -66,7 +67,7 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, upstream := fm.ParseIfExists(stats, func() {
+	exists, upstream := fm.ParseIfExists(context.Background(), stats, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest.
 		lock := computeAddr([]byte("newlock"))
 		badRoot := hash.Of([]byte("bad root"))
@@ -93,7 +94,7 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", addr{}.String(), hash.Hash{}.String()}, ":"))
 	assert.NoError(err)
 
-	assert.Panics(func() { fm.Update(addr{}, manifestContents{}, stats, nil) })
+	assert.Panics(func() { fm.Update(context.Background(), addr{}, manifestContents{}, stats, nil) })
 }
 
 func TestFileManifestUpdateEmpty(t *testing.T) {
@@ -103,20 +104,20 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	upstream := fm.Update(addr{}, manifestContents{vers: constants.NomsVersion, lock: l}, stats, nil)
+	upstream := fm.Update(context.Background(), addr{}, manifestContents{vers: constants.NomsVersion, lock: l}, stats, nil)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
 	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
-	exists, upstream := fm2.ParseIfExists(stats, nil)
+	exists, upstream := fm2.ParseIfExists(context.Background(), stats, nil)
 	assert.True(exists)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
 
 	l2 := computeAddr([]byte{0x02})
-	upstream = fm2.Update(l, manifestContents{vers: constants.NomsVersion, lock: l2}, stats, nil)
+	upstream = fm2.Update(context.Background(), l, manifestContents{vers: constants.NomsVersion, lock: l2}, stats, nil)
 	assert.Equal(l2, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
@@ -135,7 +136,7 @@ func TestFileManifestUpdate(t *testing.T) {
 		root:  hash.Of([]byte("new root")),
 		specs: []tableSpec{{computeAddr([]byte("a")), 3}},
 	}
-	upstream := fm.Update(addr{}, contents, stats, func() {
+	upstream := fm.Update(context.Background(), addr{}, contents, stats, func() {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
@@ -148,11 +149,11 @@ func TestFileManifestUpdate(t *testing.T) {
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2"))}
-	upstream = fm.Update(addr{}, contents2, stats, nil)
+	upstream = fm.Update(context.Background(), addr{}, contents2, stats, nil)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
-	upstream = fm.Update(upstream.lock, contents2, stats, nil)
+	upstream = fm.Update(context.Background(), upstream.lock, contents2, stats, nil)
 	assert.Equal(contents2.lock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
 	assert.Empty(upstream.specs)
@@ -164,7 +165,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	assert.NoError(err)
 
 	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3"))}
-	upstream = fm.Update(upstream.lock, contents3, stats, nil)
+	upstream = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
 	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)

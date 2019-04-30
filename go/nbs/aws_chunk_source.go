@@ -5,13 +5,14 @@
 package nbs
 
 import (
+	"context"
 	"sync"
 	"time"
 
 	"github.com/attic-labs/noms/go/d"
 )
 
-func newAWSChunkSource(ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats) chunkSource {
+func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats) chunkSource {
 	if indexCache != nil {
 		indexCache.lockEntry(name)
 		defer indexCache.unlockEntry(name)
@@ -24,7 +25,7 @@ func newAWSChunkSource(ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, nam
 	t1 := time.Now()
 	indexBytes, tra := func() ([]byte, tableReaderAt) {
 		if al.tableMayBeInDynamo(chunkCount) {
-			data, err := ddb.ReadTable(name, stats)
+			data, err := ddb.ReadTable(ctx, name, stats)
 			if data != nil {
 				return data, &dynamoTableReaderAt{ddb: ddb, h: name}
 			}
@@ -35,7 +36,7 @@ func newAWSChunkSource(ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, nam
 		size := indexSize(chunkCount) + footerSize
 		buff := make([]byte, size)
 
-		n, err := s3.ReadFromEnd(name, buff, stats)
+		n, err := s3.ReadFromEnd(ctx, name, buff, stats)
 		d.PanicIfError(err)
 		d.PanicIfFalse(size == uint64(n))
 		return buff, &s3TableReaderAt{s3: s3, h: name}
@@ -66,14 +67,14 @@ func (atra *awsTableReaderAt) hash() addr {
 	return atra.name
 }
 
-func (atra *awsTableReaderAt) ReadAtWithStats(p []byte, off int64, stats *Stats) (n int, err error) {
-	atra.once.Do(func() { atra.tra = atra.getTableReaderAt(stats) })
-	return atra.tra.ReadAtWithStats(p, off, stats)
+func (atra *awsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
+	atra.once.Do(func() { atra.tra = atra.getTableReaderAt(ctx, stats) })
+	return atra.tra.ReadAtWithStats(ctx, p, off, stats)
 }
 
-func (atra *awsTableReaderAt) getTableReaderAt(stats *Stats) tableReaderAt {
+func (atra *awsTableReaderAt) getTableReaderAt(ctx context.Context, stats *Stats) tableReaderAt {
 	if atra.al.tableMayBeInDynamo(atra.chunkCount) {
-		data, err := atra.ddb.ReadTable(atra.name, stats)
+		data, err := atra.ddb.ReadTable(ctx, atra.name, stats)
 		if data != nil {
 			return &dynamoTableReaderAt{ddb: atra.ddb, h: atra.name}
 		}

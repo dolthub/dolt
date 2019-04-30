@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/kingpin"
@@ -16,7 +17,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-func nomsMap(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
+func nomsMap(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
 	maap := noms.Command("map", "interact with maps")
 
 	mapNew := maap.Command("new", "creates a new map")
@@ -34,37 +35,37 @@ func nomsMap(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler
 	return maap, func(input string) int {
 		switch input {
 		case mapNew.FullCommand():
-			return nomsMapNew(*newDb, *newEntries)
+			return nomsMapNew(ctx, *newDb, *newEntries)
 		case mapSet.FullCommand():
-			return nomsMapSet(*setSpec, *setEntries)
+			return nomsMapSet(ctx, *setSpec, *setEntries)
 		case mapDel.FullCommand():
-			return nomsMapDel(*delSpec, *delKeys)
+			return nomsMapDel(ctx, *delSpec, *delKeys)
 		}
 		d.Panic("notreached")
 		return 1
 	}
 }
 
-func nomsMapNew(dbStr string, args []string) int {
+func nomsMapNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyMapEdits(sp, types.NewMap(sp.GetDatabase()), nil, args)
+	applyMapEdits(ctx, sp, types.NewMap(ctx, sp.GetDatabase(ctx)), nil, args)
 	return 0
 }
 
-func nomsMapSet(specStr string, args []string) int {
+func nomsMapSet(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(sp)
-	applyMapEdits(sp, rootVal, basePath, args)
+	rootVal, basePath := splitPath(ctx, sp)
+	applyMapEdits(ctx, sp, rootVal, basePath, args)
 	return 0
 }
 
-func nomsMapDel(specStr string, args []string) int {
+func nomsMapDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 
-	rootVal, basePath := splitPath(sp)
+	rootVal, basePath := splitPath(ctx, sp)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		kp := parseKeyPart(args, i)
@@ -74,11 +75,11 @@ func nomsMapDel(specStr string, args []string) int {
 		})
 	}
 
-	appplyPatch(sp, rootVal, basePath, patch)
+	appplyPatch(ctx, sp, rootVal, basePath, patch)
 	return 0
 }
 
-func applyMapEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
+func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
 	if len(args)%2 != 0 {
 		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
@@ -86,11 +87,11 @@ func applyMapEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args 
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		kp := parseKeyPart(args, i)
-		vv, err := argumentToValue(args[i+1], db)
+		vv, err := argumentToValue(ctx, args[i+1], db)
 		if err != nil {
 			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i+1], i+1, err))
 		}
@@ -100,7 +101,7 @@ func applyMapEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, args 
 			NewValue:   vv,
 		})
 	}
-	appplyPatch(sp, rootVal, basePath, patch)
+	appplyPatch(ctx, sp, rootVal, basePath, patch)
 }
 
 func parseKeyPart(args []string, i int) (res types.PathPart) {

@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"sort"
 	"testing"
@@ -42,7 +43,7 @@ func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 			c := nextChunk()
 			mt.addChunk(computeAddr(c), c)
 		}
-		srcs = append(srcs, p.Persist(mt, nil, &Stats{}))
+		srcs = append(srcs, p.Persist(context.Background(), mt, nil, &Stats{}))
 	}
 	return
 }
@@ -69,13 +70,13 @@ func TestConjoin(t *testing.T) {
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
 		open := func(specs []tableSpec) (srcs chunkReaderGroup) {
 			for _, sp := range specs {
-				srcs = append(srcs, p.Open(sp.name, sp.chunkCount, nil))
+				srcs = append(srcs, p.Open(context.Background(), sp.name, sp.chunkCount, nil))
 			}
 			return
 		}
 		expectSrcs, actualSrcs := open(expect), open(actual)
 		chunkChan := make(chan extractRecord, expectSrcs.count())
-		expectSrcs.extract(chunkChan)
+		expectSrcs.extract(context.Background(), chunkChan)
 		close(chunkChan)
 
 		for rec := range chunkChan {
@@ -87,7 +88,7 @@ func TestConjoin(t *testing.T) {
 		p = newFakeTablePersister()
 		fm = &fakeManifest{}
 		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p))
-		_, upstream = fm.ParseIfExists(nil, nil)
+		_, upstream = fm.ParseIfExists(context.Background(), nil, nil)
 		return
 	}
 
@@ -112,8 +113,8 @@ func TestConjoin(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				conjoin(upstream, fm, p, stats)
-				exists, newUpstream := fm.ParseIfExists(stats, nil)
+				conjoin(context.Background(), upstream, fm, p, stats)
+				exists, newUpstream := fm.ParseIfExists(context.Background(), stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, c.postcompact, getSortedSizes(newUpstream.specs))
 				assertContainAll(t, p, upstream.specs, newUpstream.specs)
@@ -127,7 +128,7 @@ func TestConjoin(t *testing.T) {
 			mt := newMemTable(testMemTableSize)
 			data := []byte{0xde, 0xad}
 			mt.addChunk(computeAddr(data), data)
-			src := p.Persist(mt, nil, &Stats{})
+			src := p.Persist(context.Background(), mt, nil, &Stats{})
 			return tableSpec{src.hash(), src.count()}
 		}
 		for _, c := range tc {
@@ -139,8 +140,8 @@ func TestConjoin(t *testing.T) {
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable))
 				}}
-				conjoin(upstream, u, p, stats)
-				exists, newUpstream := fm.ParseIfExists(stats, nil)
+				conjoin(context.Background(), upstream, u, p, stats)
+				exists, newUpstream := fm.ParseIfExists(context.Background(), stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.postcompact...), getSortedSizes(newUpstream.specs))
 				assertContainAll(t, p, append(upstream.specs, newTable), newUpstream.specs)
@@ -157,8 +158,8 @@ func TestConjoin(t *testing.T) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:])
 				}}
-				conjoin(upstream, u, p, stats)
-				exists, newUpstream := fm.ParseIfExists(stats, nil)
+				conjoin(context.Background(), upstream, u, p, stats)
+				exists, newUpstream := fm.ParseIfExists(context.Background(), stats, nil)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact[1:], getSortedSizes(newUpstream.specs))
 			})
@@ -171,9 +172,9 @@ type updatePreemptManifest struct {
 	preUpdate func()
 }
 
-func (u updatePreemptManifest) Update(lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (u updatePreemptManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
 	if u.preUpdate != nil {
 		u.preUpdate()
 	}
-	return u.manifest.Update(lastLock, newContents, stats, writeHook)
+	return u.manifest.Update(ctx, lastLock, newContents, stats, writeHook)
 }

@@ -5,6 +5,7 @@
 package splore
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -41,7 +42,7 @@ func TestNomsSplore(t *testing.T) {
 			return nil
 		}
 
-		go func() { run(&http.ServeMux{}, 0, false, "nbs:"+dir) }()
+		go func() { run(context.Background(), &http.ServeMux{}, 0, false, "nbs:"+dir) }()
 		l := <-lchan
 		defer l.Close()
 
@@ -67,25 +68,25 @@ func TestNomsSplore(t *testing.T) {
 	sp, err := spec.ForDataset(fmt.Sprintf("nbs:%s::ds", dir))
 	d.PanicIfError(err)
 	defer sp.Close()
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	strct := types.NewStruct("StructName", types.StructData{
-		"blob":          types.NewBlob(db),
+		"blob":          types.NewBlob(context.Background(), db),
 		"bool":          types.Bool(true),
-		"list":          types.NewList(db, types.Float(1), types.Float(2)),
-		"map":           types.NewMap(db, types.String("a"), types.String("b"), types.String("c"), types.String("d")),
+		"list":          types.NewList(context.Background(), db, types.Float(1), types.Float(2)),
+		"map":           types.NewMap(context.Background(), db, types.String("a"), types.String("b"), types.String("c"), types.String("d")),
 		"number":        types.Float(42),
-		"ref":           db.WriteValue(types.Bool(true)),
-		"set":           types.NewSet(db, types.Float(3), types.Float(4)),
+		"ref":           db.WriteValue(context.Background(), types.Bool(true)),
+		"set":           types.NewSet(context.Background(), db, types.Float(3), types.Float(4)),
 		"string":        types.String("hello world"),
 		"typeCompound":  types.MakeMapType(types.StringType, types.MakeListType(types.BoolType)),
 		"typePrimitive": types.FloaTType,
 		"typeStruct":    types.MakeStructType("StructType", types.StructField{Name: "x", Type: types.StringType}, types.StructField{Name: "y", Type: types.MakeStructType("")}),
 	})
-	sp.GetDatabase().CommitValue(sp.GetDataset(), strct)
+	sp.GetDatabase(context.Background()).CommitValue(context.Background(), sp.GetDataset(context.Background()), strct)
 
 	// The dataset head hash changes whenever the test data changes, so instead
 	// of updating it all the time, use string replacement.
-	dsHash := sp.GetDataset().HeadRef().TargetHash().String()
+	dsHash := sp.GetDataset(context.Background()).HeadRef().TargetHash().String()
 	test := func(expectJSON string, id string) {
 		expectJSON = strings.Replace(expectJSON, "{{dsHash}}", dsHash, -1)
 		assert.JSONEq(expectJSON, getNode(id))
@@ -588,51 +589,51 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 	// A bunch of lists with just numbers or ref<number>s in them. None of these
 	// should be detected as meta sequences:
 
-	l1 := types.NewList(db)
+	l1 := types.NewList(context.Background(), db)
 	assert.Nil(getMetaChildren(l1))
 
-	l2 := types.NewList(db, types.Float(1))
+	l2 := types.NewList(context.Background(), db, types.Float(1))
 	assert.Nil(getMetaChildren(l2))
 
-	l3 := types.NewList(db, types.Float(1), types.Float(2))
+	l3 := types.NewList(context.Background(), db, types.Float(1), types.Float(2))
 	assert.Nil(getMetaChildren(l3))
 
-	l4 := types.NewList(db, db.WriteValue(types.Float(1)))
+	l4 := types.NewList(context.Background(), db, db.WriteValue(context.Background(), types.Float(1)))
 	assert.Nil(getMetaChildren(l4))
 
-	l5 := types.NewList(db, db.WriteValue(types.Float(1)), types.Float(2))
+	l5 := types.NewList(context.Background(), db, db.WriteValue(context.Background(), types.Float(1)), types.Float(2))
 	assert.Nil(getMetaChildren(l5))
 
-	l6 := types.NewList(db, db.WriteValue(types.Float(1)), db.WriteValue(types.Float(2)))
+	l6 := types.NewList(context.Background(), db, db.WriteValue(context.Background(), types.Float(1)), db.WriteValue(context.Background(), types.Float(2)))
 	assert.Nil(getMetaChildren(l6))
 
-	l7 := types.NewList(db, l1)
+	l7 := types.NewList(context.Background(), db, l1)
 	assert.Nil(getMetaChildren(l7))
 
-	l8 := types.NewList(db, l4)
+	l8 := types.NewList(context.Background(), db, l4)
 	assert.Nil(getMetaChildren(l8))
 
 	// List with more or equal ref<list> than elements. This can't possibly be a meta
 	// sequence, because there are no empty leaf sequences:
 
-	l1Ref := db.WriteValue(l1)
-	l2Ref := db.WriteValue(l2)
-	l3Ref := db.WriteValue(l3)
-	listRefList := types.NewList(db, l1Ref, l2Ref, l3Ref)
+	l1Ref := db.WriteValue(context.Background(), l1)
+	l2Ref := db.WriteValue(context.Background(), l2)
+	l3Ref := db.WriteValue(context.Background(), l3)
+	listRefList := types.NewList(context.Background(), db, l1Ref, l2Ref, l3Ref)
 
-	l9 := types.NewList(db, listRefList)
+	l9 := types.NewList(context.Background(), db, listRefList)
 	assert.Nil(getMetaChildren(l9))
 
-	l10 := types.NewList(db, types.Float(1), listRefList)
+	l10 := types.NewList(context.Background(), db, types.Float(1), listRefList)
 	assert.Nil(getMetaChildren(l10))
 
 	l11 := listRefList
 	assert.Nil(getMetaChildren(l11))
 
-	l12 := types.NewList(db, types.Float(1), types.Float(2), listRefList)
+	l12 := types.NewList(context.Background(), db, types.Float(1), types.Float(2), listRefList)
 	assert.Nil(getMetaChildren(l12))
 
-	l13 := types.NewList(db, types.Float(1), db.WriteValue(types.Float(2)), listRefList)
+	l13 := types.NewList(context.Background(), db, types.Float(1), db.WriteValue(context.Background(), types.Float(2)), listRefList)
 	assert.Nil(getMetaChildren(l13))
 
 	// List with fewer ref<list> as children. For now this is the closet
@@ -647,15 +648,15 @@ func TestNomsSploreGetMetaChildren(t *testing.T) {
 		{Value: nodeInfo{HasChildren: true, ID: l3Hash, Name: "List" + l3Hash}},
 	}
 
-	l14 := types.NewList(db, types.Float(1), types.Float(2), types.Float(3), listRefList)
+	l14 := types.NewList(context.Background(), db, types.Float(1), types.Float(2), types.Float(3), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l14))
 
-	l15 := types.NewList(db, types.Float(1), types.Float(2), db.WriteValue(types.Float(3)), listRefList)
+	l15 := types.NewList(context.Background(), db, types.Float(1), types.Float(2), db.WriteValue(context.Background(), types.Float(3)), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l15))
 
-	l16 := types.NewList(db, types.Float(1), types.Float(2), types.Float(3), types.Float(4), listRefList)
+	l16 := types.NewList(context.Background(), db, types.Float(1), types.Float(2), types.Float(3), types.Float(4), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l16))
 
-	l17 := types.NewList(db, types.Float(1), types.Float(2), db.WriteValue(types.Float(3)), db.WriteValue(types.Float(4)), listRefList)
+	l17 := types.NewList(context.Background(), db, types.Float(1), types.Float(2), db.WriteValue(context.Background(), types.Float(3)), db.WriteValue(context.Background(), types.Float(4)), listRefList)
 	assert.Equal(expectNodeChildren, getMetaChildren(l17))
 }

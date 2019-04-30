@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"testing"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -29,10 +30,10 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	s.NoError(err)
 	defer sp.Close()
 
-	sp.GetDatabase().CommitValue(sp.GetDataset(), types.Float(i))
+	sp.GetDatabase(context.Background()).CommitValue(context.Background(), sp.GetDataset(context.Background()), types.Float(i))
 	s.NoError(err)
 
-	commit := sp.GetDataset().Head()
+	commit := sp.GetDataset(context.Background()).Head()
 	res, _ := s.MustRun(main, []string{"log", str})
 	s.Contains(res, commit.Hash().String())
 }
@@ -42,7 +43,7 @@ func (s *nomsLogTestSuite) TestNomsLog() {
 	s.NoError(err)
 	defer sp.Close()
 
-	sp.GetDatabase() // create the database
+	sp.GetDatabase(context.Background()) // create the database
 	s.Panics(func() { s.MustRun(main, []string{"log", sp.String()}) })
 
 	testCommitInResults(s, sp.String(), 1)
@@ -54,13 +55,13 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
-	ds := sp.GetDataset()
+	db := sp.GetDatabase(context.Background())
+	ds := sp.GetDataset(context.Background())
 	for i := 0; i < 3; i++ {
 		data := types.NewStruct("", types.StructData{
 			"bar": types.Float(i),
 		})
-		ds, err = db.CommitValue(ds, data)
+		ds, err = db.CommitValue(context.Background(), ds, data)
 		s.NoError(err)
 	}
 
@@ -74,21 +75,21 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 }
 
 func addCommit(ds datas.Dataset, v string) (datas.Dataset, error) {
-	return ds.Database().CommitValue(ds, types.String(v))
+	return ds.Database().CommitValue(context.Background(), ds, types.String(v))
 }
 
 func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) {
-	return ds.Database().CommitValue(ds, v)
+	return ds.Database().CommitValue(context.Background(), ds, v)
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(vrw, parentDs.HeadRef())
-	return newDs.Database().Commit(newDs, types.String(v), datas.CommitOptions{Parents: p})
+	p := types.NewSet(context.Background(), vrw, parentDs.HeadRef())
+	return newDs.Database().Commit(context.Background(), newDs, types.String(v), datas.CommitOptions{Parents: p})
 }
 
 func mergeDatasets(vrw types.ValueReadWriter, ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(vrw, ds1.HeadRef(), ds2.HeadRef())
-	return ds1.Database().Commit(ds1, types.String(v), datas.CommitOptions{Parents: p})
+	p := types.NewSet(context.Background(), vrw, ds1.HeadRef(), ds2.HeadRef())
+	return ds1.Database().Commit(context.Background(), ds1, types.String(v), datas.CommitOptions{Parents: p})
 }
 
 func (s *nomsLogTestSuite) TestNArg() {
@@ -98,7 +99,7 @@ func (s *nomsLogTestSuite) TestNArg() {
 	s.NoError(err)
 	defer sp.Close()
 
-	ds := sp.GetDatabase().GetDataset(dsName)
+	ds := sp.GetDatabase(context.Background()).GetDataset(context.Background(), dsName)
 
 	ds, err = addCommit(ds, "1")
 	h1 := ds.Head().Hash()
@@ -132,17 +133,17 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
-	ds := db.GetDataset("ds1")
+	db := sp.GetDatabase(context.Background())
+	ds := db.GetDataset(context.Background(), "ds1")
 
 	meta := types.NewStruct("Meta", map[string]types.Value{
 		"longNameForTest": types.String("Yoo"),
 		"test2":           types.String("Hoo"),
 	})
-	ds, err = db.Commit(ds, types.String("1"), datas.CommitOptions{Meta: meta})
+	ds, err = db.Commit(context.Background(), ds, types.String("1"), datas.CommitOptions{Meta: meta})
 	s.NoError(err)
 
-	ds, err = db.Commit(ds, types.String("2"), datas.CommitOptions{})
+	ds, err = db.Commit(context.Background(), ds, types.String("2"), datas.CommitOptions{})
 	s.NoError(err)
 
 	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, "ds1")
@@ -158,9 +159,9 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
-	b1 := db.GetDataset("b1")
+	b1 := db.GetDataset(context.Background(), "b1")
 	b1, err = addCommit(b1, "1")
 	s.NoError(err)
 	b1, err = addCommit(b1, "2")
@@ -168,7 +169,7 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	b1, err = addCommit(b1, "3")
 	s.NoError(err)
 
-	b2 := db.GetDataset("b2")
+	b2 := db.GetDataset(context.Background(), "b2")
 	b2, err = addBranchedDataset(db, b2, b1, "3.1")
 	s.NoError(err)
 
@@ -177,7 +178,7 @@ func (s *nomsLogTestSuite) TestNomsGraph1() {
 	b1, err = addCommit(b1, "3.6")
 	s.NoError(err)
 
-	b3 := db.GetDataset("b3")
+	b3 := db.GetDataset(context.Background(), "b3")
 	b3, err = addBranchedDataset(db, b3, b2, "3.1.3")
 	s.NoError(err)
 	b3, err = addCommit(b3, "3.1.5")
@@ -211,17 +212,17 @@ func (s *nomsLogTestSuite) TestNomsGraph2() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
-	ba := db.GetDataset("ba")
+	ba := db.GetDataset(context.Background(), "ba")
 	ba, err = addCommit(ba, "1")
 	s.NoError(err)
 
-	bb := db.GetDataset("bb")
+	bb := db.GetDataset(context.Background(), "bb")
 	bb, err = addCommit(bb, "10")
 	s.NoError(err)
 
-	bc := db.GetDataset("bc")
+	bc := db.GetDataset(context.Background(), "bc")
 	bc, err = addCommit(bc, "100")
 	s.NoError(err)
 
@@ -242,9 +243,9 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 	s.NoError(err)
 	defer sp.Close()
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
-	w := db.GetDataset("w")
+	w := db.GetDataset(context.Background(), "w")
 
 	w, err = addCommit(w, "1")
 	s.NoError(err)
@@ -252,15 +253,15 @@ func (s *nomsLogTestSuite) TestNomsGraph3() {
 	w, err = addCommit(w, "2")
 	s.NoError(err)
 
-	x := db.GetDataset("x")
+	x := db.GetDataset(context.Background(), "x")
 	x, err = addBranchedDataset(db, x, w, "20-x")
 	s.NoError(err)
 
-	y := db.GetDataset("y")
+	y := db.GetDataset(context.Background(), "y")
 	y, err = addBranchedDataset(db, y, w, "200-y")
 	s.NoError(err)
 
-	z := db.GetDataset("z")
+	z := db.GetDataset(context.Background(), "z")
 	z, err = addBranchedDataset(db, z, w, "2000-z")
 	s.NoError(err)
 
@@ -283,17 +284,17 @@ func (s *nomsLogTestSuite) TestTruncation() {
 	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("nbs", s.DBDir))
 	s.NoError(err)
 	defer sp.Close()
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	toNomsList := func(l []string) types.List {
 		nv := []types.Value{}
 		for _, v := range l {
 			nv = append(nv, types.String(v))
 		}
-		return types.NewList(db, nv...)
+		return types.NewList(context.Background(), db, nv...)
 	}
 
-	t := db.GetDataset("truncate")
+	t := db.GetDataset(context.Background(), "truncate")
 
 	t, err = addCommit(t, "the first line")
 	s.NoError(err)

@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"sort"
 	"testing"
 
@@ -37,11 +38,11 @@ func (suite *OpCacheSuite) TestMapSet() {
 	defer opCacheStore.destroy()
 
 	entries := mapEntrySlice{
-		{NewList(vs, Float(8), Float(0)), String("ahoy")},
-		{String("A key"), NewBlob(vs, bytes.NewBufferString("A value"))},
+		{NewList(context.Background(), vs, Float(8), Float(0)), String("ahoy")},
+		{String("A key"), NewBlob(context.Background(), vs, bytes.NewBufferString("A value"))},
 		{Float(1), Bool(true)},
 		{Bool(false), Float(1)},
-		{NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap(vs)},
+		{NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0xff, 0, 0})), NewMap(context.Background(), vs)},
 		{Bool(true), Float(42)},
 		{NewStruct("thing1", StructData{"a": Float(7)}), Float(42)},
 		{String("struct"), NewStruct("thing2", nil)},
@@ -71,14 +72,14 @@ func (suite *OpCacheSuite) TestSetInsert() {
 	defer opCacheStore.destroy()
 
 	entries := ValueSlice{
-		NewList(vs, Float(8), Float(0)),
+		NewList(context.Background(), vs, Float(8), Float(0)),
 		String("ahoy"),
-		NewBlob(vs, bytes.NewBufferString("A value")),
+		NewBlob(context.Background(), vs, bytes.NewBufferString("A value")),
 		Float(1),
 		Bool(true),
 		Bool(false),
-		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
-		NewMap(vs),
+		NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
+		NewMap(context.Background(), vs),
 		Float(42),
 		NewStruct("thing1", StructData{"a": Float(7)}),
 		String("struct"),
@@ -109,14 +110,14 @@ func (suite *OpCacheSuite) TestListAppend() {
 	defer opCacheStore.destroy()
 
 	entries := ValueSlice{
-		NewList(vs, Float(8), Float(0)),
+		NewList(context.Background(), vs, Float(8), Float(0)),
 		String("ahoy"),
-		NewBlob(vs, bytes.NewBufferString("A value")),
+		NewBlob(context.Background(), vs, bytes.NewBufferString("A value")),
 		Float(1),
 		Bool(true),
 		Bool(false),
-		NewBlob(vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
-		NewMap(vs),
+		NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0xff, 0, 0})),
+		NewMap(context.Background(), vs),
 		Float(42),
 		NewStruct("thing1", StructData{"a": Float(7)}),
 		String("struct"),

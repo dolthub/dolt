@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -36,17 +37,17 @@ func setupRootFlags() *flag.FlagSet {
 	return flagSet
 }
 
-func runRoot(args []string) int {
+func runRoot(ctx context.Context, args []string) int {
 	if len(args) < 1 {
 		fmt.Fprintln(os.Stderr, "Not enough arguments")
 		return 0
 	}
 
 	cfg := config.NewResolver()
-	cs, err := cfg.GetChunkStore(args[0])
+	cs, err := cfg.GetChunkStore(ctx, args[0])
 	d.CheckErrorNoUsage(err)
 
-	currRoot := cs.Root()
+	currRoot := cs.Root(ctx)
 
 	if updateRoot == "" {
 		fmt.Println(currRoot)
@@ -63,10 +64,10 @@ func runRoot(args []string) int {
 	}
 
 	// If BUG 3407 is correct, we might be able to just take cs and make a Database directly from that.
-	db, err := cfg.GetDatabase(args[0])
+	db, err := cfg.GetDatabase(ctx, args[0])
 	d.CheckErrorNoUsage(err)
 	defer db.Close()
-	if !validate(db.ReadValue(h)) {
+	if !validate(ctx, db.ReadValue(ctx, h)) {
 		return 1
 	}
 
@@ -86,7 +87,7 @@ Continue?`)
 		return 0
 	}
 
-	ok = cs.Commit(h, currRoot)
+	ok = cs.Commit(ctx, h, currRoot)
 	if !ok {
 		fmt.Fprintln(os.Stderr, "Optimistic concurrency failure")
 		return 1
@@ -96,14 +97,14 @@ Continue?`)
 	return 0
 }
 
-func validate(r types.Value) bool {
+func validate(ctx context.Context, r types.Value) bool {
 	rootType := types.MakeMapType(types.StringType, types.MakeRefType(types.ValueType))
 	if !types.IsValueSubtypeOf(r, rootType) {
-		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(), types.TypeOf(r).Describe())
+		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(ctx), types.TypeOf(r).Describe(ctx))
 		return false
 	}
 
-	return r.(types.Map).Any(func(k, v types.Value) bool {
+	return r.(types.Map).Any(ctx, func(k, v types.Value) bool {
 		if !datas.IsRefOfCommitType(types.TypeOf(v)) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false

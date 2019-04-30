@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"testing"
 
@@ -24,15 +25,15 @@ func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) 
 func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str string, vr ValueReader) {
 	p, err := ParsePath(str)
 	assert.NoError(err)
-	actual := p.Resolve(ref, vr)
+	actual := p.Resolve(context.Background(), ref, vr)
 	if expect == nil {
 		if actual != nil {
-			assert.Fail("", "Expected nil, but got %s", EncodedValue(actual))
+			assert.Fail("", "Expected nil, but got %s", EncodedValue(context.Background(), actual))
 		}
 	} else if actual == nil {
-		assert.Fail("", "Expected %s, but got nil", EncodedValue(expect))
+		assert.Fail("", "Expected %s, but got nil", EncodedValue(context.Background(), expect))
 	} else {
-		assert.True(expect.Equals(actual), "Expected %s, but got %s", EncodedValue(expect), EncodedValue(actual))
+		assert.True(expect.Equals(actual), "Expected %s, but got %s", EncodedValue(context.Background(), expect), EncodedValue(context.Background(), actual))
 	}
 }
 
@@ -97,7 +98,7 @@ func TestPathIndex(t *testing.T) {
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	v = NewList(vs, Float(1), Float(3), String("foo"), Bool(false))
+	v = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
 
 	resolvesTo(Float(1), Float(0), "[0]")
 	resolvesTo(Float(3), Float(1), "[1]")
@@ -110,7 +111,7 @@ func TestPathIndex(t *testing.T) {
 	resolvesTo(String("foo"), Float(2), "[-2]")
 	resolvesTo(Bool(false), Float(3), "[-1]")
 
-	v = NewMap(vs,
+	v = NewMap(context.Background(), vs,
 		Bool(false), Float(23),
 		Float(1), String("foo"),
 		Float(2.3), Float(4.5),
@@ -175,16 +176,16 @@ func TestPathHashIndex(t *testing.T) {
 	br := NewRef(b)
 	i := Float(0)
 	str := String("foo")
-	l := NewList(vs, b, i, str)
+	l := NewList(context.Background(), vs, b, i, str)
 	lr := NewRef(l)
-	m := NewMap(vs,
+	m := NewMap(context.Background(), vs,
 		b, br,
 		br, i,
 		i, str,
 		l, lr,
 		lr, b,
 	)
-	s := NewSet(vs, b, br, i, str, l, lr)
+	s := NewSet(context.Background(), vs, b, br, i, str, l, lr)
 
 	resolvesTo := func(col, key, expVal, expKey Value) {
 		assertResolvesTo(assert, expVal, col, hashIdx(key))
@@ -222,8 +223,8 @@ func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 	}
 
 	b := Bool(true)
-	resolvesToNil(NewMap(vs, b, b), b)
-	resolvesToNil(NewSet(vs, b), b)
+	resolvesToNil(NewMap(context.Background(), vs, b, b), b)
+	resolvesToNil(NewSet(context.Background(), vs, b), b)
 }
 
 func TestPathMulti(t *testing.T) {
@@ -231,19 +232,19 @@ func TestPathMulti(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	m1 := NewMap(vs,
+	m1 := NewMap(context.Background(), vs,
 		String("a"), String("foo"),
 		String("b"), String("bar"),
 		String("c"), String("car"),
 	)
 
-	m2 := NewMap(vs,
+	m2 := NewMap(context.Background(), vs,
 		Bool(false), String("earth"),
 		String("d"), String("dar"),
 		m1, String("fire"),
 	)
 
-	l := NewList(vs, m1, m2)
+	l := NewList(context.Background(), vs, m1, m2)
 
 	s := NewStruct("", StructData{
 		"foo": l,
@@ -436,7 +437,7 @@ func TestPathCanBePathIndex(t *testing.T) {
 	assert.True(ValueCanBePathIndex(String("yes")))
 
 	assert.False(ValueCanBePathIndex(NewRef(String("yes"))))
-	assert.False(ValueCanBePathIndex(NewBlob(vs, bytes.NewReader([]byte("yes")))))
+	assert.False(ValueCanBePathIndex(NewBlob(context.Background(), vs, bytes.NewReader([]byte("yes")))))
 }
 
 func TestCopyPath(t *testing.T) {
@@ -479,14 +480,14 @@ func TestPathType(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	m := NewMap(vs,
+	m := NewMap(context.Background(), vs,
 		String("string"), String("foo"),
 		String("bool"), Bool(false),
 		String("number"), Float(42),
-		String("List<number|string>"), NewList(vs, Float(42), String("foo")),
-		String("Map<Bool, Bool>"), NewMap(vs, Bool(true), Bool(false)))
+		String("List<number|string>"), NewList(context.Background(), vs, Float(42), String("foo")),
+		String("Map<Bool, Bool>"), NewMap(context.Background(), vs, Bool(true), Bool(false)))
 
-	m.IterAll(func(k, cv Value) {
+	m.IterAll(context.Background(), func(k, cv Value) {
 		ks := k.(String)
 		assertResolvesTo(assert, TypeOf(cv), m, fmt.Sprintf("[\"%s\"]@type", ks))
 	})
@@ -508,7 +509,7 @@ func TestPathTarget(t *testing.T) {
 		"foo": String("bar"),
 	})
 	vs := newTestValueStore()
-	r := vs.WriteValue(s)
+	r := vs.WriteValue(context.Background(), s)
 	s2 := NewStruct("", StructData{
 		"ref": r,
 	})
@@ -530,7 +531,7 @@ func TestPathAtAnnotation(t *testing.T) {
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	v = NewList(vs, Float(1), Float(3), String("foo"), Bool(false))
+	v = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
 
 	resolvesTo(Float(1), nil, "@at(0)")
 	resolvesTo(Float(3), nil, "@at(1)")
@@ -543,7 +544,7 @@ func TestPathAtAnnotation(t *testing.T) {
 	resolvesTo(String("foo"), nil, "@at(-2)")
 	resolvesTo(Bool(false), nil, "@at(-1)")
 
-	v = NewSet(vs,
+	v = NewSet(context.Background(), vs,
 		Bool(false),
 		Float(1),
 		Float(2.3),
@@ -561,7 +562,7 @@ func TestPathAtAnnotation(t *testing.T) {
 	resolvesTo(Float(2.3), Float(2.3), "@at(-2)")
 	resolvesTo(String("two"), String("two"), `@at(-1)`)
 
-	v = NewMap(vs,
+	v = NewMap(context.Background(), vs,
 		Bool(false), Float(23),
 		Float(1), String("foo"),
 		Float(2.3), Float(4.5),

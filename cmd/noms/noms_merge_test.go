@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -44,39 +45,39 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 		types.StructData{
 			"num": types.Float(42),
 			"str": types.String("foobar"),
-			"lst": types.NewList(parentSpec.GetDatabase(), types.Float(1), types.String("foo")),
-			"map": types.NewMap(parentSpec.GetDatabase(), types.Float(1), types.String("foo"),
+			"lst": types.NewList(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
+			"map": types.NewMap(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 				types.String("foo"), types.Float(1)),
 		},
-		types.NewSet(parentSpec.GetDatabase()))
+		types.NewSet(context.Background(), parentSpec.GetDatabase(context.Background())))
 
 	l := s.setupMergeDataset(
 		leftSpec,
 		types.StructData{
 			"num": types.Float(42),
 			"str": types.String("foobaz"),
-			"lst": types.NewList(leftSpec.GetDatabase(), types.Float(1), types.String("foo")),
-			"map": types.NewMap(leftSpec.GetDatabase(), types.Float(1), types.String("foo"),
+			"lst": types.NewList(context.Background(), leftSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
+			"map": types.NewMap(context.Background(), leftSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 				types.String("foo"), types.Float(1)),
 		},
-		types.NewSet(leftSpec.GetDatabase(), p))
+		types.NewSet(context.Background(), leftSpec.GetDatabase(context.Background()), p))
 
 	r := s.setupMergeDataset(
 		rightSpec,
 		types.StructData{
 			"num": types.Float(42),
 			"str": types.String("foobar"),
-			"lst": types.NewList(rightSpec.GetDatabase(), types.Float(1), types.String("foo")),
-			"map": types.NewMap(rightSpec.GetDatabase(), types.Float(1), types.String("foo"),
+			"lst": types.NewList(context.Background(), rightSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
+			"map": types.NewMap(context.Background(), rightSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 				types.String("foo"), types.Float(1), types.Float(2), types.String("bar")),
 		},
-		types.NewSet(rightSpec.GetDatabase(), p))
+		types.NewSet(context.Background(), rightSpec.GetDatabase(context.Background()), p))
 
 	expected := types.NewStruct("", types.StructData{
 		"num": types.Float(42),
 		"str": types.String("foobaz"),
-		"lst": types.NewList(parentSpec.GetDatabase(), types.Float(1), types.String("foo")),
-		"map": types.NewMap(parentSpec.GetDatabase(), types.Float(1), types.String("foo"),
+		"lst": types.NewList(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
+		"map": types.NewMap(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 			types.String("foo"), types.Float(1), types.Float(2), types.String("bar")),
 	})
 
@@ -97,21 +98,21 @@ func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
 }
 
 func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructData, p types.Set) types.Ref {
-	ds := sp.GetDataset()
-	ds, err := sp.GetDatabase().Commit(ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
+	ds := sp.GetDataset(context.Background())
+	ds, err := sp.GetDatabase(context.Background()).Commit(context.Background(), ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
 	s.NoError(err)
 	return ds.HeadRef()
 }
 
 func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...types.Value) {
 	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 	if s.NoError(err) {
 		defer sp.Close()
-		commit := sp.GetDataset().Head()
-		s.True(commit.Get(datas.ParentsField).Equals(types.NewSet(db, parents...)))
-		merged := sp.GetDataset().HeadValue()
-		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(expected), types.EncodedValue(merged))
+		commit := sp.GetDataset(context.Background()).Head()
+		s.True(commit.Get(datas.ParentsField).Equals(types.NewSet(context.Background(), db, parents...)))
+		merged := sp.GetDataset(context.Background()).HeadValue()
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 }
 
@@ -124,9 +125,9 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 	rightSpec := s.spec(right)
 	defer rightSpec.Close()
 
-	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(parentSpec.GetDatabase()))
-	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(leftSpec.GetDatabase(), p))
-	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(rightSpec.GetDatabase(), p))
+	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(context.Background(), parentSpec.GetDatabase(context.Background())))
+	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(context.Background(), leftSpec.GetDatabase(context.Background()), p))
+	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(context.Background(), rightSpec.GetDatabase(context.Background()), p))
 
 	expected := types.NewStruct("", types.StructData{"num": types.Float(43)})
 
@@ -149,9 +150,9 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
 	rightSpec := s.spec(right)
 	defer rightSpec.Close()
 
-	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(parentSpec.GetDatabase()))
-	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(leftSpec.GetDatabase(), p))
-	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(rightSpec.GetDatabase(), p))
+	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(context.Background(), parentSpec.GetDatabase(context.Background())))
+	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(context.Background(), leftSpec.GetDatabase(context.Background()), p))
+	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(context.Background(), rightSpec.GetDatabase(context.Background()), p))
 
 	expected := types.NewStruct("", types.StructData{"num": types.Float(44)})
 
@@ -173,9 +174,9 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 	defer leftSpec.Close()
 	rightSpec := s.spec(right)
 	defer rightSpec.Close()
-	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(parentSpec.GetDatabase()))
-	s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(leftSpec.GetDatabase(), p))
-	s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(rightSpec.GetDatabase(), p))
+	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, types.NewSet(context.Background(), parentSpec.GetDatabase(context.Background())))
+	s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(context.Background(), leftSpec.GetDatabase(context.Background()), p))
+	s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(context.Background(), rightSpec.GetDatabase(context.Background()), p))
 
 	s.Panics(func() { s.MustRun(main, []string{"merge", s.DBDir, left, right, "output"}) })
 }
@@ -197,11 +198,11 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 		{[]string{sp.String(), l, r, "!invalid"}, "error: Invalid dataset !invalid, must match [a-zA-Z0-9\\-_/]+\n"},
 	}
 
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(context.Background())
 
 	prep := func(dsName string) {
-		ds := db.GetDataset(dsName)
-		db.CommitValue(ds, types.NewMap(db, types.String("foo"), types.String("bar")))
+		ds := db.GetDataset(context.Background(), dsName)
+		db.CommitValue(context.Background(), ds, types.NewMap(context.Background(), db, types.String("foo"), types.String("bar")))
 	}
 	prep(l)
 	prep(r)

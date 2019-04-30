@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"encoding/binary"
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -13,7 +14,7 @@ import (
 type Int int64
 
 // Value interface
-func (v Int) Value() Value {
+func (v Int) Value(ctx context.Context) Value {
 	return v
 }
 
@@ -32,7 +33,7 @@ func (v Int) Hash() hash.Hash {
 	return getHash(v)
 }
 
-func (v Int) WalkValues(cb ValueCallback) {
+func (v Int) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (v Int) WalkRefs(cb RefCallback) {

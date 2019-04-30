@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -12,7 +13,7 @@ import (
 // sorted order.
 type SetIterator interface {
 	// Next returns subsequent values from a set. It returns nil, when no objects remain.
-	Next() Value
+	Next(ctx context.Context) Value
 
 	// SkipTo(v) advances to and returns the next value in the iterator >= v.
 	// Note: if the iterator has already returned the value being skipped to, it will return the next
@@ -28,7 +29,7 @@ type SetIterator interface {
 	//   i.skipTo(20) -- returns nil
 	// If there are no values left in the iterator that are >= v,
 	// the iterator will skip to the end of the sequence and return nil.
-	SkipTo(v Value) Value
+	SkipTo(ctx context.Context, v Value) Value
 }
 
 type setIterator struct {
@@ -37,27 +38,27 @@ type setIterator struct {
 	currentValue Value
 }
 
-func (si *setIterator) Next() Value {
+func (si *setIterator) Next(ctx context.Context) Value {
 	if si.cursor.valid() {
 		si.currentValue = si.cursor.current().(Value)
-		si.cursor.advance()
+		si.cursor.advance(ctx)
 	} else {
 		si.currentValue = nil
 	}
 	return si.currentValue
 }
 
-func (si *setIterator) SkipTo(v Value) Value {
+func (si *setIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
 	if si.cursor.valid() {
 		if compareValue(v, si.currentValue) <= 0 {
-			return si.Next()
+			return si.Next(ctx)
 		}
 
-		si.cursor = newCursorAtValue(si.s.orderedSequence, v, true, false)
+		si.cursor = newCursorAtValue(ctx, si.s.orderedSequence, v, true, false)
 		if si.cursor.valid() {
 			si.currentValue = si.cursor.current().(Value)
-			si.cursor.advance()
+			si.cursor.advance(ctx)
 		} else {
 			si.currentValue = nil
 		}
@@ -73,21 +74,21 @@ type iterState struct {
 	v Value
 }
 
-func (st *iterState) Next() Value {
+func (st *iterState) Next(ctx context.Context) Value {
 	if st.v == nil {
 		return nil
 	}
 	v := st.v
-	st.v = st.i.Next()
+	st.v = st.i.Next(ctx)
 	return v
 }
 
-func (st *iterState) SkipTo(v Value) Value {
+func (st *iterState) SkipTo(ctx context.Context, v Value) Value {
 	if st.v == nil || v == nil {
 		st.v = nil
 		return nil
 	}
-	st.v = st.i.SkipTo(v)
+	st.v = st.i.SkipTo(ctx, v)
 	return st.v
 }
 
@@ -99,49 +100,49 @@ type UnionIterator struct {
 }
 
 // NewUnionIterator creates a union iterator from two other SetIterators.
-func NewUnionIterator(iterA, iterB SetIterator) SetIterator {
+func NewUnionIterator(ctx context.Context, iterA, iterB SetIterator) SetIterator {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
-	a := iterState{i: iterA, v: iterA.Next()}
-	b := iterState{i: iterB, v: iterB.Next()}
+	a := iterState{i: iterA, v: iterA.Next(ctx)}
+	b := iterState{i: iterB, v: iterB.Next(ctx)}
 	return &UnionIterator{aState: a, bState: b}
 }
 
-func (u *UnionIterator) Next() Value {
+func (u *UnionIterator) Next(ctx context.Context) Value {
 	switch compareValue(u.aState.v, u.bState.v) {
 	case -1:
-		return u.aState.Next()
+		return u.aState.Next(ctx)
 	case 0:
-		u.aState.Next()
-		return u.bState.Next()
+		u.aState.Next(ctx)
+		return u.bState.Next(ctx)
 	case 1:
-		return u.bState.Next()
+		return u.bState.Next(ctx)
 	}
 	panic("Unreachable")
 }
 
-func (u *UnionIterator) SkipTo(v Value) Value {
+func (u *UnionIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
 	didAdvance := false
 	if compareValue(u.aState.v, v) < 0 {
 		didAdvance = true
-		u.aState.SkipTo(v)
+		u.aState.SkipTo(ctx, v)
 	}
 	if compareValue(u.bState.v, v) < 0 {
 		didAdvance = true
-		u.bState.SkipTo(v)
+		u.bState.SkipTo(ctx, v)
 	}
 	if !didAdvance {
-		return u.Next()
+		return u.Next(ctx)
 	}
 	switch compareValue(u.aState.v, u.bState.v) {
 	case -1:
-		return u.aState.Next()
+		return u.aState.Next(ctx)
 	case 0:
-		u.aState.Next()
-		return u.bState.Next()
+		u.aState.Next(ctx)
+		return u.bState.Next(ctx)
 	case 1:
-		return u.bState.Next()
+		return u.bState.Next(ctx)
 	}
 	panic("Unreachable")
 }
@@ -154,41 +155,41 @@ type IntersectionIterator struct {
 }
 
 // NewIntersectionIterator creates a intersect iterator from two other SetIterators.
-func NewIntersectionIterator(iterA, iterB SetIterator) SetIterator {
+func NewIntersectionIterator(ctx context.Context, iterA, iterB SetIterator) SetIterator {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
-	a := iterState{i: iterA, v: iterA.Next()}
-	b := iterState{i: iterB, v: iterB.Next()}
+	a := iterState{i: iterA, v: iterA.Next(ctx)}
+	b := iterState{i: iterB, v: iterB.Next(ctx)}
 	return &IntersectionIterator{aState: a, bState: b}
 }
 
-func (i *IntersectionIterator) Next() Value {
+func (i *IntersectionIterator) Next(ctx context.Context) Value {
 	for cont := true; cont; {
 		switch compareValue(i.aState.v, i.bState.v) {
 		case -1:
-			i.aState.SkipTo(i.bState.v)
+			i.aState.SkipTo(ctx, i.bState.v)
 		case 0:
 			cont = false
 		case 1:
-			i.bState.SkipTo(i.aState.v)
+			i.bState.SkipTo(ctx, i.aState.v)
 		}
 	}
 	// we only get here if aState and bState are equal
 	res := i.aState.v
-	i.aState.Next()
-	i.bState.Next()
+	i.aState.Next(ctx)
+	i.bState.Next(ctx)
 	return res
 }
 
-func (i *IntersectionIterator) SkipTo(v Value) Value {
+func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
 	if compareValue(v, i.aState.v) >= 0 {
-		i.aState.SkipTo(v)
+		i.aState.SkipTo(ctx, v)
 	}
 	if compareValue(v, i.bState.v) >= 0 {
-		i.bState.SkipTo(v)
+		i.bState.SkipTo(ctx, v)
 	}
-	return i.Next()
+	return i.Next(ctx)
 }
 
 // considers nil max value, return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2

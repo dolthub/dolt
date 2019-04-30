@@ -4,11 +4,14 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"context"
+	"github.com/attic-labs/noms/go/d"
+)
 
 type newSequenceChunkerFn func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker
 
-func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence {
+func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence {
 	if fst.numLeaves() == 0 {
 		return snd
 	}
@@ -23,9 +26,9 @@ func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence
 	if vrw != snd.valueReadWriter() {
 		d.Panic("cannot concat sequences from different databases")
 	}
-	chunker := newSequenceChunker(newCursorAtIndex(fst, fst.numLeaves()), vrw)
+	chunker := newSequenceChunker(newCursorAtIndex(ctx, fst, fst.numLeaves()), vrw)
 
-	for cur, ch := newCursorAtIndex(snd, 0), chunker; ch != nil; ch = ch.parent {
+	for cur, ch := newCursorAtIndex(ctx, snd, 0), chunker; ch != nil; ch = ch.parent {
 		// Note that if snd is shallower than fst, then higher chunkers will have
 		// their cursors set to nil. This has the effect of "dropping" the final
 		// item in each of those sequences.
@@ -35,10 +38,10 @@ func concat(fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence
 			if cur != nil && ch.parent == nil {
 				// If fst is shallower than snd, its cur will have a parent whereas the
 				// chunker to snd won't. In that case, create a parent for fst.
-				ch.createParent()
+				ch.createParent(ctx)
 			}
 		}
 	}
 
-	return chunker.Done()
+	return chunker.Done(ctx)
 }

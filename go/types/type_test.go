@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,15 +23,15 @@ func TestTypes(t *testing.T) {
 	)
 	recType := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType("RecursiveStruct"), false})
 
-	mRef := vs.WriteValue(mapType).TargetHash()
-	setRef := vs.WriteValue(setType).TargetHash()
-	mahRef := vs.WriteValue(mahType).TargetHash()
-	recRef := vs.WriteValue(recType).TargetHash()
+	mRef := vs.WriteValue(context.Background(), mapType).TargetHash()
+	setRef := vs.WriteValue(context.Background(), setType).TargetHash()
+	mahRef := vs.WriteValue(context.Background(), mahType).TargetHash()
+	recRef := vs.WriteValue(context.Background(), recType).TargetHash()
 
-	assert.True(mapType.Equals(vs.ReadValue(mRef)))
-	assert.True(setType.Equals(vs.ReadValue(setRef)))
-	assert.True(mahType.Equals(vs.ReadValue(mahRef)))
-	assert.True(recType.Equals(vs.ReadValue(recRef)))
+	assert.True(mapType.Equals(vs.ReadValue(context.Background(), mRef)))
+	assert.True(setType.Equals(vs.ReadValue(context.Background(), setRef)))
+	assert.True(mahType.Equals(vs.ReadValue(context.Background(), mahRef)))
+	assert.True(recType.Equals(vs.ReadValue(context.Background(), recRef)))
 }
 
 func TestTypeType(t *testing.T) {
@@ -42,20 +43,20 @@ func TestTypeRefDescribe(t *testing.T) {
 	mapType := MakeMapType(StringType, FloaTType)
 	setType := MakeSetType(StringType)
 
-	assert.Equal("Bool", BoolType.Describe())
-	assert.Equal("Float", FloaTType.Describe())
-	assert.Equal("String", StringType.Describe())
-	assert.Equal("UUID", UUIDType.Describe())
-	assert.Equal("Int", IntType.Describe())
-	assert.Equal("Uint", UintType.Describe())
-	assert.Equal("Map<String, Float>", mapType.Describe())
-	assert.Equal("Set<String>", setType.Describe())
+	assert.Equal("Bool", BoolType.Describe(context.Background()))
+	assert.Equal("Float", FloaTType.Describe(context.Background()))
+	assert.Equal("String", StringType.Describe(context.Background()))
+	assert.Equal("UUID", UUIDType.Describe(context.Background()))
+	assert.Equal("Int", IntType.Describe(context.Background()))
+	assert.Equal("Uint", UintType.Describe(context.Background()))
+	assert.Equal("Map<String, Float>", mapType.Describe(context.Background()))
+	assert.Equal("Set<String>", setType.Describe(context.Background()))
 
 	mahType := MakeStructType("MahStruct",
 		StructField{"Field1", StringType, false},
 		StructField{"Field2", BoolType, false},
 	)
-	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe())
+	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe(context.Background()))
 }
 
 func TestTypeOrdered(t *testing.T) {

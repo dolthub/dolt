@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -48,25 +49,25 @@ func checkIfTrue(b bool, format string, args ...interface{}) {
 	}
 }
 
-func runMerge(args []string) int {
+func runMerge(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 
 	if len(args) != 4 {
 		d.CheckErrorNoUsage(fmt.Errorf("Incorrect number of arguments"))
 	}
-	db, err := cfg.GetDatabase(args[0])
+	db, err := cfg.GetDatabase(ctx, args[0])
 	d.CheckError(err)
 	defer db.Close()
 
-	leftDS, rightDS, outDS := resolveDatasets(db, args[1], args[2], args[3])
-	left, right, ancestor := getMergeCandidates(db, leftDS, rightDS)
+	leftDS, rightDS, outDS := resolveDatasets(ctx, db, args[1], args[2], args[3])
+	left, right, ancestor := getMergeCandidates(ctx, db, leftDS, rightDS)
 	policy := decidePolicy(resolver)
 	pc := newMergeProgressChan()
-	merged, err := policy(left, right, ancestor, db, pc)
+	merged, err := policy(ctx, left, right, ancestor, db, pc)
 	d.CheckErrorNoUsage(err)
 	close(pc)
 
-	_, err = db.SetHead(outDS, db.WriteValue(datas.NewCommit(merged, types.NewSet(db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
+	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(merged, types.NewSet(ctx, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
 	d.PanicIfError(err)
 	if !verbose.Quiet() {
 		status.Printf("Done")
@@ -75,12 +76,12 @@ func runMerge(args []string) int {
 	return 0
 }
 
-func resolveDatasets(db datas.Database, leftName, rightName, outName string) (leftDS, rightDS, outDS datas.Dataset) {
+func resolveDatasets(ctx context.Context, db datas.Database, leftName, rightName, outName string) (leftDS, rightDS, outDS datas.Dataset) {
 	makeDS := func(dsName string) datas.Dataset {
 		if !datasetRe.MatchString(dsName) {
 			d.CheckErrorNoUsage(fmt.Errorf("Invalid dataset %s, must match %s", dsName, datas.DatasetRe.String()))
 		}
-		return db.GetDataset(dsName)
+		return db.GetDataset(ctx, dsName)
 	}
 	leftDS = makeDS(leftName)
 	rightDS = makeDS(rightName)
@@ -88,28 +89,28 @@ func resolveDatasets(db datas.Database, leftName, rightName, outName string) (le
 	return
 }
 
-func getMergeCandidates(db datas.Database, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value) {
+func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value) {
 	leftRef, ok := leftDS.MaybeHeadRef()
 	checkIfTrue(!ok, "Dataset %s has no data", leftDS.ID())
 	rightRef, ok := rightDS.MaybeHeadRef()
 	checkIfTrue(!ok, "Dataset %s has no data", rightDS.ID())
-	ancestorCommit, ok := getCommonAncestor(leftRef, rightRef, db)
+	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, db)
 	checkIfTrue(!ok, "Datasets %s and %s have no common ancestor", leftDS.ID(), rightDS.ID())
 
 	return leftDS.HeadValue(), rightDS.HeadValue(), ancestorCommit.Get(datas.ValueField)
 }
 
-func getCommonAncestor(r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
-	aRef, found := datas.FindCommonAncestor(r1, r2, vr)
+func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
+	aRef, found := datas.FindCommonAncestor(ctx, r1, r2, vr)
 	if !found {
 		return
 	}
-	v := vr.ReadValue(aRef.TargetHash())
+	v := vr.ReadValue(ctx, aRef.TargetHash())
 	if v == nil {
 		panic(aRef.TargetHash().String() + " not found")
 	}
 	if !datas.IsCommit(v) {
-		panic("Not a commit: " + types.EncodedValueMaxLines(v, 10) + "  ...")
+		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, v, 10) + "  ...")
 	}
 	return v.(types.Struct), true
 }

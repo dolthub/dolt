@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -22,15 +23,15 @@ func newMapMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) m
 	return newMetaSequenceFromTuples(MapKind, level, tuples, vrw)
 }
 
-func newCursorAtValue(seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
+func newCursorAtValue(ctx context.Context, seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
 	var key orderedKey
 	if val != nil {
 		key = newOrderedKey(val)
 	}
-	return newCursorAt(seq, key, forInsertion, last)
+	return newCursorAt(ctx, seq, key, forInsertion, last)
 }
 
-func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bool) *sequenceCursor {
+func newCursorAt(ctx context.Context, seq orderedSequence, key orderedKey, forInsertion bool, last bool) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
 		idx := 0
@@ -44,7 +45,7 @@ func newCursorAt(seq orderedSequence, key orderedKey, forInsertion bool, last bo
 			}
 		}
 
-		cs := cur.getChildSequence()
+		cs := cur.getChildSequence(ctx)
 		if cs == nil {
 			break
 		}

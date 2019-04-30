@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"sort"
 	"sync"
 
@@ -98,11 +99,11 @@ func (mt *memTable) hasMany(addrs []hasRecord) (remaining bool) {
 	return
 }
 
-func (mt *memTable) get(h addr, stats *Stats) []byte {
+func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) []byte {
 	return mt.chunks[h]
 }
 
-func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
+func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
@@ -115,7 +116,7 @@ func (mt *memTable) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg
 	return
 }
 
-func (mt *memTable) extract(chunks chan<- extractRecord) {
+func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) {
 	for _, hrec := range mt.order {
 		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a]}
 	}

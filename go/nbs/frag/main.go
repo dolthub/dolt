@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -48,11 +49,11 @@ func main() {
 
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
-		store = nbs.NewLocalStore(*dir, memTableSize)
+		store = nbs.NewLocalStore(context.Background(), *dir, memTableSize)
 		*dbName = *dir
 	} else if *table != "" && *bucket != "" && *dbName != "" {
 		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-		store = nbs.NewAWSStore(*table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
+		store = nbs.NewAWSStore(context.Background(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")
 	}
@@ -62,7 +63,7 @@ func main() {
 
 	defer profile.MaybeStartProfile().Stop()
 
-	height := types.NewRef(db.Datasets()).Height()
+	height := types.NewRef(db.Datasets(context.Background())).Height()
 	fmt.Println("Store is of height", height)
 	fmt.Println("| Height |   Nodes | Children | Branching | Groups | Reads | Pruned |")
 	fmt.Println("+--------+---------+----------+-----------+--------+-------+--------+")
@@ -71,11 +72,11 @@ func main() {
 	var optimal, sum int
 	visited := map[hash.Hash]bool{}
 
-	current := hash.HashSlice{store.Root()}
+	current := hash.HashSlice{store.Root(context.Background())}
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))
-		readValues := db.ReadManyValues(current)
+		readValues := db.ReadManyValues(context.Background(), current)
 		for i, v := range readValues {
 			h := current[i]
 			currentValues[h] = v

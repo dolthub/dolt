@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -18,7 +19,7 @@ type Valuable interface {
 	// Kind is the NomsKind describing the kind of value this is.
 	Kind() NomsKind
 
-	Value() Value
+	Value(ctx context.Context) Value
 }
 
 // Emptyable is an interface for Values which may or may not be empty
@@ -46,7 +47,7 @@ type Value interface {
 
 	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	// Type()
-	WalkValues(ValueCallback)
+	WalkValues(context.Context, ValueCallback)
 
 	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
 	// chunked then this will return the refs of th sub trees of the prolly-tree.

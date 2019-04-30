@@ -4,7 +4,10 @@
 
 package types
 
-import "github.com/attic-labs/noms/go/d"
+import (
+	"context"
+	"github.com/attic-labs/noms/go/d"
+)
 
 type hashValueBytesFn func(item sequenceItem, rv *rollingValueHasher)
 
@@ -25,11 +28,11 @@ type sequenceChunker struct {
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
 type makeChunkFn func(level uint64, values []sequenceItem) (Collection, orderedKey, uint64)
 
-func newEmptySequenceChunker(vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
-	return newSequenceChunker(nil, uint64(0), vrw, makeChunk, parentMakeChunk, hashValueBytes)
+func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
+	return newSequenceChunker(ctx, nil, uint64(0), vrw, makeChunk, parentMakeChunk, hashValueBytes)
 }
 
-func newSequenceChunker(cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
+func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
 	d.PanicIfFalse(makeChunk != nil)
 	d.PanicIfFalse(parentMakeChunk != nil)
 	d.PanicIfFalse(hashValueBytes != nil)
@@ -52,31 +55,31 @@ func newSequenceChunker(cur *sequenceCursor, level uint64, vrw ValueReadWriter, 
 	}
 
 	if cur != nil {
-		sc.resume()
+		sc.resume(ctx)
 	}
 
 	return sc
 }
 
-func (sc *sequenceChunker) resume() {
+func (sc *sequenceChunker) resume(ctx context.Context) {
 	if sc.cur.parent != nil && sc.parent == nil {
-		sc.createParent()
+		sc.createParent(ctx)
 	}
 
 	idx := sc.cur.idx
 
 	// Walk backwards to the start of the existing chunk.
-	for sc.cur.indexInChunk() > 0 && sc.cur.retreatMaybeAllowBeforeStart(false) {
+	for sc.cur.indexInChunk() > 0 && sc.cur.retreatMaybeAllowBeforeStart(ctx, false) {
 	}
 
-	for ; sc.cur.idx < idx; sc.cur.advance() {
-		sc.Append(sc.cur.current())
+	for ; sc.cur.idx < idx; sc.cur.advance(ctx) {
+		sc.Append(ctx, sc.cur.current())
 	}
 }
 
 // advanceTo advances the sequenceChunker to the next "spine" at which
 // modifications to the prolly-tree should take place
-func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
+func (sc *sequenceChunker) advanceTo(ctx context.Context, next *sequenceCursor) {
 	// There are four basic situations which must be handled when advancing to a
 	// new chunking position:
 	//
@@ -99,14 +102,14 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 	//             parent chunkers then sc.resume() at |next|
 
 	for sc.cur.compare(next) > 0 {
-		next.advance() // Case (2)
+		next.advance(ctx) // Case (2)
 	}
 
 	// If neither loop above and below are entered, it is Case (1). If the loop
 	// below is entered but Case (4) isn't reached, then it is Case (3).
 	reachedNext := true
 	for sc.cur.compare(next) < 0 {
-		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
+		if sc.Append(ctx, sc.cur.current()) && sc.cur.atLastItem() {
 			if sc.cur.parent != nil {
 
 				if sc.cur.parent.compare(next.parent) < 0 {
@@ -120,7 +123,7 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 				// but that would force loading of the next sequence, which we don't
 				// need for any reason, so instead we advance the parent and take care
 				// not to allow it to step outside the sequence.
-				sc.cur.parent.advanceMaybeAllowPastEnd(false)
+				sc.cur.parent.advanceMaybeAllowPastEnd(ctx, false)
 
 				// Invalidate this cursor, since it is now inconsistent with its parent
 				sc.cur.parent = nil
@@ -130,48 +133,48 @@ func (sc *sequenceChunker) advanceTo(next *sequenceCursor) {
 			break
 		}
 
-		sc.cur.advance()
+		sc.cur.advance(ctx)
 	}
 
 	if sc.parent != nil && next.parent != nil {
-		sc.parent.advanceTo(next.parent)
+		sc.parent.advanceTo(ctx, next.parent)
 	}
 
 	sc.cur = next
 	if !reachedNext {
-		sc.resume() // Case (4)
+		sc.resume(ctx) // Case (4)
 	}
 }
 
-func (sc *sequenceChunker) Append(item sequenceItem) bool {
+func (sc *sequenceChunker) Append(ctx context.Context, item sequenceItem) bool {
 	d.PanicIfTrue(item == nil)
 	sc.current = append(sc.current, item)
 	sc.hashValueBytes(item, sc.rv)
 	if sc.rv.crossedBoundary {
-		sc.handleChunkBoundary()
+		sc.handleChunkBoundary(ctx)
 		return true
 	}
 	return false
 }
 
-func (sc *sequenceChunker) Skip() {
-	sc.cur.advance()
+func (sc *sequenceChunker) Skip(ctx context.Context) {
+	sc.cur.advance(ctx)
 }
 
-func (sc *sequenceChunker) createParent() {
+func (sc *sequenceChunker) createParent(ctx context.Context) {
 	d.PanicIfFalse(sc.parent == nil)
 	var parent *sequenceCursor
 	if sc.cur != nil && sc.cur.parent != nil {
 		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
 		parent = sc.cur.parent
 	}
-	sc.parent = newSequenceChunker(parent, sc.level+1, sc.vrw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
+	sc.parent = newSequenceChunker(ctx, parent, sc.level+1, sc.vrw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
 	sc.parent.isLeaf = false
 
 	if sc.unwrittenCol != nil {
 		// There is an unwritten collection, but this chunker now has a parent, so
 		// write it. See createSequence().
-		sc.vrw.WriteValue(sc.unwrittenCol)
+		sc.vrw.WriteValue(ctx, sc.unwrittenCol)
 		sc.unwrittenCol = nil
 	}
 }
@@ -189,7 +192,7 @@ func (sc *sequenceChunker) createParent() {
 // canonical root of the sequence (see Done()), then we will have ended up
 // unnecessarily writing a chunk - the canonical root. However, this is a fair
 // tradeoff for simplicity of the chunking algorithm.
-func (sc *sequenceChunker) createSequence(write bool) (sequence, metaTuple) {
+func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequence, metaTuple) {
 	col, key, numLeaves := sc.makeChunk(sc.level, sc.current)
 
 	// |sc.makeChunk| copies |sc.current| so it's safe to re-use the memory.
@@ -197,7 +200,7 @@ func (sc *sequenceChunker) createSequence(write bool) (sequence, metaTuple) {
 
 	var ref Ref
 	if write {
-		ref = sc.vrw.WriteValue(col)
+		ref = sc.vrw.WriteValue(ctx, col)
 	} else {
 		ref = NewRef(col)
 		sc.unwrittenCol = col
@@ -207,14 +210,14 @@ func (sc *sequenceChunker) createSequence(write bool) (sequence, metaTuple) {
 	return col.asSequence(), mt
 }
 
-func (sc *sequenceChunker) handleChunkBoundary() {
+func (sc *sequenceChunker) handleChunkBoundary(ctx context.Context) {
 	d.PanicIfFalse(len(sc.current) > 0)
 	sc.rv.Reset()
 	if sc.parent == nil {
-		sc.createParent()
+		sc.createParent(ctx)
 	}
-	_, mt := sc.createSequence(true)
-	sc.parent.Append(mt)
+	_, mt := sc.createSequence(ctx, true)
+	sc.parent.Append(ctx, mt)
 }
 
 // Returns true if this chunker or any of its parents have any pending items in their |current| slice.
@@ -231,22 +234,22 @@ func (sc *sequenceChunker) anyPending() bool {
 }
 
 // Returns the root sequence of the resulting tree. The logic here is subtle, but hopefully correct and understandable. See comments inline.
-func (sc *sequenceChunker) Done() sequence {
+func (sc *sequenceChunker) Done(ctx context.Context) sequence {
 	d.PanicIfTrue(sc.done)
 	sc.done = true
 
 	if sc.cur != nil {
-		sc.finalizeCursor()
+		sc.finalizeCursor(ctx)
 	}
 
 	// There is pending content above us, so we must push any remaining items from this level up and allow some parent to find the root of the resulting tree.
 	if sc.parent != nil && sc.parent.anyPending() {
 		if len(sc.current) > 0 {
 			// If there are items in |current| at this point, they represent the final items of the sequence which occurred beyond the previous *explicit* chunk boundary. The end of input of a sequence is considered an *implicit* boundary.
-			sc.handleChunkBoundary()
+			sc.handleChunkBoundary(ctx)
 		}
 
-		return sc.parent.Done()
+		return sc.parent.Done(ctx)
 	}
 
 	// At this point, we know this chunker contains, in |current| every item at this level of the resulting tree. To see this, consider that there are two ways a chunker can enter items into its |current|: (1) as the result of resume() with the cursor on anything other than the first item in the sequence, and (2) as a result of a child chunker hitting an explicit chunk boundary during either Append() or finalize(). The only way there can be no items in some parent chunker's |current| is if this chunker began with cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any items up to a parent as a result of chunking). Therefore, this chunker's current must contain all items within the current sequence.
@@ -255,7 +258,7 @@ func (sc *sequenceChunker) Done() sequence {
 
 	// (1) This is "leaf" chunker and thus produced tree of depth 1 which contains exactly one chunk (never hit a boundary), or (2) This in an internal node of the tree which contains multiple references to child nodes. In either case, this is the canonical root of the tree.
 	if sc.isLeaf || len(sc.current) > 1 {
-		seq, _ := sc.createSequence(false)
+		seq, _ := sc.createSequence(ctx, false)
 		return seq
 	}
 
@@ -264,7 +267,7 @@ func (sc *sequenceChunker) Done() sequence {
 	mt := sc.current[0].(metaTuple)
 
 	for {
-		child := mt.getChildSequence(sc.vrw)
+		child := mt.getChildSequence(ctx, sc.vrw)
 		if _, ok := child.(metaSequence); !ok || child.seqLen() > 1 {
 			return child
 		}
@@ -274,15 +277,15 @@ func (sc *sequenceChunker) Done() sequence {
 }
 
 // If we are mutating an existing sequence, appending subsequent items in the sequence until we reach a pre-existing chunk boundary or the end of the sequence.
-func (sc *sequenceChunker) finalizeCursor() {
-	for ; sc.cur.valid(); sc.cur.advance() {
-		if sc.Append(sc.cur.current()) && sc.cur.atLastItem() {
+func (sc *sequenceChunker) finalizeCursor(ctx context.Context) {
+	for ; sc.cur.valid(); sc.cur.advance(ctx) {
+		if sc.Append(ctx, sc.cur.current()) && sc.cur.atLastItem() {
 			break // boundary occurred at same place in old & new sequence
 		}
 	}
 
 	if sc.cur.parent != nil {
-		sc.cur.parent.advance()
+		sc.cur.parent.advance(ctx)
 
 		// Invalidate this cursor, since it is now inconsistent with its parent
 		sc.cur.parent = nil

@@ -5,12 +5,13 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 )
 
-func assertSubtype(t *Type, v Value) {
+func assertSubtype(ctx context.Context, t *Type, v Value) {
 	if !IsValueSubtypeOf(v, t) {
-		d.Panic("Invalid type. %s is not a subtype of %s", TypeOf(v).Describe(), t.Describe())
+		d.Panic("Invalid type. %s is not a subtype of %s", TypeOf(v).Describe(ctx), t.Describe(ctx))
 	}
 }
 

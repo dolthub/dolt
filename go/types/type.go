@@ -6,6 +6,7 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 )
 
@@ -27,8 +28,8 @@ func newType(desc TypeDesc) *Type {
 }
 
 // Describe generate text that should parse into the struct being described.
-func (t *Type) Describe() (out string) {
-	return EncodedValue(t)
+func (t *Type) Describe(ctx context.Context) (out string) {
+	return EncodedValue(ctx, t)
 }
 
 func (t *Type) TargetKind() NomsKind {
@@ -36,7 +37,7 @@ func (t *Type) TargetKind() NomsKind {
 }
 
 // Value interface
-func (t *Type) Value() Value {
+func (t *Type) Value(ctx context.Context) Value {
 	return t
 }
 
@@ -70,7 +71,7 @@ func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type) {
 	t.Desc.writeTo(w, t, seensStructs)
 }
 
-func (t *Type) WalkValues(cb ValueCallback) {
+func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
 	t.Desc.walkValues(cb)
 }
 

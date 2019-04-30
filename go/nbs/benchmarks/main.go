@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -81,7 +82,7 @@ func main() {
 		if *toNBS != "" {
 			dir := makeTempDir(*toNBS, pb)
 			defer os.RemoveAll(dir)
-			open = func() chunks.ChunkStore { return nbs.NewLocalStore(dir, bufSize) }
+			open = func() chunks.ChunkStore { return nbs.NewLocalStore(context.Background(), dir, bufSize) }
 			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
 
 		} else if *toFile != "" {
@@ -97,7 +98,7 @@ func main() {
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() chunks.ChunkStore {
-				return nbs.NewAWSStore(dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 			reset = func() {
 				ddb := dynamodb.New(sess)
@@ -118,11 +119,11 @@ func main() {
 		}
 	} else {
 		if *useNBS != "" {
-			open = func() chunks.ChunkStore { return nbs.NewLocalStore(*useNBS, bufSize) }
+			open = func() chunks.ChunkStore { return nbs.NewLocalStore(context.Background(), *useNBS, bufSize) }
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() chunks.ChunkStore {
-				return nbs.NewAWSStore(dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 		}
 		writeDB = func() {}

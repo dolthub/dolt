@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 
 	"github.com/attic-labs/noms/go/hash"
 )
@@ -107,8 +108,8 @@ func (r Ref) Height() uint64 {
 	return dec.readCount()
 }
 
-func (r Ref) TargetValue(vr ValueReader) Value {
-	return vr.ReadValue(r.TargetHash())
+func (r Ref) TargetValue(ctx context.Context, vr ValueReader) Value {
+	return vr.ReadValue(ctx, r.TargetHash())
 }
 
 func (r Ref) TargetType() *Type {
@@ -117,11 +118,11 @@ func (r Ref) TargetType() *Type {
 }
 
 // Value interface
-func (r Ref) Value() Value {
+func (r Ref) Value(ctx context.Context) Value {
 	return r
 }
 
-func (r Ref) WalkValues(cb ValueCallback) {
+func (r Ref) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (r Ref) typeOf() *Type {

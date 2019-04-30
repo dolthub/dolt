@@ -5,6 +5,7 @@
 package types
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/d"
@@ -30,11 +31,11 @@ func (se *SetEditor) Kind() NomsKind {
 	return SetKind
 }
 
-func (se *SetEditor) Value() Value {
-	return se.Set()
+func (se *SetEditor) Value(ctx context.Context) Value {
+	return se.Set(ctx)
 }
 
-func (se *SetEditor) Set() Set {
+func (se *SetEditor) Set(ctx context.Context) Set {
 	if len(se.edits) == 0 {
 		return se.s // no edits
 	}
@@ -60,7 +61,7 @@ func (se *SetEditor) Set() Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(seq, edit.value, true, false)
+				cc <- newCursorAtValue(ctx, seq, edit.value, true, false)
 			}()
 
 			editChan <- edit
@@ -91,15 +92,15 @@ func (se *SetEditor) Set() Set {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 		} else {
-			ch.advanceTo(cur)
+			ch.advanceTo(ctx, cur)
 		}
 
 		if edit.insert {
-			ch.Append(edit.value)
+			ch.Append(ctx, edit.value)
 		} else {
-			ch.Skip()
+			ch.Skip(ctx)
 		}
 	}
 
@@ -107,7 +108,7 @@ func (se *SetEditor) Set() Set {
 		return se.s // no edits required application
 	}
 
-	return newSet(ch.Done().(orderedSequence))
+	return newSet(ch.Done(ctx).(orderedSequence))
 }
 
 func (se *SetEditor) Insert(vs ...Value) *SetEditor {
@@ -128,12 +129,12 @@ func (se *SetEditor) Remove(vs ...Value) *SetEditor {
 	return se
 }
 
-func (se *SetEditor) Has(v Value) bool {
+func (se *SetEditor) Has(ctx context.Context, v Value) bool {
 	if idx, found := se.findEdit(v); found {
 		return se.edits[idx].insert
 	}
 
-	return se.s.Has(v)
+	return se.s.Has(ctx, v)
 }
 
 func (se *SetEditor) edit(v Value, insert bool) {

@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"strconv"
 
@@ -19,7 +20,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 )
 
-func nomsSet(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
+func nomsSet(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
 	set := noms.Command("set", "interact with sets")
 
 	setNew := set.Command("new", "creates a new set")
@@ -37,49 +38,49 @@ func nomsSet(noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler
 	return set, func(input string) int {
 		switch input {
 		case setNew.FullCommand():
-			return nomsSetNew(*newDb, *newEntries)
+			return nomsSetNew(ctx, *newDb, *newEntries)
 		case setInsert.FullCommand():
-			return nomsSetInsert(*insertSpec, *insertEntries)
+			return nomsSetInsert(ctx, *insertSpec, *insertEntries)
 		case setDel.FullCommand():
-			return nomsSetDel(*delSpec, *delEntries)
+			return nomsSetDel(ctx, *delSpec, *delEntries)
 		}
 		d.Panic("notreached")
 		return 1
 	}
 }
 
-func nomsSetNew(dbStr string, args []string) int {
+func nomsSetNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applySetEdits(sp, types.NewSet(sp.GetDatabase()), nil, types.DiffChangeAdded, args)
+	applySetEdits(ctx, sp, types.NewSet(ctx, sp.GetDatabase(ctx)), nil, types.DiffChangeAdded, args)
 	return 0
 }
 
-func nomsSetInsert(specStr string, args []string) int {
+func nomsSetInsert(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(sp)
-	applySetEdits(sp, rootVal, basePath, types.DiffChangeAdded, args)
+	rootVal, basePath := splitPath(ctx, sp)
+	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeAdded, args)
 	return 0
 }
 
-func nomsSetDel(specStr string, args []string) int {
+func nomsSetDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(sp)
-	applySetEdits(sp, rootVal, basePath, types.DiffChangeRemoved, args)
+	rootVal, basePath := splitPath(ctx, sp)
+	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeRemoved, args)
 	return 0
 }
 
-func applySetEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ct types.DiffChangeType, args []string) {
+func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, ct types.DiffChangeType, args []string) {
 	if rootVal == nil {
 		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase()
+	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
-		vv, err := argumentToValue(args[i], db)
+		vv, err := argumentToValue(ctx, args[i], db)
 		if err != nil {
 			d.CheckErrorNoUsage(err)
 		}
@@ -99,10 +100,10 @@ func applySetEdits(sp spec.Spec, rootVal types.Value, basePath types.Path, ct ty
 		}
 		patch = append(patch, d)
 	}
-	appplyPatch(sp, rootVal, basePath, patch)
+	appplyPatch(ctx, sp, rootVal, basePath, patch)
 }
 
-func argumentToValue(arg string, db datas.Database) (types.Value, error) {
+func argumentToValue(ctx context.Context, arg string, db datas.Database) (types.Value, error) {
 	d.PanicIfTrue(arg == "")
 
 	if arg == "true" {
@@ -135,7 +136,7 @@ func argumentToValue(arg string, db datas.Database) (types.Value, error) {
 	if arg[0] == '@' {
 		p, err := spec.NewAbsolutePath(arg[1:])
 		d.PanicIfError(err)
-		return p.Resolve(db), nil
+		return p.Resolve(ctx, db), nil
 	}
 	if n, err := strconv.ParseFloat(arg, 64); err == nil {
 		return types.Float(n), nil

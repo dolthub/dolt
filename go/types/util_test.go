@@ -5,18 +5,19 @@
 package types
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 )
 
 type iterator interface {
-	Next() Value
+	Next(ctx context.Context) Value
 }
 
 func iterToSlice(iter iterator) ValueSlice {
 	vs := ValueSlice{}
 	for {
-		v := iter.Next()
+		v := iter.Next(context.Background())
 		if v == nil {
 			break
 		}
@@ -68,14 +69,14 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		r := vrw.WriteValue(NewStruct("num", StructData{"n": Float(i)}))
+		r := vrw.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i)}))
 		nums = append(nums, r)
 	}
 	return nums
 }
 
 func leafCount(c Collection) int {
-	leaves, _ := LoadLeafNodes([]Collection{c}, 0, c.Len())
+	leaves, _ := LoadLeafNodes(context.Background(), []Collection{c}, 0, c.Len())
 	return len(leaves)
 }
 
@@ -83,8 +84,8 @@ func leafDiffCount(c1, c2 Collection) int {
 	count := 0
 	hashes := make(map[hash.Hash]int)
 
-	leaves1, _ := LoadLeafNodes([]Collection{c1}, 0, c1.Len())
-	leaves2, _ := LoadLeafNodes([]Collection{c2}, 0, c2.Len())
+	leaves1, _ := LoadLeafNodes(context.Background(), []Collection{c1}, 0, c1.Len())
+	leaves2, _ := LoadLeafNodes(context.Background(), []Collection{c2}, 0, c2.Len())
 
 	for _, l := range leaves1 {
 		hashes[l.Hash()]++

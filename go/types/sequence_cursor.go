@@ -4,6 +4,7 @@
 
 package types
 
+import "context"
 import "github.com/attic-labs/noms/go/d"
 import "fmt"
 
@@ -38,15 +39,15 @@ func (cur *sequenceCursor) getItem(idx int) sequenceItem {
 
 // sync loads the sequence that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
-func (cur *sequenceCursor) sync() {
+func (cur *sequenceCursor) sync(ctx context.Context) {
 	d.PanicIfFalse(cur.parent != nil)
-	cur.seq = cur.parent.getChildSequence()
+	cur.seq = cur.parent.getChildSequence(ctx)
 	cur.seqLen = cur.seq.seqLen()
 }
 
 // getChildSequence retrieves the child at the current cursor position.
-func (cur *sequenceCursor) getChildSequence() sequence {
-	return cur.seq.getChildSequence(cur.idx)
+func (cur *sequenceCursor) getChildSequence(ctx context.Context) sequence {
+	return cur.seq.getChildSequence(ctx, cur.idx)
 }
 
 // current returns the value at the current cursor position
@@ -67,11 +68,11 @@ func (cur *sequenceCursor) atLastItem() bool {
 	return cur.idx == cur.length()-1
 }
 
-func (cur *sequenceCursor) advance() bool {
-	return cur.advanceMaybeAllowPastEnd(true)
+func (cur *sequenceCursor) advance(ctx context.Context) bool {
+	return cur.advanceMaybeAllowPastEnd(ctx, true)
 }
 
-func (cur *sequenceCursor) advanceMaybeAllowPastEnd(allowPastEnd bool) bool {
+func (cur *sequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) bool {
 	if cur.idx < cur.length()-1 {
 		cur.idx++
 		return true
@@ -79,9 +80,9 @@ func (cur *sequenceCursor) advanceMaybeAllowPastEnd(allowPastEnd bool) bool {
 	if cur.idx == cur.length() {
 		return false
 	}
-	if cur.parent != nil && cur.parent.advanceMaybeAllowPastEnd(false) {
+	if cur.parent != nil && cur.parent.advanceMaybeAllowPastEnd(ctx, false) {
 		// at end of current leaf chunk and there are more
-		cur.sync()
+		cur.sync(ctx)
 		cur.idx = 0
 		return true
 	}
@@ -91,11 +92,11 @@ func (cur *sequenceCursor) advanceMaybeAllowPastEnd(allowPastEnd bool) bool {
 	return false
 }
 
-func (cur *sequenceCursor) retreat() bool {
-	return cur.retreatMaybeAllowBeforeStart(true)
+func (cur *sequenceCursor) retreat(ctx context.Context) bool {
+	return cur.retreatMaybeAllowBeforeStart(ctx, true)
 }
 
-func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(allowBeforeStart bool) bool {
+func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) bool {
 	if cur.idx > 0 {
 		cur.idx--
 		return true
@@ -104,8 +105,8 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(allowBeforeStart bool) b
 		return false
 	}
 	d.PanicIfFalse(0 == cur.idx)
-	if cur.parent != nil && cur.parent.retreatMaybeAllowBeforeStart(false) {
-		cur.sync()
+	if cur.parent != nil && cur.parent.retreatMaybeAllowBeforeStart(ctx, false) {
+		cur.sync(ctx)
 		cur.idx = cur.length() - 1
 		return true
 	}
@@ -153,9 +154,9 @@ func (cur *sequenceCursor) compare(other *sequenceCursor) int {
 }
 
 // iter iterates forward from the current position
-func (cur *sequenceCursor) iter(cb cursorIterCallback) {
+func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) {
 	for cur.valid() && !cb(cur.getItem(cur.idx)) {
-		cur.advance()
+		cur.advance(ctx)
 	}
 }
 
@@ -164,12 +165,12 @@ func (cur *sequenceCursor) iter(cb cursorIterCallback) {
 // Implemented by searching down the tree to the leaf sequence containing idx. Each
 // sequence cursor includes a back pointer to its parent so that it can follow the path
 // to the next leaf chunk when the cursor exhausts the entries in the current chunk.
-func newCursorAtIndex(seq sequence, idx uint64) *sequenceCursor {
+func newCursorAtIndex(ctx context.Context, seq sequence, idx uint64) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
 		cur = newSequenceCursor(cur, seq, 0)
 		idx = idx - advanceCursorToOffset(cur, idx)
-		cs := cur.getChildSequence()
+		cs := cur.getChildSequence(ctx)
 		if cs == nil {
 			break
 		}

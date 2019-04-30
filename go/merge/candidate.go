@@ -5,6 +5,7 @@
 package merge
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/attic-labs/noms/go/d"
@@ -16,9 +17,9 @@ import (
 // threeWayOrderedSequenceMerge() can remain agnostic to which kind of
 // collections it's actually working with.
 type candidate interface {
-	diff(parent candidate, change chan<- types.ValueChanged, stop <-chan struct{})
-	get(k types.Value) types.Value
-	pathConcat(change types.ValueChanged, path types.Path) (out types.Path)
+	diff(ctx context.Context, parent candidate, change chan<- types.ValueChanged, stop <-chan struct{})
+	get(ctx context.Context, k types.Value) types.Value
+	pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path)
 	getValue() types.Value
 }
 
@@ -26,15 +27,15 @@ type mapCandidate struct {
 	m types.Map
 }
 
-func (mc mapCandidate) diff(p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	mc.m.Diff(p.(mapCandidate).m, change, stop)
+func (mc mapCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
+	mc.m.Diff(ctx, p.(mapCandidate).m, change, stop)
 }
 
-func (mc mapCandidate) get(k types.Value) types.Value {
-	return mc.m.Get(k)
+func (mc mapCandidate) get(ctx context.Context, k types.Value) types.Value {
+	return mc.m.Get(ctx, k)
 }
 
-func (mc mapCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
+func (mc mapCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
@@ -52,15 +53,15 @@ type setCandidate struct {
 	s types.Set
 }
 
-func (sc setCandidate) diff(p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	sc.s.Diff(p.(setCandidate).s, change, stop)
+func (sc setCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
+	sc.s.Diff(ctx, p.(setCandidate).s, change, stop)
 }
 
-func (sc setCandidate) get(k types.Value) types.Value {
+func (sc setCandidate) get(ctx context.Context, k types.Value) types.Value {
 	return k
 }
 
-func (sc setCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
+func (sc setCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
@@ -78,23 +79,23 @@ type structCandidate struct {
 	s types.Struct
 }
 
-func (sc structCandidate) diff(p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
+func (sc structCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
 	sc.s.Diff(p.(structCandidate).s, change, stop)
 }
 
-func (sc structCandidate) get(key types.Value) types.Value {
+func (sc structCandidate) get(ctx context.Context, key types.Value) types.Value {
 	if field, ok := key.(types.String); ok {
 		val, _ := sc.s.MaybeGet(string(field))
 		return val
 	}
-	panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(key).Describe()))
+	panic(fmt.Errorf("Bad key type in diff: %s", types.TypeOf(key).Describe(ctx)))
 }
 
-func (sc structCandidate) pathConcat(change types.ValueChanged, path types.Path) (out types.Path) {
+func (sc structCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	str, ok := change.Key.(types.String)
 	if !ok {
-		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe())
+		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe(ctx))
 	}
 	return append(out, types.NewFieldPath(string(str)))
 }

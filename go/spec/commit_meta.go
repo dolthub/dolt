@@ -5,6 +5,7 @@
 package spec
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -37,7 +38,7 @@ func RegisterCommitMetaFlags(flags *flag.FlagSet) {
 // Database is used only if commitMetaKeyValuePaths are provided on the command line and values need to be resolved.
 // Date should be ISO 8601 format (see CommitMetaDateFormat), if empty the current date is used.
 // The values passed as command line arguments (if any) are merged with the values provided as function arguments.
-func CreateCommitMetaStruct(db datas.Database, date, message string, keyValueStrings map[string]string, keyValuePaths map[string]types.Value) (types.Struct, error) {
+func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, message string, keyValueStrings map[string]string, keyValuePaths map[string]types.Value) (types.Struct, error) {
 	metaValues := types.StructData{}
 
 	resolvePathFunc := func(path string) (types.Value, error) {
@@ -45,7 +46,7 @@ func CreateCommitMetaStruct(db datas.Database, date, message string, keyValueStr
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("Bad path for meta-p: %s", path))
 		}
-		return absPath.Resolve(db), nil
+		return absPath.Resolve(ctx, db), nil
 	}
 	parseMetaStrings := func(param string, resolveAsPaths bool) error {
 		if param == "" {

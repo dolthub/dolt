@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"sync"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 )
 
-func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
+func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
 	t1 := time.Now()
 
 	ccs := &persistingChunkSource{mt: mt}
@@ -22,7 +23,7 @@ func newPersistingChunkSource(mt *memTable, haver chunkReader, p tablePersister,
 	rl <- struct{}{}
 	go func() {
 		defer ccs.wg.Done()
-		cs := p.Persist(mt, haver, stats)
+		cs := p.Persist(ctx, mt, haver, stats)
 
 		ccs.mu.Lock()
 		defer ccs.mu.Unlock()
@@ -66,16 +67,16 @@ func (ccs *persistingChunkSource) hasMany(addrs []hasRecord) bool {
 	return cr.hasMany(addrs)
 }
 
-func (ccs *persistingChunkSource) get(h addr, stats *Stats) []byte {
+func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats) []byte {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
-	return cr.get(h, stats)
+	return cr.get(ctx, h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
+func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
 	cr := ccs.getReader()
 	d.Chk.True(cr != nil)
-	return cr.getMany(reqs, foundChunks, wg, stats)
+	return cr.getMany(ctx, reqs, foundChunks, wg, stats)
 }
 
 func (ccs *persistingChunkSource) count() uint32 {
@@ -102,10 +103,10 @@ func (ccs *persistingChunkSource) index() tableIndex {
 	return ccs.cs.index()
 }
 
-func (ccs *persistingChunkSource) reader() io.Reader {
+func (ccs *persistingChunkSource) reader(ctx context.Context) io.Reader {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
-	return ccs.cs.reader()
+	return ccs.cs.reader(ctx)
 }
 
 func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {
@@ -114,10 +115,10 @@ func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) 
 	return ccs.cs.calcReads(reqs, blockSize)
 }
 
-func (ccs *persistingChunkSource) extract(chunks chan<- extractRecord) {
+func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
-	ccs.cs.extract(chunks)
+	ccs.cs.extract(ctx, chunks)
 }
 
 type emptyChunkSource struct{}
@@ -130,11 +131,11 @@ func (ecs emptyChunkSource) hasMany(addrs []hasRecord) bool {
 	return true
 }
 
-func (ecs emptyChunkSource) get(h addr, stats *Stats) []byte {
+func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) []byte {
 	return nil
 }
 
-func (ecs emptyChunkSource) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
+func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
 	return true
 }
 
@@ -154,7 +155,7 @@ func (ecs emptyChunkSource) index() tableIndex {
 	return tableIndex{}
 }
 
-func (ecs emptyChunkSource) reader() io.Reader {
+func (ecs emptyChunkSource) reader(context.Context) io.Reader {
 	return &bytes.Buffer{}
 }
 
@@ -162,4 +163,4 @@ func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads
 	return 0, true
 }
 
-func (ecs emptyChunkSource) extract(chunks chan<- extractRecord) {}
+func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) {}

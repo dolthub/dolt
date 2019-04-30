@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ func TestAWSChunkSource(t *testing.T) {
 
 	makeSrc := func(chunkMax int, ic *indexCache) chunkSource {
 		return newAWSChunkSource(
+			context.Background(),
 			dts,
 			s3or,
 			awsLimits{itemMax: maxDynamoItemSize, chunkMax: uint32(chunkMax)},

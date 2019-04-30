@@ -70,6 +70,7 @@ package suite
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -237,7 +238,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	}
 
 	defer func() {
-		db := sp.GetDatabase()
+		db := sp.GetDatabase(context.Background())
 
 		reps := make([]types.Value, *perfRepeatFlag)
 		for i, rep := range testReps {
@@ -249,18 +250,18 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 					"total":   types.Float(info.total.Nanoseconds()),
 				}))
 			}
-			reps[i] = types.NewMap(db, timesSlice...)
+			reps[i] = types.NewMap(context.Background(), db, timesSlice...)
 		}
 
 		record := types.NewStruct("", map[string]types.Value{
 			"environment":      suite.getEnvironment(db),
 			"nomsRevision":     types.String(suite.getGitHead(path.Join(suite.AtticLabs, "noms"))),
 			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
-			"reps":             types.NewList(db, reps...),
+			"reps":             types.NewList(context.Background(), db, reps...),
 		})
 
-		ds := db.GetDataset(*perfPrefixFlag + datasetID)
-		_, err := db.CommitValue(ds, record)
+		ds := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)
+		_, err := db.CommitValue(context.Background(), ds, record)
 		assert.NoError(err)
 	}()
 
@@ -273,7 +274,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 
 		serverHost, stopServerFn := suite.StartRemoteDatabase()
 		suite.DatabaseSpec = serverHost
-		suite.Database = datas.NewDatabase(datas.NewHTTPChunkStore(serverHost, ""))
+		suite.Database = datas.NewDatabase(datas.NewHTTPChunkStore(context.Background(), serverHost, ""))
 		defer suite.Database.Close()
 
 		if t, ok := suiteT.(SetupRepSuite); ok {
@@ -451,7 +452,7 @@ func (suite *PerfSuite) getEnvironment(vrw types.ValueReadWriter) types.Value {
 	assert.NoError(err)
 	env.Host = *hostInfo
 
-	envStruct, err := marshal.Marshal(vrw, env)
+	envStruct, err := marshal.Marshal(context.Background(), vrw, env)
 	assert.NoError(err)
 	return envStruct
 }
@@ -496,7 +497,7 @@ func (suite *PerfSuite) StartRemoteDatabase() (host string, stopFn func()) {
 		chunkStore = st.NewView()
 	} else {
 		dbDir := suite.TempDir()
-		chunkStore = nbs.NewLocalStore(dbDir, 128*(1<<20))
+		chunkStore = nbs.NewLocalStore(context.Background(), dbDir, 128*(1<<20))
 	}
 
 	server := datas.NewRemoteDatabaseServer(chunkStore, 0)

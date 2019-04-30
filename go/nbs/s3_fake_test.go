@@ -18,6 +18,7 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
 )
@@ -63,7 +64,7 @@ func (m *fakeS3) readerForTable(name addr) chunkReader {
 	return nil
 }
 
-func (m *fakeS3) AbortMultipartUpload(input *s3.AbortMultipartUploadInput) (*s3.AbortMultipartUploadOutput, error) {
+func (m *fakeS3) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.UploadId, "UploadId is a required field")
@@ -78,7 +79,7 @@ func (m *fakeS3) AbortMultipartUpload(input *s3.AbortMultipartUploadInput) (*s3.
 	return &s3.AbortMultipartUploadOutput{}, nil
 }
 
-func (m *fakeS3) CreateMultipartUpload(input *s3.CreateMultipartUploadInput) (*s3.CreateMultipartUploadOutput, error) {
+func (m *fakeS3) CreateMultipartUploadWithContext(ctx aws.Context, input *s3.CreateMultipartUploadInput, opts ...request.Option) (*s3.CreateMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 
@@ -96,7 +97,7 @@ func (m *fakeS3) CreateMultipartUpload(input *s3.CreateMultipartUploadInput) (*s
 	return out, nil
 }
 
-func (m *fakeS3) UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOutput, error) {
+func (m *fakeS3) UploadPartWithContext(ctx aws.Context, input *s3.UploadPartInput, opts ...request.Option) (*s3.UploadPartOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.PartNumber, "PartNumber is a required field")
@@ -119,7 +120,7 @@ func (m *fakeS3) UploadPart(input *s3.UploadPartInput) (*s3.UploadPartOutput, er
 	return &s3.UploadPartOutput{ETag: aws.String(etag)}, nil
 }
 
-func (m *fakeS3) UploadPartCopy(input *s3.UploadPartCopyInput) (*s3.UploadPartCopyOutput, error) {
+func (m *fakeS3) UploadPartCopyWithContext(ctx aws.Context, input *s3.UploadPartCopyInput, opts ...request.Option) (*s3.UploadPartCopyOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.PartNumber, "PartNumber is a required field")
@@ -153,7 +154,7 @@ func (m *fakeS3) UploadPartCopy(input *s3.UploadPartCopyInput) (*s3.UploadPartCo
 	return &s3.UploadPartCopyOutput{CopyPartResult: &s3.CopyPartResult{ETag: aws.String(etag)}}, nil
 }
 
-func (m *fakeS3) CompleteMultipartUpload(input *s3.CompleteMultipartUploadInput) (*s3.CompleteMultipartUploadOutput, error) {
+func (m *fakeS3) CompleteMultipartUploadWithContext(ctx aws.Context, input *s3.CompleteMultipartUploadInput, opts ...request.Option) (*s3.CompleteMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 	m.assert.NotNil(input.UploadId, "UploadId is a required field")
@@ -173,7 +174,7 @@ func (m *fakeS3) CompleteMultipartUpload(input *s3.CompleteMultipartUploadInput)
 	return &s3.CompleteMultipartUploadOutput{Bucket: input.Bucket, Key: input.Key}, nil
 }
 
-func (m *fakeS3) GetObject(input *s3.GetObjectInput) (*s3.GetObjectOutput, error) {
+func (m *fakeS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
 	m.getCount++
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
@@ -215,7 +216,7 @@ func parseRange(hdr string, total int) (start, end int) {
 	return start, end + 1 // insanely, the HTTP range header specifies ranges inclusively.
 }
 
-func (m *fakeS3) PutObject(input *s3.PutObjectInput) (*s3.PutObjectOutput, error) {
+func (m *fakeS3) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput, opts ...request.Option) (*s3.PutObjectOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
 

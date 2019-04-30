@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -26,7 +27,7 @@ func setupVersionFlags() *flag.FlagSet {
 	return flag.NewFlagSet("version", flag.ExitOnError)
 }
 
-func runVersion(args []string) int {
+func runVersion(ctx context.Context, args []string) int {
 	fmt.Fprintf(os.Stdout, "format version: %v\n", constants.NomsVersion)
 	fmt.Fprintf(os.Stdout, "built from %v\n", constants.NomsGitSHA)
 	return 0

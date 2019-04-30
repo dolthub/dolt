@@ -6,6 +6,7 @@ package types
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"math/rand"
 	"testing"
@@ -35,7 +36,7 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
 			s := NewStruct("", StructData{"n": Float(1)})
-			runTest(NewRef(NewMap(vrw, s, Float(2))), t)
+			runTest(NewRef(NewMap(context.Background(), vrw, s, Float(2))), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
 			runTest(ToRefOfValue(NewRef(Bool(false))), t)
@@ -66,14 +67,14 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			l := NewList(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
+			l := NewList(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(l, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			l := NewList(vrw, newValueSlice(r)...)
+			l := NewList(context.Background(), vrw, newValueSlice(r)...)
 			for l.sequence.isLeaf() {
-				l = l.Concat(NewList(vrw, newValueSlice(r)...))
+				l = l.Concat(context.Background(), NewList(context.Background(), vrw, newValueSlice(r)...))
 			}
 			runTest(l, t)
 		})
@@ -85,16 +86,16 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			s := NewSet(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
+			s := NewSet(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(s, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			s := NewSet(vrw, newValueSlice(r)...)
+			s := NewSet(context.Background(), vrw, newValueSlice(r)...)
 			for s.isLeaf() {
 				e := s.Edit()
 				e = e.Insert(newValueSlice(r)...)
-				s = e.Set()
+				s = e.Set(context.Background())
 			}
 			runTest(s, t)
 		})
@@ -106,19 +107,19 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			m := NewMap(vrw, vrw.WriteValue(Float(42)), vrw.WriteValue(Float(0)))
+			m := NewMap(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(m, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			m := NewMap(vrw, newValueSlice(r)...)
+			m := NewMap(context.Background(), vrw, newValueSlice(r)...)
 			for m.isLeaf() {
 				e := m.Edit()
 				vs := newValueSlice(r)
 				for i := 0; i < len(vs); i += 2 {
 					e = e.Set(vs[i], vs[i+1])
 				}
-				m = e.Map()
+				m = e.Map(context.Background())
 			}
 			runTest(m, t)
 		})
@@ -134,9 +135,9 @@ func TestWalkRefs(t *testing.T) {
 			r.Read(scratch)
 			return bytes.NewReader(scratch)
 		}
-		b := NewBlob(vrw, freshRandomBytes())
+		b := NewBlob(context.Background(), vrw, freshRandomBytes())
 		for b.sequence.isLeaf() {
-			b = b.Concat(NewBlob(vrw, freshRandomBytes()))
+			b = b.Concat(context.Background(), NewBlob(context.Background(), vrw, freshRandomBytes()))
 		}
 		runTest(b, t)
 	})

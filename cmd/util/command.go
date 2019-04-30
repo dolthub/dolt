@@ -6,6 +6,7 @@
 package util
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -16,7 +17,7 @@ import (
 type Command struct {
 	// Run runs the command.
 	// The args are the arguments after the command name.
-	Run func(args []string) int
+	Run func(ctx context.Context, args []string) int
 
 	// UsageLine is the one-line usage message.
 	// The first word in the line is taken to be the command name.

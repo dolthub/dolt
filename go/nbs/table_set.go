@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"context"
 	"sync"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -48,10 +49,10 @@ func (ts tableSet) hasMany(addrs []hasRecord) (remaining bool) {
 	return f(ts.novel) && f(ts.upstream)
 }
 
-func (ts tableSet) get(h addr, stats *Stats) []byte {
+func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) []byte {
 	f := func(css chunkSources) []byte {
 		for _, haver := range css {
-			if data := haver.get(h, stats); data != nil {
+			if data := haver.get(ctx, h, stats); data != nil {
 				return data
 			}
 		}
@@ -63,7 +64,7 @@ func (ts tableSet) get(h addr, stats *Stats) []byte {
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
+func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
 	f := func(css chunkSources) (remaining bool) {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {
@@ -76,7 +77,7 @@ func (ts tableSet) getMany(reqs []getRecord, foundChunks chan *chunks.Chunk, wg 
 				continue
 			}
 
-			if !haver.getMany(reqs, foundChunks, wg, stats) {
+			if !haver.getMany(ctx, reqs, foundChunks, wg, stats) {
 				return false
 			}
 		}
@@ -157,26 +158,26 @@ func (ts tableSet) Upstream() int {
 
 // Prepend adds a memTable to an existing tableSet, compacting |mt| and
 // returning a new tableSet with newly compacted table added.
-func (ts tableSet) Prepend(mt *memTable, stats *Stats) tableSet {
+func (ts tableSet) Prepend(ctx context.Context, mt *memTable, stats *Stats) tableSet {
 	newTs := tableSet{
 		novel:    make(chunkSources, len(ts.novel)+1),
 		upstream: make(chunkSources, len(ts.upstream)),
 		p:        ts.p,
 		rl:       ts.rl,
 	}
-	newTs.novel[0] = newPersistingChunkSource(mt, ts, ts.p, ts.rl, stats)
+	newTs.novel[0] = newPersistingChunkSource(ctx, mt, ts, ts.p, ts.rl, stats)
 	copy(newTs.novel[1:], ts.novel)
 	copy(newTs.upstream, ts.upstream)
 	return newTs
 }
 
-func (ts tableSet) extract(chunks chan<- extractRecord) {
+func (ts tableSet) extract(ctx context.Context, chunks chan<- extractRecord) {
 	// Since new tables are _prepended_ to a tableSet, extracting chunks in insertOrder requires iterating ts.upstream back to front, followed by ts.novel.
 	for i := len(ts.upstream) - 1; i >= 0; i-- {
-		ts.upstream[i].extract(chunks)
+		ts.upstream[i].extract(ctx, chunks)
 	}
 	for i := len(ts.novel) - 1; i >= 0; i-- {
-		ts.novel[i].extract(chunks)
+		ts.novel[i].extract(ctx, chunks)
 	}
 }
 
@@ -199,7 +200,7 @@ func (ts tableSet) Flatten() (flattened tableSet) {
 
 // Rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
-func (ts tableSet) Rebase(specs []tableSpec, stats *Stats) tableSet {
+func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) tableSet {
 	merged := tableSet{
 		novel:    make(chunkSources, 0, len(ts.novel)),
 		upstream: make(chunkSources, 0, len(specs)),
@@ -229,7 +230,7 @@ func (ts tableSet) Rebase(specs []tableSpec, stats *Stats) tableSet {
 	for _, spec := range tablesToOpen {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			merged.upstream[idx] = ts.p.Open(spec.name, spec.chunkCount, stats)
+			merged.upstream[idx] = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
 			wg.Done()
 		}(i, spec)
 		i++
