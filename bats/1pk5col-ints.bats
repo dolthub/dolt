@@ -782,6 +782,36 @@ teardown() {
     [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
 }
 
+@test "dolt diff on schema changes" {
+    dolt add test
+    dolt commit -m "committed table so we can see diffs"
+    dolt schema --add-column test c0 int
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c0 int" ]] || false
+    [[ "$output" =~ "| c0" ]] || false
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c0 int" ]] || false
+    [[ ! "$output" =~ "| c0" ]] || false
+    run dolt diff --data
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "c0 int" ]] || false
+    [[ "$output" =~ "| c0" ]] || false
+    dolt sql -q "insert into test (pk,c0,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0)"
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "c0 int" ]]|| false
+    [[ "$output" =~ "| c0" ]] || false
+    [[ "$output" =~ "+ 0" ]] || false
+    dolt schema --drop-column test c0
+    run dolt diff
+    skip "This produces a diff when it should not"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+}
+
 @test "rm a staged but uncommitted table" {
     run dolt add test
     [ "$status" -eq 0 ]
