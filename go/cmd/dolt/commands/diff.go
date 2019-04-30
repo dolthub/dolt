@@ -13,10 +13,24 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
+	"reflect"
+	"sort"
+	"strconv"
+)
+
+const (
+	SchemaOnlyDiff    = 1
+	DataOnlyDiff      = 2
+	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
+
+	DataFlag   = "data"
+	SchemaFlag = "schema"
 )
 
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
@@ -33,19 +47,28 @@ dolt diff [--options] <commit> <commit> [--] [<tables>...]
 `
 
 var diffSynopsis = []string{
-	"[options] [<commit>] [--] [<tables>...]",
-	"[options] <commit> <commit> [--] [<tables>...]",
+	"[options] [<commit>] [--data|--schema][--] [<tables>...]",
+	"[options] <commit> <commit> [--data|--schema] [--] [<tables>...]",
 }
 
 func Diff(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
+	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
+	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+
+	diffParts := SchemaAndDataDiff
+	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
+		diffParts = DataOnlyDiff
+	} else if apr.Contains(SchemaFlag) && !apr.Contains(DataFlag) {
+		diffParts = SchemaOnlyDiff
+	}
 
 	r1, r2, tables, verr := getRoots(apr.Args(), dEnv)
 
 	if verr == nil {
-		verr = diffRoots(r1, r2, tables, dEnv)
+		verr = diffRoots(r1, r2, tables, diffParts, dEnv)
 	}
 
 	if verr != nil {
@@ -118,7 +141,7 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 	return cm.HashOf().String(), r, nil
 }
 
-func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) errhand.VerboseError {
+func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(tblNames) == 0 {
 		tblNames = actions.AllTables(context.TODO(), r1, r2)
 	}
@@ -143,20 +166,32 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 
 		var sch1 schema.Schema
 		var sch2 schema.Schema
+		var sch1Hash hash.Hash
+		var sch2Hash hash.Hash
 		rowData1 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
 		rowData2 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
 
 		if ok1 {
 			sch1 = tbl1.GetSchema(context.TODO())
+			sch1Hash = tbl1.GetSchemaRef().TargetHash()
 			rowData1 = tbl1.GetRowData(context.TODO())
 		}
 
 		if ok2 {
 			sch2 = tbl2.GetSchema(context.TODO())
+			sch2Hash = tbl2.GetSchemaRef().TargetHash()
 			rowData2 = tbl2.GetRowData(context.TODO())
 		}
 
-		verr := diffRows(rowData1, rowData2, sch1, sch2)
+		var verr errhand.VerboseError
+
+		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash {
+			verr = diffSchemas(tblName, sch2, sch1)
+		}
+
+		if diffParts&DataOnlyDiff != 0 {
+			verr = diffRows(rowData1, rowData2, sch1, sch2)
+		}
 
 		if verr != nil {
 			return verr
@@ -166,8 +201,82 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv) e
 	return nil
 }
 
+func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errhand.VerboseError {
+	diffs := diff.DiffSchemas(sch1, sch2)
+	tags := make([]uint64, 0, len(diffs))
+
+	for tag := range diffs {
+		tags = append(tags, tag)
+	}
+
+	sort.Slice(tags, func(i, j int) bool {
+		return tags[i] < tags[j]
+	})
+
+	cli.Println("  CREATE TABLE", tableName, "(")
+
+	for _, tag := range tags {
+		dff := diffs[tag]
+		switch dff.DiffType {
+		case diff.SchDiffNone:
+			cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
+		case diff.SchDiffColAdded:
+			cli.Println(color.GreenString("+ " + sql.FmtCol(2, 0, 0, *dff.New)))
+		case diff.SchDiffColRemoved:
+			// removed from sch2
+			cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
+		case diff.SchDiffColModified:
+			// changed in sch2
+			n0, t0 := dff.Old.Name, sql.DoltToSQLType[dff.Old.Kind]
+			n1, t1 := dff.New.Name, sql.DoltToSQLType[dff.New.Kind]
+
+			nameLen := 0
+			typeLen := 0
+
+			if n0 != n1 {
+				n0 = color.YellowString(n0)
+				n1 = color.YellowString(n1)
+				nameLen = mathutil.Max(len(n0), len(n1))
+			}
+
+			if t0 != t1 {
+				t0 = color.YellowString(t0)
+				t1 = color.YellowString(t1)
+				typeLen = mathutil.Max(len(t0), len(t1))
+			}
+
+			cli.Println("< " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
+			cli.Println("> " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
+		}
+	}
+
+	cli.Println("  );")
+	cli.Println()
+
+	return nil
+}
+
+func dumbDownSchema(in schema.Schema) schema.Schema {
+	allCols := in.GetAllCols()
+
+	dumbCols := make([]schema.Column, 0, allCols.Size())
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		col.Name = strconv.FormatUint(tag, 10)
+		col.Constraints = nil
+		dumbCols = append(dumbCols, col)
+
+		return false
+	})
+
+	dumbColColl, _ := schema.NewColCollection(dumbCols...)
+	return schema.SchemaFromCols(dumbColColl)
+}
+
 func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.VerboseError {
-	untypedUnionSch, err := untyped.UntypedSchemaUnion(newSch, oldSch)
+	dumbNewSch := dumbDownSchema(newSch)
+	dumbOldSch := dumbDownSchema(oldSch)
+
+	untypedUnionSch, err := untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 
 	if err != nil {
 		return errhand.BuildDError("Failed to merge schemas").Build()
@@ -220,8 +329,34 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
 	p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, badRowCB)
 
-	colNames := schema.ExtractAllColNames(untypedUnionSch)
-	p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, colNames))
+	oldColNames := make(map[uint64]string)
+	newColNames := make(map[uint64]string)
+	untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		oldCol, oldOk := oldSch.GetAllCols().GetByTag(tag)
+		newCol, newOk := newSch.GetAllCols().GetByTag(tag)
+
+		if oldOk {
+			oldColNames[tag] = oldCol.Name
+		} else {
+			oldColNames[tag] = ""
+		}
+
+		if newOk {
+			newColNames[tag] = newCol.Name
+		} else {
+			newColNames[tag] = ""
+		}
+
+		return false
+	})
+
+	if reflect.DeepEqual(oldColNames, newColNames) {
+		p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames))
+	} else {
+		p.InjectRowWithProps("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, oldColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
+		p.InjectRowWithProps("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
+	}
+
 	p.Start()
 	p.Wait()
 

@@ -1,6 +1,8 @@
 package sql
 
 import (
+	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"testing"
 )
 
@@ -22,5 +24,52 @@ func TestSchemaAsCreateStmt(t *testing.T) {
 
 	if str != expectedSQL {
 		t.Error("\n", str, "\n\t!=\n", expectedSQL)
+	}
+}
+
+func TestFmtCol(t *testing.T) {
+	tests := []struct {
+		Col       schema.Column
+		Indent    int
+		NameWidth int
+		TypeWidth int
+		Expected  string
+	}{
+		{
+			schema.NewColumn("first", 0, types.StringKind, true),
+			0,
+			0,
+			0,
+			"first varchar comment 'tag:0'",
+		},
+		{
+			schema.NewColumn("last", 123, types.IntKind, true),
+			2,
+			0,
+			0,
+			"  last int comment 'tag:123'",
+		},
+		{
+			schema.NewColumn("title", 2, types.UintKind, true),
+			0,
+			10,
+			0,
+			"     title unsigned int comment 'tag:2'",
+		},
+		{
+			schema.NewColumn("aoeui", 52, types.UintKind, true),
+			0,
+			10,
+			15,
+			"     aoeui    unsigned int comment 'tag:52'",
+		},
+	}
+
+	for _, test := range tests {
+		actual := FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
+
+		if actual != test.Expected {
+			t.Errorf("\n'%s' \n\t!= \n'%s'", actual, test.Expected)
+		}
 	}
 }

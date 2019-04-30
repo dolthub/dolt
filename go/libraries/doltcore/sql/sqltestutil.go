@@ -12,7 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/stretchr/testify/assert"
 	"math"
 	"reflect"
@@ -212,47 +211,6 @@ func findRowIndex(find row.Row, rows []row.Row) int {
 var floatComparer = cmp.Comparer(func(x, y types.Float) bool {
 	return math.Abs(float64(x)-float64(y)) < .001
 })
-
-// Returns a subset of the schema given
-func subsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
-	srcColls := sch.GetAllCols()
-
-	if len(colNames) > 0 {
-		var cols []schema.Column
-		for _, name := range colNames {
-			if col, ok := srcColls.GetByName(name); !ok {
-				panic("Unrecognized name " + name)
-			} else {
-				cols = append(cols, col)
-			}
-		}
-		colColl, _ := schema.NewColCollection(cols...)
-		sch := schema.UnkeyedSchemaFromCols(colColl)
-		return sch
-	}
-
-	return schema.UnkeyedSchemaFromCols(srcColls)
-}
-
-// Returns the cross product of the collections of rows given with the target schema given
-func crossProduct(sch schema.Schema, rowCollections [][]resultset.RowWithSchema) []row.Row {
-	emptyRow := resultset.RowWithSchema{row.New(sch, row.TaggedValues{}), sch}
-	return cph(emptyRow, sch, rowCollections)
-}
-
-// Recursive helper function for crossProduct
-func cph(r resultset.RowWithSchema, sch schema.Schema, rowCollections [][]resultset.RowWithSchema) []row.Row {
-	if len(rowCollections) == 0 {
-		return []row.Row{r.Row}
-	}
-
-	resultSet := make([]row.Row, 0)
-	//for _, r2 := range rowCollections[0] {
-	//	partialRow := resultset.CombineRows(r, r2)
-	//	resultSet = append(resultSet, cph(partialRow, sch, rowCollections[1:])...)
-	//}
-	return resultSet
-}
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
 func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {

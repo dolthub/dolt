@@ -7,8 +7,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
+	"strings"
 )
 
 // SQL keyword constants for use in switches and comparisons
@@ -232,257 +234,562 @@ func nodeToString(node sqlparser.SQLNode) string {
 	return buffer.String()
 }
 
-// createFilter creates a filter function from the where clause given, or returns an error if it cannot
-func createFilterForWhere(whereClause *sqlparser.Where, tableSch schema.Schema, aliases *Aliases) (rowFilterFn, error) {
+// Finds the schema that contains the column name given among the tables given, and returns the fully qualified column,
+// with the full (unaliased) name of the table and column being referenced.  Returns an error if no schema contains such
+// a column name, or if multiple do.
+func resolveColumn(colName string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
+	// First try matching any known aliases directly
+	if qc, ok := aliases.ColumnsByAlias[colName]; ok {
+		return qc, nil
+	}
+
+	// Then try getting the table from the column name string itself, eg. "t.col"
+	qc := parseColumnAlias(colName)
+	if qc.TableName != "" {
+		tableName := aliases.TablesByAlias[qc.TableName]
+		if resolvedName, ok := aliases.ColumnsByAlias[qc.ColumnName]; ok {
+			return resolvedName, nil
+		}
+		if _, ok := schemas[tableName]; ok {
+			return QualifiedColumn{TableName: tableName, ColumnName: qc.ColumnName}, nil
+		} else {
+			return QualifiedColumn{}, errFmt("Unrecognized table name: '%v'", tableName)
+		}
+	}
+
+	// Finally, look through all input schemas to see if there's an exact match and dying if there's any ambiguity
+	var colSchema schema.Schema
+	var tableName string
+	for tbl, sch := range schemas {
+		if _, ok := sch.GetAllCols().GetByName(colName); ok {
+			if colSchema != nil {
+				return QualifiedColumn{}, errFmt("Ambiguous column: %v", colName)
+			}
+			colSchema = sch
+			tableName = tbl
+		}
+	}
+
+	if colSchema == nil {
+		return QualifiedColumn{}, errFmt("Unknown column: '%v'", colName)
+	}
+
+	return QualifiedColumn{TableName: tableName, ColumnName: colName}, nil
+}
+
+// Parses a column alias (e.g.: "a.id") into a qualified column name, where either the table name or the column name may
+// be an alias. If there is no table qualifier, the returned QualifiedColumn will have an empty TableName
+func parseColumnAlias(colName string) QualifiedColumn {
+	if idx := strings.Index(colName, "."); idx > 0 {
+		return QualifiedColumn{colName[:idx], colName[idx+1:]}
+	}
+	return QualifiedColumn{"", colName}
+}
+
+type valGetterKind uint8
+const (
+	COLNAME valGetterKind = iota
+	SQL_VAL
+	BOOL_VAL
+)
+
+// valGetter is a convenience object used for comparing the right and left side of an expression
+type valGetter struct {
+	// The kind of this val getter
+	Kind      valGetterKind
+	// The value type returned by this getter
+	NomsKind  types.NomsKind
+	// The kind of the value that this getter's result will be compared against, filled in elsewhere
+	CmpKind   types.NomsKind
+	// Init() performs error checking and does any labor-saving pre-calculation that doens't need to be done for every
+	// row in the result set
+	Init      func() error
+	// Get() returns the value for this getter for the row given
+	Get       func(r row.Row) types.Value
+	// CachedVal is a handy place to put a pre-computed value for getters that deal with constants or literals
+	CachedVal types.Value
+}
+
+// Returns a comparison value getter for the expression given, which could be a column value or a literal
+func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
+	switch e := expr.(type) {
+	case *sqlparser.ColName:
+		colNameStr := getColumnNameString(e)
+
+		qc, err := resolveColumn(colNameStr, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		tableSch := inputSchemas[qc.TableName]
+
+		column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
+		if !ok {
+			return nil, errFmt("Unknown column %v", colNameStr)
+		}
+		resultSetTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
+
+		getter := valGetter{Kind: COLNAME, NomsKind: column.Kind}
+		getter.Init = func() error {
+			return nil
+		}
+		getter.Get = func(r row.Row) types.Value {
+			value, _ := r.GetColVal(resultSetTag)
+			return value
+		}
+
+		return &getter, nil
+	case *sqlparser.SQLVal:
+		getter := valGetter{Kind: SQL_VAL}
+
+		getter.Init = func() error {
+			val, err := extractNomsValueFromSQLVal(e, getter.CmpKind)
+			if err != nil {
+				return err
+			}
+			getter.CachedVal = val
+			return nil
+		}
+		getter.Get = func(r row.Row) types.Value {
+			return getter.CachedVal
+		}
+
+		return &getter, nil
+	case sqlparser.BoolVal:
+		val := types.Bool(bool(e))
+		getter := valGetter{Kind: BOOL_VAL, NomsKind: types.BoolKind}
+
+		getter.Init = func() error {
+			switch getter.CmpKind {
+			case types.BoolKind:
+				return nil
+			default:
+				return errFmt("Type mismatch: boolean value but non-numeric column: %v", nodeToString(e))
+			}
+		}
+		getter.Get = func(r row.Row) types.Value {
+			return val
+		}
+
+		return &getter, nil
+	default:
+		return nil, errFmt("Unsupported comparison %v", nodeToString(e))
+	}
+}
+
+func getColumnNameString(e *sqlparser.ColName) string {
+	var b strings.Builder
+	if !e.Qualifier.Name.IsEmpty() {
+		b.WriteString(e.Qualifier.Name.String())
+		b.WriteString(".")
+	}
+	b.WriteString(e.Name.String())
+	return b.String()
+}
+
+// resolveColumnsInWhereClause returns the qualified columns referenced by the where clause
+func resolveColumnsInWhereClause(whereClause *sqlparser.Where, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
 	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
 		return nil, errFmt("Having clause not supported")
 	}
 
-	var filter rowFilterFn
 	if whereClause == nil {
-		filter = func(r row.Row) bool {
-			return true
+		return nil, nil
+	}
+
+	return resolveColumnsInWhereExpr(whereClause.Expr, inputSchemas, aliases)
+}
+
+// resolveColumnsInJoins returns the qualified columns referenced by the join expressions given
+func resolveColumnsInJoins(joinExprs []*sqlparser.JoinTableExpr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	cols := make([]QualifiedColumn, 0)
+	for _, je := range joinExprs {
+		if joinCols, err := resolveColumnsInJoin(je, inputSchemas, aliases); err != nil {
+			return nil, err
+		} else {
+			cols = append(cols, joinCols...)
 		}
+	}
+
+	return cols, nil
+}
+
+// resolveColumnsInJoin returns the qualified columsn referenced by the join expression given
+func resolveColumnsInJoin(expr *sqlparser.JoinTableExpr, schemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	if expr.Condition.Using != nil {
+		return nil, errFmt("Using expression not supported: %v", nodeToString(expr.Condition.Using))
+	}
+
+	if expr.Condition.On == nil {
+		return nil, nil
+	}
+
+	// This may not work in all cases -- not sure if there are expressions that are valid in where clauses but not in
+	// join conditions or vice versa.
+	return resolveColumnsInWhereExpr(expr.Condition.On, schemas, aliases)
+}
+
+// resolveColumnsInWhereExpr is the helper function for resolveColumnsInWhereExpr, which can be used recursively on sub
+// expressions. Supported parser types here must be kept in sync with createFilterForWhereExpr
+func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+
+	cols := make([]QualifiedColumn, 0)
+	switch expr := whereExpr.(type) {
+	case *sqlparser.ComparisonExpr:
+		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, leftCols...)
+		cols = append(cols, rightCols...)
+	case *sqlparser.ColName:
+		colNameStr := getColumnNameString(expr)
+		qc, err := resolveColumn(colNameStr, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, qc)
+	case *sqlparser.AndExpr:
+		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, leftCols...)
+		cols = append(cols, rightCols...)
+	case *sqlparser.OrExpr:
+		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, leftCols...)
+		cols = append(cols, rightCols...)
+	case *sqlparser.SQLVal, sqlparser.BoolVal:
+		// No columns, just a SQL literal
+	case *sqlparser.NotExpr:
+		return nil, errFmt("Not expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ParenExpr:
+		return nil, errFmt("Parenthetical expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.RangeCond:
+		return nil, errFmt("Range expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.IsExpr:
+		return nil, errFmt("Is expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ExistsExpr:
+		return nil, errFmt("Exists expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.NullVal:
+		return nil, errFmt("NULL expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ValTuple:
+		return nil, errFmt("Tuple expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.Subquery:
+		return nil, errFmt("Subquery expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ListArg:
+		return nil, errFmt("List expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.BinaryExpr:
+		return nil, errFmt("Binary expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.UnaryExpr:
+		return nil, errFmt("Unary expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.IntervalExpr:
+		return nil, errFmt("Interval expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.CollateExpr:
+		return nil, errFmt("Collate expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.FuncExpr:
+		return nil, errFmt("Function expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.CaseExpr:
+		return nil, errFmt("Case expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ValuesFuncExpr:
+		return nil, errFmt("Values func expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ConvertExpr:
+		return nil, errFmt("Conversion expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.SubstrExpr:
+		return nil, errFmt("Substr expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ConvertUsingExpr:
+		return nil, errFmt("Convert expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.MatchExpr:
+		return nil, errFmt("Match expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.GroupConcatExpr:
+		return nil, errFmt("Group concat expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.Default:
+		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
+	default:
+		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
+	}
+
+	return cols, nil
+}
+
+// createFilterForWhere creates a filter function from the where clause given, or returns an error if it cannot
+func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
+	if whereClause != nil && whereClause.Type != sqlparser.WhereStr {
+		return nil, errFmt("Having clause not supported")
+	}
+
+	if whereClause == nil {
+		return func(r row.Row) bool {
+			return true
+		}, nil
 	} else {
-		switch expr := whereClause.Expr.(type) {
-		case *sqlparser.ComparisonExpr:
-			left := expr.Left
-			right := expr.Right
-			op := expr.Operator
+		return createFilterForWhereExpr(whereClause.Expr, inputSchemas, aliases, rss)
+	}
+}
 
-			colValOnLeft := true
-			colExpr := left
-			valExpr := right
+// createFilterForWhere creates a filter function from the joins given
+func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
 
-			// Swap the column and value expr as necessary
-			colName, ok := colExpr.(*sqlparser.ColName)
-			if !ok {
-				colValOnLeft = false
-				colExpr = right
-				valExpr = left
+	filterFns := make([]rowFilterFn, 0)
+	for _, je := range joins {
+		if filterFn, err := createFilterForJoin(je, inputSchemas, aliases, rss); err != nil {
+			return nil, err
+		} else if filterFn != nil {
+			filterFns = append(filterFns, filterFn)
+		}
+	}
+
+	return func(r row.Row) (matchesFilter bool) {
+		for _, fn := range filterFns {
+			if !fn(r) {
+				return false
 			}
+		}
+		return true
+	}, nil
+}
 
-			colName, ok = colExpr.(*sqlparser.ColName)
-			if !ok {
-				return nil, errFmt("Only column names and value literals are supported")
-			}
+// createFilterForJoin creates a row filter function for the join expression given
+func createFilterForJoin(expr *sqlparser.JoinTableExpr, schemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
+	if expr.Condition.Using != nil {
+		return nil, errFmt("Using expression not supported: %v", nodeToString(expr.Condition.Using))
+	}
 
-			colNameStr := colName.Name.String()
-			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
-				colNameStr = colName
-			}
-			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
-			if !ok {
-				return nil, errFmt("Unknown column: '%v'", colNameStr)
-			}
+	if expr.Condition.On == nil {
+		return nil, nil
+	}
 
-			var comparisonVal types.Value
-			switch val := valExpr.(type) {
-			case *sqlparser.SQLVal:
-				var err error
-				comparisonVal, err = extractNomsValueFromSQLVal(val, column)
-				if err != nil {
-					return nil, err
-				}
-			case sqlparser.BoolVal:
-				switch column.Kind {
-				case types.BoolKind:
-					comparisonVal = types.Bool(bool(val))
-				default:
-					return nil, errFmt("Type mismatch: boolean value but non-numeric column: %v", nodeToString(val))
-				}
+	// This may not work in all cases -- not sure if there are expressions that are valid in where clauses but not in
+	// join conditions or vice versa.
+	return createFilterForWhereExpr(expr.Condition.On, schemas, aliases, rss)
+}
 
-			default:
-				return nil, errFmt("Only SQL literal values are supported in comparisons: %v", nodeToString(val))
-			}
+// createFilterForWhereExpr is the helper function for createFilterForWhere, which can be used recursively on sub
+// expressions. Supported parser types here must be kept in sync with resolveColumnsInWhereExpr
+func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
+	var filter rowFilterFn
+	switch expr := whereExpr.(type) {
+	case *sqlparser.ComparisonExpr:
 
-			// All the operations differ only in their filter logic
-			switch op {
-			case sqlparser.EqualStr:
-				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
-						return false
-					}
-					return comparisonVal.Equals(colVal)
-				}
-			case sqlparser.LessThanStr:
-				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
-						return false
-					}
+		leftGetter, err := getComparisonValueGetter(expr.Left, inputSchemas, aliases, rss)
+		if err != nil {
+			return nil, err
+		}
+		rightGetter, err := getComparisonValueGetter(expr.Right, inputSchemas, aliases, rss)
+		if err != nil {
+			return nil, err
+		}
 
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
+		// Fill in target noms kinds for SQL_VAL fields if possible
+		if leftGetter.Kind == SQL_VAL && rightGetter.Kind != SQL_VAL {
+			leftGetter.NomsKind = rightGetter.NomsKind
+		}
+		if rightGetter.Kind == SQL_VAL && leftGetter.Kind != SQL_VAL {
+			rightGetter.NomsKind = leftGetter.NomsKind
+		}
 
-					return leftVal.Less(rightVal)
-				}
-			case sqlparser.GreaterThanStr:
-				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
-						return false
-					}
+		// Fill in comparison kinds before doing error checking
+		rightGetter.CmpKind, leftGetter.CmpKind = leftGetter.NomsKind, rightGetter.NomsKind
 
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
+		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
+		// literals.
+		if err := leftGetter.Init(); err != nil {
+			return nil, err
+		}
+		if err := rightGetter.Init(); err != nil {
+			return nil, err
+		}
 
-					return rightVal.Less(leftVal)
-				}
-			case sqlparser.LessEqualStr:
-				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
-						return false
-					}
-
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
-
-					return leftVal.Less(rightVal) || leftVal.Equals(rightVal)
-				}
-			case sqlparser.GreaterEqualStr:
-				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
-						return false
-					}
-
-					leftVal := colVal
-					rightVal := comparisonVal
-					if !colValOnLeft {
-						swap(&leftVal, &rightVal)
-					}
-
-					return rightVal.Less(leftVal) || rightVal.Equals(leftVal)
-				}
-			case sqlparser.NotEqualStr:
-				filter = func(r row.Row) bool {
-					colVal, ok := r.GetColVal(column.Tag)
-					if !ok {
-						return false
-					}
-					return !comparisonVal.Equals(colVal)
-				}
-			case sqlparser.NullSafeEqualStr:
-				return nil, errFmt("null safe equal operation not supported")
-			case sqlparser.InStr:
-				return nil, errFmt("in keyword not supported")
-			case sqlparser.NotInStr:
-				return nil, errFmt("in keyword not supported")
-			case sqlparser.LikeStr:
-				return nil, errFmt("like keyword not supported")
-			case sqlparser.NotLikeStr:
-				return nil, errFmt("like keyword not supported")
-			case sqlparser.RegexpStr:
-				return nil, errFmt("regular expressions not supported")
-			case sqlparser.NotRegexpStr:
-				return nil, errFmt("regular expressions not supported")
-			case sqlparser.JSONExtractOp:
-				return nil, errFmt("json not supported")
-			case sqlparser.JSONUnquoteExtractOp:
-				return nil, errFmt("json not supported")
-			}
-		case *sqlparser.ColName:
-			colNameStr := expr.Name.String()
-			if colName, ok := aliases.ColumnsByAlias[colNameStr]; ok {
-				colNameStr = colName
-			}
-			column, ok := tableSch.GetAllCols().GetByName(colNameStr)
-			if !ok {
-				return nil, errFmt("Unknown column: '%v'", colNameStr)
-			}
-			if column.Kind != types.BoolKind {
-				return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", colNameStr)
-			}
-
+		// All the operations differ only in their filter logic
+		switch expr.Operator {
+		case sqlparser.EqualStr:
 			filter = func(r row.Row) bool {
-				colVal, ok := r.GetColVal(column.Tag)
-				if !ok {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
 					return false
 				}
-				return colVal.Equals(types.Bool(true))
+				return leftVal.Equals(rightVal)
 			}
-
-		case *sqlparser.AndExpr:
-			return nil, errFmt("And expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.OrExpr:
-			return nil, errFmt("Or expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.NotExpr:
-			return nil, errFmt("Not expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ParenExpr:
-			return nil, errFmt("Parenthetical expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.RangeCond:
-			return nil, errFmt("Range expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.IsExpr:
-			return nil, errFmt("Is expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ExistsExpr:
-			return nil, errFmt("Exists expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.SQLVal:
-			return nil, errFmt("Literal expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.NullVal:
-			return nil, errFmt("NULL expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.BoolVal:
-			return nil, errFmt("Bool expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ValTuple:
-			return nil, errFmt("Tuple expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.Subquery:
-			return nil, errFmt("Subquery expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ListArg:
-			return nil, errFmt("List expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.BinaryExpr:
-			return nil, errFmt("Binary expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.UnaryExpr:
-			return nil, errFmt("Unary expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.IntervalExpr:
-			return nil, errFmt("Interval expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.CollateExpr:
-			return nil, errFmt("Collate expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.FuncExpr:
-			return nil, errFmt("Function expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.CaseExpr:
-			return nil, errFmt("Case expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ValuesFuncExpr:
-			return nil, errFmt("Values func expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ConvertExpr:
-			return nil, errFmt("Conversion expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.SubstrExpr:
-			return nil, errFmt("Substr expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.ConvertUsingExpr:
-			return nil, errFmt("Convert expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.MatchExpr:
-			return nil, errFmt("Match expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.GroupConcatExpr:
-			return nil, errFmt("Group concat expressions not supported: %v", nodeToString(expr))
-		case *sqlparser.Default:
-			return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
-		default:
-			return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
+		case sqlparser.LessThanStr:
+			filter = func(r row.Row) bool {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+					return false
+				}
+				return leftVal.Less(rightVal)
+			}
+		case sqlparser.GreaterThanStr:
+			filter = func(r row.Row) bool {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+					return false
+				}
+				return rightVal.Less(leftVal)
+			}
+		case sqlparser.LessEqualStr:
+			filter = func(r row.Row) bool {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+					return false
+				}
+				return leftVal.Less(rightVal) || leftVal.Equals(rightVal)
+			}
+		case sqlparser.GreaterEqualStr:
+			filter = func(r row.Row) bool {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+					return false
+				}
+				return rightVal.Less(leftVal) || rightVal.Equals(leftVal)
+			}
+		case sqlparser.NotEqualStr:
+			filter = func(r row.Row) bool {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+					return false
+				}
+				return !leftVal.Equals(rightVal)
+			}
+		case sqlparser.NullSafeEqualStr:
+			return nil, errFmt("null safe equal operation not supported")
+		case sqlparser.InStr:
+			return nil, errFmt("in keyword not supported")
+		case sqlparser.NotInStr:
+			return nil, errFmt("in keyword not supported")
+		case sqlparser.LikeStr:
+			return nil, errFmt("like keyword not supported")
+		case sqlparser.NotLikeStr:
+			return nil, errFmt("like keyword not supported")
+		case sqlparser.RegexpStr:
+			return nil, errFmt("regular expressions not supported")
+		case sqlparser.NotRegexpStr:
+			return nil, errFmt("regular expressions not supported")
+		case sqlparser.JSONExtractOp:
+			return nil, errFmt("json not supported")
+		case sqlparser.JSONUnquoteExtractOp:
+			return nil, errFmt("json not supported")
 		}
+	case *sqlparser.ColName:
+		getter, err := getComparisonValueGetter(expr, inputSchemas, aliases, rss)
+		if err != nil {
+			return nil, err
+		}
+
+		if getter.NomsKind != types.BoolKind {
+			return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", nodeToString(expr))
+		}
+
+		filter = func(r row.Row) bool {
+			colVal := getter.Get(r)
+			if types.IsNull(colVal) {
+				return false
+			}
+			return colVal.Equals(types.Bool(true))
+		}
+
+	case *sqlparser.AndExpr:
+		var leftFilter, rightFilter rowFilterFn
+		var err error
+		if leftFilter, err = createFilterForWhereExpr(expr.Left, inputSchemas, aliases, rss); err != nil {
+			return nil, err
+		}
+		if rightFilter, err = createFilterForWhereExpr(expr.Right, inputSchemas, aliases, rss); err != nil {
+			return nil, err
+		}
+		filter = func(r row.Row) (matchesFilter bool) {
+			return leftFilter(r) && rightFilter(r)
+		}
+	case *sqlparser.OrExpr:
+		var leftFilter, rightFilter rowFilterFn
+		var err error
+		if leftFilter, err = createFilterForWhereExpr(expr.Left, inputSchemas, aliases, rss); err != nil {
+			return nil, err
+		}
+		if rightFilter, err = createFilterForWhereExpr(expr.Right, inputSchemas, aliases, rss); err != nil {
+			return nil, err
+		}
+		filter = func(r row.Row) (matchesFilter bool) {
+			return leftFilter(r) || rightFilter(r)
+		}
+	case *sqlparser.NotExpr:
+		return nil, errFmt("Not expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ParenExpr:
+		return nil, errFmt("Parenthetical expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.RangeCond:
+		return nil, errFmt("Range expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.IsExpr:
+		return nil, errFmt("Is expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ExistsExpr:
+		return nil, errFmt("Exists expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.SQLVal:
+		return nil, errFmt("Literal expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.NullVal:
+		return nil, errFmt("NULL expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.BoolVal:
+		return nil, errFmt("Bool expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ValTuple:
+		return nil, errFmt("Tuple expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.Subquery:
+		return nil, errFmt("Subquery expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ListArg:
+		return nil, errFmt("List expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.BinaryExpr:
+		return nil, errFmt("Binary expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.UnaryExpr:
+		return nil, errFmt("Unary expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.IntervalExpr:
+		return nil, errFmt("Interval expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.CollateExpr:
+		return nil, errFmt("Collate expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.FuncExpr:
+		return nil, errFmt("Function expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.CaseExpr:
+		return nil, errFmt("Case expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ValuesFuncExpr:
+		return nil, errFmt("Values func expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ConvertExpr:
+		return nil, errFmt("Conversion expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.SubstrExpr:
+		return nil, errFmt("Substr expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.ConvertUsingExpr:
+		return nil, errFmt("Convert expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.MatchExpr:
+		return nil, errFmt("Match expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.GroupConcatExpr:
+		return nil, errFmt("Group concat expressions not supported: %v", nodeToString(expr))
+	case *sqlparser.Default:
+		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
+	default:
+		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
 	}
 
 	return filter, nil
 }
 
-func swap(left, right *types.Value) {
-	temp := *right
-	*right = *left
-	*left = temp
-}
-
 // extractNomsValueFromSQLVal extracts a noms value from the given SQLVal, using type info in the dolt column given as
 // a hint and for type-checking
-func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (types.Value, error) {
+func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, kind types.NomsKind) (types.Value, error) {
 	switch val.Type {
 	// Integer-like values
 	case sqlparser.HexVal, sqlparser.HexNum, sqlparser.IntVal, sqlparser.BitVal:
@@ -490,7 +797,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (ty
 		if err != nil {
 			return nil, err
 		}
-		switch column.Kind {
+		switch kind {
 		case types.IntKind:
 			return types.Int(intVal), nil
 		case types.FloatKind:
@@ -506,7 +813,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (ty
 		if err != nil {
 			return nil, err
 		}
-		switch column.Kind {
+		switch kind {
 		case types.FloatKind:
 			return types.Float(floatVal), nil
 		default:
@@ -515,7 +822,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, column schema.Column) (ty
 	// Strings, which can be coerced into lots of other types
 	case sqlparser.StrVal:
 		strVal := string(val.Val)
-		switch column.Kind {
+		switch kind {
 		case types.StringKind:
 			return types.String(strVal), nil
 		case types.UUIDKind:

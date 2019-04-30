@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
@@ -80,30 +81,37 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 // Executes a SQL select statement and prints the result to the CLI.
 func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
-	p, outSch, err := sql.BuildSelectQueryPipeline(context.TODO(), root, s, query)
+
+	p, statement, err := sql.BuildSelectQueryPipeline(context.TODO(), root, s)
 	if err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
 		return 1
 	}
 
+	// Now that we have the output schema, we do two additional steps in the pipeline:
+	// 1) Coerce all the values in each row into strings
+	// 2) Run them through a fixed width transformer to make them print pretty
+	untypedSch, untypingTransform := NewUntypingTransformer(statement.ResultSetSchema.Schema())
+	p.AddStage(untypingTransform)
+	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
+	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+
+	// Redirect outtput to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
-	wr := tabular.NewTextTableWriter(cliWr, outSch)
+
+	wr := tabular.NewTextTableWriter(cliWr, statement.ResultSetSchema.Schema())
 	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, outSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, statement.ResultSetSchema.Schema())))
 		return true
 	})
 
-	colNames := schema.ExtractAllColNames(outSch)
-	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
-
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(statement.ResultSetSchema.Schema())))
 
 	p.Start()
 	err = p.Wait()
@@ -204,4 +212,18 @@ func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query
 func quitErr(fmtMsg string, args ...interface{}) int {
 	cli.PrintErrln(color.RedString(fmtMsg, args))
 	return 1
+}
+
+// Returns a new untyping transformer for the schema given.
+// TODO: move this somewhere more appropriate. Import cycles currently make this difficult.
+func NewUntypingTransformer(sch schema.Schema) (schema.Schema, pipeline.NamedTransform) {
+	untypedSch := untyped.UntypeUnkeySchema(sch)
+	mapping, err := rowconv.TagMapping(sch, untypedSch)
+
+	if err != nil {
+		panic(err)
+	}
+
+	rConv, _ := rowconv.NewRowConverter(mapping)
+	return untypedSch, pipeline.NewNamedTransform("untype", rowconv.GetRowConvTransformFunc(rConv))
 }

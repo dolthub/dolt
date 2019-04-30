@@ -83,14 +83,18 @@ func New(sch schema.Schema, colVals TaggedValues) Row {
 	return fromTaggedVals(sch, keyVals, nonKeyVals)
 }
 
-func fromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
+// fromTaggedVals will take a schema, a map of tag to value for the key, and a map of tag to value for non key values,
+// and generates a row.  When a schema adds or removes columns, from the non-key portion of the row, the schema will be
+// updated, but the rows will not be touched.  So the non-key portion of the row may contain values that are not in the
+// schema (The keys must match the schema though).
+func fromTaggedVals(sch schema.Schema, keyVals, initialNonKeyVals TaggedValues) Row {
 	allCols := sch.GetAllCols()
 
 	keyVals.Iter(func(tag uint64, val types.Value) (stop bool) {
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
-			panic("Trying to set a value on an unknown tag is a bug.  Validation should happen upstream. col:" + col.Name)
+			panic("Trying to set a value on an unknown tag is a bug for the key.  Validation should happen upstream. col:" + col.Name)
 		} else if !col.IsPartOfPK {
 			panic("writing columns that are not part of the primary key to pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
@@ -100,15 +104,16 @@ func fromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
 		return false
 	})
 
-	nonKeyVals.Iter(func(tag uint64, val types.Value) (stop bool) {
+	nonKeyVals := make(TaggedValues, len(initialNonKeyVals))
+	initialNonKeyVals.Iter(func(tag uint64, val types.Value) (stop bool) {
 		col, ok := allCols.GetByTag(tag)
 
-		if !ok {
-			panic("Trying to set a value on an unknown tag is a bug.  Validation should happen upstream. col:" + col.Name)
-		} else if col.IsPartOfPK {
+		if col.IsPartOfPK {
 			panic("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
 			panic("bug.  Setting a value to an incorrect kind. col:" + col.Name)
+		} else if ok {
+			nonKeyVals[tag] = val
 		}
 
 		return false
