@@ -805,6 +805,13 @@ teardown() {
     [[ "$output" =~ "| c0" ]] || false
     [[ "$output" =~ "+ 0" ]] || false
     dolt schema --drop-column test c0
+}
+
+@test "adding and dropping column should produce no diff" {
+    dolt add test
+    dolt commit -m "committed table so we can see diffs"
+    dolt schema --add-column test c0 int
+    dolt schema --drop-column test c0
     run dolt diff
     skip "This produces a diff when it should not"
     [ "$status" -eq 0 ]
