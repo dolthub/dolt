@@ -190,10 +190,11 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
     run dolt sql -q "select * from test where c2 > 3 and c1 < 10"
-    [[ "$output" =~ "And expressions not supported" ]] || false
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select c10 from test where pk=1"
     [ "$status" -eq 1 ]
-    [ "$output" = "Unknown column 'c10'" ]
+    [ "$output" = "Unknown column: 'c10'" ]
     run dolt sql -q "select * from test where c2=147"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
