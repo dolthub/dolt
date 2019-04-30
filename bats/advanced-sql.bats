@@ -29,14 +29,14 @@ teardown() {
     [ "${#lines[@]}" -eq 8 ]
 }
 
-@test "select the same column twice using aliasing" {
+@test "select the same column twice using column aliases" {
     run dolt sql -q "select pk,c1 as foo,c1 as bar from one_pk"
     [ "$status" -eq 0 ]
     skip "This breaks right now. Reports one column as NULL"
     [[ ! "$output" =~ "<NULL>" ]] || false
 }
 
-@test "select using table aliases" {
+@test "select same column twice using table aliases" {
     run dolt sql -q "select pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
     [ "$status" -eq 0 ]
     skip "This breaks right now. Reports one column as NULL"
