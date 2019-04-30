@@ -239,7 +239,7 @@ func (rss *ResultSetSchema) combineRows(r1 RowWithSchema, r2 RowWithSchema) RowW
 
 	fieldMapping, ok := rss.mapping[r2.Schema]
 	if !ok {
-		panic(fmt.Sprintf("Unrecognized schema %v", r1.Schema))
+		panic(fmt.Sprintf("Unrecognized schema %v", r2.Schema))
 	}
 
 	r2.Row.IterCols(func(tag uint64, val types.Value) (stop bool) {
