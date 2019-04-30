@@ -809,7 +809,6 @@ teardown() {
     skip "This produces a diff when it should not"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-
 }
 
 @test "rm a staged but uncommitted table" {
