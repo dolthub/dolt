@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -56,7 +57,7 @@ func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	err := dEnv.InitRepo(name, email)
+	err := dEnv.InitRepo(context.Background(), name, email)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))

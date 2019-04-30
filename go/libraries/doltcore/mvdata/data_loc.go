@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,16 +124,16 @@ func (dl *DataLocation) IsFileType() bool {
 	return true
 }
 
-func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, tblName string) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, tblName string) (rdCl table.TableReadCloser, sorted bool, err error) {
 	if dl.Format == DoltDB {
-		tbl, ok := root.GetTable(dl.Path)
+		tbl, ok := root.GetTable(ctx, dl.Path)
 
 		if !ok {
 			return nil, false, doltdb.ErrTableNotFound
 		}
 
-		sch := tbl.GetSchema()
-		rd := noms.NewNomsMapReader(tbl.GetRowData(), sch)
+		sch := tbl.GetSchema(ctx)
+		rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), sch)
 		return rd, true, nil
 	} else {
 		exists, isDir := fs.Exists(dl.Path)
@@ -170,14 +171,14 @@ func (dl *DataLocation) CreateReader(root *doltdb.RootValue, fs filesys.Readable
 	panic("Unsupported table format should have failed before reaching here. ")
 }
 
-func (dl *DataLocation) Exists(root *doltdb.RootValue, fs filesys.ReadableFS) bool {
+func (dl *DataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) bool {
 	if dl.IsFileType() {
 		exists, _ := fs.Exists(dl.Path)
 		return exists
 	}
 
 	if dl.Format == DoltDB {
-		return root.HasTable(dl.Path)
+		return root.HasTable(ctx, dl.Path)
 	}
 
 	panic("Invalid Data Format.")
@@ -185,7 +186,7 @@ func (dl *DataLocation) Exists(root *doltdb.RootValue, fs filesys.ReadableFS) bo
 
 var ErrNoPK = errors.New("schema does not contain a primary key")
 
-func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema) (table.TableWriteCloser, error) {
 	if dl.RequiresPK() && outSch.GetPKCols().Size() == 0 {
 		return nil, ErrNoPK
 	}
@@ -193,9 +194,9 @@ func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs f
 	switch dl.Format {
 	case DoltDB:
 		if sortedInput {
-			return noms.NewNomsMapCreator(root.VRW(), outSch), nil
+			return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
 		} else {
-			m := types.NewMap(root.VRW())
+			m := types.NewMap(ctx, root.VRW())
 			return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
 		}
 
@@ -228,17 +229,17 @@ func (dl *DataLocation) CreateOverwritingDataWriter(root *doltdb.RootValue, fs f
 
 // CreateUpdatingDataWriter will create a TableWriteCloser for a DataLocation that will update and append rows based
 // on their primary key.
-func (dl *DataLocation) CreateUpdatingDataWriter(root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case DoltDB:
 		tableName := dl.Path
-		tbl, ok := root.GetTable(tableName)
+		tbl, ok := root.GetTable(ctx, tableName)
 
 		if !ok {
 			return nil, errors.New("Could not find table " + tableName)
 		}
 
-		m := tbl.GetRowData()
+		m := tbl.GetRowData(ctx)
 		return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
 
 	case CsvFile, PsvFile, JsonFile, XlsxFile:

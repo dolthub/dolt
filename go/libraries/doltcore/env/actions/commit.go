@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"sort"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -34,8 +35,8 @@ func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
-	staged, notStaged, err := GetTableDiffs(dEnv)
+func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
+	staged, notStaged, err := GetTableDiffs(ctx, dEnv)
 
 	if msg == "" {
 		return ErrEmptyCommitMessage
@@ -66,13 +67,13 @@ func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
 		mergeCmSpec = []*doltdb.CommitSpec{spec}
 	}
 
-	root, err := dEnv.StagedRoot()
+	root, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return err
 	}
 
-	h, err := dEnv.UpdateStagedRoot(root)
+	h, err := dEnv.UpdateStagedRoot(ctx, root)
 
 	if err != nil {
 		return err
@@ -83,7 +84,7 @@ func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
 		return ErrEmptyCommitMessage
 	}
 
-	_, err = dEnv.DoltDB.CommitWithParents(h, dEnv.RepoState.Branch, mergeCmSpec, meta)
+	_, err = dEnv.DoltDB.CommitWithParents(ctx, h, dEnv.RepoState.Branch, mergeCmSpec, meta)
 
 	if err == nil {
 		dEnv.RepoState.ClearMerge()
@@ -92,9 +93,9 @@ func CommitStaged(dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
 	return err
 }
 
-func TimeSortedCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
+func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
 	hashToCommit := make(map[hash.Hash]*doltdb.Commit)
-	err := AddCommits(ddb, commit, hashToCommit, n)
+	err := AddCommits(ctx, ddb, commit, hashToCommit, n)
 
 	if err != nil {
 		return nil, err
@@ -114,19 +115,19 @@ func TimeSortedCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*dol
 	return uniqueCommits, nil
 }
 
-func AddCommits(ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
+func AddCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
 	hash := commit.HashOf()
 	hashToCommit[hash] = commit
 
 	numParents := commit.NumParents()
 	for i := 0; i < numParents && len(hashToCommit) != n; i++ {
-		parentCommit, err := ddb.ResolveParent(commit, i)
+		parentCommit, err := ddb.ResolveParent(ctx, commit, i)
 
 		if err != nil {
 			return err
 		}
 
-		err = AddCommits(ddb, parentCommit, hashToCommit, n)
+		err = AddCommits(ctx, ddb, parentCommit, hashToCommit, n)
 
 		if err != nil {
 			return err

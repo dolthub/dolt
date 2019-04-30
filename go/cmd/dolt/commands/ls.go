@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"sort"
 
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -48,7 +49,7 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
-	tblNames := root.GetTableNames()
+	tblNames := root.GetTableNames(context.TODO())
 	sort.Strings(tblNames)
 
 	if len(tblNames) == 0 {
@@ -59,7 +60,7 @@ func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.Ver
 	cli.Printf("Tables in %s:\n", label)
 	for _, tbl := range tblNames {
 		if verbose {
-			h, _ := root.GetTableHash(tbl)
+			h, _ := root.GetTableHash(context.TODO(), tbl)
 			cli.Printf("\t%-32s %s\n", tbl, h.String())
 		} else {
 			cli.Println("\t", tbl)

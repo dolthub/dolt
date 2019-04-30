@@ -1,6 +1,7 @@
 package env
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
@@ -44,10 +45,10 @@ type DoltEnv struct {
 }
 
 // Load loads the DoltEnv for the current directory of the cli
-func Load(hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.Location) *DoltEnv {
+func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.Location) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	ddb := doltdb.LoadDoltDB(loc)
+	ddb := doltdb.LoadDoltDB(ctx, loc)
 
 	dEnv := &DoltEnv{
 		config,
@@ -109,7 +110,7 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
 // database with dolt structure.
-func (dEnv *DoltEnv) InitRepo(name, email string) error { // should remove name and email args
+func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -119,7 +120,7 @@ func (dEnv *DoltEnv) InitRepo(name, email string) error { // should remove name 
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.initDBAndState(name, email)
+		err = dEnv.initDBAndState(ctx, name, email)
 	}
 
 	if err != nil {
@@ -129,7 +130,7 @@ func (dEnv *DoltEnv) InitRepo(name, email string) error { // should remove name 
 	return err
 }
 
-func (dEnv *DoltEnv) InitRepoWithNoData() error {
+func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -142,7 +143,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData() error {
 		dEnv.bestEffortDeleteAll(doltdb.DoltDir)
 	}
 
-	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
+	dEnv.DoltDB = doltdb.LoadDoltDB(ctx, dEnv.loc)
 
 	return err
 }
@@ -173,16 +174,16 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) initDBAndState(name, email string) error {
-	dEnv.DoltDB = doltdb.LoadDoltDB(dEnv.loc)
-	err := dEnv.DoltDB.WriteEmptyRepo(name, email)
+func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) error {
+	dEnv.DoltDB = doltdb.LoadDoltDB(ctx, dEnv.loc)
+	err := dEnv.DoltDB.WriteEmptyRepo(ctx, name, email)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	commit, _ := dEnv.DoltDB.Resolve(cs)
+	commit, _ := dEnv.DoltDB.Resolve(ctx, cs)
 
 	rootHash := commit.GetRootValue().HashOf()
 	dEnv.RepoState, err = CreateRepoState(dEnv.FS, "master", rootHash)
@@ -194,15 +195,15 @@ func (dEnv *DoltEnv) initDBAndState(name, email string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) WorkingRoot() (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	hashStr := dEnv.RepoState.Working
 	h := hash.Parse(hashStr)
 
-	return dEnv.DoltDB.ReadRootValue(h)
+	return dEnv.DoltDB.ReadRootValue(ctx, h)
 }
 
-func (dEnv *DoltEnv) UpdateWorkingRoot(newRoot *doltdb.RootValue) error {
-	h, err := dEnv.DoltDB.WriteRootValue(newRoot)
+func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
+	h, err := dEnv.DoltDB.WriteRootValue(ctx, newRoot)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
@@ -218,9 +219,9 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(newRoot *doltdb.RootValue) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) HeadRoot() (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	cs, _ := doltdb.NewCommitSpec("head", dEnv.RepoState.Branch)
-	commit, err := dEnv.DoltDB.Resolve(cs)
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return nil, err
@@ -229,15 +230,15 @@ func (dEnv *DoltEnv) HeadRoot() (*doltdb.RootValue, error) {
 	return commit.GetRootValue(), nil
 }
 
-func (dEnv *DoltEnv) StagedRoot() (*doltdb.RootValue, error) {
+func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
 	hashStr := dEnv.RepoState.Staged
 	h := hash.Parse(hashStr)
 
-	return dEnv.DoltDB.ReadRootValue(h)
+	return dEnv.DoltDB.ReadRootValue(ctx, h)
 }
 
-func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) (hash.Hash, error) {
-	h, err := dEnv.DoltDB.WriteRootValue(newRoot)
+func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {
+	h, err := dEnv.DoltDB.WriteRootValue(ctx, newRoot)
 
 	if err != nil {
 		return hash.Hash{}, doltdb.ErrNomsIO
@@ -253,46 +254,46 @@ func (dEnv *DoltEnv) UpdateStagedRoot(newRoot *doltdb.RootValue) (hash.Hash, err
 	return h, nil
 }
 
-func (dEnv *DoltEnv) PutTableToWorking(rows types.Map, sch schema.Schema, tableName string) error {
-	root, err := dEnv.WorkingRoot()
+func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch schema.Schema, tableName string) error {
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	schVal, err := encoding.MarshalAsNomsValue(vrw, sch)
+	schVal, err := encoding.MarshalAsNomsValue(ctx, vrw, sch)
 
 	if err != nil {
 		return ErrMarshallingSchema
 	}
 
-	tbl := doltdb.NewTable(vrw, schVal, rows)
-	newRoot := root.PutTable(dEnv.DoltDB, tableName, tbl)
+	tbl := doltdb.NewTable(ctx, vrw, schVal, rows)
+	newRoot := root.PutTable(ctx, dEnv.DoltDB, tableName, tbl)
 
 	if root.HashOf() == newRoot.HashOf() {
 		return nil
 	}
 
-	return dEnv.UpdateWorkingRoot(newRoot)
+	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
 func (dEnv *DoltEnv) IsMergeActive() bool {
 	return dEnv.RepoState.Merge != nil
 }
 
-func (dEnv *DoltEnv) GetTablesWithConflicts() ([]string, error) {
-	root, err := dEnv.WorkingRoot()
+func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, error) {
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return root.TablesInConflict(), nil
+	return root.TablesInConflict(ctx), nil
 }
 
-func (dEnv *DoltEnv) IsUnchangedFromHead() (bool, error) {
-	root, err := dEnv.HeadRoot()
+func (dEnv *DoltEnv) IsUnchangedFromHead(ctx context.Context) (bool, error) {
+	root, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
 		return false, err

@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -10,8 +11,8 @@ import (
 
 var ErrCantFF = errors.New("can't fast forward merge")
 
-func Push(branch, remoteBranch string, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
-	canFF, err := srcDB.CanFastForward(remoteBranch, commit)
+func Push(ctx context.Context, branch, remoteBranch string, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
+	canFF, err := srcDB.CanFastForward(ctx, remoteBranch, commit)
 
 	if err != nil {
 		return err
@@ -20,32 +21,32 @@ func Push(branch, remoteBranch string, srcDB, destDB *doltdb.DoltDB, commit *dol
 	}
 
 	err = pantoerr.PanicToErrorNil("error pulling chunks", func() {
-		destDB.PullChunks(srcDB, commit, progChan)
+		destDB.PullChunks(ctx, srcDB, commit, progChan)
 	})
 
 	if err != nil {
 		return err
 	}
 
-	err = destDB.FastForward(branch, commit)
+	err = destDB.FastForward(ctx, branch, commit)
 
 	if err != nil {
 		return err
 	}
 
-	err = srcDB.FastForward(remoteBranch, commit)
+	err = srcDB.FastForward(ctx, remoteBranch, commit)
 
 	return err
 }
 
-func Fetch(branch string, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
+func Fetch(ctx context.Context, branch string, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
 	err := pantoerr.PanicToErrorNil("error pulling chunks", func() {
-		destDB.PullChunks(srcDB, commit, progChan)
+		destDB.PullChunks(ctx, srcDB, commit, progChan)
 	})
 
 	if err != nil {
 		return err
 	}
 
-	return destDB.FastForward(branch, commit)
+	return destDB.FastForward(ctx, branch, commit)
 }

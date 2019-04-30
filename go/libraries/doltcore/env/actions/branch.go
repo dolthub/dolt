@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"errors"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -14,8 +15,8 @@ var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
 
-func MoveBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
-	err := CopyBranch(dEnv, oldBranch, newBranch, force)
+func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+	err := CopyBranch(ctx, dEnv, oldBranch, newBranch, force)
 
 	if err != nil {
 		return err
@@ -30,30 +31,30 @@ func MoveBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) erro
 		}
 	}
 
-	return DeleteBranch(dEnv, oldBranch, true)
+	return DeleteBranch(ctx, dEnv, oldBranch, true)
 }
 
-func CopyBranch(dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
-	if !dEnv.DoltDB.HasBranch(oldBranch) {
+func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+	if !dEnv.DoltDB.HasBranch(ctx, oldBranch) {
 		return doltdb.ErrBranchNotFound
-	} else if !force && dEnv.DoltDB.HasBranch(newBranch) {
+	} else if !force && dEnv.DoltDB.HasBranch(ctx, newBranch) {
 		return ErrAlreadyExists
 	} else if !doltdb.IsValidUserBranchName(newBranch) {
 		return doltdb.ErrInvBranchName
 	}
 
 	cs, _ := doltdb.NewCommitSpec("head", oldBranch)
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(newBranch, cm)
+	return dEnv.DoltDB.NewBranchAtCommit(ctx, newBranch, cm)
 }
 
-func DeleteBranch(dEnv *env.DoltEnv, brName string, force bool) error {
-	if !dEnv.DoltDB.HasBranch(brName) {
+func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
+	if !dEnv.DoltDB.HasBranch(ctx, brName) {
 		return doltdb.ErrBranchNotFound
 	} else if dEnv.RepoState.Branch == brName {
 		return ErrCOBranchDelete
@@ -65,7 +66,7 @@ func DeleteBranch(dEnv *env.DoltEnv, brName string, force bool) error {
 		return err
 	}
 
-	master, err := dEnv.DoltDB.Resolve(ms)
+	master, err := dEnv.DoltDB.Resolve(ctx, ms)
 
 	if err != nil {
 		return err
@@ -77,23 +78,23 @@ func DeleteBranch(dEnv *env.DoltEnv, brName string, force bool) error {
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
 	}
 
 	if !force {
-		if isMerged, _ := master.CanFastReverseTo(cm); !isMerged {
+		if isMerged, _ := master.CanFastReverseTo(ctx, cm); !isMerged {
 			return ErrUnmergedBranchDelete
 		}
 	}
 
-	return dEnv.DoltDB.DeleteBranch(brName)
+	return dEnv.DoltDB.DeleteBranch(ctx, brName)
 }
 
-func CreateBranch(dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
-	if !force && dEnv.DoltDB.HasBranch(newBranch) {
+func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
+	if !force && dEnv.DoltDB.HasBranch(ctx, newBranch) {
 		return ErrAlreadyExists
 	}
 
@@ -107,17 +108,17 @@ func CreateBranch(dEnv *env.DoltEnv, newBranch, startingPoint string, force bool
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(newBranch, cm)
+	return dEnv.DoltDB.NewBranchAtCommit(ctx, newBranch, cm)
 }
 
-func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
-	if !dEnv.DoltDB.HasBranch(brName) {
+func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
+	if !dEnv.DoltDB.HasBranch(ctx, brName) {
 		return doltdb.ErrBranchNotFound
 	}
 
@@ -125,7 +126,7 @@ func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
 		return doltdb.ErrAlreadyOnBranch
 	}
 
-	currRoots, err := getRoots(dEnv, HeadRoot, WorkingRoot, StagedRoot)
+	currRoots, err := getRoots(ctx, dEnv, HeadRoot, WorkingRoot, StagedRoot)
 
 	if err != nil {
 		return err
@@ -137,7 +138,7 @@ func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
 		return RootValueUnreadable{HeadRoot, err}
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return RootValueUnreadable{HeadRoot, err}
@@ -145,20 +146,20 @@ func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
 
 	newRoot := cm.GetRootValue()
 	conflicts := set.NewStrSet([]string{})
-	wrkTblHashes := tblHashesForCO(currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
-	stgTblHashes := tblHashesForCO(currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
+	wrkTblHashes := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
+	stgTblHashes := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
 
 	if conflicts.Size() > 0 {
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err := writeRoot(dEnv, wrkTblHashes)
+	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes)
 
 	if err != nil {
 		return err
 	}
 
-	stgHash, err := writeRoot(dEnv, stgTblHashes)
+	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes)
 
 	if err != nil {
 		return err
@@ -174,12 +175,12 @@ func CheckoutBranch(dEnv *env.DoltEnv, brName string) error {
 
 var emptyHash = hash.Hash{}
 
-func tblHashesForCO(oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) map[string]hash.Hash {
+func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) map[string]hash.Hash {
 	resultMap := make(map[string]hash.Hash)
-	for _, tblName := range newRoot.GetTableNames() {
-		oldHash, _ := oldRoot.GetTableHash(tblName)
-		newHash, _ := newRoot.GetTableHash(tblName)
-		changedHash, _ := changedRoot.GetTableHash(tblName)
+	for _, tblName := range newRoot.GetTableNames(ctx) {
+		oldHash, _ := oldRoot.GetTableHash(ctx, tblName)
+		newHash, _ := newRoot.GetTableHash(ctx, tblName)
+		changedHash, _ := changedRoot.GetTableHash(ctx, tblName)
 
 		if oldHash == changedHash {
 			resultMap[tblName] = newHash
@@ -192,10 +193,10 @@ func tblHashesForCO(oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *
 		}
 	}
 
-	for _, tblName := range changedRoot.GetTableNames() {
+	for _, tblName := range changedRoot.GetTableNames(ctx) {
 		if _, exists := resultMap[tblName]; !exists {
-			oldHash, _ := oldRoot.GetTableHash(tblName)
-			changedHash, _ := changedRoot.GetTableHash(tblName)
+			oldHash, _ := oldRoot.GetTableHash(ctx, tblName)
+			changedHash, _ := changedRoot.GetTableHash(ctx, tblName)
 
 			if oldHash == emptyHash {
 				resultMap[tblName] = changedHash
@@ -208,14 +209,14 @@ func tblHashesForCO(oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *
 	return resultMap
 }
 
-func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, error) {
+func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, error) {
 	for k, v := range tblHashes {
 		if v == emptyHash {
 			delete(tblHashes, k)
 		}
 	}
 
-	root, err := doltdb.NewRootValue(dEnv.DoltDB.ValueReadWriter(), tblHashes)
+	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes)
 
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
@@ -224,15 +225,15 @@ func writeRoot(dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, er
 		return emptyHash, doltdb.ErrNomsIO
 	}
 
-	return dEnv.DoltDB.WriteRootValue(root)
+	return dEnv.DoltDB.WriteRootValue(ctx, root)
 }
 
-func getDifferingTables(root1, root2 *doltdb.RootValue) []string {
-	tbls := root1.GetTableNames()
+func getDifferingTables(ctx context.Context, root1, root2 *doltdb.RootValue) []string {
+	tbls := root1.GetTableNames(ctx)
 	differing := make([]string, 0, len(tbls))
 	for _, tbl := range tbls {
-		hsh1, _ := root1.GetTableHash(tbl)
-		hsh2, _ := root2.GetTableHash(tbl)
+		hsh1, _ := root1.GetTableHash(ctx, tbl)
+		hsh2, _ := root2.GetTableHash(ctx, tbl)
 
 		if hsh1 != hsh2 {
 			differing = append(differing, tbl)
@@ -261,8 +262,8 @@ func intersect(sl1, sl2 []string) []string {
 	return intersection
 }
 
-func RootsWithTable(dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
-	roots, err := getRoots(dEnv, ActiveRoots...)
+func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
+	roots, err := getRoots(ctx, dEnv, ActiveRoots...)
 
 	if err != nil {
 		return nil, err
@@ -270,7 +271,7 @@ func RootsWithTable(dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
 
 	rootsWithTable := make([]RootType, 0, len(roots))
 	for rt, root := range roots {
-		if root.HasTable(table) {
+		if root.HasTable(ctx, table) {
 			rootsWithTable = append(rootsWithTable, rt)
 		}
 	}
@@ -278,21 +279,21 @@ func RootsWithTable(dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-func BranchOrTable(dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
-	rootsWithTbl, err := RootsWithTable(dEnv, str)
+func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
+	rootsWithTbl, err := RootsWithTable(ctx, dEnv, str)
 
 	if err != nil {
 		return false, nil, err
 	}
 
-	return dEnv.DoltDB.HasBranch(str), rootsWithTbl, nil
+	return dEnv.DoltDB.HasBranch(ctx, str), rootsWithTbl, nil
 }
 
-func MaybeGetCommit(dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
+func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.Branch)
 
 	if err == nil {
-		cm, err := dEnv.DoltDB.Resolve(cs)
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 		switch err {
 		case nil:

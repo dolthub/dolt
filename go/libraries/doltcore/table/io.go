@@ -1,6 +1,7 @@
 package table
 
 import (
+	"context"
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -14,7 +15,7 @@ type TableReader interface {
 
 	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 	// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-	ReadRow() (row.Row, error)
+	ReadRow(ctx context.Context) (row.Row, error)
 }
 
 // TableWriteCloser is an interface for writing rows to a table
@@ -23,13 +24,13 @@ type TableWriter interface {
 	GetSchema() schema.Schema
 
 	// WriteRow will write a row to a table
-	WriteRow(r row.Row) error
+	WriteRow(ctx context.Context, r row.Row) error
 }
 
 // TableCloser is an interface for a table stream that can be closed to release resources
 type TableCloser interface {
 	// Close should release resources being held
-	Close() error
+	Close(ctx context.Context) error
 }
 
 // TableReadCloser is an interface for reading rows from a table, that can be closed.
@@ -51,10 +52,10 @@ type TableWriteCloser interface {
 //
 // Returns a tuple: (number of rows written, number of errors ignored, error). In the case that err is non-nil, the
 // row counter fields in the tuple will be set to -1.
-func PipeRows(rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, error) {
+func PipeRows(ctx context.Context, rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, error) {
 	var numBad, numGood int
 	for {
-		r, err := rd.ReadRow()
+		r, err := rd.ReadRow(ctx)
 
 		if err != nil && err != io.EOF {
 			if IsBadRow(err) && contOnBadRow {
@@ -70,7 +71,7 @@ func PipeRows(rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, erro
 			return -1, -1, errors.New("reader returned nil row with err==nil")
 		}
 
-		err = wr.WriteRow(r)
+		err = wr.WriteRow(ctx, r)
 
 		if err != nil {
 			return -1, -1, err
@@ -84,14 +85,14 @@ func PipeRows(rd TableReader, wr TableWriter, contOnBadRow bool) (int, int, erro
 
 // ReadAllRows reads all rows from a TableReader and returns a slice containing those rows.  Usually this is used
 // for testing, or with very small data sets.
-func ReadAllRows(rd TableReader, contOnBadRow bool) ([]row.Row, int, error) {
+func ReadAllRows(ctx context.Context, rd TableReader, contOnBadRow bool) ([]row.Row, int, error) {
 	var rows []row.Row
 	var err error
 
 	badRowCount := 0
 	for {
 		var r row.Row
-		r, err = rd.ReadRow()
+		r, err = rd.ReadRow(ctx)
 
 		if err != nil && err != io.EOF || r == nil {
 			if IsBadRow(err) {

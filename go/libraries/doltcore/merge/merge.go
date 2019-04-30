@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -21,14 +22,14 @@ type Merger struct {
 	vrw         types.ValueReadWriter
 }
 
-func NewMerger(commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*Merger, error) {
-	ancestor, err := doltdb.GetCommitAnscestor(commit, mergeCommit)
+func NewMerger(ctx context.Context, commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*Merger, error) {
+	ancestor, err := doltdb.GetCommitAnscestor(ctx, commit, mergeCommit)
 
 	if err != nil {
 		return nil, err
 	}
 
-	ff, err := commit.CanFastForwardTo(mergeCommit)
+	ff, err := commit.CanFastForwardTo(ctx, mergeCommit)
 	if err != nil {
 		return nil, err
 	} else if ff {
@@ -37,14 +38,14 @@ func NewMerger(commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*
 	return &Merger{commit, mergeCommit, ancestor, vrw}, nil
 }
 
-func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, error) {
+func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.Table, *MergeStats, error) {
 	root := merger.commit.GetRootValue()
 	mergeRoot := merger.mergeCommit.GetRootValue()
 	ancRoot := merger.ancestor.GetRootValue()
 
-	tbl, ok := root.GetTable(tblName)
-	mergeTbl, mergeOk := mergeRoot.GetTable(tblName)
-	ancTbl, ancOk := ancRoot.GetTable(tblName)
+	tbl, ok := root.GetTable(ctx, tblName)
+	mergeTbl, mergeOk := mergeRoot.GetTable(ctx, tblName)
+	ancTbl, ancOk := ancRoot.GetTable(ctx, tblName)
 
 	if ok && mergeOk && tbl.HashOf() == mergeTbl.HashOf() {
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil
@@ -66,35 +67,35 @@ func (merger *Merger) MergeTable(tblName string) (*doltdb.Table, *MergeStats, er
 		}
 	}
 
-	tblSchema := tbl.GetSchema()
-	mergeTblSchema := mergeTbl.GetSchema()
+	tblSchema := tbl.GetSchema(ctx)
+	mergeTblSchema := mergeTbl.GetSchema(ctx)
 	schemaUnion, err := typed.TypedSchemaUnion(tblSchema, mergeTblSchema)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rows := tbl.GetRowData()
-	mergeRows := mergeTbl.GetRowData()
-	ancRows := ancTbl.GetRowData()
+	rows := tbl.GetRowData(ctx)
+	mergeRows := mergeTbl.GetRowData(ctx)
+	ancRows := ancTbl.GetRowData(ctx)
 
-	mergedRowData, conflicts, stats, err := mergeTableData(schemaUnion, rows, mergeRows, ancRows, merger.vrw)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	schUnionVal, err := encoding.MarshalAsNomsValue(merger.vrw, schemaUnion)
+	mergedRowData, conflicts, stats, err := mergeTableData(ctx, schemaUnion, rows, mergeRows, ancRows, merger.vrw)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergedTable := doltdb.NewTable(merger.vrw, schUnionVal, mergedRowData)
+	schUnionVal, err := encoding.MarshalAsNomsValue(ctx, merger.vrw, schemaUnion)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergedTable := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData)
 
 	if conflicts.Len() > 0 {
 		schemas := doltdb.NewConflict(ancTbl.GetSchemaRef(), tbl.GetSchemaRef(), mergeTbl.GetSchemaRef())
-		mergedTable = mergedTable.SetConflicts(schemas, conflicts)
+		mergedTable = mergedTable.SetConflicts(ctx, schemas, conflicts)
 	}
 
 	return mergedTable, stats, nil
@@ -106,20 +107,20 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 	}
 }
 
-func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
+func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
 	//changeChan1, changeChan2 := make(chan diff.Difference, 32), make(chan diff.Difference, 32)
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 	stopChan, mergeStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
 	go func() {
 		//diff.Diff(rows1, ancRows, changeChan1, stopChan1, true, dontDescend)
-		rows.Diff(ancRows, changeChan, stopChan)
+		rows.Diff(ctx, ancRows, changeChan, stopChan)
 		close(changeChan)
 	}()
 
 	go func() {
 		//diff.Diff(rows2, ancRows, changeChan2, stopChan2, true, dontDescend)
-		mergeRows.Diff(ancRows, mergeChangeChan, mergeStopChan)
+		mergeRows.Diff(ctx, ancRows, mergeChangeChan, mergeStopChan)
 		close(mergeChangeChan)
 	}()
 
@@ -127,7 +128,7 @@ func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw t
 	defer stopAndDrain(mergeStopChan, mergeChangeChan)
 
 	conflictValChan := make(chan types.Value)
-	conflictMapChan := types.NewStreamingMap(vrw, conflictValChan)
+	conflictMapChan := types.NewStreamingMap(ctx, vrw, conflictValChan)
 	mapEditor := rows.Edit()
 
 	stats := &MergeStats{Operation: TableModified}
@@ -173,7 +174,7 @@ func mergeTableData(sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw t
 
 	close(conflictValChan)
 	conflicts := <-conflictMapChan
-	mergedData := mapEditor.Map()
+	mergedData := mapEditor.Map(ctx)
 
 	return mergedData, conflicts, stats, nil
 }

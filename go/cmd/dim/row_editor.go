@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/gizak/termui/v3"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -88,7 +89,7 @@ func (re *RowEditor) editSelected(colTag uint64, colName string, append bool) {
 	re.input.Render()
 }
 
-func (re *RowEditor) InHandler(e termui.Event) (exit, render, releaseFocus bool) {
+func (re *RowEditor) InHandler(ctx context.Context, e termui.Event) (exit, render, releaseFocus bool) {
 	if e.ID == "<Escape>" {
 		if re.input.initialVal != re.input.Value {
 			re.dr.UpdateVal(re.colTag, re.input.Value)

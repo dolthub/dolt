@@ -1,6 +1,7 @@
 package table
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -38,7 +39,7 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 		if !ok {
 			return NewBadRow(r, col.Name+" is missing")
 		} else {
-			return NewBadRow(r, col.Name+":"+types.EncodedValue(val)+" is not valid.")
+			return NewBadRow(r, col.Name+":"+types.EncodedValue(context.Background(), val)+" is not valid.")
 		}
 	}
 
@@ -81,7 +82,7 @@ func NewInMemTableReader(imt *InMemTable) *InMemTableReader {
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (rd *InMemTableReader) ReadRow() (row.Row, error) {
+func (rd *InMemTableReader) ReadRow(ctx context.Context) (row.Row, error) {
 	numRows := rd.tt.NumRows()
 
 	if rd.current < numRows {
@@ -95,7 +96,7 @@ func (rd *InMemTableReader) ReadRow() (row.Row, error) {
 }
 
 // Close should release resources being held
-func (rd *InMemTableReader) Close() error {
+func (rd *InMemTableReader) Close(ctx context.Context) error {
 	rd.current = -1
 	return nil
 }
@@ -116,12 +117,12 @@ func NewInMemTableWriter(imt *InMemTable) *InMemTableWriter {
 }
 
 // WriteRow will write a row to a table
-func (w *InMemTableWriter) WriteRow(r row.Row) error {
+func (w *InMemTableWriter) WriteRow(ctx context.Context, r row.Row) error {
 	return w.tt.AppendRow(r)
 }
 
 // Close should flush all writes, release resources being held
-func (w *InMemTableWriter) Close() error {
+func (w *InMemTableWriter) Close(ctx context.Context) error {
 	return nil
 }
 

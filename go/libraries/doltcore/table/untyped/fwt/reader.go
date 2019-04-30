@@ -2,6 +2,7 @@ package fwt
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -48,7 +49,7 @@ func NewFWTReader(r io.ReadCloser, fwtSch *FWTSchema, colSep string) (*FWTReader
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (fwtRd *FWTReader) ReadRow() (row.Row, error) {
+func (fwtRd *FWTReader) ReadRow(ctx context.Context) (row.Row, error) {
 	if fwtRd.isDone {
 		return nil, io.EOF
 	}
@@ -81,7 +82,7 @@ func (fwtRd *FWTReader) GetSchema() schema.Schema {
 }
 
 // Close should release resources being held
-func (fwtRd *FWTReader) Close() error {
+func (fwtRd *FWTReader) Close(ctx context.Context) error {
 	if fwtRd.closer != nil {
 		err := fwtRd.closer.Close()
 		fwtRd.closer = nil

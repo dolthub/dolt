@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -8,7 +9,7 @@ import (
 )
 
 func GetWorkingWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseError) {
-	working, err := dEnv.WorkingRoot()
+	working, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to get working.").AddCause(err).Build()
@@ -18,7 +19,7 @@ func GetWorkingWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseEr
 }
 
 func GetStagedWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseError) {
-	staged, err := dEnv.StagedRoot()
+	staged, err := dEnv.StagedRoot(context.Background())
 
 	if err != nil {
 		return nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
@@ -28,7 +29,7 @@ func GetStagedWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseErr
 }
 
 func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	err := dEnv.UpdateWorkingRoot(updatedRoot)
+	err := dEnv.UpdateWorkingRoot(context.Background(), updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:
@@ -41,7 +42,7 @@ func UpdateWorkingWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) err
 }
 
 func UpdateStagedWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errhand.VerboseError {
-	_, err := dEnv.UpdateStagedRoot(updatedRoot)
+	_, err := dEnv.UpdateStagedRoot(context.Background(), updatedRoot)
 
 	switch err {
 	case doltdb.ErrNomsIO:
@@ -54,7 +55,7 @@ func UpdateStagedWithVErr(dEnv *env.DoltEnv, updatedRoot *doltdb.RootValue) errh
 }
 
 func ValidateTablesWithVErr(tbls []string, roots ...*doltdb.RootValue) errhand.VerboseError {
-	err := actions.ValidateTables(tbls, roots...)
+	err := actions.ValidateTables(context.TODO(), tbls, roots...)
 
 	if err != nil {
 		if actions.IsTblNotExist(err) {
@@ -81,7 +82,7 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr, cwb string) (*doltdb.Com
 		return nil, errhand.BuildDError("'%s' is not a valid commit", cSpecStr).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 	if err != nil {
 		if err == doltdb.ErrInvalidAnscestorSpec {
@@ -99,7 +100,7 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr, cwb string) (*doltdb.Com
 }
 
 func MaybeGetCommitWithVErr(dEnv *env.DoltEnv, maybeCommit string) (*doltdb.Commit, errhand.VerboseError) {
-	cm, err := actions.MaybeGetCommit(dEnv, maybeCommit)
+	cm, err := actions.MaybeGetCommit(context.TODO(), dEnv, maybeCommit)
 
 	if err != nil {
 		bdr := errhand.BuildDError("fatal: Unable to read from data repository.")

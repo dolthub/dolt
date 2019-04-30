@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -64,13 +65,13 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		branchName := apr.Arg(0)
-		if !dEnv.DoltDB.HasBranch(branchName) {
+		if !dEnv.DoltDB.HasBranch(context.TODO(), branchName) {
 			cli.PrintErrln(color.RedString("unknown branch: %s", branchName))
 			usage()
 			return 1
 		}
 
-		isUnchanged, _ := dEnv.IsUnchangedFromHead()
+		isUnchanged, _ := dEnv.IsUnchangedFromHead(context.TODO())
 
 		if !isUnchanged {
 			cli.Println("error: Your local changes would be overwritten.")
@@ -83,7 +84,7 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		root, verr = GetWorkingWithVErr(dEnv)
 
 		if verr == nil {
-			if root.HasConflicts() {
+			if root.HasConflicts(context.TODO()) {
 				cli.Println("error: Merging is not possible because you have unmerged files.")
 				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
@@ -104,7 +105,7 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func abortMerge(doltEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.CheckoutAllTables(doltEnv)
+	err := actions.CheckoutAllTables(context.Background(), doltEnv)
 
 	if err == nil {
 		err = doltEnv.RepoState.ClearMerge()
@@ -132,7 +133,7 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 
 	cli.Println("Updating", cm1.HashOf().String()+".."+cm2.HashOf().String())
 
-	if ok, err := cm1.CanFastForwardTo(cm2); ok {
+	if ok, err := cm1.CanFastForwardTo(context.TODO(), cm2); ok {
 		return executeFFMerge(dEnv, cm2)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
@@ -147,13 +148,13 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 func executeFFMerge(dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
-	h, err := dEnv.DoltDB.WriteRootValue(cm2.GetRootValue())
+	h, err := dEnv.DoltDB.WriteRootValue(context.Background(), cm2.GetRootValue())
 
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 	}
 
-	err = dEnv.DoltDB.FastForward(dEnv.RepoState.Branch, cm2)
+	err = dEnv.DoltDB.FastForward(context.TODO(), dEnv.RepoState.Branch, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
@@ -178,7 +179,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 }
 
 func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, branchName string) errhand.VerboseError {
-	mergedRoot, tblToStats, err := actions.MergeCommits(dEnv.DoltDB, cm1, cm2)
+	mergedRoot, tblToStats, err := actions.MergeCommits(context.Background(), dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
 		switch err {

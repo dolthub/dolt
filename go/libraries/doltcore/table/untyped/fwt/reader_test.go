@@ -1,6 +1,7 @@
 package fwt
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
@@ -80,7 +81,7 @@ func TestReader(t *testing.T) {
 			for i, r := range rows {
 				expectedRow := test.expectedRows[i]
 				if !row.AreEqual(r, expectedRow, sch) {
-					t.Error(row.Fmt(r, sch), "!=", row.Fmt(expectedRow, sch))
+					t.Error(row.Fmt(context.Background(), r, sch), "!=", row.Fmt(context.Background(), expectedRow, sch))
 				}
 			}
 		}
@@ -93,7 +94,7 @@ func readTestRows(t *testing.T, inputStr string, fwtSch *FWTSchema, sep string) 
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
 	fwtRd, err := OpenFWTReader(path, fs, fwtSch, sep)
-	defer fwtRd.Close()
+	defer fwtRd.Close(context.Background())
 
 	if err != nil {
 		t.Fatal("Could not open reader", err)
@@ -102,7 +103,7 @@ func readTestRows(t *testing.T, inputStr string, fwtSch *FWTSchema, sep string) 
 	badRows := 0
 	var rows []row.Row
 	for {
-		row, err := fwtRd.ReadRow()
+		row, err := fwtRd.ReadRow(context.Background())
 
 		if err != io.EOF && err != nil && !table.IsBadRow(err) {
 			return nil, -1, err

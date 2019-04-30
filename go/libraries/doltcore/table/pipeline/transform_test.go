@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -78,12 +79,12 @@ func TestPipeline(t *testing.T) {
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		)
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
 
-		p.RunAfter(func() { rd.Close() })
-		p.RunAfter(func() { wr.Close() })
+		p.RunAfter(func() { rd.Close(context.Background()) })
+		p.RunAfter(func() { wr.Close(context.Background()) })
 		p.RunAfter(afterFinishFunc)
 
 		p.Start()
@@ -119,15 +120,15 @@ func TestAddingStages(t *testing.T) {
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
 		for _, stage := range addedStages {
 			p.AddStage(stage)
 		}
 
-		p.RunAfter(func() { rd.Close() })
-		p.RunAfter(func() { wr.Close() })
+		p.RunAfter(func() { rd.Close(context.Background()) })
+		p.RunAfter(func() { wr.Close(context.Background()) })
 		p.RunAfter(afterFinishFunc)
 
 		p.Start()
@@ -189,8 +190,8 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 
 		p := NewPartialPipeline(inProcFunc, tc)
 		for _, stage := range addedStages {
@@ -228,8 +229,8 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 		injectedRow = untyped.NewRowFromTaggedStrings(schOut, injectedColumns)
 		p.InjectRow("append", injectedRow)
 
-		p.RunAfter(func() { rd.Close() })
-		p.RunAfter(func() { wr.Close() })
+		p.RunAfter(func() { rd.Close(context.Background()) })
+		p.RunAfter(func() { wr.Close(context.Background()) })
 		p.RunAfter(afterFinishFunc)
 
 		p.Start()
@@ -275,12 +276,12 @@ func TestAbort(t *testing.T) {
 			NewNamedTransform("dies", hangs(&wg)),
 		)
 
-		inProcFunc := ProcFuncForReader(rd)
-		outProcFunc := ProcFuncForWriter(wr)
+		inProcFunc := ProcFuncForReader(context.Background(), rd)
+		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 		p := NewAsyncPipeline(inProcFunc, outProcFunc, tc, nil)
 
-		p.RunAfter(func() { rd.Close() })
-		p.RunAfter(func() { wr.Close() })
+		p.RunAfter(func() { rd.Close(context.Background()) })
+		p.RunAfter(func() { wr.Close(context.Background()) })
 		p.RunAfter(afterFinishFunc)
 
 		p.Start()

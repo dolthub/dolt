@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
@@ -85,7 +86,7 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 	i := 0
 	for _, arg := range args {
 		if cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.Branch); err == nil {
-			if cm, err := dEnv.DoltDB.Resolve(cs); err == nil {
+			if cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs); err == nil {
 				roots[i] = cm.GetRootValue()
 				i++
 				continue
@@ -110,7 +111,7 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 
 	for ; i < len(args); i++ {
 		tbl := args[i]
-		if !(roots[0].HasTable(tbl) || roots[1].HasTable(tbl)) {
+		if !(roots[0].HasTable(context.TODO(), tbl) || roots[1].HasTable(context.TODO(), tbl)) {
 			verr := errhand.BuildDError("error: Unknown table: '%s'", tbl).Build()
 			return nil, nil, args, verr
 		}
@@ -129,7 +130,7 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 		return "", nil, bdr.AddCause(err).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(cs)
+	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 	if err != nil {
 		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()
@@ -142,12 +143,12 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 
 func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv) errhand.VerboseError {
 	if len(tblNames) == 0 {
-		tblNames = actions.AllTables(r1, r2)
+		tblNames = actions.AllTables(context.TODO(), r1, r2)
 	}
 
 	for _, tblName := range tblNames {
-		tbl1, ok1 := r1.GetTable(tblName)
-		tbl2, ok2 := r2.GetTable(tblName)
+		tbl1, ok1 := r1.GetTable(context.TODO(), tblName)
+		tbl2, ok2 := r2.GetTable(context.TODO(), tblName)
 
 		if !ok1 && !ok2 {
 			bdr := errhand.BuildDError("Table could not be found.")
@@ -167,19 +168,19 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 		var sch2 schema.Schema
 		var sch1Hash hash.Hash
 		var sch2Hash hash.Hash
-		rowData1 := types.NewMap(dEnv.DoltDB.ValueReadWriter())
-		rowData2 := types.NewMap(dEnv.DoltDB.ValueReadWriter())
+		rowData1 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+		rowData2 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
 
 		if ok1 {
-			sch1 = tbl1.GetSchema()
+			sch1 = tbl1.GetSchema(context.TODO())
 			sch1Hash = tbl1.GetSchemaRef().TargetHash()
-			rowData1 = tbl1.GetRowData()
+			rowData1 = tbl1.GetRowData(context.TODO())
 		}
 
 		if ok2 {
-			sch2 = tbl2.GetSchema()
+			sch2 = tbl2.GetSchema(context.TODO())
 			sch2Hash = tbl2.GetSchemaRef().TargetHash()
-			rowData2 = tbl2.GetRowData()
+			rowData2 = tbl2.GetRowData(context.TODO())
 		}
 
 		var verr errhand.VerboseError
@@ -304,7 +305,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	}
 
 	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(newRows, oldRows)
+	ad.Start(context.TODO(), newRows, oldRows)
 	defer ad.Close()
 
 	src := diff.NewRowDiffSource(ad, oldToUnionConv, newToUnionConv, untypedUnionSch)

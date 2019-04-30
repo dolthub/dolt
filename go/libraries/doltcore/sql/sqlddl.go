@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -23,12 +24,12 @@ const (
 	colKey
 )
 
-var ErrNoPrimaryKeyColumns  = errors.New("at least one primary key column must be specified")
+var ErrNoPrimaryKeyColumns = errors.New("at least one primary key column must be specified")
 var tagCommentPrefix = "tag:"
 
 // ExecuteCreate executes the given create statement and returns the new root value of the database and its
 // accompanying schema.
-func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
+func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
 	if ddl.Action != sqlparser.CreateStr {
 		panic("expected create statement")
 	}
@@ -44,7 +45,7 @@ func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL
 	tableNameExpr := ddl.NewName
 	tableName = tableNameExpr.Name.String()
 
-	if root.HasTable(tableName) {
+	if root.HasTable(ctx, tableName) {
 		return errCreate("error: table %v already defined", tableName)
 	}
 
@@ -54,9 +55,9 @@ func ExecuteCreate(db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL
 		return nil, nil, err
 	}
 
-	schVal, err := encoding.MarshalAsNomsValue(root.VRW(), sch)
-	tbl := doltdb.NewTable(root.VRW(), schVal, types.NewMap(root.VRW()))
-	root = root.PutTable(db, tableName, tbl)
+	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), sch)
+	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, types.NewMap(ctx, root.VRW()))
+	root = root.PutTable(ctx, db, tableName, tbl)
 
 	return root, sch, nil
 }
@@ -88,7 +89,6 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 
 	return schema.SchemaFromCols(colColl), nil
 }
-
 
 func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDefinition, tag uint64) (schema.Column, error) {
 	columnType := colDef.Type
@@ -243,10 +243,10 @@ func extractTag(columnType sqlparser.ColumnType) uint64 {
 	return schema.InvalidTag
 }
 
-func errColumn(errFmt string, args... interface{}) (schema.Column, error) {
+func errColumn(errFmt string, args ...interface{}) (schema.Column, error) {
 	return schema.Column{}, errors.New(fmt.Sprintf(errFmt, args...))
 }
 
-func errCreate(errFmt string, args... interface{}) (*doltdb.RootValue, schema.Schema, error) {
+func errCreate(errFmt string, args ...interface{}) (*doltdb.RootValue, schema.Schema, error) {
 	return nil, nil, errors.New(fmt.Sprintf(errFmt, args...))
 }

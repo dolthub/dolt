@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 
@@ -44,15 +45,15 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if verr == nil {
 			force := apr.Contains(forceParam)
-			tbl := doltdb.NewTable(root.VRW(), schVal, types.NewMap(root.VRW()))
+			tbl := doltdb.NewTable(context.Background(), root.VRW(), schVal, types.NewMap(context.TODO(), root.VRW()))
 			for i := 0; i < apr.NArg() && verr == nil; i++ {
 				tblName := apr.Arg(i)
-				if !force && root.HasTable(tblName) {
+				if !force && root.HasTable(context.TODO(), tblName) {
 					bdr := errhand.BuildDError("table '%s' already exists.", tblName)
 					bdr.AddDetails("Use -f to overwrite the table with the specified schema and empty row data.")
 					verr = bdr.AddDetails("aborting").Build()
 				} else {
-					root = root.PutTable(dEnv.DoltDB, tblName, tbl)
+					root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
 				}
 			}
 
@@ -97,7 +98,7 @@ func readSchema(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (types.Value,
 		return nil, errhand.BuildDError("Invalid schema does not have a primary key.").Build()
 	}
 
-	schVal, err := encoding.MarshalAsNomsValue(dEnv.DoltDB.ValueReadWriter(), sch)
+	schVal, err := encoding.MarshalAsNomsValue(context.TODO(), dEnv.DoltDB.ValueReadWriter(), sch)
 
 	if err != nil {
 		//I dont really understand the cases where this would happen.

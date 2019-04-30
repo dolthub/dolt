@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"strings"
 
 	"github.com/attic-labs/noms/go/hash"
@@ -86,7 +87,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 		return 1
 	}
 
-	commit, err := dEnv.DoltDB.Resolve(cs)
+	commit, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
@@ -94,7 +95,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	}
 
 	n := apr.GetIntOrDefault(numLinesParam, -1)
-	commits, err := actions.TimeSortedCommits(dEnv.DoltDB, commit, n)
+	commits, err := actions.TimeSortedCommits(context.TODO(), dEnv.DoltDB, commit, n)
 
 	if err != nil {
 		cli.PrintErrln("Error retrieving commit.")
@@ -102,7 +103,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	}
 
 	for _, comm := range commits {
-		loggerFunc(comm.GetCommitMeta(), comm.ParentHashes(), comm.HashOf())
+		loggerFunc(comm.GetCommitMeta(), comm.ParentHashes(context.TODO()), comm.HashOf())
 	}
 
 	return 0

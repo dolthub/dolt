@@ -2,6 +2,7 @@ package csv
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -78,7 +79,7 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
-func (csvr *CSVReader) ReadRow() (row.Row, error) {
+func (csvr *CSVReader) ReadRow(ctx context.Context) (row.Row, error) {
 	if csvr.isDone {
 		return nil, io.EOF
 	}
@@ -112,7 +113,7 @@ func (csvr *CSVReader) GetSchema() schema.Schema {
 }
 
 // Close should release resources being held
-func (csvr *CSVReader) Close() error {
+func (csvr *CSVReader) Close(ctx context.Context) error {
 	if csvr.closer != nil {
 		err := csvr.closer.Close()
 		csvr.closer = nil

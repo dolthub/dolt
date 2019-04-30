@@ -1,6 +1,7 @@
 package json
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -52,7 +53,7 @@ func (jr JsonRows) decodeJSONRows(sch schema.Schema) ([]row.Row, error) {
 }
 
 //TableFromJSON takes a filepath, vrw, and schema and returns a dolt table.
-func TableFromJSON(fp string, vrw types.ValueReadWriter, sch schema.Schema) (*doltdb.Table, error) {
+func TableFromJSON(ctx context.Context, fp string, vrw types.ValueReadWriter, sch schema.Schema) (*doltdb.Table, error) {
 	data, err := filesys.LocalFS.ReadFile(fp)
 	if err != nil {
 		return nil, err
@@ -69,18 +70,18 @@ func TableFromJSON(fp string, vrw types.ValueReadWriter, sch schema.Schema) (*do
 	}
 
 	var rowMap types.Map
-	me := types.NewMap(vrw).Edit()
+	me := types.NewMap(ctx, vrw).Edit()
 	for _, row := range tblRows {
 		me = me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch))
 	}
-	rowMap = me.Map()
+	rowMap = me.Map(ctx)
 
-	schemaVal, err := encoding.MarshalAsNomsValue(vrw, sch)
+	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl := doltdb.NewTable(vrw, schemaVal, rowMap)
+	tbl := doltdb.NewTable(ctx, vrw, schemaVal, rowMap)
 	if err != nil {
 		return nil, err
 	}

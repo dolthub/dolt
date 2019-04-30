@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -57,7 +58,9 @@ func main() {
 	flag.BoolVar(&verboseOut, "v", false, "output verbose logging after completion")
 	flag.Parse()
 
-	dEnv := env.Load(env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
+	ctx := context.Background()
+
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 
 	if !dEnv.HasDoltDataDir() {
 		fmt.Fprintf(os.Stderr, "fatal: not a dolt data repository.")
@@ -73,28 +76,28 @@ func main() {
 	}
 
 	tableName := flag.Arg(0)
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		panic(err)
 	}
 
-	tbl, ok := root.GetTable(tableName)
+	tbl, ok := root.GetTable(ctx, tableName)
 
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Could not find table '%s'.\n", tableName)
 		os.Exit(1)
 	}
 
-	data := tbl.GetRowData()
-	sch := tbl.GetSchema()
+	data := tbl.GetRowData(ctx)
+	sch := tbl.GetSchema(ctx)
 
-	dim := New(sch, data)
-	updatedRows := dim.Run()
+	dim := New(ctx, sch, data)
+	updatedRows := dim.Run(ctx)
 
 	if !data.Equals(updatedRows) {
-		updatedTbl := tbl.UpdateRows(updatedRows)
-		updatedRoot := root.PutTable(dEnv.DoltDB, tableName, updatedTbl)
-		dEnv.UpdateWorkingRoot(updatedRoot)
+		updatedTbl := tbl.UpdateRows(ctx, updatedRows)
+		updatedRoot := root.PutTable(ctx, dEnv.DoltDB, tableName, updatedTbl)
+		dEnv.UpdateWorkingRoot(ctx, updatedRoot)
 	}
 }

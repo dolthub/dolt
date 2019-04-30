@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -21,7 +22,7 @@ func testHomeDirFunc() (string, error) {
 func createTestEnv() *env.DoltEnv {
 	initialDirs := []string{testHomeDir, filepath.Join(workingDir, doltdb.DoltDir)}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
-	dEnv := env.Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB)
 
 	return dEnv
 }
@@ -29,7 +30,7 @@ func createTestEnv() *env.DoltEnv {
 func createUninitializedEnv() *env.DoltEnv {
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
-	dEnv := env.Load(testHomeDirFunc, fs, doltdb.InMemDoltDB)
+	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB)
 
 	return dEnv
 }

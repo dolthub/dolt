@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -56,7 +57,7 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	root, tbl, verr := getRootAndTable(dEnv, rmArgs.TableName)
 
 	if verr == nil {
-		pkVals, err := cli.ParseKeyValues(tbl.GetSchema(), rmArgs.PKs)
+		pkVals, err := cli.ParseKeyValues(tbl.GetSchema(context.TODO()), rmArgs.PKs)
 
 		if err != nil {
 			verr = errhand.BuildDError("error parsing keys to delete").AddCause(err).Build()
@@ -74,13 +75,13 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *doltdb.Table, errhand.VerboseError) {
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get working value for the dolt data repository.").Build()
 	}
 
-	tbl, ok := root.GetTable(tblName)
+	tbl, ok := root.GetTable(context.TODO(), tblName)
 
 	if !ok {
 		return nil, nil, errhand.BuildDError("Unknown table %s", tblName).Build()
@@ -90,21 +91,21 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 }
 
 func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblName string, pkVals []types.Value, dEnv *env.DoltEnv) errhand.VerboseError {
-	m := tbl.GetRowData()
+	m := tbl.GetRowData(context.TODO())
 
 	updates := 0
 	for _, pk := range pkVals {
-		_, ok := m.MaybeGet(pk)
+		_, ok := m.MaybeGet(context.TODO(), pk)
 
 		if !ok {
-			cli.PrintErrln(color.YellowString(`No row with %s equal to %s was found.`, types.EncodedValue(pk)))
+			cli.PrintErrln(color.YellowString(`No row with %s equal to %s was found.`, types.EncodedValue(context.TODO(), pk)))
 			continue
 		}
 
 		verr := errhand.PanicToVError("Failed to remove the row from the table.", func() errhand.VerboseError {
 			me := m.Edit()
 			me.Remove(pk)
-			m = me.Map()
+			m = me.Map(context.TODO())
 			return nil
 		})
 
@@ -116,8 +117,8 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 	}
 
 	verr := errhand.PanicToVError("Failed to update the table.", func() errhand.VerboseError {
-		tbl = tbl.UpdateRows(m)
-		root = root.PutTable(dEnv.DoltDB, tblName, tbl)
+		tbl = tbl.UpdateRows(context.Background(), m)
+		root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
 		return nil
 	})
 

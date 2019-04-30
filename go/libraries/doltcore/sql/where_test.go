@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/xwb1989/sqlparser"
@@ -93,13 +94,13 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
 		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot()
+		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)
 		s := sqlStatement.(*sqlparser.Select)
 
 		t.Run(tt.name, func(t *testing.T) {
-			_, _, err := ExecuteSelect(root, s)
+			_, _, err := ExecuteSelect(context.Background(), root, s)
 			if err != nil {
 				assert.Contains(t, err.Error(), tt.expectedErr)
 			} else {

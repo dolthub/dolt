@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -87,7 +88,7 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 	verbose := apr.Contains(verboseFlag)
 	printAll := apr.Contains(allParam)
 
-	branches := dEnv.DoltDB.GetBranches()
+	branches := dEnv.DoltDB.GetBranches(context.TODO())
 	currentBranch := dEnv.RepoState.Branch
 	sort.Strings(branches)
 
@@ -109,7 +110,7 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 
 		if verbose {
 
-			cm, err := dEnv.DoltDB.Resolve(cs)
+			cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 			if err == nil {
 				line = fmt.Sprintf("%s %s", line, cm.HashOf().String())
@@ -131,7 +132,7 @@ func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.MoveBranch(dEnv, src, apr.Arg(1), force)
+	err := actions.MoveBranch(context.TODO(), dEnv, src, apr.Arg(1), force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -161,7 +162,7 @@ func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.CopyBranch(dEnv, src, dest, force)
+	err := actions.CopyBranch(context.TODO(), dEnv, src, dest, force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -196,7 +197,7 @@ func handleDeleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usa
 
 	brName := apr.Arg(0)
 
-	err := actions.DeleteBranch(dEnv, brName, force)
+	err := actions.DeleteBranch(context.TODO(), dEnv, brName, force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -231,7 +232,7 @@ func createBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.U
 }
 
 func createBranchWithStartPt(dEnv *env.DoltEnv, newBranch, startPt string, force bool) errhand.VerboseError {
-	err := actions.CreateBranch(dEnv, newBranch, startPt, force)
+	err := actions.CreateBranch(context.TODO(), dEnv, newBranch, startPt, force)
 
 	if err != nil {
 		if err == actions.ErrAlreadyExists {

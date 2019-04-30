@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -37,13 +38,13 @@ func appendRow(drs []*DimRow, toUntyped, toTyped *rowconv.RowConverter, k, v typ
 	return drs, false
 }
 
-func NewDataWindow(size int, data types.Map, toUntyped, toTyped *rowconv.RowConverter) *DataWindow {
-	itr := data.Iterator()
+func NewDataWindow(ctx context.Context, size int, data types.Map, toUntyped, toTyped *rowconv.RowConverter) *DataWindow {
+	itr := data.Iterator(ctx)
 
 	ok := true
 	var drs []*DimRow
 	for i := 0; i < size && ok; i++ {
-		k, v := itr.Next()
+		k, v := itr.Next(ctx)
 		drs, ok = appendRow(drs, toUntyped, toTyped, k, v)
 	}
 
@@ -61,13 +62,13 @@ func NewDataWindow(size int, data types.Map, toUntyped, toTyped *rowconv.RowConv
 	}
 }
 
-func (dw *DataWindow) Resize(size, selRow int) int {
+func (dw *DataWindow) Resize(ctx context.Context, size, selRow int) int {
 	shrunk := size < dw.size
 
 	dw.size = size
 
 	if !shrunk {
-		dw.fillInData()
+		dw.fillInData(ctx)
 		return selRow
 	} else {
 		absSel := dw.idx + selRow
@@ -107,9 +108,9 @@ func (dw *DataWindow) PageUp() {
 	}
 }
 
-func (dw *DataWindow) fillInData() {
+func (dw *DataWindow) fillInData(ctx context.Context) {
 	for len(dw.dimRows) < dw.idx+dw.size {
-		k, v := dw.itr.Next()
+		k, v := dw.itr.Next(ctx)
 
 		var ok bool
 		dw.dimRows, ok = appendRow(dw.dimRows, dw.toUntyped, dw.toTyped, k, v)
@@ -124,14 +125,14 @@ func (dw *DataWindow) fillInData() {
 	}
 }
 
-func (dw *DataWindow) MoveDown() {
+func (dw *DataWindow) MoveDown(ctx context.Context) {
 	dw.idx += 1
-	dw.fillInData()
+	dw.fillInData(ctx)
 }
 
-func (dw *DataWindow) PageDown() {
+func (dw *DataWindow) PageDown(ctx context.Context) {
 	dw.idx += dw.size - 1
-	dw.fillInData()
+	dw.fillInData(ctx)
 }
 
 func (dw *DataWindow) IterWindow(cb func(*DimRow)) {
@@ -159,7 +160,7 @@ func (dw *DataWindow) UpdateRow(n int) {
 	dw.changedSet[absIdx] = struct{}{}
 }
 
-func (dw *DataWindow) FlushEdits() {
+func (dw *DataWindow) FlushEdits(ctx context.Context) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Println("recovered from:", r)
@@ -176,7 +177,7 @@ func (dw *DataWindow) FlushEdits() {
 		}
 
 		log.Println("flushed edits")
-		dw.data = me.Map()
+		dw.data = me.Map(ctx)
 	}
 }
 

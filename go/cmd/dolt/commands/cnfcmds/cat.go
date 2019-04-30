@@ -1,6 +1,7 @@
 package cnfcmds
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -8,6 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
@@ -64,19 +66,19 @@ func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
 	if len(tblNames) == 1 && tblNames[0] == "." {
-		tblNames = actions.AllTables(root)
+		tblNames = actions.AllTables(context.TODO(), root)
 	}
 
 	var verr errhand.VerboseError
 	for _, tblName := range tblNames {
 		func() {
-			if !root.HasTable(tblName) {
+			if !root.HasTable(context.TODO(), tblName) {
 				verr = errhand.BuildDError("error: unknown table '%s'", tblName).Build()
 				return
 			}
 
-			tbl, _ := root.GetTable(tblName)
-			cnfRd, err := merge.NewConflictReader(tbl)
+			tbl, _ := root.GetTable(context.TODO(), tblName)
+			cnfRd, err := merge.NewConflictReader(context.TODO(), tbl)
 
 			if err == doltdb.ErrNoConflicts {
 				return
@@ -94,7 +96,8 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 				pipeline.NamedTransform{Name: "fwt", Func: fwtTr.TransformToFWT},
 			)
 
-			srcProcFunc := pipeline.ProcFuncForSourceFunc(cnfRd.NextConflict)
+			// TODO: Pipeline should be contextified.
+			srcProcFunc := pipeline.ProcFuncForSourceFunc(func() (row.Row, pipeline.ImmutableProperties, error) { return cnfRd.NextConflict(context.TODO()) })
 			sinkProcFunc := pipeline.ProcFuncForSinkFunc(cnfWr.ProcRowWithProps)
 			p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, func(failure *pipeline.TransformRowFailure) (quit bool) {
 				panic("")

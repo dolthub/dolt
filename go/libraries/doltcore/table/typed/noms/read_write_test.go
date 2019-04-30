@@ -1,6 +1,7 @@
 package noms
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
@@ -64,7 +65,7 @@ func createRows(onlyUpdated, updatedAge bool) []row.Row {
 
 func TestReadWrite(t *testing.T) {
 	dbSPec, _ := spec.ForDatabase("mem")
-	db := dbSPec.GetDatabase()
+	db := dbSPec.GetDatabase(context.Background())
 
 	rows := createRows(false, false)
 
@@ -79,7 +80,7 @@ func TestReadWrite(t *testing.T) {
 }
 
 func testNomsMapCreator(t *testing.T, vrw types.ValueReadWriter, rows []row.Row) *types.Map {
-	mc := NewNomsMapCreator(vrw, sch)
+	mc := NewNomsMapCreator(context.Background(), vrw, sch)
 	return testNomsWriteCloser(t, mc, rows)
 }
 
@@ -90,20 +91,20 @@ func testNomsMapUpdate(t *testing.T, vrw types.ValueReadWriter, initialMapVal *t
 
 func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *types.Map {
 	for _, r := range rows {
-		err := nwc.WriteRow(r)
+		err := nwc.WriteRow(context.Background(), r)
 
 		if err != nil {
 			t.Error("Failed to write row.", err)
 		}
 	}
 
-	err := nwc.Close()
+	err := nwc.Close(context.Background())
 
 	if err != nil {
 		t.Fatal("Failed to close writer")
 	}
 
-	err = nwc.Close()
+	err = nwc.Close(context.Background())
 
 	if err == nil {
 		t.Error("Should give error for having already been closed")
@@ -116,7 +117,7 @@ func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *
 			}
 		}()
 
-		nwc.WriteRow(rows[0])
+		nwc.WriteRow(context.Background(), rows[0])
 	}()
 
 	mapVal := nwc.GetMap()
@@ -129,8 +130,8 @@ func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *
 }
 
 func testReadAndCompare(t *testing.T, initialMapVal *types.Map, expectedRows []row.Row) {
-	mr := NewNomsMapReader(*initialMapVal, sch)
-	actualRows, numBad, err := table.ReadAllRows(mr, true)
+	mr := NewNomsMapReader(context.Background(), *initialMapVal, sch)
+	actualRows, numBad, err := table.ReadAllRows(context.Background(), mr, true)
 
 	if err != nil {
 		t.Fatal("Failed to read rows from map.")
@@ -146,7 +147,7 @@ func testReadAndCompare(t *testing.T, initialMapVal *types.Map, expectedRows []r
 
 	for i := 0; i < len(expectedRows); i++ {
 		if !row.AreEqual(actualRows[i], expectedRows[i], sch) {
-			t.Error(row.Fmt(actualRows[i], sch), "!=", row.Fmt(expectedRows[i], sch))
+			t.Error(row.Fmt(context.Background(), actualRows[i], sch), "!=", row.Fmt(context.Background(), expectedRows[i], sch))
 		}
 	}
 }

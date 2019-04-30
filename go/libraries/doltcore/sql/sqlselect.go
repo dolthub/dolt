@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -61,8 +62,8 @@ func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.Readable
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, schema.Schema, error) {
-	p, statement, err := BuildSelectQueryPipeline(root, s)
+func ExecuteSelect(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, schema.Schema, error) {
+	p, statement, err := BuildSelectQueryPipeline(ctx, root, s)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -99,18 +100,18 @@ func ExecuteSelect(root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, sche
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
 // for the caller to mutate and execute, as well as the schema of the result set. The pipeline will not have any output
 // set; one must be assigned before execution.
-func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pipeline.Pipeline, *SelectStatement, error) {
+func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Select) (*pipeline.Pipeline, *SelectStatement, error) {
 	selectStmt := &SelectStatement{
-		aliases: NewAliases(),
+		aliases:      NewAliases(),
 		inputSchemas: make(map[string]schema.Schema),
-		joins: make([]*sqlparser.JoinTableExpr, 0),
+		joins:        make([]*sqlparser.JoinTableExpr, 0),
 	}
 
-	if err := processFromClause(root, selectStmt, s.From); err != nil {
+	if err := processFromClause(ctx, root, selectStmt, s.From); err != nil {
 		return nil, nil, err
 	}
 
-	if err := processSelectedColumns(root, selectStmt, s.SelectExprs); err != nil {
+	if err := processSelectedColumns(ctx, root, selectStmt, s.SelectExprs); err != nil {
 		return nil, nil, err
 	}
 
@@ -126,7 +127,7 @@ func BuildSelectQueryPipeline(root *doltdb.RootValue, s *sqlparser.Select) (*pip
 		return nil, nil, err
 	}
 
-	p, err := createPipeline(root, s, selectStmt)
+	p, err := createPipeline(ctx, root, s, selectStmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -195,9 +196,9 @@ func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error 
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
-func processFromClause(root *doltdb.RootValue, selectStmt *SelectStatement, from sqlparser.TableExprs) error {
+func processFromClause(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement, from sqlparser.TableExprs) error {
 	for _, tableExpr := range from {
-		if err := processTableExpression(root, selectStmt, tableExpr); err != nil {
+		if err := processTableExpression(ctx, root, selectStmt, tableExpr); err != nil {
 			return err
 		}
 	}
@@ -206,7 +207,7 @@ func processFromClause(root *doltdb.RootValue, selectStmt *SelectStatement, from
 }
 
 // Processes the a single table expression from a from (or join) clause
-func processTableExpression(root *doltdb.RootValue, selectStmt *SelectStatement, expr sqlparser.TableExpr) error {
+func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement, expr sqlparser.TableExpr) error {
 	switch te := expr.(type) {
 	case *sqlparser.AliasedTableExpr:
 		var tableName string
@@ -219,7 +220,7 @@ func processTableExpression(root *doltdb.RootValue, selectStmt *SelectStatement,
 			return errFmt("Unrecognized expression: %v", nodeToString(e))
 		}
 
-		if !root.HasTable(tableName) {
+		if !root.HasTable(ctx, tableName) {
 			return errFmt("Unknown table '%s'", tableName)
 		}
 
@@ -228,7 +229,7 @@ func processTableExpression(root *doltdb.RootValue, selectStmt *SelectStatement,
 		}
 		selectStmt.aliases.AddTableAlias(tableName, tableName)
 
-		selectStmt.inputSchemas[tableName] = mustGetSchema(root, tableName)
+		selectStmt.inputSchemas[tableName] = mustGetSchema(ctx, root, tableName)
 		selectStmt.inputTables = append(selectStmt.inputTables, tableName)
 
 	case *sqlparser.JoinTableExpr:
@@ -242,10 +243,10 @@ func processTableExpression(root *doltdb.RootValue, selectStmt *SelectStatement,
 		selectStmt.joins = append(selectStmt.joins, te)
 
 		// Join expressions can also define aliases, which we will fill in here recursively
-		if err := processTableExpression(root, selectStmt, te.LeftExpr); err != nil {
+		if err := processTableExpression(ctx, root, selectStmt, te.LeftExpr); err != nil {
 			return err
 		}
-		if err := processTableExpression(root, selectStmt, te.RightExpr); err != nil {
+		if err := processTableExpression(ctx, root, selectStmt, te.RightExpr); err != nil {
 			return err
 		}
 	case *sqlparser.ParenTableExpr:
@@ -259,7 +260,7 @@ func processTableExpression(root *doltdb.RootValue, selectStmt *SelectStatement,
 
 // Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
 // or returns an error if it cannot. All table aliases must be established in the SelectStatement.
-func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
+func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
 	var columns []QualifiedColumn
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
@@ -294,8 +295,8 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 				if !colExpr.Qualifier.IsEmpty() {
 					columnTableName := colExpr.Qualifier.Name.String()
 					var ok bool
-					if tableName, ok = selectStmt.aliases.TablesByAlias[columnTableName]; ok{
-						tableSch = mustGetSchema(root, tableName)
+					if tableName, ok = selectStmt.aliases.TablesByAlias[columnTableName]; ok {
+						tableSch = mustGetSchema(ctx, root, tableName)
 					} else {
 						return errFmt("Unknown table " + columnTableName)
 					}
@@ -323,7 +324,7 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 			}
 		case sqlparser.Nextval:
 			return errFmt("Next value is not supported: %v", nodeToString(selectExpr))
-	 	}
+		}
 	}
 
 	selectStmt.selectedCols = columns
@@ -331,9 +332,9 @@ func processSelectedColumns(root *doltdb.RootValue, selectStmt *SelectStatement,
 }
 
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
-func mustGetSchema(root *doltdb.RootValue, tableName string) schema.Schema {
-	tbl, _:= root.GetTable(tableName)
-	return tbl.GetSchema()
+func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string) schema.Schema {
+	tbl, _ := root.GetTable(ctx, tableName)
+	return tbl.GetSchema(ctx)
 }
 
 // Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
@@ -368,7 +369,7 @@ type singleTablePipelineResult struct {
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(root *doltdb.RootValue, s *sqlparser.Select, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
+func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Select, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
 
 	if len(selectStmt.inputSchemas) == 1 {
 		var tableName string
@@ -385,12 +386,12 @@ func createPipeline(root *doltdb.RootValue, s *sqlparser.Select, selectStmt *Sel
 			return nil, err
 		}
 
-		return createSingleTablePipeline(root, selectStmt, tableName, true)
+		return createSingleTablePipeline(ctx, root, selectStmt, tableName, true)
 	}
 
 	pipelines := make(map[string]*singleTablePipelineResult)
 	for tableName := range selectStmt.inputSchemas {
-		p, err := createSingleTablePipeline(root, selectStmt, tableName, false)
+		p, err := createSingleTablePipeline(ctx, root, selectStmt, tableName, false)
 		if err != nil {
 			return nil, err
 		}
@@ -473,17 +474,17 @@ func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
 }
 
 // Creates a pipeline to return results from a single table.
-func createSingleTablePipeline(root *doltdb.RootValue, statement *SelectStatement, tableName string, isTerminal bool) (*pipeline.Pipeline, error) {
+func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, statement *SelectStatement, tableName string, isTerminal bool) (*pipeline.Pipeline, error) {
 	tblSch := statement.inputSchemas[tableName]
-	tbl, _ := root.GetTable(tableName)
+	tbl, _ := root.GetTable(ctx, tableName)
 
-	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
-	rdProcFunc := pipeline.ProcFuncForReader(rd)
+	rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), tblSch)
+	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
 	p := pipeline.NewPartialPipeline(rdProcFunc, &pipeline.TransformCollection{})
-	p.RunAfter(func() { rd.Close() })
+	p.RunAfter(func() { rd.Close(ctx) })
 
 	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
-	selTrans.noMoreCallback = func() {p.NoMore()}
+	selTrans.noMoreCallback = func() { p.NoMore() }
 
 	if isTerminal {
 		p.AddStage(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))

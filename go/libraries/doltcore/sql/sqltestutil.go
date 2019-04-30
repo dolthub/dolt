@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -67,7 +68,7 @@ var appearancesTestSchema = createAppearancesTestSchema()
 var untypedAppearacesSch = untyped.UntypeUnkeySchema(appearancesTestSchema)
 var appearancesTableName = "appearances"
 
-func createSchema(columns... schema.Column) schema.Schema {
+func createSchema(columns ...schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
 	return schema.SchemaFromCols(colColl)
 }
@@ -79,7 +80,7 @@ func createPeopleTestSchema() schema.Schema {
 		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
 		schema.NewColumn("age", ageTag, types.IntKind, false),
-//		schema.NewColumn("empty", emptyTag, types.IntKind, false),
+		//		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 		schema.NewColumn("rating", ratingTag, types.FloatKind, false),
 		schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
 		schema.NewColumn("num_episodes", numEpisodesTag, types.UintKind, false),
@@ -108,12 +109,12 @@ func createAppearancesTestSchema() schema.Schema {
 
 func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
-		idTag: types.Int(id),
-		firstTag: types.String(first),
-		lastTag: types.String(last),
+		idTag:        types.Int(id),
+		firstTag:     types.String(first),
+		lastTag:      types.String(last),
 		isMarriedTag: types.Bool(isMarried),
-		ageTag: types.Int(age),
-		ratingTag: types.Float(rating),
+		ageTag:       types.Int(age),
+		ratingTag:    types.Float(rating),
 	}
 
 	return row.New(peopleTestSchema, vals)
@@ -122,9 +123,9 @@ func newPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 	vals := row.TaggedValues{
 		episodeIdTag: types.Int(id),
-		epNameTag: types.String(name),
+		epNameTag:    types.String(name),
 		epAirDateTag: types.Int(airdate),
-		epRatingTag: types.Float(rating),
+		epRatingTag:  types.Float(rating),
 	}
 
 	return row.New(episodesTestSchema, vals)
@@ -133,8 +134,8 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 func newAppsRow(charId, epId int, comment string) row.Row {
 	vals := row.TaggedValues{
 		appCharacterTag: types.Int(charId),
-		appEpTag : types.Int(epId),
-		appCommentsTag: types.String(comment),
+		appEpTag:        types.Int(epId),
+		appCommentsTag:  types.String(comment),
 	}
 
 	return row.New(appearancesTestSchema, vals)
@@ -143,13 +144,13 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
 func newPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
 	vals := row.TaggedValues{
-		idTag: types.Int(id),
-		firstTag: types.String(first),
-		lastTag: types.String(last),
-		isMarriedTag: types.Bool(isMarried),
-		ageTag: types.Int(age),
-		ratingTag: types.Float(rating),
-		uuidTag: types.UUID(uid),
+		idTag:          types.Int(id),
+		firstTag:       types.String(first),
+		lastTag:        types.String(last),
+		isMarriedTag:   types.Bool(isMarried),
+		ageTag:         types.Int(age),
+		ratingTag:      types.Float(rating),
+		uuidTag:        types.UUID(uid),
 		numEpisodesTag: types.Uint(numEpisodes),
 	}
 
@@ -183,11 +184,12 @@ var app7 = newAppsRow(homerId, 3, "Homer is in every episode")
 var app8 = newAppsRow(margeId, 3, "Marge shows up a lot too")
 var app9 = newAppsRow(lisaId, 3, "Lisa is the best Simpson")
 var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
+
 // nobody in episode 4, that one was terrible
-var allAppsRows = rs(app1,app2,app3,app4,app5,app6,app7,app8,app9,app10)
+var allAppsRows = rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10)
 
 // Convenience func to avoid the boilerplate of typing []row.Row{} all the time
-func rs(rows... row.Row) []row.Row {
+func rs(rows ...row.Row) []row.Row {
 	return rows
 }
 
@@ -207,19 +209,19 @@ func findRowIndex(find row.Row, rows []row.Row) int {
 
 // Compares two noms Floats for approximate equality
 var floatComparer = cmp.Comparer(func(x, y types.Float) bool {
-	return math.Abs(float64(x) - float64(y)) < .001
+	return math.Abs(float64(x)-float64(y)) < .001
 })
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
 func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
-	if len(tagsAndVals) % 2 != 0 {
+	if len(tagsAndVals)%2 != 0 {
 		panic("expected pairs of tags and values")
 	}
 
 	var mutated row.Row = r
 	var err error
 
-	for i := 0; i < len(tagsAndVals); i += 2{
+	for i := 0; i < len(tagsAndVals); i += 2 {
 		tag := tagsAndVals[i].(int)
 		val := tagsAndVals[i+1]
 		var nomsVal types.Value
@@ -284,7 +286,7 @@ func convertRow(t *testing.T, r row.Row, sch, destSchema schema.Schema) row.Row 
 	return untyped
 }
 
-func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch schema.Schema, rs... row.Row) {
+func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch schema.Schema, rs ...row.Row) {
 	imt := table.NewInMemTable(sch)
 
 	for _, r := range rs {
@@ -292,16 +294,16 @@ func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch sche
 	}
 
 	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(dEnv.DoltDB.ValueReadWriter(), sch)
+	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
 
-	_, _, err := table.PipeRows(rd, wr, false)
-	rd.Close()
-	wr.Close()
+	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
+	rd.Close(context.Background())
+	wr.Close(context.Background())
 
 	assert.Nil(t, err, "Failed to seed initial data")
 
-	err = dEnv.PutTableToWorking(*wr.GetMap(), wr.GetSchema(), tableName)
-	assert.Nil(t, err,"Unable to put initial value of table in in mem noms db")
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
+	assert.Nil(t, err, "Unable to put initial value of table in in mem noms db")
 }
 
 // Creates a test database with the test data set in it

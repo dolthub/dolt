@@ -1,6 +1,7 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -21,13 +22,13 @@ var ErrMissingPrimaryKeys = errors.New("one or more primary key columns missing 
 var ErrConstraintFailure = errors.New("row constraint failed")
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string)  (*InsertResult, error) {
+func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
 	tableName := s.Table.Name.String()
-	if !root.HasTable(tableName) {
+	if !root.HasTable(ctx, tableName) {
 		return errInsert("Unknown table %v", tableName)
 	}
-	table, _ := root.GetTable(tableName)
-	tableSch := table.GetSchema()
+	table, _ := root.GetTable(ctx, tableName)
+	tableSch := table.GetSchema(ctx)
 
 	// Parser supports overwrite on insert with both the replace keyword (from MySQL) as well as the ignore keyword
 	replace := s.Action == sqlparser.ReplaceStr
@@ -75,7 +76,7 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 	}
 
 	// Perform the insert
-	rowData := table.GetRowData()
+	rowData := table.GetRowData(ctx)
 	me := rowData.Edit()
 	var result InsertResult
 
@@ -91,7 +92,7 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 
 		key := r.NomsMapKey(tableSch)
 
-		rowExists := me.Get(key) != nil
+		rowExists := me.Get(ctx, key) != nil
 		if rowExists {
 			if replace {
 				result.NumRowsUpdated += 1
@@ -107,9 +108,9 @@ func ExecuteInsert(db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Inser
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(me.Map())
+	table = table.UpdateRows(ctx, me.Map(ctx))
 
-	result.Root = root.PutTable(db, tableName, table)
+	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil
 }
 
@@ -149,7 +150,7 @@ func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch 
 
 func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.ValTuple) (row.Row, error) {
 	if len(columns) != len(tuple) {
-		return errInsertRow("Wrong number of values for tuple %v",  nodeToString(tuple))
+		return errInsertRow("Wrong number of values for tuple %v", nodeToString(tuple))
 	}
 
 	taggedVals := make(row.TaggedValues)
@@ -231,11 +232,11 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 }
 
 // Returns an error result with return type to match ExecuteInsert
-func errInsert(errorFmt string, args... interface{})  (*InsertResult, error) {
+func errInsert(errorFmt string, args ...interface{}) (*InsertResult, error) {
 	return nil, errors.New(fmt.Sprintf(errorFmt, args...))
 }
 
 // Returns an error result with return type to match ExecuteInsert
-func errInsertRow(errorFmt string, args... interface{})  (row.Row, error) {
+func errInsertRow(errorFmt string, args ...interface{}) (row.Row, error) {
 	return nil, errors.New(fmt.Sprintf(errorFmt, args...))
 }

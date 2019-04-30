@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
@@ -181,12 +182,12 @@ func newArgParser() *argparser.ArgParser {
 // Runs the selection pipeline and prints the table of resultant values, returning any error encountered.
 func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseError {
 	var verr errhand.VerboseError
-	if !root.HasTable(selArgs.tblName) {
+	if !root.HasTable(context.TODO(), selArgs.tblName) {
 		return errhand.BuildDError("error: unknown table '%s'", selArgs.tblName).Build()
 	}
 
-	tbl, _ := root.GetTable(selArgs.tblName)
-	tblSch := tbl.GetSchema()
+	tbl, _ := root.GetTable(context.TODO(), selArgs.tblName)
+	tblSch := tbl.GetSchema(context.TODO())
 	whereFn, err := parseWhere(tblSch, selArgs.whereClause)
 
 	if err != nil {
@@ -221,20 +222,20 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	colNames := schema.ExtractAllColNames(outSch)
 	addSizingTransform(outSch, transforms)
 
-	rd := noms.NewNomsMapReader(tbl.GetRowData(), tblSch)
+	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(context.TODO()), tblSch)
 	wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, &csv.CSVFileInfo{Delim: '|'})
 
 	badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(tff.Row, outSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.TODO(), tff.Row, outSch)))
 		return true
 	}
 
-	rdProcFunc := pipeline.ProcFuncForReader(rd)
-	wrProcFunc := pipeline.ProcFuncForWriter(wr)
+	rdProcFunc := pipeline.ProcFuncForReader(context.TODO(), rd)
+	wrProcFunc := pipeline.ProcFuncForWriter(context.TODO(), wr)
 
 	p := pipeline.NewAsyncPipeline(rdProcFunc, wrProcFunc, transforms, badRowCallback)
-	p.RunAfter(func() { rd.Close() })
-	p.RunAfter(func() { wr.Close() })
+	p.RunAfter(func() { rd.Close(context.TODO()) })
+	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	// Insert the table header row at the appropriate stage
 	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
@@ -292,7 +293,7 @@ func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltd
 		_, confSchema := untyped.NewUntypedSchemaWithFirstTag(cnfTag, cnfColName)
 		schWithConf, _ := typed.TypedSchemaUnion(confSchema, tblSch)
 
-		_, confData, _ := tbl.GetConflicts()
+		_, confData, _ := tbl.GetConflicts(context.TODO())
 
 		cnfTransform := pipeline.NewNamedTransform(transCnfSetName, CnfTransformer(tblSch, schWithConf, confData))
 		transColl.AppendTransforms(cnfTransform)
@@ -311,7 +312,7 @@ func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow
 		key := inRow.NomsMapKey(inSch)
 
 		var err error
-		if conflicts.Has(key) {
+		if conflicts.Has(context.TODO(), key) {
 			inRow, err = inRow.SetColVal(cnfTag, confLabel, outSch)
 		} else {
 			inRow, err = inRow.SetColVal(cnfTag, noConfLabel, outSch)

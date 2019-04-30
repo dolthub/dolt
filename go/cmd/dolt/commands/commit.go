@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"strings"
 
 	"github.com/fatih/color"
@@ -43,7 +44,7 @@ func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		msg = getCommitMessageFromEditor(dEnv)
 	}
 
-	err := actions.CommitStaged(dEnv, msg, apr.Contains(allowEmptyFlag))
+	err := actions.CommitStaged(context.Background(), dEnv, msg, apr.Contains(allowEmptyFlag))
 	return handleCommitErr(err, usage)
 }
 
@@ -102,10 +103,10 @@ func buildInitalCommitMsg(dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.Branch
-	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(dEnv)
+	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(context.Background(), dEnv)
 	buf := bytes.NewBuffer([]byte{})
 
-	workingInConflict, _, _, err := actions.GetTablesInConflict(dEnv)
+	workingInConflict, _, _, err := actions.GetTablesInConflict(context.Background(), dEnv)
 
 	if err != nil {
 		workingInConflict = []string{}

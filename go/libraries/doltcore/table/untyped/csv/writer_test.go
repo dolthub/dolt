@@ -1,6 +1,7 @@
 package csv
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -65,10 +66,10 @@ John Johnson,21,Intern Dufus
 	}
 
 	func() {
-		defer csvWr.Close()
+		defer csvWr.Close(context.Background())
 
 		for _, row := range rows {
-			err := csvWr.WriteRow(row)
+			err := csvWr.WriteRow(context.Background(), row)
 
 			if err != nil {
 				t.Fatal("Failed to write row")

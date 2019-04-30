@@ -1,6 +1,7 @@
 package doltdb
 
 import (
+	"context"
 	"errors"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -43,11 +44,11 @@ func (c *Commit) GetCommitMeta() *CommitMeta {
 	panic(c.HashOf().String() + " is a commit without the required metadata.")
 }
 
-func (c *Commit) ParentHashes() []hash.Hash {
+func (c *Commit) ParentHashes(ctx context.Context) []hash.Hash {
 	parentSet := c.getParents()
 
 	hashes := make([]hash.Hash, 0, parentSet.Len())
-	parentSet.IterAll(func(parentVal types.Value) {
+	parentSet.IterAll(ctx, func(parentVal types.Value) {
 		parentRef := parentVal.(types.Ref)
 		parentHash := parentRef.TargetHash()
 		hashes = append(hashes, parentHash)
@@ -70,18 +71,18 @@ func (c *Commit) NumParents() int {
 	return int(parents.Len())
 }
 
-func (c *Commit) getParent(idx int) *types.Struct {
+func (c *Commit) getParent(ctx context.Context, idx int) *types.Struct {
 	parentSet := c.getParents()
 
-	itr := parentSet.IteratorAt(uint64(idx))
-	parentVal := itr.Next()
+	itr := parentSet.IteratorAt(ctx, uint64(idx))
+	parentVal := itr.Next(ctx)
 
 	if parentVal == nil {
 		return nil
 	}
 
 	parentRef := parentVal.(types.Ref)
-	parentSt := parentRef.TargetValue(c.vrw).(types.Struct)
+	parentSt := parentRef.TargetValue(ctx, c.vrw).(types.Struct)
 	return &parentSt
 }
 
@@ -100,18 +101,18 @@ func (c *Commit) GetRootValue() *RootValue {
 
 var ErrNoCommonAnscestor = errors.New("no common anscestor")
 
-func GetCommitAnscestor(cm1, cm2 *Commit) (*Commit, error) {
+func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	ref1, ref2 := types.NewRef(cm1.commitSt), types.NewRef(cm2.commitSt)
 
 	var ancestorSt types.Struct
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		ref, err := getCommitAncestorRef(ref1, ref2, cm1.vrw)
+		ref, err := getCommitAncestorRef(ctx, ref1, ref2, cm1.vrw)
 
 		if err != nil {
 			return err
 		}
 
-		ancestorSt, _ = ref.TargetValue(cm1.vrw).(types.Struct)
+		ancestorSt, _ = ref.TargetValue(ctx, cm1.vrw).(types.Struct)
 		return nil
 	})
 
@@ -122,8 +123,8 @@ func GetCommitAnscestor(cm1, cm2 *Commit) (*Commit, error) {
 	return &Commit{cm1.vrw, ancestorSt}, nil
 }
 
-func getCommitAncestorRef(ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
-	ancestorRef, ok := datas.FindCommonAncestor(ref1, ref2, vrw)
+func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
+	ancestorRef, ok := datas.FindCommonAncestor(ctx, ref1, ref2, vrw)
 
 	if !ok {
 		return types.Ref{}, ErrNoCommonAnscestor
@@ -132,8 +133,8 @@ func getCommitAncestorRef(ref1, ref2 types.Ref, vrw types.ValueReadWriter) (type
 	return ancestorRef, nil
 }
 
-func (c *Commit) CanFastForwardTo(new *Commit) (bool, error) {
-	ancestor, err := GetCommitAnscestor(c, new)
+func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
+	ancestor, err := GetCommitAnscestor(ctx, c, new)
 
 	if err != nil {
 		return false, err
@@ -151,8 +152,8 @@ func (c *Commit) CanFastForwardTo(new *Commit) (bool, error) {
 	return false, nil
 }
 
-func (c *Commit) CanFastReverseTo(new *Commit) (bool, error) {
-	ancestor, err := GetCommitAnscestor(c, new)
+func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error) {
+	ancestor, err := GetCommitAnscestor(ctx, c, new)
 
 	if err != nil {
 		return false, err

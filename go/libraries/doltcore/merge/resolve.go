@@ -1,6 +1,7 @@
 package merge
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -18,29 +19,29 @@ func Theirs(key types.Value, cnf doltdb.Conflict) (types.Value, error) {
 	return cnf.MergeValue, nil
 }
 
-func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc AutoResolver) (*doltdb.Table, error) {
+func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc AutoResolver) (*doltdb.Table, error) {
 	if !tbl.HasConflicts() {
 		return nil, doltdb.ErrNoConflicts
 	}
 
 	tblSchRef := tbl.GetSchemaRef()
-	tblSchVal := tblSchRef.TargetValue(vrw)
-	tblSch, err := encoding.UnmarshalNomsValue(tblSchVal)
+	tblSchVal := tblSchRef.TargetValue(ctx, vrw)
+	tblSch, err := encoding.UnmarshalNomsValue(ctx, tblSchVal)
 
 	if err != nil {
 		return nil, err
 	}
 
-	schemas, conflicts, err := tbl.GetConflicts()
+	schemas, conflicts, err := tbl.GetConflicts(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	rowEditor := tbl.GetRowData().Edit()
+	rowEditor := tbl.GetRowData(ctx).Edit()
 
 	var itrErr error
-	conflicts.Iter(func(key, value types.Value) (stop bool) {
+	conflicts.Iter(ctx, func(key, value types.Value) (stop bool) {
 		cnf := doltdb.ConflictFromTuple(value.(types.Tuple))
 
 		var updated types.Value
@@ -70,8 +71,8 @@ func ResolveTable(vrw types.ValueReadWriter, tbl *doltdb.Table, autoResFunc Auto
 		return nil, itrErr
 	}
 
-	newTbl := doltdb.NewTable(vrw, tblSchVal, rowEditor.Map())
-	newTbl = newTbl.SetConflicts(schemas, types.NewMap(vrw))
+	newTbl := doltdb.NewTable(ctx, vrw, tblSchVal, rowEditor.Map(ctx))
+	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(ctx, vrw))
 
 	return newTbl, nil
 }

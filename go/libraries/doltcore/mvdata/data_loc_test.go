@@ -1,6 +1,7 @@
 package mvdata
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -52,11 +53,11 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 	initialDirs := []string{testHomeDir, workingDir}
 	fs := filesys.NewInMemFS(initialDirs, nil, workingDir)
 	fs.WriteFile("schema.json", []byte(testSchema))
-	ddb := doltdb.LoadDoltDB(doltdb.InMemDoltDB)
-	ddb.WriteEmptyRepo("billy bob", "bigbillieb@fake.horse")
+	ddb := doltdb.LoadDoltDB(context.Background(), doltdb.InMemDoltDB)
+	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
-	commit, _ := ddb.Resolve(cs)
+	commit, _ := ddb.Resolve(context.Background(), cs)
 	root := commit.GetRootValue()
 
 	return ddb, root, fs
@@ -134,19 +135,19 @@ func TestExists(t *testing.T) {
 	ddb, root, fs := createRootAndFS()
 
 	for _, loc := range testLocations {
-		if loc.Exists(root, fs) {
+		if loc.Exists(context.Background(), root, fs) {
 			t.Error("Shouldn't exist before creation")
 		}
 
 		if loc.Format == DoltDB {
-			schVal, _ := encoding.MarshalAsNomsValue(ddb.ValueReadWriter(), fakeSchema)
-			tbl := doltdb.NewTable(ddb.ValueReadWriter(), schVal, types.NewMap(ddb.ValueReadWriter()))
-			root = root.PutTable(ddb, loc.Path, tbl)
+			schVal, _ := encoding.MarshalAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
+			tbl := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, types.NewMap(context.Background(), ddb.ValueReadWriter()))
+			root = root.PutTable(context.Background(), ddb, loc.Path, tbl)
 		} else {
 			fs.WriteFile(loc.Path, []byte("test"))
 		}
 
-		if !loc.Exists(root, fs) {
+		if !loc.Exists(context.Background(), root, fs) {
 			t.Error("Should already exist after creation")
 		}
 	}
@@ -171,7 +172,7 @@ func TestCreateRdWr(t *testing.T) {
 	for _, test := range tests {
 		loc := test.dl
 
-		wr, err := loc.CreateOverwritingDataWriter(root, fs, true, fakeSchema)
+		wr, err := loc.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)
@@ -183,8 +184,8 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		inMemRd := table.NewInMemTableReader(imt)
-		_, numBad, pipeErr := table.PipeRows(inMemRd, wr, false)
-		wr.Close()
+		_, numBad, pipeErr := table.PipeRows(context.Background(), inMemRd, wr, false)
+		wr.Close(context.Background())
 
 		if numBad != 0 || pipeErr != nil {
 			t.Fatal("Failed to write data. bad:", numBad, err)
@@ -192,18 +193,18 @@ func TestCreateRdWr(t *testing.T) {
 
 		if nomsWr, ok := wr.(noms.NomsMapWriteCloser); ok {
 			vrw := ddb.ValueReadWriter()
-			schVal, err := encoding.MarshalAsNomsValue(vrw, nomsWr.GetSchema())
+			schVal, err := encoding.MarshalAsNomsValue(context.Background(), vrw, nomsWr.GetSchema())
 
 			if err != nil {
 				t.Fatal("Unable ta update table")
 			}
 
-			tbl := doltdb.NewTable(vrw, schVal, *nomsWr.GetMap())
-			root = root.PutTable(ddb, test.dl.Path, tbl)
+			tbl := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
+			root = root.PutTable(context.Background(), ddb, test.dl.Path, tbl)
 		}
 
 		// TODO (oo): fix this for json path test
-		rd, _, err := loc.CreateReader(root, fs, "schema.json", "")
+		rd, _, err := loc.CreateReader(context.Background(), root, fs, "schema.json", "")
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer", err)
@@ -214,6 +215,6 @@ func TestCreateRdWr(t *testing.T) {
 			t.Error("Unexpected reader type. Expected:", test.expectedRdT.Name(), "actual:", actualRdT.Name())
 		}
 
-		rd.Close()
+		rd.Close(context.Background())
 	}
 }

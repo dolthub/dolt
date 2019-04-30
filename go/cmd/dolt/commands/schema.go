@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"strings"
@@ -122,7 +123,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 		// If the user hasn't specified table names, try to grab them all;
 		// show usage and error out if there aren't any
 		if len(tables) == 0 {
-			tables = root.GetTableNames()
+			tables = root.GetTableNames(context.TODO())
 
 			if len(tables) == 0 {
 				return errhand.BuildDError("").SetPrintUsage().Build()
@@ -131,7 +132,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 
 		var notFound []string
 		for _, tblName := range tables {
-			tbl, ok := root.GetTable(tblName)
+			tbl, ok := root.GetTable(context.TODO(), tblName)
 
 			if !ok {
 				notFound = append(notFound, tblName)
@@ -151,7 +152,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 
 func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	//schStr, err := encoding.MarshalAsJson(sch)
 	schStr, err := sql.SchemaAsCreateStmt(tblName, sch)
 	if err != nil {
@@ -170,11 +171,11 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 	tblName := apr.Arg(0)
 	fileName := apr.Arg(1)
 	root, _ = GetWorkingWithVErr(dEnv)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	err := exportTblSchema(tblName, tbl, fileName, dEnv)
 	if err != nil {
 		return errhand.BuildDError("file path not valid.").Build()
@@ -184,7 +185,7 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 }
 
 func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	jsonSchStr, err := encoding.MarshalAsJson(sch)
 	if err != nil {
 		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
@@ -200,12 +201,12 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	}
 
 	tblName := apr.Arg(0)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
-	tblSch := tbl.GetSchema()
+	tbl, _ := root.GetTable(context.TODO(), tblName)
+	tblSch := tbl.GetSchema(context.TODO())
 	newFieldName := apr.Arg(1)
 
 	var defaultVal *string
@@ -248,7 +249,7 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 
 	notNull := apr.Contains(notNullFlag)
 
-	if notNull && defaultVal == nil && tbl.GetRowData().Len() > 0 {
+	if notNull && defaultVal == nil && tbl.GetRowData(context.TODO()).Len() > 0 {
 		return errhand.BuildDError("When adding a column that may not be null to a table with existing rows, a default value must be provided.").Build()
 	}
 
@@ -257,7 +258,7 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 		return errhand.BuildDError("failed to add column").AddCause(err).Build()
 	}
 
-	root = root.PutTable(dEnv.DoltDB, tblName, newTable)
+	root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTable)
 	return UpdateWorkingWithVErr(dEnv, root)
 }
 
@@ -270,7 +271,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 		col = schema.NewColumn(name, tag, kind, false)
 	}
 
-	sch := tbl.GetSchema()
+	sch := tbl.GetSchema(context.TODO())
 	updatedCols, err := sch.GetAllCols().Append(col)
 
 	if err != nil {
@@ -279,23 +280,23 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
 	newSchema := schema.SchemaFromCols(updatedCols)
-	newSchemaVal, err := encoding.MarshalAsNomsValue(vrw, newSchema)
+	newSchemaVal, err := encoding.MarshalAsNomsValue(context.TODO(), vrw, newSchema)
 
 	if err != nil {
 		return nil, err
 	}
 
 	if defaultVal == nil {
-		newTable := doltdb.NewTable(vrw, newSchemaVal, tbl.GetRowData())
+		newTable := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, tbl.GetRowData(context.TODO()))
 		return newTable, nil
 	}
 
-	rowData := tbl.GetRowData()
+	rowData := tbl.GetRowData(context.TODO())
 	me := rowData.Edit()
 	defVal, _ := doltcore.StringToValue(*defaultVal, kind)
 
-	rowData.Iter(func(k, v types.Value) (stop bool) {
-		oldRow, _ := tbl.GetRow(k.(types.Tuple), newSchema)
+	rowData.Iter(context.TODO(), func(k, v types.Value) (stop bool) {
+		oldRow, _ := tbl.GetRow(context.TODO(), k.(types.Tuple), newSchema)
 		newRow, err := oldRow.SetColVal(tag, defVal, newSchema)
 
 		if err != nil {
@@ -307,7 +308,7 @@ func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind ty
 		return false
 	})
 
-	updatedTbl := doltdb.NewTable(vrw, newSchemaVal, me.Map())
+	updatedTbl := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, me.Map(context.TODO()))
 	return updatedTbl, nil
 }
 
@@ -317,20 +318,20 @@ func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	}
 
 	tblName := apr.Arg(0)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	oldColName := apr.Arg(1)
 	newColName := apr.Arg(2)
 
-	newTbl, err := actions.RenameColumnOfSchema(oldColName, newColName, tbl, dEnv.DoltDB)
+	newTbl, err := actions.RenameColumnOfSchema(context.Background(), oldColName, newColName, tbl, dEnv.DoltDB)
 	if err != nil {
 		return errToVerboseErr(oldColName, newColName, err)
 	}
 
-	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
+	root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTbl)
 
 	return UpdateWorkingWithVErr(dEnv, root)
 }
@@ -354,19 +355,19 @@ func removeColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	}
 
 	tblName := apr.Arg(0)
-	if !root.HasTable(tblName) {
+	if !root.HasTable(context.TODO(), tblName) {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _ := root.GetTable(tblName)
+	tbl, _ := root.GetTable(context.TODO(), tblName)
 	colName := apr.Arg(1)
 
-	newTbl, err := actions.RemoveColumnFromTable(colName, tbl, dEnv.DoltDB)
+	newTbl, err := actions.RemoveColumnFromTable(context.Background(), colName, tbl, dEnv.DoltDB)
 
 	if err != nil {
 		return errToVerboseErr(colName, "", err)
 	}
 
-	root = root.PutTable(dEnv.DoltDB, tblName, newTbl)
+	root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTbl)
 	return UpdateWorkingWithVErr(dEnv, root)
 }

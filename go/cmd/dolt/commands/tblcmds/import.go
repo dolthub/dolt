@@ -1,6 +1,7 @@
 package tblcmds
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -177,14 +178,14 @@ func createArgParser() *argparser.ArgParser {
 }
 
 func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {
-	root, err := dEnv.WorkingRoot()
+	root, err := dEnv.WorkingRoot(context.Background())
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get the working root value for this data repository."))
 		return 1
 	}
 
-	if mvOpts.Operation == mvdata.OverwriteOp && !force && mvOpts.Dest.Exists(root, dEnv.FS) {
+	if mvOpts.Operation == mvdata.OverwriteOp && !force && mvOpts.Dest.Exists(context.TODO(), root, dEnv.FS) {
 		cli.PrintErrln(color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
 		return 1
 	}
@@ -194,7 +195,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	mover, nDMErr := mvdata.NewDataMover(root, dEnv.FS, mvOpts)
+	mover, nDMErr := mvdata.NewDataMover(context.TODO(), root, dEnv.FS, mvOpts)
 
 	if nDMErr != nil {
 		verr := newDataMoverErrToVerr(mvOpts, nDMErr)
@@ -202,7 +203,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	err = mover.Move()
+	err = mover.Move(context.TODO())
 
 	if err != nil {
 		if pipeline.IsTransformFailure(err) {
@@ -210,7 +211,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(r, mover.Rd.GetSchema()))
+				bdr.AddDetails("Bad Row:" + row.Fmt(context.TODO(), r, mover.Rd.GetSchema()))
 			}
 
 			details := pipeline.GetTransFailureDetails(err)
@@ -227,7 +228,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	}
 
 	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		err = dEnv.PutTableToWorking(*nomsWr.GetMap(), nomsWr.GetSchema(), mvOpts.Dest.Path)
+		err = dEnv.PutTableToWorking(context.Background(), *nomsWr.GetMap(), nomsWr.GetSchema(), mvOpts.Dest.Path)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to update the working value."))
