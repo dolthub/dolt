@@ -54,3 +54,31 @@ teardown() {
     skip "This breaks right now. Reports one column as NULL"
     [[ ! "$output" =~ "<NULL>" ]] || false
 }
+
+@test "basic inner join" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    first_join_output=$output
+    run dolt sql -q "select pk,pk1,pk2 from two_pk join one_pk on one_pk.c1=two_pk.c1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    [ "$output" = "$first_join_output" ]
+    run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 where pk=1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on foo=bar"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on foo=bar where foo=10"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "10" ]] || false
+}
+
+@test "table name in the from clause and the join statement" {
+    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk join one_pk on pk=pk1"
+    skip "Though weird we think this is valid but it panics right now. At least make it not panic."
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+}
