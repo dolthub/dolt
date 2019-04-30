@@ -40,27 +40,6 @@ type SelectStatement struct {
 	limit int
 }
 
-type selectTransform struct {
-	noMoreCallback func()
-	filter         rowFilterFn
-	limit          int
-	count          int
-}
-
-// Limits and filter the rows returned by a query
-func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
-	if st.limit == -1 || st.count < st.limit {
-		if st.filter(inRow) {
-			st.count++
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
-		}
-	} else if st.count == st.limit {
-		st.noMoreCallback()
-	}
-
-	return nil, ""
-}
-
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
 func ExecuteSelect(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Select) ([]row.Row, schema.Schema, error) {
 	p, statement, err := BuildSelectQueryPipeline(ctx, root, s)
@@ -471,6 +450,28 @@ func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
 		idx++
 		return r, pipeline.NoProps, nil
 	}
+}
+
+// Convenience struct to apply a filter and limit operation
+type selectTransform struct {
+	noMoreCallback func()
+	filter         rowFilterFn
+	limit          int
+	count          int
+}
+
+// Limits and filters the rows returned by a query
+func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
+	if st.limit == -1 || st.count < st.limit {
+		if st.filter(inRow) {
+			st.count++
+			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+		}
+	} else if st.count == st.limit {
+		st.noMoreCallback()
+	}
+
+	return nil, ""
 }
 
 // Creates a pipeline to return results from a single table.
