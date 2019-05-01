@@ -69,6 +69,29 @@ func TestS3TableReaderAt(t *testing.T) {
 	})
 }
 
+func TestS3TableReaderAtNamespace(t *testing.T) {
+	assert := assert.New(t)
+
+	s3 := makeFakeS3(t)
+
+	chunks := [][]byte{
+		[]byte("hello2"),
+		[]byte("goodbye2"),
+		[]byte("badbye2"),
+	}
+
+	ns := "a-prefix-here"
+
+	tableData, h := buildTable(chunks)
+	s3.data["a-prefix-here/"+h.String()] = tableData
+
+	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, nil, ns}, h}
+	scratch := make([]byte, len(tableData))
+	_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
+	assert.NoError(err)
+	assert.Equal(tableData, scratch)
+}
+
 type flakyS3 struct {
 	s3svc
 	alreadyFailed map[string]struct{}
