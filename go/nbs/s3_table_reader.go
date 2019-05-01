@@ -50,6 +50,14 @@ type s3ObjectReader struct {
 	bucket string
 	readRl chan struct{}
 	tc     tableCache
+	ns     string
+}
+
+func (s3or *s3ObjectReader) key(k string) string {
+	if s3or.ns != "" {
+		return s3or.ns + "/" + k
+	}
+	return k
 }
 
 func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off int64, stats *Stats) (n int, err error) {
@@ -99,7 +107,7 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, 
 
 		input := &s3.GetObjectInput{
 			Bucket: aws.String(s3or.bucket),
-			Key:    aws.String(name.String()),
+			Key:    aws.String(s3or.key(name.String())),
 			Range:  aws.String(rangeHeader),
 		}
 		result, err := s3or.s3.GetObjectWithContext(ctx, input)

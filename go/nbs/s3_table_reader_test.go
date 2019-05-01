@@ -35,7 +35,7 @@ func TestS3TableReaderAt(t *testing.T) {
 		assert := assert.New(t)
 
 		baseline := s3.getCount
-		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, nil}, h}
+		tra := &s3TableReaderAt{&s3ObjectReader{makeFlakyS3(s3), "bucket", nil, nil, ""}, h}
 		scratch := make([]byte, len(tableData))
 		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
 		assert.NoError(err)
@@ -51,7 +51,7 @@ func TestS3TableReaderAt(t *testing.T) {
 		stats := &Stats{}
 
 		tc := newFSTableCache(dir, uint64(2*len(tableData)), 4)
-		tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, tc}, h}
+		tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, tc, ""}, h}
 
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData))
@@ -67,6 +67,29 @@ func TestS3TableReaderAt(t *testing.T) {
 		assert.NoError(err)
 		assert.Zero(s3.getCount - baseline)
 	})
+}
+
+func TestS3TableReaderAtNamespace(t *testing.T) {
+	assert := assert.New(t)
+
+	s3 := makeFakeS3(t)
+
+	chunks := [][]byte{
+		[]byte("hello2"),
+		[]byte("goodbye2"),
+		[]byte("badbye2"),
+	}
+
+	ns := "a-prefix-here"
+
+	tableData, h := buildTable(chunks)
+	s3.data["a-prefix-here/"+h.String()] = tableData
+
+	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, nil, ns}, h}
+	scratch := make([]byte, len(tableData))
+	_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
+	assert.NoError(err)
+	assert.Equal(tableData, scratch)
 }
 
 type flakyS3 struct {

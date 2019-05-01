@@ -64,6 +64,19 @@ func (m *fakeS3) readerForTable(name addr) chunkReader {
 	return nil
 }
 
+func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) chunkReader {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := name.String()
+	if ns != "" {
+		key = ns + "/" + key
+	}
+	if buff, present := m.data[key]; present {
+		return newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), s3BlockSize)
+	}
+	return nil
+}
+
 func (m *fakeS3) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error) {
 	m.assert.NotNil(input.Bucket, "Bucket is a required field")
 	m.assert.NotNil(input.Key, "Key is a required field")
