@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"path"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"runtime/debug"
 
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -20,7 +20,7 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	branch := dEnv.RepoState.Branch
+	branch := dEnv.RepoState.Head
 
 	var verr errhand.VerboseError
 	if apr.NArg() != 1 {
@@ -35,15 +35,16 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		} else if remote, ok := remotes[remoteName]; !ok {
 			verr = errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
 		} else {
-			verr = pullRemoteBranch(dEnv, remote, remoteName, branch)
+			remoteRef := ref.NewRemoteRef(remoteName, branch.Path)
+			verr = pullRemoteBranch(dEnv, remote, branch, remoteRef)
 		}
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch string) (verr errhand.VerboseError) {
-	verr = fetchRemoteBranch(dEnv, r, remoteName, branch)
+func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
+	verr = fetchRemoteBranch(dEnv, r, srcRef, destRef)
 
 	if verr == nil {
 		defer func() {
@@ -53,7 +54,7 @@ func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch string
 			}
 		}()
 
-		mergeBranch(dEnv, path.Join("remotes", remoteName, branch))
+		mergeBranch(dEnv, destRef)
 	}
 
 	return

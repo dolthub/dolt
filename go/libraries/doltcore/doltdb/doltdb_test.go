@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
@@ -156,7 +157,11 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Failled to commit")
 		}
 
+<<<<<<< HEAD
 		commit, err := ddb.Commit(context.Background(), valHash, "master", meta)
+=======
+		commit, err := ddb.Commit(valHash, ref.NewBranchRef("master"), meta)
+>>>>>>> adding refs
 		if err != nil {
 			t.Error("Failled to commit")
 		}

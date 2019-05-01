@@ -4,20 +4,21 @@ import (
 	"encoding/json"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
 type MergeState struct {
-	Branch          string `json:"branch"`
-	Commit          string `json:"commit"`
-	PreMergeWorking string `json:"working_pre_merge"`
+	Head            ref.DoltRef `json:"head"`
+	Commit          string      `json:"commit"`
+	PreMergeWorking string      `json:"working_pre_merge"`
 }
 
 type RepoState struct {
-	Branch  string            `json:"branch"`
+	Head    ref.DoltRef       `json:"head"`
 	Staged  string            `json:"staged"`
 	Working string            `json:"working"`
-	Merge   *MergeState       `json:"merge_state"`
+	Merge   *MergeState       `json:"merge"`
 	Remotes map[string]Remote `json:"remotes"`
 
 	fs filesys.ReadWriteFS `json:"-"`
@@ -46,7 +47,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{"", hashStr, hashStr, nil, map[string]Remote {r.Name: r}, fs}
+	rs := &RepoState{ref.InvalidRef, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, fs}
 
 	err := rs.Save()
 
@@ -59,9 +60,15 @@ func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 
 func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*RepoState, error) {
 	hashStr := rootHash.String()
-	rs := &RepoState{br, hashStr, hashStr, nil, nil, fs}
+	headRef, err := ref.Parse(br)
 
-	err := rs.Save()
+	if err != nil {
+		return nil, err
+	}
+
+	rs := &RepoState{headRef, hashStr, hashStr, nil, nil, fs}
+
+	err = rs.Save()
 
 	if err != nil {
 		return nil, err
@@ -83,13 +90,13 @@ func (rs *RepoState) Save() error {
 }
 
 func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
-	spec, _ := doltdb.NewCommitSpec("HEAD", rs.Branch)
+	spec, _ := doltdb.NewCommitSpec("HEAD", rs.Head.String())
 
 	return spec
 }
 
-func (rs *RepoState) StartMerge(branch, commit string) error {
-	rs.Merge = &MergeState{branch, commit, rs.Working}
+func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string) error {
+	rs.Merge = &MergeState{dref, commit, rs.Working}
 	return rs.Save()
 }
 

@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"runtime/debug"
 	"time"
 
@@ -42,7 +43,7 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if remote, ok := remotes[remoteName]; !ok {
 			verr = errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
-		} else if !dEnv.DoltDB.HasBranch(context.TODO(), branch) {
+		} else if dref := ref.NewBranchRef(branch); !dEnv.DoltDB.HasRef(context.TODO(), dref) {
 			verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
 		} else {
 			verr = pushToRemoteBranch(dEnv, remote, branch)
@@ -66,15 +67,16 @@ func pushToRemoteBranch(dEnv *env.DoltEnv, r env.Remote, branch string) (verr er
 	if err != nil {
 		verr = errhand.BuildDError("error: unable to find %v", branch).Build()
 	} else {
-
 		destDB := r.GetRemoteDB(context.TODO())
 
 		progChan := make(chan datas.PullProgress, 16)
 		stopChan := make(chan struct{})
 		go progFunc(progChan, stopChan)
 
-		remoteBranch := doltdb.LongRemoteBranchName(r.Name, branch)
-		err = actions.Push(context.TODO(), branch, remoteBranch, dEnv.DoltDB, destDB, cm, progChan)
+		localRef := ref.NewBranchRef(branch)
+		remoteRef := ref.NewRemoteRef(r.Name, branch)
+		err = actions.Push(context.TODO(), localRef, remoteRef, dEnv.DoltDB, destDB, cm, progChan)
+
 		close(progChan)
 		<-stopChan
 
@@ -83,7 +85,7 @@ func pushToRemoteBranch(dEnv *env.DoltEnv, r env.Remote, branch string) (verr er
 				cli.Println("Everything up-to-date")
 			} else if err == doltdb.ErrIsAhead || err == actions.ErrCantFF || err == datas.ErrMergeNeeded {
 				cli.Printf("To %s\n", r.Url)
-				cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", branch, remoteBranch)
+				cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", localRef.String(), remoteRef.String())
 				cli.Printf("error: failed to push some refs to '%s'\n", r.Url)
 				cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
 				cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")

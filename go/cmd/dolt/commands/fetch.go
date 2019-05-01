@@ -2,7 +2,7 @@ package commands
 
 import (
 	"context"
-	"path"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"runtime/debug"
 
 	"github.com/attic-labs/noms/go/datas"
@@ -39,14 +39,16 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		} else if remote, ok := remotes[remoteName]; !ok {
 			verr = errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
 		} else {
-			verr = fetchRemoteBranch(dEnv, remote, remoteName, branch)
+			remoteRef := ref.NewRemoteRef(remoteName, branch)
+			localRef := ref.NewBranchRef(branch)
+			verr = fetchRemoteBranch(dEnv, remote, localRef, remoteRef)
 		}
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch string) (verr errhand.VerboseError) {
+func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
@@ -56,21 +58,21 @@ func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, remoteName, branch strin
 
 	srcDB := r.GetRemoteDB(context.TODO())
 
-	if !srcDB.HasBranch(context.TODO(), branch) {
-		verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
+	if !srcDB.HasRef(context.TODO(), srcRef) {
+		verr = errhand.BuildDError("fatal: unknown branch " + srcRef.String()).Build()
 	} else {
-
-		cs, _ := doltdb.NewCommitSpec("HEAD", branch)
+		cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
 		cm, err := srcDB.Resolve(context.TODO(), cs)
 
 		if err != nil {
-			verr = errhand.BuildDError("error: unable to find %v", branch).Build()
+			verr = errhand.BuildDError("error: unable to find %v", srcRef.Path).Build()
 		} else {
 			progChan := make(chan datas.PullProgress)
 			stopChan := make(chan struct{})
 			go progFunc(progChan, stopChan)
 
-			err = actions.Fetch(context.TODO(), path.Join("remotes", remoteName, branch), srcDB, dEnv.DoltDB, cm, progChan)
+			err = actions.Fetch(context.TODO(), destRef, srcDB, dEnv.DoltDB, cm, progChan)
+
 			close(progChan)
 			<-stopChan
 

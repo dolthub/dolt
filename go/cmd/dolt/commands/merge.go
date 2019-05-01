@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"sort"
 	"strconv"
 
@@ -65,7 +66,8 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		branchName := apr.Arg(0)
-		if !dEnv.DoltDB.HasBranch(context.TODO(), branchName) {
+		dref := ref.NewBranchRef(branchName)
+		if !dEnv.DoltDB.HasRef(context.TODO(), dref) {
 			cli.PrintErrln(color.RedString("unknown branch: %s", branchName))
 			usage()
 			return 1
@@ -97,7 +99,7 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				return 1
 			}
 
-			verr = mergeBranch(dEnv, branchName)
+			verr = mergeBranch(dEnv, ref.NewBranchRef(branchName))
 		}
 	}
 
@@ -118,14 +120,14 @@ func abortMerge(doltEnv *env.DoltEnv) errhand.VerboseError {
 	return errhand.BuildDError("fatal: failed to revert changes").AddCause(err).Build()
 }
 
-func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
-	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.Branch)
+func mergeBranch(dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
+	cm1, verr := ResolveCommitWithVErr(dEnv, "HEAD", dEnv.RepoState.Head.String())
 
 	if verr != nil {
 		return verr
 	}
 
-	cm2, verr := ResolveCommitWithVErr(dEnv, branchName, dEnv.RepoState.Branch)
+	cm2, verr := ResolveCommitWithVErr(dEnv, dref.String(), dEnv.RepoState.Head.String())
 
 	if verr != nil {
 		return verr
@@ -139,7 +141,7 @@ func mergeBranch(dEnv *env.DoltEnv, branchName string) errhand.VerboseError {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(dEnv, cm1, cm2, branchName)
+		return executeMerge(dEnv, cm1, cm2, dref)
 	}
 
 	return nil
@@ -154,7 +156,7 @@ func executeFFMerge(dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError 
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
 	}
 
-	err = dEnv.DoltDB.FastForward(context.TODO(), dEnv.RepoState.Branch, cm2)
+	err = dEnv.DoltDB.FastForward(context.TODO(), dEnv.RepoState.Head, cm2)
 
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
@@ -178,7 +180,7 @@ and take the hash for your current branch and use it for the value for "staged" 
 	return nil
 }
 
-func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, branchName string) errhand.VerboseError {
+func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef) errhand.VerboseError {
 	mergedRoot, tblToStats, err := actions.MergeCommits(context.Background(), dEnv.DoltDB, cm1, cm2)
 
 	if err != nil {
@@ -192,7 +194,7 @@ func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, branchName string)
 		}
 	}
 
-	err = dEnv.RepoState.StartMerge(branchName, cm2.HashOf().String())
+	err = dEnv.RepoState.StartMerge(dref, cm2.HashOf().String())
 
 	if err != nil {
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
