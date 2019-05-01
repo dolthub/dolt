@@ -220,7 +220,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	cs, _ := doltdb.NewCommitSpec("head", dEnv.RepoState.Branch)
+	cs, _ := doltdb.NewCommitSpec("head", dEnv.RepoState.Head.String())
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {

@@ -46,7 +46,7 @@ func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		var old, new string
 		if apr.NArg() == 3 {
 			var cm *doltdb.Commit
-			cm, verr = commands.ResolveCommitWithVErr(dEnv, apr.Arg(0), dEnv.RepoState.Branch)
+			cm, verr = commands.ResolveCommitWithVErr(dEnv, apr.Arg(0), dEnv.RepoState.Head.String())
 			if verr == nil {
 				root = cm.GetRootValue()
 			}

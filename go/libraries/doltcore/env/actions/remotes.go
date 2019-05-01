@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -11,7 +12,7 @@ import (
 
 var ErrCantFF = errors.New("can't fast forward merge")
 
-func Push(ctx context.Context, branch, remoteBranch string, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
+func Push(ctx context.Context, branch, remoteBranch ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
 	canFF, err := srcDB.CanFastForward(ctx, remoteBranch, commit)
 
 	if err != nil {
@@ -39,7 +40,7 @@ func Push(ctx context.Context, branch, remoteBranch string, srcDB, destDB *doltd
 	return err
 }
 
-func Fetch(ctx context.Context, branch string, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
+func Fetch(ctx context.Context, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
 	err := pantoerr.PanicToErrorNil("error pulling chunks", func() {
 		destDB.PullChunks(ctx, srcDB, commit, progChan)
 	})
@@ -48,5 +49,5 @@ func Fetch(ctx context.Context, branch string, srcDB, destDB *doltdb.DoltDB, com
 		return err
 	}
 
-	return destDB.FastForward(ctx, branch, commit)
+	return destDB.FastForward(ctx, destRef, commit)
 }

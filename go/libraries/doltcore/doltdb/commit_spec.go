@@ -1,9 +1,17 @@
 package doltdb
 
 import (
+	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"regexp"
 	"strings"
 )
+
+type stringer string
+
+func (s stringer) String() string {
+	return string(s)
+}
 
 var wordRegex = `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+`
 var UserBranchRegexStr = "^" + wordRegex + "$"
@@ -20,20 +28,19 @@ func IsValidUserBranchName(name string) bool {
 	return !hashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != head
 }
 
-func IsValidRemoteBranchName(name string) bool {
-	return remoteBranchRegex.MatchString(name)
+func IsValidBranchRef(dref ref.DoltRef) bool {
+	return dref.Type == ref.BranchRef && IsValidUserBranchName(dref.Path)
 }
 
-func LongRemoteBranchName(remote, branch string) string {
-	return "remotes/" + remote + "/" + branch
+func IsValidRemoteBranchName(name string) bool {
+	return remoteBranchRegex.MatchString(name)
 }
 
 type CommitSpecType string
 
 const (
-	BranchCommitSpec       CommitSpecType = "branch"
-	RemoteBranchCommitSpec CommitSpecType = "remote_branch"
-	CommitHashSpec         CommitSpecType = "hash"
+	RefCommitSpec  CommitSpecType = "ref"
+	HashCommitSpec CommitSpecType = "hash"
 )
 
 // CommitSpec handles three different types of string representations of commits.  Commits can either be represented
@@ -41,9 +48,9 @@ const (
 // An Ancestor spec can be appended to the end of any of these in order to reach commits that are in the ancestor tree
 // of the referenced commit.
 type CommitSpec struct {
-	name   string
-	csType CommitSpecType
-	aSpec  *AncestorSpec
+	CommitStringer fmt.Stringer
+	CSType         CommitSpecType
+	ASpec          *AncestorSpec
 }
 
 // NewCommitSpec takes a spec string and the current working branch.  The current working branch is only relevant when
@@ -62,27 +69,18 @@ func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
 	}
 
 	if hashRegex.MatchString(name) {
-		return &CommitSpec{name, CommitHashSpec, as}, nil
-	} else if userBranchRegex.MatchString(name) {
-		return &CommitSpec{name, BranchCommitSpec, as}, nil
-	} else if remoteBranchRegex.MatchString(name) {
-		return &CommitSpec{name, RemoteBranchCommitSpec, as}, nil
-	} else {
-		return nil, ErrInvalidBranchOrHash
+		return &CommitSpec{stringer(name), HashCommitSpec, as}, nil
+	} else if ref.IsRef(name) {
+		dref, err := ref.Parse(name)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return &CommitSpec{dref, RefCommitSpec, as}, nil
+	} else if IsValidUserBranchName(name) {
+		return &CommitSpec{ref.NewBranchRef(name), RefCommitSpec, as}, nil
 	}
-}
 
-// Name gets the name of the commit.  Will either be a branch name, or a commit hash
-func (c *CommitSpec) Name() string {
-	return c.name
-}
-
-// AncestorSpec gets the ancestor spec string
-func (c *CommitSpec) AncestorSpec() *AncestorSpec {
-	return c.aSpec
-}
-
-// CSpecType gets the type of the commit spec
-func (c *CommitSpec) CSpecType() CommitSpecType {
-	return c.csType
+	return nil, ErrInvalidBranchOrHash
 }

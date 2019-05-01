@@ -76,7 +76,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	} else if apr.NArg() == 1 {
 		var err error
 		comSpecStr := apr.Arg(0)
-		cs, err = doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Branch)
+		cs, err = doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Head.String())
 
 		if err != nil {
 			cli.PrintErrf("Invalid commit %s\n", comSpecStr)

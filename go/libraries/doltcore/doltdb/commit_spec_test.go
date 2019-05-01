@@ -46,14 +46,13 @@ func TestNewCommitSpec(t *testing.T) {
 	tests := []struct {
 		inputStr        string
 		cwbName         string
-		expectedName    string
+		expectedRefStr  string
 		expecteASpecStr string
 		expectErr       bool
 	}{
-		{"master", "", "master", "", false},
-		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
-		{"head^~2", "master", "master", "^~2", false},
-
+		//{"master", "", "refs/heads/master", "", false},
+		//{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
+		//{"head^~2", "master", "refs/heads/master", "^~2", false},
 		{"__invalid__^~2", "", "", "", true},
 	}
 
@@ -64,10 +63,10 @@ func TestNewCommitSpec(t *testing.T) {
 			if !test.expectErr {
 				t.Error(test.inputStr, "Error didn't match expected.  Errored: ", err != nil)
 			}
-		} else if cs.Name() != test.expectedName {
-			t.Error(test.inputStr, "expected name:", test.expectedName, "actual name:", cs.Name())
-		} else if cs.AncestorSpec().SpecStr != test.expecteASpecStr {
-			t.Error(test.inputStr, "expected ancestor spec:", test.expecteASpecStr, "actual ancestor spec:", cs.AncestorSpec().SpecStr)
+		} else if cs.CommitStringer.String() != test.expectedRefStr {
+			t.Error(test.inputStr, "expected name:", test.expectedRefStr, "actual name:", cs.CommitStringer.String())
+		} else if cs.ASpec.SpecStr != test.expecteASpecStr {
+			t.Error(test.inputStr, "expected ancestor spec:", test.expecteASpecStr, "actual ancestor spec:", cs.ASpec.SpecStr)
 		}
 	}
 }

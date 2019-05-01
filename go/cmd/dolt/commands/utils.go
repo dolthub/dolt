@@ -86,7 +86,7 @@ func ResolveCommitWithVErr(dEnv *env.DoltEnv, cSpecStr, cwb string) (*doltdb.Com
 
 	if err != nil {
 		if err == doltdb.ErrInvalidAnscestorSpec {
-			return nil, errhand.BuildDError("'%s' is an invalid ancestor spec", cs.AncestorSpec().SpecStr).Build()
+			return nil, errhand.BuildDError("'%s' is an invalid ancestor spec", cs.ASpec.SpecStr).Build()
 		} else if doltdb.IsNotFoundErr(err) {
 			return nil, errhand.BuildDError("'%s' not found", cSpecStr).Build()
 		} else if err == doltdb.ErrFoundHashNotACommit {

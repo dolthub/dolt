@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"os"
 	"path"
@@ -143,7 +144,8 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 		srcDB, verr = createRemote(remoteName, remoteUrl, insecure, dEnv)
 
 		if verr == nil {
-			if !srcDB.HasBranch(context.TODO(), branch) {
+			dref := ref.NewBranchRef(branch)
+			if !srcDB.HasRef(context.TODO(), dref) {
 				verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
 			} else {
 				cs, _ := doltdb.NewCommitSpec("HEAD", branch)
@@ -157,7 +159,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 					stopChan := make(chan struct{})
 					go progFunc(progChan, stopChan)
 
-					remoteBranch := path.Join("remotes", remoteName, branch)
+					remoteBranch := ref.NewRemoteRef(remoteName, branch)
 					err = actions.Fetch(context.TODO(), remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
 					close(progChan)
 					<-stopChan
@@ -166,7 +168,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 						verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 					} else {
 
-						err = dEnv.DoltDB.NewBranchAtCommit(context.TODO(), branch, cm)
+						err = dEnv.DoltDB.NewBranchAtCommit(context.TODO(), dref, cm)
 
 						if err != nil {
 							verr = errhand.BuildDError("error: failed to create branch " + branch).Build()
@@ -176,7 +178,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 							localCommit, _ := dEnv.DoltDB.Resolve(context.TODO(), localCommitSpec)
 							h, err := dEnv.DoltDB.WriteRootValue(context.Background(), localCommit.GetRootValue())
 
-							dEnv.RepoState.Branch = branch
+							dEnv.RepoState.Head = dref
 							dEnv.RepoState.Staged = h.String()
 							dEnv.RepoState.Working = h.String()
 							err = dEnv.RepoState.Save()

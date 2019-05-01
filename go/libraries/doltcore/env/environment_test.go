@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"path/filepath"
 	"testing"
@@ -28,7 +29,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 		initialDirs = append(initialDirs, doltDir)
 
 		hashStr := hash.Hash{}.String()
-		repoState := &RepoState{"master", hashStr, hashStr, nil, nil, nil}
+		repoState := &RepoState{ref.NewBranchRef("master"), hashStr, hashStr, nil, nil, nil}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {

@@ -5,6 +5,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/stretchr/testify/assert"
@@ -60,7 +61,7 @@ func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []type
 		longest = ancVals
 	}
 
-	cols := make([]schema.Column, len(longest) + 1)
+	cols := make([]schema.Column, len(longest)+1)
 	// Schema needs a primary key to be valid, but all the logic being tested works only on the non-key columns.
 	cols[0] = schema.NewColumn("primaryKey", 0, types.IntKind, true)
 	for i, val := range longest {
@@ -165,7 +166,11 @@ func TestRowMerge(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			actualResult, isConflict := rowMerge(test.sch, test.row, test.mergeRow, test.ancRow)
+<<<<<<< HEAD
 			assert.Equal(t, test.expectedResult, actualResult, "expected " + types.EncodedValue(context.Background(), test.expectedResult) + "got " + types.EncodedValue(context.Background(), actualResult))
+=======
+			assert.Equal(t, test.expectedResult, actualResult, "expected "+types.EncodedValue(test.expectedResult)+"got "+types.EncodedValue(actualResult))
+>>>>>>> adding refs
 			assert.Equal(t, test.expectConflict, isConflict)
 		})
 	}
@@ -243,9 +248,9 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person 9"), types.NullValue}),
 	)
 
-	updateRowEditor := initialRows.Edit()                                                                                       // leave 0 as is
-	updateRowEditor.Remove(keyTuples[1])                                                                                        // remove 1 from both
-	updateRowEditor.Remove(keyTuples[2])                                                                                        // remove 2 from update
+	updateRowEditor := initialRows.Edit()                                                                                          // leave 0 as is
+	updateRowEditor.Remove(keyTuples[1])                                                                                           // remove 1 from both
+	updateRowEditor.Remove(keyTuples[2])                                                                                           // remove 2 from update
 	updateRowEditor.Set(keyTuples[4], valsToTestTupleWithoutPks([]types.Value{types.String("person five"), types.NullValue}))      // modify 4 only in update
 	updateRowEditor.Set(keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person 7"), types.String("dr")}))      // modify 6 in both without overlap
 	updateRowEditor.Set(keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person eight"), types.NullValue}))     // modify 7 in both with equal overlap
@@ -256,9 +261,9 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 
 	updatedRows := updateRowEditor.Map(context.Background())
 
-	mergeRowEditor := initialRows.Edit()                                                                                              // leave 0 as is
-	mergeRowEditor.Remove(keyTuples[1])                                                                                               // remove 1 from both
-	mergeRowEditor.Remove(keyTuples[3])                                                                                               // remove 3 from merge
+	mergeRowEditor := initialRows.Edit()                                                                                                 // leave 0 as is
+	mergeRowEditor.Remove(keyTuples[1])                                                                                                  // remove 1 from both
+	mergeRowEditor.Remove(keyTuples[3])                                                                                                  // remove 3 from merge
 	mergeRowEditor.Set(keyTuples[5], valsToTestTupleWithoutPks([]types.Value{types.String("person six"), types.NullValue}))              // modify 5 only in merge
 	mergeRowEditor.Set(keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("madam")}))      // modify 6 in both without overlap
 	mergeRowEditor.Set(keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person eight"), types.NullValue}))            // modify 7 in both with equal overlap
@@ -269,6 +274,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 
 	mergeRows := mergeRowEditor.Map(context.Background())
 
+<<<<<<< HEAD
 	expectedRows := types.NewMap(context.Background(), vrw,
 		keyTuples[0], initialRows.Get(context.Background(), keyTuples[0]),                                                           // unaltered
 		keyTuples[4], updatedRows.Get(context.Background(), keyTuples[4]),                                                           // modified in updated
@@ -280,6 +286,19 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		keyTuples[10], mergeRows.Get(context.Background(), keyTuples[10]),                                                           // added in merge
 		keyTuples[11], updatedRows.Get(context.Background(), keyTuples[11]),                                                         // added same in both
 		keyTuples[12], updatedRows.Get(context.Background(), keyTuples[12]),                                                         // conflict
+=======
+	expectedRows := types.NewMap(vrw,
+		keyTuples[0], initialRows.Get(keyTuples[0]), // unaltered
+		keyTuples[4], updatedRows.Get(keyTuples[4]), // modified in updated
+		keyTuples[5], mergeRows.Get(keyTuples[5]), // modified in merged
+		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("dr")}), // modified in both with no overlap
+		keyTuples[7], updatedRows.Get(keyTuples[7]), // modify both with the same value
+		keyTuples[8], updatedRows.Get(keyTuples[8]), // conflict
+		keyTuples[9], updatedRows.Get(keyTuples[9]), // added in update
+		keyTuples[10], mergeRows.Get(keyTuples[10]), // added in merge
+		keyTuples[11], updatedRows.Get(keyTuples[11]), // added same in both
+		keyTuples[12], updatedRows.Get(keyTuples[12]), // conflict
+>>>>>>> adding refs
 	)
 
 	updateConflict := doltdb.NewConflict(initialRows.Get(context.Background(), keyTuples[8]), updatedRows.Get(context.Background(), keyTuples[8]), mergeRows.Get(context.Background(), keyTuples[8]))
@@ -309,11 +328,19 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	mergeHash, _ := ddb.WriteRootValue(context.Background(), mergeRoot)
 
 	meta, _ := doltdb.NewCommitMeta(name, email, "fake")
+<<<<<<< HEAD
 	initialCommit, _ := ddb.Commit(context.Background(), masterHash, "master", meta)
 	commit, _ := ddb.Commit(context.Background(), hash, "master", meta)
 
 	ddb.NewBranchAtCommit(context.Background(), "to-merge", initialCommit)
 	mergeCommit, _ := ddb.Commit(context.Background(), mergeHash, "to-merge", meta)
+=======
+	initialCommit, _ := ddb.Commit(masterHash, ref.NewBranchRef("master"), meta)
+	commit, _ := ddb.Commit(hash, ref.NewBranchRef("master"), meta)
+
+	ddb.NewBranchAtCommit(ref.NewBranchRef("to-merge"), initialCommit)
+	mergeCommit, _ := ddb.Commit(mergeHash, ref.NewBranchRef("to-merge"), meta)
+>>>>>>> adding refs
 
 	return vrw, commit, mergeCommit, expectedRows, expectedConflicts
 }

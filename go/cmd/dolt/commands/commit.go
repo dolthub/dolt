@@ -102,7 +102,7 @@ func buildInitalCommitMsg(dEnv *env.DoltEnv) string {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
-	currBranch := dEnv.RepoState.Branch
+	currBranch := dEnv.RepoState.Head
 	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(context.Background(), dEnv)
 	buf := bytes.NewBuffer([]byte{})
 
@@ -116,7 +116,7 @@ func buildInitalCommitMsg(dEnv *env.DoltEnv) string {
 	n = printDiffsNotStaged(buf, notStagedDiffs, true, n, workingInConflict)
 
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
-		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch + "\n#" + "\n"
+		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.Path + "\n#" + "\n"
 
 	msgLines := strings.Split(buf.String(), "\n")
 	for i, msg := range msgLines {

@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/util/math"
@@ -16,14 +17,17 @@ var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into master; use `-f` to force")
 
 func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+	oldRef := ref.NewBranchRef(oldBranch)
+	newRef := ref.NewBranchRef(newBranch)
+
 	err := CopyBranch(ctx, dEnv, oldBranch, newBranch, force)
 
 	if err != nil {
 		return err
 	}
 
-	if dEnv.RepoState.Branch == oldBranch {
-		dEnv.RepoState.Branch = newBranch
+	if dEnv.RepoState.Head.Equals(oldRef) {
+		dEnv.RepoState.Head = newRef
 		err = dEnv.RepoState.Save()
 
 		if err != nil {
@@ -35,9 +39,11 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
-	if !dEnv.DoltDB.HasBranch(ctx, oldBranch) {
+	oldRef := ref.NewBranchRef(oldBranch)
+	newRef := ref.NewBranchRef(newBranch)
+	if !dEnv.DoltDB.HasRef(ctx, oldRef) {
 		return doltdb.ErrBranchNotFound
-	} else if !force && dEnv.DoltDB.HasBranch(ctx, newBranch) {
+	} else if !force && dEnv.DoltDB.HasRef(ctx, newRef) {
 		return ErrAlreadyExists
 	} else if !doltdb.IsValidUserBranchName(newBranch) {
 		return doltdb.ErrInvBranchName
@@ -50,13 +56,15 @@ func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(ctx, newBranch, cm)
+	return dEnv.DoltDB.NewBranchAtCommit(ctx, newRef, cm)
 }
 
 func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
-	if !dEnv.DoltDB.HasBranch(ctx, brName) {
+	dref := ref.NewBranchRef(brName)
+
+	if !dEnv.DoltDB.HasRef(ctx, dref) {
 		return doltdb.ErrBranchNotFound
-	} else if dEnv.RepoState.Branch == brName {
+	} else if dEnv.RepoState.Head.Equals(dref) {
 		return ErrCOBranchDelete
 	}
 
@@ -90,11 +98,13 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force b
 		}
 	}
 
-	return dEnv.DoltDB.DeleteBranch(ctx, brName)
+	return dEnv.DoltDB.DeleteBranch(ctx, dref)
 }
 
 func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
-	if !force && dEnv.DoltDB.HasBranch(ctx, newBranch) {
+	newRef := ref.NewBranchRef(newBranch)
+
+	if !force && dEnv.DoltDB.HasRef(ctx, newRef) {
 		return ErrAlreadyExists
 	}
 
@@ -102,7 +112,7 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return doltdb.ErrInvBranchName
 	}
 
-	cs, err := doltdb.NewCommitSpec(startingPoint, dEnv.RepoState.Branch)
+	cs, err := doltdb.NewCommitSpec(startingPoint, dEnv.RepoState.Head.String())
 
 	if err != nil {
 		return err
@@ -114,15 +124,17 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(ctx, newBranch, cm)
+	return dEnv.DoltDB.NewBranchAtCommit(ctx, newRef, cm)
 }
 
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
-	if !dEnv.DoltDB.HasBranch(ctx, brName) {
+	dref := ref.NewBranchRef(brName)
+
+	if !dEnv.DoltDB.HasRef(ctx, dref) {
 		return doltdb.ErrBranchNotFound
 	}
 
-	if dEnv.RepoState.Branch == brName {
+	if dEnv.RepoState.Head.Equals(dref) {
 		return doltdb.ErrAlreadyOnBranch
 	}
 
@@ -165,7 +177,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	dEnv.RepoState.Branch = brName
+	dEnv.RepoState.Head = dref
 	dEnv.RepoState.Working = wrkHash.String()
 	dEnv.RepoState.Staged = stgHash.String()
 	dEnv.RepoState.Save()
@@ -286,11 +298,12 @@ func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, Ro
 		return false, nil, err
 	}
 
-	return dEnv.DoltDB.HasBranch(ctx, str), rootsWithTbl, nil
+	dref := ref.NewBranchRef(str)
+	return dEnv.DoltDB.HasRef(ctx, dref), rootsWithTbl, nil
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.Branch)
+	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.Head.String())
 
 	if err == nil {
 		cm, err := dEnv.DoltDB.Resolve(ctx, cs)

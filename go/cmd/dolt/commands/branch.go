@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"sort"
 	"strings"
 
@@ -88,24 +89,26 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 	verbose := apr.Contains(verboseFlag)
 	printAll := apr.Contains(allParam)
 
-	branches := dEnv.DoltDB.GetBranches(context.TODO())
-	currentBranch := dEnv.RepoState.Branch
-	sort.Strings(branches)
+	branches := dEnv.DoltDB.GetRefs(context.TODO())
+	currentBranch := dEnv.RepoState.Head
+	sort.Slice(branches, func(i, j int) bool {
+		return branches[i].String() < branches[j].String()
+	})
 
 	for _, branch := range branches {
-		cs, _ := doltdb.NewCommitSpec("HEAD", branch)
+		cs, _ := doltdb.NewCommitSpec("HEAD", branch.String())
 
-		if cs.CSpecType() == doltdb.RemoteBranchCommitSpec && !printAll {
+		if branch.Type != ref.BranchRef && !printAll {
 			continue
 		}
 
 		line := ""
-		if branch == currentBranch {
-			line = fmt.Sprint("* ", color.GreenString("%-32s", branch))
-		} else if cs.CSpecType() == doltdb.RemoteBranchCommitSpec {
-			line = fmt.Sprint(color.RedString("  %-32s", branch))
+		if branch.Equals(currentBranch) {
+			line = fmt.Sprint("* ", color.GreenString("%-32s", branch.Path))
+		} else if branch.Type == ref.RemoteRef {
+			line = fmt.Sprint(color.RedString("  remots/%-32s", branch.Path))
 		} else {
-			line = fmt.Sprintf("  %-32s", branch)
+			line = fmt.Sprintf("  %-32s", branch.Path)
 		}
 
 		if verbose {
