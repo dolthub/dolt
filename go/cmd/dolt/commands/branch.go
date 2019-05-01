@@ -104,9 +104,9 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 
 		line := ""
 		if branch.Equals(currentBranch) {
-			line = fmt.Sprint("* ", color.GreenString("%-32s", branch.Path))
+			line = fmt.Sprint("* ", color.GreenString("%-56s", branch.Path))
 		} else if branch.Type == ref.RemoteRef {
-			line = fmt.Sprint(color.RedString("  remots/%-32s", branch.Path))
+			line = fmt.Sprint(color.RedString("  remotes/%-48s", branch.Path))
 		} else {
 			line = fmt.Sprintf("  %-32s", branch.Path)
 		}

@@ -157,11 +157,7 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Failled to commit")
 		}
 
-<<<<<<< HEAD
-		commit, err := ddb.Commit(context.Background(), valHash, "master", meta)
-=======
-		commit, err := ddb.Commit(valHash, ref.NewBranchRef("master"), meta)
->>>>>>> adding refs
+		commit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
 		if err != nil {
 			t.Error("Failled to commit")
 		}

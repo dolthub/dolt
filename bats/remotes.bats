@@ -122,7 +122,7 @@ teardown() {
     run dolt fetch origin master
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt merge remotes/origin/master
+    run dolt merge origin/master
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]]
     run dolt log

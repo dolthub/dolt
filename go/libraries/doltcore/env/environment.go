@@ -9,6 +9,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
@@ -16,6 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -402,4 +404,25 @@ func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
 	} else {
 		return path, nil
 	}
+}
+
+func (dEnv *DoltEnv) FindRef(ctx context.Context, str string) (ref.DoltRef, error) {
+	localRef := ref.NewBranchRef(str)
+	if dEnv.DoltDB.HasRef(context.TODO(), localRef) {
+		return localRef, nil
+	} else {
+		slashIdx := strings.IndexRune(str, '/')
+		if slashIdx > 0 {
+			remoteName := str[:slashIdx]
+			if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
+				remoteRef := ref.NewRemoteRefFromPathStr(str)
+
+				if dEnv.DoltDB.HasRef(context.TODO(), remoteRef) {
+					return remoteRef, nil
+				}
+			}
+		}
+	}
+
+	return ref.InvalidRef, doltdb.ErrBranchNotFound
 }

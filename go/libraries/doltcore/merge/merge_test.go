@@ -166,11 +166,7 @@ func TestRowMerge(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			actualResult, isConflict := rowMerge(test.sch, test.row, test.mergeRow, test.ancRow)
-<<<<<<< HEAD
-			assert.Equal(t, test.expectedResult, actualResult, "expected " + types.EncodedValue(context.Background(), test.expectedResult) + "got " + types.EncodedValue(context.Background(), actualResult))
-=======
-			assert.Equal(t, test.expectedResult, actualResult, "expected "+types.EncodedValue(test.expectedResult)+"got "+types.EncodedValue(actualResult))
->>>>>>> adding refs
+			assert.Equal(t, test.expectedResult, actualResult, "expected "+types.EncodedValue(context.Background(), test.expectedResult)+"got "+types.EncodedValue(context.Background(), actualResult))
 			assert.Equal(t, test.expectConflict, isConflict)
 		})
 	}
@@ -274,31 +270,17 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 
 	mergeRows := mergeRowEditor.Map(context.Background())
 
-<<<<<<< HEAD
 	expectedRows := types.NewMap(context.Background(), vrw,
-		keyTuples[0], initialRows.Get(context.Background(), keyTuples[0]),                                                           // unaltered
-		keyTuples[4], updatedRows.Get(context.Background(), keyTuples[4]),                                                           // modified in updated
-		keyTuples[5], mergeRows.Get(context.Background(), keyTuples[5]),                                                             // modified in merged
+		keyTuples[0], initialRows.Get(context.Background(), keyTuples[0]), // unaltered
+		keyTuples[4], updatedRows.Get(context.Background(), keyTuples[4]), // modified in updated
+		keyTuples[5], mergeRows.Get(context.Background(), keyTuples[5]), // modified in merged
 		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("dr")}), // modified in both with no overlap
-		keyTuples[7], updatedRows.Get(context.Background(), keyTuples[7]),                                                           // modify both with the same value
-		keyTuples[8], updatedRows.Get(context.Background(), keyTuples[8]),                                                           // conflict
-		keyTuples[9], updatedRows.Get(context.Background(), keyTuples[9]),                                                           // added in update
-		keyTuples[10], mergeRows.Get(context.Background(), keyTuples[10]),                                                           // added in merge
-		keyTuples[11], updatedRows.Get(context.Background(), keyTuples[11]),                                                         // added same in both
-		keyTuples[12], updatedRows.Get(context.Background(), keyTuples[12]),                                                         // conflict
-=======
-	expectedRows := types.NewMap(vrw,
-		keyTuples[0], initialRows.Get(keyTuples[0]), // unaltered
-		keyTuples[4], updatedRows.Get(keyTuples[4]), // modified in updated
-		keyTuples[5], mergeRows.Get(keyTuples[5]), // modified in merged
-		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("dr")}), // modified in both with no overlap
-		keyTuples[7], updatedRows.Get(keyTuples[7]), // modify both with the same value
-		keyTuples[8], updatedRows.Get(keyTuples[8]), // conflict
-		keyTuples[9], updatedRows.Get(keyTuples[9]), // added in update
-		keyTuples[10], mergeRows.Get(keyTuples[10]), // added in merge
-		keyTuples[11], updatedRows.Get(keyTuples[11]), // added same in both
-		keyTuples[12], updatedRows.Get(keyTuples[12]), // conflict
->>>>>>> adding refs
+		keyTuples[7], updatedRows.Get(context.Background(), keyTuples[7]), // modify both with the same value
+		keyTuples[8], updatedRows.Get(context.Background(), keyTuples[8]), // conflict
+		keyTuples[9], updatedRows.Get(context.Background(), keyTuples[9]), // added in update
+		keyTuples[10], mergeRows.Get(context.Background(), keyTuples[10]), // added in merge
+		keyTuples[11], updatedRows.Get(context.Background(), keyTuples[11]), // added same in both
+		keyTuples[12], updatedRows.Get(context.Background(), keyTuples[12]), // conflict
 	)
 
 	updateConflict := doltdb.NewConflict(initialRows.Get(context.Background(), keyTuples[8]), updatedRows.Get(context.Background(), keyTuples[8]), mergeRows.Get(context.Background(), keyTuples[8]))
@@ -328,19 +310,11 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	mergeHash, _ := ddb.WriteRootValue(context.Background(), mergeRoot)
 
 	meta, _ := doltdb.NewCommitMeta(name, email, "fake")
-<<<<<<< HEAD
-	initialCommit, _ := ddb.Commit(context.Background(), masterHash, "master", meta)
-	commit, _ := ddb.Commit(context.Background(), hash, "master", meta)
+	initialCommit, _ := ddb.Commit(context.Background(), masterHash, ref.NewBranchRef("master"), meta)
+	commit, _ := ddb.Commit(context.Background(), hash, ref.NewBranchRef("master"), meta)
 
-	ddb.NewBranchAtCommit(context.Background(), "to-merge", initialCommit)
-	mergeCommit, _ := ddb.Commit(context.Background(), mergeHash, "to-merge", meta)
-=======
-	initialCommit, _ := ddb.Commit(masterHash, ref.NewBranchRef("master"), meta)
-	commit, _ := ddb.Commit(hash, ref.NewBranchRef("master"), meta)
-
-	ddb.NewBranchAtCommit(ref.NewBranchRef("to-merge"), initialCommit)
-	mergeCommit, _ := ddb.Commit(mergeHash, ref.NewBranchRef("to-merge"), meta)
->>>>>>> adding refs
+	ddb.NewBranchAtCommit(context.Background(), ref.NewBranchRef("to-merge"), initialCommit)
+	mergeCommit, _ := ddb.Commit(context.Background(), mergeHash, ref.NewBranchRef("to-merge"), meta)
 
 	return vrw, commit, mergeCommit, expectedRows, expectedConflicts
 }

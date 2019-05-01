@@ -79,6 +79,11 @@ func TestEqualsStr(t *testing.T) {
 			true,
 		},
 		{
+			NewRemoteRefFromPathStr("origin/master"),
+			"refs/remotes/origin/master",
+			true,
+		},
+		{
 			NewRemoteRef("origin", "master"),
 			"refs/remotes/borigin/master",
 			false,

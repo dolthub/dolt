@@ -66,11 +66,11 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		branchName := apr.Arg(0)
-		dref := ref.NewBranchRef(branchName)
-		if !dEnv.DoltDB.HasRef(context.TODO(), dref) {
+		dref, err := dEnv.FindRef(context.TODO(), branchName)
+
+		if err != nil {
 			cli.PrintErrln(color.RedString("unknown branch: %s", branchName))
 			usage()
-			return 1
 		}
 
 		isUnchanged, _ := dEnv.IsUnchangedFromHead(context.TODO())
@@ -99,7 +99,7 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				return 1
 			}
 
-			verr = mergeBranch(dEnv, ref.NewBranchRef(branchName))
+			verr = mergeBranch(dEnv, dref)
 		}
 	}
 
