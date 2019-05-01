@@ -197,6 +197,7 @@ func NewAWSStore(ctx context.Context, table, ns, bucket string, s3 s3svc, ddb dd
 		&ddbTableStore{ddb, table, readRateLimiter, nil},
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
+		ns,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
 	return newNomsBlockStore(ctx, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
