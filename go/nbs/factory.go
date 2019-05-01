@@ -61,6 +61,7 @@ func NewAWSStoreFactory(ctx context.Context, sess *session.Session, table, bucke
 			&ddbTableStore{ddb, table, readRateLimiter, sizecache.New(defaultSmallTableCacheSize)},
 			awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 			indexCache,
+			"",
 		},
 		table:         table,
 		conjoiner:     inlineConjoiner{awsMaxTables},
