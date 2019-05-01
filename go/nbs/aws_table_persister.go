@@ -38,6 +38,7 @@ type awsTablePersister struct {
 	ddb        *ddbTableStore
 	limits     awsLimits
 	indexCache *indexCache
+	ns         string
 }
 
 type awsLimits struct {
@@ -61,7 +62,7 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 	return newAWSChunkSource(
 		ctx,
 		s3p.ddb,
-		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc},
+		&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns},
 		s3p.limits,
 		name,
 		chunkCount,
@@ -73,6 +74,13 @@ func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 type s3UploadedPart struct {
 	idx  int64
 	etag string
+}
+
+func (s3p awsTablePersister) key(k string) string {
+	if s3p.ns != "" {
+		return s3p.ns + "/" + k
+	}
+	return k
 }
 
 func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
@@ -89,7 +97,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		go s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
 	}
 	s3p.multipartUpload(ctx, data, name.String())
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns}, name}
 	return newReaderFromIndexData(s3p.indexCache, data, name, tra, s3BlockSize)
 }
 
@@ -106,7 +114,7 @@ func (s3p awsTablePersister) multipartUpload(ctx context.Context, data []byte, k
 func (s3p awsTablePersister) startMultipartUpload(ctx context.Context, key string) string {
 	result, err := s3p.s3.CreateMultipartUploadWithContext(ctx, &s3.CreateMultipartUploadInput{
 		Bucket: aws.String(s3p.bucket),
-		Key:    aws.String(key),
+		Key:    aws.String(s3p.key(key)),
 	})
 	d.PanicIfError(err)
 	return *result.UploadId
@@ -115,7 +123,7 @@ func (s3p awsTablePersister) startMultipartUpload(ctx context.Context, key strin
 func (s3p awsTablePersister) abortMultipartUpload(ctx context.Context, key, uploadID string) {
 	_, abrtErr := s3p.s3.AbortMultipartUploadWithContext(ctx, &s3.AbortMultipartUploadInput{
 		Bucket:   aws.String(s3p.bucket),
-		Key:      aws.String(key),
+		Key:      aws.String(s3p.key(key)),
 		UploadId: aws.String(uploadID),
 	})
 	d.PanicIfError(abrtErr)
@@ -124,7 +132,7 @@ func (s3p awsTablePersister) abortMultipartUpload(ctx context.Context, key, uplo
 func (s3p awsTablePersister) completeMultipartUpload(ctx context.Context, key, uploadID string, mpu *s3.CompletedMultipartUpload) {
 	_, err := s3p.s3.CompleteMultipartUploadWithContext(ctx, &s3.CompleteMultipartUploadInput{
 		Bucket:          aws.String(s3p.bucket),
-		Key:             aws.String(key),
+		Key:             aws.String(s3p.key(key)),
 		MultipartUpload: mpu,
 		UploadId:        aws.String(uploadID),
 	})
@@ -241,7 +249,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	if s3p.tc != nil {
 		go s3p.loadIntoCache(ctx, name) // load conjoined table to the cache
 	}
-	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc}, name}
+	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns}, name}
 	return newReaderFromIndexData(s3p.indexCache, plan.mergedIndex, name, tra, s3BlockSize)
 }
 
@@ -455,7 +463,7 @@ func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, src
 		CopySource:      aws.String(url.QueryEscape(s3p.bucket + "/" + src)),
 		CopySourceRange: aws.String(s3RangeHeader(srcStart, srcEnd)),
 		Bucket:          aws.String(s3p.bucket),
-		Key:             aws.String(key),
+		Key:             aws.String(s3p.key(key)),
 		PartNumber:      aws.Int64(int64(partNum)),
 		UploadId:        aws.String(uploadID),
 	})
@@ -468,7 +476,7 @@ func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, src
 func (s3p awsTablePersister) uploadPart(ctx context.Context, data []byte, key, uploadID string, partNum int64) (etag string, err error) {
 	res, err := s3p.s3.UploadPartWithContext(ctx, &s3.UploadPartInput{
 		Bucket:     aws.String(s3p.bucket),
-		Key:        aws.String(key),
+		Key:        aws.String(s3p.key(key)),
 		PartNumber: aws.Int64(int64(partNum)),
 		UploadId:   aws.String(uploadID),
 		Body:       bytes.NewReader(data),

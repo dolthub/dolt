@@ -22,7 +22,7 @@ func TestAWSChunkSource(t *testing.T) {
 	s3 := makeFakeS3(t)
 	ddb := makeFakeDDB(t)
 
-	s3or := &s3ObjectReader{s3, "bucket", nil, nil}
+	s3or := &s3ObjectReader{s3, "bucket", nil, nil, ""}
 	dts := &ddbTableStore{ddb, "table", nil, nil}
 
 	makeSrc := func(chunkMax int, ic *indexCache) chunkSource {
