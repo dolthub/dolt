@@ -98,6 +98,14 @@ func NewRemoteRef(origin, name string) DoltRef {
 	return DoltRef{RemoteRef, origin + "/" + name}
 }
 
+func NewRemoteRefFromPathStr(path string) DoltRef {
+	if strings.HasPrefix(path, "ref/") {
+		panic("bug")
+	}
+
+	return DoltRef{RemoteRef, path}
+}
+
 func NewInternalRef(name string) DoltRef {
 	if strings.HasPrefix(name, "ref/") {
 		panic("bug")
