@@ -318,7 +318,7 @@ teardown() {
 }
 
 @test "import a table with non UTF-8 characters in it" {
-    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
+    run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/bad-characters.csv
     skip "Dolt allows you to create tables with non-UTF-8 characters right now"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unsupported characters" ]] || false
