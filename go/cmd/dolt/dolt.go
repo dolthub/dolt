@@ -46,6 +46,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "schema", Desc: "Display the schema for table(s)", Func: commands.Schema, ReqRepo: true},
 	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts.", Func: cnfcmds.Commands, ReqRepo: false},
+	{Name: "ref_migrate", Desc: "", Func: commands.RefMigrate, ReqRepo: true},
 })
 
 func main() {
