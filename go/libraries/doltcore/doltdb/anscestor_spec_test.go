@@ -44,9 +44,9 @@ func TestSplitAnscestorSpec(t *testing.T) {
 		expectErr        bool
 	}{
 		{"master", "master", "", false},
-		{"MASTER^1", "master", "^1", false},
-		{"HEAD~3^^", "head", "~3^^", false},
-		{"HEAD~3^^", "head", "~3^^", false},
+		{"MASTER^1", "MASTER", "^1", false},
+		{"head~3^^", "head", "~3^^", false},
+		{"HEAD~3^^", "HEAD", "~3^^", false},
 		{"branch^invalid", "", "", true},
 	}
 
