@@ -2,6 +2,7 @@ module github.com/liquidata-inc/ld/dolt/go
 
 require (
 	cloud.google.com/go v0.35.1 // indirect
+	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/attic-labs/noms v0.0.0-20181127201811-95e8b35cc96f
 	github.com/aws/aws-sdk-go v1.16.26 // indirect
 	github.com/dustin/go-humanize v1.0.0
@@ -22,6 +23,7 @@ require (
 	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
 	golang.org/x/net v0.0.0-20190313220215-9f648a60d977
 	golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c // indirect
+	golang.org/x/text v0.3.1-0.20180807135948-17ff2d5776d2
 	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca // indirect
 	google.golang.org/grpc v1.18.0
 	gopkg.in/square/go-jose.v2 v2.2.2
