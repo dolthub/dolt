@@ -99,8 +99,14 @@ func NewRemoteRef(origin, name string) DoltRef {
 }
 
 func NewRemoteRefFromPathStr(path string) DoltRef {
+	const remotesPrefix = "remotes/"
+
 	if strings.HasPrefix(path, "ref/") {
 		panic("bug")
+	}
+
+	if strings.HasPrefix(path, remotesPrefix) {
+		path = path[len(remotesPrefix):]
 	}
 
 	return DoltRef{RemoteRef, path}

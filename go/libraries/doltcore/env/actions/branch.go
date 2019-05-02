@@ -39,33 +39,43 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+	return CopyBranchOnDB(ctx, dEnv.DoltDB, oldBranch, newBranch, force)
+}
+
+func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
-	if !dEnv.DoltDB.HasRef(ctx, oldRef) {
+	if !ddb.HasRef(ctx, oldRef) {
 		return doltdb.ErrBranchNotFound
-	} else if !force && dEnv.DoltDB.HasRef(ctx, newRef) {
+	} else if !force && ddb.HasRef(ctx, newRef) {
 		return ErrAlreadyExists
 	} else if !doltdb.IsValidUserBranchName(newBranch) {
 		return doltdb.ErrInvBranchName
 	}
 
 	cs, _ := doltdb.NewCommitSpec("head", oldBranch)
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	cm, err := ddb.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
 	}
 
-	return dEnv.DoltDB.NewBranchAtCommit(ctx, newRef, cm)
+	return ddb.NewBranchAtCommit(ctx, newRef, cm)
 }
 
 func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	dref := ref.NewBranchRef(brName)
 
-	if !dEnv.DoltDB.HasRef(ctx, dref) {
-		return doltdb.ErrBranchNotFound
-	} else if dEnv.RepoState.Head.Equals(dref) {
+	if dEnv.RepoState.Head.Equals(dref) {
 		return ErrCOBranchDelete
+	}
+
+	return DeleteBranchOnDB(ctx, dEnv.DoltDB, dref, force)
+}
+
+func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, force bool) error {
+	if !ddb.HasRef(ctx, dref) {
+		return doltdb.ErrBranchNotFound
 	}
 
 	ms, err := doltdb.NewCommitSpec("head", "master")
@@ -74,19 +84,19 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force b
 		return err
 	}
 
-	master, err := dEnv.DoltDB.Resolve(ctx, ms)
+	master, err := ddb.Resolve(ctx, ms)
 
 	if err != nil {
 		return err
 	}
 
-	cs, err := doltdb.NewCommitSpec("head", brName)
+	cs, err := doltdb.NewCommitSpec("head", dref.String())
 
 	if err != nil {
 		return err
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	cm, err := ddb.Resolve(ctx, cs)
 
 	if err != nil {
 		return err
@@ -98,7 +108,7 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force b
 		}
 	}
 
-	return dEnv.DoltDB.DeleteBranch(ctx, dref)
+	return ddb.DeleteBranch(ctx, dref)
 }
 
 func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {

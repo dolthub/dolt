@@ -381,9 +381,15 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 	var branches []ref.DoltRef
 	ddb.db.Datasets(ctx).IterAll(ctx, func(key, _ types.Value) {
 		keyStr := string(key.(types.String))
-		dref, _ := ref.Parse(keyStr)
 
-		if _, ok := refTypeFilter[dref.Type]; ok && dref.Type != ref.InternalRef && dref.Type != ref.InvalidRefType {
+		var dref ref.DoltRef
+		if ref.IsRef(keyStr) {
+			dref, _ = ref.Parse(keyStr)
+		} else {
+			dref = ref.DoltRef{ref.InvalidRefType, keyStr}
+		}
+
+		if _, ok := refTypeFilter[dref.Type]; ok {
 			branches = append(branches, dref)
 		}
 	})
@@ -402,12 +408,29 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 	return err
 }
 
-// DeleteBranch deletes the branch given, returning an error if it doesn't exist.
-func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
-	if dref.Type != ref.BranchRef {
-		panic("not a branch.")
+func (ddb *DoltDB) CopyBranchByName(ctx context.Context, src, dest string) error {
+	srcDS := ddb.db.GetDataset(ctx, src)
+	headRef := srcDS.HeadRef()
+
+	destDS := ddb.db.GetDataset(ctx, dest)
+	ddb.db.SetHead(ctx, destDS, headRef)
+
+	return nil
+}
+
+func (ddb *DoltDB) DeleteBranchByName(ctx context.Context, name string) error {
+	ds := ddb.db.GetDataset(ctx, name)
+
+	if !ds.HasHead() {
+		return ErrBranchNotFound
 	}
 
+	_, err := ddb.db.Delete(ctx, ds)
+	return err
+}
+
+// DeleteBranch deletes the branch given, returning an error if it doesn't exist.
+func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
 	ds := ddb.db.GetDataset(ctx, dref.String())
 
 	if !ds.HasHead() {
