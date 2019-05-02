@@ -241,7 +241,6 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	}
 
 	newFieldType := strings.ToLower(apr.Arg(2))
-
 	newFieldKind, ok := schema.LwrStrToKind[newFieldType]
 	if !ok {
 		return errhand.BuildDError(newFieldType + " is not a valid type for this new column.").SetPrintUsage().Build()
