@@ -49,7 +49,6 @@ type CommitSpec struct {
 // NewCommitSpec takes a spec string and the current working branch.  The current working branch is only relevant when
 // using "head" to reference a commit, but if it is not needed it will be ignored.
 func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
-	isHead := strings.ToLower(strings.TrimSpace(cwb)) == head
 	cSpecStrLwr := strings.TrimSpace(cSpecStr)
 
 	name, as, err := SplitAncestorSpec(cSpecStrLwr)
@@ -58,8 +57,8 @@ func NewCommitSpec(cSpecStr, cwb string) (*CommitSpec, error) {
 		return nil, err
 	}
 
-	if isHead {
-		name = head
+	if strings.ToLower(name) == head {
+		name = cwb
 	}
 
 	if hashRegex.MatchString(name) {
