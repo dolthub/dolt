@@ -15,16 +15,14 @@ teardown() {
 }
 
 @test "capital letter col names. put a row in a table using dolt table put-row" {
-    run dolt table put-row test Aaa:3 Bbb:ccc Ccc:CCC
-    [ "$status" -eq 0 ]
+    dolt table put-row test Aaa:3 Bbb:ccc Ccc:CCC
     run dolt table select test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CCC" ]] || false
 }
 
 @test "capital letter col names. remove a row from a table with dolt table rm-row" {
-    run dolt table rm-row test Aaa 2
-    [ "$status" -eq 0 ]
+    dolt table rm-row test Aaa 2
     run dolt table select test
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "BBB" ]] || false
@@ -36,7 +34,7 @@ teardown() {
     [[ "$output" =~ "BBB" ]] || false
 }
 
-@test "capital letter column names. dolt schema" {
+@test "capital letter col names. dolt schema" {
     run dolt schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Aaa" ]] || false
@@ -44,7 +42,7 @@ teardown() {
     [[ "$output" =~ "Ccc" ]] || false
 }
 
-@test "capital letter column names. sql select" {
+@test "capital letter col names. sql select" {
     run dolt sql -q "select Bbb from test where Aaa=2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "bbb" ]] || false
@@ -53,7 +51,7 @@ teardown() {
     [[ ! "$output" =~ "aaa" ]] || false
 }
 
-@test "capital letter column names. dolt table export" {
+@test "capital letter col names. dolt table export" {
     run dolt table export test export.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data" ]] || false
@@ -65,7 +63,7 @@ teardown() {
     [[ "$output" =~ "aaa" ]] || false
 }
 
-@test "capital letter column names. dolt table copy" {
+@test "capital letter col names. dolt table copy" {
     run dolt table cp test test-copy
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
