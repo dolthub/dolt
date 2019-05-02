@@ -323,3 +323,18 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unsupported characters" ]] || false
 }
+
+@test "changing column types should not produce a data diff error" {
+    dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
+    run dolt schema
+    [[ "$output" =~ "varchar" ]] || false
+    dolt add test
+    dolt commit -m "Added test table"
+    dolt table import -c -f -pk=pk -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
+    run dolt diff
+    skip "This produces a failed to merge schemas error message right now"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "int" ]] || false
+    [[ ! "$output" =~ "varchar" ]] || false
+    [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
+}
