@@ -406,18 +406,18 @@ func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
 	}
 }
 
-func (dEnv *DoltEnv) FindRef(ctx context.Context, str string) (ref.DoltRef, error) {
-	localRef := ref.NewBranchRef(str)
-	if dEnv.DoltDB.HasRef(context.TODO(), localRef) {
+func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, error) {
+	localRef := ref.NewBranchRef(refStr)
+	if dEnv.DoltDB.HasRef(ctx, localRef) {
 		return localRef, nil
 	} else {
-		slashIdx := strings.IndexRune(str, '/')
+		slashIdx := strings.IndexRune(refStr, '/')
 		if slashIdx > 0 {
-			remoteName := str[:slashIdx]
+			remoteName := refStr[:slashIdx]
 			if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
-				remoteRef := ref.NewRemoteRefFromPathStr(str)
+				remoteRef := ref.NewRemoteRefFromPathStr(refStr)
 
-				if dEnv.DoltDB.HasRef(context.TODO(), remoteRef) {
+				if dEnv.DoltDB.HasRef(ctx, remoteRef) {
 					return remoteRef, nil
 				}
 			}
