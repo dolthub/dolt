@@ -23,6 +23,7 @@ const (
 	BaseVersion MergeVersion = iota
 	OurVersion
 	TheirVersion
+	Blank // for display only
 )
 
 type ConflictReader struct {

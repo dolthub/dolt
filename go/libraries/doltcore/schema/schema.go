@@ -65,14 +65,14 @@ func SchemasAreEqual(sch1, sch2 Schema) bool {
 var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func AutoGenerateTag(sch Schema) uint64 {
-	var maxTagVal int64 = 128 * 128
+	var maxTagVal uint64 = 128 * 128
 
 	allCols := sch.GetAllCols()
-	for maxTagVal/2 < int64(allCols.Size()) {
-		if maxTagVal == int64(ReservedTagMin)-1 {
+	for maxTagVal/2 < uint64(allCols.Size()) {
+		if maxTagVal == ReservedTagMin - 1 {
 			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
 		} else if maxTagVal*128 < maxTagVal {
-			maxTagVal = int64(ReservedTagMin) - 1
+			maxTagVal = ReservedTagMin - 1
 		} else {
 			maxTagVal = maxTagVal * 128
 		}
@@ -80,7 +80,7 @@ func AutoGenerateTag(sch Schema) uint64 {
 
 	var randTag uint64
 	for {
-		randTag = uint64(randGen.Int63n(maxTagVal))
+		randTag = uint64(randGen.Int63n(int64(maxTagVal)))
 
 		if _, ok := allCols.GetByTag(randTag); !ok {
 			break

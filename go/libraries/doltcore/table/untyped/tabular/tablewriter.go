@@ -5,11 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/acarl005/stripansi"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -47,7 +49,7 @@ func (ttw *TextTableWriter) writeTableHeader(r row.Row) error {
 	var colnames strings.Builder
 	separator.WriteString("+")
 	colnames.WriteString("|")
-	allCols.IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		separator.WriteString("-")
 		colnames.WriteString(" ")
 		colNameVal, ok := r.GetColVal(tag)
@@ -79,14 +81,15 @@ func (ttw *TextTableWriter) writeTableFooter() error {
 
 	var separator strings.Builder
 	separator.WriteString("+")
-	allCols.IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		separator.WriteString("-")
 		val, ok := (*ttw.lastWritten).GetColVal(tag)
 		if !ok {
-			panic("No column name value for tag " + string(tag))
+			panic("No column name value for tag " + strconv.FormatUint(tag, 10))
 		}
 		sval := string(val.(types.String))
-		for i := 0; i < len(sval); i++ {
+		normalized := stripansi.Strip(sval)
+		for i := 0; i < len(normalized); i++ {
 			separator.WriteString("-")
 		}
 		separator.WriteString("-+")
@@ -113,7 +116,7 @@ func (ttw *TextTableWriter) WriteRow(ctx context.Context, r row.Row) error {
 	var rowVals strings.Builder
 	var err error
 	rowVals.WriteString("|")
-	allCols.IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		rowVals.WriteString(" ")
 		val, _ := r.GetColVal(tag)
 		if !types.IsNull(val) && val.Kind() == types.StringKind {

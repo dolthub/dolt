@@ -102,7 +102,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
 	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
 
-	// Redirect outtput to the CLI
+	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
 
 	wr := tabular.NewTextTableWriter(cliWr, untypedSch)
