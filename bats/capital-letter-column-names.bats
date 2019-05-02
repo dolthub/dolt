@@ -16,7 +16,6 @@ teardown() {
 
 @test "capital letter col names. put a row in a table using dolt table put-row" {
     run dolt table put-row test Aaa:3 Bbb:ccc Ccc:CCC
-    echo $output
     [ "$status" -eq 0 ]
     run dolt table select test
     [ "$status" -eq 0 ]
@@ -25,7 +24,6 @@ teardown() {
 
 @test "capital letter col names. remove a row from a table with dolt table rm-row" {
     run dolt table rm-row test Aaa 2
-    echo $output
     [ "$status" -eq 0 ]
     run dolt table select test
     [ "$status" -eq 0 ]
