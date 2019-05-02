@@ -7,16 +7,76 @@ setup() {
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
-    dolt table import -c -pk=Aaa -s $BATS_TEST_DIRNAME/helper/capital-letter-column-names.schema test $BATS_TEST_DIRNAME/helper/capital-letter-column-names.csv
+    dolt table import -c -s $BATS_TEST_DIRNAME/helper/capital-letter-column-names.schema test $BATS_TEST_DIRNAME/helper/capital-letter-column-names.csv
 }
 
 teardown() {
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
-@test "put a row in a table" {
+@test "capital letter col names. put a row in a table using dolt table put-row" {
     run dolt table put-row test Aaa:3 Bbb:ccc Ccc:CCC
     skip "Brian hates capital letters and this is proof"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CCC" ]] || false
+}
+
+@test "capital letter col names. remove a row from a table with dolt table rm-row" {
+    run dolt table rm-row test Aaa:2
+    skip "Brian hates capital letters and this is proof"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "BBB" ]] || false
+}
+
+@test "capital letter col names. dolt table select with a where clause" {
+    run dolt table select test --where Aaa=2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "BBB" ]] || false
+}
+
+@test "capital letter column names. dolt schema" {
+    run dolt schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Aaa" ]] || false
+    [[ "$output" =~ "Bbb" ]] || false
+    [[ "$output" =~ "Ccc" ]] || false
+}
+
+@test "capital letter column names. sql select" {
+    run dolt sql -q "select Bbb from test where Aaa=2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bbb" ]] || false
+    [[ "$output" =~ "Bbb" ]] || false
+    [[ ! "$output" =~ "Aaa" ]] || false
+    [[ ! "$output" =~ "aaa" ]] || false
+}
+
+@test "capital letter column names. dolt table export" {
+    run dolt table export test export.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data" ]] || false
+    run cat export.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bbb" ]] || false
+    [[ "$output" =~ "Bbb" ]] || false
+    [[ "$output" =~ "Aaa" ]] || false
+    [[ "$output" =~ "aaa" ]] || false
+}
+
+@test "capital letter column names. dolt table copy" {
+    run dolt table cp test test-copy
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt table select test-copy
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "bbb" ]] || false
+    [[ "$output" =~ "Bbb" ]] || false
+    [[ "$output" =~ "Aaa" ]] || false
+    [[ "$output" =~ "aaa" ]] || false
 }
