@@ -143,6 +143,8 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 		var srcDB *doltdb.DoltDB
 		srcDB, verr = createRemote(remoteName, remoteUrl, insecure, dEnv)
 
+		MigrateDoltDB(srcDB)
+
 		if verr == nil {
 			dref := ref.NewBranchRef(branch)
 			if !srcDB.HasRef(context.TODO(), dref) {
