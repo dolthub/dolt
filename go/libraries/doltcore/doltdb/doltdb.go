@@ -174,6 +174,10 @@ func walkAncestorSpec(ctx context.Context, db datas.Database, commitSt types.Str
 
 // Resolve takes a CommitSpec and returns a Commit, or an error if the commit cannot be found.
 func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error) {
+	if cs == nil {
+		panic("nil commit spec")
+	}
+
 	var commitSt types.Struct
 	err := pantoerr.PanicToError("unable to resolve commit "+cs.Name(), func() error {
 		var err error
