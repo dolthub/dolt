@@ -11,7 +11,7 @@ import (
 
 func RefMigrate(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	cli.Println("local branches:")
-	migrateDoltDB(dEnv.DoltDB)
+	MigrateDoltDB(dEnv.DoltDB)
 
 	remotes, _ := dEnv.GetRemotes()
 	for _, rem := range remotes {
