@@ -20,9 +20,9 @@ import (
 
 var ErrUploadFailed = errors.New("upload failed")
 
-var globalHttpFetcher HttpFetcher = &http.Client{}
+var globalHttpFetcher HTTPFetcher = &http.Client{}
 
-type HttpFetcher interface {
+type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
@@ -32,14 +32,14 @@ type DoltChunkStore struct {
 	host        string
 	csClient    remotesapi.ChunkStoreServiceClient
 	cache       chunkCache
-	httpFetcher HttpFetcher
+	httpFetcher HTTPFetcher
 }
 
 func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
 	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher}
 }
 
-func (dcs *DoltChunkStore) WithHttpFetcher(fetcher HttpFetcher) *DoltChunkStore {
+func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
 	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, fetcher}
 }
 
@@ -338,7 +338,7 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 	if err != nil {
 		return err
 	}
-	resp, err := dcs.httpFetcher.Do(req)
+	resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
 
 	if err != nil {
 		return err
@@ -385,7 +385,7 @@ func (dcs *DoltChunkStore) httpGetDownload(ctx context.Context, httpGet *remotes
 	if err != nil {
 		return nil, err
 	}
-	resp, err := dcs.httpFetcher.Do(req)
+	resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
 
 	if err != nil {
 		return nil, err
@@ -413,7 +413,7 @@ type bytesResult struct {
 	err  error
 }
 
-func getRanges(ctx context.Context, httpFetcher HttpFetcher, url string, rangeChan <-chan *remotesapi.RangeChunk, resultChan chan<- bytesResult, stopChan <-chan struct{}) {
+func getRanges(ctx context.Context, httpFetcher HTTPFetcher, url string, rangeChan <-chan *remotesapi.RangeChunk, resultChan chan<- bytesResult, stopChan <-chan struct{}) {
 	for {
 		select {
 		case <-stopChan:
@@ -433,7 +433,7 @@ func getRanges(ctx context.Context, httpFetcher HttpFetcher, url string, rangeCh
 			}
 			rangeVal := fmt.Sprintf("bytes=%d-%d", r.Offset, r.Offset+uint64(r.Length)-1)
 			req.Header.Set("Range", rangeVal)
-			resp, err := httpFetcher.Do(req)
+			resp, err := httpFetcher.Do(req.WithContext(ctx))
 
 			if err != nil {
 				resultChan <- bytesResult{r, nil, err}
