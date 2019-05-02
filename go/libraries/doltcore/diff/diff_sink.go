@@ -1,60 +1,44 @@
 package diff
 
 import (
-	"bufio"
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"io"
-	"path/filepath"
-	"strings"
 )
 
-const (
-	ColorRowProp = "color"
-)
+const colorRowProp = "color"
+
+const diffColTag = schema.ReservedTagMin
+
 
 type ColorFunc func(string, ...interface{}) string
 
-var WriteBufSize = 256 * 1024
-
 type ColorDiffSink struct {
-	closer io.Closer
-	bWr    *bufio.Writer
-	sch    schema.Schema
-	colSep string
+	sch schema.Schema
+	ttw *tabular.TextTableWriter
 }
 
-func OpenColorDiffSink(path string, fs filesys.WritableFS, sch schema.Schema, colSep string) (*ColorDiffSink, error) {
-	err := fs.MkDirs(filepath.Dir(path))
-
+func NewColorDiffWriter(wr io.WriteCloser, sch schema.Schema) *ColorDiffSink {
+	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(diffColTag, "diff")
+	outSch, err := untyped.UntypedSchemaUnion(additionalCols, sch)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
-	wr, err := fs.OpenForWrite(path)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewColorDiffWriter(wr, sch, colSep), nil
-}
-
-func NewColorDiffWriter(wr io.Writer, sch schema.Schema, colSep string) *ColorDiffSink {
-	bwr := bufio.NewWriterSize(wr, WriteBufSize)
-	return &ColorDiffSink{nil, bwr, sch, colSep}
+	ttw := tabular.NewTextTableWriter(wr, outSch)
+	return &ColorDiffSink{outSch, ttw}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
-func (cdWr *ColorDiffSink) GetSchema() schema.Schema {
-	return cdWr.sch
+func (cds *ColorDiffSink) GetSchema() schema.Schema {
+	return cds.sch
 }
 
 var colDiffColors = map[DiffChType]ColorFunc{
@@ -64,95 +48,75 @@ var colDiffColors = map[DiffChType]ColorFunc{
 	DiffRemoved:     color.RedString,
 }
 
-// WriteRow will write a row to a table
-func (cdWr *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
-	allCols := cdWr.sch.GetAllCols()
-	colStrs := make([]string, allCols.Size())
+func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
+
+	taggedVals := make(row.TaggedValues)
+	allCols := cds.sch.GetAllCols()
 	colDiffs := make(map[string]DiffChType)
+
 	if prop, ok := props.Get(CollChangesProp); ok {
 		if convertedVal, convertedOK := prop.(map[string]DiffChType); convertedOK {
 			colDiffs = convertedVal
 		}
 	}
 
-	i := 0
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-		str := sql.PRINTED_NULL
-		val, ok := r.GetColVal(tag)
-		if ok {
-			str = string(val.(types.String))
+		if val, ok := r.GetColVal(tag); ok {
+			taggedVals[tag] = val.(types.String)
 		}
-
-		colStrs[i] = str
-
-		i++
 		return false
 	})
 
-	prefix := "   "
+	taggedVals[diffColTag] = types.String("   ")
 	colorColumns := false
 	if prop, ok := props.Get(DiffTypeProp); ok {
 		if dt, convertedOK := prop.(DiffChType); convertedOK {
 			switch dt {
 			case DiffAdded:
-				prefix = " + "
+				taggedVals[diffColTag] = types.String(" + ")
 			case DiffRemoved:
-				prefix = " - "
+				taggedVals[diffColTag] = types.String(" - ")
 			case DiffModifiedOld:
-				prefix = " < "
+				taggedVals[diffColTag] = types.String(" < ")
 			case DiffModifiedNew:
-				prefix = " > "
+				taggedVals[diffColTag] = types.String(" > ")
 				colorColumns = true
 			}
 		}
 	}
 
-	if colorColumns {
-		i = 0
-		allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	// Color all the columns as appropriate
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		if colorColumns {
 			if dt, ok := colDiffs[col.Name]; ok {
 				if colorFunc, ok := colDiffColors[dt]; ok {
-					colStrs[i] = colorFunc(colStrs[i])
+					taggedVals[tag] = types.String(colorFunc(string(taggedVals[tag].(types.String))))
 				}
 			}
-
-			i++
-			return false
-		})
-	}
-
-	lineStr := prefix + strings.Join(colStrs, cdWr.colSep) + "\n"
-
-	if !colorColumns {
-		if prop, ok := props.Get(ColorRowProp); ok {
-			colorer, convertedOK := prop.(func(string, ...interface{}) string)
-			if convertedOK {
-				lineStr = colorer(lineStr)
+		} else {
+			if prop, ok := props.Get(colorRowProp); ok {
+				colorFunc, convertedOK := prop.(func(string, ...interface{}) string)
+				if convertedOK {
+					taggedVals[tag] = types.String(colorFunc(string(taggedVals[tag].(types.String))))
+				}
 			}
 		}
-	}
 
-	err := iohelp.WriteAll(cdWr.bWr, []byte(lineStr))
+		return false
+	})
 
-	return err
+	r = row.New(cds.sch, taggedVals)
+	return cds.ttw.WriteRow(context.TODO(), r)
 }
 
 // Close should release resources being held
-func (cdWr *ColorDiffSink) Close() error {
-	if cdWr.bWr != nil {
-		errFl := cdWr.bWr.Flush()
-		cdWr.bWr = nil
-
-		if cdWr.closer != nil {
-			errCl := cdWr.closer.Close()
-			cdWr.closer = nil
-
-			if errCl != nil {
-				return errCl
-			}
+func (cds *ColorDiffSink) Close() error {
+	if cds.ttw != nil {
+		if err := cds.ttw.Close(context.TODO()); err != nil {
+			return err
 		}
-
-		return errFl
+		cds.ttw = nil
+		return nil
 	} else {
 		return errors.New("Already closed.")
 	}

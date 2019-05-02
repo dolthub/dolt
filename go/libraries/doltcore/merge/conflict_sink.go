@@ -37,8 +37,8 @@ var diffTypeToColor = map[types.DiffChangeType]diff.ColorFunc{
 }
 
 type ConflictSink struct {
-	sch        schema.Schema
-	ttw        *tabular.TextTableWriter
+	sch schema.Schema
+	ttw *tabular.TextTableWriter
 }
 
 const (
@@ -72,7 +72,6 @@ var noColorFunc = func(s string, i ...interface{}) string {
 	}
 }
 
-// WriteRow will write a row to a table
 func (cs *ConflictSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
 	taggedVals := make(row.TaggedValues)
 
