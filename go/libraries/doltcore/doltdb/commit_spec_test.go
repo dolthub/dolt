@@ -50,9 +50,9 @@ func TestNewCommitSpec(t *testing.T) {
 		expecteASpecStr string
 		expectErr       bool
 	}{
-		//{"master", "", "refs/heads/master", "", false},
-		//{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
-		//{"head^~2", "master", "refs/heads/master", "^~2", false},
+		{"master", "", "refs/heads/master", "", false},
+		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
+		{"head^~2", "master", "refs/heads/master", "^~2", false},
 		{"__invalid__^~2", "", "", "", true},
 	}
 

@@ -18,10 +18,10 @@ func IsRef(str string) bool {
 type RefType string
 
 const (
-	InvalidRefType = "invalid"
-	BranchRef      = "heads"
-	RemoteRef      = "remotes"
-	InternalRef    = "internal"
+	InvalidRefType RefType = "invalid"
+	BranchRef      RefType = "heads"
+	RemoteRef      RefType = "remotes"
+	InternalRef    RefType = "internal"
 )
 
 var RefTypes = map[RefType]struct{}{BranchRef: {}, RemoteRef: {}, InternalRef: {}}
@@ -83,29 +83,33 @@ func (dr *DoltRef) UnmarshalJSON(data []byte) error {
 }
 
 func NewBranchRef(branchName string) DoltRef {
-	if strings.HasPrefix(branchName, "ref/") {
-		panic("bug")
+	if IsRef(branchName) {
+		prefix := PrefixForType(BranchRef)
+		if strings.HasPrefix(branchName, prefix) {
+			branchName = branchName[len(prefix):]
+		} else {
+			panic(branchName + " is a ref that is not of type " + prefix)
+		}
 	}
 
 	return DoltRef{BranchRef, branchName}
 }
 
 func NewRemoteRef(origin, name string) DoltRef {
-	if strings.HasPrefix(name, "ref/") {
-		panic("bug")
-	}
-
 	return DoltRef{RemoteRef, origin + "/" + name}
 }
 
 func NewRemoteRefFromPathStr(path string) DoltRef {
 	const remotesPrefix = "remotes/"
 
-	if strings.HasPrefix(path, "ref/") {
-		panic("bug")
-	}
-
-	if strings.HasPrefix(path, remotesPrefix) {
+	if IsRef(path) {
+		prefix := PrefixForType(RemoteRef)
+		if strings.HasPrefix(path, prefix) {
+			path = path[len(prefix):]
+		} else {
+			panic(path + " is a ref that is not of type " + prefix)
+		}
+	} else if strings.HasPrefix(path, remotesPrefix) {
 		path = path[len(remotesPrefix):]
 	}
 
@@ -113,8 +117,13 @@ func NewRemoteRefFromPathStr(path string) DoltRef {
 }
 
 func NewInternalRef(name string) DoltRef {
-	if strings.HasPrefix(name, "ref/") {
-		panic("bug")
+	if IsRef(name) {
+		prefix := PrefixForType(InternalRef)
+		if strings.HasPrefix(name, prefix) {
+			name = name[len(prefix):]
+		} else {
+			panic(name + " is a ref that is not of type " + prefix)
+		}
 	}
 
 	return DoltRef{InternalRef, name}
