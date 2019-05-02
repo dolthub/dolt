@@ -17,13 +17,13 @@ func RefMigrate(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	for _, rem := range remotes {
 		cli.Println(rem.Name + ":")
 		remDB := rem.GetRemoteDB(context.Background())
-		migrateDoltDB(remDB)
+		MigrateDoltDB(remDB)
 	}
 
 	return 0
 }
 
-func migrateDoltDB(ddb *doltdb.DoltDB) {
+func MigrateDoltDB(ddb *doltdb.DoltDB) {
 	ctx := context.Background()
 	refs := ddb.GetRefsOfType(context.Background(), map[ref.RefType]struct{}{ref.InvalidRefType: {}})
 
