@@ -3,8 +3,6 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -156,7 +154,7 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 		apr.Contains(contOnErrParam),
 		schemaFile,
 		mappingFile,
-		strings.ToLower(primaryKey),
+		primaryKey,
 		fileLoc,
 		tableLoc,
 	}

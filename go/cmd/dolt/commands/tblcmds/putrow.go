@@ -65,7 +65,7 @@ func parseKVPs(args []string) ([]string, map[string]string, errhand.VerboseError
 		colonIndex := strings.IndexByte(arg, ':')
 
 		if colonIndex != -1 {
-			key := strings.ToLower(strings.TrimSpace(arg[:colonIndex]))
+			key := strings.TrimSpace(arg[:colonIndex])
 			value := arg[colonIndex+1:]
 
 			if key != "" {

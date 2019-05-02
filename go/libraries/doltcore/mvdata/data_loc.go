@@ -59,6 +59,7 @@ func DFFromString(dfStr string) DataFormat {
 	switch strings.ToLower(dfStr) {
 	case "csv", ".csv":
 		return CsvFile
+
 	case "psv", ".psv":
 		return PsvFile
 

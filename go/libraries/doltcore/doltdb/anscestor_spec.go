@@ -86,7 +86,7 @@ func NewAncestorSpec(s string) (*AncestorSpec, error) {
 // SplitAncestorSpec takes a string that is a commit spec suffixed with an ancestor spec, and splits them apart.
 // If there is no ancestor spec then only the commit spec will be returned and the ancestorSpec will have no empty.
 func SplitAncestorSpec(s string) (string, *AncestorSpec, error) {
-	cleanStr := strings.ToLower(strings.TrimSpace(s))
+	cleanStr := strings.TrimSpace(s)
 
 	cIdx := strings.IndexByte(cleanStr, '^')
 	tIdx := strings.IndexByte(cleanStr, '~')
