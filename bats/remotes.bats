@@ -88,14 +88,15 @@ teardown() {
     cd "dolt-repo-clones"
     run dolt clone localhost:50051/test-org/test-repo --insecure
     [ "$status" -eq 0 ]
-    # [ "$output" = "cloning localhost:50051/test-org/test-repo" ]
+    # Change this back to not a regex after we remove the extra refs output
+    [[ "$output" =~ "cloning localhost:50051/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
 }
 
-@test "dolt fetch" {
+@test "dolt fetch without remotes syntax. dolt fetch origin/master." {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
     dolt push test-remote master
     run dolt fetch test-remote master
@@ -128,6 +129,29 @@ teardown() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
+}
+
+@test "dolt fetch and merge with remotes/origin/master syntax" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    dolt clone localhost:50051/test-org/test-repo --insecure
+    cd ..
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones/test-repo"
+    skip "This remotes/origin/master syntax no longer works but works on git"
+    run dolt merge remotes/origin/master
+    [ "$status" -eq 0 ]
+    # This needs to say up-to-date like the skipped test above
+    # [[ "$output" =~ "up to date" ]]
+    dolt fetch origin master
+    [ "$status" -eq 0 ]
+    run dolt merge remotes/origin/master
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Fast-forward" ]]
 }
 
 @test "try to push a remote that is behind tip" {
