@@ -10,9 +10,13 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 )
 
 var catShortDesc = "print conflicts"
@@ -88,11 +92,13 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 
 			defer cnfRd.Close()
 
-			cnfWr := merge.NewConflictSink(cli.CliOut, cnfRd.GetSchema(), " | ")
+			cnfWr := merge.NewConflictSink(iohelp.NopWrCloser(cli.CliOut), cnfRd.GetSchema(), " | ")
 			defer cnfWr.Close()
 
+			nullPrinter := nullprinter.NewNullPrinter(cnfRd.GetSchema())
 			fwtTr := fwt.NewAutoSizingFWTTransformer(cnfRd.GetSchema(), fwt.HashFillWhenTooLong, 1000)
 			transforms := pipeline.NewTransformCollection(
+				pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
 				pipeline.NamedTransform{Name: "fwt", Func: fwtTr.TransformToFWT},
 			)
 
@@ -102,6 +108,8 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 			p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, func(failure *pipeline.TransformRowFailure) (quit bool) {
 				panic("")
 			})
+
+			p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(cnfRd.GetSchema(), schema.ExtractAllColNames(cnfRd.GetSchema())))
 
 			p.Start()
 			p.Wait()

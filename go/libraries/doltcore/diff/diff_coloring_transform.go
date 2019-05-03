@@ -6,9 +6,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
 
-var greenTextProp = map[string]interface{}{ColorRowProp: color.GreenString}
-var redTextProp = map[string]interface{}{ColorRowProp: color.RedString}
-var yellowTextProp = map[string]interface{}{ColorRowProp: color.YellowString}
+var greenTextProp = map[string]interface{}{colorRowProp: color.GreenString}
+var redTextProp = map[string]interface{}{colorRowProp: color.RedString}
+var yellowTextProp = map[string]interface{}{colorRowProp: color.YellowString}
 
 func ColoringTransform(r row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	var updatedProps map[string]interface{}

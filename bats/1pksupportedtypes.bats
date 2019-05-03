@@ -20,7 +20,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 5 ]
 }
 
 @test "boolean 1,0,true,false inserts and examine table" {
@@ -29,24 +29,24 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt table select test boolean
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "boolean" ]
+    [[ "${lines[1]}" =~ "boolean" ]] || false
     # Can't get the [ "${lines[1]}" = "true" ] to return true. Going regex instead
-    [[ "${lines[1]}" =~ "true" ]] || false
+    [[ "${lines[3]}" =~ "true" ]] || false
     run dolt table put-row test pk:0 int:1 string:foo boolean:0 float:1.11111111111111 uint:346 uuid:123e4567-e89b-12d3-a456-426655440000
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully put row." ]
     run dolt table select test boolean
-    [[ "${lines[1]}" =~ "false" ]] || false
+    [[ "${lines[3]}" =~ "false" ]] || false
     run dolt table put-row test pk:0 int:1 string:foo boolean:true float:1.11111111111111 uint:346 uuid:123e4567-e89b-12d3-a456-426655440000
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully put row." ]
     run dolt table select test boolean
-    [[ "${lines[1]}" =~ "true" ]] || false
+    [[ "${lines[3]}" =~ "true" ]] || false
     run dolt table put-row test pk:0 int:1 string:foo boolean:false float:1.11111111111111 uint:346 uuid:123e4567-e89b-12d3-a456-426655440000
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully put row." ]
     run dolt table select test boolean
-    [[ "${lines[1]}" =~ "false" ]] || false
+    [[ "${lines[3]}" =~ "false" ]] || false
 }
 
 @test "attempt to insert some schema violations" {

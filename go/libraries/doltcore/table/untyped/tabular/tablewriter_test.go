@@ -39,7 +39,6 @@ func TestWriter(t *testing.T) {
 
 	// Simulate fixed-width string values that the table writer needs to function.
 	// First value in each array is the column name
-	// Names has one more values than the other columns.
 	names := []string {
 		"name          ",
 		"Michael Scott ",
@@ -52,14 +51,14 @@ func TestWriter(t *testing.T) {
 		"43    ",
 		"25    ",
 		"29    ",
-//      "<NULL>",
+        "<NULL>",
 	}
 	titles := []string {
 		"title                            ",
 		"Regional Manager                 ",
 		"Secretary                        ",
 		"Assistant to the Regional Manager",
-//		"<NULL>",
+		"<NULL>                           ",
 	}
 
 	rows := make([]row.Row, len(ages) + 1)
