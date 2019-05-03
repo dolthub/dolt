@@ -318,7 +318,6 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	transforms := pipeline.NewTransformCollection(
 		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
 		pipeline.NamedTransform{"fwt", fwtTr.TransformToFWT},
-		pipeline.NewNamedTransform("color", diff.ColoringTransform),
 	)
 
 	sink := diff.NewColorDiffWriter(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch)

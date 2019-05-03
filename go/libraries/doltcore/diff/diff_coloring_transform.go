@@ -10,6 +10,7 @@ var greenTextProp = map[string]interface{}{colorRowProp: color.GreenString}
 var redTextProp = map[string]interface{}{colorRowProp: color.RedString}
 var yellowTextProp = map[string]interface{}{colorRowProp: color.YellowString}
 
+// Unused, color logic moved to ColorDiffSink. Still handy.
 func ColoringTransform(r row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	var updatedProps map[string]interface{}
 	diffType, ok := props.Get(DiffTypeProp)

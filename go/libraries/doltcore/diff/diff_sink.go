@@ -13,10 +13,11 @@ import (
 	"io"
 )
 
-const colorRowProp = "color"
-
-const diffColTag = schema.ReservedTagMin
-
+const (
+	colorRowProp = "color"
+ 	diffColTag = schema.ReservedTagMin
+ 	diffColName = "__diff__"
+)
 
 type ColorFunc func(string, ...interface{}) string
 
@@ -26,7 +27,7 @@ type ColorDiffSink struct {
 }
 
 func NewColorDiffWriter(wr io.WriteCloser, sch schema.Schema) *ColorDiffSink {
-	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(diffColTag, "diff")
+	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(diffColTag, diffColName)
 	outSch, err := untyped.UntypedSchemaUnion(additionalCols, sch)
 	if err != nil {
 		panic(err)
@@ -42,10 +43,10 @@ func (cds *ColorDiffSink) GetSchema() schema.Schema {
 }
 
 var colDiffColors = map[DiffChType]ColorFunc{
-	DiffAdded:       color.GreenString,
-	DiffModifiedOld: color.YellowString,
-	DiffModifiedNew: color.YellowString,
-	DiffRemoved:     color.RedString,
+	DiffAdded:       color.New(color.Bold, color.FgGreen).Sprintf,
+	DiffModifiedOld: color.RedString,
+	DiffModifiedNew: color.GreenString,
+	DiffRemoved:     color.New(color.Bold, color.FgRed).Sprintf,
 }
 
 func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
@@ -68,38 +69,47 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 	})
 
 	taggedVals[diffColTag] = types.String("   ")
-	colorColumns := false
+	colorColumns := true
 	if prop, ok := props.Get(DiffTypeProp); ok {
 		if dt, convertedOK := prop.(DiffChType); convertedOK {
 			switch dt {
 			case DiffAdded:
 				taggedVals[diffColTag] = types.String(" + ")
+				colorColumns = false
 			case DiffRemoved:
 				taggedVals[diffColTag] = types.String(" - ")
+				colorColumns = false
 			case DiffModifiedOld:
 				taggedVals[diffColTag] = types.String(" < ")
 			case DiffModifiedNew:
 				taggedVals[diffColTag] = types.String(" > ")
-				colorColumns = true
 			}
+			// Treat the diff indicator string as a diff of the same type
+			colDiffs[diffColName] = dt
 		}
 	}
 
-	// Color all the columns as appropriate
+	// Color the columns as appropriate. Some rows will be all colored.
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		var colorFunc ColorFunc
 		if colorColumns {
 			if dt, ok := colDiffs[col.Name]; ok {
-				if colorFunc, ok := colDiffColors[dt]; ok {
-					taggedVals[tag] = types.String(colorFunc(string(taggedVals[tag].(types.String))))
+				if fn, ok := colDiffColors[dt]; ok {
+					colorFunc = fn
 				}
 			}
 		} else {
-			if prop, ok := props.Get(colorRowProp); ok {
-				colorFunc, convertedOK := prop.(func(string, ...interface{}) string)
-				if convertedOK {
-					taggedVals[tag] = types.String(colorFunc(string(taggedVals[tag].(types.String))))
+			if prop, ok := props.Get(DiffTypeProp); ok {
+				if dt, convertedOK := prop.(DiffChType); convertedOK {
+					if fn, ok := colDiffColors[dt]; ok {
+						colorFunc = fn
+					}
 				}
 			}
+		}
+
+		if colorFunc != nil {
+			taggedVals[tag] = types.String(colorFunc(string(taggedVals[tag].(types.String))))
 		}
 
 		return false
