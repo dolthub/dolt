@@ -23,7 +23,7 @@ teardown() {
     [[ "${lines[1]}" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ pk[[:space:]]+\|[[:space:]]c1[[:space:]]\|[[:space:]]c2[[:space:]]\|[[:space:]]c3[[:space:]]\|[[:space:]]c4[[:space:]]\|[[:space:]]c5 ]] || false
+    [[ "$output" =~ pk[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
@@ -85,7 +85,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+|[[:space:]]+1 ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
 }
 
 @test "dolt sql all manner of inserts" {
@@ -164,18 +164,18 @@ teardown() {
     [ "$output" = "Rows inserted: 2" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*10 ]] || false
-    [[ "$output" =~ \|[[:space:]]*106 ]] || false
+    [[ "$output" =~ \|[[:space:]]+c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
+    [[ "$output" =~ \|[[:space:]]+106 ]] || false
     run dolt sql -q "select * from test where pk=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*10 ]] || false
+    [[ "$output" =~ \|[[:space:]]+c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
     run dolt sql -q "select c5 from test where pk=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*10 ]] || false
+    [[ "$output" =~ \|[[:space:]]+c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
     run dolt sql -q "select * from test limit 1"
     [ "$status" -eq 0 ]
     # All line number assertions are offset by 3 to allow for table separator lines
@@ -238,7 +238,8 @@ teardown() {
     [[ "$output" =~ "11" ]] || false
     [[ ! "$output" =~ "12" ]] || false
     run dolt sql -q "update test set c2=50,c3=50,c4=50,c5=50 where c1=50"
-    [ "$status" -eq 0 ]
+
+[ "$status" -eq 0 ]
     [ "$output" = "Rows updated: 0" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
@@ -385,8 +386,8 @@ teardown() {
     [[ "$output" =~ "!" ]]
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+|[[:space:]]+ours[[:space:]] ]] || false
-    [[ "$output" =~ \+[[:space:]]+|[[:space:]]+theirs[[:space:]] ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
     run dolt conflicts resolve --ours test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
