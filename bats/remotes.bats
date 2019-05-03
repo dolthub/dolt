@@ -96,7 +96,18 @@ teardown() {
     [[ "$output" =~ "test commit" ]] || false
 }
 
-@test "dolt fetch without remotes syntax. dolt fetch origin/master." {
+@test "clone a non-existant remote" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    cd "dolt-repo-clones"
+    run dolt clone foo/bar
+    [ "$status" -eq 1 ]
+    skip "Cloning a non-existant repository fails weirdly and leaves trash"
+    [ "$output" = "fatal: repository 'foo/bar' does not exist" ]
+    [[ ! "$output" =~ "permission denied" ]] || false
+    [ ! -d bar ]
+}
+
+@test "dolt fetch with origin/master syntax." {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
     dolt push test-remote master
     run dolt fetch test-remote master

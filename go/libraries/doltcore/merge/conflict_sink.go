@@ -1,7 +1,7 @@
 package merge
 
 import (
-	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
@@ -11,9 +11,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"io"
-	"strings"
 )
 
 var WriteBufSize = 256 * 1024
@@ -21,6 +20,7 @@ var mergeVersionToLabel = map[MergeVersion]string{
 	OurVersion:   "ours  ",
 	TheirVersion: "theirs",
 	BaseVersion:  "base  ",
+	Blank:        "      ",
 }
 var diffTypeToOpLabel = map[types.DiffChangeType]string{
 	types.DiffChangeAdded:    " + ",
@@ -37,27 +37,31 @@ var diffTypeToColor = map[types.DiffChangeType]diff.ColorFunc{
 }
 
 type ConflictSink struct {
-	bWr        *bufio.Writer
-	sch        schema.Schema
-	colSep     string
-	inFieldCnt int
+	sch schema.Schema
+	ttw *tabular.TextTableWriter
 }
 
-func NewConflictSink(wr io.Writer, sch schema.Schema, colSep string) *ConflictSink {
-	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(schema.ReservedTagMin, "op", "branch")
+const (
+	opColTag = schema.ReservedTagMin
+	sourceColTag = schema.ReservedTagMin + 1
+)
+
+func NewConflictSink(wr io.WriteCloser, sch schema.Schema, colSep string) *ConflictSink {
+	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(opColTag, "op", "source")
 	outSch, err := untyped.UntypedSchemaUnion(additionalCols, sch)
 
 	if err != nil {
 		panic(err)
 	}
 
-	bWr := bufio.NewWriterSize(wr, WriteBufSize)
-	return &ConflictSink{bWr, outSch, colSep, sch.GetAllCols().Size()}
+	ttw := tabular.NewTextTableWriter(wr, outSch)
+
+	return &ConflictSink{outSch, ttw}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
-func (cWr *ConflictSink) GetSchema() schema.Schema {
-	return cWr.sch
+func (cs *ConflictSink) GetSchema() schema.Schema {
+	return cs.sch
 }
 
 var noColorFunc = func(s string, i ...interface{}) string {
@@ -68,48 +72,53 @@ var noColorFunc = func(s string, i ...interface{}) string {
 	}
 }
 
-// WriteRow will write a row to a table
-func (cWr *ConflictSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
-	numFields := cWr.sch.GetAllCols().Size()
-	colStrs := make([]string, numFields)
+func (cs *ConflictSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
+	taggedVals := make(row.TaggedValues)
 
 	colorFunc := noColorFunc
-	mergeVersion, _ := props.Get(mergeVersionProp)
-	colStrs[0] = "   "
-	colStrs[1] = string(mergeVersionToLabel[mergeVersion.(MergeVersion)])
+	mergeVersion, ok := props.Get(mergeVersionProp)
+
+	// The column header row won't have properties to read
+	if !ok {
+		mergeVersion = Blank
+	}
+	taggedVals[opColTag] = types.String("   ")
+	taggedVals[sourceColTag] = types.String(mergeVersionToLabel[mergeVersion.(MergeVersion)])
 
 	if mergeVersion != BaseVersion {
-		mergeRowOp, _ := props.Get(mergeRowOperation)
-		dt := mergeRowOp.(types.DiffChangeType)
-		colStrs[0] = diffTypeToOpLabel[dt]
-		colorFunc = diffTypeToColor[dt]
+		mergeRowOp, ok := props.Get(mergeRowOperation)
+		// The column header row won't have properties to read
+		if ok {
+			dt := mergeRowOp.(types.DiffChangeType)
+			taggedVals[opColTag] = types.String(diffTypeToOpLabel[dt])
+			colorFunc = diffTypeToColor[dt]
+		} else {
+			taggedVals[opColTag] = types.String("   ")
+		}
 	}
 
-	i := 0
-	cWr.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	cs.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if val, ok := r.GetColVal(tag); ok {
-			str := string(val.(types.String))
-			colStrs[i] = str
+			taggedVals[tag] = types.String(colorFunc(string(val.(types.String))))
 		}
-		i++
 		return false
 	})
 
-	lineStr := strings.Join(colStrs, cWr.colSep) + "\n"
-	coloredLine := colorFunc(lineStr)
-	err := iohelp.WriteAll(cWr.bWr, []byte(coloredLine))
-
-	return err
+	r = row.New(cs.sch, taggedVals)
+	return cs.ttw.WriteRow(context.TODO(), r)
 }
 
 // Close should release resources being held
-func (cWr *ConflictSink) Close() error {
-	if cWr.bWr != nil {
-		cWr.bWr.Flush()
-		cWr.bWr = nil
+func (cs *ConflictSink) Close() error {
+	if cs.ttw != nil {
+		if err := cs.ttw.Close(context.TODO()); err != nil {
+			return err
+		}
 
+		cs.ttw = nil
 		return nil
 	} else {
 		return errors.New("already closed")
 	}
 }
+

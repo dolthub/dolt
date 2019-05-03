@@ -3,7 +3,6 @@ package fwt
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
 
@@ -66,12 +65,6 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 				width, ok := asTr.widths[tag]
 				if ok && strLen > width {
 					asTr.widths[tag] = strLen
-				}
-			} else {
-				// NULL string
-				width, ok := asTr.widths[tag]
-				if ok && len(sql.PRINTED_NULL) > width {
-					asTr.widths[tag] = len(sql.PRINTED_NULL)
 				}
 			}
 			return false

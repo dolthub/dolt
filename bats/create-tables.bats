@@ -70,7 +70,7 @@ teardown() {
     run dolt table select employees
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 7 ]
 }
 
 @test "create a table with json import. no schema." {
@@ -108,7 +108,7 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "try to create a table with a bad csv" {
@@ -135,7 +135,7 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "create two table with the same name" {
@@ -163,7 +163,7 @@ teardown() {
     run dolt table select employees
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
-    [ "${#lines[@]}" -eq 4 ]
+    [ "${#lines[@]}" -eq 7 ]
     run dolt table import -c --pk=number basketball $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -174,7 +174,7 @@ teardown() {
     run dolt table select basketball
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
-    [ "${#lines[@]}" -eq 5 ]
+    [ "${#lines[@]}" -eq 8 ]
 }
 
 @test "specify incorrect sheet name on excel import" {

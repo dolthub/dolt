@@ -20,7 +20,7 @@ teardown() {
     [[ "${lines[1]}" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "$output" = "pk1|pk2|c1|c2|c3|c4|c5" ]
+    [[ "$output" =~ pk1[[:space:]]+\|[[:space:]]+pk2[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
@@ -39,7 +39,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+0 ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+0 ]] || false
 }
 
 @test "add a row where one of the primary keys is different, not both" {
@@ -49,9 +49,9 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
-    [[ "$output" =~ "|5" ]] || false
-    [[ "$output" =~ "|10" ]] || false
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ \|[[:space:]]+5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
 }
 
 @test "overwrite a row with two primary keys" {
@@ -61,9 +61,9 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
-    [[ ! "$output" =~ "|5" ]] || false
-    [[ "$output" =~ "|10" ]] || false
+    [ "${#lines[@]}" -eq 5 ]
+    [[ ! "$output" =~ \|[[:space:]]+5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
 }
 
 @test "interact with a multiple primary key table with sql" {
