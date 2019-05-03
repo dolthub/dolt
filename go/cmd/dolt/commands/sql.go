@@ -14,6 +14,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
@@ -88,18 +89,23 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 		return 1
 	}
 
-	// Now that we have the output schema, we do two additional steps in the pipeline:
+	// Now that we have the output schema, we do three additional steps in the pipeline:
 	// 1) Coerce all the values in each row into strings
-	// 2) Run them through a fixed width transformer to make them print pretty
+	// 2) Convert null values to printed values
+	// 3) Run them through a fixed width transformer to make them print pretty
 	untypedSch, untypingTransform := NewUntypingTransformer(statement.ResultSetSchema.Schema())
 	p.AddStage(untypingTransform)
+
+	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
+	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
+
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
 	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
 
-	// Redirect outtput to the CLI
+	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
 
-	wr := tabular.NewTextTableWriter(cliWr, statement.ResultSetSchema.Schema())
+	wr := tabular.NewTextTableWriter(cliWr, untypedSch)
 	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
