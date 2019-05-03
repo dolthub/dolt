@@ -23,7 +23,7 @@ teardown() {
     [[ "${lines[1]}" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "$output" = "pk|c1|c2|c3|c4|c5" ]
+    [[ "$output" =~ pk[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
@@ -85,7 +85,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
 }
 
 @test "dolt sql all manner of inserts" {
@@ -164,18 +164,18 @@ teardown() {
     [ "$output" = "Rows inserted: 2" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*10 ]] || false
-    [[ "$output" =~ \|[[:space:]]*106 ]] || false
+    [[ "$output" =~ \|[[:space:]]+c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
+    [[ "$output" =~ \|[[:space:]]+106 ]] || false
     run dolt sql -q "select * from test where pk=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*10 ]] || false
+    [[ "$output" =~ \|[[:space:]]+c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
     run dolt sql -q "select c5 from test where pk=1"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]*c5 ]] || false
-    [[ "$output" =~ \|[[:space:]]*10 ]] || false
+    [[ "$output" =~ \|[[:space:]]+c5 ]] || false
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
     run dolt sql -q "select * from test limit 1"
     [ "$status" -eq 0 ]
     # All line number assertions are offset by 3 to allow for table separator lines
@@ -238,7 +238,8 @@ teardown() {
     [[ "$output" =~ "11" ]] || false
     [[ ! "$output" =~ "12" ]] || false
     run dolt sql -q "update test set c2=50,c3=50,c4=50,c5=50 where c1=50"
-    [ "$status" -eq 0 ]
+
+[ "$status" -eq 0 ]
     [ "$output" = "Rows updated: 0" ]
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
@@ -385,8 +386,8 @@ teardown() {
     [[ "$output" =~ "!" ]]
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]]+\| ]] || false
-    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]]\| ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
+    [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
     run dolt conflicts resolve --ours test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -394,8 +395,8 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Cnf" ]] || false
     [[ ! "$output" =~ "!" ]] || false
-    [[ "$output" =~ "|5" ]] || false
-    [[ ! "$output" =~ "|6" ]] || false
+    [[ "$output" =~ \|[[:space:]]+5 ]] || false
+    [[ ! "$output" =~ \|[[:space:]]+6 ]] || false
     dolt add test
     dolt commit -m "merged and resolved conflict"
     run dolt log
@@ -442,7 +443,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
-    [[ "$output" =~ "|5" ]] || false
+    [[ "$output" =~ \|[[:space:]]+5 ]] || false
     [[ ! "$output" =~ "Cnf" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts fixed but you are still merging." ]] || false
@@ -471,7 +472,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt table select test
-    [[ "$output" =~ "|6" ]] || false
+    [[ "$output" =~ \|[[:space:]]+6 ]] || false
     [[ ! "$output" =~ "|5" ]] || false
 }
 
@@ -493,7 +494,8 @@ teardown() {
     [ "$output" = "" ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    # Number of lines offset by 3 for table printing style
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "import data from a psv file after table created" {
@@ -502,7 +504,8 @@ teardown() {
     [ "$output" = "" ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    # Number of lines offset by 3 for table printing style
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "overwrite a row. make sure it updates not inserts" {
@@ -512,7 +515,8 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    # Number of lines offset by 3 for table printing style
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "add row on two different branches. no merge conflict" {
@@ -533,7 +537,8 @@ teardown() {
     [[ ! "$output" =~ "CONFLICT" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    # Number of lines offset by 3 for table printing style
+    [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "add column, no merge conflict" {
@@ -674,20 +679,20 @@ teardown() {
     dolt table put-row test pk:2 c1:1 c2:2 c3:3 c4:4 c5:5
     run dolt table select --where pk=1 test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "|10" ]] || false
-    [[ ! "$output" =~ "|5" ]] || false
-    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ \|[[:space:]]+10 ]] || false
+    [[ ! "$output" =~ \|[[:space:]]+5 ]] || false
+    [ "${#lines[@]}" -eq 5 ]
     run dolt table select --where c1=1 test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "|5" ]] || false
+    [[ "$output" =~ \|[[:space:]]+5 ]] || false
     [[ ! "$output" =~ "|10" ]] || false
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 6 ]
     run dolt table select test pk c1 c2 c3
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "c4" ]] || false
     run dolt table select --where c1=1 --limit=1 test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 5 ]
 }
 
 @test "dolt table export" {
@@ -802,8 +807,8 @@ teardown() {
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "c0 int" ]]|| false
-    [[ "$output" =~ "| c0" ]] || false
-    [[ "$output" =~ "+ 0" ]] || false
+    [[ "$output" =~ \|[[:space:]]+c0 ]] || false
+    [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
     dolt schema --drop-column test c0
 }
 

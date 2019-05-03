@@ -17,7 +17,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
 	"reflect"
 	"sort"
@@ -312,11 +314,14 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	defer src.Close()
 
 	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
+	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
 	transforms := pipeline.NewTransformCollection(
+		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
 		pipeline.NamedTransform{"fwt", fwtTr.TransformToFWT},
-		pipeline.NewNamedTransform("color", diff.ColoringTransform))
+		pipeline.NewNamedTransform("color", diff.ColoringTransform),
+	)
 
-	sink := diff.NewColorDiffWriter(cli.CliOut, untypedUnionSch, " | ")
+	sink := diff.NewColorDiffWriter(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch)
 	defer sink.Close()
 
 	var verr errhand.VerboseError
@@ -358,7 +363,10 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	}
 
 	p.Start()
-	p.Wait()
+	if err = p.Wait(); err != nil {
+		return errhand.BuildDError("Error diffing: %v", err.Error()).Build()
+	}
+
 
 	return verr
 }

@@ -23,7 +23,7 @@ func init() {
 var InvalidTag uint64 = math.MaxUint64
 
 // ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
-var ReservedTagMin uint64 = 1 << 63
+const ReservedTagMin uint64 = 1 << 63
 
 // InvalidCol is a Column instance that is returned when there is nothing to return and can be tested against.
 var InvalidCol = NewColumn("invalid", InvalidTag, types.NullKind, false)
