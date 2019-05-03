@@ -95,7 +95,7 @@ teardown() {
     [[ "$output" =~ "test commit" ]] || false
 }
 
-@test "clone a non-eistant remote" {
+@test "clone a non-existant remote" {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
     cd "dolt-repo-clones"
     run dolt clone foo/bar
