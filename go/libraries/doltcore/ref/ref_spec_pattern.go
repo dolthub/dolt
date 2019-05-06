@@ -2,34 +2,32 @@ package ref
 
 import "strings"
 
-type PatternType int
-
-type Pattern interface {
-	Matches(string) (string, bool)
+type pattern interface {
+	matches(string) (string, bool)
 }
 
-type StringPattern string
+type strPattern string
 
-func (sp StringPattern) Matches(s string) (string, bool) {
+func (sp strPattern) matches(s string) (string, bool) {
 	return "", s == string(sp)
 }
 
-type WildcardPattern struct {
+type wcPattern struct {
 	prefixStr string
 	suffixStr string
 }
 
-func NewWildcardPattern(s string) WildcardPattern {
+func newWildcardPattern(s string) wcPattern {
 	tokens := strings.Split(s, "*")
 
 	if len(tokens) != 2 {
 		panic("invalid pattern")
 	}
 
-	return WildcardPattern{tokens[0], tokens[1]}
+	return wcPattern{tokens[0], tokens[1]}
 }
 
-func (wp WildcardPattern) Matches(s string) (string, bool) {
+func (wp wcPattern) matches(s string) (string, bool) {
 	if strings.HasPrefix(s, wp.prefixStr) {
 		s = s[len(wp.prefixStr):]
 		if strings.HasSuffix(s, wp.suffixStr) {
