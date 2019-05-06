@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -504,8 +505,7 @@ func TestExecuteSelect(t *testing.T) {
 			s := sqlStatement.(*sqlparser.Select)
 
 			if tt.expectedRows != nil && tt.expectedSchema == nil {
-				assert.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
-				t.FailNow()
+				require.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
 			}
 
 			rows, sch, err := ExecuteSelect(context.Background(), root, s)
@@ -515,6 +515,7 @@ func TestExecuteSelect(t *testing.T) {
 			} else {
 				assert.False(t, len(tt.expectedErr) > 0, "unexpected error")
 			}
+
 			assert.Equal(t, tt.expectedRows, rows)
 			assert.Equal(t, tt.expectedSchema, sch)
 		})

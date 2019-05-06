@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/xwb1989/sqlparser"
@@ -19,7 +20,7 @@ func TestExecuteUpdate(t *testing.T) {
 		query          string
 		updatedRows    []row.Row
 		expectedResult UpdateResult // root is not compared, but it's used for other assertions
-		expectedErr    bool
+		expectedErr    string
 	}{
 		{
 			name:           "update one row, one col, primary key where clause",
@@ -112,6 +113,19 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
 		{
+			name: "update increment age",
+			query: `update people set age = age + 1`,
+			updatedRows:   []row.Row{
+				mutateRow(homer, ageTag, 41),
+				mutateRow(marge, ageTag, 39),
+				mutateRow(bart, ageTag, 11),
+				mutateRow(lisa, ageTag, 9),
+				mutateRow(moe, ageTag, 49),
+				mutateRow(barney, ageTag, 41),
+			},
+			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
+		},
+		{
 			name: "update multiple rows, =",
 			query: `update people set first = "Homer"
 				where last = "Simpson"`,
@@ -176,102 +190,102 @@ func TestExecuteUpdate(t *testing.T) {
 		{
 			name: "existing row key collision",
 			query: `update people set id = 0 where first = "Marge"`,
-			expectedErr: true,
+			expectedErr: "duplicate primary key",
 		},
 		{
 			name: "duplicate primary keys in updated rows",
 			query: `update people set id = 100 where last = "Simpson"`,
-			expectedErr: true,
+			expectedErr: "duplicate primary key",
 		},
 		{
 			name: "duplicate column in update list",
 			query: `update people set first = "Marge", first = "Homer", last = "Simpson"`,
-			expectedErr: true,
+			expectedErr: "Repeated column 'first'",
 		},
 		{
 			name: "null constraint failure",
 			query: `update people set first = null where id = 0`,
-			expectedErr: true,
+			expectedErr: "row constraint failed",
 		},
 		{
 			name: "type mismatch int -> string",
 			query: `update people set first = 1 where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch int -> bool",
 			query: `update people set is_married = 0 where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch int -> uuid",
 			query: `update people set uuid = 0 where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> int",
 			query: `update people set age = "pretty old" where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> float",
 			query: `update people set rating = "great" where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> uint",
 			query: `update people set num_episodes = "all of them" where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> uuid",
 			query: `update people set uuid = "not a uuid string" where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch float -> string",
 			query: `update people set last = 1.0 where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch float -> bool",
 			query: `update people set is_married = 1.0 where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch float -> int",
 			query: `update people set num_episodes = 1.5 where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> int",
 			query: `update people set age = true where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> float",
 			query: `update people set rating = false where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> string",
 			query: `update people set last = true where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> uuid",
 			query: `update people set uuid = false where id = 0`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch in where clause",
 			query: `update people set first = "Homer" where id = "id"`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch in where clause",
 			query: `update people set first = "Homer" where id = "0"`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 	}
 
@@ -284,18 +298,19 @@ func TestExecuteUpdate(t *testing.T) {
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Update)
 
-			if tt.expectedErr {
-				assert.Equal(t, UpdateResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
-				assert.Nil(t, tt.updatedRows, "incorrect test setup: cannot assert both an error and updated values")
-				return
+			if len(tt.expectedErr) > 0 {
+				require.Equal(t, UpdateResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
+				require.Nil(t, tt.updatedRows, "incorrect test setup: cannot assert both an error and updated values")
 			}
 
 			result, err := ExecuteUpdate(context.Background(), dEnv.DoltDB, root, s, tt.query)
-			if err != nil {
-				assert.True(t, tt.expectedErr, "unexpected error: " + err.Error())
-				return
+
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
 			} else {
-				assert.False(t, tt.expectedErr, "unexpected error")
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
 			}
 
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)
