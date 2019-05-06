@@ -1,8 +1,10 @@
 package sql
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -301,7 +303,7 @@ type valGetter struct {
 	NomsKind  types.NomsKind
 	// The kind of the value that this getter's result will be compared against, filled in elsewhere
 	CmpKind   types.NomsKind
-	// Init() performs error checking and does any labor-saving pre-calculation that doens't need to be done for every
+	// Init() performs error checking and does any labor-saving pre-calculation that doesn't need to be done for every
 	// row in the result set
 	Init      func() error
 	// Get() returns the value for this getter for the row given
@@ -368,6 +370,37 @@ func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schem
 		}
 		getter.Get = func(r row.Row) types.Value {
 			return val
+		}
+
+		return &getter, nil
+	case sqlparser.ValTuple:
+		getter := valGetter{Kind: SQL_VAL}
+
+		getter.Init = func() error {
+			vals := make([]types.Value, len(e))
+			for i, item := range e {
+				switch v := item.(type) {
+				case *sqlparser.SQLVal:
+					if val, err := extractNomsValueFromSQLVal(v, getter.CmpKind); err != nil {
+						return err
+					} else {
+						vals[i] = val
+					}
+				default:
+					return errFmt("Unsupported list literal: %v", nodeToString(v))
+				}
+			}
+
+			// TODO: surely there is a better way to do this without resorting to interface{}
+			ts := &chunks.TestStorage{}
+			vs := types.NewValueStore(ts.NewView())
+			set := types.NewSet(context.Background(), vs, vals...)
+
+			getter.CachedVal = set
+			return nil
+		}
+		getter.Get = func(r row.Row) types.Value {
+			return getter.CachedVal
 		}
 
 		return &getter, nil
@@ -474,7 +507,7 @@ func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string
 		}
 		cols = append(cols, leftCols...)
 		cols = append(cols, rightCols...)
-	case *sqlparser.SQLVal, sqlparser.BoolVal:
+	case *sqlparser.SQLVal, sqlparser.BoolVal, sqlparser.ValTuple:
 		// No columns, just a SQL literal
 	case *sqlparser.NotExpr:
 		return nil, errFmt("Not expressions not supported: %v", nodeToString(expr))
@@ -518,10 +551,8 @@ func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string
 		return nil, errFmt("Match expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.GroupConcatExpr:
 		return nil, errFmt("Group concat expressions not supported: %v", nodeToString(expr))
-	case *sqlparser.Default:
-		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
 	default:
-		return nil, errFmt("Unrecognized expression: %v", nodeToString(expr))
+		return nil, errFmt("Unrecognized expression resolving columns: %v", nodeToString(expr))
 	}
 
 	return cols, nil
@@ -671,12 +702,28 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 				}
 				return !leftVal.Equals(rightVal)
 			}
+		case sqlparser.InStr:
+			filter = func(r row.Row) bool {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+					return false
+				}
+				set := rightVal.(types.Set)
+				return set.Has(context.Background(), leftVal)
+			}
+		case sqlparser.NotInStr:
+			filter = func(r row.Row) bool {
+				leftVal := leftGetter.Get(r)
+				rightVal := rightGetter.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+					return false
+				}
+				set := rightVal.(types.Set)
+				return !set.Has(context.Background(), leftVal)
+			}
 		case sqlparser.NullSafeEqualStr:
 			return nil, errFmt("null safe equal operation not supported")
-		case sqlparser.InStr:
-			return nil, errFmt("in keyword not supported")
-		case sqlparser.NotInStr:
-			return nil, errFmt("in keyword not supported")
 		case sqlparser.LikeStr:
 			return nil, errFmt("like keyword not supported")
 		case sqlparser.NotLikeStr:

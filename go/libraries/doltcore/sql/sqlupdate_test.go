@@ -99,6 +99,19 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
 		{
+			name: "update set first = last",
+			query: `update people set first = last`,
+			updatedRows:   []row.Row{
+				mutateRow(homer, firstTag, "Simpson"),
+				mutateRow(marge, firstTag, "Simpson"),
+				mutateRow(bart, firstTag, "Simpson"),
+				mutateRow(lisa, firstTag, "Simpson"),
+				mutateRow(moe, firstTag, "Szyslak"),
+				mutateRow(barney, firstTag, "Gumble"),
+			},
+			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
+		},
+		{
 			name: "update multiple rows, =",
 			query: `update people set first = "Homer"
 				where last = "Simpson"`,
@@ -255,12 +268,11 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set first = "Homer" where id = "id"`,
 			expectedErr: true,
 		},
-		// This should fail but doesn't.
-		//{
-		//	name: "type mismatch in where clause",
-		//	query: `update people set first = "Homer" where id = "0"`,
-		//	expectedErr: true,
-		//},
+		{
+			name: "type mismatch in where clause",
+			query: `update people set first = "Homer" where id = "0"`,
+			expectedErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -272,14 +284,18 @@ func TestExecuteUpdate(t *testing.T) {
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Update)
 
-			result, err := ExecuteUpdate(context.Background(), dEnv.DoltDB, root, s, tt.query)
 			if tt.expectedErr {
-				assert.True(t, err != nil, "expected error")
 				assert.Equal(t, UpdateResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
 				assert.Nil(t, tt.updatedRows, "incorrect test setup: cannot assert both an error and updated values")
 				return
+			}
+
+			result, err := ExecuteUpdate(context.Background(), dEnv.DoltDB, root, s, tt.query)
+			if err != nil {
+				assert.True(t, tt.expectedErr, "unexpected error: " + err.Error())
+				return
 			} else {
-				assert.Nil(t, err, "unexpected error")
+				assert.False(t, tt.expectedErr, "unexpected error")
 			}
 
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)

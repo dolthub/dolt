@@ -93,12 +93,11 @@ func TestExecuteDelete(t *testing.T) {
 			query:       `delete from people where id = "id"`,
 			expectedErr: true,
 		},
-		//This should fail but doesn't.
-		//{
-		//	name: "type mismatch in where clause",
-		//	query: `delete from people where id = "0"`,
-		//	expectedErr: true,
-		//},
+		{
+			name: "type mismatch in where clause",
+			query: `delete from people where id = "0"`,
+			expectedErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
