@@ -246,7 +246,7 @@ teardown() {
     [[ ! "$output" =~ "50" ]] || false
     run dolt sql -q "update test set c12=11 where pk=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown column c12" ]] || false
+    [[ "$output" =~ "Unknown column 'c12'" ]] || false
     run dolt sql -q "update test set c1='foo' where pk=0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Type mismatch" ]] || false
