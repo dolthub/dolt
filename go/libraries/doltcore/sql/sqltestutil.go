@@ -2,6 +2,7 @@ package sql
 
 import (
 	"context"
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -258,6 +259,26 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 	}
 
 	return mutated
+}
+
+// Creates a new row for a result set specified by the given values
+func newResultSetRow(colVals ...types.Value) row.Row {
+
+	taggedVals := make(row.TaggedValues)
+	cols := make([]schema.Column, len(colVals))
+	for i := 0; i < len(colVals); i++ {
+		taggedVals[uint64(i)] = colVals[i]
+		nomsKind := colVals[i].Kind()
+		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	sch := schema.UnkeyedSchemaFromCols(collection)
+
+	return row.New(sch, taggedVals)
 }
 
 func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch schema.Schema, rs ...row.Row) {
