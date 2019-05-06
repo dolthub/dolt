@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
@@ -159,11 +158,11 @@ func newPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, 
 
 // 6 characters
 var homer = newPeopleRow(homerId, "Homer", "Simpson", true, 40, 8.5)
-var marge = newPeopleRow(margeId, "Marge", "Simpson", true, 38, 8)
-var bart = newPeopleRow(bartId, "Bart", "Simpson", false, 10, 9)
-var lisa = newPeopleRow(lisaId, "Lisa", "Simpson", false, 8, 10)
-var moe = newPeopleRow(moeId, "Moe", "Szyslak", false, 48, 6.5)
-var barney = newPeopleRow(barneyId, "Barney", "Gumble", false, 40, 4)
+var marge = newPeopleRowWithOptionalFields(margeId, "Marge", "Simpson", true, 38, 8, uuid.MustParse("00000000-0000-0000-0000-000000000001"), 111)
+var bart = newPeopleRowWithOptionalFields(bartId, "Bart", "Simpson", false, 10, 9, uuid.MustParse("00000000-0000-0000-0000-000000000002"), 222)
+var lisa = newPeopleRowWithOptionalFields(lisaId, "Lisa", "Simpson", false, 8, 10, uuid.MustParse("00000000-0000-0000-0000-000000000003"), 333)
+var moe = newPeopleRowWithOptionalFields(moeId, "Moe", "Szyslak", false, 48, 6.5, uuid.MustParse("00000000-0000-0000-0000-000000000004"), 444)
+var barney = newPeopleRowWithOptionalFields(barneyId, "Barney", "Gumble", false, 40, 4, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 555)
 var allPeopleRows = rs(homer, marge, bart, lisa, moe, barney)
 
 // Actually the first 4 episodes of the show
@@ -259,31 +258,6 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 	}
 
 	return mutated
-}
-
-// Converts the rows given from the source schema give to the destination schema given, using a simple tag mapping.
-func convertRows(t *testing.T, rows []row.Row, srcSchema, destSchema schema.Schema) []row.Row {
-	// Zero typing makes the nil slice and the empty slice appear equal to most functions, but they are semantically
-	// distinct.
-	if rows == nil {
-		return nil
-	}
-
-	result := make([]row.Row, 0, len(rows))
-	for _, r := range rows {
-		result = append(result, convertRow(t, r, srcSchema, destSchema))
-	}
-	return result
-}
-
-// Converts the row given from the source schema given to the destination schema given using a simple tag mapping.
-func convertRow(t *testing.T, r row.Row, sch, destSchema schema.Schema) row.Row {
-	fieldMapping, _ := rowconv.TagMapping(sch, destSchema)
-
-	rConv, _ := rowconv.NewRowConverter(fieldMapping)
-	untyped, err := rConv.Convert(r)
-	assert.Nil(t, err, "failed to convert row to new schema")
-	return untyped
 }
 
 func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch schema.Schema, rs ...row.Row) {
