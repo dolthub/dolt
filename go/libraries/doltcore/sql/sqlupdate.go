@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -54,89 +53,44 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	table, _ := root.GetTable(ctx, tableName)
 	tableSch := table.GetSchema(ctx)
 
-	// map of column tag to value
-	setVals := make(map[uint64]types.Value)
+	setVals := make(map[uint64]*valGetter)
+	schemas := map[string]schema.Schema{tableName: tableSch}
+	aliases := NewAliases()
+	rss := resultset.Identity(tableSch)
 
 	for _, update := range s.Exprs {
 		colName := update.Name.Name.String()
 		column, ok := tableSch.GetAllCols().GetByName(colName)
 		if !ok {
-			return errUpdate("Unknown column %v", colName)
+			return errUpdate("Unknown column '%v'", colName)
 		}
 		if _, ok = setVals[column.Tag]; ok {
-			return errUpdate("Repeated column %v", colName)
+			return errUpdate("Repeated column '%v'", colName)
 		}
 
-		switch val := update.Expr.(type) {
-		case *sqlparser.SQLVal:
-			nomsVal, err := extractNomsValueFromSQLVal(val, column.Kind)
-			if err != nil {
-				return nil, err
-			}
-			setVals[column.Tag] = nomsVal
-		case sqlparser.BoolVal:
-			if column.Kind != types.BoolKind {
-				return errUpdate("Type mismatch: boolean value but non-boolean column: %v", nodeToString(val))
-			}
-			setVals[column.Tag] = types.Bool(val)
-		case *sqlparser.NullVal:
-			setVals[column.Tag] = nil
-
-		case *sqlparser.ColName:
-			return errUpdate("Column name expressions not supported: %v", nodeToString(val))
-		case *sqlparser.AndExpr:
-			return errUpdate("And expressions not supported: %v", nodeToString(val))
-		case *sqlparser.OrExpr:
-			return errUpdate("Or expressions not supported: %v", nodeToString(val))
-		case *sqlparser.NotExpr:
-			return errUpdate("Not expressions not supported: %v", nodeToString(val))
-		case *sqlparser.ParenExpr:
-			return errUpdate("Parenthetical expressions not supported: %v", nodeToString(val))
-		case *sqlparser.RangeCond:
-			return errUpdate("Range expressions not supported: %v", nodeToString(val))
-		case *sqlparser.IsExpr:
-			return errUpdate("Is expressions not supported: %v", nodeToString(val))
-		case *sqlparser.ExistsExpr:
-			return errUpdate("Exists expressions not supported: %v", nodeToString(val))
-		case *sqlparser.ValTuple:
-			return errUpdate("Tuple expressions not supported: %v", nodeToString(val))
-		case *sqlparser.Subquery:
-			return errUpdate("Subquery expressions not supported: %v", nodeToString(val))
-		case *sqlparser.ListArg:
-			return errUpdate("List expressions not supported: %v", nodeToString(val))
-		case *sqlparser.BinaryExpr:
-			return errUpdate("Binary expressions not supported: %v", nodeToString(val))
-		case *sqlparser.UnaryExpr:
-			return errUpdate("Unary expressions not supported: %v", nodeToString(val))
-		case *sqlparser.IntervalExpr:
-			return errUpdate("Interval expressions not supported: %v", nodeToString(val))
-		case *sqlparser.CollateExpr:
-			return errUpdate("Collate expressions not supported: %v", nodeToString(val))
-		case *sqlparser.FuncExpr:
-			return errUpdate("Function expressions not supported: %v", nodeToString(val))
-		case *sqlparser.CaseExpr:
-			return errUpdate("Case expressions not supported: %v", nodeToString(val))
-		case *sqlparser.ValuesFuncExpr:
-			return errUpdate("Values func expressions not supported: %v", nodeToString(val))
-		case *sqlparser.ConvertExpr:
-			return errUpdate("Conversion expressions not supported: %v", nodeToString(val))
-		case *sqlparser.SubstrExpr:
-			return errUpdate("Substr expressions not supported: %v", nodeToString(val))
-		case *sqlparser.ConvertUsingExpr:
-			return errUpdate("Convert expressions not supported: %v", nodeToString(val))
-		case *sqlparser.MatchExpr:
-			return errUpdate("Match expressions not supported: %v", nodeToString(val))
-		case *sqlparser.GroupConcatExpr:
-			return errUpdate("Group concat expressions not supported: %v", nodeToString(val))
-		case *sqlparser.Default:
-			return errUpdate("Unrecognized expression: %v", nodeToString(val))
-		default:
-			return errUpdate("Unrecognized expression: %v", nodeToString(val))
+		// TODO: support aliases, multiple table updates
+		getter, err := getterFor(update.Expr, schemas, aliases, rss)
+		if err != nil {
+			return nil, err
 		}
+
+		// Fill in comparison kinds before doing error checking
+		if getter.Kind == SQL_VAL {
+			getter.NomsKind = column.Kind
+		}
+		getter.CmpKind = column.Kind
+
+		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
+		// set values.
+		if err := getter.Init(); err != nil {
+			return nil, err
+		}
+
+		setVals[column.Tag] = getter
 	}
 
-	// TODO: support aliases in update
-	filter, err := createFilterForWhere(s.Where, map[string]schema.Schema{tableName: tableSch}, NewAliases(), resultset.Identity(tableSch))
+	// TODO: support aliases in where clauses
+	filter, err := createFilterForWhere(s.Where, schemas, aliases, rss)
 	if err != nil {
 		return errUpdate(err.Error())
 	}
@@ -163,11 +117,12 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		var primaryKeyColChanged bool
 		var anyColChanged bool
 
-		for tag, val := range setVals {
-			// We need to know if a primay key changed values to correctly enforce key constraints (avoid overwriting
+		for tag, getter := range setVals {
+			// We need to know if a primary key changed values to correctly enforce key constraints (avoid overwriting
 			// existing rows that are keyed to the updated value)
 			currVal, _ := r.GetColVal(tag)
 			column, _ := tableSch.GetAllCols().GetByTag(tag)
+			val := getter.Get(r)
 
 			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(val)) {
 				anyColChanged = true

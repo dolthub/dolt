@@ -313,8 +313,13 @@ type valGetter struct {
 }
 
 // Returns a comparison value getter for the expression given, which could be a column value or a literal
-func getComparisonValueGetter(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
+func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
 	switch e := expr.(type) {
+	case *sqlparser.NullVal:
+		getter := valGetter{Kind: SQL_VAL}
+		getter.Init = func() error { return nil }
+		getter.Get = func(r row.Row) types.Value { return nil }
+		return &getter, nil
 	case *sqlparser.ColName:
 		colNameStr := getColumnNameString(e)
 
@@ -617,11 +622,11 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 	switch expr := whereExpr.(type) {
 	case *sqlparser.ComparisonExpr:
 
-		leftGetter, err := getComparisonValueGetter(expr.Left, inputSchemas, aliases, rss)
+		leftGetter, err := getterFor(expr.Left, inputSchemas, aliases, rss)
 		if err != nil {
 			return nil, err
 		}
-		rightGetter, err := getComparisonValueGetter(expr.Right, inputSchemas, aliases, rss)
+		rightGetter, err := getterFor(expr.Right, inputSchemas, aliases, rss)
 		if err != nil {
 			return nil, err
 		}
@@ -738,7 +743,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			return nil, errFmt("json not supported")
 		}
 	case *sqlparser.ColName:
-		getter, err := getComparisonValueGetter(expr, inputSchemas, aliases, rss)
+		getter, err := getterFor(expr, inputSchemas, aliases, rss)
 		if err != nil {
 			return nil, err
 		}
