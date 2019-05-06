@@ -64,6 +64,11 @@ func TestEqualsStr(t *testing.T) {
 			true,
 		},
 		{
+			NewBranchRef("refs/heads/master"),
+			"refs/heads/master",
+			true,
+		},
+		{
 			NewBranchRef("master"),
 			"refs/heads/notmaster",
 			false,
@@ -84,6 +89,11 @@ func TestEqualsStr(t *testing.T) {
 			true,
 		},
 		{
+			NewRemoteRefFromPathStr("refs/remotes/origin/master"),
+			"refs/remotes/origin/master",
+			true,
+		},
+		{
 			NewRemoteRef("origin", "master"),
 			"refs/remotes/borigin/master",
 			false,
@@ -98,13 +108,23 @@ func TestEqualsStr(t *testing.T) {
 			"refs/notavalidtype/origin/notmaster",
 			false,
 		},
+		{
+			NewInternalRef("create"),
+			"refs/internal/create",
+			true,
+		},
+		{
+			NewInternalRef("refs/internal/create"),
+			"refs/internal/create",
+			true,
+		},
 	}
 
 	for _, test := range tests {
 		actual := test.dr.EqualsStr(test.cmp)
 
 		if actual != test.expected {
-			t.Error("error comparing", test.dr, "to", test.cmp)
+			t.Error("for input:", test.cmp, "error comparing", test.dr, "to", test.cmp)
 		}
 	}
 }

@@ -41,7 +41,7 @@ var RefTypes = map[RefType]struct{}{BranchRef: {}, RemoteRef: {}, InternalRef: {
 
 // PrefixForType returns what a reference string for a given type should start with
 func PrefixForType(refType RefType) string {
-	return refPrefix + string(refType)
+	return refPrefix + string(refType) + "/"
 }
 
 // DoltRef is a reference to a commit.
@@ -58,7 +58,7 @@ var InvalidRef = DoltRef{InvalidRefType, ""}
 
 // String() converts the DoltRef to a reference string in the format refs/type/path
 func (dr DoltRef) String() string {
-	return PrefixForType(dr.Type) + "/" + dr.Path
+	return PrefixForType(dr.Type) + dr.Path
 }
 
 // Equals returns true if two DoltRefs have the same Type and Path
@@ -122,8 +122,8 @@ func NewBranchRef(branchName string) DoltRef {
 }
 
 // NewRemoteRef creates a remote ref from an origin name and a path
-func NewRemoteRef(origin, name string) DoltRef {
-	return DoltRef{RemoteRef, path.Join(origin, name)}
+func NewRemoteRef(remote, name string) DoltRef {
+	return DoltRef{RemoteRef, path.Join(remote, name)}
 }
 
 // NewRemoteRefFromPathString creates a DoltRef from a string in the format origin/master, or remotes/origin/master, or
@@ -172,7 +172,7 @@ func Parse(str string) (DoltRef, error) {
 		if strings.HasPrefix(str, prefix) {
 			return DoltRef{
 				rType,
-				str[len(prefix)+1:],
+				str[len(prefix):],
 			}, nil
 		}
 	}
