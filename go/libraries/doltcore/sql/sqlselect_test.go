@@ -125,7 +125,7 @@ func TestExecuteSelect(t *testing.T) {
 		query          string
 		expectedRows   []row.Row
 		expectedSchema schema.Schema
-		expectedErr    bool
+		expectedErr    string
 	}{
 		{
 			name:           "select * ",
@@ -272,6 +272,24 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
+			name:           "select *, in clause",
+			query:          "select * from people where first in ('Homer', 'Marge')",
+			expectedRows:   compressRows(peopleTestSchema, homer, marge),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, not in clause",
+			query:          "select * from people where first not in ('Homer', 'Marge')",
+			expectedRows:   compressRows(peopleTestSchema, bart, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, in clause single element",
+			query:          "select * from people where first in ('Homer')",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
 			name:  "select subset of cols",
 			query: "select first, last from people where age >= 40",
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), homer, moe, barney),
@@ -310,7 +328,7 @@ func TestExecuteSelect(t *testing.T) {
 		{
 			name:  "table aliases with bad alias",
 			query: "select m.first as f, p.last as l from people p where p.f = 'Homer'",
-			expectedErr: true,
+			expectedErr: "Unknown table m",
 		},
 		{
 			name:  "column aliases, all columns",
@@ -343,18 +361,18 @@ func TestExecuteSelect(t *testing.T) {
 		{
 			name:  "select * unknown column",
 			query: "select * from people where dne > 8.0",
-			expectedErr: true,
+			expectedErr: `Unknown column: 'dne'`,
 		},
 		{
 			name:  "unsupported comparison",
-			query: "select * from people where first in ('Homer')",
+			query: "select * from people where function(first)",
 			expectedRows: nil, // not the same as empty result set
-			expectedErr: true,
+			expectedErr: "not supported",
 		},
 		{
 			name: "type mismatch in where clause",
 			query: `select * from people where id = "0"`,
-			expectedErr: true,
+			expectedErr: "Type mismatch:",
 		},
 	}
 	for _, tt := range tests {
@@ -362,10 +380,14 @@ func TestExecuteSelect(t *testing.T) {
 		createTestDatabase(dEnv, t)
 		root, _ := dEnv.WorkingRoot(context.Background())
 
-		sqlStatement, _ := sqlparser.Parse(tt.query)
-		s := sqlStatement.(*sqlparser.Select)
-
 		t.Run(tt.name, func(t *testing.T) {
+			sqlStatement, err := sqlparser.Parse(tt.query)
+			if err != nil {
+				assert.FailNow(t, "Couldn't parse query " + tt.query, "%v", err.Error())
+			}
+
+			s := sqlStatement.(*sqlparser.Select)
+
 			if tt.expectedRows != nil && tt.expectedSchema == nil {
 				assert.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
 				t.FailNow()
@@ -373,9 +395,10 @@ func TestExecuteSelect(t *testing.T) {
 
 			rows, sch, err := ExecuteSelect(context.Background(), root, s)
 			if err != nil {
-				assert.True(t, tt.expectedErr, err.Error())
+				assert.True(t, len(tt.expectedErr) > 0, err.Error())
+				assert.Contains(t, err.Error(), tt.expectedErr)
 			} else {
-				assert.False(t, tt.expectedErr, "unexpected error")
+				assert.False(t, len(tt.expectedErr) > 0, "unexpected error")
 			}
 			assert.Equal(t, tt.expectedRows, rows)
 			assert.Equal(t, tt.expectedSchema, sch)
