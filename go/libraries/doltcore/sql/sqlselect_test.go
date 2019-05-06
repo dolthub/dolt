@@ -2,7 +2,6 @@ package sql
 
 import (
 	"context"
-	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
@@ -333,6 +332,76 @@ func TestExecuteSelect(t *testing.T) {
 		{
 			name:        "select *, is true clause on non-bool column",
 			query:       "select * from people where age is true",
+			expectedErr: "Type mismatch:",
+		},
+		// TODO: support operations in select clause
+		// {
+		// 	name:        "binary expression in select",
+		// 	query:       "select age + 1 as age from people where is_married",
+		// 	expectedRows:   rs(newResultSetRow(types.Int(41)), newResultSetRow(types.Int(39))),
+		// 	expectedSchema: newResultSetSchema("age", types.FloatKind),
+		// },
+		{
+			name:           "select *, binary + in where",
+			query:          "select * from people where age + 1 = 41",
+			expectedRows:   compressRows(peopleTestSchema, homer, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, binary - in where",
+			query:          "select * from people where age - 1 = 39",
+			expectedRows:   compressRows(peopleTestSchema, homer, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, binary / in where",
+			query:          "select * from people where age / 2 = 20",
+			expectedRows:   compressRows(peopleTestSchema, homer, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, binary / in where",
+			query:          "select * from people where age * 2 = 80",
+			expectedRows:   compressRows(peopleTestSchema, homer, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, binary % in where",
+			query:          "select * from people where age % 4 = 0",
+			expectedRows:   compressRows(peopleTestSchema, homer, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		// TODO: this should work but doesn't. Type checking is getting hung up on 2 + 2, since it has no noms type to
+		// enforce against
+		// {
+		// 	name:           "select *, complex binary expr in where",
+		// 	query:          "select * from people where age / 4 + 2 * 2 = 14",
+		// 	expectedRows:   compressRows(peopleTestSchema, homer, barney),
+		// 	expectedSchema: compressSchema(peopleTestSchema),
+		// },
+		{
+			name:        "select *, binary + in where type mismatch",
+			query:       "select * from people where first + 1 = 41",
+			expectedErr: "Type mismatch:",
+		},
+		{
+			name:        "select *, binary - in where type mismatch",
+			query:       "select * from people where first - 1 = 39",
+			expectedErr: "Type mismatch:",
+		},
+		{
+			name:        "select *, binary / in where type mismatch",
+			query:       "select * from people where first / 2 = 20",
+			expectedErr: "Type mismatch:",
+		},
+		{
+			name:        "select *, binary / in where type mismatch",
+			query:       "select * from people where first * 2 = 80",
+			expectedErr: "Type mismatch:",
+		},
+		{
+			name:        "select *, binary % in where type mismatch",
+			query:       "select * from people where first % 4 = 0",
 			expectedErr: "Type mismatch:",
 		},
 		{
@@ -767,26 +836,6 @@ func compressSchemas(schs ...schema.Schema) schema.Schema {
 	}
 
 	return schema.UnkeyedSchemaFromCols(colCol)
-}
-
-// Creates a new row for a result set specified by the given values
-func newResultSetRow(colVals ...types.Value) row.Row {
-
-	taggedVals := make(row.TaggedValues)
-	cols := make([]schema.Column, len(colVals))
-	for i := 0; i < len(colVals); i++ {
-		taggedVals[uint64(i)] = colVals[i]
-		nomsKind := colVals[i].Kind()
-		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
-	}
-
-	collection, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic("unexpected error " + err.Error())
-	}
-	sch := schema.UnkeyedSchemaFromCols(collection)
-
-	return row.New(sch, taggedVals)
 }
 
 // Creates a new schema for a result set specified by the given pairs of column names and types. Column names are
