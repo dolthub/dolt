@@ -6,13 +6,13 @@ import (
 )
 
 func TestStringPattern(t *testing.T) {
-	sp := StringPattern("refs/heads/master")
+	sp := strPattern("refs/heads/master")
 
-	captured, matchesMaster := sp.Matches("refs/heads/master")
+	captured, matchesMaster := sp.matches("refs/heads/master")
 	assert.True(t, matchesMaster, "should match master branch ref")
 	assert.True(t, captured == "", "nothing to capture")
 
-	captured, matchesFeature := sp.Matches("refs/heads/feature")
+	captured, matchesFeature := sp.matches("refs/heads/feature")
 	assert.False(t, matchesFeature, "shouldn't match feature branch ref")
 	assert.True(t, captured == "", "nothing to capture")
 }
@@ -55,11 +55,11 @@ func TestWildcardPattern(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run("'"+test.pattern+"'", func(t *testing.T) {
-			wcp := NewWildcardPattern(test.pattern)
+			wcp := newWildcardPattern(test.pattern)
 
 			for _, patternTest := range test.patternTest {
 				t.Run("'"+patternTest.refStr+"'", func(t *testing.T) {
-					captured, matches := wcp.Matches(patternTest.refStr)
+					captured, matches := wcp.matches(patternTest.refStr)
 
 					assert.Truef(t, captured == patternTest.expectedCaptured, "%s != %s", captured, patternTest.expectedCaptured)
 					assert.Truef(t, matches == patternTest.expectedMatch, "%b != %b", matches, patternTest.expectedMatch)
