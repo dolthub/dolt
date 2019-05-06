@@ -814,9 +814,8 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 				return nil, err
 			}
 
-			getter.CmpKind, getter.NomsKind = types.BoolKind, types.BoolKind
-			if err := getter.Init(); err != nil {
-				return nil, err
+			if getter.NomsKind != types.BoolKind {
+				return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", nodeToString(expr))
 			}
 
 			filter = func(r row.Row) (matchesFilter bool) {
