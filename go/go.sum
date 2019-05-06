@@ -104,6 +104,7 @@ github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/pty v1.1.3/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
+github.com/liquidata-inc/ld v0.0.0-20190506173730-94c35ad33de5 h1:mqGtXid1QsS7cvNybL8bSuzdmHYpkvB0rKvI4+A0OxE=
 github.com/liquidata-inc/noms v0.0.0-20190501224857-715e9e99b55e h1:c45DUW4L93bcfBWngs23q2CtAqN0Ipd988gCvlpELYs=
 github.com/liquidata-inc/noms v0.0.0-20190501224857-715e9e99b55e/go.mod h1:3M7C9+Co0TI0lJ7TICfOIZSYBY5C0bt2VGaZTx6tfs4=
 github.com/mattn/go-colorable v0.0.9 h1:UVL0vNpWh04HeJXV0KLcaT7r06gOH2l4OW6ddYRUIY4=

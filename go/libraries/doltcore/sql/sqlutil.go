@@ -490,6 +490,12 @@ func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string
 			return nil, err
 		}
 		cols = append(cols, qc)
+	case *sqlparser.IsExpr:
+		cols, err := resolveColumnsInWhereExpr(expr.Expr, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, cols...)
 	case *sqlparser.AndExpr:
 		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
 		if err != nil {
@@ -512,6 +518,7 @@ func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string
 		}
 		cols = append(cols, leftCols...)
 		cols = append(cols, rightCols...)
+
 	case *sqlparser.SQLVal, sqlparser.BoolVal, sqlparser.ValTuple:
 		// No columns, just a SQL literal
 	case *sqlparser.NotExpr:
@@ -520,8 +527,6 @@ func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string
 		return nil, errFmt("Parenthetical expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.RangeCond:
 		return nil, errFmt("Range expressions not supported: %v", nodeToString(expr))
-	case *sqlparser.IsExpr:
-		return nil, errFmt("Is expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.ExistsExpr:
 		return nil, errFmt("Exists expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.NullVal:
@@ -580,7 +585,6 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 
 // createFilterForWhere creates a filter function from the joins given
 func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
-
 	filterFns := make([]rowFilterFn, 0)
 	for _, je := range joins {
 		if filterFn, err := createFilterForJoin(je, inputSchemas, aliases, rss); err != nil {
@@ -784,14 +788,59 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 		filter = func(r row.Row) (matchesFilter bool) {
 			return leftFilter(r) || rightFilter(r)
 		}
+	case *sqlparser.IsExpr:
+		op := expr.Operator
+		switch op {
+		case sqlparser.IsNullStr, sqlparser.IsNotNullStr:
+			getter, err := getterFor(expr.Expr, inputSchemas, aliases, rss)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := getter.Init(); err != nil {
+				return nil, err
+			}
+
+			filter = func(r row.Row) (matchesFilter bool) {
+				colVal := getter.Get(r)
+				if (types.IsNull(colVal) && op == sqlparser.IsNullStr) || (!types.IsNull(colVal) && op == sqlparser.IsNotNullStr) {
+					return true
+				}
+				return false
+			}
+		case sqlparser.IsTrueStr, sqlparser.IsNotTrueStr, sqlparser.IsFalseStr, sqlparser.IsNotFalseStr:
+			getter, err := getterFor(expr.Expr, inputSchemas, aliases, rss)
+			if err != nil {
+				return nil, err
+			}
+
+			getter.CmpKind, getter.NomsKind = types.BoolKind, types.BoolKind
+			if err := getter.Init(); err != nil {
+				return nil, err
+			}
+
+			filter = func(r row.Row) (matchesFilter bool) {
+				colVal := getter.Get(r)
+				if types.IsNull(colVal) {
+					return false
+				}
+				// TODO: this may not be the correct nullness semantics for "is not" comparisons
+				if colVal.Equals(types.Bool(true)) {
+					return op == sqlparser.IsTrueStr || op == sqlparser.IsNotFalseStr
+				} else {
+					return op == sqlparser.IsFalseStr || op == sqlparser.IsNotTrueStr
+				}
+			}
+		default:
+			return nil, errFmt("Unrecognized is comparison: %v", expr.Operator)
+		}
+
 	case *sqlparser.NotExpr:
 		return nil, errFmt("Not expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.ParenExpr:
 		return nil, errFmt("Parenthetical expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.RangeCond:
 		return nil, errFmt("Range expressions not supported: %v", nodeToString(expr))
-	case *sqlparser.IsExpr:
-		return nil, errFmt("Is expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.ExistsExpr:
 		return nil, errFmt("Exists expressions not supported: %v", nodeToString(expr))
 	case *sqlparser.SQLVal:

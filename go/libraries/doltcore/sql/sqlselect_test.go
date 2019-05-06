@@ -290,6 +290,47 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
+			name:        "select *, in clause single type mismatch",
+			query:       "select * from people where first in (1.0)",
+			expectedErr: "Type mismatch:",
+		},
+		{
+			name:           "select *, is null clause ",
+			query:          "select * from people where uuid is null",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, is not null clause ",
+			query:          "select * from people where uuid is not null",
+			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, is true clause ",
+			query:          "select * from people where is_married is true",
+			expectedRows:   compressRows(peopleTestSchema, homer, marge),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, is not true clause ",
+			query:          "select * from people where is_married is not true",
+			expectedRows:   compressRows(peopleTestSchema, bart, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, is false clause ",
+			query:          "select * from people where is_married is false",
+			expectedRows:   compressRows(peopleTestSchema, bart, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, is not false clause ",
+			query:          "select * from people where is_married is not false",
+			expectedRows:   compressRows(peopleTestSchema, homer, marge),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
 			name:  "select subset of cols",
 			query: "select first, last from people where age >= 40",
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), homer, moe, barney),
