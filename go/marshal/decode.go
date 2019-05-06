@@ -100,8 +100,8 @@ func MustUnmarshalOpt(ctx context.Context, v types.Value, opt Opt, out interface
 	nt := nomsTags{
 		set: opt.Set,
 	}
-	d := typeDecoder(ctx, rv.Type(), nt)
-	d(v, rv)
+	d := typeDecoder(rv.Type(), nt)
+	d(ctx, v, rv)
 }
 
 // Unmarshaler is an interface types can implement to provide their own
@@ -168,11 +168,11 @@ func (e *unmarshalNomsError) Error() string {
 	return e.err.Error()
 }
 
-type decoderFunc func(v types.Value, rv reflect.Value)
+type decoderFunc func(ctx context.Context, v types.Value, rv reflect.Value)
 
-func typeDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc {
+func typeDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 	if reflect.PtrTo(t).Implements(unmarshalerInterface) {
-		return marshalerDecoder(ctx, t)
+		return marshalerDecoder(t)
 	}
 
 	switch t.Kind() {
@@ -187,18 +187,18 @@ func typeDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc
 	case reflect.String:
 		return stringDecoder
 	case reflect.Struct:
-		return structDecoder(ctx, t)
+		return structDecoder(t)
 	case reflect.Interface:
-		return interfaceDecoder(ctx, t)
+		return interfaceDecoder(t)
 	case reflect.Slice:
-		return sliceDecoder(ctx, t)
+		return sliceDecoder(t)
 	case reflect.Array:
-		return arrayDecoder(ctx, t)
+		return arrayDecoder(t)
 	case reflect.Map:
 		if shouldMapDecodeFromSet(t, tags) {
-			return mapFromSetDecoder(ctx, t)
+			return mapFromSetDecoder(t)
 		}
-		return mapDecoder(ctx, t, tags)
+		return mapDecoder(t, tags)
 	case reflect.Ptr:
 		// Allow implementations of types.Value (like *types.Type)
 		if t.Implements(nomsValueInterface) {
@@ -210,7 +210,7 @@ func typeDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc
 	}
 }
 
-func boolDecoder(v types.Value, rv reflect.Value) {
+func boolDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
 	if b, ok := v.(types.Bool); ok {
 		rv.SetBool(bool(b))
 	} else {
@@ -218,7 +218,7 @@ func boolDecoder(v types.Value, rv reflect.Value) {
 	}
 }
 
-func stringDecoder(v types.Value, rv reflect.Value) {
+func stringDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
 	if s, ok := v.(types.String); ok {
 		rv.SetString(string(s))
 	} else {
@@ -226,7 +226,7 @@ func stringDecoder(v types.Value, rv reflect.Value) {
 	}
 }
 
-func floatDecoder(v types.Value, rv reflect.Value) {
+func floatDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
 	if n, ok := v.(types.Float); ok {
 		rv.SetFloat(float64(n))
 	} else {
@@ -234,7 +234,7 @@ func floatDecoder(v types.Value, rv reflect.Value) {
 	}
 }
 
-func intDecoder(v types.Value, rv reflect.Value) {
+func intDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
 	if n, ok := v.(types.Float); ok {
 		i := int64(n)
 		if rv.OverflowInt(i) {
@@ -246,7 +246,7 @@ func intDecoder(v types.Value, rv reflect.Value) {
 	}
 }
 
-func uintDecoder(v types.Value, rv reflect.Value) {
+func uintDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
 	if n, ok := v.(types.Float); ok {
 		u := uint64(n)
 		if rv.OverflowUint(u) {
@@ -292,7 +292,7 @@ type decField struct {
 	original  bool
 }
 
-func structDecoderFields(ctx context.Context, t reflect.Type) []decField {
+func structDecoderFields(t reflect.Type) []decField {
 	fields := make([]decField, 0, t.NumField())
 	for i := 0; i < t.NumField(); i++ {
 		index := make([]int, 1)
@@ -304,7 +304,7 @@ func structDecoderFields(ctx context.Context, t reflect.Type) []decField {
 		}
 
 		if f.Anonymous && f.PkgPath == "" && !tags.hasName {
-			embeddedFields := structDecoderFields(ctx, f.Type)
+			embeddedFields := structDecoderFields(f.Type)
 			for _, ef := range embeddedFields {
 				ef.index = append(index, ef.index...)
 				fields = append(fields, ef)
@@ -316,7 +316,7 @@ func structDecoderFields(ctx context.Context, t reflect.Type) []decField {
 
 		fields = append(fields, decField{
 			name:      tags.name,
-			decoder:   typeDecoder(ctx, f.Type, tags),
+			decoder:   typeDecoder(f.Type, tags),
 			index:     index,
 			omitEmpty: tags.omitEmpty,
 			original:  tags.original,
@@ -325,7 +325,7 @@ func structDecoderFields(ctx context.Context, t reflect.Type) []decField {
 	return fields
 }
 
-func structDecoder(ctx context.Context, t reflect.Type) decoderFunc {
+func structDecoder(t reflect.Type) decoderFunc {
 	if t.Implements(nomsValueInterface) {
 		return nomsValueDecoder
 	}
@@ -335,9 +335,9 @@ func structDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 		return d
 	}
 
-	fields := structDecoderFields(ctx, t)
+	fields := structDecoderFields(t)
 
-	d = func(v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
 		s, ok := v.(types.Struct)
 		if !ok {
 			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", expected struct"})
@@ -354,7 +354,7 @@ func structDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 			}
 			fv, ok := s.MaybeGet(f.name)
 			if ok {
-				f.decoder(fv, sf)
+				f.decoder(ctx, fv, sf)
 			} else if !f.omitEmpty {
 				panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", missing field \"" + f.name + "\""})
 			}
@@ -365,15 +365,15 @@ func structDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 	return d
 }
 
-func nomsValueDecoder(v types.Value, rv reflect.Value) {
+func nomsValueDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
 	if !reflect.TypeOf(v).AssignableTo(rv.Type()) {
 		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
 	}
 	rv.Set(reflect.ValueOf(v))
 }
 
-func marshalerDecoder(ctx context.Context, t reflect.Type) decoderFunc {
-	return func(v types.Value, rv reflect.Value) {
+func marshalerDecoder(t reflect.Type) decoderFunc {
+	return func(ctx context.Context, v types.Value, rv reflect.Value) {
 		ptr := reflect.New(t)
 		err := ptr.Interface().(Unmarshaler).UnmarshalNoms(ctx, v)
 		if err != nil {
@@ -398,7 +398,7 @@ func iterListOrSlice(ctx context.Context, v types.Value, t reflect.Type, f func(
 	}
 }
 
-func sliceDecoder(ctx context.Context, t reflect.Type) decoderFunc {
+func sliceDecoder(t reflect.Type) decoderFunc {
 	d := decoderCache.get(t)
 	if d != nil {
 		return d
@@ -408,7 +408,7 @@ func sliceDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
 		var slice reflect.Value
 		if rv.IsNil() {
 			slice = rv
@@ -419,18 +419,18 @@ func sliceDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 		defer init.RUnlock()
 		iterListOrSlice(ctx, v, t, func(v types.Value, _ uint64) {
 			elemRv := reflect.New(t.Elem()).Elem()
-			decoder(v, elemRv)
+			decoder(ctx, v, elemRv)
 			slice = reflect.Append(slice, elemRv)
 		})
 		rv.Set(slice)
 	}
 
 	decoderCache.set(t, d)
-	decoder = typeDecoder(ctx, t.Elem(), nomsTags{})
+	decoder = typeDecoder(t.Elem(), nomsTags{})
 	return d
 }
 
-func arrayDecoder(ctx context.Context, t reflect.Type) decoderFunc {
+func arrayDecoder(t reflect.Type) decoderFunc {
 	d := decoderCache.get(t)
 	if d != nil {
 		return d
@@ -440,7 +440,7 @@ func arrayDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
 		size := t.Len()
 		list, ok := v.(types.Collection)
 		if !ok {
@@ -454,16 +454,16 @@ func arrayDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 		init.RLock()
 		defer init.RUnlock()
 		iterListOrSlice(ctx, list, t, func(v types.Value, i uint64) {
-			decoder(v, rv.Index(int(i)))
+			decoder(ctx, v, rv.Index(int(i)))
 		})
 	}
 
 	decoderCache.set(t, d)
-	decoder = typeDecoder(ctx, t.Elem(), nomsTags{})
+	decoder = typeDecoder(t.Elem(), nomsTags{})
 	return d
 }
 
-func mapFromSetDecoder(ctx context.Context, t reflect.Type) decoderFunc {
+func mapFromSetDecoder(t reflect.Type) decoderFunc {
 	d := setDecoderCache.get(t)
 	if d != nil {
 		return d
@@ -473,7 +473,7 @@ func mapFromSetDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
 		m := rv
 
 		nomsSet, ok := v.(types.Set)
@@ -485,7 +485,7 @@ func mapFromSetDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 		defer init.RUnlock()
 		nomsSet.IterAll(ctx, func(v types.Value) {
 			keyRv := reflect.New(t.Key()).Elem()
-			decoder(v, keyRv)
+			decoder(ctx, v, keyRv)
 			if m.IsNil() {
 				m = reflect.MakeMap(t)
 			}
@@ -495,11 +495,11 @@ func mapFromSetDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 	}
 
 	setDecoderCache.set(t, d)
-	decoder = typeDecoder(ctx, t.Key(), nomsTags{})
+	decoder = typeDecoder(t.Key(), nomsTags{})
 	return d
 }
 
-func mapDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc {
+func mapDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 	d := decoderCache.get(t)
 	if d != nil {
 		return d
@@ -510,7 +510,7 @@ func mapDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc 
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
 		m := rv
 
 		// Special case decoding failure if it looks like the "set" tag is missing,
@@ -528,9 +528,9 @@ func mapDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc 
 		defer init.RUnlock()
 		nomsMap.IterAll(ctx, func(k, v types.Value) {
 			keyRv := reflect.New(t.Key()).Elem()
-			keyDecoder(k, keyRv)
+			keyDecoder(ctx, k, keyRv)
 			valueRv := reflect.New(t.Elem()).Elem()
-			valueDecoder(v, valueRv)
+			valueDecoder(ctx, v, valueRv)
 			if m.IsNil() {
 				m = reflect.MakeMap(t)
 			}
@@ -540,12 +540,12 @@ func mapDecoder(ctx context.Context, t reflect.Type, tags nomsTags) decoderFunc 
 	}
 
 	decoderCache.set(t, d)
-	keyDecoder = typeDecoder(ctx, t.Key(), nomsTags{})
-	valueDecoder = typeDecoder(ctx, t.Elem(), nomsTags{})
+	keyDecoder = typeDecoder(t.Key(), nomsTags{})
+	valueDecoder = typeDecoder(t.Elem(), nomsTags{})
 	return d
 }
 
-func interfaceDecoder(ctx context.Context, t reflect.Type) decoderFunc {
+func interfaceDecoder(t reflect.Type) decoderFunc {
 	if t.Implements(nomsValueInterface) {
 		return nomsValueDecoder
 	}
@@ -554,11 +554,11 @@ func interfaceDecoder(ctx context.Context, t reflect.Type) decoderFunc {
 		panic(&UnsupportedTypeError{Type: t})
 	}
 
-	return func(v types.Value, rv reflect.Value) {
+	return func(ctx context.Context, v types.Value, rv reflect.Value) {
 		// TODO: Go directly from value to go type
 		t := getGoTypeForNomsType(types.TypeOf(v), rv.Type(), v)
 		i := reflect.New(t).Elem()
-		typeDecoder(ctx, t, nomsTags{})(v, i)
+		typeDecoder(t, nomsTags{})(ctx, v, i)
 		rv.Set(i)
 	}
 }
