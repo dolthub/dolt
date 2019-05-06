@@ -331,6 +331,11 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
+			name:        "select *, is true clause on non-bool column",
+			query:       "select * from people where age is true",
+			expectedErr: "Type mismatch:",
+		},
+		{
 			name:  "select subset of cols",
 			query: "select first, last from people where age >= 40",
 			expectedRows: compressRows(resultset.SubsetSchema(peopleTestSchema,"first", "last"), homer, moe, barney),
