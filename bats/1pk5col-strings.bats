@@ -31,7 +31,7 @@ teardown() {
     dolt table put-row test pk:this c1:test c2:is c3:a c4:good c5:test
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    # All row counts are offset by 3 to account for table printing
+    # All row counts are offset by 4 to account for table printing
     [ "${#lines[@]}" -eq 7 ] 
     run dolt sql -q "select * from test where pk='tim'"
     [ "$status" -eq 0 ]
@@ -80,10 +80,11 @@ teardown() {
     # select orders by primary key right now so aaron, brian, tim 
     [[ "${lines[4]}" =~ "<NULL>" ]] || false
     [[ ! "${lines[5]}" =~ "<NULL>" ]] || false
+    doltselectoutput=$output
     run dolt table select test
     [ "$status" -eq 0 ]
-    skip "Need to make NULL printing the same in dolt table select and dolt sql select"
     [[ "$output" =~ "<NULL>" ]] || false
+    [ "$output" = "$doltselectoutput" ]
     # Make sure we don't get a table with no spaces because that bug was 
     # generated when making changes to NULL printing
     [[ ! "$output" =~ "|||||" ]] || false
