@@ -82,3 +82,57 @@ teardown() {
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
 }
+
+@test "sql is null and is not null statements" {
+    dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
+    run dolt sql -q "select pk from one_pk where c3 is null"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "11" ]] || false
+    run dolt sql -q "select pk from one_pk where c3 is not null"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 8 ]
+    [[ ! "$output" =~ "11" ]] || false
+}
+
+@test "sql addition and subtraction" {
+    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,0,5,10,15,20)"
+    run dolt sql -q "select pk from one_pk where c2-c1>=5"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "11" ]] || false
+    run dolt sql -q "select pk from one_pk where c3-c2-c1>=5"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "11" ]] || false
+    run dolt sql -q "select pk from one_pk where c2+c1<=5"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "11" ]] || false
+}
+
+@test "addition on both left and right side of comparison operator" {
+    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,0,5,10,15,20)"
+    run dolt sql -q "select pk from one_pk where c2+c1<=5-0"
+    skip "This fails right now with a numeric value but non-nuneric column error"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "11" ]] || false
+}
+
+@test "sql addition in join statement" {
+    run dolt sql -q "select * from one_pk join two_pk on pk1-pk>0 and pk2<1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "20" ]] || false
+}
+
+@test "leave off table name in select" {
+    dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
+    run dolt sql -q "select pk where c3 is null"
+    [ "$status" -eq 1 ]
+    skip "Bad error message for no table name"
+    [[ "$output" =~ "Missing table name" ]] || false
+    [[ ! "$output" =~ "Unknown table 'dual'" ]] || false
+}
