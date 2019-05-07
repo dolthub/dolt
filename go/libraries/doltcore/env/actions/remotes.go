@@ -12,8 +12,8 @@ import (
 
 var ErrCantFF = errors.New("can't fast forward merge")
 
-func Push(ctx context.Context, branch, remoteBranch ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
-	canFF, err := srcDB.CanFastForward(ctx, remoteBranch, commit)
+func Push(ctx context.Context, branchRef, remoteRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
+	canFF, err := srcDB.CanFastForward(ctx, remoteRef, commit)
 
 	if err != nil {
 		return err
@@ -29,13 +29,13 @@ func Push(ctx context.Context, branch, remoteBranch ref.DoltRef, srcDB, destDB *
 		return err
 	}
 
-	err = destDB.FastForward(ctx, branch, commit)
+	err = destDB.FastForward(ctx, branchRef, commit)
 
 	if err != nil {
 		return err
 	}
 
-	err = srcDB.FastForward(ctx, remoteBranch, commit)
+	err = srcDB.FastForward(ctx, remoteRef, commit)
 
 	return err
 }

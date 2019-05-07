@@ -1,11 +1,17 @@
 #!/usr/bin/env bats
 
-setup() {
+setup() { 
+    if [ -z "$BATS_TMPDIR" ]; then
+        export BATS_TMPDIR=$HOME/batstmp/
+        mkdir $BATS_TMPDIR
+    fi
+
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir remotes-$$
-    remotesrv --http-port 1234 --dir $BATS_TMPDIR/remotes-$$ &>/dev/null 3>&- &
+    echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
+    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     mkdir dolt-repo-$$
     cd dolt-repo-$$
     dolt init
@@ -107,15 +113,13 @@ teardown() {
     [ ! -d bar ]
 }
 
-@test "dolt fetch with origin/master syntax." {
+@test "dolt merge with origin/master syntax." {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
     dolt push test-remote master
-    run dolt fetch test-remote master
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    run dolt fetch poop master
+    dolt fetch
+    run dolt fetch refs/heads/master:refs/remotes/poop/master
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote poop" ]] || false
+    [[ "$output" =~ "unknown remote 'poop'" ]] || false
     cd "dolt-repo-clones"
     dolt clone localhost:50051/test-org/test-repo --insecure
     cd ..
@@ -131,7 +135,7 @@ teardown() {
     [ "$status" -eq 0 ]
     # This needs to say up-to-date like the skipped test above
     # [[ "$output" =~ "up to date" ]]
-    run dolt fetch origin master
+    run dolt fetch
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt merge origin/master
@@ -179,7 +183,7 @@ teardown() {
     run dolt push origin master
     [ "$status" -eq 0 ]
     [ "$output" = "Everything up-to-date" ] || false
-    dolt fetch origin master
+    dolt fetch
     run dolt push origin master
     skip "dolt push when behind returns a 0 exit code now. should be 1"
     [ "$status" -eq 1 ]

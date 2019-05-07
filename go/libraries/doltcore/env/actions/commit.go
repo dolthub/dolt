@@ -58,7 +58,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 
 	var mergeCmSpec []*doltdb.CommitSpec
 	if dEnv.IsMergeActive() {
-		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit, dEnv.RepoState.Merge.Head.String())
+		spec, err := doltdb.NewCommitSpec(dEnv.RepoState.Merge.Commit, dEnv.RepoState.Merge.Head.Ref.String())
 
 		if err != nil {
 			panic("Corrupted repostate. Active merge state is not valid.")
@@ -84,7 +84,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 		return ErrEmptyCommitMessage
 	}
 
-	_, err = dEnv.DoltDB.CommitWithParents(ctx, h, dEnv.RepoState.Head, mergeCmSpec, meta)
+	_, err = dEnv.DoltDB.CommitWithParents(ctx, h, dEnv.RepoState.Head.Ref, mergeCmSpec, meta)
 
 	if err == nil {
 		dEnv.RepoState.ClearMerge()

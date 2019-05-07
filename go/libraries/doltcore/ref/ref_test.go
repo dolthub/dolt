@@ -6,7 +6,7 @@ import (
 )
 
 type TestMarshalStruct struct {
-	Test DoltRef `json:"test"`
+	Test MarshalableRef `json:"test"`
 }
 
 func TestJsonMarshalAndUnmarshal(t *testing.T) {
@@ -29,7 +29,7 @@ func TestJsonMarshalAndUnmarshal(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		tms := TestMarshalStruct{test.dr}
+		tms := TestMarshalStruct{MarshalableRef{test.dr}}
 		data, err := json.Marshal(tms)
 		actual := string(data)
 
@@ -46,13 +46,15 @@ func TestJsonMarshalAndUnmarshal(t *testing.T) {
 
 		if err != nil {
 			t.Error(err)
-		} else if !test.dr.Equals(tms.Test) {
+		} else if !Equals(test.dr, tms.Test.Ref) {
 			t.Error(tms.Test, "!=", test.dr)
 		}
 	}
 }
 
 func TestEqualsStr(t *testing.T) {
+	om, _ := NewRemoteRefFromPathStr("origin/master")
+	rom, _ := NewRemoteRefFromPathStr("refs/remotes/origin/master")
 	tests := []struct {
 		dr       DoltRef
 		cmp      string
@@ -84,12 +86,12 @@ func TestEqualsStr(t *testing.T) {
 			true,
 		},
 		{
-			NewRemoteRefFromPathStr("origin/master"),
+			om,
 			"refs/remotes/origin/master",
 			true,
 		},
 		{
-			NewRemoteRefFromPathStr("refs/remotes/origin/master"),
+			rom,
 			"refs/remotes/origin/master",
 			true,
 		},
@@ -121,7 +123,7 @@ func TestEqualsStr(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actual := test.dr.EqualsStr(test.cmp)
+		actual := EqualsStr(test.dr, test.cmp)
 
 		if actual != test.expected {
 			t.Error("for input:", test.cmp, "error comparing", test.dr, "to", test.cmp)

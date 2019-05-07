@@ -143,8 +143,6 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 		var srcDB *doltdb.DoltDB
 		srcDB, verr = createRemote(remoteName, remoteUrl, insecure, dEnv)
 
-		MigrateDoltDB(srcDB)
-
 		if verr == nil {
 			dref := ref.NewBranchRef(branch)
 			if !srcDB.HasRef(context.TODO(), dref) {
@@ -180,7 +178,7 @@ func cloneRemote(dir, remoteName, remoteUrl, branch string, insecure bool, fs fi
 							localCommit, _ := dEnv.DoltDB.Resolve(context.TODO(), localCommitSpec)
 							h, err := dEnv.DoltDB.WriteRootValue(context.Background(), localCommit.GetRootValue())
 
-							dEnv.RepoState.Head = dref
+							dEnv.RepoState.Head = ref.MarshalableRef{dref}
 							dEnv.RepoState.Staged = h.String()
 							dEnv.RepoState.Working = h.String()
 							err = dEnv.RepoState.Save()

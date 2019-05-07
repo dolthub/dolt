@@ -181,7 +181,7 @@ func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp 
 }
 
 func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs, workingInConflict []string) {
-	cli.Printf(branchHeader, dEnv.RepoState.Head.Path)
+	cli.Printf(branchHeader, dEnv.RepoState.Head.Ref.GetPath())
 
 	if dEnv.RepoState.Merge != nil {
 		if len(workingInConflict) > 0 {

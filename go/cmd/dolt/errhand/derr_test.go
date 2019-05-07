@@ -2,7 +2,6 @@ package errhand
 
 import (
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"testing"
 )
 
@@ -35,8 +34,8 @@ func TestDError(t *testing.T) {
 	derr := BuildDError("More Badness occurred.").AddDetails("details 1").AddDetails("details 2").AddCause(rootCause).Build()
 	derr = BuildDError("Badness occurred.").AddDetails("details 0").AddCause(derr).Build()
 
-	cli.Println(derr.Error())
-	cli.Println(derr.Verbose())
+	t.Log(derr.Error())
+	t.Log(derr.Verbose())
 }
 
 func TestBuildIf(t *testing.T) {

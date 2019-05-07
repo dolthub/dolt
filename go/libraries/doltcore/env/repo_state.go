@@ -9,17 +9,17 @@ import (
 )
 
 type MergeState struct {
-	Head            ref.DoltRef `json:"head"`
-	Commit          string      `json:"commit"`
-	PreMergeWorking string      `json:"working_pre_merge"`
+	Head            ref.MarshalableRef `json:"head"`
+	Commit          string             `json:"commit"`
+	PreMergeWorking string             `json:"working_pre_merge"`
 }
 
 type RepoState struct {
-	Head    ref.DoltRef       `json:"head"`
-	Staged  string            `json:"staged"`
-	Working string            `json:"working"`
-	Merge   *MergeState       `json:"merge"`
-	Remotes map[string]Remote `json:"remotes"`
+	Head    ref.MarshalableRef `json:"head"`
+	Staged  string             `json:"staged"`
+	Working string             `json:"working"`
+	Merge   *MergeState        `json:"merge"`
+	Remotes map[string]Remote  `json:"remotes"`
 
 	fs filesys.ReadWriteFS `json:"-"`
 }
@@ -47,7 +47,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.InvalidRef, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, fs}
+	rs := &RepoState{ref.MarshalableRef{ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, fs}
 
 	err := rs.Save()
 
@@ -66,7 +66,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 		return nil, err
 	}
 
-	rs := &RepoState{headRef, hashStr, hashStr, nil, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{headRef}, hashStr, hashStr, nil, nil, fs}
 
 	err = rs.Save()
 
@@ -90,13 +90,13 @@ func (rs *RepoState) Save() error {
 }
 
 func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
-	spec, _ := doltdb.NewCommitSpec("HEAD", rs.Head.String())
+	spec, _ := doltdb.NewCommitSpec("HEAD", rs.Head.Ref.String())
 
 	return spec
 }
 
 func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string) error {
-	rs.Merge = &MergeState{dref, commit, rs.Working}
+	rs.Merge = &MergeState{ref.MarshalableRef{dref}, commit, rs.Working}
 	return rs.Save()
 }
 

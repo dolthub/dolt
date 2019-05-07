@@ -26,8 +26,8 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 		return err
 	}
 
-	if dEnv.RepoState.Head.Equals(oldRef) {
-		dEnv.RepoState.Head = newRef
+	if ref.Equals(dEnv.RepoState.Head.Ref, oldRef) {
+		dEnv.RepoState.Head = ref.MarshalableRef{newRef}
 		err = dEnv.RepoState.Save()
 
 		if err != nil {
@@ -66,7 +66,7 @@ func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranc
 func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	dref := ref.NewBranchRef(brName)
 
-	if dEnv.RepoState.Head.Equals(dref) {
+	if ref.Equals(dEnv.RepoState.Head.Ref, dref) {
 		return ErrCOBranchDelete
 	}
 
@@ -122,7 +122,7 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 		return doltdb.ErrInvBranchName
 	}
 
-	cs, err := doltdb.NewCommitSpec(startingPoint, dEnv.RepoState.Head.String())
+	cs, err := doltdb.NewCommitSpec(startingPoint, dEnv.RepoState.Head.Ref.String())
 
 	if err != nil {
 		return err
@@ -144,7 +144,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return doltdb.ErrBranchNotFound
 	}
 
-	if dEnv.RepoState.Head.Equals(dref) {
+	if ref.Equals(dEnv.RepoState.Head.Ref, dref) {
 		return doltdb.ErrAlreadyOnBranch
 	}
 
@@ -187,7 +187,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	dEnv.RepoState.Head = dref
+	dEnv.RepoState.Head = ref.MarshalableRef{dref}
 	dEnv.RepoState.Working = wrkHash.String()
 	dEnv.RepoState.Staged = stgHash.String()
 	dEnv.RepoState.Save()
@@ -313,7 +313,7 @@ func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, Ro
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
-	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.Head.String())
+	cs, err := doltdb.NewCommitSpec(str, dEnv.RepoState.Head.Ref.String())
 
 	if err == nil {
 		cm, err := dEnv.DoltDB.Resolve(ctx, cs)
