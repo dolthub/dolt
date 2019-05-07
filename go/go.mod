@@ -29,3 +29,5 @@ require (
 )
 
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190506171537-518b7edcd73f
+
+replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.0
