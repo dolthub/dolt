@@ -8,7 +8,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/gizak/termui/v3 v3.0.0
-	github.com/golang/protobuf v1.2.0
+	github.com/golang/protobuf v1.3.1
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
 	github.com/google/go-cmp v0.2.0
 	github.com/google/uuid v1.1.0
@@ -30,4 +30,4 @@ require (
 
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190506171537-518b7edcd73f
 
-replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.0
+replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.2
