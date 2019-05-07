@@ -21,7 +21,7 @@ func newWildcardPattern(s string) wcPattern {
 	tokens := strings.Split(s, "*")
 
 	if len(tokens) != 2 {
-		panic("invalid pattern")
+		panic("invalid localPattern")
 	}
 
 	return wcPattern{tokens[0], tokens[1]}

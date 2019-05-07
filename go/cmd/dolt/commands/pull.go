@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"runtime/debug"
 
@@ -20,23 +21,36 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	branch := dEnv.RepoState.Head
+	branch := dEnv.RepoState.Head.Ref
 
 	var verr errhand.VerboseError
-	if apr.NArg() != 1 {
+	var remoteName string
+	if apr.NArg() > 1 {
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	} else {
-		remoteName := apr.Arg(0)
+		if apr.NArg() == 1 {
+			remoteName = apr.Arg(0)
+		}
 
-		remotes, err := dEnv.GetRemotes()
+		var refSpecs []ref.RemoteRefSpec
+		refSpecs, verr = dEnv.GetRefSpecs(remoteName)
 
-		if err != nil {
-			verr = errhand.BuildDError("error: pull failed").AddCause(err).Build()
-		} else if remote, ok := remotes[remoteName]; !ok {
-			verr = errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
-		} else {
-			remoteRef := ref.NewRemoteRef(remoteName, branch.Path)
-			verr = pullRemoteBranch(dEnv, remote, branch, remoteRef)
+		if verr == nil {
+			if len(refSpecs) == 0 {
+				verr = errhand.BuildDError("error: no refspec for remote").Build()
+			} else {
+				remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
+
+				for _, refSpec := range refSpecs {
+					if remoteTrackRef := refSpec.Map(branch); remoteTrackRef != nil {
+						verr = pullRemoteBranch(dEnv, remote, branch, remoteTrackRef)
+
+						if verr != nil {
+							break
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -44,7 +58,8 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
-	verr = fetchRemoteBranch(dEnv, r, srcRef, destRef)
+	srcDB := r.GetRemoteDB(context.TODO())
+	verr = fetchRemoteBranch(r, srcDB, dEnv.DoltDB, srcRef, destRef)
 
 	if verr == nil {
 		defer func() {

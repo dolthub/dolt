@@ -7,6 +7,7 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
@@ -222,7 +223,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	cs, _ := doltdb.NewCommitSpec("head", dEnv.RepoState.Head.String())
+	cs, _ := doltdb.NewCommitSpec("head", dEnv.RepoState.Head.Ref.String())
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
@@ -415,7 +416,11 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 		if slashIdx > 0 {
 			remoteName := refStr[:slashIdx]
 			if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
-				remoteRef := ref.NewRemoteRefFromPathStr(refStr)
+				remoteRef, err := ref.NewRemoteRefFromPathStr(refStr)
+
+				if err != nil {
+					return nil, err
+				}
 
 				if dEnv.DoltDB.HasRef(ctx, remoteRef) {
 					return remoteRef, nil
@@ -424,5 +429,56 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 		}
 	}
 
-	return ref.InvalidRef, doltdb.ErrBranchNotFound
+	return nil, doltdb.ErrBranchNotFound
+}
+
+func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+	var remote Remote
+	var verr errhand.VerboseError
+
+	if remoteName == "" {
+		remote, verr = dEnv.GetDefaultRemote()
+	} else if r, ok := dEnv.RepoState.Remotes[remoteName]; ok {
+		remote = r
+	} else {
+		verr = errhand.BuildDError("error: unknown remote '%s'", remoteName).Build()
+	}
+
+	if verr != nil {
+		return nil, verr
+	}
+
+	var refSpecs []ref.RemoteRefSpec
+	for _, fs := range remote.FetchSpecs {
+		rs, err := ref.ParseRefSpecForRemote(remote.Name, fs)
+
+		if err != nil {
+			return nil, errhand.BuildDError("error: for '%s', '%s' is not a valid refspec.", remote.Name, fs).Build()
+		}
+
+		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
+			return nil, errhand.BuildDError("error: '%s' is no a valid refspec referring to a remote tracking branch", remote.Name).Build()
+		} else if rrs.GetRemote() != remote.Name {
+			return nil, errhand.BuildDError("error: remote '%s' refers to remote '%s'", remote.Name, rrs.GetRemote()).Build()
+		} else {
+			refSpecs = append(refSpecs, rrs)
+		}
+	}
+
+	return refSpecs, nil
+}
+
+func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
+	remotes := dEnv.RepoState.Remotes
+
+	if len(remotes) == 0 {
+		return NoRemote, errhand.BuildDError("error: no remote").Build()
+	} else if len(remotes) == 1 {
+		for _, v := range remotes {
+			return v, nil
+		}
+	}
+
+	// To do handle multiple origins.
+	panic("Not implemented yet")
 }

@@ -90,7 +90,7 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 	printAll := apr.Contains(allParam)
 
 	branches := dEnv.DoltDB.GetRefs(context.TODO())
-	currentBranch := dEnv.RepoState.Head
+	currentBranch := dEnv.RepoState.Head.Ref
 	sort.Slice(branches, func(i, j int) bool {
 		return branches[i].String() < branches[j].String()
 	})
@@ -98,17 +98,17 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 	for _, branch := range branches {
 		cs, _ := doltdb.NewCommitSpec("HEAD", branch.String())
 
-		if branch.Type != ref.BranchRef && !printAll {
+		if branch.GetType() != ref.BranchRefType && !printAll {
 			continue
 		}
 
 		line := ""
-		if branch.Equals(currentBranch) {
-			line = fmt.Sprint("* ", color.GreenString("%-56s", branch.Path))
-		} else if branch.Type == ref.RemoteRef {
-			line = fmt.Sprint(color.RedString("  remotes/%-48s", branch.Path))
+		if ref.Equals(branch, currentBranch) {
+			line = fmt.Sprint("* ", color.GreenString("%-56s", branch.GetPath()))
+		} else if branch.GetType() == ref.RemoteRefType {
+			line = fmt.Sprint(color.RedString("  remotes/%-48s", branch.GetPath()))
 		} else {
-			line = fmt.Sprintf("  %-32s", branch.Path)
+			line = fmt.Sprintf("  %-32s", branch.GetPath())
 		}
 
 		if verbose {

@@ -243,7 +243,7 @@ func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, 
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
 func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, cm *CommitMeta) (*Commit, error) {
-	if dref.Type != ref.BranchRef {
+	if dref.GetType() != ref.BranchRefType {
 		panic("can't commit to ref that isn't branch atm.  will probably remove this.")
 	}
 
@@ -366,7 +366,7 @@ func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) bool {
 	return ddb.db.Datasets(ctx).Has(ctx, types.String(doltRef.String()))
 }
 
-var branchRefFilter = map[ref.RefType]struct{}{ref.BranchRef: {}}
+var branchRefFilter = map[ref.RefType]struct{}{ref.BranchRefType: {}}
 
 // GetBranches returns a list of all branches in the database.
 func (ddb *DoltDB) GetBranches(ctx context.Context) []ref.DoltRef {
@@ -385,12 +385,10 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 		var dref ref.DoltRef
 		if ref.IsRef(keyStr) {
 			dref, _ = ref.Parse(keyStr)
-		} else {
-			dref = ref.DoltRef{ref.InvalidRefType, keyStr}
-		}
 
-		if _, ok := refTypeFilter[dref.Type]; ok {
-			branches = append(branches, dref)
+			if _, ok := refTypeFilter[dref.GetType()]; ok {
+				branches = append(branches, dref)
+			}
 		}
 	})
 
@@ -405,27 +403,6 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 
 	ds := ddb.db.GetDataset(ctx, dref.String())
 	_, err := ddb.db.SetHead(ctx, ds, types.NewRef(commit.commitSt))
-	return err
-}
-
-func (ddb *DoltDB) CopyBranchByName(ctx context.Context, src, dest string) error {
-	srcDS := ddb.db.GetDataset(ctx, src)
-	headRef := srcDS.HeadRef()
-
-	destDS := ddb.db.GetDataset(ctx, dest)
-	ddb.db.SetHead(ctx, destDS, headRef)
-
-	return nil
-}
-
-func (ddb *DoltDB) DeleteBranchByName(ctx context.Context, name string) error {
-	ds := ddb.db.GetDataset(ctx, name)
-
-	if !ds.HasHead() {
-		return ErrBranchNotFound
-	}
-
-	_, err := ddb.db.Delete(ctx, ds)
 	return err
 }
 

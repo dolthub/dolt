@@ -29,7 +29,8 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 		initialDirs = append(initialDirs, doltDir)
 
 		hashStr := hash.Hash{}.String()
-		repoState := &RepoState{ref.NewBranchRef("master"), hashStr, hashStr, nil, nil, nil}
+		masterRef := ref.NewBranchRef("master")
+		repoState := &RepoState{ref.MarshalableRef{masterRef}, hashStr, hashStr, nil, nil, nil}
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {

@@ -16,7 +16,7 @@ func TestRefSpec(t *testing.T) {
 			map[string]string{
 				"refs/heads/master":          "refs/remotes/origin/master",
 				"refs/heads/feature":         "refs/remotes/origin/feature",
-				"refs/remotes/origin/master": "refs/invalid/",
+				"refs/remotes/origin/master": "refs/nil/",
 			},
 		}, {
 			"borigin",
@@ -24,14 +24,14 @@ func TestRefSpec(t *testing.T) {
 			true,
 			map[string]string{
 				"refs/heads/master":  "refs/remotes/borigin/mymaster",
-				"refs/heads/feature": "refs/invalid/",
+				"refs/heads/feature": "refs/nil/",
 			},
 		}, {
-			"borigin",
+			"",
 			"refs/heads/*/master:refs/remotes/borigin/*/mymaster",
 			true,
 			map[string]string{
-				"refs/heads/master":    "refs/invalid/",
+				"refs/heads/master":    "refs/nil/",
 				"refs/heads/bh/master": "refs/remotes/borigin/bh/mymaster",
 				"refs/heads/as/master": "refs/remotes/borigin/as/mymaster",
 			},
@@ -60,7 +60,14 @@ func TestRefSpec(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		refSpec, err := ParseRefSpecForRemote(test.remote, test.refSpecStr)
+		var refSpec RefSpec
+		var err error
+
+		if test.remote == "" {
+			refSpec, err = ParseRefSpec(test.refSpecStr)
+		} else {
+			refSpec, err = ParseRefSpecForRemote(test.remote, test.refSpecStr)
+		}
 
 		if (err == nil) != test.isValid {
 			t.Error(test.refSpecStr, "is valid:", err == nil)
@@ -71,8 +78,14 @@ func TestRefSpec(t *testing.T) {
 
 				actual := refSpec.Map(inRef)
 
-				if !actual.Equals(outRef) {
+				if !Equals(actual, outRef) {
 					t.Error(test.refSpecStr, "mapped", in, "to", actual.String(), "expected", outRef.String())
+				} else if actual != nil {
+					reverse := refSpec.MapBack(actual)
+
+					if !Equals(inRef, reverse) {
+						t.Error(test.refSpecStr, "reverse mapped", actual.String(), "to", reverse.String(), "expected", inRef.String())
+					}
 				}
 			}
 		}

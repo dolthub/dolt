@@ -29,7 +29,7 @@ func IsValidUserBranchName(name string) bool {
 }
 
 func IsValidBranchRef(dref ref.DoltRef) bool {
-	return dref.Type == ref.BranchRef && IsValidUserBranchName(dref.Path)
+	return dref.GetType() == ref.BranchRefType && IsValidUserBranchName(dref.GetPath())
 }
 
 func IsValidRemoteBranchName(name string) bool {

@@ -51,8 +51,11 @@ func TestNewCommitSpec(t *testing.T) {
 		expectErr       bool
 	}{
 		{"master", "", "refs/heads/master", "", false},
-		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
+		{"refs/heads/master", "", "refs/heads/master", "", false},
+		{"head", "refs/heads/master", "refs/heads/master", "", false},
+		{"head", "refs/heads/master", "refs/heads/master", "", false},
 		{"head^~2", "master", "refs/heads/master", "^~2", false},
+		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
 		{"__invalid__^~2", "", "", "", true},
 	}
 

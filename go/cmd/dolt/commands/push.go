@@ -73,9 +73,9 @@ func pushToRemoteBranch(dEnv *env.DoltEnv, r env.Remote, branch string) (verr er
 		stopChan := make(chan struct{})
 		go progFunc(progChan, stopChan)
 
-		localRef := ref.NewBranchRef(branch)
+		branchRef := ref.NewBranchRef(branch)
 		remoteRef := ref.NewRemoteRef(r.Name, branch)
-		err = actions.Push(context.TODO(), localRef, remoteRef, dEnv.DoltDB, destDB, cm, progChan)
+		err = actions.Push(context.TODO(), branchRef, remoteRef, dEnv.DoltDB, destDB, cm, progChan)
 
 		close(progChan)
 		<-stopChan
@@ -85,7 +85,7 @@ func pushToRemoteBranch(dEnv *env.DoltEnv, r env.Remote, branch string) (verr er
 				cli.Println("Everything up-to-date")
 			} else if err == doltdb.ErrIsAhead || err == actions.ErrCantFF || err == datas.ErrMergeNeeded {
 				cli.Printf("To %s\n", r.Url)
-				cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", localRef.String(), remoteRef.String())
+				cli.Printf("! [rejected]          %s -> %s (non-fast-forward)\n", branchRef.String(), remoteRef.String())
 				cli.Printf("error: failed to push some refs to '%s'\n", r.Url)
 				cli.Println("hint: Updates were rejected because the tip of your current branch is behind")
 				cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")

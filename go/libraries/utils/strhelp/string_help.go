@@ -7,7 +7,7 @@ func NthToken(s string, delim rune, n int) (string, bool) {
 
 	prev := 0
 	curr := 0
-	for ; curr < len(s) && n >= 0; curr++ {
+	for ; curr < len(s); curr++ {
 		if s[curr] == uint8(delim) {
 			n--
 

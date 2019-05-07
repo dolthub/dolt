@@ -17,7 +17,7 @@ import (
 var fetchShortDesc = ""
 var fetchLongDesc = ""
 var fetchSynopsis = []string{
-	"<remote> <branch>",
+	"[<refspec> ...]",
 }
 
 func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -26,29 +26,89 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError
-	if apr.NArg() != 2 {
-		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	} else {
-		remoteName := apr.Arg(0)
-		branch := apr.Arg(1)
+	refSpecs, verr := getRefSpecs(apr, dEnv)
 
-		remotes, err := dEnv.GetRemotes()
+	if verr == nil {
+		var rsToRem map[ref.RemoteRefSpec]env.Remote
+		rsToRem, verr = mapRefspecsToRemotes(refSpecs, dEnv)
 
-		if err != nil {
-			verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-		} else if remote, ok := remotes[remoteName]; !ok {
-			verr = errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
-		} else {
-			remoteRef := ref.NewRemoteRef(remoteName, branch)
-			localRef := ref.NewBranchRef(branch)
-			verr = fetchRemoteBranch(dEnv, remote, localRef, remoteRef)
+		if verr == nil {
+			verr = fetchRefSpecs(dEnv, rsToRem)
 		}
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
+func getRefSpecs(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+	if apr.NArg() != 0 {
+		return parseRSFromArgs(apr)
+	}
+
+	return dEnv.GetRefSpecs("")
+}
+
+func parseRSFromArgs(apr *argparser.ArgParseResults) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+	var refSpecs []ref.RemoteRefSpec
+	for i := 0; i < apr.NArg(); i++ {
+		rsStr := apr.Arg(i)
+		rs, err := ref.ParseRefSpec(rsStr)
+
+		if err != nil {
+			return nil, errhand.BuildDError("error: '%s' is not a valid refspec.", rsStr).SetPrintUsage().Build()
+		}
+
+		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
+			return nil, errhand.BuildDError("error: '%s' is no a valid refspec referring to a remote tracking branch", rsStr).Build()
+		} else {
+			refSpecs = append(refSpecs, rrs)
+		}
+	}
+
+	return refSpecs, nil
+}
+
+func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[ref.RemoteRefSpec]env.Remote, errhand.VerboseError) {
+	nameToRemote := dEnv.RepoState.Remotes
+
+	rsToRem := make(map[ref.RemoteRefSpec]env.Remote)
+	for _, rrs := range refSpecs {
+		remName := rrs.GetRemote()
+
+		if rem, ok := nameToRemote[remName]; !ok {
+			return nil, errhand.BuildDError("error: unknown remote '%s'", remName).Build()
+		} else {
+			rsToRem[rrs] = rem
+		}
+	}
+
+	return rsToRem, nil
+}
+
+func fetchRefSpecs(dEnv *env.DoltEnv, rsToRem map[ref.RemoteRefSpec]env.Remote) errhand.VerboseError {
+	ctx := context.TODO()
+
+	for rs, rem := range rsToRem {
+		srcDB := rem.GetRemoteDB(ctx)
+
+		branchRefs := srcDB.GetRefs(ctx)
+		for _, branchRef := range branchRefs {
+			remoteTrackRef := rs.Map(branchRef)
+
+			if remoteTrackRef != nil {
+				verr := fetchRemoteBranch(rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
+
+				if verr != nil {
+					return verr
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func fetchRemoteBranch(rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
@@ -56,29 +116,23 @@ func fetchRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.Dolt
 		}
 	}()
 
-	srcDB := r.GetRemoteDB(context.TODO())
+	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
+	cm, err := srcDB.Resolve(context.TODO(), cs)
 
-	if !srcDB.HasRef(context.TODO(), srcRef) {
-		verr = errhand.BuildDError("fatal: unknown branch " + srcRef.String()).Build()
+	if err != nil {
+		verr = errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
-		cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
-		cm, err := srcDB.Resolve(context.TODO(), cs)
+		progChan := make(chan datas.PullProgress)
+		stopChan := make(chan struct{})
+		go progFunc(progChan, stopChan)
+
+		err = actions.Fetch(context.TODO(), destRef, srcDB, destDB, cm, progChan)
+
+		close(progChan)
+		<-stopChan
 
 		if err != nil {
-			verr = errhand.BuildDError("error: unable to find %v", srcRef.Path).Build()
-		} else {
-			progChan := make(chan datas.PullProgress)
-			stopChan := make(chan struct{})
-			go progFunc(progChan, stopChan)
-
-			err = actions.Fetch(context.TODO(), destRef, srcDB, dEnv.DoltDB, cm, progChan)
-
-			close(progChan)
-			<-stopChan
-
-			if err != nil {
-				verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-			}
+			verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 		}
 	}
 
