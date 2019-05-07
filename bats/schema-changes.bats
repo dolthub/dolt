@@ -88,6 +88,7 @@ teardown() {
     dolt sql -q "insert into test (pk,c0,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0)"
     run dolt diff
     [ "$status" -eq 0 ]
+    [[ "$output" =~ \+[[:space:]]+c0 ]] || false
     [[ "$output" =~ "| c0 |" ]]|| false
     [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
     [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
