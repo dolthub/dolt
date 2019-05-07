@@ -121,6 +121,32 @@ teardown() {
     [[ "$output" =~ "11" ]] || false
 }
 
+@test "select with in list" {
+    run dolt sql -q "select pk from one_pk where c1 in (10,20)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    run dolt sql -q "select pk from one_pk where c1 in (11,21)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    run dolt sql -q "select pk from one_pk where c1 not in (10,20)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    run dolt sql -q "select pk from one_pk where c1 not in (10,20) and c1 in (30)"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "3" ]] || false
+}
+
+@test "sql parser does not support empty list" {
+    run dolt sql -q "select pk from one_pk where c1 not in ()"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Error parsing SQL" ]] || false
+}
+
 @test "sql addition in join statement" {
     run dolt sql -q "select * from one_pk join two_pk on pk1-pk>0 and pk2<1"
     [ $status -eq 0 ]
@@ -131,7 +157,7 @@ teardown() {
 @test "leave off table name in select" {
     dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
     run dolt sql -q "select pk where c3 is null"
-    [ "$status" -eq 1 ]
+    [ $status -eq 1 ]
     skip "Bad error message for no table name"
     [[ "$output" =~ "Missing table name" ]] || false
     [[ ! "$output" =~ "Unknown table 'dual'" ]] || false
