@@ -48,6 +48,7 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	spec := ddl.TableSpec
+
 	sch, err := getSchema(spec)
 	if err != nil {
 		return nil, nil, err
@@ -123,94 +124,44 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 	switch columnType.Type {
 
 	// integer-like types
-	case TINYINT:
-		fallthrough
-	case SMALLINT:
-		fallthrough
-	case MEDIUMINT:
-		fallthrough
-	case INT:
-		fallthrough
-	case INTEGER:
-		fallthrough
-	case BIGINT:
-		return schema.NewColumn(colDef.Name.String(), tag, types.IntKind, isPkey, constraints...), nil
+	case TINYINT, SMALLINT, MEDIUMINT, INT, INTEGER, BIGINT:
+		kind := types.IntKind
+		if columnType.Unsigned {
+			kind = types.UintKind
+		}
+		return schema.NewColumn(colDef.Name.String(), tag, kind, isPkey, constraints...), nil
 
 	// string-like types
-	case TEXT:
-		fallthrough
-	case TINYTEXT:
-		fallthrough
-	case MEDIUMTEXT:
-		fallthrough
-	case LONGTEXT:
-		fallthrough
-	case BLOB:
-		fallthrough
-	case TINYBLOB:
-		fallthrough
-	case MEDIUMBLOB:
-		fallthrough
-	case LONGBLOB:
-		fallthrough
-	case CHAR:
-		fallthrough
-	case VARCHAR:
-		fallthrough
-	case BINARY:
-		fallthrough
-	case VARBINARY:
+	// TODO: enforce length constraints for string types
+	// TODO: support different charsets
+	case TEXT, TINYTEXT, MEDIUMTEXT, LONGTEXT, CHAR, VARCHAR:
 		return schema.NewColumn(colDef.Name.String(), tag, types.StringKind, isPkey, constraints...), nil
 
+	// blob-like types
+	case BLOB, TINYBLOB, MEDIUMBLOB, LONGBLOB:
+		return schema.NewColumn(colDef.Name.String(), tag, types.BlobKind, isPkey, constraints...), nil
+
 	// float-like types
-	case FLOAT_TYPE:
-		fallthrough
-	case DOUBLE:
-		fallthrough
-	case DECIMAL:
+	case FLOAT_TYPE, DOUBLE, DECIMAL:
 		return schema.NewColumn(colDef.Name.String(), tag, types.FloatKind, isPkey, constraints...), nil
 
 	// bool-like types
-	case BIT:
-		fallthrough
-	case BOOLEAN: // not actually implemented at the moment (should be a synonym for bit)
+	case BIT, BOOLEAN, BOOL:
 		return schema.NewColumn(colDef.Name.String(), tag, types.BoolKind, isPkey, constraints...), nil
 
-	// time-like types
-	case DATE:
-		fallthrough
-	case TIME:
-		fallthrough
-	case DATETIME:
-		fallthrough
-	case TIMESTAMP:
-		fallthrough
-	case YEAR:
+	// time-like types (not yet supported in noms, but should be)
+	case DATE, TIME, DATETIME, TIMESTAMP, YEAR:
 		return errColumn("Date and time types aren't supported")
 
+	// binary string types, need to support differently from normal strings
+	case BINARY, VARBINARY:
+		return errColumn("BINARY and VARBINARY types are not supported")
+
 	// unsupported types
-	case ENUM:
+	case ENUM, SET, JSON, GEOMETRY, POINT, LINESTRING, POLYGON, GEOMETRYCOLLECTION, MULTIPOINT, MULTILINESTRING, MULTIPOLYGON:
 		return errColumn("Unsupported column type %v", columnType.Type)
-	case SET:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case JSON:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case GEOMETRY:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case POINT:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case LINESTRING:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case POLYGON:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case GEOMETRYCOLLECTION:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case MULTIPOINT:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case MULTILINESTRING:
-		return errColumn("Unsupported column type %v", columnType.Type)
-	case MULTIPOLYGON:
-		return errColumn("Unsupported column type %v", columnType.Type)
+
+	// unrecognized types
 	default:
 		return errColumn("Unrecognized column type %v", columnType.Type)
 	}
