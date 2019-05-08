@@ -131,6 +131,10 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 		}
 		return schema.NewColumn(colDef.Name.String(), tag, kind, isPkey, constraints...), nil
 
+	// UUID type
+	case UUID:
+		return schema.NewColumn(colDef.Name.String(), tag, types.UUIDKind, isPkey, constraints...), nil
+
 	// string-like types
 	// TODO: enforce length constraints for string types
 	// TODO: support different charsets

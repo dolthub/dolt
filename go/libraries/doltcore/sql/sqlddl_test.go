@@ -80,7 +80,8 @@ func TestExecuteCreate(t *testing.T) {
 							c23 tinyint unsigned,
 							c24 smallint unsigned,
 							c25 mediumint unsigned,
-							c26 bigint unsigned)`,
+							c26 bigint unsigned,
+              c27 uuid)`,
 			expectedSchema: createSchema(
 				schema.NewColumn("c0", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("c1", 1, types.IntKind, false),
@@ -109,6 +110,7 @@ func TestExecuteCreate(t *testing.T) {
 				schema.NewColumn("c24", 24, types.UintKind, false),
 				schema.NewColumn("c25", 25, types.UintKind, false),
 				schema.NewColumn("c26", 26, types.UintKind, false),
+				schema.NewColumn("c27", 27, types.UUIDKind, false),
 			),
 		},
 		{

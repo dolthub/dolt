@@ -13,7 +13,7 @@ const expectedSQL = `CREATE TABLE table_name (
   is_married bool comment 'tag:3',
   age int comment 'tag:4',
   rating float comment 'tag:6',
-  uuid UUID comment 'tag:7',
+  uuid uuid comment 'tag:7',
   num_episodes int unsigned comment 'tag:8',
   primary key (id)
 );`
