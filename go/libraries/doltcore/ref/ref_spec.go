@@ -119,11 +119,11 @@ func newLocalToRemoteTrackingRef(remote string, local DoltRef, remoteRef DoltRef
 			remRefToLocalMapper := identityBranchMapper(local.GetPath())
 
 			return localToRemoteTrackingRef{
-				localPattern,
-				remPattern,
-				remoteInRef,
-				localToRemMapper,
-				remRefToLocalMapper,
+				localPattern:  localPattern,
+				remPattern:    remPattern,
+				remote:        remoteInRef,
+				localToRemRef: localToRemMapper,
+				remRefToLocal: remRefToLocalMapper,
 			}, nil
 		} else {
 			localPattern := newWildcardPattern(local.GetPath())
@@ -132,11 +132,11 @@ func newLocalToRemoteTrackingRef(remote string, local DoltRef, remoteRef DoltRef
 			remRefToLocalMapper := newWildcardBranchMapper(local.GetPath())
 
 			return localToRemoteTrackingRef{
-				localPattern,
-				remPattern,
-				remoteInRef,
-				localToRemMapper,
-				remRefToLocalMapper,
+				localPattern:  localPattern,
+				remPattern:    remPattern,
+				remote:        remoteInRef,
+				localToRemRef: localToRemMapper,
+				remRefToLocal: remRefToLocalMapper,
 			}, nil
 		}
 	}

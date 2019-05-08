@@ -2,18 +2,22 @@ package ref
 
 import "strings"
 
+// BranchRef is a reference to a branch
 type BranchRef struct {
 	branch string
 }
 
+// GetType will return BranchRefType
 func (br BranchRef) GetType() RefType {
 	return BranchRefType
 }
 
+// GetPath returns the name of the branch
 func (br BranchRef) GetPath() string {
 	return br.branch
 }
 
+// String returns the fully qualified reference name e.g. refs/heads/master
 func (br BranchRef) String() string {
 	return String(br)
 }

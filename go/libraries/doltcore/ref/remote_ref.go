@@ -6,23 +6,28 @@ import (
 	"strings"
 )
 
+// RemoteRef is a reference to a reference that tracks a branch on a remote
 type RemoteRef struct {
 	remote string
 	branch string
 }
 
+// GetType returns RemoteRefType
 func (rr RemoteRef) GetType() RefType {
 	return RemoteRefType
 }
 
+// GetPath returns the remote name separated by the branch e.g. origin/master
 func (rr RemoteRef) GetPath() string {
 	return path.Join(rr.remote, rr.branch)
 }
 
+// String returns the fully qualified reference e.g. refs/remotes/origin/master
 func (rr RemoteRef) String() string {
 	return String(rr)
 }
 
+// GetRemote returns the name of the remote that this reference is referring to.
 func (rr RemoteRef) GetRemote() string {
 	return rr.remote
 }

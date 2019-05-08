@@ -432,6 +432,8 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 	return nil, doltdb.ErrBranchNotFound
 }
 
+// GetRefSpecs takes an optional remoteName and returns all refspecs associated with that remote.  If "" is passed as
+// the remoteName then the default remote is used.
 func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
 	var remote Remote
 	var verr errhand.VerboseError
@@ -457,7 +459,7 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhan
 		}
 
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
-			return nil, errhand.BuildDError("error: '%s' is no a valid refspec referring to a remote tracking branch", remote.Name).Build()
+			return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", remote.Name).Build()
 		} else if rrs.GetRemote() != remote.Name {
 			return nil, errhand.BuildDError("error: remote '%s' refers to remote '%s'", remote.Name, rrs.GetRemote()).Build()
 		} else {
@@ -468,6 +470,8 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhan
 	return refSpecs, nil
 }
 
+// GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple
+// repos and a configurable default.
 func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
 	remotes := dEnv.RepoState.Remotes
 
