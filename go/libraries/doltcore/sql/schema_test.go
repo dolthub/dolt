@@ -14,7 +14,7 @@ const expectedSQL = `CREATE TABLE table_name (
   age int comment 'tag:4',
   rating float comment 'tag:6',
   uuid UUID comment 'tag:7',
-  num_episodes unsigned int comment 'tag:8',
+  num_episodes int unsigned comment 'tag:8',
   primary key (id)
 );`
 
@@ -54,22 +54,24 @@ func TestFmtCol(t *testing.T) {
 			0,
 			10,
 			0,
-			"     title unsigned int comment 'tag:2'",
+			"     title int unsigned comment 'tag:2'",
 		},
 		{
 			schema.NewColumn("aoeui", 52, types.UintKind, true),
 			0,
 			10,
 			15,
-			"     aoeui    unsigned int comment 'tag:52'",
+			"     aoeui    int unsigned comment 'tag:52'",
 		},
 	}
 
 	for _, test := range tests {
-		actual := FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
+		t.Run(test.Expected, func(t *testing.T) {
+			actual := FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
 
-		if actual != test.Expected {
-			t.Errorf("\n'%s' \n\t!= \n'%s'", actual, test.Expected)
-		}
+			if actual != test.Expected {
+				t.Errorf("\n'%s' \n\t!= \n'%s'", actual, test.Expected)
+			}
+		})
 	}
 }
