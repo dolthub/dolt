@@ -1,5 +1,7 @@
 package strhelp
 
+// NthToken returns the Nth token in s, delimited by delim. There is always at least one token: the zeroth token is the
+// input string if delim doesn't occur in s. The second return value will be false if there is no Nth token.
 func NthToken(s string, delim rune, n int) (string, bool) {
 	if n < 0 {
 		panic("invalid arguments.")
