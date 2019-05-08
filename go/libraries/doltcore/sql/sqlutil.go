@@ -224,8 +224,6 @@ const (
 	ZEROFILL           = "zerofill"
 )
 
-const PRINTED_NULL = "<NULL>"
-
 // Boolean predicate func type to filter rows in result sets
 type rowFilterFn = func(r row.Row) (matchesFilter bool)
 
@@ -292,6 +290,7 @@ func parseColumnAlias(colName string) QualifiedColumn {
 type nomsOperation func(left, right types.Value) types.Value
 
 type valGetterKind uint8
+
 const (
 	COLNAME valGetterKind = iota
 	SQL_VAL
@@ -301,16 +300,16 @@ const (
 // valGetter is a convenience object used for comparing the right and left side of an expression
 type valGetter struct {
 	// The kind of this val getter
-	Kind      valGetterKind
+	Kind valGetterKind
 	// The value type returned by this getter
-	NomsKind  types.NomsKind
+	NomsKind types.NomsKind
 	// The kind of the value that this getter's result will be compared against, filled in elsewhere
-	CmpKind   types.NomsKind
+	CmpKind types.NomsKind
 	// Init() performs error checking and does any labor-saving pre-calculation that doesn't need to be done for every
 	// row in the result set
-	Init      func() error
+	Init func() error
 	// Get() returns the value for this getter for the row given
-	Get       func(r row.Row) types.Value
+	Get func(r row.Row) types.Value
 	// CachedVal is a handy place to put a pre-computed value for getters that deal with constants or literals
 	CachedVal types.Value
 }
