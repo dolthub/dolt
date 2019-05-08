@@ -205,6 +205,7 @@ const (
 	UTC_DATE           = "utc_date"
 	UTC_TIME           = "utc_time"
 	UTC_TIMESTAMP      = "utc_timestamp"
+	UUID							 = "uuid"
 	VALUES             = "values"
 	VARBINARY          = "varbinary"
 	VARCHAR            = "varchar"

@@ -20,8 +20,8 @@ require (
 	github.com/tealeg/xlsx v1.0.3
 	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
 	go.opencensus.io v0.19.0 // indirect
-	golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a
-	golang.org/x/net v0.0.0-20190313220215-9f648a60d977
+	golang.org/x/crypto v0.0.0-20190506204251-e1dfcc566284
+	golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c
 	golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c // indirect
 	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca // indirect
 	google.golang.org/grpc v1.18.0
@@ -30,4 +30,4 @@ require (
 
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190506171537-518b7edcd73f
 
-replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.2
+replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.3
