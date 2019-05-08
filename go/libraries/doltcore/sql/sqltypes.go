@@ -7,6 +7,6 @@ var DoltToSQLType = map[types.NomsKind]string{
 	types.BoolKind:   BOOL,
 	types.FloatKind:  FLOAT_TYPE,
 	types.IntKind:    INT,
-	types.UintKind:   "unsigned int",
+	types.UintKind:   INT + " " + UNSIGNED,
 	types.UUIDKind:   "UUID",
 }
