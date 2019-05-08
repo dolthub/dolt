@@ -32,7 +32,7 @@ const (
 	InternalRefType RefType = "internal"
 )
 
-// RefTypes is the set of all supported reference types.  External RefTypes can be to this map in order to add
+// RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add
 // RefTypes for external tooling
 var RefTypes = map[RefType]struct{}{BranchRefType: {}, RemoteRefType: {}, InternalRefType: {}}
 
@@ -115,8 +115,9 @@ func Parse(str string) (DoltRef, error) {
 				return NewRemoteRefFromPathStr(str)
 			case InternalRefType:
 				return NewInternalRef(str), nil
+			default:
+				panic("unknown type " + rType)
 			}
-			break
 		}
 	}
 

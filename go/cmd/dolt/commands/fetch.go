@@ -30,9 +30,7 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	if verr == nil {
 		var rsToRem map[ref.RemoteRefSpec]env.Remote
-		rsToRem, verr = mapRefspecsToRemotes(refSpecs, dEnv)
-
-		if verr == nil {
+		if rsToRem, verr = mapRefspecsToRemotes(refSpecs, dEnv); verr == nil {
 			verr = fetchRefSpecs(dEnv, rsToRem)
 		}
 	}
@@ -59,7 +57,7 @@ func parseRSFromArgs(apr *argparser.ArgParseResults) ([]ref.RemoteRefSpec, errha
 		}
 
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
-			return nil, errhand.BuildDError("error: '%s' is no a valid refspec referring to a remote tracking branch", rsStr).Build()
+			return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", rsStr).Build()
 		} else {
 			refSpecs = append(refSpecs, rrs)
 		}
