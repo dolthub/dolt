@@ -279,6 +279,7 @@ teardown() {
     dolt commit -m "another test commit"
     run dolt pull origin
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
 }
 
 @test "generate a merge with a conflict with a remote branch" {
