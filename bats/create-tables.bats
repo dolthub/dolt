@@ -281,20 +281,17 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt schema test
-    skip "dolt sql does not support the unsigned keyword yet"
-    [[ "$output" =~ "uint" ]] || false
+    [[ "$output" =~ "int unsigned" ]] || false
 }
 
 @test "create a table using sql with a boolean" {
     run dolt sql -q "create table test (pk int not null, c1 bool, primary key (pk))"
-    skip "dolt sql does not support boolean types"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
 
 @test "create a table using sql with a uuid type" {
     run dolt sql -q "create table test (pk int not null, c1 uuid, primary key (pk))"
-    skip "dolt sql does not support uuid types"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
