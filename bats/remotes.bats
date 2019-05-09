@@ -40,24 +40,6 @@ teardown() {
     [[ "$output" =~ "usage:" ]] || false
 }
 
-@test "push and pull from a remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
-    run dolt push test-remote master
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
-    run dolt push poop master
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote poop" ]] || false
-    run dolt pull test-remote
-    [ "$status" -eq 0 ]
-    skip "Should say Already up to date not fast forward"
-    [[ "$output" = "up to date" ]] || false
-    run dolt pull poop
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote poop" ]] || false
-}
-
 @test "rename a remote" {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
     run dolt remote rename test-remote renamed-remote
@@ -85,6 +67,40 @@ teardown() {
     [[ "$output" =~ "unknown remote poop" ]] || false
 }
 
+@test "push and pull master branch from a remote" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    run dolt push test-remote master
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
+    run dolt pull test-remote
+    [ "$status" -eq 0 ]
+    skip "Should say Already up to date not fast forward"
+    [[ "$output" = "up to date" ]] || false
+}
+
+@test "push and pull an unknown remote" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    run dolt push poop master
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "unknown remote" ]] || false
+    run dolt pull poop
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "unknown remote" ]] || false    
+}
+
+@test "push and pull non-master branch from remote" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt checkout -b test-branch
+    run dolt push test-remote test-branch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt pull test-remote
+    [ "$status" -eq 0 ]
+    skip "Should say up to date not fast forward"
+    [[ "$output" = "up to date" ]] || false
+}
+
 @test "clone a remote" {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
@@ -94,8 +110,7 @@ teardown() {
     cd "dolt-repo-clones"
     run dolt clone localhost:50051/test-org/test-repo --insecure
     [ "$status" -eq 0 ]
-    # Change this back to not a regex after we remove the extra refs output
-    [[ "$output" =~ "cloning localhost:50051/test-org/test-repo" ]] || false
+    [ "$output" = "cloning localhost:50051/test-org/test-repo" ]
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -113,13 +128,71 @@ teardown() {
     [ ! -d bar ]
 }
 
+@test "clone a different branch than master" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt checkout -b test-branch
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote test-branch
+    cd "dolt-repo-clones"
+    run dolt clone -b test-branch localhost:50051/test-org/test-repo --insecure
+    [ "$status" -eq 0 ]
+    [ "$output" = "cloning localhost:50051/test-org/test-repo" ]
+    cd test-repo
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "master" ]] || false
+    [[ "$output" =~ "test-branch" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test commit" ]] || false
+}
+
+@test "call a clone's remote something other than origin" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    run dolt clone --remote test-remote localhost:50051/test-org/test-repo --insecure
+    [ "$status" -eq 0 ]
+    [ "$output" = "cloning localhost:50051/test-org/test-repo" ]
+    cd test-repo
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test commit" ]] || false
+    run dolt remote -v 
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test-remote" ]] || false
+    [[ ! "$output" =~ "origin" ]] || false
+}
+
+@test "dolt fetch" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt push test-remote master
+    run dolt fetch
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt fetch refs/heads/master:refs/remotes/test-remote/master
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt fetch refs/heads/master:refs/remotes/poop/master
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "unknown remote 'poop'" ]] || false
+    run dolt fetch refs/heads/master:refs/remotes/test-remote/poop
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt branch -v -a
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "remotes/test-remote/poop" ]] || false
+} 
+
 @test "dolt merge with origin/master syntax." {
     dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
     dolt push test-remote master
     dolt fetch
-    run dolt fetch refs/heads/master:refs/remotes/poop/master
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote 'poop'" ]] || false
     cd "dolt-repo-clones"
     dolt clone localhost:50051/test-org/test-repo --insecure
     cd ..
@@ -205,6 +278,6 @@ teardown() {
     dolt add test2
     dolt commit -m "another test commit"
     run dolt pull origin
-    skip "This panics right now with a panic: runtime error: invalid memory address or nil pointer dereference"
+    skip "This throws cause: runtime error: invalid memory address or nil pointer dereference"
     [ "$status" -eq 0 ]
 }
