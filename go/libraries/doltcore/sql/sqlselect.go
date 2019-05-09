@@ -16,6 +16,9 @@ import (
 	"strconv"
 )
 
+// No limit marker for limit statements in select
+const noLimit = -1
+
 // Struct to represent the salient results of parsing a select statement.
 type SelectStatement struct {
 	// Result set schema
@@ -167,7 +170,7 @@ func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error 
 		}
 		selectStmt.limit = limitInt
 	} else {
-		selectStmt.limit = -1
+		selectStmt.limit = noLimit
 	}
 
 	return nil
@@ -415,9 +418,10 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 	}
 
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
-	selTrans := &selectTransform{nil, selectStmt.filterFn, selectStmt.limit, 0}
-	selTrans.noMoreCallback = func() { p.NoMore() }
-	p.AddStage(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
+	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
+	if selectStmt.limit != noLimit {
+		p.AddStage(pipeline.NewNamedTransform("limit", createLimitFn(selectStmt, p)))
+	}
 
 	reductionTransform, err := schemaReductionTransform(selectStmt)
 	if err != nil {
@@ -452,26 +456,37 @@ func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
 	}
 }
 
-// Convenience struct to apply a filter and limit operation
-type selectTransform struct {
-	noMoreCallback func()
-	filter         rowFilterFn
-	limit          int
-	count          int
-}
-
-// Limits and filters the rows returned by a query
-func (st *selectTransform) limitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
-	if st.limit == -1 || st.count < st.limit {
-		if st.filter(inRow) {
-			st.count++
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
-		}
-	} else if st.count == st.limit {
-		st.noMoreCallback()
+// Returns a transform function to limit the set of rows to the value specified by the statement. Must only be applied
+// if a limit > 0 is specified.
+func createLimitFn(statement *SelectStatement, p *pipeline.Pipeline) pipeline.TransformRowFunc {
+	if statement.limit == -1 {
+		panic("Called createLimitFn without a limit specified")
 	}
 
-	return nil, ""
+	var count int
+	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
+		if count < statement.limit {
+			count++
+			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+		} else if count == statement.limit {
+			p.NoMore()
+		}
+		return nil, ""
+	}
+}
+
+// Returns a transform function to filter the set of rows to match the where / join clauses.
+func createWhereFn(statement *SelectStatement) pipeline.TransformRowFunc {
+	if statement.filterFn == nil {
+		panic("Called createWhereFn without a filterFn specified")
+	}
+
+	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
+		if statement.filterFn(inRow) {
+			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+		}
+		return nil, ""
+	}
 }
 
 // Creates a pipeline to return results from a single table.
@@ -484,11 +499,11 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 	p := pipeline.NewPartialPipeline(rdProcFunc, &pipeline.TransformCollection{})
 	p.RunAfter(func() { rd.Close(ctx) })
 
-	selTrans := &selectTransform{nil, statement.filterFn, statement.limit, 0}
-	selTrans.noMoreCallback = func() { p.NoMore() }
-
 	if isTerminal {
-		p.AddStage(pipeline.NewNamedTransform("select", selTrans.limitAndFilter))
+		p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(statement)))
+		if statement.limit != noLimit {
+			p.AddStage(pipeline.NewNamedTransform("limit", createLimitFn(statement, p)))
+		}
 		p.AddStage(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
 	}
 
