@@ -102,23 +102,27 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 			continue
 		}
 
-		line := ""
+		commitStr := ""
+		branchName := "  " + branch.GetPath()
+		branchLen := len(branchName)
 		if ref.Equals(branch, currentBranch) {
-			line = fmt.Sprint("* ", color.GreenString("%-56s", branch.GetPath()))
+			branchName = "* " + color.GreenString(branch.GetPath())
 		} else if branch.GetType() == ref.RemoteRefType {
-			line = fmt.Sprint(color.RedString("  remotes/%-48s", branch.GetPath()))
-		} else {
-			line = fmt.Sprintf("  %-32s", branch.GetPath())
+			branchName = "  " + color.RedString("remotes/"+branch.GetPath())
+			branchLen += len("remotes/")
+
 		}
 
 		if verbose {
-
 			cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 			if err == nil {
-				line = fmt.Sprintf("%s %s", line, cm.HashOf().String())
+				commitStr = cm.HashOf().String()
 			}
 		}
+
+		fmtStr := fmt.Sprintf("%%s%%%ds\t%%s", 48-branchLen)
+		line := fmt.Sprintf(fmtStr, branchName, "", commitStr)
 
 		cli.Println(line)
 	}
