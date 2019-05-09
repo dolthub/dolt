@@ -205,6 +205,5 @@ teardown() {
     dolt add test2
     dolt commit -m "another test commit"
     run dolt pull origin
-    skip "This panics right now with a panic: runtime error: invalid memory address or nil pointer dereference"
     [ "$status" -eq 0 ]
 }
