@@ -51,12 +51,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
-	if tbl.HashOf() == ancTbl.HashOf() {
-		return mergeTbl, &MergeStats{Operation: TableModified}, nil
-	} else if mergeTbl.HashOf() == ancTbl.HashOf() {
-		return tbl, &MergeStats{Operation: TableUnmodified}, nil
-	}
-
 	if !ancOk {
 		if mergeOk && ok {
 			return nil, nil, ErrSameTblAddedTwice
@@ -65,6 +59,12 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		} else {
 			return mergeTbl, &MergeStats{Operation: TableAdded}, nil
 		}
+	}
+
+	if tbl.HashOf() == ancTbl.HashOf() {
+		return mergeTbl, &MergeStats{Operation: TableModified}, nil
+	} else if mergeTbl.HashOf() == ancTbl.HashOf() {
+		return tbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
 	tblSchema := tbl.GetSchema(ctx)
