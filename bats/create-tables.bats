@@ -340,3 +340,11 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
 }
+
+@test "dolt diff on a newly created table" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    run dolt diff
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = "diff --dolt a/test b/test" ]
+    [ "${lines[1]}" = "added table" ]
+}
