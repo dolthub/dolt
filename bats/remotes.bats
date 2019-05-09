@@ -281,3 +281,33 @@ teardown() {
     skip "This throws cause: runtime error: invalid memory address or nil pointer dereference"
     [ "$status" -eq 0 ]
 }
+
+@test "generate a merge with a conflict with a remote branch" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "created table"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    dolt clone localhost:50051/test-org/test-repo --insecure
+    cd ..
+    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt add test
+    dolt commit -m "row to generate conflict"
+    dolt push test-remote master
+    cd "dolt-repo-clones/test-repo"
+    dolt table put-row test pk:0 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt add test
+    dolt commit -m "conflicting row"
+    run dolt pull origin
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]]
+    dolt conflicts resolve test --ours
+    dolt add test
+    dolt commit -m "Fixed conflicts"
+    run dolt push origin master
+    cd ../../
+    dolt pull test-remote
+    run dolt log
+    [[ "$output" =~ "Fixed conflicts" ]] || false
+}
