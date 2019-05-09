@@ -15,110 +15,6 @@ import (
 	"github.com/xwb1989/sqlparser"
 )
 
-// Tests that the basic SelectAndLimit
-func Test_selectTransform_limitAndFilter(t *testing.T) {
-	var noMoreCallbackCalled = false
-	var noMoreCallback = func() {
-		noMoreCallbackCalled = true
-	}
-
-	type fields struct {
-		noMoreCallback func()
-		filter         rowFilterFn
-		limit          int
-		count          int
-	}
-	type args struct {
-		inRow row.Row
-		props pipeline.ReadableMap
-	}
-	tests := []struct {
-		name                  string
-		fields                fields
-		args                  args
-		expectedRow           []*pipeline.TransformedRowResult
-		expectedBadRowDetails string
-		noMoreCalled          bool
-	}{
-		{
-			name: "true no limit",
-			fields: fields{
-				noMoreCallback: noMoreCallback,
-				filter: func(r row.Row) (matchesFilter bool) { return true },
-				limit:  -1,
-			},
-			args: args{ homer, pipeline.NoProps },
-			expectedRow: transformedRowResults(homer),
-			expectedBadRowDetails: "",
-		},
-		{
-			name: "false no limit",
-			fields: fields{
-				noMoreCallback: noMoreCallback,
-				filter: func(r row.Row) (matchesFilter bool) { return false },
-				limit:  -1,
-			},
-			args: args{ homer, pipeline.NoProps },
-			expectedRow: transformedRowResults(),
-			expectedBadRowDetails: "",
-		},
-		{
-			name: "true limit 1",
-			fields: fields{
-				noMoreCallback: noMoreCallback,
-				filter: func(r row.Row) (matchesFilter bool) { return true },
-				limit:  1,
-				count: 1,
-			},
-			args: args{ homer, pipeline.NoProps },
-			expectedRow: transformedRowResults(),
-			expectedBadRowDetails: "",
-			noMoreCalled: true,
-		},
-		{
-			name: "false limit 1",
-			fields: fields{
-				noMoreCallback: noMoreCallback,
-				filter: func(r row.Row) (matchesFilter bool) { return false },
-				limit:  1,
-				count: 1,
-			},
-			args: args{ homer, pipeline.NoProps },
-			expectedRow: transformedRowResults(),
-			expectedBadRowDetails: "",
-			noMoreCalled: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			noMoreCallbackCalled = false
-			st := &selectTransform{
-				noMoreCallback: tt.fields.noMoreCallback,
-				filter:         tt.fields.filter,
-				limit:          tt.fields.limit,
-				count:          tt.fields.count,
-			}
-			row, badRowDetails := st.limitAndFilter(tt.args.inRow, tt.args.props)
-			assert.Equal(t, tt.expectedRow, row)
-			assert.Equal(t, tt.expectedBadRowDetails, badRowDetails)
-			assert.Equal(t, tt.noMoreCalled, noMoreCallbackCalled)
-		})
-	}
-}
-
-func transformedRowResults(rows... row.Row) []*pipeline.TransformedRowResult {
-	var r []*pipeline.TransformedRowResult
-	for _, v := range rows {
-		r = append(r, transformedRowWithoutProps(v))
-	}
-	return r
-}
-
-func transformedRowWithoutProps(r row.Row) *pipeline.TransformedRowResult {
-	return &pipeline.TransformedRowResult{r, nil}
-}
-
 func TestExecuteSelect(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -134,8 +30,38 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
+			name:           "select *, limit 1 ",
+			query:          "select * from people limit 1",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, limit 100",
+			query:          "select * from people limit 100",
+			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
 			name:           "select *, where < int",
 			query:          "select * from people where age < 40",
+			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, where < int, limit 1",
+			query:          "select * from people where age < 40 limit 1",
+			expectedRows:   compressRows(peopleTestSchema, marge),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, where < int, limit 2",
+			query:          "select * from people where age < 40 limit 2",
+			expectedRows:   compressRows(peopleTestSchema, marge, bart),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, where < int, limit 100",
+			query:          "select * from people where age < 40 limit 100",
 			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
