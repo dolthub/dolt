@@ -25,13 +25,22 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	remotes, _ := dEnv.GetRemotes()
+
 	var verr errhand.VerboseError
-	refSpecs, verr := getRefSpecs(apr, dEnv)
+	if len(remotes) == 0 {
+		verr = errhand.BuildDError("error: no remotes set").
+			AddDetails("to add a remote run: dolt remote add <remote> <url>").Build()
+	}
 
 	if verr == nil {
-		var rsToRem map[ref.RemoteRefSpec]env.Remote
-		if rsToRem, verr = mapRefspecsToRemotes(refSpecs, dEnv); verr == nil {
-			verr = fetchRefSpecs(dEnv, rsToRem)
+		refSpecs, verr := getRefSpecs(apr, dEnv)
+
+		if verr == nil {
+			var rsToRem map[ref.RemoteRefSpec]env.Remote
+			if rsToRem, verr = mapRefspecsToRemotes(refSpecs, dEnv); verr == nil {
+				verr = fetchRefSpecs(dEnv, rsToRem)
+			}
 		}
 	}
 
