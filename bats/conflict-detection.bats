@@ -33,6 +33,7 @@ teardown() {
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ "$output" =~ "1 rows modified" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches modify different cell same row. merge. no conflict" {
@@ -54,6 +55,7 @@ teardown() {
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ "$output" =~ "1 rows modified" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches modify same cell. merge. conflict" {
@@ -93,6 +95,7 @@ teardown() {
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ "$output" =~ "1 rows added" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches add same row. merge. no conflict" {
@@ -111,6 +114,7 @@ teardown() {
     run dolt merge add-row
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "one branch add table, other modifies table. merge. no conflict" {
@@ -131,6 +135,7 @@ teardown() {
     [[ "$output" =~ "Updating" ]] || false
     skip "should have a merge summary section that says 1 table changed" 
     [[ "$output" =~ "1 tables changed" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches add same column. merge. no conflict" {
@@ -149,6 +154,7 @@ teardown() {
     run dolt merge add-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches add different column. merge. no conflict" {
@@ -168,6 +174,7 @@ teardown() {
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches add same column, different types. merge. conflict" {
@@ -205,6 +212,7 @@ teardown() {
     run dolt merge delete-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches delete different column. merge. no conflict" {
@@ -223,6 +231,7 @@ teardown() {
     run dolt merge delete-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches rename same column to same name. merge. no conflict" {
@@ -241,6 +250,7 @@ teardown() {
     run dolt merge rename-column
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches rename same column to different name. merge. conflict" {
@@ -264,7 +274,7 @@ teardown() {
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches rename different column to same name. merge conflict" {
+@test "two branches rename different column to same name. merge. conflict" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "table created"
@@ -303,6 +313,7 @@ teardown() {
     run dolt merge change-types
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches change type of same column to different type. merge. conflict" {
@@ -342,6 +353,7 @@ teardown() {
     run dolt merge add-pk
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches add same primary key column. merge. no conflict" {
@@ -360,6 +372,7 @@ teardown() {
     run dolt merge add-pk
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches make different columns primary key. merge. conflict" {
@@ -399,4 +412,5 @@ teardown() {
     run dolt merge table2
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+    [[ ! "$output" =~ "CONFLICT" ]] || false
 }
