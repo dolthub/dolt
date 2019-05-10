@@ -133,6 +133,11 @@ func mergeBranch(dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
 		return verr
 	}
 
+	if cm1.HashOf() == cm2.HashOf() {
+		cli.Println("Everything up-to-date")
+		return nil
+	}
+
 	cli.Println("Updating", cm1.HashOf().String()+".."+cm2.HashOf().String())
 
 	if ok, err := cm1.CanFastForwardTo(context.TODO(), cm2); ok {
