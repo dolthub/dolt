@@ -19,15 +19,23 @@ var ErrUnsupportedMapping = errors.New("unsupported mapping")
 
 // RefSpec is an interface for mapping a reference in one space to a reference in another space.
 type RefSpec interface {
+	// SrcRef will take a reference to the current working branch and return a reference to what should be used
+	// for the source reference of an operation involving a reference spec
 	SrcRef(cwbRef DoltRef) DoltRef
+
+	// DestRef will take a source reference and return a reference to what shat should be used for the destination
+	// reference of an operation involving a reference spec.
 	DestRef(srcRef DoltRef) DoltRef
 }
 
+// RemoteRefSpec is an interface that embeds the RefSpec interface and provides an additional method to get the name
+// of a remote.
 type RemoteRefSpec interface {
 	RefSpec
 	GetRemote() string
 }
 
+// ParseRefSpec parses a RefSpec from a string.
 func ParseRefSpec(refSpecStr string) (RefSpec, error) {
 	return ParseRefSpecForRemote("", refSpecStr)
 }
@@ -112,11 +120,13 @@ func (wcbm wcBranchMapper) mapBranch(s string) string {
 	return wcbm.prefix + s + wcbm.suffix
 }
 
+// BranchToBranchRefSpec maps one branch to another.
 type BranchToBranchRefSpec struct {
 	srcRef  DoltRef
 	destRef DoltRef
 }
 
+// NewBranchToBranchRefSpec takes a source and destination BranchRef and returns a RefSpec that maps source to dest.
 func NewBranchToBranchRefSpec(srcRef, destRef BranchRef) (RefSpec, error) {
 	return BranchToBranchRefSpec{
 		srcRef:  srcRef,
@@ -124,6 +134,7 @@ func NewBranchToBranchRefSpec(srcRef, destRef BranchRef) (RefSpec, error) {
 	}, nil
 }
 
+// SrcRef will always determine the DoltRef specified as the source ref regardless to the cwbRef
 func (rs BranchToBranchRefSpec) SrcRef(cwbRef DoltRef) DoltRef {
 	return rs.srcRef
 }
@@ -137,6 +148,7 @@ func (rs BranchToBranchRefSpec) DestRef(r DoltRef) DoltRef {
 	return nil
 }
 
+// BranchToTrackingBranchRefSpec maps a branch to the branch that should be tracking it
 type BranchToTrackingBranchRefSpec struct {
 	localPattern  pattern
 	remPattern    pattern
@@ -192,11 +204,13 @@ func newLocalToRemoteTrackingRef(remote string, srcRef BranchRef, destRef Remote
 	return nil, ErrInvalidRefSpec
 }
 
-func (rs BranchToTrackingBranchRefSpec) SrcRef(branchRef DoltRef) DoltRef {
-	if branchRef.GetType() == BranchRefType {
-		_, matches := rs.localPattern.matches(branchRef.GetPath())
+// SrcRef will return the current working branchh reference that is passed in as long as the cwbRef matches
+// the source portion of the ref spec
+func (rs BranchToTrackingBranchRefSpec) SrcRef(cwbRef DoltRef) DoltRef {
+	if cwbRef.GetType() == BranchRefType {
+		_, matches := rs.localPattern.matches(cwbRef.GetPath())
 		if matches {
-			return branchRef
+			return cwbRef
 		}
 	}
 
@@ -215,6 +229,7 @@ func (rs BranchToTrackingBranchRefSpec) DestRef(branchRef DoltRef) DoltRef {
 	return nil
 }
 
+// GetRemote returns the name of the remote being operated on.
 func (rs BranchToTrackingBranchRefSpec) GetRemote() string {
 	return rs.remote
 }
