@@ -36,6 +36,22 @@ func TestRefSpec(t *testing.T) {
 				"refs/heads/as/master": "refs/remotes/borigin/as/mymaster",
 			},
 		}, {
+			"",
+			"master",
+			true,
+			map[string]string{
+				"refs/heads/master":  "refs/heads/master",
+				"refs/heads/feature": "refs/nil/",
+			},
+		}, {
+			"",
+			"master:master",
+			true,
+			map[string]string{
+				"refs/heads/master":  "refs/heads/master",
+				"refs/heads/feature": "refs/nil/",
+			},
+		}, {
 			"origin",
 			"refs/heads/master:refs/remotes/not_borigin/mymaster",
 			false,
@@ -50,8 +66,7 @@ func TestRefSpec(t *testing.T) {
 			"refs/heads/branchname:refs/remotes/origin/*",
 			false,
 			nil,
-		},
-		{
+		}, {
 			"origin",
 			"refs/heads/*/*:refs/remotes/origin/*/*",
 			false,
@@ -76,16 +91,10 @@ func TestRefSpec(t *testing.T) {
 				inRef, _ := Parse(in)
 				outRef, _ := Parse(out)
 
-				actual := refSpec.Map(inRef)
+				actual := refSpec.DestRef(inRef)
 
 				if !Equals(actual, outRef) {
 					t.Error(test.refSpecStr, "mapped", in, "to", actual.String(), "expected", outRef.String())
-				} else if actual != nil {
-					reverse := refSpec.MapBack(actual)
-
-					if !Equals(inRef, reverse) {
-						t.Error(test.refSpecStr, "reverse mapped", actual.String(), "to", reverse.String(), "expected", inRef.String())
-					}
 				}
 			}
 		}

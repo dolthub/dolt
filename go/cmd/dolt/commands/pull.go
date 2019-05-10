@@ -42,7 +42,7 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				remote := dEnv.RepoState.Remotes[refSpecs[0].GetRemote()]
 
 				for _, refSpec := range refSpecs {
-					if remoteTrackRef := refSpec.Map(branch); remoteTrackRef != nil {
+					if remoteTrackRef := refSpec.DestRef(branch); remoteTrackRef != nil {
 						verr = pullRemoteBranch(dEnv, remote, branch, remoteTrackRef)
 
 						if verr != nil {

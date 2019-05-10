@@ -12,7 +12,12 @@ import (
 
 var ErrCantFF = errors.New("can't fast forward merge")
 
-func Push(ctx context.Context, branchRef, remoteRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
+// Push will update a destination branch, in a given destination database if it can be done as a fast forward merge.
+// This is accomplished first by verifying that the remote tracking reference for the source database can be updated to
+// the given commit via a fast forward merge.  If this is the case, an attempt will be made to update the branch in the
+// destination db to the given commit via fast forward move.  If that succeeds the tracking branch is updated in the
+// source db.
+func Push(ctx context.Context, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
 	canFF, err := srcDB.CanFastForward(ctx, remoteRef, commit)
 
 	if err != nil {
@@ -29,7 +34,7 @@ func Push(ctx context.Context, branchRef, remoteRef ref.DoltRef, srcDB, destDB *
 		return err
 	}
 
-	err = destDB.FastForward(ctx, branchRef, commit)
+	err = destDB.FastForward(ctx, destRef, commit)
 
 	if err != nil {
 		return err
@@ -38,6 +43,25 @@ func Push(ctx context.Context, branchRef, remoteRef ref.DoltRef, srcDB, destDB *
 	err = srcDB.FastForward(ctx, remoteRef, commit)
 
 	return err
+}
+
+func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef ref.RemoteRef, localDB, remoteDB *doltdb.DoltDB) error {
+	var err error
+	if remoteDB.HasRef(ctx, targetRef) {
+		err = remoteDB.DeleteBranch(ctx, targetRef)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	err = localDB.DeleteBranch(ctx, remoteRef)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func Fetch(ctx context.Context, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {

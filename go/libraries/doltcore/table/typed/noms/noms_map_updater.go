@@ -9,7 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
-// NomsMapUpdater is a TableWriter that writes rows to a noms types.Map. Once all rows are written Close() should be
+// NomsMapUpdater is a TableWriter that writes rows to a noms types.DestRef. Once all rows are written Close() should be
 // called and GetMap will then return the new map.
 type NomsMapUpdater struct {
 	sch schema.Schema
@@ -81,7 +81,7 @@ func (nmu *NomsMapUpdater) Close(ctx context.Context) error {
 	}
 }
 
-// GetMap retrieves the resulting types.Map once close is called
+// GetMap retrieves the resulting types.DestRef once close is called
 func (nmu *NomsMapUpdater) GetMap() *types.Map {
 	return nmu.result
 }

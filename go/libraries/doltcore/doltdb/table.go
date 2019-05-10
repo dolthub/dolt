@@ -190,7 +190,7 @@ func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch
 	return t.GetRow(ctx, pkTuple, sch)
 }
 
-// GetRow uses the noms Map containing the row data to lookup a row by primary key.  If a valid row exists with this pk
+// GetRow uses the noms DestRef containing the row data to lookup a row by primary key.  If a valid row exists with this pk
 // then the supplied TableRowFactory will be used to create a TableRow using the row data.
 func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (row.Row, bool) {
 	rowMap := t.GetRowData(ctx)

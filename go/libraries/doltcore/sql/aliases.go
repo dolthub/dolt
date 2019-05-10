@@ -2,27 +2,27 @@ package sql
 
 // Aliases tracks the aliased identifiers in a query
 type Aliases struct {
-	// Map from table alias to table name
+	// DestRef from table alias to table name
 	TablesByAlias map[string]string
-	// Map from table alias to table name
+	// DestRef from table alias to table name
 	AliasesByTable map[string]string
-	// Map from column alias to column name in original schema
+	// DestRef from column alias to column name in original schema
 	ColumnsByAlias map[string]QualifiedColumn
-	// Map from column name to column alias
+	// DestRef from column name to column alias
 	AliasesByColumn map[QualifiedColumn]string
 }
 
 // A single result set can have many columns that share the same name
 type QualifiedColumn struct {
-	TableName string
+	TableName  string
 	ColumnName string
 }
 
 func NewAliases() *Aliases {
 	return &Aliases{
-		TablesByAlias: make(map[string]string),
-		AliasesByTable: make(map[string]string),
-		ColumnsByAlias: make(map[string]QualifiedColumn),
+		TablesByAlias:   make(map[string]string),
+		AliasesByTable:  make(map[string]string),
+		ColumnsByAlias:  make(map[string]QualifiedColumn),
 		AliasesByColumn: make(map[QualifiedColumn]string),
 	}
 }

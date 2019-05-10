@@ -2,6 +2,8 @@ package ref
 
 import "strings"
 
+var EmptyBranchRef = BranchRef{""}
+
 // BranchRef is a reference to a branch
 type BranchRef struct {
 	branch string
