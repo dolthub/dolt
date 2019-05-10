@@ -14,6 +14,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
 	"io"
+	"sort"
 	"strconv"
 )
 
@@ -108,10 +109,6 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processOrderByClause(selectStmt, s.OrderBy); err != nil {
-		return nil, nil, err
-	}
-
 	if err := processLimitClause(s, selectStmt); err != nil {
 		return nil, nil, err
 	}
@@ -149,7 +146,7 @@ type ob struct {
 }
 
 // Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
-func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy) error {
+func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy, rss *resultset.ResultSetSchema) error {
 	if len(orderBy) == 0 {
 		return nil
 	}
@@ -179,7 +176,7 @@ func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy)
 			return errFmt(UnknownColumnErrFmt, qc.ColumnName)
 		}
 
-		comparisonTag := statement.ResultSetSchema.Mapping(tableSch).SrcToDest[column.Tag]
+		comparisonTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
 
 		dir := asc
 		if o.Direction == sqlparser.DescScr {
@@ -466,6 +463,10 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 			return nil, err
 		}
 
+		if err := processOrderByClause(selectStmt, s.OrderBy, resultset.Identity(tableSch)); err != nil {
+			return nil, err
+		}
+
 		return createSingleTablePipeline(ctx, root, selectStmt, tableName, true)
 	}
 
@@ -515,8 +516,15 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 		return nil, err
 	}
 
+	if err := processOrderByClause(selectStmt, s.OrderBy, selectStmt.intermediateRss); err != nil {
+		return nil, err
+	}
+
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
+	if selectStmt.orderFn != nil {
+		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderFn)})
+	}
 	if selectStmt.limit != noLimit {
 		p.AddStage(pipeline.NewNamedTransform("limit", createLimitFn(selectStmt, p)))
 	}
@@ -528,6 +536,46 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 	p.AddStage(reductionTransform)
 
 	return p, nil
+}
+
+// Returns a sorting transform for the rowLesserFn given. The transform will necessarily block until it receives all
+// input rows before sending rows to the rest of the pipeline.
+func newSortingTransform(lesser rowLesserFn) pipeline.TransformFunc {
+	rows := make([]pipeline.RowWithProps, 0)
+
+	sortAndWrite := func(outChan chan<- pipeline.RowWithProps) {
+		sort.Slice(rows, func(i, j int) bool {
+			return lesser(rows[i].Row, rows[j].Row)
+		})
+		for _, r := range rows {
+			outChan <- r
+		}
+	}
+
+	return func(inChan <-chan pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
+		for {
+			select {
+			case <-stopChan:
+				sortAndWrite(outChan)
+				return
+			default:
+			}
+
+			select {
+			case r, ok := <-inChan:
+				if ok {
+					rows = append(rows, r)
+				} else {
+					sortAndWrite(outChan)
+					return
+				}
+
+			case <-stopChan:
+				sortAndWrite(outChan)
+				return
+			}
+		}
+	}
 }
 
 // Returns a transform stage to reduce the intermediate schema to the final one.
@@ -599,6 +647,9 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 
 	if isTerminal {
 		p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(statement)))
+		if statement.orderFn != nil {
+			p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(statement.orderFn)})
+		}
 		if statement.limit != noLimit {
 			p.AddStage(pipeline.NewNamedTransform("limit", createLimitFn(statement, p)))
 		}
