@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -39,6 +40,8 @@ type SelectStatement struct {
 	aliases *Aliases
 	// Filter function for the result set
 	filterFn rowFilterFn
+	// Ordering function for the result set
+	orderFn rowLesserFn
 	// Limit of results returned
 	limit int
 }
@@ -101,11 +104,15 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processLimitClause(s, selectStmt); err != nil {
+	if err := createResultSetSchema(selectStmt); err != nil {
 		return nil, nil, err
 	}
 
-	if err := createResultSetSchema(selectStmt); err != nil {
+	if err := processOrderByClause(selectStmt, s.OrderBy); err != nil {
+		return nil, nil, err
+	}
+
+	if err := processLimitClause(s, selectStmt); err != nil {
 		return nil, nil, err
 	}
 
@@ -115,6 +122,97 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 	}
 
 	return p, selectStmt, nil
+}
+
+type orderDirection bool
+const (
+	asc  orderDirection = true
+	desc orderDirection = false
+)
+
+// Returns the appropriate less value for sorting, reversing the sort order for desc orders.
+func (od orderDirection) lessVal(less bool) bool {
+	switch od {
+	case asc:
+		return less
+	case desc:
+		return !less
+	}
+	panic("impossible")
+}
+
+// order-by struct
+type ob struct {
+	qc            QualifiedColumn
+	comparisonTag uint64
+	direction     orderDirection
+}
+
+// Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
+func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy) error {
+	if len(orderBy) == 0 {
+		return nil
+	}
+
+	obs := make([]ob, len(orderBy))
+	for i, o := range orderBy {
+		qcs, err := resolveColumnsInWhereExpr(o.Expr, statement.inputSchemas, statement.aliases)
+		if err != nil {
+			return err
+		}
+
+		if len(qcs) == 0 {
+			return errFmt("Found no column in order by clause: %v", nodeToString(o))
+		} else if len(qcs) > 1 {
+			return errFmt("Found more than one column in order by clause: %v", nodeToString(o))
+		}
+
+		qc := qcs[0]
+
+		tableSch, ok := statement.inputSchemas[qc.TableName]
+		if !ok {
+			return errFmt("Unresolved table %v", qc.TableName)
+		}
+
+		column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
+		if !ok {
+			return errFmt(UnknownColumnErrFmt, qc.ColumnName)
+		}
+
+		comparisonTag := statement.ResultSetSchema.Mapping(tableSch).SrcToDest[column.Tag]
+
+		dir := asc
+		if o.Direction == sqlparser.DescScr {
+			dir = desc
+		}
+
+		obs[i] = ob{qc, comparisonTag, dir}
+	}
+
+	// less function for sorting, returns whether left < right
+	statement.orderFn = func(rLeft, rRight row.Row) bool {
+		for _, ob := range obs {
+			leftVal, _ := rLeft.GetColVal(ob.comparisonTag)
+			rightVal, _ := rRight.GetColVal(ob.comparisonTag)
+
+			// MySQL behavior is that nulls sort first in asc, last in desc
+			if types.IsNull(leftVal) {
+				return  ob.direction.lessVal(true)
+			} else if types.IsNull(rightVal) {
+				return ob.direction.lessVal(false)
+			}
+
+			if leftVal.Less(rightVal) {
+				return ob.direction.lessVal(true)
+			} else if rightVal.Less(leftVal) {
+				return ob.direction.lessVal(false)
+			}
+		}
+
+		return false
+	}
+
+	return nil
 }
 
 // Processes the referenced columns, those appearing either in the select list, the where clause, or the join statement.
@@ -293,7 +391,7 @@ func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectS
 
 				_, ok := tableSch.GetAllCols().GetByName(colName)
 				if !ok {
-					return errFmt("Unknown column '%v'", colName)
+					return errFmt(UnknownColumnErrFmt, colName)
 				}
 
 				// an absent column alias will be empty
@@ -459,7 +557,7 @@ func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
 // Returns a transform function to limit the set of rows to the value specified by the statement. Must only be applied
 // if a limit > 0 is specified.
 func createLimitFn(statement *SelectStatement, p *pipeline.Pipeline) pipeline.TransformRowFunc {
-	if statement.limit == -1 {
+	if statement.limit == noLimit {
 		panic("Called createLimitFn without a limit specified")
 	}
 
@@ -546,7 +644,7 @@ func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Sc
 			panic("Unknown table " + tableName)
 		} else {
 			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
-				panic("Unknown column " + colName)
+				panic(fmt.Sprintf(UnknownColumnErrFmt, colName))
 			} else {
 				// Rename any aliased columns for output. Column names only matter for the end result, not any
 				// intermediate ones.

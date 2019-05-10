@@ -228,6 +228,11 @@ const (
 // Boolean predicate func type to filter rows in result sets
 type rowFilterFn = func(r row.Row) (matchesFilter bool)
 
+// Boolean lesser function for rows. Returns whether rLeft < rRight
+type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
+
+const UnknownColumnErrFmt = "Unknown column: '%v'"
+
 // Turns a node to a string
 func nodeToString(node sqlparser.SQLNode) string {
 	buffer := sqlparser.NewTrackedBuffer(nil)
@@ -272,7 +277,7 @@ func resolveColumn(colName string, schemas map[string]schema.Schema, aliases *Al
 	}
 
 	if colSchema == nil {
-		return QualifiedColumn{}, errFmt("Unknown column: '%v'", colName)
+		return QualifiedColumn{}, errFmt(UnknownColumnErrFmt, colName)
 	}
 
 	return QualifiedColumn{TableName: tableName, ColumnName: colName}, nil
@@ -330,11 +335,14 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		if err != nil {
 			return nil, err
 		}
-		tableSch := inputSchemas[qc.TableName]
+		tableSch, ok := inputSchemas[qc.TableName]
+		if !ok {
+			return nil, errFmt("Unresolved table %v", qc.TableName)
+		}
 
 		column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
 		if !ok {
-			return nil, errFmt("Unknown column %v", colNameStr)
+			return nil, errFmt(UnknownColumnErrFmt, colNameStr)
 		}
 		resultSetTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
 
@@ -622,10 +630,10 @@ func resolveColumnsInJoin(expr *sqlparser.JoinTableExpr, schemas map[string]sche
 
 // resolveColumnsInWhereExpr is the helper function for resolveColumnsInWhereExpr, which can be used recursively on sub
 // expressions. Supported parser types here must be kept in sync with createFilterForWhereExpr
-func resolveColumnsInWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+func resolveColumnsInWhereExpr(colExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
 
 	cols := make([]QualifiedColumn, 0)
-	switch expr := whereExpr.(type) {
+	switch expr := colExpr.(type) {
 	case *sqlparser.ComparisonExpr:
 		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
 		if err != nil {
