@@ -101,7 +101,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processReferencedColumns(selectStmt, s.Where); err != nil {
+	if err := processReferencedColumns(selectStmt, s.Where, s.OrderBy); err != nil {
 		return nil, nil, err
 	}
 
@@ -153,7 +153,7 @@ func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy,
 
 	obs := make([]ob, len(orderBy))
 	for i, o := range orderBy {
-		qcs, err := resolveColumnsInWhereExpr(o.Expr, statement.inputSchemas, statement.aliases)
+		qcs, err := resolveColumnsInExpr(o.Expr, statement.inputSchemas, statement.aliases)
 		if err != nil {
 			return err
 		}
@@ -213,11 +213,11 @@ func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy,
 }
 
 // Processes the referenced columns, those appearing either in the select list, the where clause, or the join statement.
-func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Where) error {
+func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Where, orderBy sqlparser.OrderBy) error {
 	cols := make([]QualifiedColumn, 0)
 	cols = append(cols, selectStmt.selectedCols...)
 
-	referencedCols, err := resolveColumnsInWhereClause(where, selectStmt.inputSchemas, selectStmt.aliases)
+	whereCols, err := resolveColumnsInWhereClause(where, selectStmt.inputSchemas, selectStmt.aliases)
 	if err != nil {
 		return err
 	}
@@ -227,14 +227,16 @@ func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Wher
 		return err
 	}
 
-	for _, col := range referencedCols {
-		if !contains(col, cols) {
-			cols = append(cols, col)
-		}
+	obCols, err := resolveColumnsInOrderBy(orderBy, selectStmt.inputSchemas, selectStmt.aliases)
+	if err != nil {
+		return err
 	}
-	for _, col := range joinCols {
-		if !contains(col, cols) {
-			cols = append(cols, col)
+
+	for _, refCols := range [][]QualifiedColumn {whereCols, joinCols, obCols } {
+		for _, col := range refCols {
+			if !contains(col, cols) {
+				cols = append(cols, col)
+			}
 		}
 	}
 
@@ -242,6 +244,7 @@ func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Wher
 	return nil
 }
 
+// Returns whether the given column is in the slice
 func contains(column QualifiedColumn, cols []QualifiedColumn) bool {
 	for _, col := range cols {
 		if AreColumnsEqual(col, column) {
