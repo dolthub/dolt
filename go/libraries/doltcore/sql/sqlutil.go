@@ -269,7 +269,7 @@ func resolveColumn(colName string, schemas map[string]schema.Schema, aliases *Al
 	for tbl, sch := range schemas {
 		if _, ok := sch.GetAllCols().GetByName(colName); ok {
 			if colSchema != nil {
-				return QualifiedColumn{}, errFmt("Ambiguous column: %v", colName)
+				return QualifiedColumn{}, errFmt("Ambiguous column: '%v'", colName)
 			}
 			colSchema = sch
 			tableName = tbl
@@ -596,7 +596,25 @@ func resolveColumnsInWhereClause(whereClause *sqlparser.Where, inputSchemas map[
 		return nil, nil
 	}
 
-	return resolveColumnsInWhereExpr(whereClause.Expr, inputSchemas, aliases)
+	return resolveColumnsInExpr(whereClause.Expr, inputSchemas, aliases)
+}
+
+// resolveColumnsInOrderBy returns the qualified columns referenced in the order by clause
+func resolveColumnsInOrderBy(orderBy sqlparser.OrderBy, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	if orderBy == nil {
+		return nil, nil
+	}
+
+	cols := make([]QualifiedColumn, 0)
+	for _, o := range orderBy {
+		if obCols, err := resolveColumnsInExpr(o.Expr, inputSchemas, aliases); err != nil {
+			return nil, err
+		} else {
+			cols = append(cols, obCols...)
+		}
+	}
+
+	return cols, nil
 }
 
 // resolveColumnsInJoins returns the qualified columns referenced by the join expressions given
@@ -625,21 +643,21 @@ func resolveColumnsInJoin(expr *sqlparser.JoinTableExpr, schemas map[string]sche
 
 	// This may not work in all cases -- not sure if there are expressions that are valid in where clauses but not in
 	// join conditions or vice versa.
-	return resolveColumnsInWhereExpr(expr.Condition.On, schemas, aliases)
+	return resolveColumnsInExpr(expr.Condition.On, schemas, aliases)
 }
 
-// resolveColumnsInWhereExpr is the helper function for resolveColumnsInWhereExpr, which can be used recursively on sub
+// resolveColumnsInExpr is the helper function for resolveColumnsInExpr, which can be used recursively on sub
 // expressions. Supported parser types here must be kept in sync with createFilterForWhereExpr
-func resolveColumnsInWhereExpr(colExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+func resolveColumnsInExpr(colExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
 
 	cols := make([]QualifiedColumn, 0)
 	switch expr := colExpr.(type) {
 	case *sqlparser.ComparisonExpr:
-		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		leftCols, err := resolveColumnsInExpr(expr.Left, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
-		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		rightCols, err := resolveColumnsInExpr(expr.Right, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
@@ -653,46 +671,46 @@ func resolveColumnsInWhereExpr(colExpr sqlparser.Expr, inputSchemas map[string]s
 		}
 		cols = append(cols, qc)
 	case *sqlparser.IsExpr:
-		isCols, err := resolveColumnsInWhereExpr(expr.Expr, inputSchemas, aliases)
+		isCols, err := resolveColumnsInExpr(expr.Expr, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
 		cols = append(cols, isCols...)
 	case *sqlparser.AndExpr:
-		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		leftCols, err := resolveColumnsInExpr(expr.Left, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
-		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		rightCols, err := resolveColumnsInExpr(expr.Right, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
 		cols = append(cols, leftCols...)
 		cols = append(cols, rightCols...)
 	case *sqlparser.OrExpr:
-		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		leftCols, err := resolveColumnsInExpr(expr.Left, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
-		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		rightCols, err := resolveColumnsInExpr(expr.Right, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
 		cols = append(cols, leftCols...)
 		cols = append(cols, rightCols...)
 	case *sqlparser.BinaryExpr:
-		leftCols, err := resolveColumnsInWhereExpr(expr.Left, inputSchemas, aliases)
+		leftCols, err := resolveColumnsInExpr(expr.Left, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
-		rightCols, err := resolveColumnsInWhereExpr(expr.Right, inputSchemas, aliases)
+		rightCols, err := resolveColumnsInExpr(expr.Right, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
 		cols = append(cols, leftCols...)
 		cols = append(cols, rightCols...)
 	case *sqlparser.UnaryExpr:
-		unaryCols, err := resolveColumnsInWhereExpr(expr.Expr, inputSchemas, aliases)
+		unaryCols, err := resolveColumnsInExpr(expr.Expr, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
@@ -795,7 +813,7 @@ func createFilterForJoin(expr *sqlparser.JoinTableExpr, schemas map[string]schem
 }
 
 // createFilterForWhereExpr is the helper function for createFilterForWhere, which can be used recursively on sub
-// expressions. Supported parser types here must be kept in sync with resolveColumnsInWhereExpr
+// expressions. Supported parser types here must be kept in sync with resolveColumnsInExpr
 func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
 	var filter rowFilterFn
 	switch expr := whereExpr.(type) {
