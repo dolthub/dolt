@@ -45,6 +45,8 @@ func Push(ctx context.Context, destRef ref.BranchRef, remoteRef ref.RemoteRef, s
 	return err
 }
 
+// DeleteRemoteBranch validates targetRef is a branch on the remote database, and then deletes it, then deletes the
+// remote tracking branch from the local database.
 func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef ref.RemoteRef, localDB, remoteDB *doltdb.DoltDB) error {
 	var err error
 	if remoteDB.HasRef(ctx, targetRef) {

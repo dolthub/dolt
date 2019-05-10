@@ -6,6 +6,7 @@ import (
 	"strings"
 )
 
+// ErrUnknownRefType is the error returned when parsing a ref in the format refs/type/... where type is unknown
 var ErrUnknownRefType = errors.New("unknown ref type")
 
 const (
@@ -30,9 +31,6 @@ const (
 
 	// InternalRefType is a reference to a dolt internal commit
 	InternalRefType RefType = "internal"
-
-	// EmptyRefType is an empty reference
-	EmptyRefType RefType = "empty"
 )
 
 // RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add
