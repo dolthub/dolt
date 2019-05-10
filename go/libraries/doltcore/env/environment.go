@@ -470,19 +470,25 @@ func (dEnv *DoltEnv) GetRefSpecs(remoteName string) ([]ref.RemoteRefSpec, errhan
 	return refSpecs, nil
 }
 
+var ErrNoRemote = errhand.BuildDError("error: no remote.").Build()
+var ErrCantDetermineDefault = errhand.BuildDError("error: unable to determine the default remote.").Build()
+
 // GetDefaultRemote gets the default remote for the environment.  Not fully implemented yet.  Needs to support multiple
 // repos and a configurable default.
 func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
 	remotes := dEnv.RepoState.Remotes
 
 	if len(remotes) == 0 {
-		return NoRemote, errhand.BuildDError("error: no remote").Build()
+		return NoRemote, ErrNoRemote
 	} else if len(remotes) == 1 {
 		for _, v := range remotes {
 			return v, nil
 		}
 	}
 
-	// To do handle multiple origins.
-	panic("Not implemented yet")
+	if remote, ok := dEnv.RepoState.Remotes["origin"]; ok {
+		return remote, nil
+	}
+
+	return NoRemote, ErrCantDetermineDefault
 }
