@@ -13,6 +13,10 @@ teardown() {
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
+@test "two branches modify different cell different row. merge. no conflict" {
+
+}
+
 @test "two branches modify different cell same row. merge. no conflict" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
@@ -87,8 +91,116 @@ teardown() {
     dolt commit -m "added pk=0 row"
     dolt checkout master
     run dolt merge add-row
-    [ "$status" -eq 0 ]
+    [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
+}
+
+@test "one branch add table, other modifies table. merge. no conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch add-table
+    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt add test
+    dolt commit -m "added row"
+    dolt checkout add-table
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test2
+    dolt add test2
+    dolt commit -m "added new table test2"
+    dolt checkout master
+    run dolt merge add-table
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    skip "should have a merge summary section that says 1 table changed" 
+    [[ "$output" =~ "1 tables changed" ]] || false
+}
+
+@test "two branches add same column. merge. no conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch add-column
+    dolt schema --add-column test c0 int
+    dolt add test
+    dolt commit -m "added column c0"
+    dolt checkout add-column
+    dolt schema --add-column test c0 int
+    dolt add test
+    dolt commit -m "added same column c0"
+    dolt checkout master
+    run dolt merge add-column
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+}
+
+@test "two branches add different column. merge. no conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch add-column
+    dolt schema --add-column test c0 int
+    dolt add test
+    dolt commit -m "added column c0"
+    dolt checkout add-column
+    dolt schema --add-column test c6 int
+    dolt add test
+    dolt commit -m "added column c6"
+    dolt checkout master
+    run dolt merge add-column
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ "$output" =~ "1 tables changed" ]] || false
+}
+
+@test "two branches add same column, different types. merge. conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch add-column
+    dolt schema --add-column test c0 string
+    dolt add test
+    dolt commit -m "added column c0 as string"
+    dolt checkout add-column
+    dolt schema --add-column test c0 int
+    dolt add test
+    dolt commit -m "added column c0 as int"
+    dolt checkout master
+    run dolt merge add-column
+    [ $status -eq 0 ]
+    skip "This created two c0 columns with different types and tag numbers. Bug I think."
+    [[ "$output" =~ "CONFLICT" ]] || false
+}
+
+@test "two branches delete same column. merge. no conflict" {
+
+}
+
+@test "two branches delete different column. merge. no conflict" {
+
+}
+
+@test "two branches rename same column to same name. merge. no conflict" {
+
+}
+
+@test "two branches rename same column to different name. merge. conflict" {
+
+}
+
+@test "two branches change properties of same column to different values. merge. conflict" {
+
+}
+
+@test "two branches make same column primary key. merge. no conflict" {
+
+}
+
+@test "two branches add same primary key column and data. merge. no conflict" {
+
+}
+
+@test "two branches make different columns primary key. merge. conflict" {
+
 }
 
 @test "two branches both create different tables. merge. no conflict" {
