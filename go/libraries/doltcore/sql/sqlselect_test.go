@@ -29,13 +29,6 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
-		// TODO: smoke test, make real
-		{
-			name:           "select *, order by",
-			query:          "select * from people order by age desc",
-			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, moe, barney),
-			expectedSchema: compressSchema(peopleTestSchema),
-		},
 		{
 			name:           "select *, limit 1 ",
 			query:          "select * from people limit 1",
@@ -70,6 +63,48 @@ func TestExecuteSelect(t *testing.T) {
 			name:           "select *, where < int, limit 100",
 			query:          "select * from people where age < 40 limit 100",
 			expectedRows:   compressRows(peopleTestSchema, marge, bart, lisa),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, order by int",
+			query:          "select * from people order by id",
+			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, order by int desc",
+			query:          "select * from people order by id desc",
+			expectedRows:   compressRows(peopleTestSchema, barney, moe, lisa, bart, marge, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, order by float",
+			query:          "select * from people order by rating",
+			expectedRows:   compressRows(peopleTestSchema, barney, moe, marge, homer, bart, lisa),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, order by string",
+			query:          "select * from people order by first",
+			expectedRows:   compressRows(peopleTestSchema, barney, bart, homer, lisa, marge, moe),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, order by string,string",
+			query:          "select * from people order by last desc, first asc",
+			expectedRows:   compressRows(peopleTestSchema, moe, bart, homer, lisa, marge, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, order by with limit",
+			query:          "select * from people order by first limit 2",
+			expectedRows:   compressRows(peopleTestSchema, barney, bart),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:           "select *, order by string,string with limit",
+			query:          "select * from people order by last desc, first asc limit 2",
+			expectedRows:   compressRows(peopleTestSchema, moe, bart),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
