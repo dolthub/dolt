@@ -17,6 +17,10 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
 
+const (
+	SetUpstreamFlag = "set-upstream"
+)
+
 var pushShortDesc = ""
 var pushLongDesc = ""
 var pushSynopsis = []string{
@@ -25,7 +29,7 @@ var pushSynopsis = []string{
 
 func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag("set-upstream", "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less <b>dolt pull</b> and other commands.")
+	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less <b>dolt pull</b> and other commands.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -48,7 +52,7 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	} else if !hasUpstream && apr.NArg() != 2 {
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	} else if hasUpstream && apr.NArg() == 0 {
+	} else if hasUpstream && !apr.Contains(SetUpstreamFlag) && apr.NArg() == 0 {
 		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
 			cli.Println("fatal: The upstream branch of your current branch does not match")
 			cli.Println("the name of your current branch.  To push to the upstream branch")
@@ -103,6 +107,19 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				} else {
 					verr = pushToRemoteBranch(ctx, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				}
+			}
+
+			if verr == nil {
+				if dEnv.RepoState.Branches == nil {
+					dEnv.RepoState.Branches = map[string]env.BranchConfig{}
+				}
+
+				dEnv.RepoState.Branches[src.GetPath()] = env.BranchConfig{
+					Merge:  ref.MarshalableRef{dest},
+					Remote: remoteName,
+				}
+
+				dEnv.RepoState.Save()
 			}
 		}
 	}

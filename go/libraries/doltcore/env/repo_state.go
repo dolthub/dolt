@@ -84,7 +84,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 }
 
 func (rs *RepoState) Save() error {
-	data, err := json.Marshal(rs)
+	data, err := json.MarshalIndent(rs, "", "  ")
 
 	if err != nil {
 		return err
