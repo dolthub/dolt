@@ -35,9 +35,20 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	var verr errhand.VerboseError
 	var remoteName string
 	var refSpec ref.RefSpec
-	if !hasUpstream && apr.NArg() != 2 {
+	if !hasUpstream && apr.NArg() == 0 {
+		remoteName = "<remote>"
+		if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
+			remoteName = defRemote.Name
+		}
+
+		cli.Println("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.")
+		cli.Println("To push the current branch and set the remote as upstream, use")
+		cli.Println()
+		cli.Println("\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath())
+		return 1
+	} else if !hasUpstream && apr.NArg() != 2 {
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	} else if hasUpstream {
+	} else if hasUpstream && apr.NArg() == 0 {
 		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
 			cli.Println("fatal: The upstream branch of your current branch does not match")
 			cli.Println("the name of your current branch.  To push to the upstream branch")
