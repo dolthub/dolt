@@ -91,7 +91,7 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rsToRem map[ref.RemoteRefSpec]env.Remote) 
 
 		branchRefs := srcDB.GetRefs(ctx)
 		for _, branchRef := range branchRefs {
-			remoteTrackRef := rs.Map(branchRef)
+			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
 				verr := fetchRemoteBranch(rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)

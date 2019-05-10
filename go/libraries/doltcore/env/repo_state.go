@@ -8,6 +8,11 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
+type BranchConfig struct {
+	Merge  ref.MarshalableRef `json:"head"`
+	Remote string             `json:"remote"`
+}
+
 type MergeState struct {
 	Head            ref.MarshalableRef `json:"head"`
 	Commit          string             `json:"commit"`
@@ -15,11 +20,12 @@ type MergeState struct {
 }
 
 type RepoState struct {
-	Head    ref.MarshalableRef `json:"head"`
-	Staged  string             `json:"staged"`
-	Working string             `json:"working"`
-	Merge   *MergeState        `json:"merge"`
-	Remotes map[string]Remote  `json:"remotes"`
+	Head     ref.MarshalableRef      `json:"head"`
+	Staged   string                  `json:"staged"`
+	Working  string                  `json:"working"`
+	Merge    *MergeState             `json:"merge"`
+	Remotes  map[string]Remote       `json:"remotes"`
+	Branches map[string]BranchConfig `json:"branches"`
 
 	fs filesys.ReadWriteFS `json:"-"`
 }
@@ -47,7 +53,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.MarshalableRef{ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, fs}
+	rs := &RepoState{ref.MarshalableRef{ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil, fs}
 
 	err := rs.Save()
 
@@ -66,7 +72,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 		return nil, err
 	}
 
-	rs := &RepoState{ref.MarshalableRef{headRef}, hashStr, hashStr, nil, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{headRef}, hashStr, hashStr, nil, nil, nil, fs}
 
 	err = rs.Save()
 

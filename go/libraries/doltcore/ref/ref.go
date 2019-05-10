@@ -30,6 +30,9 @@ const (
 
 	// InternalRefType is a reference to a dolt internal commit
 	InternalRefType RefType = "internal"
+
+	// EmptyRefType is an empty reference
+	EmptyRefType RefType = "empty"
 )
 
 // RefTypes is the set of all supported reference types.  External RefTypes can be added to this map in order to add

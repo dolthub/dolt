@@ -19,8 +19,8 @@ var ErrUnsupportedMapping = errors.New("unsupported mapping")
 
 // RefSpec is an interface for mapping a reference in one space to a reference in another space.
 type RefSpec interface {
-	Map(DoltRef) DoltRef
-	MapBack(DoltRef) DoltRef
+	SrcRef(cwbRef DoltRef) DoltRef
+	DestRef(srcRef DoltRef) DoltRef
 }
 
 type RemoteRefSpec interface {
@@ -35,26 +35,49 @@ func ParseRefSpec(refSpecStr string) (RefSpec, error) {
 // ParseRefSpecForRemote takes the name of a remote and a refspec, and parses that refspec, verifying that it refers
 // to the appropriate remote
 func ParseRefSpecForRemote(remote, refSpecStr string) (RefSpec, error) {
-	tokens := strings.Split(refSpecStr, ":")
+	var fromRef DoltRef
+	var toRef DoltRef
+	var err error
+	if refSpecStr[0] == ':' {
+		fromRef = EmptyBranchRef
+		toRef, err = Parse(refSpecStr[1:])
 
-	if len(tokens) != 2 {
-		return nil, ErrInvalidRefSpec
-	}
+		if err != nil {
+			return nil, ErrInvalidRefSpec
+		}
+	} else {
+		tokens := strings.Split(refSpecStr, ":")
 
-	fromRef, err := Parse(tokens[0])
+		if len(tokens) == 0 {
+			return nil, ErrInvalidRefSpec
+		}
 
-	if err != nil {
-		return nil, ErrInvalidRefSpec
-	}
+		srcStr := tokens[0]
+		destStr := tokens[0]
 
-	toRef, err := Parse(tokens[1])
+		if len(tokens) > 2 {
+			return nil, ErrInvalidRefSpec
+		} else if len(tokens) == 2 {
+			destStr = tokens[1]
+		}
 
-	if err != nil {
-		return nil, ErrInvalidRefSpec
+		fromRef, err = Parse(srcStr)
+
+		if err != nil {
+			return nil, ErrInvalidRefSpec
+		}
+
+		toRef, err = Parse(destStr)
+
+		if err != nil {
+			return nil, ErrInvalidRefSpec
+		}
 	}
 
 	if fromRef.GetType() == BranchRefType && toRef.GetType() == RemoteRefType {
-		return newLocalToRemoteTrackingRef(remote, fromRef, toRef)
+		return newLocalToRemoteTrackingRef(remote, fromRef.(BranchRef), toRef.(RemoteRef))
+	} else if fromRef.GetType() == BranchRefType && toRef.GetType() == BranchRefType {
+		return NewBranchToBranchRefSpec(fromRef.(BranchRef), toRef.(BranchRef))
 	}
 
 	return nil, ErrUnsupportedMapping
@@ -89,7 +112,32 @@ func (wcbm wcBranchMapper) mapBranch(s string) string {
 	return wcbm.prefix + s + wcbm.suffix
 }
 
-type localToRemoteTrackingRef struct {
+type BranchToBranchRefSpec struct {
+	srcRef  DoltRef
+	destRef DoltRef
+}
+
+func NewBranchToBranchRefSpec(srcRef, destRef BranchRef) (RefSpec, error) {
+	return BranchToBranchRefSpec{
+		srcRef:  srcRef,
+		destRef: destRef,
+	}, nil
+}
+
+func (rs BranchToBranchRefSpec) SrcRef(cwbRef DoltRef) DoltRef {
+	return rs.srcRef
+}
+
+// DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch.
+func (rs BranchToBranchRefSpec) DestRef(r DoltRef) DoltRef {
+	if Equals(r, rs.srcRef) {
+		return rs.destRef
+	}
+
+	return nil
+}
+
+type BranchToTrackingBranchRefSpec struct {
 	localPattern  pattern
 	remPattern    pattern
 	remote        string
@@ -97,14 +145,14 @@ type localToRemoteTrackingRef struct {
 	remRefToLocal branchMapper
 }
 
-func newLocalToRemoteTrackingRef(remote string, local DoltRef, remoteRef DoltRef) (RefSpec, error) {
-	localWCs := strings.Count(local.GetPath(), "*")
-	remoteWCs := strings.Count(remoteRef.GetPath(), "*")
+func newLocalToRemoteTrackingRef(remote string, srcRef BranchRef, destRef RemoteRef) (RefSpec, error) {
+	srcWCs := strings.Count(srcRef.GetPath(), "*")
+	destWCs := strings.Count(destRef.GetPath(), "*")
 
-	if localWCs != remoteWCs || localWCs > 1 {
+	if srcWCs != destWCs || srcWCs > 1 {
 		return nil, ErrInvalidRefSpec
 	} else {
-		remoteInRef, ok := strhelp.NthToken(remoteRef.GetPath(), '/', 0)
+		remoteInRef, ok := strhelp.NthToken(destRef.GetPath(), '/', 0)
 
 		if !ok {
 			return nil, ErrInvalidRefSpec
@@ -112,31 +160,31 @@ func newLocalToRemoteTrackingRef(remote string, local DoltRef, remoteRef DoltRef
 			return nil, ErrInvalidRefSpec
 		}
 
-		if localWCs == 0 {
-			localPattern := strPattern(local.GetPath())
-			remPattern := strPattern(remoteRef.GetPath())
-			localToRemMapper := identityBranchMapper(remoteRef.GetPath()[len(remoteInRef):])
-			remRefToLocalMapper := identityBranchMapper(local.GetPath())
+		if srcWCs == 0 {
+			srcPattern := strPattern(srcRef.GetPath())
+			destPattern := strPattern(destRef.GetPath())
+			srcToDestMapper := identityBranchMapper(destRef.GetPath()[len(remoteInRef):])
+			destToSrcMapper := identityBranchMapper(srcRef.GetPath())
 
-			return localToRemoteTrackingRef{
-				localPattern:  localPattern,
-				remPattern:    remPattern,
+			return BranchToTrackingBranchRefSpec{
+				localPattern:  srcPattern,
+				remPattern:    destPattern,
 				remote:        remoteInRef,
-				localToRemRef: localToRemMapper,
-				remRefToLocal: remRefToLocalMapper,
+				localToRemRef: srcToDestMapper,
+				remRefToLocal: destToSrcMapper,
 			}, nil
 		} else {
-			localPattern := newWildcardPattern(local.GetPath())
-			remPattern := newWildcardPattern(remoteRef.GetPath())
-			localToRemMapper := newWildcardBranchMapper(remoteRef.GetPath()[len(remoteInRef)+1:])
-			remRefToLocalMapper := newWildcardBranchMapper(local.GetPath())
+			srcPattern := newWildcardPattern(srcRef.GetPath())
+			destPattern := newWildcardPattern(destRef.GetPath())
+			srcToDestMapper := newWildcardBranchMapper(destRef.GetPath()[len(remoteInRef)+1:])
+			destToSrcMapper := newWildcardBranchMapper(srcRef.GetPath())
 
-			return localToRemoteTrackingRef{
-				localPattern:  localPattern,
-				remPattern:    remPattern,
+			return BranchToTrackingBranchRefSpec{
+				localPattern:  srcPattern,
+				remPattern:    destPattern,
 				remote:        remoteInRef,
-				localToRemRef: localToRemMapper,
-				remRefToLocal: remRefToLocalMapper,
+				localToRemRef: srcToDestMapper,
+				remRefToLocal: destToSrcMapper,
 			}, nil
 		}
 	}
@@ -144,10 +192,21 @@ func newLocalToRemoteTrackingRef(remote string, local DoltRef, remoteRef DoltRef
 	return nil, ErrInvalidRefSpec
 }
 
-// Map verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch.
-func (rs localToRemoteTrackingRef) Map(localRef DoltRef) DoltRef {
-	if localRef.GetType() == BranchRefType {
-		captured, matches := rs.localPattern.matches(localRef.GetPath())
+func (rs BranchToTrackingBranchRefSpec) SrcRef(branchRef DoltRef) DoltRef {
+	if branchRef.GetType() == BranchRefType {
+		_, matches := rs.localPattern.matches(branchRef.GetPath())
+		if matches {
+			return branchRef
+		}
+	}
+
+	return nil
+}
+
+// DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch.
+func (rs BranchToTrackingBranchRefSpec) DestRef(branchRef DoltRef) DoltRef {
+	if branchRef.GetType() == BranchRefType {
+		captured, matches := rs.localPattern.matches(branchRef.GetPath())
 		if matches {
 			return NewRemoteRef(rs.remote, rs.localToRemRef.mapBranch(captured))
 		}
@@ -156,18 +215,6 @@ func (rs localToRemoteTrackingRef) Map(localRef DoltRef) DoltRef {
 	return nil
 }
 
-// Map verifies the remoteRef matches the refspecs remote pattern, and then maps it to a local branch
-func (rs localToRemoteTrackingRef) MapBack(remRef DoltRef) DoltRef {
-	if remRef.GetType() == RemoteRefType {
-		captured, matches := rs.remPattern.matches(remRef.GetPath())
-		if matches {
-			return NewBranchRef(rs.remRefToLocal.mapBranch(captured))
-		}
-	}
-
-	return nil
-}
-
-func (rs localToRemoteTrackingRef) GetRemote() string {
+func (rs BranchToTrackingBranchRefSpec) GetRemote() string {
 	return rs.remote
 }

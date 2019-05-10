@@ -123,7 +123,7 @@ func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *
 	mapVal := nwc.GetMap()
 
 	if mapVal == nil {
-		t.Fatal("Map should not be nil")
+		t.Fatal("DestRef should not be nil")
 	}
 
 	return mapVal
