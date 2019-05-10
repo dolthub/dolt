@@ -29,6 +29,13 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
+		// TODO: smoke test, make real
+		{
+			name:           "select *, order by",
+			query:          "select * from people order by age desc",
+			expectedRows:   compressRows(peopleTestSchema, homer, marge, bart, lisa, moe, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
 		{
 			name:           "select *, limit 1 ",
 			query:          "select * from people limit 1",
