@@ -319,6 +319,7 @@ teardown() {
     skip "Dolt allows you to create tables with non-UTF-8 characters right now"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unsupported characters" ]] || false
+}
 
 @test "dolt diff on a newly created table" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test

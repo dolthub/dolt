@@ -377,7 +377,7 @@ teardown() {
     dolt checkout master
     run dolt merge add-pk
     [ $status -eq 0 ]
-    skip "This merges fine right now. Should throw conflict"
+    skip "This merges fine right now. Should throw conflict."
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
