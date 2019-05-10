@@ -14,7 +14,25 @@ teardown() {
 }
 
 @test "two branches modify different cell different row. merge. no conflict" {
-
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch change-cell
+    dolt table put-row test pk:0 c1:11 c2:0 c3:0 c4:0 c5:0
+    dolt add test
+    dolt commit -m "changed pk=0 c1 to 11"
+    dolt checkout change-cell
+    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:11
+    dolt add test
+    dolt commit -m "changed pk=1 c5 to 11"
+    dolt checkout master
+    run dolt merge change-cell
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ "$output" =~ "1 tables changed" ]] || false
+    [[ "$output" =~ "1 rows modified" ]] || false
 }
 
 @test "two branches modify different cell same row. merge. no conflict" {
@@ -172,35 +190,195 @@ teardown() {
 }
 
 @test "two branches delete same column. merge. no conflict" {
-
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch delete-column
+    dolt schema --drop-column test c5
+    dolt add test
+    dolt commit -m "deleted c45 column"
+    dolt checkout delete-column
+    dolt schema --drop-column test c5
+    dolt add test
+    dolt commit -m "deleted c5 again"
+    dolt checkout master
+    run dolt merge delete-column
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
 }
 
 @test "two branches delete different column. merge. no conflict" {
-
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch delete-column
+    dolt schema --drop-column test c5
+    dolt add test
+    dolt commit -m "deleted column c5"
+    dolt checkout delete-column
+    dolt schema --drop-column test c4
+    dolt add test
+    dolt commit -m "deleted column c4"
+    dolt checkout master
+    run dolt merge delete-column
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
 }
 
 @test "two branches rename same column to same name. merge. no conflict" {
-
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch rename-column
+    dolt schema --rename-column test c5 c0
+    dolt add test
+    dolt commit -m "renamed c5 to c0"
+    dolt checkout rename-column
+    dolt schema --rename-column test c5 c0
+    dolt add test
+    dolt commit -m "renamed c5 to c0 again"
+    dolt checkout master
+    run dolt merge rename-column
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
 }
 
 @test "two branches rename same column to different name. merge. conflict" {
-
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch rename-column
+    dolt schema --rename-column test c5 c0
+    dolt add test
+    dolt commit -m "renamed c5 to c0"
+    dolt checkout rename-column
+    dolt schema --rename-column test c5 c6
+    dolt add test
+    dolt commit -m "renamed c5 to c6"
+    dolt checkout master
+    run dolt merge rename-column
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Bad merge" ]] || false
+    skip "This currently is a failed merge. I think it should be a conflict that you can resolve by modifying the schema. Basically choose a column name for the tag. The data is the same."
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
 }
 
-@test "two branches change properties of same column to different values. merge. conflict" {
+@test "two branches rename different column to same name. merge conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch rename-column
+    dolt schema --rename-column test c5 c0
+    dolt add test
+    dolt commit -m "renamed c5 to c0"
+    dolt checkout rename-column
+    dolt schema --rename-column test c4 c0
+    dolt add test
+    dolt commit -m "renamed c5 to c6"
+    dolt checkout master
+    run dolt merge rename-column
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Bad merge" ]] || false
+    skip "Same as test above. This case needs some thought. My initial instinct was that this generates a tag conflict. Pick one tag and then you have a data conflict because the schemas are the same on both branches."
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
+}
 
+# Altering types and properties of the schema are not really supported by the 
+# command line. Have to upload schema files for these next few tests.
+@test "two branches change type of same column to same type. merge. no conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch change-types
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-1.schema test
+    dolt add test
+    dolt commit -m "changed c1 to type bool"
+    dolt checkout change-types
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-1.schema test
+    dolt add test
+    dolt commit -m "changed c1 to type bool again"
+    dolt checkout master
+    run dolt merge change-types
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+}
+
+@test "two branches change type of same column to different type. merge. conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch change-types
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-1.schema test
+    dolt add test
+    dolt commit -m "changed c1 to type bool"
+    dolt checkout change-types
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-2.schema test
+    dolt add test
+    dolt commit -m "changed c1 to type float"
+    dolt checkout master
+    run dolt merge change-types
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Bad merge" ]] || false
+    skip "I think changing a type to two different types should throw a conflict" 
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches make same column primary key. merge. no conflict" {
-
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch add-pk
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-change-pk-1.schema test
+    dolt add test
+    dolt commit -m "made c1 a pk"
+    dolt checkout add-pk
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-change-pk-1.schema test
+    dolt add test
+    dolt commit -m "made c1 a pk again"
+    dolt checkout master
+    run dolt merge add-pk
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
 }
 
-@test "two branches add same primary key column and data. merge. no conflict" {
-
+@test "two branches add same primary key column. merge. no conflict" {
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch add-pk
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk1.schema test
+    dolt add test
+    dolt commit -m "added pk pk1"
+    dolt checkout add-pk
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk1.schema test
+    dolt add test
+    dolt commit -m "added pk pk1 again"
+    dolt checkout master
+    run dolt merge add-pk
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
 }
 
 @test "two branches make different columns primary key. merge. conflict" {
-
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "table created"
+    dolt branch add-pk
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk1.schema test
+    dolt add test
+    dolt commit -m "added pk pk1"
+    dolt checkout add-pk
+    dolt table create -f -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk2.schema test
+    dolt add test
+    dolt commit -m "added pk pk2"
+    dolt checkout master
+    run dolt merge add-pk
+    [ $status -eq 0 ]
+    skip "This merges fine right now. Should throw conflict"
+    [[ "$output" =~ "CONFLICT" ]] || false
 }
 
 @test "two branches both create different tables. merge. no conflict" {
