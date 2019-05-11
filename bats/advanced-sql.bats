@@ -32,7 +32,7 @@ teardown() {
 @test "ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
-    [ "$output" = "Ambiguous column: c1" ]
+    [ "$output" = "Ambiguous column: 'c1'" ]
 }
 
 @test "select with and and or clauses" {
