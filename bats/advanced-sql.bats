@@ -17,7 +17,7 @@ teardown() {
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
-@test "select from multiple tables" {
+@test "sql select from multiple tables" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 20 ]
@@ -29,33 +29,33 @@ teardown() {
     [ "${#lines[@]}" -eq 8 ]
 }
 
-@test "ambiguous column name" {
+@test "sql ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
     [ "$output" = "Ambiguous column: 'c1'" ]
 }
 
-@test "select with and and or clauses" {
+@test "sql select with and and or clauses" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where pk=0 and pk1=0 or pk2=1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 13 ]
 }
 
-@test "select the same column twice using column aliases" {
+@test "sql select the same column twice using column aliases" {
     run dolt sql -q "select pk,c1 as foo,c1 as bar from one_pk"
     [ "$status" -eq 0 ]
     skip "This breaks right now. Reports one column as NULL"
     [[ ! "$output" =~ "<NULL>" ]] || false
 }
 
-@test "select same column twice using table aliases" {
+@test "sql select same column twice using table aliases" {
     run dolt sql -q "select pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
     [ "$status" -eq 0 ]
     skip "This breaks right now. Reports one column as NULL"
     [[ ! "$output" =~ "<NULL>" ]] || false
 }
 
-@test "basic inner join" {
+@test "sql basic inner join" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
@@ -76,7 +76,7 @@ teardown() {
     [[ "$output" =~ "10" ]] || false
 }
 
-@test "table name in the from clause and the join statement" {
+@test "sql table name in the from clause and the join statement" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk join one_pk on pk=pk1"
     skip "Though weird we think this is valid but it panics right now. At least make it not panic."
     [ $status -eq 0 ]
@@ -110,6 +110,25 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
     [[ "$output" =~ "0" ]] || false
     [[ "$output" =~ "11" ]] || false
+}
+
+@test "sql order by and limit" {
+    run dolt sql -q "select * from one_pk order by pk limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from one_pk order by pk desc limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "30" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from two_pk order by pk1, pk2 desc limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from one_pk order by limit 1"
+    [ $status -eq 1 ]
 }
 
 @test "addition on both left and right side of comparison operator" {
