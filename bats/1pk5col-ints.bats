@@ -110,7 +110,7 @@ teardown() {
     [ "$output" = "Error inserting rows: [one or more primary key columns missing from insert statement]" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: [Unknown column c6]" ]
+    [ "$output" = "Error inserting rows: [Unknown column: 'c6']" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot insert existing row" ]] || false
@@ -246,7 +246,7 @@ teardown() {
     [[ ! "$output" =~ "50" ]] || false
     run dolt sql -q "update test set c12=11 where pk=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown column 'c12'" ]] || false
+    [[ "$output" =~ "Unknown column: 'c12'" ]] || false
     run dolt sql -q "update test set c1='foo' where pk=0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Type mismatch" ]] || false
