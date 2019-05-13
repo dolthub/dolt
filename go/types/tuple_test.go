@@ -27,7 +27,7 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("Tuples should not be equal")
 	}
 
-	tpl3 := tpl2.Set(idIdx, id)
+	tpl3 := tpl2.Set(0, String("aoeu")).Set(1, Int(-1234)).Set(2, Uint(1234)).Set(idIdx, id)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
