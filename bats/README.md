@@ -15,4 +15,3 @@ This will run all the tests. Specify a particular .bats file to run only those t
 # Test coverage needed for: #
 * large tables 
 * dolt login
-* schema diffs/merge/conflicts
