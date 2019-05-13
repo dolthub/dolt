@@ -91,6 +91,21 @@ type DError struct {
 	printUsage bool
 }
 
+// Returns a verbose error using the error given. If the error given is already a VerboseError, returns it. Otherwise,
+// creates a new VerboseError with the given error's error string.
+func VerboseErrorFromError(err error) VerboseError {
+	if err == nil {
+		return nil
+	}
+
+	if verr, ok := err.(VerboseError); ok {
+		return verr
+	}
+
+	builder := &DErrorBuilder{err.Error(), "", err, false}
+	return builder.Build()
+}
+
 func NewDError(dispMsg, details string, cause error, printUsage bool) *DError {
 	return &DError{dispMsg, details, cause, printUsage}
 }

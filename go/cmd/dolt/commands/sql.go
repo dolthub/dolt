@@ -2,9 +2,11 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -44,56 +46,69 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	args = apr.Args()
 
 	query, ok := apr.GetValue(queryFlag)
-	if !ok {
-		color.RedString("No query string found")
-		usage()
-		return 1
+	if ok {
+		err := processInput(dEnv, query, usage)
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	sqlStatement, err := sqlparser.Parse(query)
+	// start the doltsql REPL
+	// shellConf := readline.Config{
+	// 	Prompt: "doltsql>",
+	// 	Stdout: cli.CliOut,
+	// 	Stderr: cli.CliOut,
+	// }
+	// shell := ishell.NewWithConfig(&shellConf)
+	// shell.Run()
+}
+
+// Processes a single query and returns any error encountered
+func processInput(dEnv *env.DoltEnv, input string, usage cli.UsagePrinter) error {
+
+
+	sqlStatement, err := sqlparser.Parse(input)
 	if err != nil {
-		return quitErr("Error parsing SQL: %v.", err.Error())
+		return errFmt("Error parsing SQL: %v.", err.Error())
 	}
 
 	root, verr := GetWorkingWithVErr(dEnv)
 	if verr != nil {
-		return quitErr(verr.Verbose())
+		return errFmt(verr.Verbose())
 	}
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select:
-		return sqlSelect(root, s, query)
+		return sqlSelect(root, s, input)
 	case *sqlparser.Insert:
-		return sqlInsert(dEnv, root, s, query, usage)
+		return sqlInsert(dEnv, root, s, input, usage)
 	case *sqlparser.Update:
-		return sqlUpdate(dEnv, root, s, query, usage)
+		return sqlUpdate(dEnv, root, s, input, usage)
 	case *sqlparser.Delete:
-		return sqlDelete(dEnv, root, s, query, usage)
+		return sqlDelete(dEnv, root, s, input, usage)
 	case *sqlparser.DDL:
-		_, err := sqlparser.ParseStrictDDL(query)
+		_, err := sqlparser.ParseStrictDDL(input)
 		if err != nil {
-			return quitErr("Error parsing SQL: %v.", err.Error())
+			return errFmt("Error parsing SQL: %v.", err.Error())
 		}
-		return sqlDDL(dEnv, root, s, query, usage)
+		return sqlDDL(dEnv, root, s, input, usage)
 	default:
-		return quitErr("Unhandled SQL statement: %v.", query)
+		return errFmt("Unhandled SQL statement: %v.", input)
 	}
 }
 
 // Executes a SQL select statement and prints the result to the CLI.
-func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
+func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) error {
 
 	p, statement, err := sql.BuildSelectQueryPipeline(context.TODO(), root, s)
 	if err != nil {
 		cli.PrintErrln(color.RedString(err.Error()))
-		return 1
+		return err
 	}
 
-	// Now that we have the output schema, we do three additional steps in the pipeline:
+	// Now that we have the output schema, we add three additional steps to the pipeline:
 	// 1) Coerce all the values in each row into strings
 	// 2) Convert null values to printed values
 	// 3) Run them through a fixed width transformer to make them print pretty
-	untypedSch, untypingTransform := NewUntypingTransformer(statement.ResultSetSchema.Schema())
+	untypedSch, untypingTransform := newUntypingTransformer(statement.ResultSetSchema.Schema())
 	p.AddStage(untypingTransform)
 
 	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
@@ -122,17 +137,17 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) int {
 	p.Start()
 	err = p.Wait()
 	if err != nil {
-		return quitErr("error processing results: %v", err)
+		return errFmt("error processing results: %v", err)
 	}
 
-	return 0
+	return nil
 }
 
 // Executes a SQL insert statement and prints the result to the CLI.
-func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string, usage cli.UsagePrinter) int {
+func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string, usage cli.UsagePrinter) error {
 	result, err := sql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt, query)
 	if err != nil {
-		return quitErr("Error inserting rows: %v", err.Error())
+		return errFmt("Error inserting rows: %v", err.Error())
 	}
 
 	verr := UpdateWorkingWithVErr(dEnv, result.Root)
@@ -147,14 +162,14 @@ func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return verr
 }
 
 // Executes a SQL update statement and prints the result to the CLI.
-func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string, usage cli.UsagePrinter) int {
+func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string, usage cli.UsagePrinter) error {
 	result, err := sql.ExecuteUpdate(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
-		return quitErr("Error during update: %v", err.Error())
+		return errFmt("Error during update: %v", err.Error())
 	}
 
 	verr := UpdateWorkingWithVErr(dEnv, result.Root)
@@ -166,63 +181,59 @@ func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Upda
 		}
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return verr
 }
 
 // Executes a SQL delete statement and prints the result to the CLI.
-func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string, usage cli.UsagePrinter) int {
+func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string, usage cli.UsagePrinter) error {
 	result, err := sql.ExecuteDelete(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
-		return quitErr("Error during update: %v", err.Error())
+		return errFmt("Error during update: %v", err.Error())
 	}
 
 	verr := UpdateWorkingWithVErr(dEnv, result.Root)
-
 	if verr == nil {
 		cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
 	}
 
-	return HandleVErrAndExitCode(verr, usage)
+	return verr
 }
 
 // Executes a SQL DDL statement (create, update, etc.) and prints the result to the CLI.
-func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string, usage cli.UsagePrinter) int {
+func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string, usage cli.UsagePrinter) error {
 	switch ddl.Action {
 	case sqlparser.CreateStr:
-		root, _, err := sql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
+		newRoot, _, err := sql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
 		if err != nil {
-			return quitErr("Error creating table: %v", err)
+			return errFmt("Error creating table: %v", err)
 		}
-		verr := UpdateWorkingWithVErr(dEnv, root)
-		return HandleVErrAndExitCode(verr, usage)
+		return UpdateWorkingWithVErr(dEnv, newRoot)
 	case sqlparser.AlterStr:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.DropStr:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.RenameStr:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.TruncateStr:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.CreateVindexStr:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.AddColVindexStr:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.DropColVindexStr:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	default:
-		return quitErr("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
 }
 
-// Writes an error message to the CLI and returns 1
-func quitErr(fmtMsg string, args ...interface{}) int {
-	cli.PrintErrln(color.RedString(fmtMsg, args))
-	return 1
+func errFmt(fmtMsg string, args ...interface{}) error {
+	return errors.New(fmt.Sprintf(fmtMsg, args...))
 }
 
 // Returns a new untyping transformer for the schema given.
 // TODO: move this somewhere more appropriate. Import cycles currently make this difficult.
-func NewUntypingTransformer(sch schema.Schema) (schema.Schema, pipeline.NamedTransform) {
+func newUntypingTransformer(sch schema.Schema) (schema.Schema, pipeline.NamedTransform) {
 	untypedSch := untyped.UntypeUnkeySchema(sch)
 	mapping, err := rowconv.TagMapping(sch, untypedSch)
 
