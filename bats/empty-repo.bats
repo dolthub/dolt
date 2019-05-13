@@ -201,3 +201,10 @@ teardown() {
     [[ "$output" =~ "foo" ]] || false
     [[ "$output" =~ "bar" ]] || false
 }
+
+@test "branch names must support /" {
+    run dolt branch tim/test-this-format-11
+    skip "Not supported right now"
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
