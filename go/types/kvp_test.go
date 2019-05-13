@@ -1,7 +1,6 @@
-package ase
+package types
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"sort"
 	"testing"
 )
@@ -13,16 +12,16 @@ func TestKVPSliceSort(t *testing.T) {
 	}{
 		{
 			KVPSlice{
-				{types.Uint(5), types.NullValue},
-				{types.Uint(1), types.NullValue},
-				{types.Uint(4), types.NullValue},
-				{types.Uint(3), types.NullValue},
+				{Uint(5), NullValue},
+				{Uint(1), NullValue},
+				{Uint(4), NullValue},
+				{Uint(3), NullValue},
 			},
 			KVPSlice{
-				{types.Uint(1), types.NullValue},
-				{types.Uint(3), types.NullValue},
-				{types.Uint(4), types.NullValue},
-				{types.Uint(5), types.NullValue},
+				{Uint(1), NullValue},
+				{Uint(3), NullValue},
+				{Uint(4), NullValue},
+				{Uint(5), NullValue},
 			},
 		},
 	}

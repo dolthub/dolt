@@ -1,6 +1,4 @@
-package ase
-
-import "github.com/attic-labs/noms/go/types"
+package types
 
 // KVPCollItr is a KVPIterator implementation for iterating over a KVPCollection
 type KVPCollItr struct {
@@ -10,7 +8,7 @@ type KVPCollItr struct {
 	idx        int
 	currSl     KVPSlice
 	currSlSize int
-	currKey    types.Value
+	currKey    Value
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection

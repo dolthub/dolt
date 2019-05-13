@@ -1,7 +1,6 @@
-package ase
+package types
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"math/rand"
 	"testing"
 	"time"
@@ -11,7 +10,7 @@ func createKVPs(rng *rand.Rand, size int) KVPSlice {
 	kvps := make(KVPSlice, size)
 
 	for i := 0; i < size; i++ {
-		kvps[i] = KVP{types.Uint(rng.Uint64() % 10000), types.NullValue}
+		kvps[i] = KVP{Uint(rng.Uint64() % 10000), NullValue}
 	}
 
 	return kvps

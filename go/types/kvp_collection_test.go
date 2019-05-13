@@ -1,7 +1,6 @@
-package ase
+package types
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"math/rand"
 	"sort"
 	"testing"
@@ -12,14 +11,14 @@ func (coll *KVPCollection) String() string {
 	itr := coll.Iterator()
 	val := itr.Next()
 
-	keys := make([]types.Value, coll.totalSize)
+	keys := make([]Value, coll.totalSize)
 	for i := 0; val != nil; i++ {
 		keys[i] = val.Key
 		val = itr.Next()
 	}
 
-	tpl := types.NewTuple(keys...)
-	return types.EncodedValue(tpl)
+	tpl := NewTuple(keys...)
+	return EncodedValue(tpl)
 }
 
 func TestKVPCollection(t *testing.T) {
@@ -97,7 +96,7 @@ func createKVPColl(rng *rand.Rand, size int) *KVPCollection {
 	kvps := make(KVPSlice, size)
 
 	for i := 0; i < size; i++ {
-		kvps[i] = KVP{types.Uint(rng.Uint64() % 10000), types.NullValue}
+		kvps[i] = KVP{Uint(rng.Uint64() % 10000), NullValue}
 	}
 
 	sort.Stable(kvps)

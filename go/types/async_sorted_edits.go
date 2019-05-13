@@ -1,7 +1,6 @@
-package ase
+package types
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"sort"
 )
 
@@ -77,7 +76,7 @@ func NewAsyncSortedEdits(sliceSize, asyncConcurrency, sortConcurrency int) *Asyn
 }
 
 // Set adds an edit
-func (ase *AsyncSortedEdits) Set(k types.Value, v types.Valuable) {
+func (ase *AsyncSortedEdits) Set(k Value, v Valuable) {
 	ase.accumulating = append(ase.accumulating, KVP{k, v})
 
 	if len(ase.accumulating) == ase.sliceSize {
@@ -233,6 +232,7 @@ func (ase *AsyncSortedEdits) Iterator() KVPIterator {
 	panic("Sort needs to be called prior to getting an Iterator.")
 }
 
+// Size returns the number of edits
 func (ase *AsyncSortedEdits) Size() int64 {
 	size := int64(0)
 	for _, coll := range ase.sortedColls {
