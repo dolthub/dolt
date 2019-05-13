@@ -9,14 +9,14 @@ import (
 	"io"
 )
 
-// NomsMapReader is a TableReader that reads rows from a noms table which is stored in a types.DestRef where the key is
+// NomsMapReader is a TableReader that reads rows from a noms table which is stored in a types.Map where the key is
 // a types.Value and the value is a types.Tuple of field values.
 type NomsMapReader struct {
 	sch schema.Schema
 	itr types.MapIterator
 }
 
-// NewNomsMapReader creates a NomsMapReader for a given noms types.DestRef
+// NewNomsMapReader creates a NomsMapReader for a given noms types.Map
 func NewNomsMapReader(ctx context.Context, m types.Map, sch schema.Schema) *NomsMapReader {
 	itr := m.Iterator(ctx)
 

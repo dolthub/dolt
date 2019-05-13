@@ -9,7 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
-// NomsMapUpdater is a TableWriter that creates a new noms types.DestRef.  It is backed by a StreamingMap which requires
+// NomsMapUpdater is a TableWriter that creates a new noms types.Map.  It is backed by a StreamingMap which requires
 // the rows to be written in order.  If the keys being written to WriteRow are not sorted an error will be returned from
 // WriteRow.  Once all rows are written Close() should be called and GetMap will then return the new map.
 type NomsMapCreator struct {
@@ -92,7 +92,7 @@ func (nmc *NomsMapCreator) Close(ctx context.Context) error {
 	}
 }
 
-// GetMap retrieves the resulting types.DestRef once close is called
+// GetMap retrieves the resulting types.Map once close is called
 func (nmc *NomsMapCreator) GetMap() *types.Map {
 	// Might want to panic if this was never closed
 	return nmc.result
