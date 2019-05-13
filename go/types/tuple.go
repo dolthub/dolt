@@ -225,20 +225,23 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 		return nil, nil, nil, count, false
 	}
 
+	found = true
 	fieldsOffset := dec.offset
 
 	for i := uint64(0); i < n; i++ {
 		dec.skipValue()
 	}
 
-	found = true
 	head = dec.buff[fieldsOffset:dec.offset]
-	tail = dec.buff[dec.offset:len(dec.buff)]
+
+	if n != count-1 {
+		tail = dec.buff[dec.offset:len(dec.buff)]
+	}
 
 	return
 }
 
-func (t Tuple) Equals(otherVal Value) bool {
+/*func (t Tuple) Equals(otherVal Value) bool {
 	if otherTuple, ok := otherVal.(Tuple); ok {
 		itr := t.Iterator()
 		otherItr := otherTuple.Iterator()
@@ -260,7 +263,7 @@ func (t Tuple) Equals(otherVal Value) bool {
 	}
 
 	return false
-}
+}*/
 
 func (t Tuple) Less(otherVal Value) bool {
 	if otherTuple, ok := otherVal.(Tuple); ok {
