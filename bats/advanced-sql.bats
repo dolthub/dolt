@@ -127,7 +127,35 @@ teardown() {
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "10" ]] || false
+    run dolt sql -q "select pk,c2 from one_pk order by c1 limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from one_pk,two_pk order by pk1,pk2,pk limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from one_pk join two_pk order by pk1,pk2,pk limit 1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "0" ]] || false
+    [[ ! "$output" =~ "10" ]] || false
     run dolt sql -q "select * from one_pk order by limit 1"
+    [ $status -eq 1 ]
+    run dolt sql -q "select * from one_pk order by bad limit 1"
+    [ $status -eq 1 ]
+    [ "$output" = "Unknown column: 'bad'" ]
+    run dolt sql -q "select * from one_pk order pk by limit"
+    [ $status -eq 1 ]
+}
+
+@test "sql limit less than zero" {
+    run dolt sql -q "select * from one_pk order by pk limit -1"
+    skip "limit -1 returns no limit right now"
+    [ $status -eq 1 ]
+    run dolt sql -q "select * from one_pk order by pk limit -2"
     [ $status -eq 1 ]
 }
 
