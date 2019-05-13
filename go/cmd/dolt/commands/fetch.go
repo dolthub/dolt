@@ -34,7 +34,8 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr == nil {
-		refSpecs, verr := getRefSpecs(apr, dEnv)
+		var refSpecs []ref.RemoteRefSpec
+		refSpecs, verr = getRefSpecs(apr, dEnv, remotes)
 
 		if verr == nil {
 			var rsToRem map[ref.RemoteRefSpec]env.Remote
@@ -47,15 +48,15 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getRefSpecs(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+func getRefSpecs(apr *argparser.ArgParseResults, dEnv *env.DoltEnv, remotes map[string]env.Remote) ([]ref.RemoteRefSpec, errhand.VerboseError) {
 	if apr.NArg() != 0 {
-		return parseRSFromArgs(apr)
+		return parseRSFromArgs(apr, remotes)
 	}
 
 	return dEnv.GetRefSpecs("")
 }
 
-func parseRSFromArgs(apr *argparser.ArgParseResults) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+func parseRSFromArgs(apr *argparser.ArgParseResults, remotes map[string]env.Remote) ([]ref.RemoteRefSpec, errhand.VerboseError) {
 	var refSpecs []ref.RemoteRefSpec
 	for i := 0; i < apr.NArg(); i++ {
 		rsStr := apr.Arg(i)
@@ -68,6 +69,12 @@ func parseRSFromArgs(apr *argparser.ArgParseResults) ([]ref.RemoteRefSpec, errha
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
 			return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", rsStr).Build()
 		} else {
+			remName := rrs.GetRemote()
+
+			if _, ok := remotes[remName]; !ok {
+				return nil, errhand.BuildDError("error: unknown remote '%s'", remName).Build()
+			}
+
 			refSpecs = append(refSpecs, rrs)
 		}
 	}
