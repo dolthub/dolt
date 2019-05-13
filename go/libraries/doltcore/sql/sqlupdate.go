@@ -62,7 +62,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		colName := update.Name.Name.String()
 		column, ok := tableSch.GetAllCols().GetByName(colName)
 		if !ok {
-			return errUpdate("Unknown column '%v'", colName)
+			return errUpdate(UnknownColumnErrFmt, colName)
 		}
 		if _, ok = setVals[column.Tag]; ok {
 			return errUpdate("Repeated column '%v'", colName)

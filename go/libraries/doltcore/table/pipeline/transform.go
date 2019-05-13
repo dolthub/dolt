@@ -16,7 +16,7 @@ type NamedTransform struct {
 }
 
 // NewNamedTransform returns a NamedTransform object from a name and a TransformRowFunc.  The returned NamedTransform
-// will have it's Func member set to be a TransformFunc that handles input, output, and stop channel processing, along
+// will have its Func member set to be a TransformFunc that handles input, output, and stop channel processing, along
 // with error handling and it will call the given TransformRowFunc for every row.
 func NewNamedTransform(name string, transRowFunc TransformRowFunc) NamedTransform {
 	transformer := newRowTransformer(name, transRowFunc)

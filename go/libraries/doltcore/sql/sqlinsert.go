@@ -50,7 +50,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 			col, ok := tableSch.GetAllCols().GetByName(colName.String())
 			if !ok {
-				return errInsert("Unknown column %v", colName)
+				return errInsert(UnknownColumnErrFmt, colName)
 			}
 			cols[i] = col
 		}
