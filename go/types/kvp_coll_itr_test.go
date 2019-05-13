@@ -1,14 +1,13 @@
-package ase
+package types
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"testing"
 )
 
 func TestKVPCollItr(t *testing.T) {
-	slice1 := KVPSlice{{types.Uint(1), types.NullValue}, {types.Uint(2), types.NullValue}}
-	slice2 := KVPSlice{{types.Uint(3), types.NullValue}, {types.Uint(4), types.NullValue}}
-	slice3 := KVPSlice{{types.Uint(5), types.NullValue}, {}}
+	slice1 := KVPSlice{{Uint(1), NullValue}, {Uint(2), NullValue}}
+	slice2 := KVPSlice{{Uint(3), NullValue}, {Uint(4), NullValue}}
+	slice3 := KVPSlice{{Uint(5), NullValue}, {}}
 
 	type itrRes struct {
 		keyVal       uint
@@ -43,7 +42,7 @@ func TestKVPCollItr(t *testing.T) {
 			for _, expRes := range test.itrResults {
 				kvp, buff, done := itr.nextForDestructiveMerge()
 
-				if !kvp.Key.Equals(types.Uint(expRes.keyVal)) {
+				if !kvp.Key.Equals(Uint(expRes.keyVal)) {
 					t.Error("unexpected result")
 				}
 

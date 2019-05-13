@@ -6,8 +6,6 @@ package types
 
 import (
 	"context"
-	"sort"
-
 	"github.com/attic-labs/noms/go/d"
 )
 
@@ -18,39 +16,33 @@ import (
 // Note: The implementation biases performance towards a usage which applies
 // edits in key-order.
 type MapEditor struct {
-	m          Map
-	edits      mapEditSlice // edits may contain duplicate key values, in which case, the last edit of a given key is used
-	normalized bool
+	m   Map
+	ase *AsyncSortedEdits
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, mapEditSlice{}, true}
-}
-
-func (me *MapEditor) Kind() NomsKind {
-	return MapKind
-}
-
-func (me *MapEditor) Value(ctx context.Context) Value {
-	return me.Map(ctx)
+	return &MapEditor{m, NewAsyncSortedEdits(10000, 2, 4)}
 }
 
 func (me *MapEditor) Map(ctx context.Context) Map {
-	if len(me.edits) == 0 {
+	me.ase.FinishedEditing()
+	me.ase.Sort()
+
+	if me.ase.Size() == 0 {
 		return me.m // no edits
 	}
 
 	seq := me.m.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	me.normalize()
-
 	cursChan := make(chan chan *sequenceCursor)
 	kvsChan := make(chan chan mapEntry)
 
 	go func() {
-		for i, edit := range me.edits {
-			if i+1 < len(me.edits) && me.edits[i+1].key.Equals(edit.key) {
+		itr := me.ase.Iterator()
+		for i, edit := 0, itr.Next(); edit != nil; i, edit = i+1, itr.Next() {
+			nextEdit := itr.Peek()
+			if nextEdit != nil && nextEdit.Key.Equals(edit.Key) {
 				continue // next edit supercedes this one
 			}
 
@@ -61,31 +53,31 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(ctx, seq, edit.key, true, false)
+				cc <- newCursorAtValue(ctx, seq, edit.Key, true, false)
 			}()
 
 			kvc := make(chan mapEntry, 1)
 			kvsChan <- kvc
 
-			if edit.value == nil {
-				kvc <- mapEntry{edit.key, nil}
+			if edit.Val == nil {
+				kvc <- mapEntry{edit.Key, nil}
 				continue
 			}
 
-			if v, ok := edit.value.(Value); ok {
-				kvc <- mapEntry{edit.key, v}
+			if v, ok := edit.Val.(Value); ok {
+				kvc <- mapEntry{edit.Key, v}
 				continue
 			}
 
 			go func() {
-				sv := edit.value.Value(ctx)
+				sv := edit.Val.Value(ctx)
 				if e, ok := sv.(Emptyable); ok {
 					if e.Empty() {
 						sv = nil
 					}
 				}
 
-				kvc <- mapEntry{edit.key, sv}
+				kvc <- mapEntry{edit.Key, sv}
 			}()
 		}
 
@@ -155,91 +147,6 @@ func (me *MapEditor) Remove(k Value) *MapEditor {
 	return me
 }
 
-func (me *MapEditor) Get(ctx context.Context, k Value) Valuable {
-	if idx, found := me.findEdit(k); found {
-		v := me.edits[idx].value
-		if v != nil {
-			return v
-		}
-	}
-
-	return me.m.Get(ctx, k)
-}
-
-func (me *MapEditor) Has(ctx context.Context, k Value) bool {
-	if idx, found := me.findEdit(k); found {
-		return me.edits[idx].value != nil
-	}
-
-	return me.m.Has(ctx, k)
-}
-
 func (me *MapEditor) set(k Value, v Valuable) {
-	if len(me.edits) == 0 {
-		me.edits = append(me.edits, mapEdit{k, v})
-		return
-	}
-
-	final := me.edits[len(me.edits)-1]
-	if final.key.Equals(k) {
-		me.edits[len(me.edits)-1] = mapEdit{k, v}
-		return // update the last edit
-	}
-
-	me.edits = append(me.edits, mapEdit{k, v})
-
-	if me.normalized && final.key.Less(k) {
-		// fast-path: edits take place in key-order
-		return
-	}
-
-	// de-normalize
-	me.normalized = false
+	me.ase.Set(k, v)
 }
-
-// Find the edit position of the last edit for a given key
-func (me *MapEditor) findEdit(k Value) (idx int, found bool) {
-	me.normalize()
-
-	idx = sort.Search(len(me.edits), func(i int) bool {
-		return !me.edits[i].key.Less(k)
-	})
-
-	if idx == len(me.edits) {
-		return
-	}
-
-	if !me.edits[idx].key.Equals(k) {
-		return
-	}
-
-	// advance to final edit position where kv.key == k
-	for idx < len(me.edits) && me.edits[idx].key.Equals(k) {
-		idx++
-	}
-	idx--
-
-	found = true
-	return
-}
-
-func (me *MapEditor) normalize() {
-	if me.normalized {
-		return
-	}
-
-	sort.Stable(me.edits)
-	// TODO: GC duplicate keys over some threshold of collectable memory?
-	me.normalized = true
-}
-
-type mapEdit struct {
-	key   Value
-	value Valuable
-}
-
-type mapEditSlice []mapEdit
-
-func (mes mapEditSlice) Len() int           { return len(mes) }
-func (mes mapEditSlice) Swap(i, j int)      { mes[i], mes[j] = mes[j], mes[i] }
-func (mes mapEditSlice) Less(i, j int) bool { return mes[i].key.Less(mes[j].key) }

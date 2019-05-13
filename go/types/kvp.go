@@ -1,16 +1,12 @@
-package ase
-
-import (
-	"github.com/attic-labs/noms/go/types"
-)
+package types
 
 // KVP is a simple key value pair
 type KVP struct {
 	// Key is the key
-	Key types.Value
+	Key Value
 
 	// Val is the value
-	Val types.Valuable
+	Val Valuable
 }
 
 // KVPSlice is a slice of KVPs that implements sort.Interface

@@ -1,4 +1,4 @@
-package ase
+package types
 
 // SortedEditItr is a KVPIterator implementation that takes two KVPCollItr and merges them as it iterates
 type SortedEditItr struct {

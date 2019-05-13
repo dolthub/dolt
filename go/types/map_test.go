@@ -415,9 +415,13 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	cs := ts.NewView()
 	vs := newValueStoreWithCacheAndPending(cs, 0, 0)
 
+	numEdits := 10000
+	vals := make([]Value, 0, numEdits)
 	me := NewMap(context.Background(), vs).Edit()
 	for i := 0; i < 10000; i++ {
-		me.Set(Float(i), newLargeStruct(i))
+		s := newLargeStruct(i)
+		vals = append(vals, s)
+		me.Set(Float(i), s)
 	}
 	m := me.Map(context.Background())
 	r := vs.WriteValue(context.Background(), m)
@@ -430,7 +434,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	for i := 0; i < 10000; i++ {
 		if i%every == 0 {
 			k := Float(i)
-			s := me.Get(context.Background(), Float(i)).(Struct)
+			s := vals[i].(Struct)
 			s = s.Set("Number", Float(float64(s.Get("Number").(Float))+1))
 			me.Set(k, s)
 		}
@@ -549,58 +553,79 @@ func TestMapHas(t *testing.T) {
 	doTest(getTestRefToValueOrderMap, 2)
 }
 
+func hasAll(m Map, keys ...string) bool {
+	ctx := context.Background()
+	for _, k := range keys {
+		if !m.Has(ctx, String(k)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func hasNone(m Map, keys ...string) bool {
+	ctx := context.Background()
+	for _, k := range keys {
+		if m.Has(ctx, String(k)) {
+			return false
+		}
+	}
+
+	return true
+}
+
 func TestMapHasRemove(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
 	me := NewMap(context.Background(), vrw).Edit()
-	bothHave := func(k Value) bool {
-		meHas := me.Has(context.Background(), k)
-		mHas := me.Map(context.Background()).Has(context.Background(), k)
-		assert.Equal(meHas, mHas)
-		return meHas
+
+	initial := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m"}
+	initialUnexpected := []string{"n", "o", "p", "q", "r", "s"}
+	for _, k := range initial {
+		me.Set(String(k), Int(0))
 	}
 
-	assert.False(bothHave(String("a")))
+	m := me.Map(context.Background())
+	assert.True(m.Len() == uint64(len(initial)))
+	assert.True(hasAll(m, initial...))
+	assert.True(hasNone(m, initialUnexpected...))
 
-	me.Set(String("a"), String("a"))
-	assert.True(bothHave(String("a")))
+	me = m.Edit()
+	// add new
+	me.Set(String("n"), Int(1))
 
-	me.Remove(String("a"))
-	assert.False(bothHave(String("a")))
+	// remove
+	me.Remove(String("b"))
 
-	me.Set(String("a"), String("a"))
-	assert.True(bothHave(String("a")))
+	// remove and re-add
+	me.Remove(String("c"))
+	me.Set(String("c"), Int(1))
 
-	me.Set(String("a"), String("a"))
-	assert.True(bothHave(String("a")))
+	// set then remove
+	me.Set(String("d"), Int(2))
+	me.Remove(String("d"))
+
+	// add then remove
+	me.Set(String("o"), Int(1))
+	me.Remove(String("o"))
 
 	// In-order insertions
-	me.Set(String("b"), String("b"))
-	me.Set(String("c"), String("c"))
-	assert.True(bothHave(String("a")))
-	assert.True(bothHave(String("b")))
-	assert.True(bothHave(String("c")))
+	me.Set(String("p"), Int(1))
+	me.Set(String("q"), Int(1))
 
 	// Out-of-order insertions
-	me.Set(String("z"), String("z"))
-	me.Set(String("y"), String("y"))
-	assert.True(bothHave(String("z")))
-	assert.True(bothHave(String("y")))
-	assert.True(bothHave(String("a")))
-	assert.True(bothHave(String("b")))
-	assert.True(bothHave(String("c")))
+	me.Set(String("s"), Int(1))
+	me.Set(String("r"), Int(1))
 
-	// Removals
-	me.Remove(String("z")).Remove(String("y")).Remove(String("a")).Remove(String("b")).Remove(String("c")).Remove(String("never-inserted"))
-	assert.False(bothHave(String("z")))
-	assert.False(bothHave(String("y")))
-	assert.False(bothHave(String("a")))
-	assert.False(bothHave(String("b")))
-	assert.False(bothHave(String("c")))
+	m = me.Map(context.Background())
+	expected := []string{"a", "c", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "p", "q", "r", "s"}
+	unexpected := []string{"b", "d", "o"}
+	assert.True(hasAll(m, expected...))
+	assert.True(hasNone(m, unexpected...))
 
-	m := me.Map(context.Background())
-	assert.True(m.Len() == 0)
+	assert.True(m.Len() == uint64(len(expected)))
 }
 
 func TestMapRemove(t *testing.T) {
@@ -754,6 +779,7 @@ func TestMapLast2(t *testing.T) {
 	doTest(getTestRefToValueOrderMap, 2)
 }
 
+/*
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
 
@@ -811,26 +837,27 @@ func TestMapSetGet(t *testing.T) {
 
 	m := me.Map(context.Background())
 	assert.True(m.Len() == 0)
-}
+}*/
 
 func validateMapInsertion(t *testing.T, tm testMap) {
 	vrw := newTestValueStore()
+	ctx := context.Background()
 
 	allMe := NewMap(context.Background(), vrw).Edit()
 	incrMe := NewMap(context.Background(), vrw).Edit()
 
-	for i, entry := range tm.entries {
+	for _, entry := range tm.entries {
 		allMe.Set(entry.key, entry.value)
 		incrMe.Set(entry.key, entry.value)
 
-		m1 := allMe.Map(context.Background())
-		m2 := incrMe.Map(context.Background())
-
-		validateMap(t, vrw, m1, tm.entries[0:i+1])
-		validateMap(t, vrw, m2, tm.entries[0:i+1])
-
-		incrMe = m2.Edit()
+		incrMe = incrMe.Map(ctx).Edit()
 	}
+
+	m1 := allMe.Map(ctx)
+	m2 := incrMe.Map(ctx)
+
+	validateMap(t, vrw, m1, tm.entries)
+	validateMap(t, vrw, m2, tm.entries)
 }
 
 func TestMapValidateInsertAscending(t *testing.T) {
@@ -1377,17 +1404,22 @@ func TestMapEmpty(t *testing.T) {
 	assert := assert.New(t)
 
 	vrw := newTestValueStore()
+	ctx := context.Background()
 
-	me := NewMap(context.Background(), vrw).Edit()
-	empty := func() bool {
-		return me.Map(context.Background()).Empty()
-	}
+	me := NewMap(ctx, vrw).Edit()
 
-	assert.True(empty())
+	m := me.Map(ctx)
+	me = m.Edit()
+	assert.True(m.Empty())
+
 	me.Set(Bool(false), String("hi"))
-	assert.False(empty())
-	me.Set(NewList(context.Background(), vrw), NewMap(context.Background(), vrw))
-	assert.False(empty())
+	m = me.Map(ctx)
+	me = m.Edit()
+	assert.False(m.Empty())
+
+	me.Set(NewList(ctx, vrw), NewMap(ctx, vrw))
+	m = me.Map(ctx)
+	assert.False(m.Empty())
 }
 
 func TestMapType(t *testing.T) {
@@ -1716,53 +1748,4 @@ func TestMapWithNil(t *testing.T) {
 	assert.Panics(t, func() {
 		NewSet(context.Background(), vrw, String("a"), String("b"), Float(42), nil)
 	})
-}
-
-func TestNestedEditing(t *testing.T) {
-	vrw := newTestValueStore()
-
-	me0 := NewMap(context.Background(), vrw).Edit()
-
-	// m.a.a
-	me1a := NewMap(context.Background(), vrw).Edit()
-	me0.Set(String("a"), me1a)
-	se2a := NewSet(context.Background(), vrw).Edit()
-	me1a.Set(String("a"), se2a)
-	se2a.Insert(String("a"))
-
-	// m.b.b
-	me1b := NewMap(context.Background(), vrw).Edit()
-	me0.Set(String("b"), me1b)
-	se2b := NewSet(context.Background(), vrw).Edit()
-	me1b.Set(String("b"), se2b)
-	se2b.Insert(String("b"))
-
-	mOut := me0.Map(context.Background())
-	assert.True(t, mOut.Equals(NewMap(context.Background(), vrw,
-		String("a"), NewMap(context.Background(), vrw,
-			String("a"), NewSet(context.Background(), vrw, String("a")),
-		),
-		String("b"), NewMap(context.Background(), vrw,
-			String("b"), NewSet(context.Background(), vrw, String("b")),
-		),
-	)))
-
-	se2a.Remove(String("a")).Insert(String("aa"))
-	se2b.Remove(String("b")).Insert(String("bb"))
-
-	mOut = me0.Map(context.Background())
-	assert.True(t, mOut.Equals(NewMap(context.Background(), vrw,
-		String("a"), NewMap(context.Background(), vrw,
-			String("a"), NewSet(context.Background(), vrw, String("aa")),
-		),
-		String("b"), NewMap(context.Background(), vrw,
-			String("b"), NewSet(context.Background(), vrw, String("bb")),
-		),
-	)))
-
-	se2a.Remove(String("aa"))
-	se2b.Remove(String("bb"))
-
-	mOut = me0.Map(context.Background())
-	assert.True(t, mOut.Equals(NewMap(context.Background(), vrw))) // remove empty
 }
