@@ -177,9 +177,8 @@ func (t Tuple) Get(n uint64) Value {
 	return v
 }
 
-// Set returns a new struct where the field name has been set to value. If name is not an
-// existing field in the struct or the type of value is different from the old value of the
-// struct field a new struct type is created.
+// Set returns a new tuple where the field at index n is set to value. Attempting to use Set on an index that is outside
+// of the bounds will cause a panic.  Use Append to add additional values, not Set.
 func (t Tuple) Set(n uint64, v Value) Tuple {
 	prolog, head, tail, count, found := t.splitFieldsAt(n)
 	if !found {
@@ -235,6 +234,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	head = dec.buff[fieldsOffset:dec.offset]
 
 	if n != count-1 {
+		dec.skipValue()
 		tail = dec.buff[dec.offset:len(dec.buff)]
 	}
 
