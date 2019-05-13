@@ -139,7 +139,8 @@ func (rs BranchToBranchRefSpec) SrcRef(cwbRef DoltRef) DoltRef {
 	return rs.srcRef
 }
 
-// DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch.
+// DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch, or
+// nil if it does not match the local pattern.
 func (rs BranchToBranchRefSpec) DestRef(r DoltRef) DoltRef {
 	if Equals(r, rs.srcRef) {
 		return rs.destRef
@@ -217,7 +218,8 @@ func (rs BranchToTrackingBranchRefSpec) SrcRef(cwbRef DoltRef) DoltRef {
 	return nil
 }
 
-// DestRef verifies the localRef matches the refspecs local pattern, and then maps it to a remote tracking branch.
+// DestRef verifies the branchRef matches the refspec's local pattern, and then maps it to a remote tracking branch, or
+// to nil if it does not match the pattern.
 func (rs BranchToTrackingBranchRefSpec) DestRef(branchRef DoltRef) DoltRef {
 	if branchRef.GetType() == BranchRefType {
 		captured, matches := rs.localPattern.matches(branchRef.GetPath())
