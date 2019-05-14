@@ -8,10 +8,53 @@ import (
 
 type TaggedValues map[uint64]types.Value
 
-func (tt TaggedValues) NomsTupleForTags(tags []uint64, encodeNulls bool) types.Tuple {
-	numVals := len(tags)
-	vals := make([]types.Value, 0, 2*numVals)
+type TupleVals []types.Value
 
+func (tvs TupleVals) Kind() types.NomsKind {
+	return types.TupleKind
+}
+
+func (tvs TupleVals) Value(ctx context.Context) types.Value {
+	return types.NewTuple(tvs...)
+}
+
+func (tvs TupleVals) Less(other types.LesserValuable) bool {
+	if other.Kind() == types.TupleKind {
+		if otherTVs, ok := other.(TupleVals); ok {
+			for i, val := range tvs {
+				if i == len(otherTVs) {
+					// equal up til the end of other. other is shorter, therefore it is less
+					return false
+				}
+
+				otherVal := otherTVs[i]
+
+				if !val.Equals(otherVal) {
+					return val.Less(otherVal)
+				}
+			}
+
+			return len(tvs) < len(otherTVs)
+		} else {
+			panic("not supported")
+		}
+	}
+
+	return types.TupleKind < other.Kind()
+}
+
+func (tt TaggedValues) NomsTupleForTags(tags []uint64, encodeNulls bool) TupleVals {
+	numVals := 0
+	for _, tag := range tags {
+		val := tt[tag]
+
+		if val != nil || encodeNulls {
+			numVals++
+		}
+	}
+
+	i := 0
+	vals := make([]types.Value, 2*numVals)
 	for _, tag := range tags {
 		val := tt[tag]
 
@@ -20,11 +63,13 @@ func (tt TaggedValues) NomsTupleForTags(tags []uint64, encodeNulls bool) types.T
 		}
 
 		if val != nil {
-			vals = append(vals, types.Uint(tag), val)
+			vals[i*2] = types.Uint(tag)
+			vals[i*2+1] = val
+			i++
 		}
 	}
 
-	return types.NewTuple(vals...)
+	return TupleVals(vals)
 }
 
 func (tt TaggedValues) Iter(cb func(tag uint64, val types.Value) (stop bool)) bool {

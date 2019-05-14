@@ -237,7 +237,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables []string) (*Root
 	for _, tbl := range tables {
 		key := types.String(tbl)
 
-		if me.Has(ctx, key) {
+		if tableMap.Has(ctx, key) {
 			me = me.Remove(key)
 		} else {
 			return nil, ErrTableNotFound

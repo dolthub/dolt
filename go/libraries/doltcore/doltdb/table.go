@@ -187,7 +187,7 @@ func (t *Table) HashOf() hash.Hash {
 
 func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {
 	pkTuple := pkVals.NomsTupleForTags(sch.GetPKCols().Tags, true)
-	return t.GetRow(ctx, pkTuple, sch)
+	return t.GetRow(ctx, pkTuple.Value(ctx).(types.Tuple), sch)
 }
 
 // GetRow uses the noms DestRef containing the row data to lookup a row by primary key.  If a valid row exists with this pk
@@ -296,7 +296,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 
 	confEdit := confData.Edit()
 	for _, pkTupleVal := range pkTuples {
-		if confEdit.Has(ctx, pkTupleVal) {
+		if confData.Has(ctx, pkTupleVal) {
 			removed++
 			confEdit.Remove(pkTupleVal)
 		} else {

@@ -11,10 +11,10 @@ var ErrRowNotValid = errors.New("invalid row for current schema")
 
 type Row interface {
 	// Returns the noms map key for this row, using the schema provided.
-	NomsMapKey(sch schema.Schema) types.Value
+	NomsMapKey(sch schema.Schema) types.LesserValuable
 
 	// Returns the noms map value for this row, using the schema provided.
-	NomsMapValue(sch schema.Schema) types.Value
+	NomsMapValue(sch schema.Schema) types.Valuable
 
 	// Iterates over all the columns in the row. Columns that have no value set will not be visited.
 	IterCols(cb func(tag uint64, val types.Value) (stop bool)) bool
