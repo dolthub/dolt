@@ -30,6 +30,8 @@ teardown() {
 
 @test "dolt schema rename column" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    run dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    [ "$status" -eq 0 ]
     run dolt schema --rename-column test c1 c0
     [ "$status" -eq 0 ]
     run dolt schema test
@@ -44,10 +46,14 @@ teardown() {
     [[ "$output" =~ "primary key (pk)" ]] || false
     [[ "$output" =~ "c0 int comment 'tag:1'" ]] || false
     [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    run dolt table select test
+    [ "$status" -eq 0 ]
 }
 
 @test "dolt schema delete column" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    run dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    [ "$status" -eq 0 ]
     run dolt schema --drop-column test c1
     [ "$status" -eq 0 ]
     run dolt schema test
@@ -61,6 +67,9 @@ teardown() {
     [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
     [[ "$output" =~ "primary key (pk)" ]] || false
     [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    run dolt table select test
+    skip "This panics right now."
+    [ "$status" -eq 0 ]
 }
 
 @test "dolt diff on schema changes" {
@@ -83,18 +92,15 @@ teardown() {
     [[ "$output" =~ ">" ]] || false
     [[ "$output" =~ "<" ]] || false
     # Check for a blank column in the diff output
-    skip "Data diff busted for schema channges from pretty table printing"
-    [[ ! "$output" =~ \|[[:space:]]+\| ]] || false
+    [[ "$output" =~ \|[[:space:]]+\| ]] || false
     dolt sql -q "insert into test (pk,c0,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0)"
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+c0 ]] || false
-    [[ "$output" =~ "| c0 |" ]]|| false
     [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
     [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
     dolt schema --drop-column test c0
     run dolt diff
-    skip "This also gives a diff right now when it should not"
+    skip "This panics right now."
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
