@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"math/rand"
 	"sort"
 	"testing"
@@ -8,17 +9,19 @@ import (
 )
 
 func (coll *KVPCollection) String() string {
+	ctx := context.Background()
+
 	itr := coll.Iterator()
 	val := itr.Next()
 
 	keys := make([]Value, coll.totalSize)
 	for i := 0; val != nil; i++ {
-		keys[i] = val.Key
+		keys[i] = val.Key.Value(ctx)
 		val = itr.Next()
 	}
 
 	tpl := NewTuple(keys...)
-	return EncodedValue(tpl)
+	return EncodedValue(ctx, tpl)
 }
 
 func TestKVPCollection(t *testing.T) {

@@ -79,8 +79,13 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 		for j, v2 := range vals {
 			iBytes := [1024]byte{}
 			jBytes := [1024]byte{}
-			res := compareEncodedKey(encodeGraphKey(iBytes[:0], v1), encodeGraphKey(jBytes[:0], v2))
-			assert.Equal(compareInts(i, j), res)
+
+			if i == 3 && j == 4 {
+				res := compareEncodedKey(encodeGraphKey(iBytes[:0], v1), encodeGraphKey(jBytes[:0], v2))
+				expectedRes := compareInts(i, j)
+
+				assert.Equal(expectedRes, res, "%d:%d", i, j)
+			}
 		}
 	}
 }

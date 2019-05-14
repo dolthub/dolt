@@ -1,11 +1,14 @@
 package types
 
 import (
+	"context"
 	"sort"
 	"testing"
 )
 
 func TestKVPSliceSort(t *testing.T) {
+	ctx := context.Background()
+
 	tests := []struct {
 		kvps      KVPSlice
 		expSorted KVPSlice
@@ -35,7 +38,7 @@ func TestKVPSliceSort(t *testing.T) {
 		}
 
 		for i := 0; i < test.kvps.Len(); i++ {
-			if !test.kvps[i].Key.Equals(test.expSorted[i].Key) {
+			if !test.kvps[i].Key.Value(ctx).Equals(test.expSorted[i].Key.Value(ctx)) {
 				t.Error("value at", i, "does not match expected.")
 			}
 		}

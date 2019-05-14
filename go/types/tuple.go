@@ -265,8 +265,8 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return false
 }*/
 
-func (t Tuple) Less(otherVal Value) bool {
-	if otherTuple, ok := otherVal.(Tuple); ok {
+func (t Tuple) Less(other LesserValuable) bool {
+	if otherTuple, ok := other.(Tuple); ok {
 		itr := t.Iterator()
 		otherItr := otherTuple.Iterator()
 		for itr.HasMore() {
@@ -286,5 +286,5 @@ func (t Tuple) Less(otherVal Value) bool {
 		return itr.Len() < otherItr.Len()
 	}
 
-	return TupleKind < otherVal.Kind()
+	return TupleKind < other.Kind()
 }

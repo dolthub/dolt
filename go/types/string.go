@@ -23,7 +23,7 @@ func (s String) Equals(other Value) bool {
 	return s == other
 }
 
-func (s String) Less(other Value) bool {
+func (s String) Less(other LesserValuable) bool {
 	if s2, ok := other.(String); ok {
 		return s < s2
 	}

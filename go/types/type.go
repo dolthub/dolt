@@ -54,8 +54,8 @@ func (t *Type) Equals(other Value) (res bool) {
 	return false
 }
 
-func (t *Type) Less(other Value) (res bool) {
-	return valueLess(t, other)
+func (t *Type) Less(other LesserValuable) (res bool) {
+	return valueLess(t, other.(Value))
 }
 
 func (t *Type) Hash() hash.Hash {

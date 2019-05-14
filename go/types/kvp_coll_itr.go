@@ -8,7 +8,7 @@ type KVPCollItr struct {
 	idx        int
 	currSl     KVPSlice
 	currSlSize int
-	currKey    Value
+	currKey    LesserValuable
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection

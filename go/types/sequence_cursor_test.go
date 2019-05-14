@@ -81,7 +81,7 @@ func (ts testSequence) valuesSlice(from, to uint64) []Value {
 	panic("not reached")
 }
 
-func (ts testSequence) Less(other Value) bool {
+func (ts testSequence) Less(other LesserValuable) bool {
 	panic("not reached")
 }
 

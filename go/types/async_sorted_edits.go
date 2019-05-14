@@ -76,7 +76,7 @@ func NewAsyncSortedEdits(sliceSize, asyncConcurrency, sortConcurrency int) *Asyn
 }
 
 // Set adds an edit
-func (ase *AsyncSortedEdits) Set(k Value, v Valuable) {
+func (ase *AsyncSortedEdits) Set(k LesserValuable, v Valuable) {
 	ase.accumulating = append(ase.accumulating, KVP{k, v})
 
 	if len(ase.accumulating) == ase.sliceSize {
