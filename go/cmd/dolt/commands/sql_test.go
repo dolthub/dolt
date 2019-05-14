@@ -67,7 +67,6 @@ func TestBadInput(t *testing.T) {
 		args        []string
 		expectedRes int
 	}{
-		{"no input", []string{""}, 1},
 		{"no query", []string{"-q", ""}, 1},
 	}
 	for _, test := range tests {

@@ -78,6 +78,14 @@ func (dEnv *DoltEnv) HasDoltDataDir() bool {
 	return dEnv.hasDoltDataDir("./")
 }
 
+// GetDoltDir returns the path to the .dolt directory
+func (dEnv *DoltEnv) GetDoltDir() string {
+	if !dEnv.HasDoltDataDir() {
+		panic("No dolt dir")
+	}
+	return filepath.Join("./", doltdb.DoltDir)
+}
+
 func (dEnv *DoltEnv) hasDoltDir(path string) bool {
 	exists, isDir := dEnv.FS.Exists(filepath.Join(path, doltdb.DoltDir))
 	return exists && isDir
