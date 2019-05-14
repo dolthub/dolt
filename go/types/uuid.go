@@ -20,7 +20,7 @@ func (v UUID) Equals(other Value) bool {
 	return v == other
 }
 
-func (v UUID) Less(other Value) bool {
+func (v UUID) Less(other LesserValuable) bool {
 	if v2, ok := other.(UUID); ok {
 		for i := 0; i < uuidNumBytes; i++ {
 			b1 := v[i]

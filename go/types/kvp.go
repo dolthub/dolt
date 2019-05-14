@@ -3,7 +3,7 @@ package types
 // KVP is a simple key value pair
 type KVP struct {
 	// Key is the key
-	Key Value
+	Key LesserValuable
 
 	// Val is the value
 	Val Valuable
@@ -45,7 +45,7 @@ func IsInOrder(itr KVPIterator) (bool, int) {
 
 		if curr == nil {
 			break
-		} else if !prev.Key.Less(curr.Key) && !prev.Key.Equals(curr.Key) {
+		} else if curr.Key.Less(prev.Key) {
 			return false, count
 		}
 

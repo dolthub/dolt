@@ -22,7 +22,7 @@ func (v Int) Equals(other Value) bool {
 	return v == other
 }
 
-func (v Int) Less(other Value) bool {
+func (v Int) Less(other LesserValuable) bool {
 	if v2, ok := other.(Int); ok {
 		return v < v2
 	}

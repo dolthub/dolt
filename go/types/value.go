@@ -22,6 +22,16 @@ type Valuable interface {
 	Value(ctx context.Context) Value
 }
 
+type LesserValuable interface {
+	Valuable
+	// Less determines if this Noms value is less than another Noms value.
+	// When comparing two Noms values and both are comparable and the same type (Bool, Float or
+	// String) then the natural ordering is used. For other Noms values the Hash of the value is
+	// used. When comparing Noms values of different type the following ordering is used:
+	// Bool < Float < String < everything else.
+	Less(other LesserValuable) bool
+}
+
 // Emptyable is an interface for Values which may or may not be empty
 type Emptyable interface {
 	Empty() bool
@@ -29,17 +39,10 @@ type Emptyable interface {
 
 // Value is the interface all Noms values implement.
 type Value interface {
-	Valuable
+	LesserValuable
 
 	// Equals determines if two different Noms values represents the same underlying value.
 	Equals(other Value) bool
-
-	// Less determines if this Noms value is less than another Noms value.
-	// When comparing two Noms values and both are comparable and the same type (Bool, Float or
-	// String) then the natural ordering is used. For other Noms values the Hash of the value is
-	// used. When comparing Noms values of different type the following ordering is used:
-	// Bool < Float < String < everything else.
-	Less(other Value) bool
 
 	// Hash is the hash of the value. All Noms values have a unique hash and if two values have the
 	// same hash they must be equal.
@@ -140,8 +143,8 @@ func (v valueImpl) Equals(other Value) bool {
 	return false
 }
 
-func (v valueImpl) Less(other Value) bool {
-	return valueLess(v, other)
+func (v valueImpl) Less(other LesserValuable) bool {
+	return valueLess(v, other.(Value))
 }
 
 func (v valueImpl) WalkRefs(cb RefCallback) {

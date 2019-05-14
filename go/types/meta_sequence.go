@@ -454,7 +454,7 @@ func (es emptySequence) Equals(other Value) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Less(other Value) bool {
+func (es emptySequence) Less(other LesserValuable) bool {
 	panic("empty sequence")
 }
 

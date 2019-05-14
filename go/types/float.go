@@ -25,7 +25,7 @@ func (v Float) Equals(other Value) bool {
 	return v == other
 }
 
-func (v Float) Less(other Value) bool {
+func (v Float) Less(other LesserValuable) bool {
 	if v2, ok := other.(Float); ok {
 		return v < v2
 	}

@@ -35,37 +35,49 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	seq := me.m.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	cursChan := make(chan chan *sequenceCursor)
-	kvsChan := make(chan chan mapEntry)
+	cursChan := make(chan chan *sequenceCursor, 128)
+	kvsChan := make(chan chan mapEntry, 128)
 
 	go func() {
 		itr := me.ase.Iterator()
-		for i, edit := 0, itr.Next(); edit != nil; i, edit = i+1, itr.Next() {
-			nextEdit := itr.Peek()
-			if nextEdit != nil && nextEdit.Key.Equals(edit.Key) {
-				continue // next edit supercedes this one
+		nextEdit := itr.Next()
+
+		for {
+			edit := nextEdit
+
+			if edit == nil {
+				break
 			}
 
-			edit := edit
+			nextEdit = itr.Next()
+
+			if nextEdit != nil && !edit.Key.Less(nextEdit.Key) {
+				// keys are sorted, so if this key is not less than the next key then they are equal and the next
+				// value will take precedence
+				continue
+			}
+
+			key := edit.Key.Value(ctx)
 
 			// TODO: Use ReadMany
 			cc := make(chan *sequenceCursor, 1)
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(ctx, seq, edit.Key, true, false)
+				cur := newCursorAtValue(ctx, seq, key, true, false)
+				cc <- cur
 			}()
 
 			kvc := make(chan mapEntry, 1)
 			kvsChan <- kvc
 
 			if edit.Val == nil {
-				kvc <- mapEntry{edit.Key, nil}
+				kvc <- mapEntry{key, nil}
 				continue
 			}
 
 			if v, ok := edit.Val.(Value); ok {
-				kvc <- mapEntry{edit.Key, v}
+				kvc <- mapEntry{key, v}
 				continue
 			}
 
@@ -77,7 +89,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 					}
 				}
 
-				kvc <- mapEntry{edit.Key, sv}
+				kvc <- mapEntry{key, sv}
 			}()
 		}
 
@@ -115,6 +127,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		if existingValue != nil {
 			ch.Skip(ctx)
 		}
+
 		if kv.value != nil {
 			ch.Append(ctx, kv)
 		}
@@ -127,7 +140,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	return newMap(ch.Done(ctx).(orderedSequence))
 }
 
-func (me *MapEditor) Set(k Value, v Valuable) *MapEditor {
+func (me *MapEditor) Set(k LesserValuable, v Valuable) *MapEditor {
 	d.PanicIfTrue(v == nil)
 	me.set(k, v)
 	return me
@@ -142,11 +155,11 @@ func (me *MapEditor) SetM(kv ...Valuable) *MapEditor {
 	return me
 }
 
-func (me *MapEditor) Remove(k Value) *MapEditor {
+func (me *MapEditor) Remove(k LesserValuable) *MapEditor {
 	me.set(k, nil)
 	return me
 }
 
-func (me *MapEditor) set(k Value, v Valuable) {
+func (me *MapEditor) set(k LesserValuable, v Valuable) {
 	me.ase.Set(k, v)
 }

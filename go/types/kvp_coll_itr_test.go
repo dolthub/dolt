@@ -1,10 +1,13 @@
 package types
 
 import (
+	"context"
 	"testing"
 )
 
 func TestKVPCollItr(t *testing.T) {
+	ctx := context.Background()
+
 	slice1 := KVPSlice{{Uint(1), NullValue}, {Uint(2), NullValue}}
 	slice2 := KVPSlice{{Uint(3), NullValue}, {Uint(4), NullValue}}
 	slice3 := KVPSlice{{Uint(5), NullValue}, {}}
@@ -42,7 +45,7 @@ func TestKVPCollItr(t *testing.T) {
 			for _, expRes := range test.itrResults {
 				kvp, buff, done := itr.nextForDestructiveMerge()
 
-				if !kvp.Key.Equals(Uint(expRes.keyVal)) {
+				if !kvp.Key.Value(ctx).Equals(Uint(expRes.keyVal)) {
 					t.Error("unexpected result")
 				}
 

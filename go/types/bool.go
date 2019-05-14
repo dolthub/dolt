@@ -21,7 +21,7 @@ func (b Bool) Equals(other Value) bool {
 	return b == other
 }
 
-func (b Bool) Less(other Value) bool {
+func (b Bool) Less(other LesserValuable) bool {
 	if b2, ok := other.(Bool); ok {
 		return !bool(b) && bool(b2)
 	}

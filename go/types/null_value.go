@@ -29,7 +29,7 @@ func (v Null) Equals(other Value) bool {
 	return other.Kind() == NullKind
 }
 
-func (v Null) Less(other Value) bool {
+func (v Null) Less(other LesserValuable) bool {
 	return NullKind < other.Kind()
 }
 

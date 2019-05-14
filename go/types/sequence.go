@@ -27,7 +27,7 @@ type sequence interface {
 	isLeaf() bool
 	Kind() NomsKind
 	Len() uint64
-	Less(other Value) bool
+	Less(other LesserValuable) bool
 	numLeaves() uint64
 	seqLen() int
 	treeLevel() uint64
