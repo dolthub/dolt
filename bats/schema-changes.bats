@@ -45,8 +45,7 @@ teardown() {
     [[ "$output" =~ "primary key (pk)" ]] || false
     [[ "$output" =~ "c0 int comment 'tag:1'" ]] || false
     [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
-    run dolt table select test
-    [ "$status" -eq 0 ]
+    dolt table select test
 }
 
 @test "dolt schema delete column" {
