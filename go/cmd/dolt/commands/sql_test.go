@@ -88,8 +88,8 @@ func TestCreateTable(t *testing.T) {
 		expectedRes int
 	}{
 		{"create table people (id int)", 1}, // no primary key
-		{"create table", 1}, // bad syntax
-		{"create table (id int ", 1}, // bad syntax
+		{"create table", 1},                 // bad syntax
+		{"create table (id int ", 1},        // bad syntax
 		{"create table people (id int primary key)", 0},
 		{"create table people (id int primary key, age int)", 0},
 		{"create table people (id int primary key, age int, first varchar(80), is_married bit)", 0},
@@ -129,20 +129,20 @@ func TestInsert(t *testing.T) {
 		expectedIds []uuid.UUID
 	}{
 		{
-			name: "no primary key",
-			query: "insert into people (title) values ('hello')",
+			name:        "no primary key",
+			query:       "insert into people (title) values ('hello')",
 			expectedRes: 1,
 		},
 		{
-			name: "bad syntax",
+			name:  "bad syntax",
 			query: "insert into table", expectedRes: 1,
 		},
 		{
-			name: "bad syntax",
+			name:  "bad syntax",
 			query: "insert into people (id) values", expectedRes: 1,
 		},
 		{
-			name: "table doesn't exist",
+			name:  "table doesn't exist",
 			query: "insert into dne (id) values (00000000-0000-0000-0000-000000000005)", expectedRes: 1,
 		},
 		{
@@ -205,8 +205,8 @@ func TestInsert(t *testing.T) {
 				for _, expectedid := range test.expectedIds {
 					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
-					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
-					_, ok := table.GetRow(context.Background(), key, dtestutils.TypedSchema)
+					key := taggedVals.NomsTupleForTags([]uint64{dtestutils.IdTag}, true)
+					_, ok := table.GetRow(context.Background(), key.Value(context.Background()).(types.Tuple), dtestutils.TypedSchema)
 					assert.True(t, ok, "expected id not found")
 				}
 			}
@@ -225,41 +225,42 @@ func TestUpdate(t *testing.T) {
 		expectedAges []uint
 	}{
 		{
-			name: "bad syntax",
+			name:  "bad syntax",
 			query: "update table", expectedRes: 1,
 		},
 		{
-			name: "bad syntax",
+			name:  "bad syntax",
 			query: "update people set id", expectedRes: 1,
 		},
 		{
-			name: "table doesn't exist",
+			name:  "table doesn't exist",
 			query: "update dne set id = '00000000-0000-0000-0000-000000000005'", expectedRes: 1,
 		},
 		{
-			name: "update one row",
-			query: `update people set age = 1 where id = '00000000-0000-0000-0000-000000000002'`,
-			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000002")},
+			name:         "update one row",
+			query:        `update people set age = 1 where id = '00000000-0000-0000-0000-000000000002'`,
+			expectedIds:  []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000002")},
 			expectedAges: []uint{1},
 		},
 		{
-			name: "insert two rows, two columns",
+			name:  "insert two rows, two columns",
 			query: `update people set age = 1, is_married = true where age > 21`,
 			expectedIds: []uuid.UUID{
 				uuid.MustParse("00000000-0000-0000-0000-000000000000"),
 				uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 			},
-			expectedAges: []uint{1,1},
+			expectedAges: []uint{1, 1},
 		},
 		{
-			name: "null constraint violation",
-			query: `update people set name = null where id ='00000000-0000-0000-0000-000000000000'`,
+			name:        "null constraint violation",
+			query:       `update people set name = null where id ='00000000-0000-0000-0000-000000000000'`,
 			expectedRes: 1,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv := createEnvWithSeedData(t)
 
 			args := []string{"-q", test.query}
@@ -276,8 +277,8 @@ func TestUpdate(t *testing.T) {
 				for i, expectedid := range test.expectedIds {
 					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
-					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
-					row, ok := table.GetRow(context.Background(), key, dtestutils.TypedSchema)
+					key := taggedVals.NomsTupleForTags([]uint64{dtestutils.IdTag}, true)
+					row, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), dtestutils.TypedSchema)
 					assert.True(t, ok, "expected id not found")
 					ageVal, _ := row.GetColVal(dtestutils.AgeTag)
 					assert.Equal(t, test.expectedAges[i], uint(ageVal.(types.Uint)))
@@ -297,15 +298,15 @@ func TestDelete(t *testing.T) {
 		deletedIds  []uuid.UUID
 	}{
 		{
-			name: "bad syntax",
+			name:  "bad syntax",
 			query: "delete table", expectedRes: 1,
 		},
 		{
-			name: "bad syntax",
+			name:  "bad syntax",
 			query: "delete from people where", expectedRes: 1,
 		},
 		{
-			name: "table doesn't exist",
+			name:  "table doesn't exist",
 			query: "delete from dne", expectedRes: 1,
 		},
 		{
@@ -314,7 +315,7 @@ func TestDelete(t *testing.T) {
 			deletedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000002")},
 		},
 		{
-			name: "delete two rows",
+			name:  "delete two rows",
 			query: `delete from people where age > 21`,
 			deletedIds: []uuid.UUID{
 				uuid.MustParse("00000000-0000-0000-0000-000000000000"),
@@ -326,6 +327,7 @@ func TestDelete(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.query, func(t *testing.T) {
 			dEnv := createEnvWithSeedData(t)
+			ctx := context.Background()
 
 			args := []string{"-q", test.query}
 
@@ -341,8 +343,8 @@ func TestDelete(t *testing.T) {
 				for _, expectedid := range test.deletedIds {
 					table, _ := root.GetTable(context.Background(), tableName)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
-					key := taggedVals.NomsTupleForTags([]uint64 { dtestutils.IdTag}, true)
-					_, ok := table.GetRow(context.Background(), key, dtestutils.TypedSchema)
+					key := taggedVals.NomsTupleForTags([]uint64{dtestutils.IdTag}, true)
+					_, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), dtestutils.TypedSchema)
 					assert.False(t, ok, "row not deleted")
 				}
 			}
