@@ -2,6 +2,7 @@ module github.com/liquidata-inc/ld/dolt/go
 
 require (
 	cloud.google.com/go v0.35.1 // indirect
+	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/attic-labs/noms v0.0.0-20181127201811-95e8b35cc96f
 	github.com/aws/aws-sdk-go v1.16.26 // indirect
@@ -13,6 +14,7 @@ require (
 	github.com/google/go-cmp v0.2.0
 	github.com/google/uuid v1.1.0
 	github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7 // indirect
+	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d
 	github.com/pkg/errors v0.8.1
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
@@ -31,3 +33,5 @@ require (
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190506171537-518b7edcd73f
 
 replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.3
+
+//replace github.com/liquidata-inc/ishell => ../../../ishell
