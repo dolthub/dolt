@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"os"
 	"strings"
 
 	"github.com/fatih/color"
@@ -89,7 +90,11 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 func getCommitMessageFromEditor(dEnv *env.DoltEnv) string {
 	var finalMsg string
 	initialMsg := buildInitalCommitMsg(dEnv)
-	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, "vim")
+	backupEd := "vim"
+	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
+		backupEd = ed
+	}
+	editorStr := dEnv.Config.GetStringOrDefault(env.DoltEditor, backupEd)
 
 	cli.ExecuteWithStdioRestored(func() {
 		commitMsg, _ := editor.OpenCommitEditor(*editorStr, initialMsg)

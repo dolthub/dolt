@@ -23,8 +23,7 @@ func OpenCommitEditor(ed string, initialContents string) (string, error) {
 	cmdName, cmdArgs := getCmdNameAndArgsForEditor(ed)
 
 	if cmdName == "" {
-		cmdName = os.Getenv("EDITOR")
-		cmdArgs = []string{}
+		panic("No editor specified: " + ed)
 	}
 
 	cmdArgs = append(cmdArgs, filename)
