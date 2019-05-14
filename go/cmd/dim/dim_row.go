@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -17,7 +18,7 @@ type DimRow struct {
 }
 
 func NewDimRow(r row.Row, toUntyped, toTyped *rowconv.RowConverter) (*DimRow, error) {
-	key := r.NomsMapKey(toUntyped.SrcSch)
+	key := r.NomsMapKey(toUntyped.SrcSch).Value(context.Background())
 	untyped, err := toUntyped.Convert(r)
 
 	if err != nil {
@@ -36,7 +37,7 @@ func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
 	}
 
 	typedSch := dr.toTyped.DestSch
-	key := typed.NomsMapKey(typedSch)
+	key := typed.NomsMapKey(typedSch).Value(context.Background())
 
 	if !dr.key.Equals(key) {
 		me = me.Remove(dr.key)
