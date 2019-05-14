@@ -7,6 +7,7 @@ setup() {
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
 }
 
 teardown() {
@@ -24,5 +25,13 @@ teardown() {
     run bash -c "echo quit | dolt sql"
     [ $status -eq 0 ]
     [[ "$output" =~ "# Welcome to the DoltSQL shell." ]] || false
+    [[ "$output" =~ "Bye" ]] || false
+}
+
+@test "run a query in sql shell" {
+    run bash -c "echo 'select * from test;' | dolt sql"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "# Welcome to the DoltSQL shell." ]] || false
+    [[ "$output" =~ "pk" ]] || false
     [[ "$output" =~ "Bye" ]] || false
 }
