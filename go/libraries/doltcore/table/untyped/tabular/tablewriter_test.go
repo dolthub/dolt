@@ -73,10 +73,11 @@ func TestWriter(t *testing.T) {
 
 	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
 
-	var stringWr StringBuilderCloser
-	tableWr := NewTextTableWriter(&stringWr, outSch)
+	t.Run("Test single header row", func(t *testing.T) {
+		var stringWr StringBuilderCloser
+		tableWr := NewTextTableWriter(&stringWr, outSch)
 
-	var expectedTableString = `
+		var expectedTableString = `
 +----------------+--------+-----------------------------------+
 | name           | age    | title                             |
 +----------------+--------+-----------------------------------+
@@ -86,14 +87,64 @@ func TestWriter(t *testing.T) {
 | Jim Halpert    | <NULL> | <NULL>                            |
 +----------------+--------+-----------------------------------+
 `
-	// strip off the first newline, inserted for nice printing
-	expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
+		// strip off the first newline, inserted for nice printing
+		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
-	for _, r := range rows {
-		tableWr.WriteRow(context.Background(), r)
-	}
-	tableWr.Close(context.Background())
+		for _, r := range rows {
+			tableWr.WriteRow(context.Background(), r)
+		}
+		tableWr.Close(context.Background())
 
-	assert.Equal(t, expectedTableString, stringWr.String())
+		assert.Equal(t, expectedTableString, stringWr.String())
+	})
+
+	t.Run("Test multiple header rows", func(t *testing.T) {
+		var stringWr StringBuilderCloser
+		tableWr := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 3)
+
+		var expectedTableString = `
++----------------+--------+-----------------------------------+
+| name           | age    | title                             |
+| Michael Scott  | 43     | Regional Manager                  |
+| Pam Beasley    | 25     | Secretary                         |
++----------------+--------+-----------------------------------+
+| Dwight Schrute | 29     | Assistant to the Regional Manager |
+| Jim Halpert    | <NULL> | <NULL>                            |
++----------------+--------+-----------------------------------+
+`
+		// strip off the first newline, inserted for nice printing
+		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
+
+		for _, r := range rows {
+			tableWr.WriteRow(context.Background(), r)
+		}
+		tableWr.Close(context.Background())
+
+		assert.Equal(t, expectedTableString, stringWr.String())
+	})
+
+	t.Run("Test no header rows", func(t *testing.T) {
+		var stringWr StringBuilderCloser
+		tableWr := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 0)
+
+		var expectedTableString = `
++----------------+--------+-----------------------------------+
+| name           | age    | title                             |
+| Michael Scott  | 43     | Regional Manager                  |
+| Pam Beasley    | 25     | Secretary                         |
+| Dwight Schrute | 29     | Assistant to the Regional Manager |
+| Jim Halpert    | <NULL> | <NULL>                            |
++----------------+--------+-----------------------------------+
+`
+		// strip off the first newline, inserted for nice printing
+		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
+
+		for _, r := range rows {
+			tableWr.WriteRow(context.Background(), r)
+		}
+		tableWr.Close(context.Background())
+
+		assert.Equal(t, expectedTableString, stringWr.String())
+	})
+
 }
-

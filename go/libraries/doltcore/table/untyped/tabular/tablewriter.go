@@ -26,10 +26,19 @@ type TextTableWriter struct {
 	bWr           *bufio.Writer
 	sch           schema.Schema
 	lastWritten   *row.Row
+	numHeaderRows int
+	numHrsWritten int
 }
 
-// NewCSVWriter writes rows to the given WriteCloser based on the Schema provided. The schema must contain only
+// NewTextTableWriter writes rows to the given WriteCloser based on the Schema provided, with a single table header row.
+// The schema must contain only string type columns.
 func NewTextTableWriter(wr io.WriteCloser, sch schema.Schema) *TextTableWriter {
+	return NewTextTableWriterWithNumHeaderRows(wr, sch, 1)
+}
+
+// NewTextTableWriterWithNumHeaderRows writes rows to the given WriteCloser based on the Schema provided, with the
+// first numHeaderRows rows in the table header. The schema must contain only string type columns.
+func NewTextTableWriterWithNumHeaderRows(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) *TextTableWriter {
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if col.Kind != types.StringKind {
 			panic("Only string typed columns can be used to print a table")
@@ -37,7 +46,7 @@ func NewTextTableWriter(wr io.WriteCloser, sch schema.Schema) *TextTableWriter {
 		return false
 	})
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
-	return &TextTableWriter{wr, bwr, sch, nil}
+	return &TextTableWriter{wr, bwr, sch, nil, numHeaderRows, 0}
 }
 
 // writeTableHeader writes a table header with the column names given in the row provided, which is assumed to be
@@ -58,9 +67,11 @@ func (ttw *TextTableWriter) writeTableHeader(r row.Row) error {
 		}
 		colName := string(colNameVal.(types.String))
 
-		for i := 0; i < len(colName); i++ {
+		normalized := stripansi.Strip(colName)
+		for i := 0; i < len(normalized); i++ {
 			separator.WriteString("-")
 		}
+
 		colnames.WriteString(colName)
 		separator.WriteString("-+")
 		colnames.WriteString(" |")
@@ -68,7 +79,26 @@ func (ttw *TextTableWriter) writeTableHeader(r row.Row) error {
 	})
 
 	ttw.lastWritten = &r
-	return iohelp.WriteLines(ttw.bWr, separator.String(), colnames.String(), separator.String())
+
+	// Write the separators and the column headers as necessary
+	if ttw.numHrsWritten == 0 {
+		if err := iohelp.WriteLines(ttw.bWr, separator.String()); err != nil {
+			return err
+		}
+	}
+
+	if err := iohelp.WriteLines(ttw.bWr, colnames.String()); err != nil {
+		return err
+	}
+
+	ttw.numHrsWritten++
+	if ttw.numHrsWritten == ttw.numHeaderRows {
+		if err := iohelp.WriteLines(ttw.bWr, separator.String()); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // writeTableFooter writes the final separator line for a table
@@ -106,8 +136,8 @@ func (ttw *TextTableWriter) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (ttw *TextTableWriter) WriteRow(ctx context.Context, r row.Row) error {
-	// If this is the first row we've written, assume it's the column list
-	if ttw.lastWritten == nil {
+	// Handle writing header rows as asked for
+	if ttw.lastWritten == nil || ttw.numHrsWritten < ttw.numHeaderRows {
 		return ttw.writeTableHeader(r)
 	}
 

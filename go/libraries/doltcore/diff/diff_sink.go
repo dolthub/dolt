@@ -33,7 +33,7 @@ func NewColorDiffWriter(wr io.WriteCloser, sch schema.Schema) *ColorDiffSink {
 		panic(err)
 	}
 
-	ttw := tabular.NewTextTableWriter(wr, outSch)
+	ttw := tabular.NewTextTableWriterWithNumHeaderRows(wr, outSch, 2)
 	return &ColorDiffSink{outSch, ttw}
 }
 
