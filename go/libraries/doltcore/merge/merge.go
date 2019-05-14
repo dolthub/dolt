@@ -157,7 +157,7 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 			mergeChange = types.ValueChanged{}
 		} else {
 			r, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
-			mergedRow, isConflict := rowMerge(sch, r, mergeRow, ancRow)
+			mergedRow, isConflict := rowMerge(ctx, sch, r, mergeRow, ancRow)
 
 			if isConflict {
 				stats.Conflicts++
@@ -198,7 +198,7 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
+func rowMerge(ctx context.Context, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
 		if r.Equals(mergeRow) {
@@ -257,5 +257,5 @@ func rowMerge(sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value,
 
 	tpl := resultVals.NomsTupleForTags(sch.GetNonPKCols().SortedTags, false)
 
-	return tpl, false
+	return tpl.Value(ctx), false
 }

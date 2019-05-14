@@ -129,10 +129,10 @@ func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) Row {
 	return fromTaggedVals(sch, key, val)
 }
 
-func (nr nomsRow) NomsMapKey(sch schema.Schema) types.Value {
+func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {
 	return nr.key.NomsTupleForTags(sch.GetPKCols().Tags, true)
 }
 
-func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Value {
+func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
 	return nr.value.NomsTupleForTags(sch.GetNonPKCols().SortedTags, false)
 }

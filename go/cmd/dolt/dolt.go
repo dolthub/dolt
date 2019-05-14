@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/credcmds"
+	"github.com/pkg/profile"
 	"os"
 	"strings"
-
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/credcmds"
 
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -48,7 +49,24 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts.", Func: cnfcmds.Commands, ReqRepo: false},
 })
 
+var cpuProf = false
+var memProf = false
+
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
+	if cpuProf {
+		fmt.Println("cpu profiling enabled.")
+		defer profile.Start(profile.CPUProfile).Stop()
+	}
+
+	if memProf {
+		fmt.Println("mem profiling enabled.")
+		defer profile.Start(profile.MemProfile).Stop()
+	}
+
 	args := os.Args[1:]
 	// Currently goland doesn't support running with a different working directory when using go modules.
 	// This is a hack that allows a different working directory to be set after the application starts using
@@ -71,10 +89,8 @@ func main() {
 
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config.", dEnv.CfgLoadErr))
-		os.Exit(1)
+		return 1
 	}
 
-	res := doltCommand("dolt", args, dEnv)
-
-	os.Exit(res)
+	return doltCommand("dolt", args, dEnv)
 }

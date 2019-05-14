@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
@@ -155,7 +156,7 @@ func ParseKeyValues(sch schema.Schema, args []string) ([]types.Value, error) {
 			taggedVals[k] = val
 		}
 
-		pkVals = append(pkVals, taggedVals.NomsTupleForTags(pkCols.Tags, true))
+		pkVals = append(pkVals, taggedVals.NomsTupleForTags(pkCols.Tags, true).Value(context.TODO()))
 	}
 
 	return pkVals, nil

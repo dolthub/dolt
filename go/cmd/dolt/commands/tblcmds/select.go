@@ -313,10 +313,11 @@ var noConfLabel = types.String("   ")
 
 func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 	return func(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
+		ctx := context.TODO()
 		key := inRow.NomsMapKey(inSch)
 
 		var err error
-		if conflicts.Has(context.TODO(), key) {
+		if conflicts.Has(ctx, key.Value(ctx)) {
 			inRow, err = inRow.SetColVal(cnfTag, confLabel, outSch)
 		} else {
 			inRow, err = inRow.SetColVal(cnfTag, noConfLabel, outSch)

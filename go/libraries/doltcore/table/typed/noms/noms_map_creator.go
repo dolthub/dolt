@@ -54,9 +54,11 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 		pk := r.NomsMapKey(nmc.sch)
 		fieldVals := r.NomsMapValue(nmc.sch)
 		if nmc.lastPK == nil || nmc.lastPK.Less(pk) {
-			nmc.kvsChan <- pk
-			nmc.kvsChan <- fieldVals
-			nmc.lastPK = pk
+			pkVal := pk.Value(ctx)
+
+			nmc.kvsChan <- pkVal
+			nmc.kvsChan <- fieldVals.Value(ctx)
+			nmc.lastPK = pkVal
 		} else {
 			err = errors.New("Input was not sorted by the primary key")
 		}

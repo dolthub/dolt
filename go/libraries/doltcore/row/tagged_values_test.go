@@ -10,6 +10,8 @@ import (
 )
 
 func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
+	ctx := context.Background()
+
 	tt := TaggedValues{
 		0: types.String("0"),
 		1: types.String("1"),
@@ -32,7 +34,7 @@ func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 	}
 	for _, test := range tests {
 		if got := tt.NomsTupleForTags(test.tags, test.encodeNulls); !reflect.DeepEqual(got, test.want) {
-			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", types.EncodedValue(context.Background(), got), types.EncodedValue(context.Background(), test.want))
+			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", types.EncodedValue(ctx, got.Value(ctx)), types.EncodedValue(ctx, test.want))
 		}
 	}
 }

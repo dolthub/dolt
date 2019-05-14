@@ -37,7 +37,7 @@ func TaggedValueSliceItr(sch schema.Schema, vals []row.TaggedValues) func() (typ
 
 		if current < size {
 			tpl := vals[current].NomsTupleForTags(pkTags, true)
-			return tpl, true
+			return tpl.Value(context.TODO()).(types.Tuple), true
 		}
 
 		return types.EmptyTuple, false
