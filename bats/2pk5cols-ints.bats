@@ -89,5 +89,5 @@ teardown() {
     [[ ! "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: [row constraint failed]" ] || false
+    [ "$output" = "Error inserting rows: row constraint failed" ] || false
 }

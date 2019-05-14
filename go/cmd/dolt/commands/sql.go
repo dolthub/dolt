@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
+	"github.com/liquidata-inc/ishell"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -21,6 +23,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/xwb1989/sqlparser"
+	"path/filepath"
+	"strings"
 )
 
 var sqlShortDesc = "EXPERIMENTAL: Runs a SQL query"
@@ -35,6 +39,9 @@ var fwtStageName = "fwt"
 
 const (
 	queryFlag = "query"
+	welcomeMsg = `# Welcome to the DoltSQL shell.
+# Statements must be terminated with ';'.
+# "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
 func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -47,60 +54,109 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	query, ok := apr.GetValue(queryFlag)
 	if ok {
-		err := processInput(dEnv, query, usage)
+		// run a single command and exit
+		err := processQuery(query, dEnv)
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// start the doltsql REPL
-	// shellConf := readline.Config{
-	// 	Prompt: "doltsql>",
-	// 	Stdout: cli.CliOut,
-	// 	Stderr: cli.CliOut,
-	// }
-	// shell := ishell.NewWithConfig(&shellConf)
-	// shell.Run()
+	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
+
+	// start the doltsql shell
+	historyFile := filepath.Join(dEnv.GetDoltDir(), ".sqlhistory")
+	rlConf := readline.Config{
+		Prompt: "doltsql> ",
+		Stdout: cli.CliOut,
+		Stderr: cli.CliOut,
+		HistoryFile: historyFile,
+		HistoryLimit: 500,
+		HistorySearchFold: true,
+		DisableAutoSaveHistory: true,
+	}
+	shellConf := ishell.UninterpretedConfig{
+		ReadlineConfig: &rlConf,
+		QuitKeywords: []string {
+			"quit", "exit", "quit()", "exit()",
+		},
+		LineTerminator: ";",
+	}
+
+	shell := ishell.NewUninterpreted(&shellConf)
+	shell.SetMultiPrompt( "      -> ")
+
+	shell.EOF(func(c *ishell.Context) {
+		c.Stop()
+	})
+	shell.Interrupt(func(c *ishell.Context, count int, input string) {
+		if count > 1 {
+			c.Stop()
+		} else {
+			c.Println("Received SIGINT. Interrupt again to exit, or use ^D, quit, or exit")
+		}
+	})
+
+	shell.Uninterpreted(func(c *ishell.Context) {
+		query = c.Args[0]
+		if len(strings.TrimSpace(query)) == 0 {
+			return
+		}
+		if err := processQuery(query, dEnv); err != nil {
+			shell.Println(color.RedString(err.Error()))
+		}
+
+		// TODO: there's a bug in the readline library when editing multi-line history entries.
+		// Longer term we need to switch to a new readline library, like in this bug:
+		// https://github.com/cockroachdb/cockroach/issues/15460
+		// For now, we store all history entries as single-line strings to avoid the issue.
+		singleLine := strings.ReplaceAll(query, "\n", " ")
+		if err := shell.AddHistory(singleLine); err != nil {
+			// TODO: handle better, like by turning off history writing for the rest of the session
+			shell.Println(color.RedString(err.Error()))
+		}
+	})
+
+	shell.Run()
+	_ = iohelp.WriteLine(cli.CliOut, "Bye")
+
+	return 0
 }
 
 // Processes a single query and returns any error encountered
-func processInput(dEnv *env.DoltEnv, input string, usage cli.UsagePrinter) error {
-
-
-	sqlStatement, err := sqlparser.Parse(input)
+func processQuery(query string, dEnv *env.DoltEnv) error {
+	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
 		return errFmt("Error parsing SQL: %v.", err.Error())
 	}
 
 	root, verr := GetWorkingWithVErr(dEnv)
 	if verr != nil {
-		return errFmt(verr.Verbose())
+		return verr
 	}
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select:
-		return sqlSelect(root, s, input)
+		return sqlSelect(root, s)
 	case *sqlparser.Insert:
-		return sqlInsert(dEnv, root, s, input, usage)
+		return sqlInsert(dEnv, root, s, query)
 	case *sqlparser.Update:
-		return sqlUpdate(dEnv, root, s, input, usage)
+		return sqlUpdate(dEnv, root, s, query)
 	case *sqlparser.Delete:
-		return sqlDelete(dEnv, root, s, input, usage)
+		return sqlDelete(dEnv, root, s, query)
 	case *sqlparser.DDL:
-		_, err := sqlparser.ParseStrictDDL(input)
+		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
 			return errFmt("Error parsing SQL: %v.", err.Error())
 		}
-		return sqlDDL(dEnv, root, s, input, usage)
+		return sqlDDL(dEnv, root, s, query)
 	default:
-		return errFmt("Unhandled SQL statement: %v.", input)
+		return errFmt("Unhandled SQL statement: %v.", query)
 	}
 }
 
 // Executes a SQL select statement and prints the result to the CLI.
-func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) error {
+func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
 
 	p, statement, err := sql.BuildSelectQueryPipeline(context.TODO(), root, s)
 	if err != nil {
-		cli.PrintErrln(color.RedString(err.Error()))
 		return err
 	}
 
@@ -144,7 +200,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select, query string) error 
 }
 
 // Executes a SQL insert statement and prints the result to the CLI.
-func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string, usage cli.UsagePrinter) error {
+func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string) error {
 	result, err := sql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt, query)
 	if err != nil {
 		return errFmt("Error inserting rows: %v", err.Error())
@@ -166,7 +222,7 @@ func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert
 }
 
 // Executes a SQL update statement and prints the result to the CLI.
-func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string, usage cli.UsagePrinter) error {
+func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) error {
 	result, err := sql.ExecuteUpdate(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
 		return errFmt("Error during update: %v", err.Error())
@@ -185,7 +241,7 @@ func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Upda
 }
 
 // Executes a SQL delete statement and prints the result to the CLI.
-func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string, usage cli.UsagePrinter) error {
+func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) error {
 	result, err := sql.ExecuteDelete(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
 		return errFmt("Error during update: %v", err.Error())
@@ -200,7 +256,7 @@ func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Dele
 }
 
 // Executes a SQL DDL statement (create, update, etc.) and prints the result to the CLI.
-func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string, usage cli.UsagePrinter) error {
+func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) error {
 	switch ddl.Action {
 	case sqlparser.CreateStr:
 		newRoot, _, err := sql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
