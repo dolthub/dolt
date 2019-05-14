@@ -30,8 +30,7 @@ teardown() {
 
 @test "dolt schema rename column" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
-    run dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-    [ "$status" -eq 0 ]
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt schema --rename-column test c1 c0
     [ "$status" -eq 0 ]
     run dolt schema test
@@ -52,8 +51,7 @@ teardown() {
 
 @test "dolt schema delete column" {
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
-    run dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-    [ "$status" -eq 0 ]
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt schema --drop-column test c1
     [ "$status" -eq 0 ]
     run dolt schema test
@@ -67,9 +65,8 @@ teardown() {
     [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
     [[ "$output" =~ "primary key (pk)" ]] || false
     [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
-    run dolt table select test
     skip "This panics right now."
-    [ "$status" -eq 0 ]
+    dolt table select test
 }
 
 @test "dolt diff on schema changes" {
@@ -99,10 +96,8 @@ teardown() {
     [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
     [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
     dolt schema --drop-column test c0
-    run dolt diff
     skip "This panics right now."
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    dolt diff
 }
 
 @test "change the primary key. view the schema diff" {
