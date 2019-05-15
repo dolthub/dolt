@@ -83,12 +83,6 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 
 			go func() {
 				sv := edit.Val.Value(ctx)
-				if e, ok := sv.(Emptyable); ok {
-					if e.Empty() {
-						sv = nil
-					}
-				}
-
 				kvc <- mapEntry{key, sv}
 			}()
 		}
