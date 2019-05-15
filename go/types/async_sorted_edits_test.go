@@ -20,7 +20,7 @@ func TestAsyncSortedEdits(t *testing.T) {
 	rng := rand.New(rand.NewSource(0))
 	testASE(t, rng)
 
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 16; i++ {
 		seed := time.Now().UnixNano()
 		t.Log(seed)
 		rng := rand.New(rand.NewSource(seed))
