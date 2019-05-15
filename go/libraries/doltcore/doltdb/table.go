@@ -21,7 +21,7 @@ const (
 	conflictSchemasKey = "conflict_schemas"
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
-	TableNameRegexStr = `^[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
+	TableNameRegexStr = `^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
 )
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
