@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +21,7 @@ func TestExecuteInsert(t *testing.T) {
 		expectedResult InsertResult // root is not compared, but it used for other assertions
 		expectedErr    bool
 	}{
-		/*{
+		{
 			name: "insert one row, all columns",
 			query: `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000005', 677)`,
@@ -247,7 +248,7 @@ func TestExecuteInsert(t *testing.T) {
 				row.New(peopleTestSchema, row.TaggedValues{idTag: types.Int(8), firstTag: types.String("Milhouse"), lastTag: types.String("Van Houten")}),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 2},
-		},*/
+		},
 
 		{
 			name: "insert two rows, duplicate id",
