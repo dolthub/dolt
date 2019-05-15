@@ -154,6 +154,40 @@ func TestExecuteCreate(t *testing.T) {
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
+		// Real world examples for regression testing
+		{
+			name:  "Test ip2nation",
+			query: `CREATE TABLE ip2nation (
+  ip int(11) unsigned NOT NULL default '0',
+  country char(2) NOT NULL default '',
+  PRIMARY KEY (ip)
+);`,
+			expectedSchema: createSchema(
+				schema.NewColumn("ip", 0, types.UintKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("country", 1, types.StringKind, false, schema.NotNullConstraint{})),
+		},
+		{
+			name:  "Test ip2nationCountries",
+			query: `CREATE TABLE ip2nationCountries (
+  code varchar(4) NOT NULL default '',
+  iso_code_2 varchar(2) NOT NULL default '',
+  iso_code_3 varchar(3) default '',
+  iso_country varchar(255) NOT NULL default '',
+  country varchar(255) NOT NULL default '',
+  lat float NOT NULL default '0',
+  lon float NOT NULL default '0',
+  PRIMARY KEY (code)
+);`,
+			expectedSchema: createSchema(
+				schema.NewColumn("code", 0, types.StringKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("iso_code_2", 1, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("iso_code_3", 2, types.StringKind, false),
+				schema.NewColumn("iso_country", 3, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("country", 4, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("lat", 5, types.FloatKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("lon", 6, types.FloatKind, false, schema.NotNullConstraint{})),
+		},
+
 	}
 
 	for _, tt := range tests {
