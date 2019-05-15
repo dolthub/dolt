@@ -36,8 +36,13 @@ type KVPIterator interface {
 
 // IsInOrder iterates over every value and validates that they are returned in key order.  This is intended for testing.
 func IsInOrder(itr KVPIterator) (bool, int) {
-	count := 1
 	prev := itr.Next()
+
+	if prev == nil {
+		return true, 0
+	}
+
+	count := 1
 
 	for {
 		var curr *KVP

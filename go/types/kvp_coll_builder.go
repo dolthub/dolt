@@ -84,5 +84,10 @@ func (cb *KVPCollBuilder) Build() *KVPCollection {
 		cb.doneWithCurrBuff()
 	}
 
-	return &KVPCollection{cb.buffSize, len(cb.filled), cb.numItems, cb.filled}
+	return &KVPCollection{
+		buffSize:  cb.buffSize,
+		numSlices: len(cb.filled),
+		totalSize: cb.numItems,
+		slices:    cb.filled,
+	}
 }
