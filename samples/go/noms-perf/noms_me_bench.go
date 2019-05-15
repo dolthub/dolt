@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/types"
 )
@@ -12,7 +13,7 @@ type NomsMEBench struct {
 func NewNomsMEBench() *NomsMEBench {
 	ts := &chunks.TestStorage{}
 	vrw := types.NewValueStore(ts.NewView())
-	me := types.NewMap(vrw).Edit()
+	me := types.NewMap(context.Background(), vrw).Edit()
 
 	return &NomsMEBench{me}
 }
@@ -30,10 +31,6 @@ func (nmeb *NomsMEBench) AddEdits(nextEdit NextEdit) {
 	}
 }
 
-func (nmeb *NomsMEBench) SortEdits() {
-	nmeb.me.SortStable()
-}
-
 func (nmeb *NomsMEBench) Map() {
-	nmeb.me.Map()
+	nmeb.me.Map(context.Background())
 }

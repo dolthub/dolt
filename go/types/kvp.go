@@ -34,7 +34,7 @@ type KVPIterator interface {
 	Peek() *KVP
 }
 
-// IsInOrder iterates over every value and validates that they are returned in key order
+// IsInOrder iterates over every value and validates that they are returned in key order.  This is intended for testing.
 func IsInOrder(itr KVPIterator) (bool, int) {
 	count := 1
 	prev := itr.Next()
