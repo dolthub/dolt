@@ -198,11 +198,11 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		suite.W = nopWriter{}
 	}
 
-	gopath := os.Getenv("GOPATH")
-	if !assert.NotEmpty(gopath) {
+	home := os.Getenv("HOME")
+	if !assert.NotEmpty(home) {
 		return
 	}
-	suite.AtticLabs = path.Join(gopath, "src", "github.com", "attic-labs")
+	suite.AtticLabs = path.Join(home, "attic-labs", "suite")
 	suite.Testdata = *perfTestdataFlag
 	if suite.Testdata == "" {
 		suite.Testdata = path.Join(suite.AtticLabs, "testdata")
