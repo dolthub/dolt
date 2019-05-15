@@ -779,7 +779,6 @@ func TestMapLast2(t *testing.T) {
 	doTest(getTestRefToValueOrderMap, 2)
 }
 
-/*
 func TestMapSetGet(t *testing.T) {
 	assert := assert.New(t)
 
@@ -787,39 +786,40 @@ func TestMapSetGet(t *testing.T) {
 	defer normalProductionChunks()
 
 	vrw := newTestValueStore()
+	ctx := context.Background()
 
-	me := NewMap(context.Background(), vrw).Edit()
-	bothAre := func(k Value) Value {
-		meV := me.Get(context.Background(), k)
-		mV := me.Map(context.Background()).Get(context.Background(), k)
-		assert.True((meV == nil && mV == nil) || meV.(Value).Equals(mV))
-		return mV
+	assertMapVal := func(me *MapEditor, k, expectedVal Value) *MapEditor {
+		m := me.Map(ctx)
+		mV := m.Get(ctx, k)
+		assert.True((expectedVal == nil && mV == nil) || expectedVal.Equals(mV))
+		return m.Edit()
 	}
 
-	assert.Nil(bothAre(String("a")))
+	me := NewMap(ctx, vrw).Edit()
+	me = assertMapVal(me, String("a"), nil)
 
 	me.Set(String("a"), Float(42))
-	assert.True(Float(42).Equals(bothAre(String("a"))))
+	me = assertMapVal(me, String("a"), Float(42))
 
 	me.Set(String("a"), Float(43))
-	assert.True(Float(43).Equals(bothAre(String("a"))))
+	me = assertMapVal(me, String("a"), Float(43))
 
 	me.Remove(String("a"))
-	assert.Nil(bothAre(String("a")))
+	me = assertMapVal(me, String("a"), nil)
 
 	// in-order insertions
 	me.Set(String("b"), Float(43))
 	me.Set(String("c"), Float(44))
 
-	assert.True(Float(43).Equals(bothAre(String("b"))))
-	assert.True(Float(44).Equals(bothAre(String("c"))))
+	me = assertMapVal(me, String("b"), Float(43))
+	me = assertMapVal(me, String("c"), Float(44))
 
 	// out-of-order insertions
 	me.Set(String("z"), Float(0))
 	me.Set(String("y"), Float(1))
 
-	assert.True(Float(0).Equals(bothAre(String("z"))))
-	assert.True(Float(1).Equals(bothAre(String("y"))))
+	me = assertMapVal(me, String("z"), Float(0))
+	me = assertMapVal(me, String("y"), Float(1))
 
 	// removals
 	me.Remove(String("z"))
@@ -828,16 +828,16 @@ func TestMapSetGet(t *testing.T) {
 	me.Remove(String("b"))
 	me.Remove(String("c"))
 
-	assert.Nil(bothAre(String("a")))
-	assert.Nil(bothAre(String("b")))
-	assert.Nil(bothAre(String("c")))
-	assert.Nil(bothAre(String("y")))
-	assert.Nil(bothAre(String("z")))
-	assert.Nil(bothAre(String("never-inserted")))
+	me = assertMapVal(me, String("a"), nil)
+	me = assertMapVal(me, String("b"), nil)
+	me = assertMapVal(me, String("c"), nil)
+	me = assertMapVal(me, String("y"), nil)
+	me = assertMapVal(me, String("z"), nil)
+	me = assertMapVal(me, String("never-inserted"), nil)
 
 	m := me.Map(context.Background())
 	assert.True(m.Len() == 0)
-}*/
+}
 
 func validateMapInsertion(t *testing.T, tm testMap) {
 	vrw := newTestValueStore()

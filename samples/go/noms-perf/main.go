@@ -14,7 +14,7 @@ type NextEdit func() (types.Value, types.Value)
 type MEBenchmark interface {
 	GetName() string
 	AddEdits(nextEdit NextEdit)
-	SortEdits()
+	//SortEdits()
 	Map()
 }
 
@@ -23,7 +23,6 @@ func main() {
 	cpuProf := flag.Bool("cpuprof", false, "")
 	memProf := flag.Bool("memprof", false, "")
 	meBench := flag.Bool("me-bench", false, "")
-	aseBench := flag.Bool("ase-bench", false, "")
 	count := flag.Int("n", 1000000, "")
 	flag.Parse()
 
@@ -44,10 +43,6 @@ func main() {
 		toBench = append(toBench, NewNomsMEBench())
 	}
 
-	if *aseBench {
-		toBench = append(toBench, NewASEBench(10000, 2, 8))
-	}
-
 	log.Printf("Running each benchmark for %d items\n", *count)
 	tg := NewTupleGen(*count)
 	run(tg, toBench)
@@ -61,12 +56,12 @@ func benchmark(meb MEBenchmark, nextKVP NextEdit) {
 
 	log.Printf("%s - add time: %f\n", meb.GetName(), addDelta.Seconds())
 
-	startSort := time.Now()
+	/*startSort := time.Now()
 	meb.SortEdits()
 	endSort := time.Now()
 	sortDelta := endSort.Sub(startSort)
 
-	log.Printf("%s - sort time: %f\n", meb.GetName(), sortDelta.Seconds())
+	log.Printf("%s - sort time: %f\n", meb.GetName(), sortDelta.Seconds())*/
 
 	startMap := time.Now()
 	meb.Map()
