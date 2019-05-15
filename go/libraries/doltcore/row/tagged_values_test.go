@@ -2,12 +2,102 @@ package row
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"strconv"
 	"testing"
 
 	"github.com/attic-labs/noms/go/types"
 )
+
+func TestTupleValsLess(t *testing.T) {
+	tests := []struct {
+		name       string
+		tags       []uint64
+		lesserTVs  TaggedValues
+		greaterTVs TaggedValues
+		areEqual   bool
+	}{
+		{
+			name:       "equal vals",
+			tags:       []uint64{0},
+			lesserTVs:  map[uint64]types.Value{0: types.String("a")},
+			greaterTVs: map[uint64]types.Value{0: types.String("a")},
+			areEqual:   true,
+		},
+		{
+			name:       "equal vals with null",
+			tags:       []uint64{0, 1},
+			lesserTVs:  map[uint64]types.Value{0: types.String("a")},
+			greaterTVs: map[uint64]types.Value{0: types.String("a")},
+			areEqual:   true,
+		},
+		{
+			name:       "null value after regular val",
+			tags:       []uint64{0},
+			lesserTVs:  map[uint64]types.Value{0: types.String("a")},
+			greaterTVs: map[uint64]types.Value{0: types.NullValue},
+			areEqual:   false,
+		},
+		{
+			name:       "null value after regular val",
+			tags:       []uint64{0},
+			lesserTVs:  map[uint64]types.Value{0: types.String("a")},
+			greaterTVs: map[uint64]types.Value{0: types.NullValue},
+			areEqual:   false,
+		},
+		{
+			name:       "null and null value equal",
+			tags:       []uint64{0},
+			lesserTVs:  map[uint64]types.Value{0: types.NullValue},
+			greaterTVs: map[uint64]types.Value{},
+			areEqual:   true,
+		},
+		{
+			name:       "simple string",
+			tags:       []uint64{0},
+			lesserTVs:  map[uint64]types.Value{0: types.String("a")},
+			greaterTVs: map[uint64]types.Value{0: types.String("b")},
+			areEqual:   false,
+		},
+		{
+			name:       "no tag overlap",
+			tags:       []uint64{0, 1},
+			lesserTVs:  map[uint64]types.Value{0: types.String("a")},
+			greaterTVs: map[uint64]types.Value{1: types.String("a")},
+			areEqual:   false,
+		},
+		{
+			name:       "equal for supplied tags",
+			tags:       []uint64{0},
+			lesserTVs:  map[uint64]types.Value{0: types.String("a"), 1: types.Int(1)},
+			greaterTVs: map[uint64]types.Value{0: types.String("a"), 1: types.Int(-1)},
+			areEqual:   true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			lesserTplVals := test.lesserTVs.NomsTupleForTags(test.tags, true)
+			greaterTplVals := test.greaterTVs.NomsTupleForTags(test.tags, true)
+
+			lessLTGreater := lesserTplVals.Less(greaterTplVals)
+			greaterLTLess := greaterTplVals.Less(lesserTplVals)
+
+			assert.True(t, test.areEqual && !lessLTGreater || !test.areEqual && lessLTGreater)
+			assert.True(t, !greaterLTLess)
+
+			lesserTpl := lesserTplVals.Value(ctx)
+			greaterTpl := greaterTplVals.Value(ctx)
+
+			// needs to match with the types.Tuple Less implementation.
+			assert.True(t, lessLTGreater == lesserTpl.Less(greaterTpl))
+			assert.True(t, greaterLTLess == greaterTpl.Less(lesserTpl))
+		})
+	}
+}
 
 func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 	ctx := context.Background()
