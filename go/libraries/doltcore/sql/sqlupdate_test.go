@@ -71,7 +71,7 @@ func TestExecuteUpdate(t *testing.T) {
 			name: "update multiple rows, set two columns",
 			query: `update people set first = "Changed", rating = 0.0
 				where last = "Simpson"`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(homer, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(marge, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(bart, firstTag, "Changed", ratingTag, 0.0),
@@ -83,13 +83,13 @@ func TestExecuteUpdate(t *testing.T) {
 			name: "update no matching rows",
 			query: `update people set first = "Changed", rating = 0.0
 				where last = "Flanders"`,
-			updatedRows:   []row.Row{},
+			updatedRows:    []row.Row{},
 			expectedResult: UpdateResult{NumRowsUpdated: 0, NumRowsUnchanged: 0},
 		},
 		{
-			name: "update without where clause",
+			name:  "update without where clause",
 			query: `update people set first = "Changed", rating = 0.0`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(homer, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(marge, firstTag, "Changed", ratingTag, 0.0),
 				mutateRow(bart, firstTag, "Changed", ratingTag, 0.0),
@@ -100,9 +100,9 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
 		{
-			name: "update set first = last",
+			name:  "update set first = last",
 			query: `update people set first = last`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(homer, firstTag, "Simpson"),
 				mutateRow(marge, firstTag, "Simpson"),
 				mutateRow(bart, firstTag, "Simpson"),
@@ -113,9 +113,9 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
 		{
-			name: "update increment age",
+			name:  "update increment age",
 			query: `update people set age = age + 1`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(homer, ageTag, 41),
 				mutateRow(marge, ageTag, 39),
 				mutateRow(bart, ageTag, 11),
@@ -129,7 +129,7 @@ func TestExecuteUpdate(t *testing.T) {
 			name: "update multiple rows, =",
 			query: `update people set first = "Homer"
 				where last = "Simpson"`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(bart, firstTag, "Homer"),
 				mutateRow(lisa, firstTag, "Homer"),
@@ -140,16 +140,16 @@ func TestExecuteUpdate(t *testing.T) {
 			name: "update multiple rows, <>",
 			query: `update people set last = "Simpson"
 				where last <> "Simpson"`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(moe, lastTag, "Simpson"),
 				mutateRow(barney, lastTag, "Simpson"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 2, NumRowsUnchanged: 0},
 		},
 		{
-			name: "update multiple rows, >",
+			name:  "update multiple rows, >",
 			query: `update people set first = "Homer" where age > 10`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(moe, firstTag, "Homer"),
 				mutateRow(barney, firstTag, "Homer"),
@@ -157,9 +157,9 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 3, NumRowsUnchanged: 1},
 		},
 		{
-			name: "update multiple rows, >=",
+			name:  "update multiple rows, >=",
 			query: `update people set first = "Homer" where age >= 10`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(bart, firstTag, "Homer"),
 				mutateRow(moe, firstTag, "Homer"),
@@ -168,18 +168,18 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 1},
 		},
 		{
-			name: "update multiple rows, <",
+			name:  "update multiple rows, <",
 			query: `update people set first = "Bart" where age < 40`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(marge, firstTag, "Bart"),
 				mutateRow(lisa, firstTag, "Bart"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 2, NumRowsUnchanged: 1},
 		},
 		{
-			name: "update multiple rows, <=",
+			name:  "update multiple rows, <=",
 			query: `update people set first = "Homer" where age <= 40`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(marge, firstTag, "Homer"),
 				mutateRow(bart, firstTag, "Homer"),
 				mutateRow(lisa, firstTag, "Homer"),
@@ -188,103 +188,103 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 1},
 		},
 		{
-			name: "existing row key collision",
-			query: `update people set id = 0 where first = "Marge"`,
-			expectedErr: "duplicate primary key",
+			name:        "existing row key collision",
+			query:       `update people set id = 0 where first = "Marge"`,
+			expectedErr: "attempting to update the value of the primary key",
 		},
 		{
-			name: "duplicate primary keys in updated rows",
-			query: `update people set id = 100 where last = "Simpson"`,
-			expectedErr: "duplicate primary key",
+			name:        "duplicate primary keys in updated rows",
+			query:       `update people set id = 100 where last = "Simpson"`,
+			expectedErr: "attempting to update the value of the primary key",
 		},
 		{
-			name: "duplicate column in update list",
-			query: `update people set first = "Marge", first = "Homer", last = "Simpson"`,
+			name:        "duplicate column in update list",
+			query:       `update people set first = "Marge", first = "Homer", last = "Simpson"`,
 			expectedErr: "Repeated column 'first'",
 		},
 		{
-			name: "null constraint failure",
-			query: `update people set first = null where id = 0`,
+			name:        "null constraint failure",
+			query:       `update people set first = null where id = 0`,
 			expectedErr: "row constraint failed",
 		},
 		{
-			name: "type mismatch int -> string",
-			query: `update people set first = 1 where id = 0`,
+			name:        "type mismatch int -> string",
+			query:       `update people set first = 1 where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch int -> bool",
-			query: `update people set is_married = 0 where id = 0`,
+			name:        "type mismatch int -> bool",
+			query:       `update people set is_married = 0 where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch int -> uuid",
-			query: `update people set uuid = 0 where id = 0`,
+			name:        "type mismatch int -> uuid",
+			query:       `update people set uuid = 0 where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch string -> int",
-			query: `update people set age = "pretty old" where id = 0`,
+			name:        "type mismatch string -> int",
+			query:       `update people set age = "pretty old" where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch string -> float",
-			query: `update people set rating = "great" where id = 0`,
+			name:        "type mismatch string -> float",
+			query:       `update people set rating = "great" where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch string -> uint",
-			query: `update people set num_episodes = "all of them" where id = 0`,
+			name:        "type mismatch string -> uint",
+			query:       `update people set num_episodes = "all of them" where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch string -> uuid",
-			query: `update people set uuid = "not a uuid string" where id = 0`,
+			name:        "type mismatch string -> uuid",
+			query:       `update people set uuid = "not a uuid string" where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch float -> string",
-			query: `update people set last = 1.0 where id = 0`,
+			name:        "type mismatch float -> string",
+			query:       `update people set last = 1.0 where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch float -> bool",
-			query: `update people set is_married = 1.0 where id = 0`,
+			name:        "type mismatch float -> bool",
+			query:       `update people set is_married = 1.0 where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch float -> int",
-			query: `update people set num_episodes = 1.5 where id = 0`,
+			name:        "type mismatch float -> int",
+			query:       `update people set num_episodes = 1.5 where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch bool -> int",
-			query: `update people set age = true where id = 0`,
+			name:        "type mismatch bool -> int",
+			query:       `update people set age = true where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch bool -> float",
-			query: `update people set rating = false where id = 0`,
+			name:        "type mismatch bool -> float",
+			query:       `update people set rating = false where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch bool -> string",
-			query: `update people set last = true where id = 0`,
+			name:        "type mismatch bool -> string",
+			query:       `update people set last = true where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch bool -> uuid",
-			query: `update people set uuid = false where id = 0`,
+			name:        "type mismatch bool -> uuid",
+			query:       `update people set uuid = false where id = 0`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch in where clause",
-			query: `update people set first = "Homer" where id = "id"`,
+			name:        "type mismatch in where clause",
+			query:       `update people set first = "Homer" where id = "id"`,
 			expectedErr: "Type mismatch",
 		},
 		{
-			name: "type mismatch in where clause",
-			query: `update people set first = "Homer" where id = "0"`,
+			name:        "type mismatch in where clause",
+			query:       `update people set first = "Homer" where id = "0"`,
 			expectedErr: "Type mismatch",
 		},
 	}
@@ -292,8 +292,10 @@ func TestExecuteUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
+			ctx := context.Background()
+
 			createTestDatabase(dEnv, t)
-			root, _ := dEnv.WorkingRoot(context.Background())
+			root, _ := dEnv.WorkingRoot(ctx)
 
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Update)
@@ -303,7 +305,7 @@ func TestExecuteUpdate(t *testing.T) {
 				require.Nil(t, tt.updatedRows, "incorrect test setup: cannot assert both an error and updated values")
 			}
 
-			result, err := ExecuteUpdate(context.Background(), dEnv.DoltDB, root, s, tt.query)
+			result, err := ExecuteUpdate(ctx, dEnv.DoltDB, root, s, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -317,7 +319,7 @@ func TestExecuteUpdate(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumRowsUnchanged, result.NumRowsUnchanged)
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 
-			table, ok := result.Root.GetTable(context.Background(), peopleTableName)
+			table, ok := result.Root.GetTable(ctx, peopleTableName)
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows were updated
@@ -329,7 +331,7 @@ func TestExecuteUpdate(t *testing.T) {
 					expectedRow = tt.updatedRows[updatedIdx]
 				}
 
-				foundRow, ok := table.GetRow(context.Background(), expectedRow.NomsMapKey(peopleTestSchema).(types.Tuple), peopleTestSchema)
+				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(peopleTestSchema).Value(ctx).(types.Tuple), peopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
 				opts := cmp.Options{cmp.AllowUnexported(expectedRow), floatComparer}
 				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))

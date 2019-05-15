@@ -114,7 +114,6 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			continue
 		}
 
-		var primaryKeyColChanged bool
 		var anyColChanged bool
 
 		for tag, getter := range setVals {
@@ -127,7 +126,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(val)) {
 				anyColChanged = true
 				if column.IsPartOfPK {
-					primaryKeyColChanged = true
+					return errUpdate("attempting to update the value of the primary key")
 				}
 			}
 
@@ -141,12 +140,9 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			return nil, ErrConstraintFailure
 		}
 
-		key := r.NomsMapKey(tableSch)
-		// map editor reaches into the underlying table if there isn't an edit with this key
-		// this logic isn't correct for all possible queries, but works for now
-		if primaryKeyColChanged && rowData.Get(ctx, key.Value(ctx)) != nil {
-			return errUpdate("Update results in duplicate primary key %v", key)
-		}
+		tvs := r.NomsMapKey(tableSch).(row.TupleVals)
+		key := tvs.Value(ctx)
+
 		if anyColChanged {
 			result.NumRowsUpdated += 1
 		} else {
