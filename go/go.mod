@@ -17,6 +17,7 @@ require (
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d
 	github.com/pkg/errors v0.8.1
+	github.com/pkg/profile v1.3.0
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
 	github.com/stretchr/testify v1.3.0
 	github.com/tealeg/xlsx v1.0.3
@@ -30,7 +31,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.2.2
 )
 
-replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190506171537-518b7edcd73f
+replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190515213742-e1d38290ee6c
 
 replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.3
 

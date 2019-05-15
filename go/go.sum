@@ -120,6 +120,8 @@ github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClM
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/noms v0.0.0-20190506171537-518b7edcd73f h1:Z9dfDI1SCNWSxM+Y8HYueFMSDeW0Lzrw0Img81+427s=
 github.com/liquidata-inc/noms v0.0.0-20190506171537-518b7edcd73f/go.mod h1:3M7C9+Co0TI0lJ7TICfOIZSYBY5C0bt2VGaZTx6tfs4=
+github.com/liquidata-inc/noms v0.0.0-20190515213742-e1d38290ee6c h1:0WODUSqy7HCbTpBkI4kQjk/zyht+ASZ3Mhxg0utrUgA=
+github.com/liquidata-inc/noms v0.0.0-20190515213742-e1d38290ee6c/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/sqlparser v0.9.3 h1:lAQpKBSHYG4EWI7RZiQvuSwBqpd45wzmgTtcxEGXaCk=
 github.com/liquidata-inc/sqlparser v0.9.3/go.mod h1:lEqKV1oJUXiTfUjigM/8APQJFNSTHYYkJk+NGkWSgOU=
 github.com/mattn/go-colorable v0.0.9 h1:UVL0vNpWh04HeJXV0KLcaT7r06gOH2l4OW6ddYRUIY4=
@@ -154,6 +156,8 @@ github.com/openzipkin/zipkin-go v0.1.1/go.mod h1:NtoC/o8u3JlF1lSlyPNswIbeQH9bJTm
 github.com/openzipkin/zipkin-go v0.1.3/go.mod h1:NtoC/o8u3JlF1lSlyPNswIbeQH9bJTmOf0Erfk+hxe8=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/pkg/profile v1.3.0 h1:OQIvuDgm00gWVWGTf4m4mCt6W1/0YqU7Ntg0mySWgaI=
+github.com/pkg/profile v1.3.0/go.mod h1:hJw3o1OdXxsrSjjVksARp5W95eeEaEfptyVZyv6JUPA=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/prometheus/client_golang v0.8.0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
