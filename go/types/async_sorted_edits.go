@@ -199,6 +199,7 @@ func (ase *AsyncSortedEdits) Sort() {
 	}
 }
 
+// we pair collections so that as you perform many merges you end up with collections of edits that are similarly sized
 func pairCollections(colls []*KVPCollection) [][2]*KVPCollection {
 	numColls := len(colls)
 	pairs := make([][2]*KVPCollection, 0, numColls/2+1)

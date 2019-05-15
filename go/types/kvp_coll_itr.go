@@ -25,7 +25,10 @@ func (itr *KVPCollItr) Less(other *KVPCollItr) bool {
 	return other.currKey == nil || itr.currKey != nil && itr.currKey.Less(other.currKey)
 }
 
-func (itr *KVPCollItr) nextForDestructiveMerge() (*KVP, KVPSlice, bool) {
+// returns the next kvp, the slice it was read from when that slice is empty, and whether or not iteration is complete.
+// when sliceIfExhausted returns a non-nil value it is assumed that the caller will take and use the buffer and that
+// it's data is no longer valid.
+func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *KVP, sliceIfExhausted KVPSlice, itrDone bool) {
 	if itr.done {
 		return nil, nil, true
 	}
