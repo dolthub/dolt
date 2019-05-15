@@ -209,3 +209,9 @@ teardown() {
     [[ "$output" =~ "Missing table name" ]] || false
     [[ ! "$output" =~ "Unknown table 'dual'" ]] || false
 }
+
+@test "sql update query on a primary key should error" {
+    run dolt sql -q "update one_pk set pk=11 where pk=0"
+    skip "This errors in most relational databases. We should error too. Right now it duplicates the row"
+    [ $status -eq 1 ]    
+}
