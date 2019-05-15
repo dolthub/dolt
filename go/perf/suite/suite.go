@@ -73,6 +73,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"io/ioutil"
 	"os"
@@ -198,11 +199,8 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		suite.W = nopWriter{}
 	}
 
-	home := os.Getenv("HOME")
-	if !assert.NotEmpty(home) {
-		return
-	}
-	suite.AtticLabs = path.Join(home, "attic-labs", "suite")
+	id, _ := uuid.NewUUID()
+	suite.AtticLabs = path.Join(os.TempDir(), "attic-labs", "noms", "suite", id.String())
 	suite.Testdata = *perfTestdataFlag
 	if suite.Testdata == "" {
 		suite.Testdata = path.Join(suite.AtticLabs, "testdata")
