@@ -31,51 +31,51 @@ func TestExecuteDelete(t *testing.T) {
 			expectedResult: DeleteResult{NumRowsDeleted: 1},
 		},
 		{
-			name:  "delete without where clause",
-			query: `delete from people`,
-			deletedRows: []row.Row{homer, marge, bart, lisa, moe, barney},
+			name:           "delete without where clause",
+			query:          `delete from people`,
+			deletedRows:    []row.Row{homer, marge, bart, lisa, moe, barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 6},
 		},
 		{
-			name:  "delete no matching rows",
-			query: `delete from people where last = "Flanders"`,
-			deletedRows: []row.Row{},
+			name:           "delete no matching rows",
+			query:          `delete from people where last = "Flanders"`,
+			deletedRows:    []row.Row{},
 			expectedResult: DeleteResult{NumRowsDeleted: 0},
 		},
 		{
-			name: "delete multiple rows, =",
-			query: `delete from people where last = "Simpson"`,
-			deletedRows: []row.Row{homer, marge, bart, lisa},
+			name:           "delete multiple rows, =",
+			query:          `delete from people where last = "Simpson"`,
+			deletedRows:    []row.Row{homer, marge, bart, lisa},
 			expectedResult: DeleteResult{NumRowsDeleted: 4},
 		},
 		{
-			name: "delete multiple rows, <>",
-			query: `delete from people where last <> "Simpson"`,
-			deletedRows: []row.Row{moe, barney},
+			name:           "delete multiple rows, <>",
+			query:          `delete from people where last <> "Simpson"`,
+			deletedRows:    []row.Row{moe, barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 2},
 		},
 		{
-			name:  "delete multiple rows, >",
-			query: `delete from people where age > 10`,
-			deletedRows: []row.Row{homer, marge, moe, barney},
+			name:           "delete multiple rows, >",
+			query:          `delete from people where age > 10`,
+			deletedRows:    []row.Row{homer, marge, moe, barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 4},
 		},
 		{
-			name:  "delete multiple rows, >=",
-			query: `delete from people where age >= 10`,
-			deletedRows: []row.Row{homer, marge, bart, moe, barney},
+			name:           "delete multiple rows, >=",
+			query:          `delete from people where age >= 10`,
+			deletedRows:    []row.Row{homer, marge, bart, moe, barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 5},
 		},
 		{
-			name:  "delete multiple rows, <",
-			query: `delete from people where age < 40`,
-			deletedRows: []row.Row{marge, bart, lisa},
+			name:           "delete multiple rows, <",
+			query:          `delete from people where age < 40`,
+			deletedRows:    []row.Row{marge, bart, lisa},
 			expectedResult: DeleteResult{NumRowsDeleted: 3},
 		},
 		{
-			name:  "delete multiple rows, <=",
-			query: `delete from people where age <= 40`,
-			deletedRows: []row.Row{homer, marge, bart, lisa, barney},
+			name:           "delete multiple rows, <=",
+			query:          `delete from people where age <= 40`,
+			deletedRows:    []row.Row{homer, marge, bart, lisa, barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 5},
 		},
 		{
@@ -94,13 +94,14 @@ func TestExecuteDelete(t *testing.T) {
 			expectedErr: true,
 		},
 		{
-			name: "type mismatch in where clause",
-			query: `delete from people where id = "0"`,
+			name:        "type mismatch in where clause",
+			query:       `delete from people where id = "0"`,
 			expectedErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
 			createTestDatabase(dEnv, t)
 			root, _ := dEnv.WorkingRoot(context.Background())
@@ -128,7 +129,7 @@ func TestExecuteDelete(t *testing.T) {
 				deletedIdx := findRowIndex(r, tt.deletedRows)
 
 				key := r.NomsMapKey(peopleTestSchema)
-				_, ok := table.GetRow(context.Background(), key.(types.Tuple), peopleTestSchema)
+				_, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), peopleTestSchema)
 				if deletedIdx >= 0 {
 					assert.False(t, ok, "Row not deleted: %v", r)
 				} else {

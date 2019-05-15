@@ -33,8 +33,8 @@ func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 		//{map[uint64]types.Value{}, []uint64{}, types.NewTuple()},
 	}
 	for _, test := range tests {
-		if got := tt.NomsTupleForTags(test.tags, test.encodeNulls); !reflect.DeepEqual(got, test.want) {
-			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", types.EncodedValue(ctx, got.Value(ctx)), types.EncodedValue(ctx, test.want))
+		if got := tt.NomsTupleForTags(test.tags, test.encodeNulls).Value(ctx); !reflect.DeepEqual(got, test.want) {
+			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", types.EncodedValue(ctx, got), types.EncodedValue(ctx, test.want))
 		}
 	}
 }

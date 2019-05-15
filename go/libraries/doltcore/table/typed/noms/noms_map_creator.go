@@ -16,7 +16,7 @@ type NomsMapCreator struct {
 	sch schema.Schema
 	vrw types.ValueReadWriter
 
-	lastPK  types.Value
+	lastPK  types.LesserValuable
 	kvsChan chan<- types.Value
 	mapChan <-chan types.Map
 
@@ -58,7 +58,7 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 
 			nmc.kvsChan <- pkVal
 			nmc.kvsChan <- fieldVals.Value(ctx)
-			nmc.lastPK = pkVal
+			nmc.lastPK = pk
 		} else {
 			err = errors.New("Input was not sorted by the primary key")
 		}

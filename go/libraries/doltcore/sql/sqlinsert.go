@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -80,6 +81,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	me := rowData.Edit()
 	var result InsertResult
 
+	insertedPKHashes := make(map[hash.Hash]struct{})
 	for _, r := range rows {
 		if !row.IsValid(r, tableSch) {
 			if ignore {
@@ -90,10 +92,12 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			}
 		}
 
-		key := r.NomsMapKey(tableSch)
+		key := r.NomsMapKey(tableSch).Value(ctx)
 
-		rowExists := rowData.Get(ctx, key.Value(ctx)) != nil
-		if rowExists {
+		rowExists := rowData.Get(ctx, key) != nil
+		_, rowInserted := insertedPKHashes[key.Hash()]
+
+		if rowExists || rowInserted {
 			if replace {
 				result.NumRowsUpdated += 1
 			} else if ignore {
@@ -102,14 +106,15 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			} else {
 				return errInsert("cannot insert existing row %v", r)
 			}
-		} else {
-			result.NumRowsInserted += 1
 		}
-
 		me.Set(key, r.NomsMapValue(tableSch))
-	}
-	table = table.UpdateRows(ctx, me.Map(ctx))
 
+		insertedPKHashes[key.Hash()] = struct{}{}
+	}
+	newMap := me.Map(ctx)
+	table = table.UpdateRows(ctx, newMap)
+
+	result.NumRowsInserted = int(newMap.Len() - rowData.Len())
 	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil
 }

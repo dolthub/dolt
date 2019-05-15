@@ -126,12 +126,14 @@ func TestRowSet(t *testing.T) {
 }
 
 func TestConvToAndFromTuple(t *testing.T) {
+	ctx := context.Background()
+
 	r := newTestRow()
 
-	keyTpl := r.NomsMapKey(sch)
-	valTpl := r.NomsMapValue(sch)
+	keyTpl := r.NomsMapKey(sch).(TupleVals)
+	valTpl := r.NomsMapValue(sch).(TupleVals)
 
-	r2 := FromNoms(sch, keyTpl.(types.Tuple), valTpl.(types.Tuple))
+	r2 := FromNoms(sch, keyTpl.Value(ctx).(types.Tuple), valTpl.Value(ctx).(types.Tuple))
 
 	fmt.Println(Fmt(context.Background(), r, sch))
 	fmt.Println(Fmt(context.Background(), r2, sch))
