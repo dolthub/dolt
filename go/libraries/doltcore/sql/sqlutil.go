@@ -292,8 +292,9 @@ func parseColumnAlias(colName string) QualifiedColumn {
 	return QualifiedColumn{"", colName}
 }
 
-// nomsOperation knows how to combine two noms values into a single one, e.g. addition
-type nomsOperation func(left, right types.Value) types.Value
+// binaryNomsOperation knows how to combine two noms values into a single one, e.g. addition
+type binaryNomsOperation func(left, right types.Value) types.Value
+type unaryNomsOperation func(val types.Value) types.Value
 
 type valGetterKind uint8
 
@@ -427,10 +428,89 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 		return getter, nil
 	case *sqlparser.UnaryExpr:
-		return nil, errFmt("Unary expressions not supported: %v", nodeToString(expr))
+		getter, err := getterForUnaryExpr(e, inputSchemas, aliases, rss)
+		if err != nil {
+			return nil, err
+		}
+		return getter, nil
 	default:
 		return nil, errFmt("Unsupported type %v", nodeToString(e))
 	}
+}
+
+// getterForUnaryExpr returns a getter for the given unary expression, where calls to Get() evaluates the full
+// expression for the row given
+func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
+	getter, err := getterFor(e.Expr, inputSchemas, aliases, rss)
+	if err != nil {
+		return nil, err
+	}
+
+	var opFn unaryNomsOperation
+	switch e.Operator {
+	case sqlparser.UPlusStr:
+		switch getter.NomsKind {
+		case types.IntKind, types.FloatKind:
+			// fine, nothing to do
+		default:
+			return nil, errFmt("Unsupported type for unary + operation: %v", types.KindToString[getter.NomsKind])
+		}
+		opFn = func(val types.Value) types.Value {
+			return val
+		}
+	case sqlparser.UMinusStr:
+		switch getter.NomsKind {
+		case types.IntKind:
+			opFn = func(val types.Value) types.Value {
+				if types.IsNull(val) {
+					return nil
+				}
+				return types.Int(-1 * val.(types.Int))
+			}
+		case types.FloatKind:
+			opFn = func(val types.Value) types.Value {
+				if types.IsNull(val) {
+					return nil
+				}
+				return types.Float(-1 * val.(types.Float))
+			}
+		case types.UintKind:
+			// TODO: this alters the type of the expression returned relative to the column's.
+			//  This probably causes some problems.
+			opFn = func(val types.Value) types.Value {
+				if types.IsNull(val) {
+					return nil
+				}
+				return types.Int(-1 * int64(val.(types.Uint)))
+			}
+		default:
+			return nil, errFmt("Unsupported type for unary - operation: %v", types.KindToString[getter.NomsKind])
+		}
+	case sqlparser.BangStr:
+		switch getter.NomsKind {
+		case types.BoolKind:
+			opFn = func(val types.Value) types.Value {
+				return types.Bool(!val.(types.Bool))
+			}
+		default:
+			return nil, errFmt("Unsupported type for unary ! operation: %v", types.KindToString[getter.NomsKind])
+		}
+	default:
+		return nil, errFmt("Unsupported unary operation: %v", e.Operator)
+	}
+
+	unaryGetter := valGetter{}
+
+	unaryGetter.Init = func() error {
+		// Already did type checking explicitly
+		return nil
+	}
+
+	unaryGetter.Get = func(r row.Row) types.Value {
+		return opFn(getter.Get(r))
+	}
+
+	return &unaryGetter, nil
 }
 
 // getterForBinaryExpr returns a getter for the given binary expression, where calls to Get() evaluates the full
@@ -472,7 +552,7 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 	getter := valGetter{Kind: SQL_VAL, NomsKind: leftGetter.NomsKind, CmpKind: rightGetter.NomsKind}
 
 	// All the operations differ only in their filter logic
-	var opFn nomsOperation
+	var opFn binaryNomsOperation
 	switch e.Operator {
 	case sqlparser.PlusStr:
 		switch getter.NomsKind {
@@ -1136,6 +1216,51 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, kind types.NomsKind) (typ
 		return nil, errFmt("Unrecognized SQLVal type %v", val.Type)
 	}
 }
+
+// extractNomsValueFromUnaryExpr extracts a noms value from the given expression, using the type info given as
+// a hint and for type-checking. The underlying expression must be a SQLVal
+func extractNomsValueFromUnaryExpr(expr *sqlparser.UnaryExpr, kind types.NomsKind) (types.Value, error) {
+	sqlVal, ok := expr.Expr.(*sqlparser.SQLVal)
+	if !ok {
+		return nil, errFmt("Only SQL values are supported in unary expressions: %v", nodeToString(expr))
+	}
+
+	val, err := extractNomsValueFromSQLVal(sqlVal, kind)
+	if err != nil {
+		return nil, err
+	}
+
+	switch expr.Operator {
+	case sqlparser.UPlusStr:
+		switch kind {
+		case types.UintKind, types.IntKind, types.FloatKind:
+			return val, nil
+		default:
+			return nil, errFmt("Unsupported type for unary + operator: %v", nodeToString(expr))
+		}
+	case sqlparser.UMinusStr:
+		switch kind {
+		case types.UintKind:
+			return nil, errFmt("Cannot use unary - with for an unsigned value: %v", nodeToString(expr))
+		case types.IntKind:
+			return types.Int(-1 * val.(types.Int)), nil
+		case types.FloatKind:
+			return types.Float(-1 * val.(types.Float)), nil
+		default:
+			return nil, errFmt("Unsupported type for unary - operator: %v", nodeToString(expr))
+		}
+	case sqlparser.BangStr:
+		switch kind {
+		case types.BoolKind:
+			return types.Bool(!val.(types.Bool)), nil
+		default:
+			return nil, errFmt("Unsupported type for unary ! operator: '%v'", nodeToString(expr))
+		}
+	default:
+		return nil, errFmt("Unsupported unary operator %v in expression: '%v'", expr.Operator, nodeToString(expr))
+	}
+}
+
 
 func errFmt(fmtMsg string, args ...interface{}) error {
 	return errors.New(fmt.Sprintf(fmtMsg, args...))
