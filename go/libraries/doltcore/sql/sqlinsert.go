@@ -175,6 +175,12 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 				return errInsertRow("Type mismatch: boolean value but non-boolean column: %v", nodeToString(val))
 			}
 			taggedVals[column.Tag] = types.Bool(val)
+		case *sqlparser.UnaryExpr:
+			nomsVal, err := extractNomsValueFromUnaryExpr(val, column.Kind)
+			if err != nil {
+				return nil, err
+			}
+			taggedVals[column.Tag] = nomsVal
 
 		// Many of these shouldn't be possible in the grammar, but all cases included for completeness
 		case *sqlparser.ComparisonExpr:
@@ -204,8 +210,6 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 			return errInsertRow("List expressions not supported in insert values: %v", nodeToString(tuple))
 		case *sqlparser.BinaryExpr:
 			return errInsertRow("Binary expressions not supported in insert values: %v", nodeToString(tuple))
-		case *sqlparser.UnaryExpr:
-			return errInsertRow("Unary expressions not supported in insert values: %v", nodeToString(tuple))
 		case *sqlparser.IntervalExpr:
 			return errInsertRow("Interval expressions not supported in insert values: %v", nodeToString(tuple))
 		case *sqlparser.CollateExpr:

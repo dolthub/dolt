@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/xwb1989/sqlparser"
@@ -26,6 +27,13 @@ func TestExecuteInsert(t *testing.T) {
 			query: `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000005', 677)`,
 			insertedValues: []row.Row{newPeopleRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
+			expectedResult: InsertResult{NumRowsInserted: 1},
+		},
+		{
+			name: "insert one row, all columns, negative values",
+			query: `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+					(-7, "Maggie", "Simpson", false, -1, -5.1, '00000000-0000-0000-0000-000000000005', 677)`,
+			insertedValues: []row.Row{newPeopleRowWithOptionalFields(-7, "Maggie", "Simpson", false, -1, -5.1, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 677)},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
@@ -291,13 +299,14 @@ func TestExecuteInsert(t *testing.T) {
 			s := sqlStatement.(*sqlparser.Insert)
 
 			result, err := ExecuteInsert(ctx, dEnv.DoltDB, root, s, tt.query)
+
 			if tt.expectedErr {
-				assert.NotNil(t, err, "expected error")
+				require.Error(t, err)
 				assert.Equal(t, InsertResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
 				assert.Nil(t, tt.insertedValues, "incorrect test setup: cannot assert both an error and inserted values")
 				return
 			} else {
-				assert.Nil(t, err, "unexpected error")
+				require.NoError(t, err)
 			}
 
 			assert.Equal(t, tt.expectedResult.NumRowsInserted, result.NumRowsInserted)
