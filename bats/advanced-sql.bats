@@ -118,6 +118,10 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "0" ]] || false
     [[ ! "$output" =~ "10" ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit 1,1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "10" ]] || false
     run dolt sql -q "select * from one_pk order by pk desc limit 1"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
@@ -153,10 +157,14 @@ teardown() {
 
 @test "sql limit less than zero" {
     run dolt sql -q "select * from one_pk order by pk limit -1"
-    skip "limit -1 returns no limit right now"
     [ $status -eq 1 ]
+    [[ "$output" =~ "Limit must be >= 0" ]] || false
     run dolt sql -q "select * from one_pk order by pk limit -2"
     [ $status -eq 1 ]
+    [[ "$output" =~ "Limit must be >= 0" ]] || false
+    run dolt sql -q "select * from one_pk order by pk limit -1,1"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Offset must be >= 0" ]] || false
 }
 
 @test "addition on both left and right side of comparison operator" {
