@@ -77,30 +77,39 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		}()
 	}
 
+	const batchSize = 50
 	go func() {
 		itr := me.ase.Iterator()
 		nextEdit := itr.Next()
 
 		for {
-			edit := nextEdit
+			batch := make([]*KVP, 0, batchSize)
+			for i := 0; i < batchSize; i++ {
+				edit := nextEdit
 
-			if edit == nil {
+				if edit == nil {
+					break
+				}
+
+				nextEdit = itr.Next()
+
+				if nextEdit != nil && !edit.Key.Less(nextEdit.Key) {
+					// keys are sorted, so if this key is not less than the next key then they are equal and the next
+					// value will take precedence
+					continue
+				}
+
+				batch = append(batch, edit)
+			}
+
+			if len(batch) > 0 {
+				workResChan := make(chan mapWorkResult)
+				work := mapWork{workResChan, batch}
+				rc <- workResChan
+				wc <- work
+			} else {
 				break
 			}
-
-			nextEdit = itr.Next()
-
-			if nextEdit != nil && !edit.Key.Less(nextEdit.Key) {
-				// keys are sorted, so if this key is not less than the next key then they are equal and the next
-				// value will take precedence
-				continue
-			}
-
-			workResChan := make(chan mapWorkResult)
-			work := mapWork{workResChan, []*KVP{edit}}
-			rc <- workResChan
-			wc <- work
-
 		}
 
 		close(rc)
