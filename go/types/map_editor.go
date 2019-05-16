@@ -24,6 +24,11 @@ func NewMapEditor(m Map) *MapEditor {
 	return &MapEditor{m, NewAsyncSortedEdits(10000, 2, 4)}
 }
 
+type mapWorkResult struct {
+	seqCur *sequenceCursor
+	entry  mapEntry
+}
+
 func (me *MapEditor) Map(ctx context.Context) Map {
 	me.ase.FinishedEditing()
 	me.ase.Sort()
@@ -35,8 +40,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	seq := me.m.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	cursChan := make(chan chan *sequenceCursor, 128)
-	kvsChan := make(chan chan mapEntry, 128)
+	rc := make(chan chan mapWorkResult, 16)
 
 	go func() {
 		itr := me.ase.Iterator()
@@ -57,44 +61,36 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 				continue
 			}
 
-			key := edit.Key.Value(ctx)
-
-			// TODO: Use ReadMany
-			cc := make(chan *sequenceCursor, 1)
-			cursChan <- cc
+			workResChan := make(chan mapWorkResult)
+			rc <- workResChan
 
 			go func() {
+				key := edit.Key.Value(ctx)
 				cur := newCursorAtValue(ctx, seq, key, true, false)
-				cc <- cur
-			}()
 
-			kvc := make(chan mapEntry, 1)
-			kvsChan <- kvc
+				var mEnt mapEntry
+				if edit.Val == nil {
+					mEnt = mapEntry{key, nil}
+				} else if v, ok := edit.Val.(Value); ok {
+					mEnt = mapEntry{key, v}
+				} else {
+					sv := edit.Val.Value(ctx)
+					mEnt = mapEntry{key, sv}
+				}
 
-			if edit.Val == nil {
-				kvc <- mapEntry{key, nil}
-				continue
-			}
-
-			if v, ok := edit.Val.(Value); ok {
-				kvc <- mapEntry{key, v}
-				continue
-			}
-
-			go func() {
-				sv := edit.Val.Value(ctx)
-				kvc <- mapEntry{key, sv}
+				workResChan <- mapWorkResult{cur, mEnt}
 			}()
 		}
 
-		close(cursChan)
-		close(kvsChan)
+		close(rc)
 	}()
 
 	var ch *sequenceChunker
-	for cc := range cursChan {
-		cur := <-cc
-		kv := <-<-kvsChan
+	for wrc := range rc {
+		workRes := <-wrc
+
+		cur := workRes.seqCur
+		kv := workRes.entry
 
 		var existingValue Value
 		if cur.idx < cur.seq.seqLen() {
