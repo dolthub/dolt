@@ -45,6 +45,8 @@ type SelectStatement struct {
 	orderFn rowLesserFn
 	// Limit of results returned
 	limit int
+	// Offset for results (skip N)
+	offset int
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
@@ -266,6 +268,11 @@ func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error 
 		if err != nil {
 			return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
 		}
+
+		if limitInt <= 0 {
+			return errFmt("Limit must be greater than zero if supplied: '%v'", nodeToString(s.Limit.Rowcount))
+		}
+
 		selectStmt.limit = limitInt
 	} else {
 		selectStmt.limit = noLimit
