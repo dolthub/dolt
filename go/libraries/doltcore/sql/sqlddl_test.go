@@ -17,34 +17,44 @@ func TestExecuteCreate(t *testing.T) {
 		name           string
 		query          string
 		expectedSchema schema.Schema
-		expectedErr    bool
+		expectedErr    string
 	}{
 		{
 			name:  "Test create single column schema",
-			query: "create table people (id int primary key)",
+			query: "create table testTable (id int primary key)",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{})),
 		},
 		{
 			name:  "Test create two column schema",
-			query: "create table people (id int primary key, age int)",
+			query: "create table testTable (id int primary key, age int)",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
 		{
 			name:        "Test syntax error",
-			query:       "create table people id int, age int",
-			expectedErr: true,
+			query:       "create table testTable id int, age int",
+			expectedErr: "syntax error",
 		},
 		{
 			name:        "Test no primary keys",
-			query:       "create table people (id int, age int)",
-			expectedErr: true,
+			query:       "create table testTable (id int, age int)",
+			expectedErr: "at least one primary key column must be specified",
+		},
+		{
+			name:        "Test bad table name",
+			query:       "create table _testTable (id int primary key, age int)",
+			expectedErr: "Invalid table name",
+		},
+		{
+			name:        "Test in use table name",
+			query:       "create table people (id int primary key, age int)",
+			expectedErr: "Table people already exists",
 		},
 		{
 			name:  "Test types",
-			query: "create table people (id int primary key, age int, first varchar, is_married boolean)",
+			query: "create table testTable (id int primary key, age int, first varchar, is_married boolean)",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false),
@@ -53,7 +63,7 @@ func TestExecuteCreate(t *testing.T) {
 		},
 		{
 			name: "Test all supported types",
-			query: `create table people (
+			query: `create table testTable (
 							c0 int primary key, 
 							c1 tinyint,
 							c2 smallint,
@@ -115,7 +125,7 @@ func TestExecuteCreate(t *testing.T) {
 		},
 		{
 			name:  "Test primary keys",
-			query: "create table people (id int, age int, first varchar(80), is_married bool, primary key (id, age))",
+			query: "create table testTable (id int, age int, first varchar(80), is_married bool, primary key (id, age))",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
@@ -124,7 +134,7 @@ func TestExecuteCreate(t *testing.T) {
 		},
 		{
 			name:  "Test not null constraints",
-			query: "create table people (id int, age int, first varchar(80) not null, is_married bool, primary key (id, age))",
+			query: "create table testTable (id int, age int, first varchar(80) not null, is_married bool, primary key (id, age))",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
@@ -133,7 +143,7 @@ func TestExecuteCreate(t *testing.T) {
 		},
 		{
 			name:  "Test quoted columns",
-			query: "create table people (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))",
+			query: "create table testTable (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
@@ -142,14 +152,14 @@ func TestExecuteCreate(t *testing.T) {
 		},
 		{
 			name:  "Test tag comments",
-			query: "create table people (id int primary key comment 'tag:5', age int comment 'tag:10')",
+			query: "create table testTable (id int primary key comment 'tag:5', age int comment 'tag:10')",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 5, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 10, types.IntKind, false)),
 		},
 		{
 			name:  "Test faulty tag comments",
-			query: "create table people (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
+			query: "create table testTable (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
 			expectedSchema: createSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
@@ -193,28 +203,26 @@ func TestExecuteCreate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
 			root, _ := dEnv.WorkingRoot(context.Background())
 
 			sqlStatement, err := sqlparser.Parse(tt.query)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			s := sqlStatement.(*sqlparser.DDL)
 
 			updatedRoot, sch, err := ExecuteCreate(context.Background(), dEnv.DoltDB, root, s, tt.query)
 
-			if err != nil {
-				if !tt.expectedErr {
-					require.NoError(t, err)
-				}
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
 			} else {
-				require.False(t, tt.expectedErr, "expected error")
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
 			}
 
-			assert.Equal(t, tt.expectedErr, err != nil, "unexpected error condition")
-			if !tt.expectedErr {
-				assert.NotNil(t, updatedRoot)
-				assert.Equal(t, tt.expectedSchema, sch)
-			}
+			assert.NotNil(t, updatedRoot)
+			assert.Equal(t, tt.expectedSchema, sch)
 		})
 	}
 }
