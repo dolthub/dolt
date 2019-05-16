@@ -260,26 +260,47 @@ func contains(column QualifiedColumn, cols []QualifiedColumn) bool {
 // given or returning any error encountered.
 func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error {
 	if s.Limit != nil && s.Limit.Rowcount != nil {
-		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
-		if !ok {
-			return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
-		}
-		limitInt, err := strconv.Atoi(nodeToString(limitVal))
-		if err != nil {
-			return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
-		}
 
-		if limitInt <= 0 {
-			return errFmt("Limit must be greater than zero if supplied: '%v'", nodeToString(s.Limit.Rowcount))
-		}
+			limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
+			if !ok {
+				return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+			}
+			limitInt, err := strconv.Atoi(nodeToString(limitVal))
+			if err != nil {
+				return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+			}
 
-		selectStmt.limit = limitInt
+			if limitInt < 0 {
+				return errFmt("Limit must be >= 0 if supplied: '%v'", nodeToString(s.Limit.Rowcount))
+			}
+
+			selectStmt.limit = limitInt
+
+			if s.Limit.Offset != nil {
+				offsetVal, ok := s.Limit.Offset.(*sqlparser.SQLVal)
+				if !ok {
+					return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+				}
+				offsetInt, err := strconv.Atoi(nodeToString(offsetVal))
+				if err != nil {
+					return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+				}
+
+				if offsetInt < 0 {
+					return errFmt("Offset must be >= 0 if supplied: '%v'", nodeToString(s.Limit.Offset))
+				}
+
+				selectStmt.offset = offsetInt
+			}
+
 	} else {
 		selectStmt.limit = noLimit
 	}
 
 	return nil
 }
+
+
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
@@ -536,7 +557,7 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderFn)})
 	}
 	if selectStmt.limit != noLimit {
-		p.AddStage(pipeline.NewNamedTransform("limit", createLimitFn(selectStmt, p)))
+		p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(selectStmt, p)))
 	}
 
 	reductionTransform, err := schemaReductionTransform(selectStmt)
@@ -614,18 +635,20 @@ func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
 
 // Returns a transform function to limit the set of rows to the value specified by the statement. Must only be applied
 // if a limit > 0 is specified.
-func createLimitFn(statement *SelectStatement, p *pipeline.Pipeline) pipeline.TransformRowFunc {
+func createLimitAndOffsetFn(statement *SelectStatement, p *pipeline.Pipeline) pipeline.TransformRowFunc {
 	if statement.limit == noLimit {
-		panic("Called createLimitFn without a limit specified")
+		panic("Called createLimitAndOffsetFn without a limit specified")
 	}
 
-	var count int
+	var skipped, returned int
 	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
-		if count < statement.limit {
-			count++
+		if skipped >= statement.offset && returned < statement.limit {
+			returned++
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
-		} else if count == statement.limit {
+		} else if returned == statement.limit {
 			p.NoMore()
+		} else {
+			skipped++
 		}
 		return nil, ""
 	}
@@ -661,7 +684,7 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 			p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(statement.orderFn)})
 		}
 		if statement.limit != noLimit {
-			p.AddStage(pipeline.NewNamedTransform("limit", createLimitFn(statement, p)))
+			p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(statement, p)))
 		}
 		p.AddStage(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
 	}
