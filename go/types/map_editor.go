@@ -29,6 +29,11 @@ type mapWorkResult struct {
 	entry  mapEntry
 }
 
+type mapWork struct {
+	resChan chan mapWorkResult
+	kvp     *KVP
+}
+
 func (me *MapEditor) Map(ctx context.Context) Map {
 	me.ase.FinishedEditing()
 	me.ase.Sort()
@@ -40,7 +45,32 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	seq := me.m.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	rc := make(chan chan mapWorkResult, 16)
+	numWorkers := 8
+	rc := make(chan chan mapWorkResult, 128)
+	wc := make(chan mapWork, numWorkers)
+
+	for i := 0; i < numWorkers; i++ {
+		go func() {
+			for work := range wc {
+				edit := work.kvp
+				key := edit.Key.Value(ctx)
+				cur := newCursorAtValue(ctx, seq, key, true, false)
+
+				var mEnt mapEntry
+				if edit.Val == nil {
+					mEnt = mapEntry{key, nil}
+				} else if v, ok := edit.Val.(Value); ok {
+					mEnt = mapEntry{key, v}
+				} else {
+					sv := edit.Val.Value(ctx)
+					mEnt = mapEntry{key, sv}
+				}
+
+				work.resChan <- mapWorkResult{cur, mEnt}
+
+			}
+		}()
+	}
 
 	go func() {
 		itr := me.ase.Iterator()
@@ -62,27 +92,14 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 			}
 
 			workResChan := make(chan mapWorkResult)
+			work := mapWork{workResChan, edit}
 			rc <- workResChan
+			wc <- work
 
-			go func() {
-				key := edit.Key.Value(ctx)
-				cur := newCursorAtValue(ctx, seq, key, true, false)
-
-				var mEnt mapEntry
-				if edit.Val == nil {
-					mEnt = mapEntry{key, nil}
-				} else if v, ok := edit.Val.(Value); ok {
-					mEnt = mapEntry{key, v}
-				} else {
-					sv := edit.Val.Value(ctx)
-					mEnt = mapEntry{key, sv}
-				}
-
-				workResChan <- mapWorkResult{cur, mEnt}
-			}()
 		}
 
 		close(rc)
+		close(wc)
 	}()
 
 	var ch *sequenceChunker
