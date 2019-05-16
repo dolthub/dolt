@@ -42,9 +42,12 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	tableName := ddl.Table.Name.String()
+	if !doltdb.IsValidTableName(tableName) {
+		return errCreate("Invalid table name: '%v'", tableName)
+	}
 
 	if root.HasTable(ctx, tableName) {
-		return errCreate("error: table %v already defined", tableName)
+		return errCreate("Table %v already exists", tableName)
 	}
 
 	spec := ddl.TableSpec
