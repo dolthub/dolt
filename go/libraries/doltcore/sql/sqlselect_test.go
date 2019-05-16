@@ -30,10 +30,20 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "select *, limit 1 ",
+			name:           "select *, limit 1",
 			query:          "select * from people limit 1",
 			expectedRows:   compressRows(peopleTestSchema, homer),
 			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:        "select *, limit 0",
+			query:       "select * from people limit 0",
+			expectedErr: "Limit must be greater than zero",
+		},
+		{
+			name:        "select *, limit -1",
+			query:       "select * from people limit -1",
+			expectedErr: "Limit must be greater than zero",
 		},
 		{
 			name:           "select *, limit 100",
@@ -500,11 +510,12 @@ func TestExecuteSelect(t *testing.T) {
 			}
 
 			rows, sch, err := ExecuteSelect(context.Background(), root, s)
-			if err != nil {
-				require.True(t, len(tt.expectedErr) > 0, err.Error())
+
+			if len(tt.expectedErr) > 0 {
+				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedErr)
 			} else {
-				assert.False(t, len(tt.expectedErr) > 0, "unexpected error")
+				require.NoError(t, err)
 			}
 
 			assert.Equal(t, tt.expectedRows, rows)
