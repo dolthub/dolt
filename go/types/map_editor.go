@@ -25,13 +25,13 @@ func NewMapEditor(m Map) *MapEditor {
 }
 
 type mapWorkResult struct {
-	seqCur *sequenceCursor
-	entry  mapEntry
+	seqCurs       []*sequenceCursor
+	cursorEntries [][]mapEntry
 }
 
 type mapWork struct {
 	resChan chan mapWorkResult
-	kvp     *KVP
+	kvps    []*KVP
 }
 
 func (me *MapEditor) Map(ctx context.Context) Map {
@@ -52,22 +52,27 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for work := range wc {
-				edit := work.kvp
-				key := edit.Key.Value(ctx)
-				cur := newCursorAtValue(ctx, seq, key, true, false)
+				wRes := mapWorkResult{}
 
-				var mEnt mapEntry
-				if edit.Val == nil {
-					mEnt = mapEntry{key, nil}
-				} else if v, ok := edit.Val.(Value); ok {
-					mEnt = mapEntry{key, v}
-				} else {
-					sv := edit.Val.Value(ctx)
-					mEnt = mapEntry{key, sv}
+				for _, edit := range work.kvps {
+					key := edit.Key.Value(ctx)
+					cur := newCursorAtValue(ctx, seq, key, true, false)
+
+					var mEnt mapEntry
+					if edit.Val == nil {
+						mEnt = mapEntry{key, nil}
+					} else if v, ok := edit.Val.(Value); ok {
+						mEnt = mapEntry{key, v}
+					} else {
+						sv := edit.Val.Value(ctx)
+						mEnt = mapEntry{key, sv}
+					}
+
+					wRes.seqCurs = append(wRes.seqCurs, cur)
+					wRes.cursorEntries = append(wRes.cursorEntries, []mapEntry{mEnt})
 				}
 
-				work.resChan <- mapWorkResult{cur, mEnt}
-
+				work.resChan <- wRes
 			}
 		}()
 	}
@@ -92,7 +97,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 			}
 
 			workResChan := make(chan mapWorkResult)
-			work := mapWork{workResChan, edit}
+			work := mapWork{workResChan, []*KVP{edit}}
 			rc <- workResChan
 			wc <- work
 
@@ -106,37 +111,38 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	for wrc := range rc {
 		workRes := <-wrc
 
-		cur := workRes.seqCur
-		kv := workRes.entry
+		for i, cur := range workRes.seqCurs {
+			for _, kv := range workRes.cursorEntries[i] {
+				var existingValue Value
+				if cur.idx < cur.seq.seqLen() {
+					ckv := cur.current().(mapEntry)
+					if ckv.key.Equals(kv.key) {
+						existingValue = ckv.value
+					}
+				}
 
-		var existingValue Value
-		if cur.idx < cur.seq.seqLen() {
-			ckv := cur.current().(mapEntry)
-			if ckv.key.Equals(kv.key) {
-				existingValue = ckv.value
+				if existingValue == nil && kv.value == nil {
+					continue // already non-present
+				}
+
+				if existingValue != nil && kv.value != nil && existingValue.Equals(kv.value) {
+					continue // same value
+				}
+
+				if ch == nil {
+					ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+				} else {
+					ch.advanceTo(ctx, cur)
+				}
+
+				if existingValue != nil {
+					ch.Skip(ctx)
+				}
+
+				if kv.value != nil {
+					ch.Append(ctx, kv)
+				}
 			}
-		}
-
-		if existingValue == nil && kv.value == nil {
-			continue // already non-present
-		}
-
-		if existingValue != nil && kv.value != nil && existingValue.Equals(kv.value) {
-			continue // same value
-		}
-
-		if ch == nil {
-			ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
-		} else {
-			ch.advanceTo(ctx, cur)
-		}
-
-		if existingValue != nil {
-			ch.Skip(ctx)
-		}
-
-		if kv.value != nil {
-			ch.Append(ctx, kv)
 		}
 	}
 
