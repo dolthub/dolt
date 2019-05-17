@@ -56,27 +56,30 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 
 				var cur *sequenceCursor
 				var curKey orderedKey
-				for _, edit := range work.kvps {
+
+				i := 0
+				for ; i < len(work.kvps); i++ {
+					edit := work.kvps[i]
 					key := edit.Key.Value(ctx)
 					ordKey := newOrderedKey(key)
 
 					if cur == nil || !ordKey.Less(curKey) {
 						cur = newCursorAt(ctx, seq, ordKey, true, false)
-						curKey = getCurrentKey(cur)
+
+						if cur.valid() {
+							curKey = getCurrentKey(cur)
+						} else {
+							break
+						}
 					}
 
-					var mEnt mapEntry
-					if edit.Val == nil {
-						mEnt = mapEntry{key, nil}
-					} else if v, ok := edit.Val.(Value); ok {
-						mEnt = mapEntry{key, v}
-					} else {
-						sv := edit.Val.Value(ctx)
-						mEnt = mapEntry{key, sv}
-					}
+					appendToWRes(ctx, &wRes, cur, key, edit.Val)
+				}
 
-					wRes.seqCurs = append(wRes.seqCurs, cur)
-					wRes.cursorEntries = append(wRes.cursorEntries, []mapEntry{mEnt})
+				for ; i < len(work.kvps); i++ {
+					edit := work.kvps[i]
+					key := edit.Key.Value(ctx)
+					appendToWRes(ctx, &wRes, cur, key, edit.Val)
 				}
 
 				work.resChan <- wRes
@@ -95,11 +98,6 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 
 		for {
 			batch := make([]*KVP, 0, batchSize)
-			batchSize = int(float32(batchSize) * batchMult)
-
-			if batchSize > batchSizeMax {
-				batchSize = batchSizeMax
-			}
 
 			for i := 0; i < batchSize; i++ {
 				edit := nextEdit
@@ -126,6 +124,11 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 				wc <- work
 			} else {
 				break
+			}
+
+			batchSize = int(float32(batchSize) * batchMult)
+			if batchSize > batchSizeMax {
+				batchSize = batchSizeMax
 			}
 		}
 
@@ -190,6 +193,21 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	}
 
 	return newMap(ch.Done(ctx).(orderedSequence))
+}
+
+func appendToWRes(ctx context.Context, wRes *mapWorkResult, cur *sequenceCursor, key Value, val Valuable) {
+	var mEnt mapEntry
+	if val == nil {
+		mEnt = mapEntry{key, nil}
+	} else if v, ok := val.(Value); ok {
+		mEnt = mapEntry{key, v}
+	} else {
+		sv := val.Value(ctx)
+		mEnt = mapEntry{key, sv}
+	}
+
+	wRes.seqCurs = append(wRes.seqCurs, cur)
+	wRes.cursorEntries = append(wRes.cursorEntries, []mapEntry{mEnt})
 }
 
 func (me *MapEditor) Set(k LesserValuable, v Valuable) *MapEditor {
