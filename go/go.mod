@@ -31,7 +31,7 @@ require (
 	gopkg.in/square/go-jose.v2 v2.2.2
 )
 
-replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190515224941-a284c0c8ff68
+replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190517232528-d1d6db257d6e
 
 replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.3
 
