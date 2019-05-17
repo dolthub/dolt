@@ -6,9 +6,7 @@ package types
 
 import (
 	"context"
-	"fmt"
 	"github.com/attic-labs/noms/go/d"
-	"time"
 )
 
 // MapEditor allows for efficient editing of Map-typed prolly trees. Edits
@@ -47,18 +45,25 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	seq := me.m.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	numWorkers := 6
+	numWorkers := 7
 	rc := make(chan chan mapWorkResult, 128)
-	wc := make(chan mapWork, numWorkers)
+	wc := make(chan mapWork, 128)
 
 	for i := 0; i < numWorkers; i++ {
 		go func() {
 			for work := range wc {
 				wRes := mapWorkResult{}
 
+				var cur *sequenceCursor
+				var curKey orderedKey
 				for _, edit := range work.kvps {
 					key := edit.Key.Value(ctx)
-					cur := newCursorAtValue(ctx, seq, key, true, false)
+					ordKey := newOrderedKey(key)
+
+					if cur == nil || !ordKey.Less(curKey) {
+						cur = newCursorAt(ctx, seq, ordKey, true, false)
+						curKey = getCurrentKey(cur)
+					}
 
 					var mEnt mapEntry
 					if edit.Val == nil {
@@ -79,13 +84,23 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		}()
 	}
 
-	const batchSize = 50
+	const batchSizeMax = 5000
+	const batchSizeStart = 10
+	const batchMult = 1.25
+
 	go func() {
+		batchSize := batchSizeStart
 		itr := me.ase.Iterator()
 		nextEdit := itr.Next()
 
 		for {
 			batch := make([]*KVP, 0, batchSize)
+			batchSize = int(float32(batchSize) * batchMult)
+
+			if batchSize > batchSizeMax {
+				batchSize = batchSizeMax
+			}
+
 			for i := 0; i < batchSize; i++ {
 				edit := nextEdit
 
@@ -118,17 +133,17 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		close(wc)
 	}()
 
-	var waitTime time.Duration
+	//var waitTime time.Duration
 	var ch *sequenceChunker
 	for {
-		start := time.Now()
+		//start := time.Now()
 		wrc, ok := <-rc
-		waitTime += time.Now().Sub(start)
+		//waitTime += time.Now().Sub(start)
 
 		if ok {
-			start = time.Now()
+			//start = time.Now()
 			workRes := <-wrc
-			waitTime += time.Now().Sub(start)
+			//waitTime += time.Now().Sub(start)
 
 			for i, cur := range workRes.seqCurs {
 				for _, kv := range workRes.cursorEntries[i] {
@@ -168,7 +183,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		}
 	}
 
-	fmt.Printf("Total time spent waiting %f ms\n", (1000.0 * waitTime.Seconds()))
+	//fmt.Printf("Total time spent waiting %f ms\n", (1000.0 * waitTime.Seconds()))
 
 	if ch == nil {
 		return me.m // no edits required application
