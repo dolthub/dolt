@@ -1,16 +1,17 @@
-package types
+package edits
 
 import (
+	"github.com/attic-labs/noms/go/types"
 	"math/rand"
 	"testing"
 	"time"
 )
 
-func createKVPs(rng *rand.Rand, size int) KVPSlice {
-	kvps := make(KVPSlice, size)
+func createKVPs(rng *rand.Rand, size int) types.KVPSlice {
+	kvps := make(types.KVPSlice, size)
 
 	for i := 0; i < size; i++ {
-		kvps[i] = KVP{Uint(rng.Uint64() % 10000), NullValue}
+		kvps[i] = types.KVP{types.Uint(rng.Uint64() % 10000), types.NullValue}
 	}
 
 	return kvps
@@ -52,25 +53,19 @@ func testASE(t *testing.T, rng *rand.Rand) {
 	asyncSorted := NewAsyncSortedEdits(buffSize, asyncSortConcurrency, sortConcurrency)
 
 	for _, kvp := range kvps {
-		asyncSorted.Set(kvp.Key, kvp.Val)
+		asyncSorted.AddEdit(kvp.Key, kvp.Val)
 	}
 
-	asyncSorted.FinishedEditing()
-
-	expectedKVPColls := (numKVPs + (buffSize - 1)) / buffSize
-	actualKVPCols := len(asyncSorted.sortedColls)
-
-	if expectedKVPColls != actualKVPCols {
-		t.Error("unexpected buffer count. expected:", expectedKVPColls, "actual count:", actualKVPCols)
-	}
-
-	asyncSorted.Sort()
+	itr := asyncSorted.FinishedEditing()
 
 	if asyncSorted.Size() != int64(numKVPs) {
 		t.Error("Invalid count", asyncSorted.Size(), "!=", numKVPs)
 	}
 
-	itr := asyncSorted.Iterator()
+	if itr.NumEdits() != int64(numKVPs) {
+		t.Error("Invalid itr count", itr.NumEdits(), "!=", numKVPs)
+	}
+
 	inOrder, count := IsInOrder(itr)
 
 	if count != numKVPs {

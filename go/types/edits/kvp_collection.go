@@ -1,19 +1,21 @@
-package types
+package edits
+
+import "github.com/attic-labs/noms/go/types"
 
 // KVPCollection is a collection of sorted KVPs
 type KVPCollection struct {
 	buffSize  int
 	numSlices int
 	totalSize int64
-	slices    []KVPSlice
+	slices    []types.KVPSlice
 }
 
 // NewKVPCollection creates a new KVPCollection from a sorted KVPSlice
-func NewKVPCollection(sl KVPSlice) *KVPCollection {
-	return newKVPColl(cap(sl), 1, int64(len(sl)), []KVPSlice{sl})
+func NewKVPCollection(sl types.KVPSlice) *KVPCollection {
+	return newKVPColl(cap(sl), 1, int64(len(sl)), []types.KVPSlice{sl})
 }
 
-func newKVPColl(maxSize, numSlices int, totalSize int64, slices []KVPSlice) *KVPCollection {
+func newKVPColl(maxSize, numSlices int, totalSize int64, slices []types.KVPSlice) *KVPCollection {
 	if slices == nil {
 		panic("invalid params")
 	}
@@ -44,8 +46,8 @@ func (left *KVPCollection) DestructiveMerge(right *KVPCollection) *KVPCollection
 	resBuilder := NewKVPCollBuilder(left.buffSize)
 
 	var done bool
-	var kvp *KVP
-	var exhaustedBuff KVPSlice
+	var kvp *types.KVP
+	var exhaustedBuff types.KVPSlice
 	var currItr *KVPCollItr
 	var otherItr *KVPCollItr
 

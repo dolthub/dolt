@@ -26,37 +26,3 @@ func (kvps KVPSlice) Less(i, j int) bool {
 func (kvps KVPSlice) Swap(i, j int) {
 	kvps[i], kvps[j] = kvps[j], kvps[i]
 }
-
-// KVPIterator is an interface for iterating over KVPs.  There are implementations for KVPSlice, KVPCollection, and
-// for two KVPCollection instances which merges as it iterates
-type KVPIterator interface {
-	Next() *KVP
-	Peek() *KVP
-}
-
-// IsInOrder iterates over every value and validates that they are returned in key order.  This is intended for testing.
-func IsInOrder(itr KVPIterator) (bool, int) {
-	prev := itr.Next()
-
-	if prev == nil {
-		return true, 0
-	}
-
-	count := 1
-
-	for {
-		var curr *KVP
-		curr = itr.Next()
-
-		if curr == nil {
-			break
-		} else if curr.Key.Less(prev.Key) {
-			return false, count
-		}
-
-		count++
-		prev = curr
-	}
-
-	return true, count
-}

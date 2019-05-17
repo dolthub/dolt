@@ -1,4 +1,6 @@
-package types
+package edits
+
+import "github.com/attic-labs/noms/go/types"
 
 // KVPCollItr is a KVPIterator implementation for iterating over a KVPCollection
 type KVPCollItr struct {
@@ -6,9 +8,9 @@ type KVPCollItr struct {
 	done       bool
 	slIdx      int
 	idx        int
-	currSl     KVPSlice
+	currSl     types.KVPSlice
 	currSlSize int
-	currKey    LesserValuable
+	currKey    types.LesserValuable
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection
@@ -28,7 +30,7 @@ func (itr *KVPCollItr) Less(other *KVPCollItr) bool {
 // returns the next kvp, the slice it was read from when that slice is empty, and whether or not iteration is complete.
 // when sliceIfExhausted returns a non-nil value it is assumed that the caller will take and use the buffer and that
 // it's data is no longer valid.
-func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *KVP, sliceIfExhausted KVPSlice, itrDone bool) {
+func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *types.KVP, sliceIfExhausted types.KVPSlice, itrDone bool) {
 	if itr.done {
 		return nil, nil, true
 	}
@@ -59,13 +61,18 @@ func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *KVP, sliceIfExhausted
 }
 
 // Next returns the next KVP
-func (itr *KVPCollItr) Next() *KVP {
+func (itr *KVPCollItr) Next() *types.KVP {
 	kvp, _, _ := itr.nextForDestructiveMerge()
 	return kvp
 }
 
+// NumEdits returns the number of KVPs representing the edits that this will iterate over
+func (itr *KVPCollItr) NumEdits() int64 {
+	return itr.coll.Size()
+}
+
 // Peek returns the next KVP without advancing
-func (itr *KVPCollItr) Peek() *KVP {
+func (itr *KVPCollItr) Peek() *types.KVP {
 	if itr.done {
 		return nil
 	}

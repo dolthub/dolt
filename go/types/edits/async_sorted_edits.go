@@ -1,10 +1,11 @@
-package types
+package edits
 
 import (
+	"github.com/attic-labs/noms/go/types"
 	"sort"
 )
 
-func sorter(in, out chan KVPSlice) {
+func sorter(in, out chan types.KVPSlice) {
 	for kvps := range in {
 		sort.Stable(kvps)
 		out <- kvps
@@ -38,11 +39,11 @@ type AsyncSortedEdits struct {
 	sortConcurrency  int
 	asyncConcurrency int
 
-	sortChan   chan KVPSlice
-	resultChan chan KVPSlice
+	sortChan   chan types.KVPSlice
+	resultChan chan types.KVPSlice
 	doneChan   chan bool
 
-	accumulating []KVP
+	accumulating []types.KVP
 	sortedColls  []*KVPCollection
 }
 
@@ -50,8 +51,8 @@ type AsyncSortedEdits struct {
 // 'asyncConcurrency' go routines for background sorting of batches.  The final Sort call is processed with
 // 'sortConcurrency' go routines
 func NewAsyncSortedEdits(sliceSize, asyncConcurrency, sortConcurrency int) *AsyncSortedEdits {
-	sortChan := make(chan KVPSlice, asyncConcurrency*8)
-	resChan := make(chan KVPSlice, asyncConcurrency*8)
+	sortChan := make(chan types.KVPSlice, asyncConcurrency*8)
+	resChan := make(chan types.KVPSlice, asyncConcurrency*8)
 	doneChan := make(chan bool, asyncConcurrency)
 
 	for i := 0; i < asyncConcurrency; i++ {
@@ -71,13 +72,13 @@ func NewAsyncSortedEdits(sliceSize, asyncConcurrency, sortConcurrency int) *Asyn
 		sortChan:         sortChan,
 		resultChan:       resChan,
 		doneChan:         doneChan,
-		accumulating:     make([]KVP, 0, sliceSize),
+		accumulating:     make([]types.KVP, 0, sliceSize),
 		sortedColls:      nil}
 }
 
-// Set adds an edit
-func (ase *AsyncSortedEdits) Set(k LesserValuable, v Valuable) {
-	ase.accumulating = append(ase.accumulating, KVP{k, v})
+// AddEdit adds an edit
+func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
+	ase.accumulating = append(ase.accumulating, types.KVP{k, v})
 
 	if len(ase.accumulating) == ase.sliceSize {
 		ase.asyncSortAcc()
@@ -86,7 +87,7 @@ func (ase *AsyncSortedEdits) Set(k LesserValuable, v Valuable) {
 
 func (ase *AsyncSortedEdits) asyncSortAcc() {
 	ase.sortChan <- ase.accumulating
-	ase.accumulating = make([]KVP, 0, ase.sliceSize)
+	ase.accumulating = make([]types.KVP, 0, ase.sliceSize)
 	ase.pollSortedSlices()
 }
 
@@ -104,17 +105,21 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 }
 
 // FinishedEditing should be called once all edits have been added, before Sort is called
-func (ase *AsyncSortedEdits) FinishedEditing() {
+func (ase *AsyncSortedEdits) FinishedEditing() types.EditProvider {
 	close(ase.sortChan)
 
 	if len(ase.accumulating) > 0 {
-		sl := KVPSlice(ase.accumulating)
+		sl := types.KVPSlice(ase.accumulating)
 		sort.Stable(sl)
 
 		ase.resultChan <- sl
 	}
 
 	ase.wait()
+
+	ase.Sort()
+
+	return ase.Iterator()
 }
 
 func (ase *AsyncSortedEdits) wait() {
@@ -222,8 +227,10 @@ func pairCollections(colls []*KVPCollection) [][2]*KVPCollection {
 }
 
 // Iterator returns a KVPIterator instance that can iterate over all the KVPs in order.
-func (ase *AsyncSortedEdits) Iterator() KVPIterator {
+func (ase *AsyncSortedEdits) Iterator() types.EditProvider {
 	switch len(ase.sortedColls) {
+	case 0:
+		return types.EmptyEditProvider{}
 	case 1:
 		return NewItr(ase.sortedColls[0])
 	case 2:
