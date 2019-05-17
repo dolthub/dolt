@@ -9,25 +9,46 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
+const maxEdits = 256 * 1024
+
+type updateMapRes struct {
+	m   types.Map
+	err error
+}
+
 // NomsMapUpdater is a TableWriter that writes rows to a noms types.Map. Once all rows are written Close() should be
 // called and GetMap will then return the new map.
 type NomsMapUpdater struct {
 	sch schema.Schema
 	vrw types.ValueReadWriter
 
-	me     *types.MapEditor
-	result *types.Map
+	count int64
+	acc   types.EditAccumulator
+
+	mapChan chan types.EditProvider
+	resChan chan updateMapRes
+
+	result *updateMapRes
 }
 
 // NewNomsMapUpdater creates a new NomsMapUpdater for a given map.
-func NewNomsMapUpdater(vrw types.ValueReadWriter, m types.Map, sch schema.Schema) *NomsMapUpdater {
+func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.Map, sch schema.Schema) *NomsMapUpdater {
 	if sch.GetPKCols().Size() == 0 {
 		panic("NomsMapUpdater requires a schema with a primary key.")
 	}
 
-	me := m.Edit()
+	mapChan := make(chan types.EditProvider, 1)
+	resChan := make(chan updateMapRes)
 
-	return &NomsMapUpdater{sch, vrw, me, nil}
+	go func() {
+		for edits := range mapChan {
+			m = types.ApplyEdits(ctx, edits, m)
+		}
+
+		resChan <- updateMapRes{m, nil}
+	}()
+
+	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(), mapChan, resChan, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -37,7 +58,7 @@ func (nmu *NomsMapUpdater) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
-	if nmu.me == nil {
+	if nmu.acc == nil {
 		panic("Attempting to write after closing.")
 	}
 
@@ -52,7 +73,13 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 		pk := r.NomsMapKey(nmu.sch)
 		fieldVals := r.NomsMapValue(nmu.sch)
 
-		nmu.me = nmu.me.Set(pk, fieldVals)
+		nmu.acc.AddEdit(pk, fieldVals)
+		nmu.count++
+
+		if nmu.count%maxEdits == 0 {
+			nmu.mapChan <- nmu.acc.FinishedEditing()
+			nmu.acc = types.CreateEditAccForMapEdits()
+		}
 	}()
 
 	return err
@@ -60,28 +87,26 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 
 // Close should flush all writes, release resources being held
 func (nmu *NomsMapUpdater) Close(ctx context.Context) error {
-	if nmu.result == nil {
-		var err error
-		func() {
-			defer func() {
-				if r := recover(); r != nil {
-					err = fmt.Errorf("panic occured during closing: %v", r)
-				}
-
-				result := nmu.me.Map(ctx)
-				nmu.result = &result
-
-				nmu.me = nil
-			}()
-		}()
-
-		return err
-	} else {
+	if nmu.result != nil {
 		return errors.New("Already closed.")
 	}
+
+	nmu.mapChan <- nmu.acc.FinishedEditing()
+	nmu.acc = nil
+
+	close(nmu.mapChan)
+
+	result := <-nmu.resChan
+	nmu.result = &result
+
+	if nmu.result.err != nil {
+		return nmu.result.err
+	}
+
+	return nil
 }
 
 // GetMap retrieves the resulting types.Map once close is called
 func (nmu *NomsMapUpdater) GetMap() *types.Map {
-	return nmu.result
+	return &nmu.result.m
 }

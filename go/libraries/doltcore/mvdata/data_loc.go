@@ -198,7 +198,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *d
 			return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
 		} else {
 			m := types.NewMap(ctx, root.VRW())
-			return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
+			return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch), nil
 		}
 
 	case CsvFile:
@@ -241,7 +241,7 @@ func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *dolt
 		}
 
 		m := tbl.GetRowData(ctx)
-		return noms.NewNomsMapUpdater(root.VRW(), m, outSch), nil
+		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch), nil
 
 	case CsvFile, PsvFile, JsonFile, XlsxFile:
 
