@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/types/edits"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 )
+
+func init() {
+	types.CreateEditAccForMapEdits = func() types.EditAccumulator {
+		return edits.NewAsyncSortedEdits(16*1024, 4, 2)
+	}
+}
 
 const (
 	creationBranch   = "create"
