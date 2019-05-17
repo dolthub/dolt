@@ -233,3 +233,7 @@ func (me *MapEditor) Remove(k LesserValuable) *MapEditor {
 func (me *MapEditor) set(k LesserValuable, v Valuable) {
 	me.ase.Set(k, v)
 }
+
+func (me *MapEditor) EditCount() int64 {
+	return me.ase.Size()
+}
