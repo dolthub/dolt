@@ -85,7 +85,7 @@ func testNomsMapCreator(t *testing.T, vrw types.ValueReadWriter, rows []row.Row)
 }
 
 func testNomsMapUpdate(t *testing.T, vrw types.ValueReadWriter, initialMapVal *types.Map, rows []row.Row) *types.Map {
-	mu := NewNomsMapUpdater(vrw, *initialMapVal, sch)
+	mu := NewNomsMapUpdater(context.Background(), vrw, *initialMapVal, sch)
 	return testNomsWriteCloser(t, mu, rows)
 }
 

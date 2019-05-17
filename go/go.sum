@@ -124,6 +124,8 @@ github.com/liquidata-inc/noms v0.0.0-20190515213742-e1d38290ee6c h1:0WODUSqy7HCb
 github.com/liquidata-inc/noms v0.0.0-20190515213742-e1d38290ee6c/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/noms v0.0.0-20190515224941-a284c0c8ff68 h1:l4fbepvxj6PsovBih7jJ1ZhPz4zb7DF4JF0YFN6qJ9Y=
 github.com/liquidata-inc/noms v0.0.0-20190515224941-a284c0c8ff68/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
+github.com/liquidata-inc/noms v0.0.0-20190517232528-d1d6db257d6e h1:0HbKGlQiacU6Neo1veSk3Js7kD24vf43ppTigxHVgtU=
+github.com/liquidata-inc/noms v0.0.0-20190517232528-d1d6db257d6e/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/sqlparser v0.9.3 h1:lAQpKBSHYG4EWI7RZiQvuSwBqpd45wzmgTtcxEGXaCk=
 github.com/liquidata-inc/sqlparser v0.9.3/go.mod h1:lEqKV1oJUXiTfUjigM/8APQJFNSTHYYkJk+NGkWSgOU=
 github.com/mattn/go-colorable v0.0.9 h1:UVL0vNpWh04HeJXV0KLcaT7r06gOH2l4OW6ddYRUIY4=
