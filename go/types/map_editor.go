@@ -33,12 +33,7 @@ type EditAccumulator interface {
 	FinishedEditing() EditProvider
 }
 
-// MapEditor allows for efficient editing of Map-typed prolly trees. Edits
-// are buffered to memory and can be applied via Build(), which returns a new
-// Map. Prior to Build(), Get() & Has() will return the value that the resulting
-// Map would return if it were built immediately prior to the respective call.
-// Note: The implementation biases performance towards a usage which applies
-// edits in key-order.
+// MapEditor allows for efficient editing of Map-typed prolly trees.
 type MapEditor struct {
 	m        Map
 	numEdits int64
@@ -83,6 +78,7 @@ func (me *MapEditor) set(k LesserValuable, v Valuable) {
 	me.acc.AddEdit(k, v)
 }
 
+// NumEdits returns the number of edits that have been added.
 func (me *MapEditor) NumEdits() int64 {
 	return me.numEdits
 }

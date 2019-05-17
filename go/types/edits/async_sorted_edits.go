@@ -104,7 +104,8 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 	}
 }
 
-// FinishedEditing should be called once all edits have been added, before Sort is called
+// FinishedEditing should be called once all edits have been added.  Once FinishedEditing is called adding more edits
+// will have undefined behavior.
 func (ase *AsyncSortedEdits) FinishedEditing() types.EditProvider {
 	close(ase.sortChan)
 
