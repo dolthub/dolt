@@ -1,16 +1,17 @@
-package types
+package edits
 
 import (
 	"context"
+	"github.com/attic-labs/noms/go/types"
 	"testing"
 )
 
 func TestKVPCollItr(t *testing.T) {
 	ctx := context.Background()
 
-	slice1 := KVPSlice{{Uint(1), NullValue}, {Uint(2), NullValue}}
-	slice2 := KVPSlice{{Uint(3), NullValue}, {Uint(4), NullValue}}
-	slice3 := KVPSlice{{Uint(5), NullValue}, {}}
+	slice1 := types.KVPSlice{{types.Uint(1), types.NullValue}, {types.Uint(2), types.NullValue}}
+	slice2 := types.KVPSlice{{types.Uint(3), types.NullValue}, {types.Uint(4), types.NullValue}}
+	slice3 := types.KVPSlice{{types.Uint(5), types.NullValue}, {}}
 
 	type itrRes struct {
 		keyVal       uint
@@ -20,13 +21,13 @@ func TestKVPCollItr(t *testing.T) {
 	tests := []struct {
 		buffSize   int
 		totalSize  int64
-		slices     []KVPSlice
+		slices     []types.KVPSlice
 		itrResults []itrRes
 	}{
 		{
 			2,
 			5,
-			[]KVPSlice{slice1, slice2, slice3[:1]},
+			[]types.KVPSlice{slice1, slice2, slice3[:1]},
 			[]itrRes{
 				{1, false, false},
 				{2, true, false},
@@ -45,7 +46,7 @@ func TestKVPCollItr(t *testing.T) {
 			for _, expRes := range test.itrResults {
 				kvp, buff, done := itr.nextForDestructiveMerge()
 
-				if !kvp.Key.Value(ctx).Equals(Uint(expRes.keyVal)) {
+				if !kvp.Key.Value(ctx).Equals(types.Uint(expRes.keyVal)) {
 					t.Error("unexpected result")
 				}
 

@@ -1,7 +1,8 @@
-package types
+package edits
 
 import (
 	"context"
+	"github.com/attic-labs/noms/go/types"
 	"sort"
 	"testing"
 )
@@ -10,21 +11,21 @@ func TestKVPSliceSort(t *testing.T) {
 	ctx := context.Background()
 
 	tests := []struct {
-		kvps      KVPSlice
-		expSorted KVPSlice
+		kvps      types.KVPSlice
+		expSorted types.KVPSlice
 	}{
 		{
-			KVPSlice{
-				{Uint(5), NullValue},
-				{Uint(1), NullValue},
-				{Uint(4), NullValue},
-				{Uint(3), NullValue},
+			types.KVPSlice{
+				{types.Uint(5), types.NullValue},
+				{types.Uint(1), types.NullValue},
+				{types.Uint(4), types.NullValue},
+				{types.Uint(3), types.NullValue},
 			},
-			KVPSlice{
-				{Uint(1), NullValue},
-				{Uint(3), NullValue},
-				{Uint(4), NullValue},
-				{Uint(5), NullValue},
+			types.KVPSlice{
+				{types.Uint(1), types.NullValue},
+				{types.Uint(3), types.NullValue},
+				{types.Uint(4), types.NullValue},
+				{types.Uint(5), types.NullValue},
 			},
 		},
 	}

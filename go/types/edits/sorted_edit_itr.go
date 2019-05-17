@@ -1,4 +1,6 @@
-package types
+package edits
+
+import "github.com/attic-labs/noms/go/types"
 
 // SortedEditItr is a KVPIterator implementation that takes two KVPCollItr and merges them as it iterates
 type SortedEditItr struct {
@@ -17,7 +19,7 @@ func NewSortedEditItr(left, right *KVPCollection) *SortedEditItr {
 }
 
 // Next returns the next KVP
-func (itr *SortedEditItr) Next() *KVP {
+func (itr *SortedEditItr) Next() *types.KVP {
 	if itr.done {
 		return nil
 	}
@@ -33,8 +35,12 @@ func (itr *SortedEditItr) Next() *KVP {
 	return kvp
 }
 
+func (itr *SortedEditItr) NumEdits() int64 {
+	return itr.leftItr.NumEdits() + itr.rightItr.NumEdits()
+}
+
 // Peek returns the next KVP without advancing
-func (itr *SortedEditItr) Peek() *KVP {
+func (itr *SortedEditItr) Peek() *types.KVP {
 	if itr.done {
 		return nil
 	}

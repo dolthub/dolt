@@ -1,12 +1,14 @@
-package types
+package edits
+
+import "github.com/attic-labs/noms/go/types"
 
 // KVPCollBuilder is used to build a KVPCollection.  It creates two buffers which it fills with KVPs.  When a buffer
 // is filled the target buffer is changed for subsequent adds.  New buffers can be added to the builder so that
 // buffers of other KVPCollections can be reused.
 type KVPCollBuilder struct {
-	filled     []KVPSlice
-	toFill     []KVPSlice
-	currSl     KVPSlice
+	filled     []types.KVPSlice
+	toFill     []types.KVPSlice
+	currSl     types.KVPSlice
 	currSlSize int
 	currIdx    int
 	numItems   int64
@@ -15,14 +17,14 @@ type KVPCollBuilder struct {
 
 // NewKVPCollBuilder creates a builder which can be used to
 func NewKVPCollBuilder(buffSize int) *KVPCollBuilder {
-	buffs := []KVPSlice{make(KVPSlice, buffSize)}
-	currSl := make(KVPSlice, buffSize)
+	buffs := []types.KVPSlice{make(types.KVPSlice, buffSize)}
+	currSl := make(types.KVPSlice, buffSize)
 
 	return &KVPCollBuilder{nil, buffs, currSl, buffSize, 0, 0, buffSize}
 }
 
 // AddBuffer adds a buffer of KVPs that can be filled.
-func (cb *KVPCollBuilder) AddBuffer(buff KVPSlice) {
+func (cb *KVPCollBuilder) AddBuffer(buff types.KVPSlice) {
 	if cap(buff) != cb.buffSize {
 		panic("All buffers should be created with the same capacity.")
 	}
@@ -31,7 +33,7 @@ func (cb *KVPCollBuilder) AddBuffer(buff KVPSlice) {
 }
 
 // AddKVP adds a KVP to the current buffer
-func (cb *KVPCollBuilder) AddKVP(kvp KVP) {
+func (cb *KVPCollBuilder) AddKVP(kvp types.KVP) {
 	cb.currSl[cb.currIdx] = kvp
 
 	cb.currIdx++
