@@ -12,15 +12,15 @@ import (
 // CreateEditAcc defines a factory method for EditAccumulator creation
 type CreateEditAcc func() EditAccumulator
 
-// EditAccFactoryMethod allows users to define the EditAccumulator that should be used when creating a MapEditor via
+// CreateEditAccForMapEdits allows users to define the EditAccumulator that should be used when creating a MapEditor via
 // the Map.Edit method.  In most cases you should call:
 //
 // func init() {
-// 		types.EditAccFactoryMethod = func() EditAccumulator {
+// 		types.CreateEditAccForMapEdits = func() EditAccumulator {
 //			return edits.NewAsyncSortedEdits(10000, 4, 2) // configure your own constants
 // 		}
 // }
-var EditAccFactoryMethod CreateEditAcc = NewDumbEditAccumulator
+var CreateEditAccForMapEdits CreateEditAcc = NewDumbEditAccumulator
 
 // EditAccumulator is an interface for a datastructure that can have edits added to it.  Once all edits are
 // added FinishedEditing can be called to get an EditProvider which provides the edits in sorted order
@@ -46,7 +46,7 @@ type MapEditor struct {
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, 0, EditAccFactoryMethod()}
+	return &MapEditor{m, 0, CreateEditAccForMapEdits()}
 }
 
 // Map applies all edits and returns a newly updated Map
