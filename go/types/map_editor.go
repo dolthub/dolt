@@ -6,7 +6,9 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"github.com/attic-labs/noms/go/d"
+	"time"
 )
 
 // MapEditor allows for efficient editing of Map-typed prolly trees. Edits
@@ -45,7 +47,7 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 	seq := me.m.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	numWorkers := 8
+	numWorkers := 6
 	rc := make(chan chan mapWorkResult, 128)
 	wc := make(chan mapWork, numWorkers)
 
@@ -116,44 +118,57 @@ func (me *MapEditor) Map(ctx context.Context) Map {
 		close(wc)
 	}()
 
+	var waitTime time.Duration
 	var ch *sequenceChunker
-	for wrc := range rc {
-		workRes := <-wrc
+	for {
+		start := time.Now()
+		wrc, ok := <-rc
+		waitTime += time.Now().Sub(start)
 
-		for i, cur := range workRes.seqCurs {
-			for _, kv := range workRes.cursorEntries[i] {
-				var existingValue Value
-				if cur.idx < cur.seq.seqLen() {
-					ckv := cur.current().(mapEntry)
-					if ckv.key.Equals(kv.key) {
-						existingValue = ckv.value
+		if ok {
+			start = time.Now()
+			workRes := <-wrc
+			waitTime += time.Now().Sub(start)
+
+			for i, cur := range workRes.seqCurs {
+				for _, kv := range workRes.cursorEntries[i] {
+					var existingValue Value
+					if cur.idx < cur.seq.seqLen() {
+						ckv := cur.current().(mapEntry)
+						if ckv.key.Equals(kv.key) {
+							existingValue = ckv.value
+						}
+					}
+
+					if existingValue == nil && kv.value == nil {
+						continue // already non-present
+					}
+
+					if existingValue != nil && kv.value != nil && existingValue.Equals(kv.value) {
+						continue // same value
+					}
+
+					if ch == nil {
+						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+					} else {
+						ch.advanceTo(ctx, cur)
+					}
+
+					if existingValue != nil {
+						ch.Skip(ctx)
+					}
+
+					if kv.value != nil {
+						ch.Append(ctx, kv)
 					}
 				}
-
-				if existingValue == nil && kv.value == nil {
-					continue // already non-present
-				}
-
-				if existingValue != nil && kv.value != nil && existingValue.Equals(kv.value) {
-					continue // same value
-				}
-
-				if ch == nil {
-					ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
-				} else {
-					ch.advanceTo(ctx, cur)
-				}
-
-				if existingValue != nil {
-					ch.Skip(ctx)
-				}
-
-				if kv.value != nil {
-					ch.Append(ctx, kv)
-				}
 			}
+		} else {
+			break
 		}
 	}
+
+	fmt.Printf("Total time spent waiting %f ms\n", (1000.0 * waitTime.Seconds()))
 
 	if ch == nil {
 		return me.m // no edits required application
