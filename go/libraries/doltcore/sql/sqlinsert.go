@@ -10,6 +10,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/xwb1989/sqlparser"
+	"strings"
 )
 
 type InsertResult struct {
@@ -19,8 +20,8 @@ type InsertResult struct {
 	NumErrorsIgnored int
 }
 
-var ErrMissingPrimaryKeys = errors.New("one or more primary key columns missing from insert statement")
-var ErrConstraintFailure = errors.New("row constraint failed")
+var ErrMissingPrimaryKeys = errors.New("One or more primary key columns missing from insert statement")
+var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
 func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
@@ -45,7 +46,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		for i, colName := range s.Columns {
 			for _, c := range cols {
 				if c.Name == colName.String() {
-					return errInsert("Repeated column %v", c.Name)
+					return errInsert("Repeated column: '%v'", c.Name)
 				}
 			}
 
@@ -88,7 +89,8 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 				result.NumErrorsIgnored += 1
 				continue
 			} else {
-				return nil, ErrConstraintFailure
+				col, constraint := row.GetInvalidConstraint(r, tableSch)
+				return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
 			}
 		}
 
@@ -104,7 +106,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 				result.NumErrorsIgnored += 1
 				continue
 			} else {
-				return errInsert("cannot insert existing row %v", r)
+				return errInsert("Duplicate primary key: '%v'", getPrimaryKeyString(r, tableSch))
 			}
 		}
 		me.Set(key, r.NomsMapValue(tableSch))
@@ -117,6 +119,30 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	result.NumRowsInserted = int(newMap.Len() - rowData.Len())
 	result.Root = root.PutTable(ctx, db, tableName, table)
 	return &result, nil
+}
+
+// Returns a primary key summary of the row given
+func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
+	var sb strings.Builder
+	first := true
+	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		if !first {
+			sb.WriteString(", ")
+		}
+		sb.WriteString(col.Name)
+		sb.WriteString(": ")
+		val, ok := r.GetColVal(tag)
+		if ok {
+			sb.WriteString(fmt.Sprintf("%v", val))
+		} else {
+			sb.WriteString("null")
+		}
+
+		first = false
+		return false
+	})
+
+	return sb.String()
 }
 
 // Returns rows to insert from the set of values given

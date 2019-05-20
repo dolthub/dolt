@@ -1,6 +1,9 @@
 package schema
 
-import "github.com/attic-labs/noms/go/types"
+import (
+	"fmt"
+	"github.com/attic-labs/noms/go/types"
+)
 
 // ColConstraint is an interface used for evaluating whether a columns value is valid
 type ColConstraint interface {
@@ -11,10 +14,13 @@ type ColConstraint interface {
 	// deserialization of constraints (see ColConstraintFromTypeAndParams).
 	GetConstraintType() string
 
-	// GetConstraintParams returns a map[string]string containing the contstraints parameters.  This is used for
+	// GetConstraintParams returns a map[string]string containing the constraints parameters.  This is used for
 	// serialization and deserialization of constraints, and a deserialized constraint must be able to reproduce the same
 	// behavior based on the parameters in this map (See ColConstraintFromTypeAndParams).
 	GetConstraintParams() map[string]string
+
+	// Stringer results are used to inform users of the constraint's properties.
+	fmt.Stringer
 }
 
 const (
@@ -51,6 +57,12 @@ func (nnc NotNullConstraint) GetConstraintType() string {
 func (nnc NotNullConstraint) GetConstraintParams() map[string]string {
 	return nil
 }
+
+// String returns a useful description of the constraint
+func (nnc NotNullConstraint) String() string {
+	return "Not null"
+}
+
 
 // ColConstraintsAreEqual validates two ColConstraint slices are identical.
 func ColConstraintsAreEqual(a, b []ColConstraint) bool {

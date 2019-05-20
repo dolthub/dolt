@@ -203,9 +203,9 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedErr: "Repeated column 'first'",
 		},
 		{
-			name:        "null constraint failure",
-			query:       `update people set first = null where id = 0`,
-			expectedErr: "row constraint failed",
+			name: "null constraint failure",
+			query: `update people set first = null where id = 0`,
+			expectedErr: "Constraint failed for column 'first': Not null",
 		},
 		{
 			name:        "type mismatch int -> string",
