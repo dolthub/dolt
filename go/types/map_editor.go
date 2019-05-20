@@ -47,7 +47,9 @@ func NewMapEditor(m Map) *MapEditor {
 // Map applies all edits and returns a newly updated Map
 func (me *MapEditor) Map(ctx context.Context) Map {
 	edits := me.acc.FinishedEditing()
-	return ApplyEdits(ctx, edits, me.m)
+	m, _ := ApplyEdits(ctx, edits, me.m)
+
+	return m
 }
 
 // Set adds an edit
