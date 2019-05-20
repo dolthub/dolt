@@ -52,25 +52,39 @@ const (
 	batchSizeMax   = 5000
 )
 
+// AppliedEditStats contains statistics on what edits were applied in types.ApplyEdits
 type AppliedEditStats struct {
-	Additions          int64
-	Modifications      int64
-	SameVal            int64
-	Deletions          int64
-	NonexistantDeletes int64
+	// Additions counts the number of elements added to the map
+	Additions int64
+
+	// Modifications counts the number of map entries that were modified
+	Modifications int64
+
+	// SamVal counts the number of edits that had no impact because a value was set to the same value that is already
+	// stored in the map
+	SameVal int64
+
+	// Deletions counts the number of items deleted from the map
+	Deletions int64
+
+	// NonexistantDeletes counts the number of items where a deletion was attempted, but the key didn't exist in the map
+	// so there was no impact
+	NonExistentDeletes int64
 }
 
+// Add adds two AppliedEditStats structures member by member.
 func (stats AppliedEditStats) Add(other AppliedEditStats) AppliedEditStats {
 	return AppliedEditStats{
 		Additions:          stats.Additions + other.Additions,
 		Modifications:      stats.Modifications + other.Modifications,
 		SameVal:            stats.SameVal + other.SameVal,
 		Deletions:          stats.Deletions + other.Deletions,
-		NonexistantDeletes: stats.NonexistantDeletes + other.NonexistantDeletes,
+		NonExistentDeletes: stats.NonExistentDeletes + other.NonExistentDeletes,
 	}
 }
 
-// ApplyEdits applies all the edits to a given Map and returns the resulting map
+// ApplyEdits applies all the edits to a given Map and returns the resulting map, and some statistics about the edits
+// that were applied.
 func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats) {
 	var stats AppliedEditStats
 
@@ -117,7 +131,7 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 					}
 
 					if existingValue == nil && kv.value == nil {
-						stats.NonexistantDeletes++
+						stats.NonExistentDeletes++
 						continue // already non-present
 					}
 
