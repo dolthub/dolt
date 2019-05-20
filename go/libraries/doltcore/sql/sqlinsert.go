@@ -150,18 +150,16 @@ func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch 
 
 	// Lack of primary keys is its own special kind of failure that we can detect before creating any rows
 	allKeysFound := true
-	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) bool {
-		var foundCol bool
-		for _, col := range cols {
-			if col.Tag == tag {
-				foundCol = true
-				break
+	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		for _, insertCol := range cols {
+			if insertCol.Tag == tag {
+				return false
 			}
 		}
-
-		allKeysFound = allKeysFound && foundCol
-		return foundCol
+		allKeysFound = false
+		return true
 	})
+
 	if !allKeysFound {
 		return nil, ErrMissingPrimaryKeys
 	}

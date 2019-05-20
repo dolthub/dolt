@@ -107,13 +107,13 @@ teardown() {
     [[ "$output" =~ "9" ]] || false
     run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: one or more primary key columns missing from insert statement" ]
+    [ "$output" = "Error inserting rows: One or more primary key columns missing from insert statement" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
     [ "$status" -eq 1 ]
     [ "$output" = "Error inserting rows: Unknown column: 'c6'" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot insert existing row" ]] || false
+    [ "$output" = "Error inserting rows: Duplicate primary key: 'pk: 0'" ] || false
 }
 
 @test "dolt sql insert same column twice" {
