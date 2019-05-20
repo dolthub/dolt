@@ -187,7 +187,7 @@ func (dl *DataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs f
 
 var ErrNoPK = errors.New("schema does not contain a primary key")
 
-func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	if dl.RequiresPK() && outSch.GetPKCols().Size() == 0 {
 		return nil, ErrNoPK
 	}
@@ -198,7 +198,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *d
 			return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
 		} else {
 			m := types.NewMap(ctx, root.VRW())
-			return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch), nil
+			return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
 		}
 
 	case CsvFile:
@@ -217,7 +217,6 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *d
 
 	case JsonFile:
 		tWr, err := json.OpenJSONWriter(dl.Path, fs, outSch, json.NewJSONInfo())
-
 		return tWr, err
 
 		//case NbfFile:
@@ -230,7 +229,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *d
 
 // CreateUpdatingDataWriter will create a TableWriteCloser for a DataLocation that will update and append rows based
 // on their primary key.
-func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case DoltDB:
 		tableName := dl.Path
@@ -241,10 +240,9 @@ func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *dolt
 		}
 
 		m := tbl.GetRowData(ctx)
-		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch), nil
+		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
 
 	case CsvFile, PsvFile, JsonFile, XlsxFile:
-
 		panic("Update not supported for this file type.")
 	}
 
