@@ -30,8 +30,7 @@ type NomsMapUpdater struct {
 	mapChan chan types.EditProvider
 	resChan chan updateMapRes
 
-	result  *updateMapRes
-	statsCB StatsCB
+	result *updateMapRes
 }
 
 // NewNomsMapUpdater creates a new NomsMapUpdater for a given map.
@@ -58,7 +57,7 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		resChan <- updateMapRes{m, nil}
 	}()
 
-	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(), mapChan, resChan, nil, nil}
+	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(), mapChan, resChan, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
