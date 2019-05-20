@@ -172,7 +172,7 @@ func TestCreateRdWr(t *testing.T) {
 	for _, test := range tests {
 		loc := test.dl
 
-		wr, err := loc.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema)
+		wr, err := loc.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema, nil)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)

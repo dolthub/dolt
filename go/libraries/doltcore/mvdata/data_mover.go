@@ -3,6 +3,7 @@ package mvdata
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -62,7 +63,7 @@ func (dmce *DataMoverCreationError) String() string {
 	return string(dmce.ErrType) + ": " + dmce.Cause.Error()
 }
 
-func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions) (*DataMover, *DataMoverCreationError) {
+func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, mvOpts *MoveOptions, statsCB noms.StatsCB) (*DataMover, *DataMoverCreationError) {
 	var rd table.TableReadCloser
 	var err error
 	transforms := pipeline.NewTransformCollection()
@@ -109,9 +110,9 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 
 	var wr table.TableWriteCloser
 	if mvOpts.Operation == OverwriteOp {
-		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, root, fs, srcIsSorted, outSch)
+		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, root, fs, srcIsSorted, outSch, statsCB)
 	} else {
-		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(ctx, root, fs, srcIsSorted, outSch)
+		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(ctx, root, fs, srcIsSorted, outSch, statsCB)
 	}
 
 	if err != nil {

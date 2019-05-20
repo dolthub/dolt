@@ -3,6 +3,7 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -175,6 +176,15 @@ func createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+var displayStrLen int
+
+func importStatsCB(stats types.AppliedEditStats) {
+	noEffect := stats.NonExistentDeletes + stats.SameVal
+	total := noEffect + stats.Modifications + stats.Additions
+	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
+	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+}
+
 func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {
 	root, err := dEnv.WorkingRoot(context.Background())
 
@@ -193,7 +203,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	mover, nDMErr := mvdata.NewDataMover(context.TODO(), root, dEnv.FS, mvOpts)
+	mover, nDMErr := mvdata.NewDataMover(context.TODO(), root, dEnv.FS, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
 		verr := newDataMoverErrToVerr(mvOpts, nDMErr)
@@ -234,6 +244,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		}
 	}
 
+	cli.Println(color.CyanString("\nImport completed successfully."))
 	return 0
 }
 

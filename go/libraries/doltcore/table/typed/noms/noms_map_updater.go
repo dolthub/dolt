@@ -9,6 +9,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
+type StatsCB func(stats types.AppliedEditStats)
+
 const maxEdits = 256 * 1024
 
 type updateMapRes struct {
@@ -28,11 +30,12 @@ type NomsMapUpdater struct {
 	mapChan chan types.EditProvider
 	resChan chan updateMapRes
 
-	result *updateMapRes
+	result  *updateMapRes
+	statsCB StatsCB
 }
 
 // NewNomsMapUpdater creates a new NomsMapUpdater for a given map.
-func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.Map, sch schema.Schema) *NomsMapUpdater {
+func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.Map, sch schema.Schema, statsCB StatsCB) *NomsMapUpdater {
 	if sch.GetPKCols().Size() == 0 {
 		panic("NomsMapUpdater requires a schema with a primary key.")
 	}
@@ -41,14 +44,21 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 	resChan := make(chan updateMapRes)
 
 	go func() {
+		var totalStats types.AppliedEditStats
 		for edits := range mapChan {
-			m = types.ApplyEdits(ctx, edits, m)
+			var stats types.AppliedEditStats
+			m, stats = types.ApplyEdits(ctx, edits, m)
+			totalStats = totalStats.Add(stats)
+
+			if statsCB != nil {
+				statsCB(totalStats)
+			}
 		}
 
 		resChan <- updateMapRes{m, nil}
 	}()
 
-	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(), mapChan, resChan, nil}
+	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(), mapChan, resChan, nil, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes

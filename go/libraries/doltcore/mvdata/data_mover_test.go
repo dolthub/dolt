@@ -111,7 +111,7 @@ func TestDataMover(t *testing.T) {
 
 		src := test.mvOpts.Src
 
-		seedWr, err := src.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema)
+		seedWr, err := src.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema, nil)
 
 		if err != nil {
 			t.Fatal(err.Error())
@@ -129,7 +129,7 @@ func TestDataMover(t *testing.T) {
 
 		encoding.UnmarshalJson(test.schemaJSON)
 
-		dm, crDMErr := NewDataMover(context.Background(), root, fs, test.mvOpts)
+		dm, crDMErr := NewDataMover(context.Background(), root, fs, test.mvOpts, nil)
 
 		if crDMErr != nil {
 			t.Fatal(crDMErr.String())
