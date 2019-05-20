@@ -52,10 +52,30 @@ const (
 	batchSizeMax   = 5000
 )
 
+type AppliedEditStats struct {
+	Additions          int64
+	Modifications      int64
+	SameVal            int64
+	Deletions          int64
+	NonexistantDeletes int64
+}
+
+func (stats AppliedEditStats) Add(other AppliedEditStats) AppliedEditStats {
+	return AppliedEditStats{
+		Additions:          stats.Additions + other.Additions,
+		Modifications:      stats.Modifications + other.Modifications,
+		SameVal:            stats.SameVal + other.SameVal,
+		Deletions:          stats.Deletions + other.Deletions,
+		NonexistantDeletes: stats.NonexistantDeletes + other.NonexistantDeletes,
+	}
+}
+
 // ApplyEdits applies all the edits to a given Map and returns the resulting map
-func ApplyEdits(ctx context.Context, edits EditProvider, m Map) Map {
+func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats) {
+	var stats AppliedEditStats
+
 	if edits.NumEdits() == 0 {
-		return m // no edits
+		return m, stats // no edits
 	}
 
 	seq := m.orderedSequence
@@ -97,10 +117,12 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) Map {
 					}
 
 					if existingValue == nil && kv.value == nil {
+						stats.NonexistantDeletes++
 						continue // already non-present
 					}
 
 					if existingValue != nil && kv.value != nil && existingValue.Equals(kv.value) {
+						stats.SameVal++
 						continue // same value
 					}
 
@@ -111,7 +133,10 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) Map {
 					}
 
 					if existingValue != nil {
+						stats.Modifications++
 						ch.Skip(ctx)
+					} else {
+						stats.Additions++
 					}
 
 					if kv.value != nil {
@@ -125,10 +150,10 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) Map {
 	}
 
 	if ch == nil {
-		return m // no edits required application
+		return m, stats // no edits required application
 	}
 
-	return newMap(ch.Done(ctx).(orderedSequence))
+	return newMap(ch.Done(ctx).(orderedSequence)), stats
 }
 
 // prepWorker will wait for work to be read from a channel, then iterate over all of the edits finding the appropriate
