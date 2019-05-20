@@ -21,6 +21,10 @@ func (tc TestConstraint) GetConstraintParams() map[string]string {
 	return tc.params
 }
 
+func (tc TestConstraint) String() string {
+	return ""
+}
+
 func TestColConstraintsAreEqual(t *testing.T) {
 	tests := []struct {
 		constraints1 []ColConstraint
