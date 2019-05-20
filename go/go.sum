@@ -126,6 +126,7 @@ github.com/liquidata-inc/noms v0.0.0-20190515224941-a284c0c8ff68 h1:l4fbepvxj6Ps
 github.com/liquidata-inc/noms v0.0.0-20190515224941-a284c0c8ff68/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/noms v0.0.0-20190517232528-d1d6db257d6e h1:0HbKGlQiacU6Neo1veSk3Js7kD24vf43ppTigxHVgtU=
 github.com/liquidata-inc/noms v0.0.0-20190517232528-d1d6db257d6e/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
+github.com/liquidata-inc/noms v0.0.0-20190520185830-391c55dbf456 h1:qZbjrRV+MRqIADa8XVU7/pOPCBl99ehHKsI7QOPsnl8=
 github.com/liquidata-inc/noms v0.0.0-20190520185830-391c55dbf456/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/sqlparser v0.9.3 h1:lAQpKBSHYG4EWI7RZiQvuSwBqpd45wzmgTtcxEGXaCk=
 github.com/liquidata-inc/sqlparser v0.9.3/go.mod h1:lEqKV1oJUXiTfUjigM/8APQJFNSTHYYkJk+NGkWSgOU=
