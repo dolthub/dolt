@@ -132,7 +132,13 @@ func Import(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	return executeMove(dEnv, force, mvOpts)
+	res := executeMove(dEnv, force, mvOpts)
+
+	if res == 0 {
+		cli.Println(color.CyanString("\nImport completed successfully."))
+	}
+
+	return res
 }
 
 func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOptions) {
@@ -244,7 +250,6 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		}
 	}
 
-	cli.Println(color.CyanString("\nImport completed successfully."))
 	return 0
 }
 
