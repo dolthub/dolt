@@ -63,7 +63,7 @@ teardown() {
 @test "create a table with json import" {
     run dolt table import -c -s $BATS_TEST_DIRNAME/helper/employees-sch.json employees $BATS_TEST_DIRNAME/helper/employees-tbl.json
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "employees" ]] || false
@@ -102,7 +102,7 @@ teardown() {
 @test "import data from csv and create the table" {
     run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
@@ -120,7 +120,7 @@ teardown() {
 @test "create a table with two primary keys from csv import" {
     run dolt table import -c --pk=pk1,pk2 test $BATS_TEST_DIRNAME/helper/2pk5col-ints.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
@@ -129,7 +129,7 @@ teardown() {
 @test "import data from psv and create the table" {
     run dolt table import -c --pk=pk test $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
@@ -148,6 +148,7 @@ teardown() {
 @test "create a table from CSV with common column name patterns" {
     run dolt table import -c --pk=UPPERCASE test $BATS_TEST_DIRNAME/helper/caps-column-names.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "UPPERCASE" ]] || false
@@ -156,7 +157,7 @@ teardown() {
 @test "create a table from excel import with multiple sheets" {
     run dolt table import -c --pk=id employees $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "employees" ]] || false
@@ -166,7 +167,7 @@ teardown() {
     [ "${#lines[@]}" -eq 7 ]
     run dolt table import -c --pk=number basketball $BATS_TEST_DIRNAME/helper/employees.xlsx
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "employees" ]] || false

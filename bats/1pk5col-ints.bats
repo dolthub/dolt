@@ -491,7 +491,7 @@ teardown() {
 @test "import data from a csv file after table created" {
     run dolt table import test -u $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
@@ -501,7 +501,7 @@ teardown() {
 @test "import data from a psv file after table created" {
     run dolt table import test -u  $BATS_TEST_DIRNAME/helper/1pk5col-ints.psv
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
