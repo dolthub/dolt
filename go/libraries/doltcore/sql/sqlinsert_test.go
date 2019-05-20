@@ -20,7 +20,7 @@ func TestExecuteInsert(t *testing.T) {
 		query          string
 		insertedValues []row.Row
 		expectedResult InsertResult // root is not compared, but it used for other assertions
-		expectedErr    bool
+		expectedErr    string
 	}{
 		{
 			name: "insert one row, all columns",
@@ -58,16 +58,16 @@ func TestExecuteInsert(t *testing.T) {
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
-			name: "insert one row, null key columns",
+			name: "insert one row, null constraint failure",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", null, null, null, null)`,
-			expectedErr: true,
+			expectedErr: "Constraint failed for column 'last': Not null",
 		},
 		{
 			name: "duplicate column list",
 			query: `insert into people (id, first, last, is_married, first, age, rating) values
 					(7, "Maggie", "Simpson", null, null, null, null)`,
-			expectedErr: true,
+			expectedErr: "Repeated column: 'first'",
 		},
 		{
 			name: "insert two rows, all columns",
@@ -85,91 +85,91 @@ func TestExecuteInsert(t *testing.T) {
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1, 5.1),
 					(8, "Milhouse", null, false, 8, 3.5)`,
-			expectedErr: true,
+			expectedErr: "Constraint failed for column 'last': Not null",
 		},
 		{
 			name: "type mismatch int -> string",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", 100, false, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch int -> bool",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", 10, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch int -> uuid",
 			query: `insert into people (id, first, last, is_married, age, uuid) values
 					(7, "Maggie", "Simpson", false, 1, 100)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> int",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					("7", "Maggie", "Simpson", false, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> float",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1, "5.1")`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> uint",
 			query: `insert into people (id, first, last, is_married, age, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, "100")`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch string -> uuid",
 			query: `insert into people (id, first, last, is_married, age, uuid) values
 					(7, "Maggie", "Simpson", false, 1, "a uuid but idk what im doing")`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch float -> string",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, 8.1, "Simpson", false, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch float -> bool",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", 0.5, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch float -> int",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1.0, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> int",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(true, "Maggie", "Simpson", false, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> float",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1, true)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> string",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, true, "Simpson", false, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "type mismatch bool -> uuid",
 			query: `insert into people (id, first, last, is_married, age, uuid) values
 					(7, "Maggie", "Simpson", false, 1, true)`,
-			expectedErr: true,
+			expectedErr: "Type mismatch",
 		},
 		{
 			name: "insert two rows with ignore, one with null constraint failure",
@@ -185,7 +185,7 @@ func TestExecuteInsert(t *testing.T) {
 			name: "insert existing rows without ignore / replace",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(0, "Homer", "Simpson", true, 45, 100)`,
-			expectedErr: true,
+			expectedErr: "Duplicate primary key: 'id: 0'",
 		},
 		{
 			name: "insert two rows with ignore, one existing in table",
@@ -227,7 +227,7 @@ func TestExecuteInsert(t *testing.T) {
 					(0, "Homer", "Simpson", true, 45, 100),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5),
 					(7, "Maggie", null, false, 1, 5.1)`,
-			expectedErr: true,
+			expectedErr: "Constraint failed for column 'last': Not null",
 		},
 		{
 			name: "insert five rows, all columns",
@@ -263,7 +263,7 @@ func TestExecuteInsert(t *testing.T) {
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1, 5.1),
 					(7, "Milhouse", "Van Houten", false, 8, 3.5)`,
-			expectedErr: true,
+			expectedErr: "Duplicate primary key: 'id: 7'",
 		},
 		{
 			name: "insert two rows, duplicate id with ignore",
@@ -276,19 +276,20 @@ func TestExecuteInsert(t *testing.T) {
 			expectedResult: InsertResult{NumRowsInserted: 1, NumErrorsIgnored: 1},
 		},
 		{
-			name:        "insert with missing required columns",
-			query:       `insert into people (id) values (7)`,
-			expectedErr: true,
-		},
-		{
 			name:        "insert no primary keys",
 			query:       `insert into people (age) values (7), (8)`,
-			expectedErr: true,
+			expectedErr: "One or more primary key columns missing from insert statement",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			if len(tt.expectedErr) > 0 {
+				require.Equal(t, InsertResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
+				require.Nil(t, tt.insertedValues, "incorrect test setup: cannot assert both an error and inserted values")
+			}
+
 			dEnv := dtestutils.CreateTestEnv()
 			ctx := context.Background()
 
@@ -300,10 +301,9 @@ func TestExecuteInsert(t *testing.T) {
 
 			result, err := ExecuteInsert(ctx, dEnv.DoltDB, root, s, tt.query)
 
-			if tt.expectedErr {
+			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
-				assert.Equal(t, InsertResult{}, tt.expectedResult, "incorrect test setup: cannot assert both an error and expected results")
-				assert.Nil(t, tt.insertedValues, "incorrect test setup: cannot assert both an error and inserted values")
+				require.Contains(t, err.Error(), tt.expectedErr)
 				return
 			} else {
 				require.NoError(t, err)

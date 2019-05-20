@@ -137,7 +137,8 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		}
 
 		if !row.IsValid(r, tableSch) {
-			return nil, ErrConstraintFailure
+			col, constraint := row.GetInvalidConstraint(r, tableSch)
+			return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
 		}
 
 		tvs := r.NomsMapKey(tableSch).(row.TupleVals)

@@ -57,6 +57,7 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 	}
 }
 
+// IsValid returns whether the row given satisfies all the constraints of the schema given.
 func IsValid(r Row, sch schema.Schema) bool {
 	allCols := sch.GetAllCols()
 
@@ -79,10 +80,19 @@ func IsValid(r Row, sch schema.Schema) bool {
 	return valid
 }
 
+// GetInvalidCol returns the first column in the schema that fails a constraint, or nil if none do.
 func GetInvalidCol(r Row, sch schema.Schema) *schema.Column {
+	badCol, _ := GetInvalidConstraint(r, sch)
+	return badCol
+}
+
+// GetInvalidConstraint returns the failed constraint for the row given (previously identified by IsValid) along with
+// the column with that constraint.
+func GetInvalidConstraint(r Row, sch schema.Schema) (*schema.Column, schema.ColConstraint) {
 	allCols := sch.GetAllCols()
 
 	var badCol *schema.Column
+	var badCnst schema.ColConstraint
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
 		if len(col.Constraints) > 0 {
 			val, _ := r.GetColVal(tag)
@@ -90,6 +100,7 @@ func GetInvalidCol(r Row, sch schema.Schema) *schema.Column {
 			for _, cnst := range col.Constraints {
 				if !cnst.SatisfiesConstraint(val) {
 					badCol = &col
+					badCnst = cnst
 					return true
 				}
 			}
@@ -98,7 +109,7 @@ func GetInvalidCol(r Row, sch schema.Schema) *schema.Column {
 		return false
 	})
 
-	return badCol
+	return badCol, badCnst
 }
 
 func AreEqual(row1, row2 Row, sch schema.Schema) bool {
