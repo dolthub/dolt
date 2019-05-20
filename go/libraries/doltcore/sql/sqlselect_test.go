@@ -357,6 +357,17 @@ func TestExecuteSelect(t *testing.T) {
 		// 	expectedSchema: newResultSetSchema("age", types.FloatKind),
 		// },
 		{
+			name:           "select *, -column",
+			query:          "select * from people where -rating = -8.5",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		{
+			name:        "select *, -column, string type",
+			query:       "select * from people where -first = 'Homer'",
+			expectedErr: "Type mismatch",
+		},
+		{
 			name:           "select *, binary + in where",
 			query:          "select * from people where age + 1 = 41",
 			expectedRows:   compressRows(peopleTestSchema, homer, barney),

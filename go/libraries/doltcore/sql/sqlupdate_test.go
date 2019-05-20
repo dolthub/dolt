@@ -126,6 +126,19 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
 		{
+			name: "update reverse rating",
+			query: `update people set rating = -rating`,
+			updatedRows:   []row.Row{
+				mutateRow(homer, ratingTag, -8.5),
+				mutateRow(marge, ratingTag, -8.0),
+				mutateRow(bart, ratingTag, -9.0),
+				mutateRow(lisa, ratingTag, -10.0),
+				mutateRow(moe, ratingTag, -6.5),
+				mutateRow(barney, ratingTag, -4.0),
+			},
+			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
+		},
+		{
 			name: "update multiple rows, =",
 			query: `update people set first = "Homer"
 				where last = "Simpson"`,
@@ -307,12 +320,12 @@ func TestExecuteUpdate(t *testing.T) {
 
 			result, err := ExecuteUpdate(ctx, dEnv.DoltDB, root, s, tt.query)
 
-			if tt.expectedErr == "" {
-				require.NoError(t, err)
-			} else {
+			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
 				return
+			} else {
+				require.NoError(t, err)
 			}
 
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)
