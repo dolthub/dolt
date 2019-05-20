@@ -87,7 +87,13 @@ teardown() {
     [[ "$output" =~ "c5" ]] || false
     [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "6" ]] || false
+    run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,1,7,7,7,7,7)"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error inserting rows: Duplicate primary key: 'pk1: 0, pk2: 1'" ] || false
     run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: row constraint failed" ] || false
+    [ "$output" = "Error inserting rows: One or more primary key columns missing from insert statement" ] || false
+    run dolt sql -q "insert into test (c1,c2,c3,c4,c5) values (6,6,6,6,6)"
+    [ "$status" -eq 1 ]
+    [ "$output" = "Error inserting rows: One or more primary key columns missing from insert statement" ] || false
 }
