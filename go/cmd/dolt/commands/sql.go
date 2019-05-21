@@ -1,5 +1,6 @@
 package commands
 
+
 import (
 	"context"
 	"errors"
@@ -52,11 +53,21 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 
+	root, verr := GetWorkingWithVErr(dEnv)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
+	}
+
 	query, ok := apr.GetValue(queryFlag)
 	if ok {
 		// run a single command and exit
-		err := processQuery(query, dEnv)
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		if newRoot, err := processQuery(query, dEnv, root); err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		} else if newRoot != nil {
+			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, newRoot), usage)
+		} else {
+			return 0
+		}
 	}
 
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
@@ -99,14 +110,18 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		if len(strings.TrimSpace(query)) == 0 {
 			return
 		}
-		if err := processQuery(query, dEnv); err != nil {
+
+		if newRoot, err := processQuery(query, dEnv, root); err != nil {
 			shell.Println(color.RedString(err.Error()))
+		} else if newRoot != nil {
+			root = newRoot
 		}
 
 		// TODO: there's a bug in the readline library when editing multi-line history entries.
 		// Longer term we need to switch to a new readline library, like in this bug:
 		// https://github.com/cockroachdb/cockroach/issues/15460
 		// For now, we store all history entries as single-line strings to avoid the issue.
+		// TODO: only store history if it's a tty
 		singleLine := strings.ReplaceAll(query, "\n", " ")
 		if err := shell.AddHistory(singleLine); err != nil {
 			// TODO: handle better, like by turning off history writing for the rest of the session
@@ -117,24 +132,23 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	shell.Run()
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
+	if root != nil {
+		return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, root), usage)
+	}
+
 	return 0
 }
 
-// Processes a single query and returns any error encountered
-func processQuery(query string, dEnv *env.DoltEnv) error {
+// Processes a single query and returns the new root value of the DB, or an error encountered.
+func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
-		return errFmt("Error parsing SQL: %v.", err.Error())
-	}
-
-	root, verr := GetWorkingWithVErr(dEnv)
-	if verr != nil {
-		return verr
+		return nil, errFmt("Error parsing SQL: %v.", err.Error())
 	}
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Select:
-		return sqlSelect(root, s)
+		return nil, sqlSelect(root, s)
 	case *sqlparser.Insert:
 		return sqlInsert(dEnv, root, s, query)
 	case *sqlparser.Update:
@@ -144,11 +158,11 @@ func processQuery(query string, dEnv *env.DoltEnv) error {
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
-			return errFmt("Error parsing SQL: %v.", err.Error())
+			return nil, errFmt("Error parsing SQL: %v.", err.Error())
 		}
 		return sqlDDL(dEnv, root, s, query)
 	default:
-		return errFmt("Unhandled SQL statement: %v.", query)
+		return nil, errFmt("Unhandled SQL statement: %v.", query)
 	}
 }
 
@@ -199,87 +213,76 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
 	return nil
 }
 
-// Executes a SQL insert statement and prints the result to the CLI.
-func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string) error {
+// Executes a SQL insert statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
+func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string) (*doltdb.RootValue, error) {
 	result, err := sql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt, query)
 	if err != nil {
-		return errFmt("Error inserting rows: %v", err.Error())
+		return nil, errFmt("Error inserting rows: %v", err.Error())
 	}
 
-	verr := UpdateWorkingWithVErr(dEnv, result.Root)
-
-	if verr == nil {
-		cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
-		if result.NumRowsUpdated > 0 {
-			cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-		}
-		if result.NumErrorsIgnored > 0 {
-			cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
-		}
+	cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
+	if result.NumRowsUpdated > 0 {
+		cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
+	}
+	if result.NumErrorsIgnored > 0 {
+		cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
 	}
 
-	return verr
+	return result.Root, nil
 }
 
-// Executes a SQL update statement and prints the result to the CLI.
-func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) error {
+// Executes a SQL update statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
+func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) (*doltdb.RootValue, error) {
 	result, err := sql.ExecuteUpdate(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
-		return errFmt("Error during update: %v", err.Error())
+		return nil, errFmt("Error during update: %v", err.Error())
 	}
 
-	verr := UpdateWorkingWithVErr(dEnv, result.Root)
-
-	if verr == nil {
-		cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-		if result.NumRowsUnchanged > 0 {
-			cli.Println(fmt.Sprintf("Rows matched but unchanged: %v", result.NumRowsUnchanged))
-		}
+	cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
+	if result.NumRowsUnchanged > 0 {
+		cli.Println(fmt.Sprintf("Rows matched but unchanged: %v", result.NumRowsUnchanged))
 	}
 
-	return verr
+	return result.Root, nil
 }
 
-// Executes a SQL delete statement and prints the result to the CLI.
-func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) error {
+// Executes a SQL delete statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
+func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) (*doltdb.RootValue, error) {
 	result, err := sql.ExecuteDelete(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
-		return errFmt("Error during update: %v", err.Error())
+		return nil, errFmt("Error during update: %v", err.Error())
 	}
 
-	verr := UpdateWorkingWithVErr(dEnv, result.Root)
-	if verr == nil {
-		cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
-	}
+	cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
 
-	return verr
+	return result.Root, nil
 }
 
-// Executes a SQL DDL statement (create, update, etc.) and prints the result to the CLI.
-func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) error {
+// Executes a SQL DDL statement (create, update, etc.). Returns the new root value to be written as appropriate.
+func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	switch ddl.Action {
 	case sqlparser.CreateStr:
 		newRoot, _, err := sql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
 		if err != nil {
-			return errFmt("Error creating table: %v", err)
+			return nil, errFmt("Error creating table: %v", err)
 		}
-		return UpdateWorkingWithVErr(dEnv, newRoot)
+		return newRoot, nil
 	case sqlparser.AlterStr:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.DropStr:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.RenameStr:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.TruncateStr:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.CreateVindexStr:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.AddColVindexStr:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.DropColVindexStr:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	default:
-		return errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
 }
 
