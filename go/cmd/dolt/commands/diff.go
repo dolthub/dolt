@@ -160,7 +160,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 			continue
 		}
 
-		printTableHeader(tblName, tbl1, tbl2)
+		printTableDiffSummary(tblName, tbl1, tbl2)
 
 		if tbl1 == nil || tbl2 == nil {
 			continue
@@ -271,6 +271,7 @@ func dumbDownSchema(in schema.Schema) schema.Schema {
 	})
 
 	dumbColColl, _ := schema.NewColCollection(dumbCols...)
+
 	return schema.SchemaFromCols(dumbColColl)
 }
 
@@ -313,26 +314,6 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	src := diff.NewRowDiffSource(ad, oldToUnionConv, newToUnionConv, untypedUnionSch)
 	defer src.Close()
 
-	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
-	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
-	transforms := pipeline.NewTransformCollection(
-		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
-		pipeline.NamedTransform{"fwt", fwtTr.TransformToFWT},
-	)
-
-	sink := diff.NewColorDiffWriter(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch)
-	defer sink.Close()
-
-	var verr errhand.VerboseError
-	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
-		verr = errhand.BuildDError("Failed transforming row").AddDetails(trf.TransformName).AddDetails(trf.Details).Build()
-		return true
-	}
-
-	srcProcFunc := pipeline.ProcFuncForSourceFunc(src.NextDiff)
-	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
-	p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, badRowCB)
-
 	oldColNames := make(map[uint64]string)
 	newColNames := make(map[uint64]string)
 	untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
@@ -354,11 +335,36 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 		return false
 	})
 
-	if reflect.DeepEqual(oldColNames, newColNames) {
-		p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames))
+	schemasEqual := reflect.DeepEqual(oldColNames, newColNames)
+	numHeaderRows := 1
+	if !schemasEqual {
+		numHeaderRows = 2
+	}
+
+	sink := diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+	defer sink.Close()
+
+	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
+	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
+	transforms := pipeline.NewTransformCollection(
+		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
+		pipeline.NamedTransform{fwtStageName, fwtTr.TransformToFWT},
+	)
+
+	var verr errhand.VerboseError
+	badRowCallback := func(trf *pipeline.TransformRowFailure) (quit bool) {
+		verr = errhand.BuildDError("Failed transforming row").AddDetails(trf.TransformName).AddDetails(trf.Details).Build()
+		return true
+	}
+
+	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
+	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src.NextDiff), sinkProcFunc, transforms, badRowCallback)
+
+	if schemasEqual {
+		p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames))
 	} else {
-		p.InjectRowWithProps("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, oldColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
-		p.InjectRowWithProps("fwt", untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
+		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(untypedUnionSch, oldColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
+		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
 	}
 
 	p.Start()
@@ -371,7 +377,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 
 var emptyHash = hash.Hash{}
 
-func printTableHeader(tblName string, tbl1, tbl2 *doltdb.Table) {
+func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
 	bold := color.New(color.Bold)
 
 	bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)

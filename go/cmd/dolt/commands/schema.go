@@ -88,7 +88,7 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func badRowCB(_ *pipeline.TransformRowFailure) (quit bool) {
-	panic("Should only get here is there is a bug.")
+	panic("Should only get here if there is a bug.")
 }
 
 const fwtChName = "fwt"

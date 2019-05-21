@@ -27,17 +27,17 @@ const (
 // FWTTransformer transforms columns to be of fixed width.
 type FWTTransformer struct {
 	fwtSch    *FWTSchema
-	colBuffs  map[uint64][]byte
+	colBuffs  map[uint64][]rune
 	tooLngBhv TooLongBehavior
 }
 
 // NewFWTTransform creates a new FWTTransformer from a FWTSchema and a TooLongBehavior
 func NewFWTTransformer(fwtSch *FWTSchema, tooLngBhv TooLongBehavior) *FWTTransformer {
 	numFields := fwtSch.Sch.GetAllCols().Size()
-	colBuffs := make(map[uint64][]byte, numFields)
+	colBuffs := make(map[uint64][]rune, numFields)
 
 	for tag, width := range fwtSch.TagToWidth {
-		colBuffs[tag] = make([]byte, width)
+		colBuffs[tag] = make([]rune, width)
 	}
 
 	return &FWTTransformer{fwtSch, colBuffs, tooLngBhv}
@@ -59,8 +59,9 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 				continue
 			}
 			str := string(val.(types.String))
+			strLen := len([]rune(str))
 
-			if len(str) > colWidth {
+			if strLen > colWidth {
 				switch fwtTr.tooLngBhv {
 				case ErrorWhenTooLong:
 					col, _ := sch.GetAllCols().GetByTag(tag)
@@ -76,13 +77,13 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 				}
 			}
 
-			if len(str) > colWidth {
-				buf = []byte(str)
+			strLen = len([]rune(str))
+			if strLen > colWidth {
+				buf = []rune(str)
 			} else {
-				n := copy(buf, str)
-
-				for ; n < colWidth; n++ {
-					buf[n] = ' '
+				n := copy(buf, []rune(str))
+				for i := 0; i < colWidth - strLen; i++ {
+					buf[n + i] = ' '
 				}
 			}
 

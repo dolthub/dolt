@@ -35,8 +35,6 @@ var sqlSynopsis = []string{
 	"[options]",
 }
 
-var fwtStageName = "fwt"
-
 const (
 	queryFlag = "query"
 	welcomeMsg = `# Welcome to the DoltSQL shell.

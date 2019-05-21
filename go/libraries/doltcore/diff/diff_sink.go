@@ -26,14 +26,17 @@ type ColorDiffSink struct {
 	ttw *tabular.TextTableWriter
 }
 
-func NewColorDiffWriter(wr io.WriteCloser, sch schema.Schema) *ColorDiffSink {
+// NewColorDiffSink returns a ColorDiffSink that uses  the writer and schema given to print its output. numHeaderRows
+// will change how many rows of output are considered part of the table header. Use 1 for diffs where the schemas are
+// the same between the two table revisions, and 2 for when they differ.
+func NewColorDiffSink(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) *ColorDiffSink {
 	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(diffColTag, diffColName)
 	outSch, err := untyped.UntypedSchemaUnion(additionalCols, sch)
 	if err != nil {
 		panic(err)
 	}
 
-	ttw := tabular.NewTextTableWriterWithNumHeaderRows(wr, outSch, 2)
+	ttw := tabular.NewTextTableWriterWithNumHeaderRows(wr, outSch, numHeaderRows)
 	return &ColorDiffSink{outSch, ttw}
 }
 

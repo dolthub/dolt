@@ -8,6 +8,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 )
 
+var fwtStageName = "fwt"
+
 func GetWorkingWithVErr(dEnv *env.DoltEnv) (*doltdb.RootValue, errhand.VerboseError) {
 	working, err := dEnv.WorkingRoot(context.Background())
 

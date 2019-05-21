@@ -60,7 +60,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 		r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool) {
 			if !types.IsNull(val) {
 				strVal := val.(types.String)
-				strLen := len(string(strVal))
+				strLen := len([]rune(string(strVal)))
 
 				width, ok := asTr.widths[tag]
 				if ok && strLen > width {
