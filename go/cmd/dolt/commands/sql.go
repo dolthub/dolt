@@ -28,12 +28,35 @@ import (
 	"strings"
 )
 
-var sqlShortDesc = "EXPERIMENTAL: Runs a SQL query"
-var sqlLongDesc = "EXPERIMENTAL: Runs a SQL query you specify. By default, begins an interactive session to run " +
-	"queries and view the results. With the -q option, runs the given query and prints any results, then exits."
+var sqlShortDesc = "Runs a SQL query"
+var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
+results. With the -q option, runs the given query and prints any results, then exits.
+
+THIS FUNCTIONALITY IS EXPERIMENTAL and being intensively developed. Feedback is welcome: 
+dolt-interest@liquidata.co
+
+Reasonably well supported functionality:
+* SELECT statements, including most kinds of joins
+* CREATE TABLE statements
+* UPDATE and DELETE statements
+* Table and column aliases
+* ORDER BY and LIMIT clauses
+
+Known limitations:
+* Some expresssions in SELECT statements
+* ALTER TABLE / DROP TABLE statements
+* GROUP BY or aggregate functions
+* Subqueries
+* Column functions, e.g. CONCAT
+* Non-primary indexes
+* Foreign keys
+* Column constraints besides NOT NULL
+* VARCHAR columns are unlimited length; FLOAT, INTEGER columns are 64 bit
+* Performance is very bad for many SELECT statements, especially JOINs
+`
 var sqlSynopsis = []string{
-	"[options] -q query_string",
-	"[options]",
+	"",
+	"-q <query>",
 }
 
 var fwtStageName = "fwt"
