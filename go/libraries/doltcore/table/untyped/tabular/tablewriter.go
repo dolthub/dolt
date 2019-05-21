@@ -9,6 +9,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"io"
 	"strconv"
@@ -68,7 +69,8 @@ func (ttw *TextTableWriter) writeTableHeader(r row.Row) error {
 		colName := string(colNameVal.(types.String))
 
 		normalized := stripansi.Strip(colName)
-		for i := 0; i < len([]rune(normalized)); i++ {
+		strLen := fwt.StringWidth(normalized)
+		for i := 0; i < strLen; i++ {
 			separator.WriteString("-")
 		}
 
@@ -119,7 +121,8 @@ func (ttw *TextTableWriter) writeTableFooter() error {
 		}
 		sval := string(val.(types.String))
 		normalized := stripansi.Strip(sval)
-		for i := 0; i < len([]rune(normalized)); i++ {
+		strLen := fwt.StringWidth(normalized)
+		for i := 0; i < strLen; i++ {
 			separator.WriteString("-")
 		}
 		separator.WriteString("-+")
