@@ -39,19 +39,20 @@ func TestWriter(t *testing.T) {
 
 	// Simulate fixed-width string values that the table writer needs to function.
 	// First value in each array is the column name
+	// Note the unicode character in Jim Halpêrt
 	names := []string {
 		"name          ",
 		"Michael Scott ",
 		"Pam Beasley   ",
 		"Dwight Schrute",
-		"Jim Halpert   ",
+		"Jim Halpêrt   ",
 	}
 	ages := []string {
 		"age   ",
 		"43    ",
 		"25    ",
 		"29    ",
-        "<NULL>",
+		"<NULL>",
 	}
 	titles := []string {
 		"title                            ",
@@ -61,7 +62,7 @@ func TestWriter(t *testing.T) {
 		"<NULL>                           ",
 	}
 
-	rows := make([]row.Row, len(ages) + 1)
+	rows := make([]row.Row, len(ages))
 	for i := range ages {
 		rows[i] = row.New(rowSch, row.TaggedValues{
 			nameColTag: types.String(names[i]),
@@ -69,7 +70,6 @@ func TestWriter(t *testing.T) {
 			titleColTag: types.String(titles[i]),
 		})
 	}
-	rows[len(rows)-1] = row.New(rowSch, row.TaggedValues{nameColTag: types.String(names[len(names)-1])})
 
 	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
 
@@ -84,7 +84,7 @@ func TestWriter(t *testing.T) {
 | Michael Scott  | 43     | Regional Manager                  |
 | Pam Beasley    | 25     | Secretary                         |
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpert    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | <NULL> | <NULL>                            |
 +----------------+--------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
@@ -109,7 +109,7 @@ func TestWriter(t *testing.T) {
 | Pam Beasley    | 25     | Secretary                         |
 +----------------+--------+-----------------------------------+
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpert    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | <NULL> | <NULL>                            |
 +----------------+--------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
@@ -133,7 +133,31 @@ func TestWriter(t *testing.T) {
 | Michael Scott  | 43     | Regional Manager                  |
 | Pam Beasley    | 25     | Secretary                         |
 | Dwight Schrute | 29     | Assistant to the Regional Manager |
-| Jim Halpert    | <NULL> | <NULL>                            |
+| Jim Halpêrt    | <NULL> | <NULL>                            |
++----------------+--------+-----------------------------------+
+`
+		// strip off the first newline, inserted for nice printing
+		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
+
+		for _, r := range rows {
+			tableWr.WriteRow(context.Background(), r)
+		}
+		tableWr.Close(context.Background())
+
+		assert.Equal(t, expectedTableString, stringWr.String())
+	})
+
+	t.Run("Test more header rows than data", func(t *testing.T) {
+		var stringWr StringBuilderCloser
+		tableWr := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 100)
+
+		var expectedTableString = `
++----------------+--------+-----------------------------------+
+| name           | age    | title                             |
+| Michael Scott  | 43     | Regional Manager                  |
+| Pam Beasley    | 25     | Secretary                         |
+| Dwight Schrute | 29     | Assistant to the Regional Manager |
+| Jim Halpêrt    | <NULL> | <NULL>                            |
 +----------------+--------+-----------------------------------+
 `
 		// strip off the first newline, inserted for nice printing
