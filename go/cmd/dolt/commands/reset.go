@@ -14,14 +14,16 @@ import (
 )
 
 var resetShortDesc = "Resets staged tables to their HEAD state"
-var resetLongDesc = `Sets the state of a table in the staging area to be that tables value from HEAD
+var resetLongDesc = `Sets the state of a table in the staging area to be that table's value at HEAD
 
 dolt reset <tables>...
-	This form resets the values for all staged <tables> to their values at HEAD. (It does not affect the working tree or the current branch.)
+	This form resets the values for all staged <tables> to their values at HEAD. (It does not affect the working tree or
+	the current branch.)
 
-	This means that dolt <b>reset <tables></b> is the opposite of <b>dolt add <tables></b>.
+	This means that </b>dolt reset <tables></b> is the opposite of <b>dolt add <tables></b>.
 
-	After running <b>dolt reset <tables></b> to update the staged tables, you can use <b>dolt checkout</b> to check the contents out of the staged tables to the working tables.
+	After running <b>dolt reset <tables></b> to update the staged tables, you can use <b>dolt checkout</b> to check the
+	contents out of the staged tables to the working tables.
 
 dolt reset .
 	This form resets <b>all</b> staged tables to their values at HEAD. It is the opposite of <b>dolt add .</b>`
