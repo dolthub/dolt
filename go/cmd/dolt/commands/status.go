@@ -16,10 +16,11 @@ import (
 )
 
 var statusShortDesc = "Show the working status"
-var statusLongDesc = "Displays working tables that differ from the current HEAD commit, tables that have differ from the " +
-	"staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would " +
-	"commit by running <b>dolt commit</b>; the second and third are what you could commit by running <b>dolt add</b> " +
-	"before running <b>dolt commit</b>."
+var statusLongDesc = `Displays working tables that differ from the current HEAD commit, tables that differ from the 
+staged tables, and tables that are in the working tree that are not tracked by dolt. The first are what you would 
+commit by running <b>dolt commit</b>; the second and third are what you could commit by running <b>dolt add .</b> 
+before running <b>dolt commit</b>.`
+
 var statusSynopsis = []string{""}
 
 func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {

@@ -1,9 +1,6 @@
 package commands
 
 import (
-	"context"
-	"strings"
-
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -11,6 +8,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+
+	"context"
+	"strings"
 )
 
 const (
@@ -18,10 +18,12 @@ const (
 )
 
 var logShortDesc = `Show commit logs`
-var logLongDesc = ``
+var logLongDesc = "Shows the commit logs.\n" +
+	"\n" +
+	"The command takes options to control what is shown and how."
 
 var logSynopsis = []string{
-	"[-n <num_lines>] [<commit>]",
+	"[-n <num_commits>] [<commit>]",
 }
 
 type commitLoggerFunc func(*doltdb.CommitMeta, []hash.Hash, hash.Hash)
@@ -66,7 +68,7 @@ func Log(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
 	ap := argparser.NewArgParser()
-	ap.SupportsInt(numLinesParam, "n", "num_lines", "Limit the number of commits to output")
+	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

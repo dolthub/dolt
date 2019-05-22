@@ -1,11 +1,6 @@
 package commands
 
 import (
-	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
-	"strings"
-
 	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -15,8 +10,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"strings"
+
+	"context"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 )
 
 const (
@@ -30,25 +29,26 @@ const (
 )
 
 var tblSchemaShortDesc = "Displays and modifies table schemas"
-var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a given commit.  If no commit is provided the " +
-	"working set will be used.\n" +
-	"\n" +
-	"A list of tables can optionally be provided.  If it is omitted all table schemas will be shown." + "\n" +
-	"\n" +
-	"dolt table schema --export exports a table's schema into a specified file. Both table and file must be specified." + "\n" +
-	"\n" +
-	"dolt table schema --add-Column adds a column to specified table's schema. If no default value is provided" +
-	"the column will be empty.\n" +
-	"\n" +
-	"dolt table schema --rename-column renames a column of the specified table.\n" +
-	"\n" +
-	"dolt table schema --drop-column removes a column of the specified table."
+var tblSchemaLongDesc = `dolt table schema displays the schema of tables at a given commit.  If no commit is provided the
+working set will be used. 
+
+A list of tables can optionally be provided.  If it is omitted all table schemas will be shown. 
+
+dolt schema --export exports a table's schema into a specified file. Both table and file must be specified.
+
+dolt schema --add-column adds a column to specified table's schema. If no default value is provided the column 
+will be empty.
+
+dolt schema --rename-column renames a column of the specified table. 
+
+dolt schema --drop-column removes a column of the specified table.
+`
 
 var tblSchemaSynopsis = []string{
 	"[<commit>] [<table>...]",
 	"--export <table> <file>",
 	"--add-column [--default <default_value>] [--not-null] [--tag <tag-number>] <table> <name> <type>",
-	"--rename-column <table> <old> <new>]",
+	"--rename-column <table> <old> <new>",
 	"--drop-column <table> <column>",
 }
 
@@ -86,12 +86,6 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	return HandleVErrAndExitCode(verr, usage)
 }
-
-func badRowCB(_ *pipeline.TransformRowFailure) (quit bool) {
-	panic("Should only get here if there is a bug.")
-}
-
-const fwtChName = "fwt"
 
 func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	cmStr := "working"

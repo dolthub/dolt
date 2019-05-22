@@ -21,15 +21,28 @@ const (
 	SetUpstreamFlag = "set-upstream"
 )
 
-var pushShortDesc = ""
-var pushLongDesc = ""
+var pushShortDesc = "Update remote refs along with associated objects"
+
+var pushLongDesc = "Updates remote refs using local refs, while sending objects necessary to complete the given refs." +
+	"\n" +
+	"\nWhen the command line does not specify where to push with the <remote> argument, an attempt is made to infer the " +
+	"remote.  If only one remote exists it will be used, if multiple remotes exists, a remote named 'origin' will be " +
+	"attempted.  If there is more than one remote, and none of them are named 'origin' then the command will fail and " +
+	"you will need to specify the correct remote explicitly." +
+	"\n" +
+	"\nWhen the command line does not specify what to push with <refspec>... then the current branch will be used." +
+	"\n" +
+	"\nWhen neither the command-line does not specify what to push, the default behavior is used, which corresponds to the " +
+	"current branch being pushed to the corresponding upstream branch, but as a safety measure, the push is aborted if " +
+	"the upstream branch does not have the same name as the local one."
+
 var pushSynopsis = []string{
-	"<remote> <branch>",
+	"[-u | --set-upstream] [<remote>] [<refspec>]",
 }
 
 func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less <b>dolt pull</b> and other commands.")
+	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less dolt pull and other commands.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
