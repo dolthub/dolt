@@ -11,8 +11,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
 
-var pullShortDesc = ""
-var pullLongDesc = ""
+var pullShortDesc = "Fetch from and integrate with another repository or a local branch"
+var pullLongDesc = "Incorporates changes from a remote repository into the current branch. In its default mode, " +
+	"<b>dolt pull</b> is shorthand for <b>dolt fetch</b> followed by <b>dolt merge <remote>/<branch></b>." +
+	"\n" +
+	"\nMore precisely, dolt pull runs dolt fetch with the given parameters and calls dolt merge to merge the retrieved " +
+	"branch heads into the current branch."
 var pullSynopsis = []string{
 	"<remote>",
 }

@@ -14,8 +14,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
 
-var fetchShortDesc = ""
-var fetchLongDesc = ""
+var fetchShortDesc = "Download objects and refs from another repository"
+var fetchLongDesc = "Fetch refs, along with the objects necessary to complete their histories and update " +
+	"remote-tracking branches." +
+	"\n" +
+	"\nWhen no refspec(s) are specified on the command line, the fetch_specs for the default remote are used. (If there " +
+	"is more than one remote, a remote named 'origin' will be assumed to be the default)."
 var fetchSynopsis = []string{
 	"[<refspec> ...]",
 }
