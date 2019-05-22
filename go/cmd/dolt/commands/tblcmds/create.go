@@ -2,9 +2,6 @@ package tblcmds
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -13,12 +10,20 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"io/ioutil"
+	"os"
 )
 
 var tblCreateShortDesc = "Creates or overwrite existing table(s) with an empty table(s)."
-var tblCreateLongDesc = "dolt table create will create a new tables with a given schema.  Newly created tables are empty" +
-	"and if the <b>--force | -f</b> parameter is provided create will overwrite existing tables.\n" +
-	schemaFileHelp
+var tblCreateLongDesc =
+`dolt table create will create a new table with a given schema.  Newly created tables are empty.
+If the <b>--force | -f</b> parameter is provided create will overwrite existing tables.
+
+` + schemaFileHelp + `
+
+You may also consider using <b>dolt sql -q 'CREATE TABLE ...'</b>:
+`
+
 var tblCreateSynopsis = []string{
 	"[-f] -schema <schema_file> <table>...",
 }

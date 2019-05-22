@@ -37,44 +37,51 @@ var schemaFileHelp = "Schema definition files are json files in the format:" + `
 		{"constraint_type":"primary_key", "field_indices":[<b>INTEGER_FIELD_INDEX</b>]}
 	]
 }
-` + "where \"fields\" is the array of columns in each row of the table\n" +
-	"\"constraints\" is a list of table constraints.  (Only primary_key constraint types are supported currently)\n" +
-	"FIELD_NAME is the name of a column in a row and can be any valid string\n" +
-	"KIND must be a supported noms kind (bool, string, uuid, uint, int, float)\n" +
-	"INTEGER_FIELD_INDEX must be the 0 based index of the primary key in the \"fields\" array\n"
+	where "fields" is the array of columns in each row of the table
+	"constraints" is a list of table constraints.  (Only primary_key constraint types are supported currently)
+	FIELD_NAME is the name of a column in a row and can be any valid string
+	KIND must be a supported noms kind (bool, string, uuid, uint, int, float)
+	INTEGER_FIELD_INDEX must be the 0 based index of the primary key in the "fields" array
+`
 
 var mappingFileHelp = "A mapping file is json in the format:" + `
 {
 	"<b>source_field_name</b>":"<b>dest_field_name</b>"
 	...
 }
-` + "where source_field_name is the name of a field in the file being imported\n" +
-	"and dest_field_name is the name of a field in the table being imported to.\n"
+
+where source_field_name is the name of a field in the file being imported
+and dest_field_name is the name of a field in the table being imported to.
+`
 
 var importShortDesc = `Imports data into a dolt table`
-var importLongDesc = "If <b>--create-table | -c</b> is given the operation will create <table> and import the contents " +
-	"of file into it.  If a table already exists at this location then the operation will fail, unless the <b>--force | -f</b> " +
-	"flag is provided. The force flag forces the existing table to be overwritten.\n" +
-	"\n" + "" +
-	"The schema for the new table can be specified explicitly by providing a schema definition file, or will be inferred " +
-	"from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format " +
-	"being imported does not support defining a primary key, then the <b>--pk</b> parameter must supply the name of the " +
-	"field that should be used as the primary key.\n" +
-	"\n" +
-	schemaFileHelp +
-	"\n" +
-	"If <b>--update-table | -u</b> is given the operation will update <table> with the contents of file. The tables existing " +
-	"schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.\n" +
-	"\n" +
-	"During import, if there is an error importing any row, the import will be aborted by default.  Use the <b>--continue<b>" +
-	"flag to continue importing when an error is encountered.\n" +
-	"\n" +
-	"A mapping file can be used to map fields between the file being imported and the table being written to.  This can " +
-	"be used when creating a new table, or updating an existing table. " + mappingFileHelp +
-	"\n" +
-	"In both create and update scenarios the file's extension is used to infer the type of the file.  If a file does not " +
-	"have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of " +
-	"the file in one of the supported formats (csv, psv, nbf, json, xlsx)"
+var importLongDesc =
+`If <b>--create-table | -c</b> is given the operation will create <table> and import the contents of file into it.  If a
+table already exists at this location then the operation will fail, unless the <b>--force | -f</b> flag is provided. The
+force flag forces the existing table to be overwritten.
+
+The schema for the new table can be specified explicitly by providing a schema definition file, or will be inferred 
+from the imported file.  All schemas, inferred or explicitly defined must define a primary key.  If the file format 
+being imported does not support defining a primary key, then the <b>--pk</b> parameter must supply the name of the 
+field that should be used as the primary key.
+
+` + schemaFileHelp +
+`
+If <b>--update-table | -u</b> is given the operation will update <table> with the contents of file. The table's existing 
+schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
+
+During import, if there is an error importing any row, the import will be aborted by default.  Use the <b>--continue</b>
+flag to continue importing when an error is encountered.
+
+A mapping file can be used to map fields between the file being imported and the table being written to.  This can 
+be used when creating a new table, or updating an existing table.
+
+` + mappingFileHelp +
+`
+In both create and update scenarios the file's extension is used to infer the type of the file.  If a file does not 
+have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of 
+the file in one of the supported formats (csv, psv, nbf, json, xlsx)`
+
 var importSynopsis = []string{
 	"-c [-f] [--pk <field>] [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 	"-u [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
