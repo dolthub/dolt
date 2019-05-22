@@ -22,7 +22,7 @@ All changes will be applied to the working tables and will need to be staged usi
 using <b>dolt commit</b>.`
 
 var tblCpSynopsis = []string{
-	"[-f] [<commit>] [--] <oldtable> <newtable>",
+	"[-f] [<commit>] <oldtable> <newtable>",
 }
 
 func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {

@@ -38,19 +38,19 @@ const (
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
 var diffLongDesc = `Show changes between the working and staged tables, changes between the working tables and the tables within a commit, or changes between tables at two commits.
 
-dolt diff [--options] [--] [<tables>...]
+dolt diff [--options] [<tables>...]
    This form is to view the changes you made relative to the staging area for the next commit. In other words, the differences are what you could tell Dolt to further add but you still haven't. You can stage these changes by using dolt add.
 
-dolt diff [--options] <commit> [--] [<tables>...]
+dolt diff [--options] <commit> [<tables>...]
    This form is to view the changes you have in your working tables relative to the named <commit>. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
 
-dolt diff [--options] <commit> <commit> [--] [<tables>...]
+dolt diff [--options] <commit> <commit> [<tables>...]
    This is to view the changes between two arbitrary <commit>.
 `
 
 var diffSynopsis = []string{
-	"[options] [<commit>] [--data|--schema][--] [<tables>...]",
-	"[options] <commit> <commit> [--data|--schema] [--] [<tables>...]",
+	"[options] [<commit>] [--data|--schema] [<tables>...]",
+	"[options] <commit> <commit> [--data|--schema] [<tables>...]",
 }
 
 func Diff(commandStr string, args []string, dEnv *env.DoltEnv) int {

@@ -17,8 +17,22 @@ import (
 
 var ErrInvalidPort = errors.New("invalid port")
 
-var remoteShortDesc = ""
-var remoteLongDesc = ""
+var remoteShortDesc = "Manage set of tracked repositories"
+var remoteLongDesc = "With no arguments, shows a list of existing remotes. Several subcommands are available to perform " +
+	"operations on the remotes." +
+	"\n" +
+	"\nadd\n" +
+	"Adds a remote named <name> for the repository at <url>. The command git fetch <name> can" +
+	"then be used to create and update remote-tracking branches <name>/<branch>." +
+	"\n" +
+	"\nrename\n" +
+	"Rename the remote named <old> to <new>. All remote-tracking branches and configuration" +
+	"settings for the remote are updated." +
+	"\n" +
+	"\nremove, rm\n" +
+	"Remove the remote named <name>. All remote-tracking branches and configuration settings" +
+	"for the remote are removed."
+
 var remoteSynopsis = []string{
 	"[-v | --verbose]",
 	"add [-insecure] <name> <url>",
