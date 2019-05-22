@@ -64,8 +64,13 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		if !ok {
 			return errUpdate(UnknownColumnErrFmt, colName)
 		}
+
+		if column.IsPartOfPK {
+			return errUpdate("Cannot update primary key column '%v'", colName)
+		}
+
 		if _, ok = setVals[column.Tag]; ok {
-			return errUpdate("Repeated column '%v'", colName)
+			return errUpdate("Repeated column: '%v'", colName)
 		}
 
 		// TODO: support aliases, multiple table updates
@@ -120,14 +125,10 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			// We need to know if a primary key changed values to correctly enforce key constraints (avoid overwriting
 			// existing rows that are keyed to the updated value)
 			currVal, _ := r.GetColVal(tag)
-			column, _ := tableSch.GetAllCols().GetByTag(tag)
 			val := getter.Get(r)
 
 			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(val)) {
 				anyColChanged = true
-				if column.IsPartOfPK {
-					return errUpdate("attempting to update the value of the primary key")
-				}
 			}
 
 			r, err = r.SetColVal(tag, val, tableSch)

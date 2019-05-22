@@ -201,23 +201,18 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 1},
 		},
 		{
-			name:        "existing row key collision",
+			name:        "update primary key col",
 			query:       `update people set id = 0 where first = "Marge"`,
-			expectedErr: "attempting to update the value of the primary key",
-		},
-		{
-			name:        "duplicate primary keys in updated rows",
-			query:       `update people set id = 100 where last = "Simpson"`,
-			expectedErr: "attempting to update the value of the primary key",
+			expectedErr: "Cannot update primary key column 'id'",
 		},
 		{
 			name:        "duplicate column in update list",
 			query:       `update people set first = "Marge", first = "Homer", last = "Simpson"`,
-			expectedErr: "Repeated column 'first'",
+			expectedErr: "Repeated column: 'first'",
 		},
 		{
-			name: "null constraint failure",
-			query: `update people set first = null where id = 0`,
+			name:        "null constraint failure",
+			query:       `update people set first = null where id = 0`,
 			expectedErr: "Constraint failed for column 'first': Not null",
 		},
 		{
