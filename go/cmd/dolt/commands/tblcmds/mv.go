@@ -10,11 +10,15 @@ import (
 )
 
 var tblMvShortDesc = "Renames a table"
-var tblMvLongDesc = "The dolt table mv command will rename. If a table exists at the target location this command will " +
-	"fail unless the <b>--force|-f</b> flag is provided.  In this case the table at the target location will be overwritten " +
-	"by the table being renamed.\n The result is equivalent of doing <b>dolt table cp <old> <new></b> followed by " +
-	"<b>dolt table rm <old> resulting in a new table and a deleted table in the working set. These changes can be " +
-	"staged using <b>dolt add</b> and committed using <b>dolt commit</b>"
+var tblMvLongDesc = `
+The dolt table mv command will rename a table. If a table exists with the target name this command will 
+fail unless the <b>--force|-f</b> flag is provided.  In that case the table at the target location will be overwritten 
+by the table being renamed.
+
+The result is equivalent of running <b>dolt table cp <old> <new></b> followed by <b>dolt table rm <old></b>, resulting 
+in a new table and a deleted table in the working set. These changes can be staged using <b>dolt add</b> and committed
+using <b>dolt commit</b>.`
+
 var tblMvSynopsis = []string{
 	"[-f] <oldtable> <newtable>",
 }
