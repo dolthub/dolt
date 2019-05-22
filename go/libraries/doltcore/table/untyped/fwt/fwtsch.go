@@ -8,11 +8,12 @@ import (
 
 // FWTSchema is a fixed width text schema which includes information on a tables rows, and how wide they should be printed
 type FWTSchema struct {
-	Sch          schema.Schema
-	TagToWidth   map[uint64]int
-	NoFitStrs    map[uint64]string
-	totalWidth   int
-	dispColCount int
+	Sch           schema.Schema
+	TagToWidth    map[uint64]int
+	TagToMaxRunes map[uint64]int
+	NoFitStrs     map[uint64]string
+	totalWidth    int
+	dispColCount  int
 }
 
 // NewFWTSchema creates a FWTSchema given a standard schema and a map from column name to the width of that column.
@@ -38,15 +39,19 @@ func NewFWTSchema(sch schema.Schema, fldToWidth map[string]int) (*FWTSchema, err
 		}
 	}
 
-	return NewFWTSchemaWithWidths(sch, tagToWidth), nil
+	// TODO: this is used only in tests, where we assume that each grapheme is one rune. Not always true.
+	return NewFWTSchemaWithWidths(sch, tagToWidth, tagToWidth), nil
 }
 
 // NewFWTSchemaWithWidths creates a FWTSchema given a standard schema and a map from column tag to the width of that column
-func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSchema {
+func NewFWTSchemaWithWidths(sch schema.Schema, tagToPrintWidth map[uint64]int, tagToMaxRunes map[uint64]int) *FWTSchema {
 	allCols := sch.GetAllCols()
 
-	if len(tagToWidth) != allCols.Size() {
-		panic("Invalid widths map should have a value for every field.")
+	if len(tagToPrintWidth) != allCols.Size() {
+		panic("Invalid tagToPrintWidth map should have a value for every field.")
+	}
+	if len(tagToMaxRunes) != allCols.Size() {
+		panic("Invalid tagToMaxRunes map should have a value for every field.")
 	}
 
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
@@ -60,7 +65,7 @@ func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSc
 	totalWidth := 0
 	dispColCount := 0
 
-	for _, width := range tagToWidth {
+	for _, width := range tagToPrintWidth {
 		if width > 0 {
 			totalWidth += width
 			dispColCount++
@@ -69,8 +74,8 @@ func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSc
 
 	noFitStrs := make(map[uint64]string, allCols.Size())
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-		chars := make([]byte, tagToWidth[tag])
-		for j := 0; j < tagToWidth[tag]; j++ {
+		chars := make([]byte, tagToPrintWidth[tag])
+		for j := 0; j < tagToPrintWidth[tag]; j++ {
 			chars[j] = '#'
 		}
 
@@ -78,7 +83,14 @@ func NewFWTSchemaWithWidths(sch schema.Schema, tagToWidth map[uint64]int) *FWTSc
 		return false
 	})
 
-	return &FWTSchema{sch, tagToWidth, noFitStrs, totalWidth, dispColCount}
+	return &FWTSchema{
+		Sch:           sch,
+		TagToWidth:    tagToPrintWidth,
+		TagToMaxRunes: tagToMaxRunes,
+		NoFitStrs:     noFitStrs,
+		totalWidth:    totalWidth,
+		dispColCount:  dispColCount,
+	}
 }
 
 // GetTotalWidth returns the total width of all the columns

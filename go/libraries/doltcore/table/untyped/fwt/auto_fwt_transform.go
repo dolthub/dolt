@@ -6,27 +6,33 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
 
+// AutoSizingFWTTransformer samples rows to automatically determine maximum column widths to provide to FWTTransformer.
 type AutoSizingFWTTransformer struct {
-	numSamples int
-	widths     map[uint64]int
-	rowBuffer  []pipeline.RowWithProps
-
-	sch       schema.Schema
-	tooLngBhv TooLongBehavior
-	fwtTr     *FWTTransformer
+	// The number of rows to sample to determine column widths
+	numSamples  int
+	// A map of column tag to max print width
+	printWidths map[uint64]int
+	// A map of column tag to max number of runes
+	maxRunes    map[uint64]int
+	// A buffer of rows to process
+	rowBuffer   []pipeline.RowWithProps
+	// The schema being examined
+	sch         schema.Schema
+	// The behavior to use for a value that's too long to print
+	tooLngBhv   TooLongBehavior
+	// The underlying fixed width transformer being assembled by row sampling.
+	fwtTr       *FWTTransformer
 }
 
 func NewAutoSizingFWTTransformer(sch schema.Schema, tooLngBhv TooLongBehavior, numSamples int) *AutoSizingFWTTransformer {
-	widths := make(map[uint64]int, sch.GetAllCols().Size())
-
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-		widths[tag] = 0
-		return false
-	})
-
-	rowBuffer := make([]pipeline.RowWithProps, 0, 128)
-
-	return &AutoSizingFWTTransformer{numSamples, widths, rowBuffer, sch, tooLngBhv, nil}
+	return &AutoSizingFWTTransformer{
+		numSamples:  numSamples,
+		printWidths: make(map[uint64]int, sch.GetAllCols().Size()),
+		maxRunes:    make(map[uint64]int, sch.GetAllCols().Size()),
+		rowBuffer:   make([]pipeline.RowWithProps, 0, 128),
+		sch:         sch,
+		tooLngBhv:   tooLngBhv,
+	}
 }
 
 func (asTr *AutoSizingFWTTransformer) TransformToFWT(inChan <-chan pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
@@ -60,11 +66,14 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 		r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool) {
 			if !types.IsNull(val) {
 				strVal := val.(types.String)
-				strLen := len([]rune(string(strVal)))
+				printWidth := StringWidth(string(strVal))
+				numRunes := len([]rune(string(strVal)))
 
-				width, ok := asTr.widths[tag]
-				if ok && strLen > width {
-					asTr.widths[tag] = strLen
+				if printWidth > asTr.printWidths[tag] {
+					asTr.printWidths[tag] = printWidth
+				}
+				if numRunes > asTr.maxRunes[tag] {
+					asTr.maxRunes[tag] = numRunes
 				}
 			}
 			return false
@@ -78,7 +87,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 
 func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
 	if asWr.fwtTr == nil {
-		fwtSch := NewFWTSchemaWithWidths(asWr.sch, asWr.widths)
+		fwtSch := NewFWTSchemaWithWidths(asWr.sch, asWr.printWidths, asWr.maxRunes)
 		asWr.fwtTr = NewFWTTransformer(fwtSch, asWr.tooLngBhv)
 	}
 

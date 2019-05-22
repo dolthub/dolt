@@ -5,9 +5,8 @@ import (
   "github.com/rivo/uniseg"
 )
 
-// StringWidth returns the number of horizontal cells needed to print the given
-// text. It splits the text into its grapheme clusters, calculates each
-// cluster's width, and adds them up to a total.
+// StringWidth returns the number of horizontal cells needed to print the given text. It splits the text into its
+// grapheme clusters, calculates each cluster's width, and adds them up to a total.
 func StringWidth(text string) (width int) {
 	g := uniseg.NewGraphemes(text)
 	for g.Next() {

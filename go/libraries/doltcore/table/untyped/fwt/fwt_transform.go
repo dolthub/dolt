@@ -36,8 +36,8 @@ func NewFWTTransformer(fwtSch *FWTSchema, tooLngBhv TooLongBehavior) *FWTTransfo
 	numFields := fwtSch.Sch.GetAllCols().Size()
 	colBuffs := make(map[uint64][]rune, numFields)
 
-	for tag, width := range fwtSch.TagToWidth {
-		colBuffs[tag] = make([]rune, width)
+	for tag, numRunes := range fwtSch.TagToMaxRunes {
+		colBuffs[tag] = make([]rune, numRunes)
 	}
 
 	return &FWTTransformer{fwtSch, colBuffs, tooLngBhv}
@@ -59,9 +59,9 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 				continue
 			}
 			str := string(val.(types.String))
-			strLen := len([]rune(str))
+			strWidth := StringWidth(str)
 
-			if strLen > colWidth {
+			if strWidth > colWidth {
 				switch fwtTr.tooLngBhv {
 				case ErrorWhenTooLong:
 					col, _ := sch.GetAllCols().GetByTag(tag)
@@ -77,12 +77,12 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 				}
 			}
 
-			strLen = len([]rune(str))
-			if strLen > colWidth {
+			strWidth = StringWidth(str)
+			if strWidth > colWidth {
 				buf = []rune(str)
 			} else {
 				n := copy(buf, []rune(str))
-				for i := 0; i < colWidth - strLen; i++ {
+				for i := 0; i < colWidth - strWidth; i++ {
 					buf[n + i] = ' '
 				}
 			}
