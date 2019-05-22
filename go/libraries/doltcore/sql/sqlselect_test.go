@@ -519,19 +519,33 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema, "id", "age"),
 		},
 		{
-			name:        "select * unknown column in where",
+			name:        "unknown table",
+			query:       "select * from dne",
+			expectedErr: `Unknown table: 'dne'`,
+		},
+		{
+			name:        "unknown table in join",
+			query:       "select * from people join dne",
+			expectedErr: `Unknown table: 'dne'`,
+		},
+		{
+			name:        "no table",
+			query:       "select 1",
+			expectedErr: `Selects without a table are not supported:`,
+		},
+		{
+			name:        "unknown column in where",
 			query:       "select * from people where dne > 8.0",
 			expectedErr: `Unknown column: 'dne'`,
 		},
 		{
-			name:        "select * unknown column in order by",
+			name:        "unknown column in order by",
 			query:       "select * from people where rating > 8.0 order by dne",
 			expectedErr: `Unknown column: 'dne'`,
 		},
 		{
 			name:         "unsupported comparison",
 			query:        "select * from people where function(first)",
-			expectedRows: nil, // not the same as empty result set
 			expectedErr:  "not supported",
 		},
 		{

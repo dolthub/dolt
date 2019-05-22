@@ -213,9 +213,7 @@ teardown() {
     dolt sql -q "insert into one_pk (pk,c1,c2) values (11,0,0)"
     run dolt sql -q "select pk where c3 is null"
     [ $status -eq 1 ]
-    skip "Bad error message for no table name"
-    [[ "$output" =~ "Missing table name" ]] || false
-    [[ ! "$output" =~ "Unknown table 'dual'" ]] || false
+    [[ "$output" =~ "Selects without a table are not supported" ]] || false
 }
 
 @test "sql update query on a primary key should error" {
