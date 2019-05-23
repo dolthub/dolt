@@ -151,59 +151,66 @@ func cloneRemote(ctx context.Context, dir, remoteName, remoteUrl, branch string,
 				branches = srcDB.GetBranches(ctx)
 			}
 
-			for i := 0; i < len(branches) && verr == nil; i++ {
-				dref := branches[i]
-
-				if !srcDB.HasRef(ctx, dref) {
-					verr = errhand.BuildDError("fatal: unknown branch " + branch).Build()
-				} else {
-					cs, _ := doltdb.NewCommitSpec("HEAD", dref.GetPath())
-					cm, err := srcDB.Resolve(ctx, cs)
-
-					if err != nil {
-						verr = errhand.BuildDError("error: unable to find %v", branch).Build()
-					} else {
-
-						progChan := make(chan datas.PullProgress)
-						stopChan := make(chan struct{})
-						go progFunc(progChan, stopChan)
-
-						remoteBranch := ref.NewRemoteRef(remoteName, branch)
-						err = actions.Fetch(ctx, remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
-						close(progChan)
-						<-stopChan
-
-						if err != nil {
-							verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-						} else {
-
-							err = dEnv.DoltDB.NewBranchAtCommit(ctx, dref, cm)
-
-							if err != nil {
-								verr = errhand.BuildDError("error: failed to create branch " + branch).Build()
-							} else {
-
-								localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
-								localCommit, _ := dEnv.DoltDB.Resolve(ctx, localCommitSpec)
-								h, err := dEnv.DoltDB.WriteRootValue(ctx, localCommit.GetRootValue())
-
-								dEnv.RepoState.Head = ref.MarshalableRef{dref}
-								dEnv.RepoState.Staged = h.String()
-								dEnv.RepoState.Working = h.String()
-								err = dEnv.RepoState.Save()
-
-								if err != nil {
-									verr = errhand.BuildDError("error: failed to write repo state").Build()
-								}
-							}
-						}
-					}
-				}
-			}
+			verr = cloneAllBranchRefs(branches, verr, srcDB, ctx, branch, remoteName, dEnv)
 		}
 	}
 
 	return
+}
+
+func cloneAllBranchRefs(branches []ref.DoltRef, verr errhand.VerboseError, srcDB *doltdb.DoltDB, ctx context.Context, branch string, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
+	for i := 0; i < len(branches) && verr == nil; i++ {
+		dref := branches[i]
+
+		if !srcDB.HasRef(ctx, dref) {
+			return errhand.BuildDError("fatal: unknown branch " + branch).Build()
+		}
+
+		cs, _ := doltdb.NewCommitSpec("HEAD", dref.GetPath())
+		cm, err := srcDB.Resolve(ctx, cs)
+
+		if err != nil {
+			return errhand.BuildDError("error: unable to find %v", branch).AddCause(err).Build()
+		}
+
+		progChan := make(chan datas.PullProgress)
+		doneChan := make(chan struct{})
+		go progFunc(progChan, doneChan)
+
+		remoteBranch := ref.NewRemoteRef(remoteName, branch)
+		err = actions.Fetch(ctx, remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
+		close(progChan)
+		<-doneChan
+
+		if err != nil {
+			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+		}
+
+		err = dEnv.DoltDB.NewBranchAtCommit(ctx, dref, cm)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to create branch " + branch).AddCause(err).Build()
+		}
+
+		localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
+		localCommit, _ := dEnv.DoltDB.Resolve(ctx, localCommitSpec)
+		h, err := dEnv.DoltDB.WriteRootValue(ctx, localCommit.GetRootValue())
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to write to database.").AddCause(err).Build()
+		}
+
+		dEnv.RepoState.Head = ref.MarshalableRef{dref}
+		dEnv.RepoState.Staged = h.String()
+		dEnv.RepoState.Working = h.String()
+		err = dEnv.RepoState.Save()
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
+		}
+	}
+
+	return nil
 }
 
 type RpcErrVerbWrap struct {
