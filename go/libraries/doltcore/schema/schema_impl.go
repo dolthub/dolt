@@ -41,6 +41,35 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 	}
 }
 
+// ValidateForInsert returns an error if the given schema cannot be written to the dolt database.
+func ValidateForInsert(sch Schema) error {
+	if sch.GetPKCols().Size() == 0 {
+		return ErrNoPrimaryKeyColumns
+	}
+
+	colNames := make(map[string]bool)
+	colTags := make(map[uint64]bool)
+	var err error
+
+	sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool) {
+		if _, ok := colTags[tag]; ok {
+			err = ErrColTagCollision
+			return true
+		}
+		colTags[tag] = true
+
+		if _, ok := colNames[col.Name]; ok {
+			err = ErrColNameCollision
+			return true
+		}
+		colNames[col.Name] = true
+
+		return false
+	})
+
+	return err
+}
+
 // UnkeyedSchemaFromCols creates a schema without any primary keys to be used for displaying to users, tests, etc. Such
 // unkeyed schemas are not suitable to be inserted into storage.
 func UnkeyedSchemaFromCols(allCols *ColCollection) Schema {

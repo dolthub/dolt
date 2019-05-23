@@ -3,6 +3,7 @@ package schema
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"reflect"
 	"testing"
 )
@@ -28,27 +29,28 @@ var addrVal = types.String("123 Fake St")
 var ageVal = types.Uint(53)
 var titleVal = types.NullValue
 
-var testKeyCols = []Column{
+var pkCols = []Column{
 	{lnColName, lnColTag, types.StringKind, true, nil},
 	{fnColName, fnColTag, types.StringKind, true, nil},
 }
-var testCols = []Column{
+var nonPkCols = []Column{
 	{addrColName, addrColTag, types.StringKind, false, nil},
 	{ageColName, ageColTag, types.UintKind, false, nil},
 	{titleColName, titleColTag, types.StringKind, false, nil},
 	{reservedColName, reservedColTag, types.StringKind, false, nil},
 }
 
-var allCols = append(append([]Column(nil), testKeyCols...), testCols...)
+var allCols = append(append([]Column(nil), pkCols...), nonPkCols...)
 
 func TestSchema(t *testing.T) {
-	colColl, _ := NewColCollection(allCols...)
+	colColl, err := NewColCollection(allCols...)
+	require.NoError(t, err)
 	schFromCols := SchemaFromCols(colColl)
 
 	testSchema("SchemaFromCols", schFromCols, t)
 
-	testKeyColColl, _ := NewColCollection(testKeyCols...)
-	testNonKeyColsColl, _ := NewColCollection(testCols...)
+	testKeyColColl, _ := NewColCollection(pkCols...)
+	testNonKeyColsColl, _ := NewColCollection(nonPkCols...)
 	schFromPKAndNonPKCols, _ := SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColsColl)
 
 	testSchema("SchemaFromPKAndNonPKCols", schFromPKAndNonPKCols, t)
@@ -59,21 +61,62 @@ func TestSchema(t *testing.T) {
 }
 
 func TestSchemaWithNoPKs(t *testing.T) {
-	colColl, _ := NewColCollection(testCols...)
+	colColl, err := NewColCollection(nonPkCols...)
+	require.NoError(t, err)
 
 	assert.Panics(t, func() {
 		SchemaFromCols(colColl)
+	})
+
+	assert.NotPanics(t, func() {
+		UnkeyedSchemaFromCols(colColl)
+	})
+}
+
+func TestValidateForInsert(t *testing.T) {
+	t.Run("Validate good", func(t *testing.T) {
+		colColl, err := NewColCollection(allCols...)
+		require.NoError(t, err)
+		schFromCols := SchemaFromCols(colColl)
+		assert.NoError(t, ValidateForInsert(schFromCols))
+	})
+
+	t.Run("Name collision", func(t *testing.T) {
+		cols := append(allCols, Column{titleColName, 100, types.StringKind, false, nil})
+		colColl, err := NewColCollection(cols...)
+		require.NoError(t, err)
+
+		schFromCols := SchemaFromCols(colColl)
+		err = ValidateForInsert(schFromCols)
+		assert.Error(t, err)
+		assert.Equal(t, err, ErrColNameCollision)
+	})
+
+	t.Run("No primary keys", func(t *testing.T) {
+		colColl, err := NewColCollection(nonPkCols...)
+		require.NoError(t, err)
+
+		schFromCols := UnkeyedSchemaFromCols(colColl)
+		err = ValidateForInsert(schFromCols)
+		assert.Error(t, err)
+		assert.Equal(t, err, ErrNoPrimaryKeyColumns)
 	})
 }
 
 func testSchema(method string, sch Schema, t *testing.T) {
 	validateCols(t, allCols, sch.GetAllCols(), method+"GetAllCols")
-	validateCols(t, testKeyCols, sch.GetPKCols(), method+"GetPKCols")
-	validateCols(t, testCols, sch.GetNonPKCols(), method+"GetNonPKCols")
+	validateCols(t, pkCols, sch.GetPKCols(), method+"GetPKCols")
+	validateCols(t, nonPkCols, sch.GetNonPKCols(), method+"GetNonPKCols")
 
 	extracted := ExtractAllColNames(sch)
 	expExt := map[uint64]string{
-		lnColTag: lnColName, fnColTag: fnColName, ageColTag: ageColName, addrColTag: addrColName, titleColTag: titleColName, reservedColTag: reservedColName}
+		lnColTag: lnColName,
+		fnColTag: fnColName,
+		ageColTag: ageColName,
+		addrColTag: addrColName,
+		titleColTag: titleColName,
+		reservedColTag: reservedColName,
+	}
 
 	if !reflect.DeepEqual(extracted, expExt) {
 		t.Error("extracted columns did not match expectation")

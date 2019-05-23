@@ -80,7 +80,7 @@ teardown() {
 @test "dolt sql in a new repository" {
    run dolt sql -q "select * from test"
    [ "$status" -eq 1 ]
-   [[ "$output" = "Unknown table 'test'" ]] || false
+   [[ "$output" = "Unknown table: 'test'" ]] || false
 }
 
 @test "invalid sql in a new repository" {

@@ -328,8 +328,12 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 			return errFmt("Unrecognized expression: %v", nodeToString(e))
 		}
 
+		if tableName == DUAL {
+			return errFmt("Selects without a table are not supported: %v", nodeToString(te))
+		}
+
 		if !root.HasTable(ctx, tableName) {
-			return errFmt("Unknown table '%s'", tableName)
+			return errFmt("Unknown table: '%s'", tableName)
 		}
 
 		if !te.As.IsEmpty() {

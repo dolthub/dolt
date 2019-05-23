@@ -2,7 +2,8 @@ package schema
 
 import (
 	"github.com/attic-labs/noms/go/types"
-	"math"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"reflect"
 	"strconv"
 	"testing"
@@ -10,10 +11,13 @@ import (
 
 var firstNameCol = Column{"first", 0, types.StringKind, false, nil}
 var lastNameCol = Column{"last", 1, types.StringKind, false, nil}
+var firstNameCapsCol = Column{"FiRsT", 2, types.StringKind, false, nil}
+var lastNameCapsCol = Column{"LAST", 3, types.StringKind, false, nil}
 
 func TestGetByNameAndTag(t *testing.T) {
-	cols := []Column{firstNameCol, lastNameCol}
-	colColl, _ := NewColCollection(cols...)
+	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
+	colColl, err := NewColCollection(cols...)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name       string
@@ -23,25 +27,84 @@ func TestGetByNameAndTag(t *testing.T) {
 	}{
 		{firstNameCol.Name, firstNameCol.Tag, firstNameCol, true},
 		{lastNameCol.Name, lastNameCol.Tag, lastNameCol, true},
-		{"missing", math.MaxUint64, InvalidCol, false},
+		{firstNameCapsCol.Name, firstNameCapsCol.Tag, firstNameCapsCol, true},
+		{lastNameCapsCol.Name, lastNameCapsCol.Tag, lastNameCapsCol, true},
+		{"FIRST", InvalidTag, InvalidCol, false},
+		{"missing", InvalidTag, InvalidCol, false},
 	}
 
 	for _, test := range tests {
-		actual, ok := colColl.GetByName(test.name)
+		t.Run(test.name, func(t *testing.T) {
+			actual, ok := colColl.GetByName(test.name)
 
-		if ok != test.shouldBeOk {
-			t.Errorf("name - shouldBeOk: %v, ok: %v", test.shouldBeOk, ok)
-		} else if !reflect.DeepEqual(actual, test.expected) {
-			t.Errorf("name - %v != %v", actual, test.expected)
-		}
+			if ok != test.shouldBeOk {
+				t.Errorf("name - shouldBeOk: %v, ok: %v", test.shouldBeOk, ok)
+			} else if !reflect.DeepEqual(actual, test.expected) {
+				t.Errorf("name - %v != %v", actual, test.expected)
+			}
 
-		actual, ok = colColl.GetByTag(test.tag)
+			actual, ok = colColl.GetByTag(test.tag)
 
-		if ok != test.shouldBeOk {
-			t.Errorf("tag - shouldBeOk: %v, ok: %v", test.shouldBeOk, ok)
-		} else if !reflect.DeepEqual(actual, test.expected) {
-			t.Errorf("tag - %v != %v", actual, test.expected)
-		}
+			if ok != test.shouldBeOk {
+				t.Errorf("tag - shouldBeOk: %v, ok: %v", test.shouldBeOk, ok)
+			} else if !reflect.DeepEqual(actual, test.expected) {
+				t.Errorf("tag - %v != %v", actual, test.expected)
+			}
+		})
+	}
+}
+
+func TestGetByNameCaseInsensitive(t *testing.T) {
+	cols := []Column{firstNameCol, lastNameCol, firstNameCapsCol, lastNameCapsCol}
+	colColl, err := NewColCollection(cols...)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name       string
+		expected   Column
+		shouldBeOk bool
+	}{
+		{firstNameCol.Name, firstNameCol, true},
+		{lastNameCol.Name, lastNameCol, true},
+		{firstNameCapsCol.Name, firstNameCol, true},
+		{lastNameCapsCol.Name, lastNameCol, true},
+		{"missing", InvalidCol, false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			actual, ok := colColl.GetByNameCaseInsensitive(test.name)
+
+			if ok != test.shouldBeOk {
+				t.Errorf("name - shouldBeOk: %v, ok: %v", test.shouldBeOk, ok)
+			} else if !reflect.DeepEqual(actual, test.expected) {
+				t.Errorf("name - %v != %v", actual, test.expected)
+			}
+
+		})
+	}
+}
+
+func TestNewColCollectionErrorHandling(t *testing.T) {
+	tests := []struct {
+		name       string
+		cols       []Column
+		expectedErr error
+	}{
+		{
+			name:        "tag collision",
+			cols:        []Column{firstNameCol, lastNameCol, {"collision", 0, types.StringKind, false, nil}},
+			expectedErr: ErrColTagCollision,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewColCollection(test.cols...)
+			assert.Error(t, err)
+			assert.Equal(t, err, test.expectedErr)
+		})
 	}
 }
 
