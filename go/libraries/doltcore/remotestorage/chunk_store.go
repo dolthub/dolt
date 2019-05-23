@@ -132,17 +132,20 @@ const maxHasManyBatchSize = 16 * 1024
 // Returns a new HashSet containing any members of |hashes| that are
 // absent from the store.
 func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet) {
+	// get the set of hashes that isn't already in the cache
 	notCached := dcs.cache.Has(hashes)
 
 	if len(notCached) == 0 {
 		return notCached
 	}
 
+	// convert the set to a slice of hashes and a corresponding slice of the byte encoding for those hashes
 	hashSl, byteSl := HashSetToSlices(notCached)
 
 	absent = make(hash.HashSet)
 	var found []chunks.Chunk
 	for st, end := 0, maxHasManyBatchSize; st < len(hashSl); st, end = end, end+maxHasManyBatchSize {
+		// slice the slices into a batch of hashes
 		currHashSl := hashSl[st:]
 		currByteSl := byteSl[st:]
 
@@ -151,6 +154,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 			currByteSl = byteSl[st:end]
 		}
 
+		// send a request to the remote api to determine which chunks the remote api already has
 		req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
 		resp, err := dcs.csClient.HasChunks(ctx, &req)
 
@@ -165,6 +169,8 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 			return resp.Absent[i] < resp.Absent[j]
 		})
 
+		// loop over every hash in the current batch, and if they are absent from the remote host add them to the
+		// absent set, otherwise append them to the found slice
 		for i, j := 0, 0; i < len(currHashSl); i++ {
 			currHash := currHashSl[i]
 
