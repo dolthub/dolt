@@ -7,6 +7,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"strconv"
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -488,7 +489,7 @@ func TestExecuteSelect(t *testing.T) {
 		{
 			name:        "table aliases with bad alias",
 			query:       "select m.first as f, p.last as l from people p where p.f = 'Homer'",
-			expectedErr: "Unknown table m",
+			expectedErr: "Unknown table: 'm'",
 		},
 		{
 			name: "column aliases, all columns",
@@ -554,15 +555,16 @@ func TestExecuteSelect(t *testing.T) {
 			expectedErr: "Type mismatch:",
 		},
 	}
-	for _, tt := range tests {
-		dEnv := dtestutils.CreateTestEnv()
-		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot(context.Background())
 
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			root, _ := dEnv.WorkingRoot(context.Background())
+
 			sqlStatement, err := sqlparser.Parse(tt.query)
 			if err != nil {
-				assert.FailNow(t, "Couldn't parse query " + tt.query, "%v", err.Error())
+				assert.FailNow(t, "Couldn't parse query "+tt.query, "%v", err.Error())
 			}
 
 			s := sqlStatement.(*sqlparser.Select)
@@ -817,30 +819,190 @@ func TestJoins(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		dEnv := dtestutils.CreateTestEnv()
-		createTestDatabase(dEnv, t)
-		root, _ := dEnv.WorkingRoot(context.Background())
-
-		sqlStatement, _ := sqlparser.Parse(tt.query)
-		s := sqlStatement.(*sqlparser.Select)
-
 		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			root, _ := dEnv.WorkingRoot(context.Background())
+
+			sqlStatement, _ := sqlparser.Parse(tt.query)
+			s := sqlStatement.(*sqlparser.Select)
+
 			if tt.expectedRows != nil && tt.expectedSchema == nil {
 				require.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
 			}
 
 			rows, sch, err := ExecuteSelect(context.Background(), root, s)
-			if err != nil {
-				require.True(t, len(tt.expectedErr) > 0, err.Error())
+
+			if len(tt.expectedErr) > 0 {
+				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedErr)
+				return
 			} else {
-				assert.False(t, len(tt.expectedErr) > 0, "unexpected error")
+				require.NoError(t, err)
 			}
 
 			assert.Equal(t, tt.expectedRows, rows)
 			assert.Equal(t, tt.expectedSchema, sch)
 		})
 	}
+}
+
+// Tests of case sensitivity handling
+func TestCaseSensitivity(t *testing.T) {
+	tests := []struct {
+		name            string
+		tableName       string
+		tableSchema     schema.Schema
+		initialRows     []row.Row
+		additionalSetup func()
+		query           string
+		expectedRows    []row.Row
+		expectedSchema  schema.Schema
+		expectedErr     string
+	}{
+		{
+			name:        "table name has mixed case",
+			tableName:   "MiXeDcAsE",
+			tableSchema: newSchema("test", types.StringKind),
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select test from mixedcase",
+			expectedSchema: newResultSetSchema("test", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+		},
+		{
+			name:        "column name has mixed case",
+			tableName:   "test",
+			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select mixedcase from test",
+			expectedSchema: newResultSetSchema("mixedcase", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+		},
+		{
+			name:        "select uses incorrect case",
+			tableName:   "test",
+			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select mixedcase from test",
+			expectedErr: "Unknown column: 'mixedcase'",
+		},
+		{
+			name:        "column is reserved word, select not backticked",
+			tableName:   "test",
+			tableSchema: newSchema(
+				"Timestamp", types.StringKind,
+				"and", types.StringKind,
+				"or", types.StringKind,
+				"select", types.StringKind),
+			initialRows: rs(
+				newRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")),
+			),
+			query:       "select Timestamp from test",
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedSchema: newResultSetSchema("Timestamp", types.StringKind),
+		},
+		{
+			name:        "column is reserved word, select not backticked #2",
+			tableName:   "test",
+			tableSchema: newSchema(
+				"YeAr", types.StringKind),
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select Year from test",
+			expectedSchema: newResultSetSchema("YeAr", types.StringKind),
+		},
+
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+
+			if tt.tableName != "" {
+				createTestTable(dEnv, t, tt.tableName, tt.tableSchema, tt.initialRows...)
+			}
+			if tt.additionalSetup != nil {
+				tt.additionalSetup()
+			}
+
+			root, _ := dEnv.WorkingRoot(context.Background())
+
+			sqlStatement, _ := sqlparser.Parse(tt.query)
+			s := sqlStatement.(*sqlparser.Select)
+
+			if tt.expectedRows != nil && tt.expectedSchema == nil {
+				require.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
+			}
+
+			rows, sch, err := ExecuteSelect(context.Background(), root, s)
+			if len(tt.expectedErr) > 0 {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tt.expectedErr)
+				return
+			} else {
+				require.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.expectedRows, rows)
+			assert.Equal(t, tt.expectedSchema, sch)
+		})
+	}
+}
+
+// Creates a new row with the values given, using ascending tag numbers starting at 0.
+// Uses the first value as the primary key.
+func newRow(colVals ...types.Value) row.Row {
+	var cols []schema.Column
+	taggedVals := make(row.TaggedValues)
+	var tag int64
+	for _, val := range colVals {
+		isPk := tag == 0
+		var constraints []schema.ColConstraint
+		if isPk {
+			constraints = append(constraints, schema.NotNullConstraint{})
+		}
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), isPk, constraints...))
+
+		taggedVals[uint64(tag)] = val
+		tag++
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	sch := schema.SchemaFromCols(colColl)
+
+	return row.New(sch, taggedVals)
+}
+
+// Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
+// Uses the first column as the primary key.
+func newSchema(colNamesAndTypes ...interface{}) schema.Schema {
+	if len(colNamesAndTypes) % 2 != 0 {
+		panic("Non-even number of inputs passed to newResultSetSchema")
+	}
+
+	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	for i := 0; i < len(colNamesAndTypes); i += 2 {
+		name := colNamesAndTypes[i].(string)
+		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
+
+		isPk := i/2 == 0
+		var constraints []schema.ColConstraint
+		if isPk {
+			constraints = append(constraints, schema.NotNullConstraint{})
+		}
+		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, isPk, constraints...)
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return schema.SchemaFromCols(colColl)
 }
 
 // Returns the logical concatenation of the schemas and rows given, rewriting all tag numbers to begin at zero. The row

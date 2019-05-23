@@ -12,7 +12,8 @@ type Aliases struct {
 	AliasesByColumn map[QualifiedColumn]string
 }
 
-// A single result set can have many columns that share the same name
+// A qualified column names its table and its column.
+// Both names are case-sensitive and match the name as defined in the schema.
 type QualifiedColumn struct {
 	TableName  string
 	ColumnName string
@@ -28,8 +29,7 @@ func NewAliases() *Aliases {
 }
 
 // Adds a column alias as specified. Silently overwrites existing entries.
-func (a *Aliases) AddColumnAlias(tableName, colName, alias string) {
-	qc := QualifiedColumn{TableName: tableName, ColumnName: colName}
+func (a *Aliases) AddColumnAlias(qc QualifiedColumn, alias string) {
 	a.AliasesByColumn[qc] = alias
 	a.ColumnsByAlias[alias] = qc
 }
