@@ -127,6 +127,8 @@ func (dcs *DoltChunkStore) Has(ctx context.Context, h hash.Hash) bool {
 	return len(absent) == 0
 }
 
+const maxHasManyBatchSize = 16 * 1024
+
 // Returns a new HashSet containing any members of |hashes| that are
 // absent from the store.
 func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet) {
@@ -137,38 +139,52 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 	}
 
 	hashSl, byteSl := HashSetToSlices(notCached)
-	req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: byteSl}
-	resp, err := dcs.csClient.HasChunks(ctx, &req)
-
-	if err != nil {
-		rpcErr := NewRpcError(err, "HasMany", dcs.host, req)
-		//follow noms convention
-		panic(rpcErr)
-	}
-
-	numAbsent := len(resp.Absent)
-	sort.Slice(resp.Absent, func(i, j int) bool {
-		return resp.Absent[i] < resp.Absent[j]
-	})
 
 	absent = make(hash.HashSet)
-	found := make([]chunks.Chunk, 0, len(notCached)-numAbsent)
+	var found []chunks.Chunk
+	for st, end := 0, maxHasManyBatchSize; st < len(hashSl); st, end = end, end+maxHasManyBatchSize {
+		currHashSl := hashSl[st:]
+		currByteSl := byteSl[st:]
 
-	for i, j := 0, 0; i < len(hashSl); i++ {
-		currHash := hashSl[i]
-
-		nextAbsent := -1
-		if j < numAbsent {
-			nextAbsent = int(resp.Absent[j])
+		if end < len(hashSl) {
+			currHashSl = hashSl[st:end]
+			currByteSl = byteSl[st:end]
 		}
 
-		if i == nextAbsent {
-			absent[currHash] = struct{}{}
-			j++
-		} else {
-			c := chunks.NewChunkWithHash(currHash, []byte{})
-			found = append(found, c)
+		req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
+		resp, err := dcs.csClient.HasChunks(ctx, &req)
+
+		if err != nil {
+			rpcErr := NewRpcError(err, "HasMany", dcs.host, req)
+			//follow noms convention
+			panic(rpcErr)
 		}
+
+		numAbsent := len(resp.Absent)
+		sort.Slice(resp.Absent, func(i, j int) bool {
+			return resp.Absent[i] < resp.Absent[j]
+		})
+
+		for i, j := 0, 0; i < len(currHashSl); i++ {
+			currHash := currHashSl[i]
+
+			nextAbsent := -1
+			if j < numAbsent {
+				nextAbsent = int(resp.Absent[j])
+			}
+
+			if i == nextAbsent {
+				absent[currHash] = struct{}{}
+				j++
+			} else {
+				c := chunks.NewChunkWithHash(currHash, []byte{})
+				found = append(found, c)
+			}
+		}
+	}
+
+	if len(found)+len(absent) != len(notCached) {
+		panic("not all chunks were accounted for")
 	}
 
 	if len(found) > 0 {
