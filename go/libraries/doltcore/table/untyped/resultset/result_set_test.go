@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -156,7 +157,7 @@ func TestNewFromSchema(t *testing.T) {
 			schema.NewColumn("uuid", 13, types.UUIDKind, false),
 			schema.NewColumn("num_episodes", 14, types.UintKind, false),
 		)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		destSch := schema.UnkeyedSchemaFromCols(colColl)
 
 		rss, err := newFromDestSchema(destSch)
@@ -444,9 +445,7 @@ func getAllSchemaColumns(t *testing.T) *schema.ColCollection {
 		schema.NewColumn("comments", 14, types.StringKind, false),
 	)
 
-	if err != nil {
-		assert.FailNow(t, "Unexpected error creating schema: %v", err.Error())
-	}
+	require.NoError(t, err)
 	return colColl
 }
 
