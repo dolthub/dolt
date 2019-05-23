@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/pkg/profile"
+	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/fatih/color"
@@ -90,6 +92,18 @@ func runMain() int {
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config.", dEnv.CfgLoadErr))
 		return 1
+	}
+
+	homeDir, err := env.GetCurrentUserHomeDir()
+
+	if err == nil {
+		logFile := filepath.Join(homeDir, doltdb.DoltDir, "debug.log")
+		f, err := os.Create(logFile)
+
+		if err == nil {
+			defer f.Close()
+			log.SetOutput(f)
+		}
 	}
 
 	return doltCommand("dolt", args, dEnv)
