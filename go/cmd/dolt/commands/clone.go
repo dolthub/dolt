@@ -151,16 +151,17 @@ func cloneRemote(ctx context.Context, dir, remoteName, remoteUrl, branch string,
 				branches = srcDB.GetBranches(ctx)
 			}
 
-			verr = cloneAllBranchRefs(branches, verr, srcDB, ctx, branch, remoteName, dEnv)
+			verr = cloneAllBranchRefs(branches, verr, srcDB, ctx, remoteName, dEnv)
 		}
 	}
 
 	return
 }
 
-func cloneAllBranchRefs(branches []ref.DoltRef, verr errhand.VerboseError, srcDB *doltdb.DoltDB, ctx context.Context, branch string, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
+func cloneAllBranchRefs(branches []ref.DoltRef, verr errhand.VerboseError, srcDB *doltdb.DoltDB, ctx context.Context, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
 	for i := 0; i < len(branches) && verr == nil; i++ {
 		dref := branches[i]
+		branch := dref.GetPath()
 
 		if !srcDB.HasRef(ctx, dref) {
 			return errhand.BuildDError("fatal: unknown branch " + branch).Build()
