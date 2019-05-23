@@ -385,14 +385,14 @@ func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectS
 					targetTable = selectExpr.TableName.Name.String()
 				}
 				tableSch := selectStmt.inputSchemas[targetTable]
-				tableSch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+				tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 					columns = append(columns, QualifiedColumn{targetTable, col.Name})
 					return false
 				})
 			} else {
 				for _, tableName := range selectStmt.inputTables {
 					tableSch := selectStmt.inputSchemas[tableName]
-					tableSch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+					tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 						columns = append(columns, QualifiedColumn{tableName, col.Name})
 						return false
 					})
@@ -401,36 +401,18 @@ func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectS
 		case *sqlparser.AliasedExpr:
 			switch colExpr := selectExpr.Expr.(type) {
 			case *sqlparser.ColName:
-				var tableSch schema.Schema
-				var tableName string
-				colName := colExpr.Name.String()
-				if !colExpr.Qualifier.IsEmpty() {
-					columnTableName := colExpr.Qualifier.Name.String()
-					var ok bool
-					if tableName, ok = selectStmt.aliases.TablesByAlias[columnTableName]; ok {
-						tableSch = mustGetSchema(ctx, root, tableName)
-					} else {
-						return errFmt("Unknown table " + columnTableName)
-					}
-				} else {
-					qc, err := resolveColumn(colName, selectStmt.inputSchemas, selectStmt.aliases)
-					if err != nil {
-						return err
-					}
-					tableName = qc.TableName
-					tableSch = selectStmt.inputSchemas[tableName]
-				}
 
-				_, ok := tableSch.GetAllCols().GetByName(colName)
-				if !ok {
-					return errFmt(UnknownColumnErrFmt, colName)
+				qc, err := resolveColumn(getColumnNameString(colExpr), selectStmt.inputSchemas, selectStmt.aliases)
+				if err != nil {
+					return err
 				}
 
 				// an absent column alias will be empty
 				if selectExpr.As.String() != "" {
-					selectStmt.aliases.AddColumnAlias(tableName, colName, selectExpr.As.String())
+					selectStmt.aliases.AddColumnAlias(qc, selectExpr.As.String())
 				}
-				columns = append(columns, QualifiedColumn{tableName, colName})
+
+				columns = append(columns, qc)
 			default:
 				return errFmt("Only column selections or * are supported")
 			}

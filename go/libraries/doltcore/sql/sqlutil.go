@@ -243,50 +243,82 @@ func nodeToString(node sqlparser.SQLNode) string {
 
 // Finds the schema that contains the column name given among the tables given, and returns the fully qualified column,
 // with the full (unaliased) name of the table and column being referenced.  Returns an error if no schema contains such
-// a column name, or if multiple do.
-func resolveColumn(colName string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
+// a column name, or if multiple do. Columns returned by this method are verified to exist.
+//
+// colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
+// TODO: this inappropriately matches column aliases in the where clause, and shouldn't be used there
+func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
 	// First try matching any known aliases directly
-	if qc, ok := aliases.ColumnsByAlias[colName]; ok {
+	if qc, ok := aliases.ColumnsByAlias[colNameExpr]; ok {
 		return qc, nil
 	}
 
 	// Then try getting the table from the column name string itself, eg. "t.col"
-	qc := parseColumnAlias(colName)
+	qc := parseQualifiedColumnString(colNameExpr)
 	if qc.TableName != "" {
 		tableName := aliases.TablesByAlias[qc.TableName]
 		if resolvedName, ok := aliases.ColumnsByAlias[qc.ColumnName]; ok {
 			return resolvedName, nil
 		}
-		if _, ok := schemas[tableName]; ok {
-			return QualifiedColumn{TableName: tableName, ColumnName: qc.ColumnName}, nil
+		if sch, ok := schemas[tableName]; ok {
+			// prefer a case-sensitive match, but fall back to case-insensitive
+			if col, ok := sch.GetAllCols().GetByName(qc.ColumnName); ok {
+				return QualifiedColumn{tableName, col.Name}, nil
+			}
+			if col, ok := sch.GetAllCols().GetByNameCaseInsensitive(qc.ColumnName); ok {
+				return QualifiedColumn{tableName, col.Name}, nil
+			}
+
+			return QualifiedColumn{}, errFmt(UnknownColumnErrFmt, qc.ColumnName)
 		} else {
-			return QualifiedColumn{}, errFmt("Unrecognized table name: '%v'", tableName)
+			return QualifiedColumn{}, errFmt("Unknown table: '%v'", qc.TableName)
 		}
 	}
+
+	var canonicalColumnName string
+	var tableName string
+	foundMatch := false
+	foundCaseSensitiveMatch := false
 
 	// Finally, look through all input schemas to see if there's an exact match and dying if there's any ambiguity
-	var colSchema schema.Schema
-	var tableName string
 	for tbl, sch := range schemas {
-		if _, ok := sch.GetAllCols().GetByName(colName); ok {
-			if colSchema != nil {
-				return QualifiedColumn{}, errFmt("Ambiguous column: '%v'", colName)
+		if col, ok := sch.GetAllCols().GetByName(colNameExpr); ok {
+			if foundCaseSensitiveMatch {
+				return QualifiedColumn{}, errFmt("Ambiguous column: '%v'", colNameExpr)
 			}
-			colSchema = sch
 			tableName = tbl
+			canonicalColumnName = col.Name
+			foundCaseSensitiveMatch, foundMatch = true, true
+		}
+
+		// prefer a case-sensitive match, but fall back to case-insensitive
+		if !foundCaseSensitiveMatch {
+			if col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colNameExpr); ok {
+				if foundMatch {
+					return QualifiedColumn{}, errFmt("Ambiguous column: '%v'", colNameExpr)
+				}
+				tableName = tbl
+				canonicalColumnName = col.Name
+				foundMatch = true
+			}
 		}
 	}
 
-	if colSchema == nil {
-		return QualifiedColumn{}, errFmt(UnknownColumnErrFmt, colName)
+	if !foundMatch {
+		return QualifiedColumn{}, errFmt(UnknownColumnErrFmt, colNameExpr)
 	}
 
-	return QualifiedColumn{TableName: tableName, ColumnName: colName}, nil
+	return QualifiedColumn{TableName: tableName, ColumnName: canonicalColumnName}, nil
 }
 
-// Parses a column alias (e.g.: "a.id") into a qualified column name, where either the table name or the column name may
-// be an alias. If there is no table qualifier, the returned QualifiedColumn will have an empty TableName
-func parseColumnAlias(colName string) QualifiedColumn {
+// Parses a qualified column string (e.g.: "a.id") into a qualified column name, where either the table name or the
+// column name may be an alias. If there is no table qualifier, the returned QualifiedColumn will have an empty
+// TableName. The ColumnName field will always be set for any non-empty string.
+func parseQualifiedColumnString(colName string) QualifiedColumn {
+	if len(colName) == 0 {
+		panic("cannot parse empty column string")
+	}
+
 	if idx := strings.Index(colName, "."); idx > 0 {
 		return QualifiedColumn{colName[:idx], colName[idx+1:]}
 	}
