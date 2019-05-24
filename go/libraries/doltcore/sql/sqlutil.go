@@ -233,6 +233,7 @@ type rowFilterFn = func(r row.Row) (matchesFilter bool)
 type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
 
 const UnknownColumnErrFmt = "Unknown column: '%v'"
+const UnknownTableErrFmt = "Unknown table: '%v'"
 
 // Turns a node to a string
 func nodeToString(node sqlparser.SQLNode) string {
@@ -241,25 +242,54 @@ func nodeToString(node sqlparser.SQLNode) string {
 	return buffer.String()
 }
 
+// Resolves the table name expression given by returning the canonical name of the table, or an error if no such table
+// exists in the given root. The table name returned will always match the expression given except for case sensitivity.
+// If an exact case-sensitive match for table name exists, it will be returned. Otherwise, a case-insensitive match will
+// be returned if one exists. If no case-insensitive match is found, an error is returned.
+func resolveTable(tableNameExpr string, allTableNames []string, aliases *Aliases) (canonicalTableName string, err error) {
+	if tableName, ok := aliases.TablesByAlias[tableNameExpr]; ok {
+		return tableName, nil
+	}
+
+	for _, tableName := range allTableNames {
+		if tableNameExpr == tableName {
+			return tableName, nil
+		}
+	}
+
+	for _, tableName := range allTableNames {
+		if strings.ToLower(tableNameExpr) == strings.ToLower(tableName) {
+			return tableName, nil
+		}
+	}
+
+	return "", errFmt(UnknownTableErrFmt, tableNameExpr)
+}
+
 // Finds the schema that contains the column name given among the tables given, and returns the fully qualified column,
 // with the full (unaliased) name of the table and column being referenced.  Returns an error if no schema contains such
 // a column name, or if multiple do. Columns returned by this method are verified to exist.
 //
 // colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
-// TODO: this inappropriately matches column aliases in the where clause, and shouldn't be used there
+//
+// TODO: this inappropriately matches column aliases in the where clause, and shouldn't be used there.
 func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
 	// First try matching any known aliases directly
-	if qc, ok := aliases.ColumnsByAlias[colNameExpr]; ok {
-		return qc, nil
-	}
+	// if qc, ok := aliases.ColumnsByAlias[colNameExpr]; ok {
+	// 	return qc, nil
+	// }
 
 	// Then try getting the table from the column name string itself, eg. "t.col"
 	qc := parseQualifiedColumnString(colNameExpr)
 	if qc.TableName != "" {
-		tableName := aliases.TablesByAlias[qc.TableName]
-		if resolvedName, ok := aliases.ColumnsByAlias[qc.ColumnName]; ok {
-			return resolvedName, nil
+		tableName, err := resolveTable(qc.TableName, keys(schemas), aliases)
+		if err != nil {
+			return QualifiedColumn{}, err
 		}
+
+		// if resolvedName, ok := aliases.ColumnsByAlias[qc.ColumnName]; ok {
+		// 	return resolvedName, nil
+		// }
 		if sch, ok := schemas[tableName]; ok {
 			// prefer a case-sensitive match, but fall back to case-insensitive
 			if col, ok := sch.GetAllCols().GetByName(qc.ColumnName); ok {
@@ -309,6 +339,16 @@ func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases
 	}
 
 	return QualifiedColumn{TableName: tableName, ColumnName: canonicalColumnName}, nil
+}
+
+func keys(m map[string]schema.Schema) []string {
+	ks := make([]string, len(m))
+	i := 0
+	for k, _ := range m {
+		ks[i] = k
+		i++
+	}
+	return ks
 }
 
 // Parses a qualified column string (e.g.: "a.id") into a qualified column name, where either the table name or the

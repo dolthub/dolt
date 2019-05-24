@@ -450,23 +450,13 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer, moe, barney),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
+		// TODO: column aliases in the WHERE clause shouldn't work according to SQL spec. It's more work to remove support for them in the WHERE clause while still supporting them in
+		//  ORDER BY, where they must be supported.
+		// TODO: allow non-unique column aliases
 		{
-			name:           "column aliases in where clause",
-			query:          `select first as f, last as l from people where f = "Homer"`,
-			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer),
-			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
-		},
-		{
-			name:           "column aliases in where clause, >",
-			query:          `select first as f, last as l from people where l > "Simpson"`,
-			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), moe),
-			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
-		},
-		{
-			name:           "column aliases in where clause, <",
-			query:          `select first as f, last as l from people where "Simpson" < l`,
-			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), moe),
-			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
+			name:        "column aliases in where clause",
+			query:       `select first as f, last as l from people where f = "Homer"`,
+			expectedErr: "Unknown column: 'f'",
 		},
 		{
 			name:           "select subset of columns with order by",
@@ -482,7 +472,7 @@ func TestExecuteSelect(t *testing.T) {
 		},
 		{
 			name:           "table aliases",
-			query:          "select p.first as f, people.last as l from people p where p.f = 'Homer'",
+			query:          "select p.first as f, people.last as l from people p where p.first = 'Homer'",
 			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
@@ -861,7 +851,7 @@ func TestCaseSensitivity(t *testing.T) {
 		expectedErr     string
 	}{
 		{
-			name:        "table name has mixed case",
+			name:        "table name has mixed case, select lower case",
 			tableName:   "MiXeDcAsE",
 			tableSchema: newSchema("test", types.StringKind),
 			initialRows: rs(newRow(types.String("1"))),
@@ -870,7 +860,16 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows: rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "column name has mixed case",
+			name:        "table name has mixed case, select upper case",
+			tableName:   "MiXeDcAsE",
+			tableSchema: newSchema("test", types.StringKind),
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select test from MIXEDCASE",
+			expectedSchema: newResultSetSchema("test", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+		},
+		{
+			name:        "column name has mixed case, select lower case",
 			tableName:   "test",
 			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
 			initialRows: rs(newRow(types.String("1"))),
@@ -879,12 +878,22 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows: rs(newResultSetRow(types.String("1"))),
 		},
 		{
+			name:        "column name has mixed case, select upper case",
+			tableName:   "test",
+			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select MIXEDCASE from test",
+			expectedSchema: newResultSetSchema("MIXEDCASE", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+		},
+		{
 			name:        "select uses incorrect case",
 			tableName:   "test",
 			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
 			initialRows: rs(newRow(types.String("1"))),
 			query:       "select mixedcase from test",
-			expectedErr: "Unknown column: 'mixedcase'",
+			expectedSchema: newResultSetSchema("mixedcase", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
 		},
 		{
 			name:        "column is reserved word, select not backticked",
@@ -899,7 +908,7 @@ func TestCaseSensitivity(t *testing.T) {
 			),
 			query:       "select Timestamp from test",
 			expectedRows: rs(newResultSetRow(types.String("1"))),
-			expectedSchema: newResultSetSchema("Timestamp", types.StringKind),
+			expectedSchema: newResultSetSchema("timestamp", types.StringKind),
 		},
 		{
 			name:        "column is reserved word, select not backticked #2",
@@ -908,9 +917,32 @@ func TestCaseSensitivity(t *testing.T) {
 				"YeAr", types.StringKind),
 			initialRows: rs(newRow(types.String("1"))),
 			query:       "select Year from test",
-			expectedSchema: newResultSetSchema("YeAr", types.StringKind),
+			expectedSchema: newResultSetSchema("year", types.StringKind),
 		},
-
+		{
+			name:        "column is reserved word, select backticked",
+			tableName:   "test",
+			tableSchema: newSchema(
+				"Timestamp", types.StringKind,
+				"and", types.StringKind,
+				"or", types.StringKind,
+				"select", types.StringKind),
+			initialRows: rs(
+				newRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")),
+			),
+			query:       "select `Timestamp` from test",
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedSchema: newResultSetSchema("Timestamp", types.StringKind),
+		},
+		{
+			name:        "column is reserved word, select backticked #2",
+			tableName:   "test",
+			tableSchema: newSchema(
+				"YeAr", types.StringKind),
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select `Year` from test",
+			expectedSchema: newResultSetSchema("Year", types.StringKind),
+		},
 	}
 
 	for _, tt := range tests {
