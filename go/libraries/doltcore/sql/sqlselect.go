@@ -99,7 +99,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processSelectedColumns(ctx, root, selectStmt, s.SelectExprs); err != nil {
+	if err := processSelectedColumns(selectStmt, s.SelectExprs); err != nil {
 		return nil, nil, err
 	}
 
@@ -372,7 +372,7 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 
 // Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
 // or returns an error if it cannot. All table aliases must be established in the SelectStatement.
-func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
+func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
 	var columns []QualifiedColumn
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
@@ -413,7 +413,7 @@ func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectS
 				} else {
 					// This isn't a true alias, but we want the column header to exactly match the original select statement, even
 					// if we found a case-insensitive match for the column name.
-					selectStmt.aliases.AddColumnAlias(qc, getColumnNameString(colExpr))
+					selectStmt.aliases.AddColumnAlias(qc, colExpr.Name.String())
 				}
 
 				columns = append(columns, qc)
