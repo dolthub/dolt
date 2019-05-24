@@ -311,6 +311,21 @@ func processFromClause(ctx context.Context, root *doltdb.RootValue, selectStmt *
 		}
 	}
 
+	return validateTablesAndAliases(selectStmt)
+}
+
+// Validates that the tables and aliases from the select have unique names.
+func validateTablesAndAliases(selectStatement *SelectStatement) error {
+	seen := make(map[string]bool)
+	for alias := range selectStatement.aliases.TablesByAlias {
+		seen[alias] = true
+	}
+	for tableName := range selectStatement.inputSchemas {
+		if seen[tableName] {
+			return errFmt("Non-unique table name / alias: '%v'", tableName)
+		}
+	}
+
 	return nil
 }
 
@@ -338,10 +353,14 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 		}
 
 		if !te.As.IsEmpty() {
-			selectStmt.aliases.AddTableAlias(canonicalTableName, te.As.String())
+			if err := selectStmt.aliases.AddTableAlias(canonicalTableName, te.As.String()); err != nil {
+				return err
+			}
 		}
 
-		selectStmt.inputSchemas[canonicalTableName] = mustGetSchema(ctx, root, canonicalTableName)
+		if _, ok := selectStmt.inputSchemas[canonicalTableName]; !ok {
+			selectStmt.inputSchemas[canonicalTableName] = mustGetSchema(ctx, root, canonicalTableName)
+		}
 		selectStmt.inputTables = append(selectStmt.inputTables, canonicalTableName)
 
 	case *sqlparser.JoinTableExpr:

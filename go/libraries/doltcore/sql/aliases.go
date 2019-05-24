@@ -4,8 +4,8 @@ package sql
 type Aliases struct {
 	// Map from table alias to table name
 	TablesByAlias map[string]string
-	// Map from table alias to table name
-	AliasesByTable map[string]string
+	// Map from table name to aliases
+	AliasesByTable map[string][]string
 	// Map from column name to column alias
 	columnAliases map[QualifiedColumn]string
 }
@@ -20,12 +20,12 @@ type QualifiedColumn struct {
 func NewAliases() *Aliases {
 	return &Aliases{
 		TablesByAlias:  make(map[string]string),
-		AliasesByTable: make(map[string]string),
+		AliasesByTable: make(map[string][]string),
 		columnAliases:  make(map[QualifiedColumn]string),
 	}
 }
 
-// Returns a copy of the aliases with only table aliases filled in.
+// Returns a copy of the aliases with only table aliases filled in.`
 func (a *Aliases) TableAliasesOnly() *Aliases {
 	return &Aliases{
 		TablesByAlias:  a.TablesByAlias,
@@ -39,10 +39,14 @@ func (a *Aliases) AddColumnAlias(qc QualifiedColumn, alias string) {
 	a.columnAliases[qc] = alias
 }
 
-// Adds a table alias as specified. Silently overwrites existing entries.
-func (a *Aliases) AddTableAlias(tableName, alias string) {
-	a.AliasesByTable[tableName] = alias
+// Adds a table alias as specified. Returns an error if the alias already exists
+func (a *Aliases) AddTableAlias(tableName, alias string) error {
+	if _, ok := a.TablesByAlias[alias]; ok {
+		return errFmt("Duplicate table alias: '%v'", alias)
+	}
 	a.TablesByAlias[alias] = tableName
+	a.AliasesByTable[tableName] = append(a.AliasesByTable[tableName], alias)
+	return nil
 }
 
 // Returns the single column matching the alias given. If no column matches, returns NoQualifiedColumn. If
