@@ -272,12 +272,10 @@ func resolveTable(tableNameExpr string, allTableNames []string, aliases *Aliases
 // a column name, or if multiple do. Columns returned by this method are verified to exist.
 //
 // colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
-//
 func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
-
 	// First try matching any known aliases directly. This is only appropriate in some contexts, e.g. in the ORDER BY but
 	// not the WHERE clause. Callers should use Aliases.TableAliasesOnly for cases when the column aliases shouldn't be
-	// considered valid.
+	// considered.
 	if qc, err := aliases.GetColumnForAlias(colNameExpr); err != nil {
 		return QualifiedColumn{}, err
 	} else if !ColumnsEqual(qc, QualifiedColumn{}) {
@@ -293,51 +291,59 @@ func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases
 		}
 
 		if sch, ok := schemas[tableName]; ok {
-			// prefer a case-sensitive match, but fall back to case-insensitive
-			if col, ok := sch.GetAllCols().GetByName(qc.ColumnName); ok {
-				return QualifiedColumn{tableName, col.Name}, nil
-			}
-			if col, ok := sch.GetAllCols().GetByNameCaseInsensitive(qc.ColumnName); ok {
-				return QualifiedColumn{tableName, col.Name}, nil
-			}
-
-			return QualifiedColumn{}, errFmt(UnknownColumnErrFmt, qc.ColumnName)
+			return resolveColumnInTables(qc.ColumnName, map[string]schema.Schema{tableName: sch})
 		} else {
-			return QualifiedColumn{}, errFmt("Unknown table: '%v'", qc.TableName)
+			panic("resolveTable returned an unknown table")
 		}
 	}
 
+	// Finally, look through all input schemas to see if there's an exact match and dying if there's any ambiguity
+	return resolveColumnInTables(colNameExpr, schemas)
+}
+// Returns the best match column for the name given in the schemas given. An exact case-sensitive match is preferred.
+// If that isn't found, try a case-insensitive match instead. If the name is ambiguous or cannot be found in any schema,
+// returns an error.
+func resolveColumnInTables(colName string, schemas map[string]schema.Schema) (QualifiedColumn, error) {
 	var canonicalColumnName string
 	var tableName string
 	foundMatch := false
+	ambiguous := false
 	foundCaseSensitiveMatch := false
 
-	// Finally, look through all input schemas to see if there's an exact match and dying if there's any ambiguity
 	for tbl, sch := range schemas {
-		if col, ok := sch.GetAllCols().GetByName(colNameExpr); ok {
+		if col, ok := sch.GetAllCols().GetByName(colName); ok {
 			if foundCaseSensitiveMatch {
-				return QualifiedColumn{}, errFmt(AmbiguousColumnErrFmt, colNameExpr)
+				ambiguous = true
+				break
 			}
 			tableName = tbl
 			canonicalColumnName = col.Name
 			foundCaseSensitiveMatch, foundMatch = true, true
 		}
 
-		// prefer a case-sensitive match, but fall back to case-insensitive
-		if !foundCaseSensitiveMatch {
-			if col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colNameExpr); ok {
-				if foundMatch {
-					return QualifiedColumn{}, errFmt(AmbiguousColumnErrFmt, colNameExpr)
+		if _, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName); ok && !foundCaseSensitiveMatch {
+			sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+				if strings.ToLower(colName) == strings.ToLower(col.Name) {
+					if foundMatch {
+						ambiguous = true
+						return true
+					}
+					canonicalColumnName = col.Name
+					tableName = tbl
+					foundMatch = true
 				}
-				tableName = tbl
-				canonicalColumnName = col.Name
-				foundMatch = true
-			}
+
+				return false
+			})
 		}
 	}
 
+	if ambiguous {
+		return QualifiedColumn{}, errFmt(AmbiguousColumnErrFmt, colName)
+	}
+
 	if !foundMatch {
-		return QualifiedColumn{}, errFmt(UnknownColumnErrFmt, colNameExpr)
+		return QualifiedColumn{}, errFmt(UnknownColumnErrFmt, colName)
 	}
 
 	return QualifiedColumn{TableName: tableName, ColumnName: canonicalColumnName}, nil
