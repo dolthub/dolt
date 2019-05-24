@@ -232,8 +232,9 @@ type rowFilterFn = func(r row.Row) (matchesFilter bool)
 // Boolean lesser function for rows. Returns whether rLeft < rRight
 type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
 
-const UnknownColumnErrFmt = "Unknown column: '%v'"
 const UnknownTableErrFmt = "Unknown table: '%v'"
+const AmbiguousTableErrFmt = "Ambiguous table: '%v'"
+const UnknownColumnErrFmt = "Unknown column: '%v'"
 const AmbiguousColumnErrFmt = "Ambiguous column: '%v'"
 
 // Turns a node to a string
@@ -246,22 +247,32 @@ func nodeToString(node sqlparser.SQLNode) string {
 // Resolves the table name expression given by returning the canonical name of the table, or an error if no such table
 // exists in the given root. The table name returned will always match the expression given except for case sensitivity.
 // If an exact case-sensitive match for table name exists, it will be returned. Otherwise, a case-insensitive match will
-// be returned if one exists. If no case-insensitive match is found, an error is returned.
+// be returned if one exists. If no case-insensitive match exists, or if multiple exist, an error will be returned.
 func resolveTable(tableNameExpr string, allTableNames []string, aliases *Aliases) (canonicalTableName string, err error) {
 	if tableName, ok := aliases.TablesByAlias[tableNameExpr]; ok {
 		return tableName, nil
 	}
 
+	// First look for an exact case-sensitive match
 	for _, tableName := range allTableNames {
 		if tableNameExpr == tableName {
 			return tableName, nil
 		}
 	}
 
+	// Then look for case-insensitive matches, watching for ambiguity
+	var foundTableName string
 	for _, tableName := range allTableNames {
 		if strings.ToLower(tableNameExpr) == strings.ToLower(tableName) {
-			return tableName, nil
+			if foundTableName != "" {
+				return "", errFmt(AmbiguousTableErrFmt, tableNameExpr)
+			}
+			foundTableName = tableName
 		}
+	}
+
+	if foundTableName != "" {
+		return foundTableName, nil
 	}
 
 	return "", errFmt(UnknownTableErrFmt, tableNameExpr)

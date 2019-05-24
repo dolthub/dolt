@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -456,6 +457,18 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer, moe, barney),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "f", types.StringKind),
 		},
+		// TODO: fix this. To make this work we need to track selected tables along with their aliases. It's not an error to
+		//  select the same table multiple times, as long as each occurrence has a unique name
+		// {
+		// 	name:        "duplicate table selection",
+		// 	query:       "select first as f, last as f from people, people where age >= 40",
+		// 	expectedErr: "Non-unique table name / alias: 'people'",
+		// },
+		{
+			name:        "duplicate table alias",
+			query:       "select * from people p, people p where age >= 40",
+			expectedErr: "Duplicate table alias: 'p'",
+		},
 		{
 			name:        "column aliases in where clause",
 			query:       `select first as f, last as l from people where f = "Homer"`,
@@ -858,7 +871,7 @@ func TestCaseSensitivity(t *testing.T) {
 		tableName       string
 		tableSchema     schema.Schema
 		initialRows     []row.Row
-		additionalSetup func()
+		additionalSetup func(t *testing.T, dEnv *env.DoltEnv)
 		query           string
 		expectedRows    []row.Row
 		expectedSchema  schema.Schema
@@ -881,6 +894,41 @@ func TestCaseSensitivity(t *testing.T) {
 			query:       "select test from MIXEDCASE",
 			expectedSchema: newResultSetSchema("test", types.StringKind),
 			expectedRows: rs(newResultSetRow(types.String("1"))),
+		},
+		{
+			name:        "multiple tables with the same case-insensitive name, exact match",
+			tableName:   "tableName",
+			tableSchema: newSchema("test", types.StringKind),
+			additionalSetup: func(t *testing.T, dEnv *env.DoltEnv) {
+				createTestTable(dEnv, t, "TABLENAME", newSchema("test", types.StringKind))
+				createTestTable(dEnv, t, "tablename", newSchema("test", types.StringKind))
+			},
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select test from tableName",
+			expectedSchema: newResultSetSchema("test", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+		},
+		{
+			name:        "multiple tables with the same case-insensitive name, no exact match",
+			tableName:   "tableName",
+			tableSchema: newSchema("test", types.StringKind),
+			additionalSetup: func(t *testing.T, dEnv *env.DoltEnv) {
+				createTestTable(dEnv, t, "TABLENAME", newSchema("test", types.StringKind))
+			},
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select test from tablename",
+			expectedErr: "Ambiguous table: 'tablename'",
+		},
+		{
+			name:        "alias with same name as table",
+			tableName:   "tableName",
+			tableSchema: newSchema("test", types.StringKind),
+			additionalSetup: func(t *testing.T, dEnv *env.DoltEnv) {
+				createTestTable(dEnv, t, "other", newSchema("othercol", types.StringKind))
+			},
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select other.test from tablename as other, other",
+			expectedErr: "Non-unique table name / alias: 'other'",
 		},
 		{
 			name:        "column name has mixed case, select lower case",
@@ -1004,11 +1052,18 @@ func TestCaseSensitivity(t *testing.T) {
 			name:        "column is reserved word, select backticked #2",
 			tableName:   "test",
 			tableSchema: newSchema(
-				"YeAr", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select `Year` from test",
-			expectedSchema: newResultSetSchema("Year", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+				"Year", types.StringKind,
+				"and", types.StringKind,
+				"or", types.StringKind,
+				"select", types.StringKind),
+			initialRows: rs(newRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
+			query:       "select `Year`, `OR`, `SELect`, `anD` from test",
+			expectedSchema: newResultSetSchema(
+				"Year", types.StringKind,
+				"OR", types.StringKind,
+				"SELect", types.StringKind,
+				"anD", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"), types.String("aaa"), types.String("create"), types.String("1.1"))),
 		},
 	}
 
@@ -1021,7 +1076,7 @@ func TestCaseSensitivity(t *testing.T) {
 				createTestTable(dEnv, t, tt.tableName, tt.tableSchema, tt.initialRows...)
 			}
 			if tt.additionalSetup != nil {
-				tt.additionalSetup()
+				tt.additionalSetup(t, dEnv)
 			}
 
 			root, _ := dEnv.WorkingRoot(context.Background())
