@@ -450,9 +450,12 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer, moe, barney),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
 		},
-		// TODO: column aliases in the WHERE clause shouldn't work according to SQL spec. It's more work to remove support for them in the WHERE clause while still supporting them in
-		//  ORDER BY, where they must be supported.
-		// TODO: allow non-unique column aliases
+		{
+			name:           "duplicate column aliases",
+			query:          "select first as f, last as f from people where age >= 40",
+			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer, moe, barney),
+			expectedSchema: newResultSetSchema("f", types.StringKind, "f", types.StringKind),
+		},
 		{
 			name:        "column aliases in where clause",
 			query:       `select first as f, last as l from people where f = "Homer"`,
@@ -471,10 +474,21 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: newResultSetSchema("f", types.StringKind),
 		},
 		{
+			name:        "ambiguous column in order by",
+			query:       "select first as f, last as f from people order by f",
+			expectedErr: "Ambiguous column: 'f'",
+		},
+		{
 			name:           "table aliases",
 			query:          "select p.first as f, people.last as l from people p where p.first = 'Homer'",
 			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "l", types.StringKind),
+		},
+		{
+			name:           "table aliases without column aliases",
+			query:          "select p.first, people.last from people p where p.first = 'Homer'",
+			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer),
+			expectedSchema: newResultSetSchema("first", types.StringKind, "last", types.StringKind),
 		},
 		{
 			name:        "table aliases with bad alias",
