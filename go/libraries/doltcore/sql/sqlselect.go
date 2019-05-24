@@ -249,7 +249,7 @@ func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Wher
 // Returns whether the given column is in the slice
 func contains(column QualifiedColumn, cols []QualifiedColumn) bool {
 	for _, col := range cols {
-		if AreColumnsEqual(col, column) {
+		if ColumnsEqual(col, column) {
 			return true
 		}
 	}
@@ -720,9 +720,8 @@ func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Sc
 			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
 				panic(fmt.Sprintf(UnknownColumnErrFmt, colName))
 			} else {
-				// Rename any aliased columns for output. Column names only matter for the end result, not any
-				// intermediate ones.
-				if alias, ok := aliases.AliasesByColumn[selectedCol]; ok {
+				// Rename any aliased columns for output. Column names only matter for the end result, not any intermediate ones.
+				if alias, ok := aliases.GetColumnAlias(selectedCol); ok {
 					col.Name = alias
 				}
 				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}

@@ -7,7 +7,7 @@ type Aliases struct {
 	// Map from table alias to table name
 	AliasesByTable map[string]string
 	// Map from column name to column alias
-	AliasesByColumn map[QualifiedColumn]string
+	columnAliases map[QualifiedColumn]string
 }
 
 // A qualified column names its table and its column.
@@ -19,15 +19,24 @@ type QualifiedColumn struct {
 
 func NewAliases() *Aliases {
 	return &Aliases{
-		TablesByAlias:   make(map[string]string),
-		AliasesByTable:  make(map[string]string),
-		AliasesByColumn: make(map[QualifiedColumn]string),
+		TablesByAlias:  make(map[string]string),
+		AliasesByTable: make(map[string]string),
+		columnAliases:  make(map[QualifiedColumn]string),
+	}
+}
+
+// Returns a copy of the aliases with only table aliases filled in.
+func (a *Aliases) TableAliasesOnly() *Aliases {
+	return &Aliases{
+		TablesByAlias:  a.TablesByAlias,
+		AliasesByTable: a.AliasesByTable,
+		columnAliases:  make(map[QualifiedColumn]string),
 	}
 }
 
 // Adds a column alias as specified. Silently overwrites existing entries.
 func (a *Aliases) AddColumnAlias(qc QualifiedColumn, alias string) {
-	a.AliasesByColumn[qc] = alias
+	a.columnAliases[qc] = alias
 }
 
 // Adds a table alias as specified. Silently overwrites existing entries.
@@ -36,7 +45,28 @@ func (a *Aliases) AddTableAlias(tableName, alias string) {
 	a.TablesByAlias[alias] = tableName
 }
 
+// Returns the single column matching the alias given. If no column matches, returns NoQualifiedColumn. If
+// multiple match, returns an ambiguous column error.
+func (a *Aliases) GetColumnForAlias(alias string) (QualifiedColumn, error) {
+	found := QualifiedColumn{}
+	for qc, colAlias := range a.columnAliases {
+		if colAlias == alias {
+			if !ColumnsEqual(found, QualifiedColumn{}) {
+				return QualifiedColumn{}, errFmt(AmbiguousColumnErrFmt, alias)
+			}
+			found = qc
+		}
+	}
+	return found, nil
+}
+
+// Returns the alias for the column given and whether the alias exists.
+func (a *Aliases) GetColumnAlias(qc QualifiedColumn) (string, bool) {
+	alias, ok := a.columnAliases[qc]
+	return alias, ok
+}
+
 // Returns whether the two columns given are equal
-func AreColumnsEqual(c1, c2 QualifiedColumn) bool {
+func ColumnsEqual(c1, c2 QualifiedColumn) bool {
 	return c1.TableName == c2.TableName && c1.ColumnName == c2.ColumnName
 }

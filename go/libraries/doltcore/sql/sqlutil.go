@@ -234,6 +234,7 @@ type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
 
 const UnknownColumnErrFmt = "Unknown column: '%v'"
 const UnknownTableErrFmt = "Unknown table: '%v'"
+const AmbiguousColumnErrFmt = "Ambiguous column: '%v'"
 
 // Turns a node to a string
 func nodeToString(node sqlparser.SQLNode) string {
@@ -272,12 +273,16 @@ func resolveTable(tableNameExpr string, allTableNames []string, aliases *Aliases
 //
 // colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
 //
-// TODO: this inappropriately matches column aliases in the where clause, and shouldn't be used there.
 func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
-	// First try matching any known aliases directly
-	// if qc, ok := aliases.ColumnsByAlias[colNameExpr]; ok {
-	// 	return qc, nil
-	// }
+
+	// First try matching any known aliases directly. This is only appropriate in some contexts, e.g. in the ORDER BY but
+	// not the WHERE clause. Callers should use Aliases.TableAliasesOnly for cases when the column aliases shouldn't be
+	// considered valid.
+	if qc, err := aliases.GetColumnForAlias(colNameExpr); err != nil {
+		return QualifiedColumn{}, err
+	} else if !ColumnsEqual(qc, QualifiedColumn{}) {
+		return qc, nil
+	}
 
 	// Then try getting the table from the column name string itself, eg. "t.col"
 	qc := parseQualifiedColumnString(colNameExpr)
@@ -287,9 +292,6 @@ func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases
 			return QualifiedColumn{}, err
 		}
 
-		// if resolvedName, ok := aliases.ColumnsByAlias[qc.ColumnName]; ok {
-		// 	return resolvedName, nil
-		// }
 		if sch, ok := schemas[tableName]; ok {
 			// prefer a case-sensitive match, but fall back to case-insensitive
 			if col, ok := sch.GetAllCols().GetByName(qc.ColumnName); ok {
@@ -314,7 +316,7 @@ func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases
 	for tbl, sch := range schemas {
 		if col, ok := sch.GetAllCols().GetByName(colNameExpr); ok {
 			if foundCaseSensitiveMatch {
-				return QualifiedColumn{}, errFmt("Ambiguous column: '%v'", colNameExpr)
+				return QualifiedColumn{}, errFmt(AmbiguousColumnErrFmt, colNameExpr)
 			}
 			tableName = tbl
 			canonicalColumnName = col.Name
@@ -325,7 +327,7 @@ func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases
 		if !foundCaseSensitiveMatch {
 			if col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colNameExpr); ok {
 				if foundMatch {
-					return QualifiedColumn{}, errFmt("Ambiguous column: '%v'", colNameExpr)
+					return QualifiedColumn{}, errFmt(AmbiguousColumnErrFmt, colNameExpr)
 				}
 				tableName = tbl
 				canonicalColumnName = col.Name
@@ -925,7 +927,7 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 			return true
 		}, nil
 	} else {
-		return createFilterForWhereExpr(whereClause.Expr, inputSchemas, aliases, rss)
+		return createFilterForWhereExpr(whereClause.Expr, inputSchemas, aliases.TableAliasesOnly(), rss)
 	}
 }
 
@@ -933,7 +935,7 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (rowFilterFn, error) {
 	filterFns := make([]rowFilterFn, 0)
 	for _, je := range joins {
-		if filterFn, err := createFilterForJoin(je, inputSchemas, aliases, rss); err != nil {
+		if filterFn, err := createFilterForJoin(je, inputSchemas, aliases.TableAliasesOnly(), rss); err != nil {
 			return nil, err
 		} else if filterFn != nil {
 			filterFns = append(filterFns, filterFn)
