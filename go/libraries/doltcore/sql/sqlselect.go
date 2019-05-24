@@ -332,17 +332,17 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 			return errFmt("Selects without a table are not supported: %v", nodeToString(te))
 		}
 
-		if !root.HasTable(ctx, tableName) {
-			return errFmt("Unknown table: '%s'", tableName)
+		canonicalTableName, err := resolveTable(tableName, root.GetTableNames(ctx), NewAliases())
+		if err != nil {
+			return err
 		}
 
 		if !te.As.IsEmpty() {
-			selectStmt.aliases.AddTableAlias(tableName, te.As.String())
+			selectStmt.aliases.AddTableAlias(canonicalTableName, te.As.String())
 		}
-		selectStmt.aliases.AddTableAlias(tableName, tableName)
 
-		selectStmt.inputSchemas[tableName] = mustGetSchema(ctx, root, tableName)
-		selectStmt.inputTables = append(selectStmt.inputTables, tableName)
+		selectStmt.inputSchemas[canonicalTableName] = mustGetSchema(ctx, root, canonicalTableName)
+		selectStmt.inputTables = append(selectStmt.inputTables, canonicalTableName)
 
 	case *sqlparser.JoinTableExpr:
 		switch te.Join {
@@ -410,6 +410,10 @@ func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectS
 				// an absent column alias will be empty
 				if selectExpr.As.String() != "" {
 					selectStmt.aliases.AddColumnAlias(qc, selectExpr.As.String())
+				} else {
+					// This isn't a true alias, but we want the column header to exactly match the original select statement, even
+					// if we found a case-insensitive match for the column name.
+					selectStmt.aliases.AddColumnAlias(qc, getColumnNameString(colExpr))
 				}
 
 				columns = append(columns, qc)
