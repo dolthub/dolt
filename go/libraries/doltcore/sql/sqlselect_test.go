@@ -896,6 +896,42 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows: rs(newResultSetRow(types.String("1"))),
 		},
 		{
+			name:        "select with multiple matching columns, exact match",
+			tableName:   "test",
+			tableSchema: newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
+			initialRows: rs(newRow(types.String("1"), types.String("2"))),
+			query:       "select mixedcase from test",
+			expectedSchema: newResultSetSchema("mixedcase", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("2"))),
+		},
+		{
+			name:        "select with multiple matching columns, exact case #2",
+			tableName:   "test",
+			tableSchema: newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
+			initialRows: rs(newRow(types.String("1"), types.String("2"))),
+			query:       "select MiXeDcAsE from test",
+			expectedSchema: newResultSetSchema("MiXeDcAsE", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+		},
+		{
+			name:        "select with multiple matching columns, no exact match",
+			tableName:   "test",
+			tableSchema: newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
+			initialRows: rs(newRow(types.String("1"), types.String("2"))),
+			query:       "select MIXEDCASE from test",
+			expectedErr: "Ambiguous column: 'MIXEDCASE'",
+		},
+		{
+			name:        "select with multiple matching columns, no exact match, table alias",
+			tableName:   "test",
+			tableSchema: newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
+			initialRows: rs(newRow(types.String("1"), types.String("2"))),
+			query:       "select t.MIXEDCASE from test t",
+			expectedErr: "Ambiguous column: 'MIXEDCASE'",
+		},
+		// TODO: this could be handled better (not change the case of the result set schema), but the parser will silently
+		//  lower-case any column name expression that is a reserved word. Changing that is harder.
+		{
 			name:        "column is reserved word, select not backticked",
 			tableName:   "test",
 			tableSchema: newSchema(
@@ -911,6 +947,21 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedSchema: newResultSetSchema("timestamp", types.StringKind),
 		},
 		{
+			name:        "column is reserved word, qualified with table alias",
+			tableName:   "test",
+			tableSchema: newSchema(
+				"Timestamp", types.StringKind,
+				"and", types.StringKind,
+				"or", types.StringKind,
+				"select", types.StringKind),
+			initialRows: rs(
+				newRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")),
+			),
+			query:       "select t.Timestamp from test as t",
+			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedSchema: newResultSetSchema("timestamp", types.StringKind),
+		},
+		{
 			name:        "column is reserved word, select not backticked #2",
 			tableName:   "test",
 			tableSchema: newSchema(
@@ -918,6 +969,7 @@ func TestCaseSensitivity(t *testing.T) {
 			initialRows: rs(newRow(types.String("1"))),
 			query:       "select Year from test",
 			expectedSchema: newResultSetSchema("year", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
 		},
 		{
 			name:        "column is reserved word, select backticked",
@@ -942,6 +994,7 @@ func TestCaseSensitivity(t *testing.T) {
 			initialRows: rs(newRow(types.String("1"))),
 			query:       "select `Year` from test",
 			expectedSchema: newResultSetSchema("Year", types.StringKind),
+			expectedRows: rs(newResultSetRow(types.String("1"))),
 		},
 	}
 
