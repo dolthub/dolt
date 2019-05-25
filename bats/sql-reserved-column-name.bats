@@ -20,7 +20,6 @@ teardown() {
       [[ "$output" =~ "Timestamp" ]] || false
       [[ "$output" =~ "1.1" ]] || false
       run dolt sql -q "select * from test where Timestamp='1'"
-      [ "$status" -eq 1 ]
-      skip "Bad error message for unquoted sql reserved word column names"
-      [[ ! "$output" =~ "Unknown column" ]] || false
+      [ "$status" -eq 0 ]
+      [[ "$output" =~ "1.1" ]] || false
 }
