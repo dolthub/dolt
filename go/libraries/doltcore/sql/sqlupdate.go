@@ -82,7 +82,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		if getter.NomsKind != column.Kind {
 			getter, err = ConversionValueGetter(getter, column.Kind)
 			if err != nil {
-				return errUpdate("Error processing update statement %v: %v", nodeToString(update), err.Error())
+				return errUpdate("Error processing update clause '%v': %v", nodeToString(update), err.Error())
 			}
 		}
 

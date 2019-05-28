@@ -411,27 +411,27 @@ func TestExecuteSelect(t *testing.T) {
 		{
 			name:        "select *, binary + in where type mismatch",
 			query:       "select * from people where first + 1 = 41",
-			expectedErr: "Type mismatch:",
+			expectedErr: "Type mismatch evaluating expression 'first + 1'",
 		},
 		{
 			name:        "select *, binary - in where type mismatch",
 			query:       "select * from people where first - 1 = 39",
-			expectedErr: "Type mismatch:",
+			expectedErr: "Type mismatch evaluating expression 'first - 1'",
 		},
 		{
 			name:        "select *, binary / in where type mismatch",
 			query:       "select * from people where first / 2 = 20",
-			expectedErr: "Type mismatch:",
+			expectedErr: "Type mismatch evaluating expression 'first / 2'",
 		},
 		{
 			name:        "select *, binary / in where type mismatch",
 			query:       "select * from people where first * 2 = 80",
-			expectedErr: "Type mismatch:",
+			expectedErr: "Type mismatch evaluating expression 'first * 2'",
 		},
 		{
 			name:        "select *, binary % in where type mismatch",
 			query:       "select * from people where first % 4 = 0",
-			expectedErr: "Type mismatch:",
+			expectedErr: "Type mismatch evaluating expression 'first % 4'",
 		},
 		{
 			name:           "select * with where, order by",
