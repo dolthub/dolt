@@ -5,16 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/snappy"
 	"io/ioutil"
 	"net/http"
 	"sort"
 	"strconv"
+	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/nbs"
-	"github.com/golang/snappy"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 )
 
@@ -50,8 +52,7 @@ func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 	}
 }
 
-// Get the Chunk for the value of the hash in the store. If the hash is
-// absent from the store EmptyChunk is returned.
+// Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
 func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 	hashes := hash.HashSet{h: struct{}{}}
 	foundChan := make(chan *chunks.Chunk, 1)
@@ -65,9 +66,8 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 	}
 }
 
-// GetMany gets the Chunks with |hashes| from the store. On return,
-// |foundChunks| will have been fully sent all chunks which have been
-// found. Any non-present chunks will silently be ignored.
+// GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
+// which have been found. Any non-present chunks will silently be ignored.
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
 	hashToChunk := dcs.cache.Get(hashes)
 
@@ -83,39 +83,124 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	}
 
 	if len(notCached) > 0 {
-		chnks, err := dcs.readChunksAndCache(ctx, notCached)
+		err := dcs.readChunksAndCache(ctx, hashes, notCached, foundChunks)
 
 		if err != nil {
 			//follow noms convention
 			panic(err)
 		}
-
-		for i := 0; i < len(chnks); i++ {
-			c := chnks[i]
-			foundChunks <- &c
-		}
 	}
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes []hash.Hash) ([]chunks.Chunk, error) {
-	// read all from remote and cache and put in known
+const (
+	getLocsBatchSize      = 2048
+	getLocsMaxConcurrency = 1
+)
+
+func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (map[string][]*remotesapi.RangeChunk, error) {
+	dlLocChan := make(chan *remotesapi.DownloadLoc, len(hashes))
+	urlToRanges := make(map[string][]*remotesapi.RangeChunk)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for loc := range dlLocChan {
+			switch typedLoc := loc.Location.(type) {
+			case *remotesapi.DownloadLoc_HttpGet:
+				panic("deprecated")
+			case *remotesapi.DownloadLoc_HttpGetRange:
+				if len(typedLoc.HttpGetRange.Ranges) > 0 {
+					url := typedLoc.HttpGetRange.Url
+					if ranges, ok := urlToRanges[url]; ok {
+						urlToRanges[url] = append(ranges, typedLoc.HttpGetRange.Ranges...)
+					} else {
+						urlToRanges[url] = typedLoc.HttpGetRange.Ranges
+					}
+				}
+			}
+		}
+	}()
+
 	hashesBytes := HashesToSlices(hashes)
-	req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), Hashes: hashesBytes}
-	resp, err := dcs.csClient.GetDownloadLocations(ctx, &req)
+	var work []func() error
+	batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
+		batch := hashesBytes[st:end]
+		f := func() error {
+			req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), Hashes: batch}
+			resp, err := dcs.csClient.GetDownloadLocations(ctx, &req)
 
-	if err != nil {
-		return nil, NewRpcError(err, "GetDownloadLocations", dcs.host, req)
-	}
+			if err != nil {
+				return NewRpcError(err, "GetDownloadLocations", dcs.host, req)
+			}
 
-	chnks, err := dcs.downloadChunks(ctx, resp.Locs)
+			for _, loc := range resp.Locs {
+				dlLocChan <- loc
+			}
+
+			return nil
+		}
+
+		work = append(work, f)
+		return false
+	})
+
+	err := concurrentExec(work, getLocsMaxConcurrency)
+	close(dlLocChan)
+
+	wg.Wait()
 
 	if err != nil {
 		return nil, err
 	}
 
-	dcs.cache.Put(chnks)
+	return urlToRanges, nil
+}
 
-	return chnks, nil
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan *chunks.Chunk) error {
+	startGetLocs := time.Now()
+	urlToRanges, err := dcs.getDLLocs(ctx, notCached)
+	endGetLocs := time.Now()
+	getLocsDelta := endGetLocs.Sub(startGetLocs)
+
+	if err != nil {
+		return err
+	}
+
+	var wg sync.WaitGroup
+	chunkChan := make(chan *chunks.Chunk)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for chunk := range chunkChan {
+			h := chunk.Hash()
+			if !dcs.cache.PutChunk(chunk) {
+				continue
+			}
+
+			if _, ok := hashes[h]; ok {
+				foundChunks <- chunk
+			}
+		}
+	}()
+
+	startDL := time.Now()
+	err = dcs.downloadChunks(ctx, urlToRanges, chunkChan)
+	close(chunkChan)
+
+	wg.Wait()
+
+	if err != nil {
+		return err
+	}
+
+	endDL := time.Now()
+	dl := endDL.Sub(startDL)
+
+	fmt.Sprintf("For %d chunks: Get Locs %f ms, Download %f ms\n", len(notCached), getLocsDelta.Seconds()*1000.0, dl.Seconds()*1000.0)
+
+	return nil
 }
 
 // Returns true iff the value at the address |h| is contained in the
@@ -144,15 +229,10 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 
 	absent = make(hash.HashSet)
 	var found []chunks.Chunk
-	for st, end := 0, maxHasManyBatchSize; st < len(hashSl); st, end = end, end+maxHasManyBatchSize {
+	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
 		// slice the slices into a batch of hashes
-		currHashSl := hashSl[st:]
-		currByteSl := byteSl[st:]
-
-		if end < len(hashSl) {
-			currHashSl = hashSl[st:end]
-			currByteSl = byteSl[st:end]
-		}
+		currHashSl := hashSl[st:end]
+		currByteSl := byteSl[st:end]
 
 		// send a request to the remote api to determine which chunks the remote api already has
 		req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
@@ -187,7 +267,9 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 				found = append(found, c)
 			}
 		}
-	}
+
+		return false
+	})
 
 	if len(found)+len(absent) != len(notCached) {
 		panic("not all chunks were accounted for")
@@ -373,60 +455,71 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 	return nil
 }
 
-// getting this working using the simplest approach first
-func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, locs []*remotesapi.DownloadLoc) ([]chunks.Chunk, error) {
-	var allChunks []chunks.Chunk
+func aggregateDownloads(aggDistance uint64, urlToRanges map[string][]*remotesapi.RangeChunk) []*remotesapi.DownloadLoc {
+	var aggregatedLocs []*remotesapi.DownloadLoc
+	for url, ranges := range urlToRanges {
+		sort.Slice(ranges, func(i, j int) bool {
+			return ranges[i].Offset < ranges[j].Offset
+		})
 
-	for _, loc := range locs {
+		last := ranges[0]
+		aggregatedRanges := []*remotesapi.RangeChunk{last}
+		for i := 1; i < len(ranges); i++ {
+			curr := ranges[i]
+			distance := last.Offset + uint64(last.Length) - curr.Offset - 1
+
+			if distance <= aggDistance {
+				aggregatedRanges = append(aggregatedRanges, curr)
+			} else {
+				getRange := &remotesapi.HttpGetRange{Url: url, Ranges: aggregatedRanges}
+				aggregatedLocs = append(aggregatedLocs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
+
+				aggregatedRanges = []*remotesapi.RangeChunk{curr}
+			}
+
+			last = curr
+		}
+
+		getRange := &remotesapi.HttpGetRange{Url: url, Ranges: aggregatedRanges}
+		aggregatedLocs = append(aggregatedLocs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
+	}
+
+	return aggregatedLocs
+}
+
+const (
+	chunkAggDistance       = 0
+	maxDownloadConcurrency = 1
+)
+
+// getting this working using the simplest approach first
+func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, urlToRanges map[string][]*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) error {
+	var allChunks []chunks.Chunk
+	aggLocs := aggregateDownloads(chunkAggDistance, urlToRanges)
+
+	var work []func() error
+	for _, loc := range aggLocs {
 		var err error
 		var chnks []chunks.Chunk
 		switch typedLoc := loc.Location.(type) {
 		case *remotesapi.DownloadLoc_HttpGet:
-			chnks, err = dcs.httpGetDownload(ctx, typedLoc.HttpGet)
+			panic("deprecated")
+			//chnks, err = dcs.httpGetDownload(ctx, typedLoc.HttpGet, foundChunks)
 		case *remotesapi.DownloadLoc_HttpGetRange:
-			chnks, err = dcs.httpGetRangeDownload(ctx, typedLoc.HttpGetRange)
+			downloadWork := dcs.getDownloadWorkForLoc(ctx, typedLoc.HttpGetRange, chunkChan)
+			work = append(work, downloadWork...)
 		}
 
 		if err != nil {
-			return allChunks, err
+			return err
 		}
 
 		allChunks = append(allChunks, chnks...)
 	}
 
-	return allChunks, nil
-}
+	err := concurrentExec(work, maxDownloadConcurrency)
 
-func (dcs *DoltChunkStore) httpGetDownload(ctx context.Context, httpGet *remotesapi.HttpGetChunk) ([]chunks.Chunk, error) {
-	hashes := httpGet.Hashes
-	if len(hashes) != 1 {
-		return nil, errors.New("not supported yet")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, httpGet.Url, nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
-
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := ioutil.ReadAll(resp.Body)
-
-	if err != nil {
-		return nil, err
-	}
-
-	expectedHash := hash.New(hashes[0])
-	ch := chunks.NewChunk(data)
-
-	if ch.Hash() != expectedHash {
-		return nil, errors.New("content did not match hash.")
-	}
-
-	return []chunks.Chunk{ch}, nil
+	return err
 }
 
 type bytesResult struct {
@@ -435,111 +528,58 @@ type bytesResult struct {
 	err  error
 }
 
-func getRanges(ctx context.Context, httpFetcher HTTPFetcher, url string, rangeChan <-chan *remotesapi.RangeChunk, resultChan chan<- bytesResult, stopChan <-chan struct{}) {
-	for {
-		select {
-		case <-stopChan:
-			return
-		default:
+func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, url string, ranges []*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) func() error {
+	numRanges := len(ranges)
+	offset := ranges[0].Offset
+	length := ranges[numRanges-1].Offset - offset + uint64(ranges[numRanges-1].Length)
+
+	return func() error {
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			return err
 		}
-		select {
-		case r, ok := <-rangeChan:
-			if !ok {
-				return
-			}
 
-			req, err := http.NewRequest(http.MethodGet, url, nil)
-			if err != nil {
-				resultChan <- bytesResult{r, nil, err}
-				break
-			}
-			rangeVal := fmt.Sprintf("bytes=%d-%d", r.Offset, r.Offset+uint64(r.Length)-1)
-			req.Header.Set("Range", rangeVal)
-			resp, err := httpFetcher.Do(req.WithContext(ctx))
+		rangeVal := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
+		req.Header.Set("Range", rangeVal)
+		resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
 
-			if err != nil {
-				resultChan <- bytesResult{r, nil, err}
-				break
-			} else if resp.StatusCode/100 != 2 {
-				resultChan <- bytesResult{r, nil, errors.New(url + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))}
-				break
-			}
-
-			comprData, err := ioutil.ReadAll(resp.Body)
-
-			if err != nil {
-				resultChan <- bytesResult{r, nil, err}
-				break
-			}
-
-			data, err := snappy.Decode(nil, comprData[:len(comprData)-4])
-
-			if err != nil {
-				resultChan <- bytesResult{r, nil, err}
-				break
-			}
-
-			resultChan <- bytesResult{r, data, nil}
-
-		case <-stopChan:
-			return
+		if err != nil {
+			return err
+		} else if resp.StatusCode/100 != 2 {
+			return errors.New(url + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))
 		}
+
+		comprData, err := ioutil.ReadAll(resp.Body)
+
+		if err != nil {
+			return err
+		}
+
+		for _, r := range ranges {
+			chunkStart := r.Offset - offset
+			chunkEnd := chunkStart + uint64(r.Length) - 4
+			chunkBytes, err := snappy.Decode(nil, comprData[chunkStart:chunkEnd])
+
+			if err != nil {
+				return err
+			}
+
+			chunk := chunks.NewChunk(chunkBytes)
+			chunkChan <- &chunk
+		}
+
+		return nil
 	}
 }
 
-func (dcs *DoltChunkStore) httpGetRangeDownload(ctx context.Context, getRange *remotesapi.HttpGetRange) ([]chunks.Chunk, error) {
-	url := getRange.Url
+func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *remotesapi.HttpGetRange, chunkChan chan *chunks.Chunk) []func() error {
+	var work []func() error
+
 	rangeCount := len(getRange.Ranges)
 
 	if rangeCount == 0 {
-		return []chunks.Chunk{}, nil
+		return work
 	}
 
-	concurrency := rangeCount / 8
-
-	if concurrency == 0 {
-		concurrency = 1
-	} else if concurrency > 128 {
-		concurrency = 128
-	}
-
-	stopChan := make(chan struct{})
-	rangeChan := make(chan *remotesapi.RangeChunk, len(getRange.Ranges))
-	resultChan := make(chan bytesResult, 2*concurrency)
-
-	for i := 0; i < concurrency; i++ {
-		go getRanges(ctx, dcs.httpFetcher, url, rangeChan, resultChan, stopChan)
-	}
-
-	for _, r := range getRange.Ranges {
-		rangeChan <- r
-	}
-
-	close(rangeChan)
-
-	var chnks []chunks.Chunk
-	for res := range resultChan {
-		if res.err != nil {
-			close(stopChan)
-			return nil, res.err
-		}
-
-		r := res.r
-
-		expectedHash := hash.New(r.Hash)
-		ch := chunks.NewChunk(res.data)
-
-		if ch.Hash() != expectedHash {
-			close(stopChan)
-			return nil, errors.New("content did not match hash.")
-		}
-
-		chnks = append(chnks, ch)
-
-		if len(chnks) == rangeCount {
-			break
-		}
-	}
-
-	return chnks, nil
+	return []func() error{dcs.getRangeDownloadFunc(ctx, getRange.Url, getRange.Ranges, chunkChan)}
 }
