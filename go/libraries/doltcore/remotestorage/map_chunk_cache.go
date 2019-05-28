@@ -74,6 +74,19 @@ func (mcc *mapChunkCache) Has(hashes hash.HashSet) (absent hash.HashSet) {
 	return absent
 }
 
+func (mcc *mapChunkCache) PutChunk(ch *chunks.Chunk) bool {
+	mcc.mu.Lock()
+	defer mcc.mu.Unlock()
+
+	h := ch.Hash()
+	if _, ok := mcc.hashToChunk[h]; !ok {
+		mcc.hashToChunk[h] = *ch
+		return true
+	}
+
+	return false
+}
+
 func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]chunks.Chunk {
 	newToFlush := make(map[hash.Hash]chunks.Chunk)
 
