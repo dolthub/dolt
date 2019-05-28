@@ -400,14 +400,12 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(peopleTestSchema, homer, lisa, moe, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
-		// TODO: this should work but doesn't. Type checking is getting hung up on 2 + 2, since it has no noms type to
-		// enforce against
-		// {
-		// 	name:           "select *, complex binary expr in where",
-		// 	query:          "select * from people where age / 4 + 2 * 2 = 14",
-		// 	expectedRows:   compressRows(peopleTestSchema, homer, barney),
-		// 	expectedSchema: compressSchema(peopleTestSchema),
-		// },
+		{
+			name:           "select *, complex binary expr in where",
+			query:          "select * from people where age / 4 + 2 * 2 = 14",
+			expectedRows:   compressRows(peopleTestSchema, homer, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
 		{
 			name:        "select *, binary + in where type mismatch",
 			query:       "select * from people where first + 1 = 41",
