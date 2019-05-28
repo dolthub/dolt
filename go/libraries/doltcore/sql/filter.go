@@ -88,15 +88,6 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			}
 		}
 
-		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
-		// literals.
-		if err := leftGetter.Validate(); err != nil {
-			return nil, err
-		}
-		if err := rightGetter.Validate(); err != nil {
-			return nil, err
-		}
-
 		// All the operations differ only in their filter logic
 		switch expr.Operator {
 		case sqlparser.EqualStr:
@@ -236,10 +227,6 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 		case sqlparser.IsNullStr, sqlparser.IsNotNullStr:
 			getter, err := getterFor(expr.Expr, inputSchemas, aliases, rss)
 			if err != nil {
-				return nil, err
-			}
-
-			if err := getter.Validate(); err != nil {
 				return nil, err
 			}
 

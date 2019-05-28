@@ -86,12 +86,6 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			}
 		}
 
-		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
-		// set values.
-		if err := getter.Validate(); err != nil {
-			return nil, err
-		}
-
 		setVals[column.Tag] = getter
 	}
 
