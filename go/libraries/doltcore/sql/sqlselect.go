@@ -21,6 +21,9 @@ import (
 // No limit marker for limit statements in select
 const noLimit = -1
 
+// Boolean lesser function for rows. Returns whether rLeft < rRight
+type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
+
 // Struct to represent the salient results of parsing a select statement.
 type SelectStatement struct {
 	// Result set schema
