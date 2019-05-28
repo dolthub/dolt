@@ -45,6 +45,31 @@ func RowValGetterForKind(kind types.NomsKind) *RowValGetter {
 	}
 }
 
+// Returns a new RowValGetter that wraps the given one, converting to the appropriate type as necessary. Returns an
+// error if no conversion between the types is possible.
+func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowValGetter, error) {
+	if getter.NomsKind == destKind {
+		return getter, nil
+	}
+
+	converterFn := GetTypeConversionFn(getter.NomsKind, destKind)
+	if converterFn == nil {
+		return nil, errFmt("Type mismatch: cannot convert from %v to %v",
+			DoltToSQLType[getter.NomsKind], DoltToSQLType[destKind])
+	}
+
+	return &RowValGetter{
+		Validate: func() error {
+			return getter.Validate()
+		},
+		NomsKind: destKind,
+		Get: func(r row.Row) types.Value {
+			val := getter.Get(r)
+			return converterFn(val)
+		},
+	}, nil
+}
+
 // Returns a new RowValGetter for the literal value given.
 func LiteralValueGetter(value types.Value) *RowValGetter {
 	return &RowValGetter{
@@ -367,7 +392,6 @@ func divineNomsValueFromSQLVal(val *sqlparser.SQLVal) (types.Value, error) {
 		return nil, errFmt("Unrecognized SQLVal type %v", val.Type)
 	}
 }
-
 
 // extractNomsValueFromSQLVal extracts a noms value from the given SQLVal, using type info in the dolt column given as
 // a hint and for type-checking

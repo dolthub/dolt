@@ -79,6 +79,13 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			return nil, err
 		}
 
+		if getter.NomsKind != column.Kind {
+			getter, err = ConversionValueGetter(getter, column.Kind)
+			if err != nil {
+				return errUpdate("Error processing update statement %v: %v", nodeToString(update), err.Error())
+			}
+		}
+
 		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
 		// set values.
 		if err := getter.Validate(); err != nil {
@@ -116,8 +123,6 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		var anyColChanged bool
 
 		for tag, getter := range setVals {
-			// We need to know if a primary key changed values to correctly enforce key constraints (avoid overwriting
-			// existing rows that are keyed to the updated value)
 			currVal, _ := r.GetColVal(tag)
 			val := getter.Get(r)
 
