@@ -71,12 +71,12 @@ func GetTypeConversionFn(srcKind, destKind types.NomsKind) TypeConversionFn {
 	return convFunc
 }
 
-var identityConvFunc = func(value types.Value) types.Value {
+func identityConvFunc(value types.Value) types.Value {
 	return value
 }
 
 var convToNullFunc = func(types.Value) types.Value {
-	return types.NullValue
+	return nil
 }
 
 func convUintToInt(val types.Value) types.Value {

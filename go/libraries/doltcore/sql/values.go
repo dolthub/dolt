@@ -87,7 +87,7 @@ func LiteralValueGetter(value types.Value) *RowValGetter {
 func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
 	switch e := expr.(type) {
 	case *sqlparser.NullVal:
-		getter := NewRowValGetter()
+		getter := RowValGetterForKind(types.NullKind)
 		getter.Get = func(r row.Row) types.Value { return nil }
 		return getter, nil
 
@@ -243,8 +243,10 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 		return nil, err
 	}
 
+	// TODO: support type conversion
 	if rightGetter.NomsKind != leftGetter.NomsKind {
-		return nil, errFmt("Unsupported binary operation types: %v, %v", types.KindToString[leftGetter.NomsKind], types.KindToString[rightGetter.NomsKind])
+		return nil, errFmt("Type mismatch evaluating expression '%v': cannot compare %v, %v",
+			nodeToString(e), DoltToSQLType[leftGetter.NomsKind], DoltToSQLType[rightGetter.NomsKind])
 	}
 
 	// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
@@ -260,7 +262,6 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 	getter := RowValGetterForKind(leftGetter.NomsKind)
 
 	// All the operations differ only in their filter logic
-	// TODO: these fail badly with expressions of different types.
 	var opFn binaryNomsOperation
 	switch e.Operator {
 	case sqlparser.PlusStr:

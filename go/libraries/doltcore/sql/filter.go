@@ -79,7 +79,14 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			return nil, err
 		}
 
-		// TODO: better type checking
+		// TODO: better type checking. This always converts the right type to the left. Probably not appropriate in all
+		//  cases.
+		if leftGetter.NomsKind != rightGetter.NomsKind {
+			var err error
+			if rightGetter, err = ConversionValueGetter(rightGetter, leftGetter.NomsKind); err != nil {
+				return nil, err
+			}
+		}
 
 		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
 		// literals.
