@@ -12,7 +12,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math"
 	"reflect"
 	"testing"
@@ -295,10 +295,10 @@ func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch sche
 	rd.Close(context.Background())
 	wr.Close(context.Background())
 
-	assert.Nil(t, err, "Failed to seed initial data")
+	require.Nil(t, err, "Failed to seed initial data")
 
 	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
-	assert.Nil(t, err, "Unable to put initial value of table in in mem noms db")
+	require.Nil(t, err, "Unable to put initial value of table in in mem noms db")
 }
 
 // Creates a test database with the test data set in it

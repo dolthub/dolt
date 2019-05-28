@@ -24,8 +24,10 @@ teardown() {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where one_pk.c1=two_pk.c1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
-    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk,two_pk where foo=bar"
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk,two_pk where one_pk.c1=two_pk.c1"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ foo ]] || false
+    [[ "$output" =~ bar ]] || false
     [ "${#lines[@]}" -eq 8 ]
 }
 
@@ -67,10 +69,12 @@ teardown() {
     run dolt sql -q "select pk,pk1,pk2 from one_pk join two_pk on one_pk.c1=two_pk.c1 where pk=1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
-    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on foo=bar"
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ foo ]] || false
+    [[ "$output" =~ bar ]] || false
     [ "${#lines[@]}" -eq 8 ]
-    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on foo=bar where foo=10"
+    run dolt sql -q "select pk,pk1,pk2,one_pk.c1 as foo,two_pk.c1 as bar from one_pk join two_pk on one_pk.c1=two_pk.c1  where one_pk.c1=10"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "10" ]] || false

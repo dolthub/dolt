@@ -99,7 +99,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processSelectedColumns(ctx, root, selectStmt, s.SelectExprs); err != nil {
+	if err := processSelectedColumns(selectStmt, s.SelectExprs); err != nil {
 		return nil, nil, err
 	}
 
@@ -249,7 +249,7 @@ func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Wher
 // Returns whether the given column is in the slice
 func contains(column QualifiedColumn, cols []QualifiedColumn) bool {
 	for _, col := range cols {
-		if AreColumnsEqual(col, column) {
+		if ColumnsEqual(col, column) {
 			return true
 		}
 	}
@@ -311,6 +311,21 @@ func processFromClause(ctx context.Context, root *doltdb.RootValue, selectStmt *
 		}
 	}
 
+	return validateTablesAndAliases(selectStmt)
+}
+
+// Validates that the tables and aliases from the select have unique names.
+func validateTablesAndAliases(selectStatement *SelectStatement) error {
+	seen := make(map[string]bool)
+	for alias := range selectStatement.aliases.TablesByAlias {
+		seen[alias] = true
+	}
+	for tableName := range selectStatement.inputSchemas {
+		if seen[tableName] {
+			return errFmt("Non-unique table name / alias: '%v'", tableName)
+		}
+	}
+
 	return nil
 }
 
@@ -332,17 +347,21 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 			return errFmt("Selects without a table are not supported: %v", nodeToString(te))
 		}
 
-		if !root.HasTable(ctx, tableName) {
-			return errFmt("Unknown table: '%s'", tableName)
+		canonicalTableName, err := resolveTable(tableName, root.GetTableNames(ctx), NewAliases())
+		if err != nil {
+			return err
 		}
 
 		if !te.As.IsEmpty() {
-			selectStmt.aliases.AddTableAlias(tableName, te.As.String())
+			if err := selectStmt.aliases.AddTableAlias(canonicalTableName, te.As.String()); err != nil {
+				return err
+			}
 		}
-		selectStmt.aliases.AddTableAlias(tableName, tableName)
 
-		selectStmt.inputSchemas[tableName] = mustGetSchema(ctx, root, tableName)
-		selectStmt.inputTables = append(selectStmt.inputTables, tableName)
+		if _, ok := selectStmt.inputSchemas[canonicalTableName]; !ok {
+			selectStmt.inputSchemas[canonicalTableName] = mustGetSchema(ctx, root, canonicalTableName)
+		}
+		selectStmt.inputTables = append(selectStmt.inputTables, canonicalTableName)
 
 	case *sqlparser.JoinTableExpr:
 		switch te.Join {
@@ -372,7 +391,7 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 
 // Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
 // or returns an error if it cannot. All table aliases must be established in the SelectStatement.
-func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
+func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
 	var columns []QualifiedColumn
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
@@ -385,14 +404,14 @@ func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectS
 					targetTable = selectExpr.TableName.Name.String()
 				}
 				tableSch := selectStmt.inputSchemas[targetTable]
-				tableSch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+				tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 					columns = append(columns, QualifiedColumn{targetTable, col.Name})
 					return false
 				})
 			} else {
 				for _, tableName := range selectStmt.inputTables {
 					tableSch := selectStmt.inputSchemas[tableName]
-					tableSch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+					tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 						columns = append(columns, QualifiedColumn{tableName, col.Name})
 						return false
 					})
@@ -401,36 +420,22 @@ func processSelectedColumns(ctx context.Context, root *doltdb.RootValue, selectS
 		case *sqlparser.AliasedExpr:
 			switch colExpr := selectExpr.Expr.(type) {
 			case *sqlparser.ColName:
-				var tableSch schema.Schema
-				var tableName string
-				colName := colExpr.Name.String()
-				if !colExpr.Qualifier.IsEmpty() {
-					columnTableName := colExpr.Qualifier.Name.String()
-					var ok bool
-					if tableName, ok = selectStmt.aliases.TablesByAlias[columnTableName]; ok {
-						tableSch = mustGetSchema(ctx, root, tableName)
-					} else {
-						return errFmt("Unknown table " + columnTableName)
-					}
-				} else {
-					qc, err := resolveColumn(colName, selectStmt.inputSchemas, selectStmt.aliases)
-					if err != nil {
-						return err
-					}
-					tableName = qc.TableName
-					tableSch = selectStmt.inputSchemas[tableName]
-				}
 
-				_, ok := tableSch.GetAllCols().GetByName(colName)
-				if !ok {
-					return errFmt(UnknownColumnErrFmt, colName)
+				qc, err := resolveColumn(getColumnNameString(colExpr), selectStmt.inputSchemas, selectStmt.aliases)
+				if err != nil {
+					return err
 				}
 
 				// an absent column alias will be empty
 				if selectExpr.As.String() != "" {
-					selectStmt.aliases.AddColumnAlias(tableName, colName, selectExpr.As.String())
+					selectStmt.aliases.AddColumnAlias(qc, selectExpr.As.String())
+				} else {
+					// This isn't a true alias, but we want the column header to exactly match the original select statement, even
+					// if we found a case-insensitive match for the column name.
+					selectStmt.aliases.AddColumnAlias(qc, colExpr.Name.String())
 				}
-				columns = append(columns, QualifiedColumn{tableName, colName})
+
+				columns = append(columns, qc)
 			default:
 				return errFmt("Only column selections or * are supported")
 			}
@@ -734,9 +739,8 @@ func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Sc
 			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
 				panic(fmt.Sprintf(UnknownColumnErrFmt, colName))
 			} else {
-				// Rename any aliased columns for output. Column names only matter for the end result, not any
-				// intermediate ones.
-				if alias, ok := aliases.AliasesByColumn[selectedCol]; ok {
+				// Rename any aliased columns for output. Column names only matter for the end result, not any intermediate ones.
+				if alias, ok := aliases.GetColumnAlias(selectedCol); ok {
 					col.Name = alias
 				}
 				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}
