@@ -208,8 +208,9 @@ teardown() {
     [[ "$output" =~ "column2" ]] || false
     [[ ! "$output" =~ "c1" ]] || false
     [[ ! "$output" =~ "c2" ]] || false
-    run dolt sql -q "select c1 as column1 from test where column1=1"
+    run dolt sql -q "select c1 as column1 from test where c1=1"
     [ "$status" -eq 0 ]
+    [[ "$output" =~ column1 ]] || false
     [ "${#lines[@]}" -eq 5 ]
 }
 
