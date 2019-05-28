@@ -1,6 +1,7 @@
 package sql
 
 // Aliases tracks the aliased identifiers in a query
+// TODO: these should be case sensitive
 type Aliases struct {
 	// Map from table alias to table name
 	TablesByAlias map[string]string
