@@ -20,27 +20,13 @@ type unaryNomsOperation func(val types.Value) types.Value
 type RowValGetter struct {
 	// The value type returned by this getter. Types are approximate and may need to be coerced, e.g. Float -> Int.
 	NomsKind types.NomsKind
-	// Validate() performs type checking and returns any error that would be caused by calling Get() on this row.
-	Validate func() error
 	// Get() returns the value for this getter for the row given
 	Get func(r row.Row) types.Value
 }
 
 // Returns a new RowValGetter with default values filled in.
-func NewRowValGetter() *RowValGetter {
-	return &RowValGetter{
-		Validate: func() error {
-			return nil
-		},
-	}
-}
-
-// Returns a new RowValGetter with default values filled in.
 func RowValGetterForKind(kind types.NomsKind) *RowValGetter {
 	return &RowValGetter{
-		Validate: func() error {
-			return nil
-		},
 		NomsKind: kind,
 	}
 }
@@ -59,9 +45,6 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 	}
 
 	return &RowValGetter{
-		Validate: func() error {
-			return getter.Validate()
-		},
 		NomsKind: destKind,
 		Get: func(r row.Row) types.Value {
 			val := getter.Get(r)
@@ -73,9 +56,6 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 // Returns a new RowValGetter for the literal value given.
 func LiteralValueGetter(value types.Value) *RowValGetter {
 	return &RowValGetter{
-		Validate: func() error {
-			return nil
-		},
 		NomsKind: value.Kind(),
 		Get: func(r row.Row) types.Value {
 			return value
@@ -139,7 +119,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 					return nil, err
 				} else {
 					if i > 0 && kind != val.Kind() {
-						return nil, errFmt("Mixed types in list literal: %v", e)
+						return nil, errFmt("Type mismatch: mixed types in list literal '%v'", nodeToString(e))
 					}
 					vals[i] = val
 					kind = val.Kind()
@@ -183,7 +163,7 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 		case types.IntKind, types.FloatKind:
 			// fine, nothing to do
 		default:
-			return nil, errFmt("Unsupported type for unary + operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for unary + operation: %v", DoltToSQLType[getter.NomsKind])
 		}
 		opFn = func(val types.Value) types.Value {
 			return val
@@ -214,7 +194,7 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 				return types.Int(-1 * int64(val.(types.Uint)))
 			}
 		default:
-			return nil, errFmt("Unsupported type for unary - operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for unary - operation: %v", DoltToSQLType[getter.NomsKind])
 		}
 	case sqlparser.BangStr:
 		switch getter.NomsKind {
@@ -223,7 +203,7 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 				return types.Bool(!val.(types.Bool))
 			}
 		default:
-			return nil, errFmt("Unsupported type for unary ! operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for unary ! operation: %v", DoltToSQLType[getter.NomsKind])
 		}
 	default:
 		return nil, errFmt("Unsupported unary operation: %v", e.Operator)
@@ -255,23 +235,11 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 			nodeToString(e), DoltToSQLType[leftGetter.NomsKind], DoltToSQLType[rightGetter.NomsKind])
 	}
 
-	// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
-	// literals.
-	if err := leftGetter.Validate(); err != nil {
-		return nil, err
-	}
-	if err := rightGetter.Validate(); err != nil {
-		return nil, err
-	}
-
-	// TODO: need better type comparison logic
-	getter := RowValGetterForKind(leftGetter.NomsKind)
-
 	// All the operations differ only in their filter logic
 	var opFn binaryNomsOperation
 	switch e.Operator {
 	case sqlparser.PlusStr:
-		switch getter.NomsKind {
+		switch leftGetter.NomsKind {
 		case types.UintKind:
 			opFn = func(left, right types.Value) types.Value {
 				return types.Uint(uint64(left.(types.Int)) + uint64(right.(types.Int)))
@@ -285,10 +253,10 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 				return types.Float(float64(left.(types.Float)) + float64(right.(types.Float)))
 			}
 		default:
-			return nil, errFmt("Unsupported type for + operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for + operation: %v", DoltToSQLType[leftGetter.NomsKind])
 		}
 	case sqlparser.MinusStr:
-		switch getter.NomsKind {
+		switch leftGetter.NomsKind {
 		case types.UintKind:
 			opFn = func(left, right types.Value) types.Value {
 				return types.Uint(uint64(left.(types.Int)) - uint64(right.(types.Int)))
@@ -302,10 +270,10 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 				return types.Float(float64(left.(types.Float)) - float64(right.(types.Float)))
 			}
 		default:
-			return nil, errFmt("Unsupported type for - operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for - operation: %v", DoltToSQLType[leftGetter.NomsKind])
 		}
 	case sqlparser.MultStr:
-		switch getter.NomsKind {
+		switch leftGetter.NomsKind {
 		case types.UintKind:
 			opFn = func(left, right types.Value) types.Value {
 				return types.Uint(uint64(left.(types.Int)) * uint64(right.(types.Int)))
@@ -319,10 +287,10 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 				return types.Float(float64(left.(types.Float)) * float64(right.(types.Float)))
 			}
 		default:
-			return nil, errFmt("Unsupported type for * operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for * operation: %v", DoltToSQLType[leftGetter.NomsKind])
 		}
 	case sqlparser.DivStr:
-		switch getter.NomsKind {
+		switch leftGetter.NomsKind {
 		case types.UintKind:
 			opFn = func(left, right types.Value) types.Value {
 				return types.Uint(uint64(left.(types.Int)) / uint64(right.(types.Int)))
@@ -336,10 +304,10 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 				return types.Float(float64(left.(types.Float)) / float64(right.(types.Float)))
 			}
 		default:
-			return nil, errFmt("Unsupported type for / operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for / operation: %v", DoltToSQLType[leftGetter.NomsKind])
 		}
 	case sqlparser.ModStr:
-		switch getter.NomsKind {
+		switch leftGetter.NomsKind {
 		case types.UintKind:
 			opFn = func(left, right types.Value) types.Value {
 				return types.Uint(uint64(left.(types.Int)) % uint64(right.(types.Int)))
@@ -349,12 +317,13 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 				return types.Int(int64(left.(types.Int)) % int64(right.(types.Int)))
 			}
 		default:
-			return nil, errFmt("Unsupported type for %% operation: %v", types.KindToString[getter.NomsKind])
+			return nil, errFmt("Unsupported type for %% operation: %v", DoltToSQLType[leftGetter.NomsKind])
 		}
 	default:
 		return nil, errFmt("Unsupported binary operation: %v", e.Operator)
 	}
 
+	getter := RowValGetterForKind(leftGetter.NomsKind)
 	getter.Get = func(r row.Row) types.Value {
 		leftVal := leftGetter.Get(r)
 		rightVal := rightGetter.Get(r)

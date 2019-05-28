@@ -294,6 +294,17 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
+			name:        "select *, in clause, mixed types",
+			query:       "select * from people where first in ('Homer', 40)",
+			expectedErr: "Type mismatch: mixed types in list literal '('Homer', 40)'",
+		},
+		// TODO: fix this
+		// {
+		// 	name:        "select *, in clause, mixed numeric types",
+		// 	query:       "select * from people where age in (-10.0, 40)",
+		// 	expectedErr: "Type mismatch: mixed types in list literal '(-10.0, 40)'",
+		// },
+		{
 			name:           "select *, not in clause",
 			query:          "select * from people where first not in ('Homer', 'Marge')",
 			expectedRows:   compressRows(peopleTestSchema, bart, lisa, moe, barney),
@@ -368,7 +379,7 @@ func TestExecuteSelect(t *testing.T) {
 		{
 			name:        "select *, -column, string type",
 			query:       "select * from people where -first = 'Homer'",
-			expectedErr: "Unsupported type for unary - operation: String",
+			expectedErr: "Unsupported type for unary - operation: varchar",
 		},
 		{
 			name:           "select *, binary + in where",
