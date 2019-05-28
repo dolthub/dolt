@@ -79,15 +79,9 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			return nil, err
 		}
 
-		// Fill in comparison kinds before doing error checking
-		if getter.Kind == SQL_VAL {
-			getter.NomsKind = column.Kind
-		}
-		getter.CmpKind = column.Kind
-
 		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
 		// set values.
-		if err := getter.Init(); err != nil {
+		if err := getter.Validate(); err != nil {
 			return nil, err
 		}
 
