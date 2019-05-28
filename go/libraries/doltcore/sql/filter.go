@@ -79,23 +79,14 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			return nil, err
 		}
 
-		// Fill in target noms kinds for SQL_VAL fields if possible
-		if leftGetter.Kind == SQL_VAL && rightGetter.Kind != SQL_VAL {
-			leftGetter.NomsKind = rightGetter.NomsKind
-		}
-		if rightGetter.Kind == SQL_VAL && leftGetter.Kind != SQL_VAL {
-			rightGetter.NomsKind = leftGetter.NomsKind
-		}
-
-		// Fill in comparison kinds before doing error checking
-		rightGetter.CmpKind, leftGetter.CmpKind = leftGetter.NomsKind, rightGetter.NomsKind
+		// TODO: better type checking
 
 		// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
 		// literals.
-		if err := leftGetter.Init(); err != nil {
+		if err := leftGetter.Validate(); err != nil {
 			return nil, err
 		}
-		if err := rightGetter.Init(); err != nil {
+		if err := rightGetter.Validate(); err != nil {
 			return nil, err
 		}
 
@@ -241,7 +232,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 				return nil, err
 			}
 
-			if err := getter.Init(); err != nil {
+			if err := getter.Validate(); err != nil {
 				return nil, err
 			}
 

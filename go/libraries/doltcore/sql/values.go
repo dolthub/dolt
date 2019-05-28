@@ -16,38 +16,56 @@ import (
 type binaryNomsOperation func(left, right types.Value) types.Value
 type unaryNomsOperation func(val types.Value) types.Value
 
-type valGetterKind uint8
-
-const (
-	COLNAME valGetterKind = iota
-	SQL_VAL
-	BOOL_VAL
-)
-
 // RowValGetter knows how to retrieve a Value from a Row.
 type RowValGetter struct {
-	// The kind of this val getter.
-	Kind valGetterKind
-	// The value type returned by this getter.
+	// The value type returned by this getter. Types are approximate and may need to be coerced, e.g. Float -> Int.
 	NomsKind types.NomsKind
-	// The kind of the value that this getter's result will be compared against, filled in elsewhere.
-	CmpKind types.NomsKind
-	// Init() returns any error that would be caused by calling Get() on this row.
-	Init func() error
+	// Validate() performs type checking and returns any error that would be caused by calling Get() on this row.
+	Validate func() error
 	// Get() returns the value for this getter for the row given
 	Get func(r row.Row) types.Value
-	// CachedVal is a handy place to put a pre-computed value for getters that deal with constants or literals
-	CachedVal types.Value
+}
+
+// Returns a new RowValGetter with default values filled in.
+func NewRowValGetter() *RowValGetter {
+	return &RowValGetter{
+		Validate: func() error {
+			return nil
+		},
+	}
+}
+
+// Returns a new RowValGetter with default values filled in.
+func RowValGetterForKind(kind types.NomsKind) *RowValGetter {
+	return &RowValGetter{
+		Validate: func() error {
+			return nil
+		},
+		NomsKind: kind,
+	}
+}
+
+// Returns a new RowValGetter for the literal value given.
+func LiteralValueGetter(value types.Value) *RowValGetter {
+	return &RowValGetter{
+		Validate: func() error {
+			return nil
+		},
+		NomsKind: value.Kind(),
+		Get: func(r row.Row) types.Value {
+			return value
+		},
+	}
 }
 
 // Returns a comparison value getter for the expression given, which could be a column value or a literal
 func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
 	switch e := expr.(type) {
 	case *sqlparser.NullVal:
-		getter := RowValGetter{Kind: SQL_VAL}
-		getter.Init = func() error { return nil }
+		getter := NewRowValGetter()
 		getter.Get = func(r row.Row) types.Value { return nil }
-		return &getter, nil
+		return getter, nil
+
 	case *sqlparser.ColName:
 		colNameStr := getColumnNameString(e)
 
@@ -66,92 +84,54 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 		resultSetTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
 
-		getter := RowValGetter{Kind: COLNAME, NomsKind: column.Kind}
-		getter.Init = func() error {
-			return nil
-		}
+		getter := RowValGetterForKind(column.Kind)
 		getter.Get = func(r row.Row) types.Value {
 			value, _ := r.GetColVal(resultSetTag)
 			return value
 		}
 
-		return &getter, nil
+		return getter, nil
+
 	case *sqlparser.SQLVal:
-		getter := RowValGetter{Kind: SQL_VAL}
-
-		getter.Init = func() error {
-			val, err := extractNomsValueFromSQLVal(e, getter.CmpKind)
-			if err != nil {
-				return err
-			}
-			getter.CachedVal = val
-			return nil
-		}
-		getter.Get = func(r row.Row) types.Value {
-			return getter.CachedVal
+		val, err := divineNomsValueFromSQLVal(e)
+		if err != nil {
+			return nil, err
 		}
 
-		return &getter, nil
+		return LiteralValueGetter(val), nil
+
 	case sqlparser.BoolVal:
 		val := types.Bool(bool(e))
-		getter := RowValGetter{Kind: BOOL_VAL, NomsKind: types.BoolKind}
+		return LiteralValueGetter(val), nil
 
-		getter.Init = func() error {
-			switch getter.CmpKind {
-			case types.BoolKind:
-				return nil
-			default:
-				return errFmt("Type mismatch: boolean value but non-numeric column: %v", nodeToString(e))
-			}
-		}
-		getter.Get = func(r row.Row) types.Value {
-			return val
-		}
-
-		return &getter, nil
 	case sqlparser.ValTuple:
-		getter := RowValGetter{Kind: SQL_VAL}
-
-		getter.Init = func() error {
-			vals := make([]types.Value, len(e))
-			for i, item := range e {
-				switch v := item.(type) {
-				case *sqlparser.SQLVal:
-					if val, err := extractNomsValueFromSQLVal(v, getter.CmpKind); err != nil {
-						return err
-					} else {
-						vals[i] = val
-					}
-				default:
-					return errFmt("Unsupported list literal: %v", nodeToString(v))
+		vals := make([]types.Value, len(e))
+		for i, item := range e {
+			switch v := item.(type) {
+			// TODO: type checking error for mixed value types
+			case *sqlparser.SQLVal:
+				if val, err := divineNomsValueFromSQLVal(v); err != nil {
+					return nil, err
+				} else {
+					vals[i] = val
 				}
+			default:
+				return nil, errFmt("Unsupported list literal: %v", nodeToString(v))
 			}
-
-			// TODO: surely there is a better way to do this without resorting to interface{}
-			ts := &chunks.TestStorage{}
-			vs := types.NewValueStore(ts.NewView())
-			set := types.NewSet(context.Background(), vs, vals...)
-
-			getter.CachedVal = set
-			return nil
-		}
-		getter.Get = func(r row.Row) types.Value {
-			return getter.CachedVal
 		}
 
-		return &getter, nil
+		// TODO: surely there is a better way to do this without resorting to interface{}
+		ts := &chunks.TestStorage{}
+		vs := types.NewValueStore(ts.NewView())
+		set := types.NewSet(context.Background(), vs, vals...)
+
+		// TODO: type checking (NomsKind will be set instead of value type)
+		return LiteralValueGetter(set), nil
+
 	case *sqlparser.BinaryExpr:
-		getter, err := getterForBinaryExpr(e, inputSchemas, aliases, rss)
-		if err != nil {
-			return nil, err
-		}
-		return getter, nil
+		return getterForBinaryExpr(e, inputSchemas, aliases, rss)
 	case *sqlparser.UnaryExpr:
-		getter, err := getterForUnaryExpr(e, inputSchemas, aliases, rss)
-		if err != nil {
-			return nil, err
-		}
-		return getter, nil
+		return getterForUnaryExpr(e, inputSchemas, aliases, rss)
 	default:
 		return nil, errFmt("Unsupported type %v", nodeToString(e))
 	}
@@ -218,18 +198,12 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 		return nil, errFmt("Unsupported unary operation: %v", e.Operator)
 	}
 
-	unaryGetter := RowValGetter{}
-
-	unaryGetter.Init = func() error {
-		// Already did type checking explicitly
-		return nil
-	}
-
+	unaryGetter := RowValGetterForKind(getter.NomsKind)
 	unaryGetter.Get = func(r row.Row) types.Value {
 		return opFn(getter.Get(r))
 	}
 
-	return &unaryGetter, nil
+	return unaryGetter, nil
 }
 
 // getterForBinaryExpr returns a getter for the given binary expression, where calls to Get() evaluates the full
@@ -244,33 +218,24 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 		return nil, err
 	}
 
-	// Fill in target noms kinds for SQL_VAL fields if possible
-	if leftGetter.Kind == SQL_VAL && rightGetter.Kind != SQL_VAL {
-		leftGetter.NomsKind = rightGetter.NomsKind
-	}
-	if rightGetter.Kind == SQL_VAL && leftGetter.Kind != SQL_VAL {
-		rightGetter.NomsKind = leftGetter.NomsKind
-	}
-
 	if rightGetter.NomsKind != leftGetter.NomsKind {
 		return nil, errFmt("Unsupported binary operation types: %v, %v", types.KindToString[leftGetter.NomsKind], types.KindToString[rightGetter.NomsKind])
 	}
 
-	// Fill in comparison kinds before doing error checking
-	rightGetter.CmpKind, leftGetter.CmpKind = leftGetter.NomsKind, rightGetter.NomsKind
-
 	// Initialize the getters. This uses the type hints from above to enforce type constraints between columns and
 	// literals.
-	if err := leftGetter.Init(); err != nil {
+	if err := leftGetter.Validate(); err != nil {
 		return nil, err
 	}
-	if err := rightGetter.Init(); err != nil {
+	if err := rightGetter.Validate(); err != nil {
 		return nil, err
 	}
 
-	getter := RowValGetter{Kind: SQL_VAL, NomsKind: leftGetter.NomsKind, CmpKind: rightGetter.NomsKind}
+	// TODO: need better type comparison logic
+	getter := RowValGetterForKind(leftGetter.NomsKind)
 
 	// All the operations differ only in their filter logic
+	// TODO: these fail badly with expressions of different types.
 	var opFn binaryNomsOperation
 	switch e.Operator {
 	case sqlparser.PlusStr:
@@ -358,11 +323,6 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 		return nil, errFmt("Unsupported binary operation: %v", e.Operator)
 	}
 
-	getter.Init = func() error {
-		// Already did type checking explicitly
-		return nil
-	}
-
 	getter.Get = func(r row.Row) types.Value {
 		leftVal := leftGetter.Get(r)
 		rightVal := rightGetter.Get(r)
@@ -372,8 +332,42 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 		return opFn(leftVal, rightVal)
 	}
 
-	return &getter, nil
+	return getter, nil
 }
+
+// Attempts to divine a value and type from the given SQLVal expression. Returns the value or an error.
+// The most specific possible type is returned, e.g. Float over Int. Unsigned values are never returned.
+func divineNomsValueFromSQLVal(val *sqlparser.SQLVal) (types.Value, error) {
+	switch val.Type {
+	// Integer-like values
+	case sqlparser.HexVal, sqlparser.HexNum, sqlparser.IntVal, sqlparser.BitVal:
+		intVal, err := strconv.ParseInt(string(val.Val), 0, 64)
+		if err != nil {
+			return nil, err
+		}
+		return types.Int(intVal), nil
+	// Float values
+	case sqlparser.FloatVal:
+		floatVal, err := strconv.ParseFloat(string(val.Val), 64)
+		if err != nil {
+			return nil, err
+		}
+		return types.Float(floatVal), nil
+	// Strings, which can be coerced into UUIDs
+	case sqlparser.StrVal:
+		strVal := string(val.Val)
+		if id, err := uuid.Parse(strVal); err == nil {
+			return types.UUID(id), nil
+		} else {
+			return types.String(strVal), nil
+		}
+	case sqlparser.ValArg:
+		return nil, errFmt("Value args not supported")
+	default:
+		return nil, errFmt("Unrecognized SQLVal type %v", val.Type)
+	}
+}
+
 
 // extractNomsValueFromSQLVal extracts a noms value from the given SQLVal, using type info in the dolt column given as
 // a hint and for type-checking
@@ -407,7 +401,7 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, kind types.NomsKind) (typ
 		default:
 			return nil, errFmt("Type mismatch: float value but non-float column: %v", nodeToString(val))
 		}
-	// Strings, which can be coerced into lots of other types
+	// Strings, which can be coerced into UUIDs
 	case sqlparser.StrVal:
 		strVal := string(val.Val)
 		switch kind {
