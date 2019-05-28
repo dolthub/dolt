@@ -53,7 +53,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	table, _ := root.GetTable(ctx, tableName)
 	tableSch := table.GetSchema(ctx)
 
-	setVals := make(map[uint64]*valGetter)
+	setVals := make(map[uint64]*RowValGetter)
 	schemas := map[string]schema.Schema{tableName: tableSch}
 	aliases := NewAliases()
 	rss := resultset.Identity(tableSch)

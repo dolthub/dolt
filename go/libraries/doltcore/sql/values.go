@@ -24,16 +24,15 @@ const (
 	BOOL_VAL
 )
 
-// valGetter is a convenience object used for comparing the right and left side of an expression
-type valGetter struct {
-	// The kind of this val getter
+// RowValGetter knows how to retrieve a Value from a Row.
+type RowValGetter struct {
+	// The kind of this val getter.
 	Kind valGetterKind
-	// The value type returned by this getter
+	// The value type returned by this getter.
 	NomsKind types.NomsKind
-	// The kind of the value that this getter's result will be compared against, filled in elsewhere
+	// The kind of the value that this getter's result will be compared against, filled in elsewhere.
 	CmpKind types.NomsKind
-	// Init() performs error checking and does any labor-saving pre-calculation that doesn't need to be done for every
-	// row in the result set
+	// Init() returns any error that would be caused by calling Get() on this row.
 	Init func() error
 	// Get() returns the value for this getter for the row given
 	Get func(r row.Row) types.Value
@@ -42,10 +41,10 @@ type valGetter struct {
 }
 
 // Returns a comparison value getter for the expression given, which could be a column value or a literal
-func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
+func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
 	switch e := expr.(type) {
 	case *sqlparser.NullVal:
-		getter := valGetter{Kind: SQL_VAL}
+		getter := RowValGetter{Kind: SQL_VAL}
 		getter.Init = func() error { return nil }
 		getter.Get = func(r row.Row) types.Value { return nil }
 		return &getter, nil
@@ -67,7 +66,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 		resultSetTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
 
-		getter := valGetter{Kind: COLNAME, NomsKind: column.Kind}
+		getter := RowValGetter{Kind: COLNAME, NomsKind: column.Kind}
 		getter.Init = func() error {
 			return nil
 		}
@@ -78,7 +77,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 
 		return &getter, nil
 	case *sqlparser.SQLVal:
-		getter := valGetter{Kind: SQL_VAL}
+		getter := RowValGetter{Kind: SQL_VAL}
 
 		getter.Init = func() error {
 			val, err := extractNomsValueFromSQLVal(e, getter.CmpKind)
@@ -95,7 +94,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		return &getter, nil
 	case sqlparser.BoolVal:
 		val := types.Bool(bool(e))
-		getter := valGetter{Kind: BOOL_VAL, NomsKind: types.BoolKind}
+		getter := RowValGetter{Kind: BOOL_VAL, NomsKind: types.BoolKind}
 
 		getter.Init = func() error {
 			switch getter.CmpKind {
@@ -111,7 +110,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 
 		return &getter, nil
 	case sqlparser.ValTuple:
-		getter := valGetter{Kind: SQL_VAL}
+		getter := RowValGetter{Kind: SQL_VAL}
 
 		getter.Init = func() error {
 			vals := make([]types.Value, len(e))
@@ -160,7 +159,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 
 // getterForUnaryExpr returns a getter for the given unary expression, where calls to Get() evaluates the full
 // expression for the row given
-func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
+func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
 	getter, err := getterFor(e.Expr, inputSchemas, aliases, rss)
 	if err != nil {
 		return nil, err
@@ -219,7 +218,7 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 		return nil, errFmt("Unsupported unary operation: %v", e.Operator)
 	}
 
-	unaryGetter := valGetter{}
+	unaryGetter := RowValGetter{}
 
 	unaryGetter.Init = func() error {
 		// Already did type checking explicitly
@@ -235,7 +234,7 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 
 // getterForBinaryExpr returns a getter for the given binary expression, where calls to Get() evaluates the full
 // expression for the row given
-func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*valGetter, error) {
+func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
 	leftGetter, err := getterFor(e.Left, inputSchemas, aliases, rss)
 	if err != nil {
 		return nil, err
@@ -269,7 +268,7 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 		return nil, err
 	}
 
-	getter := valGetter{Kind: SQL_VAL, NomsKind: leftGetter.NomsKind, CmpKind: rightGetter.NomsKind}
+	getter := RowValGetter{Kind: SQL_VAL, NomsKind: leftGetter.NomsKind, CmpKind: rightGetter.NomsKind}
 
 	// All the operations differ only in their filter logic
 	var opFn binaryNomsOperation
