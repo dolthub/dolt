@@ -131,14 +131,18 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 
 	case sqlparser.ValTuple:
 		vals := make([]types.Value, len(e))
+		var kind types.NomsKind
 		for i, item := range e {
 			switch v := item.(type) {
-			// TODO: type checking error for mixed value types
 			case *sqlparser.SQLVal:
 				if val, err := divineNomsValueFromSQLVal(v); err != nil {
 					return nil, err
 				} else {
+					if i > 0 && kind != val.Kind() {
+						return nil, errFmt("Mixed types in list literal: %v", e)
+					}
 					vals[i] = val
+					kind = val.Kind()
 				}
 			default:
 				return nil, errFmt("Unsupported list literal: %v", nodeToString(v))
@@ -150,8 +154,10 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		vs := types.NewValueStore(ts.NewView())
 		set := types.NewSet(context.Background(), vs, vals...)
 
-		// TODO: type checking (NomsKind will be set instead of value type)
-		return LiteralValueGetter(set), nil
+		// TODO: better type checking (set type is not literally the underlying type)
+		getter := LiteralValueGetter(set)
+		getter.NomsKind = kind
+		return getter, nil
 
 	case *sqlparser.BinaryExpr:
 		return getterForBinaryExpr(e, inputSchemas, aliases, rss)
