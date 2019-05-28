@@ -27,7 +27,7 @@ func Push(ctx context.Context, destRef ref.BranchRef, remoteRef ref.RemoteRef, s
 	}
 
 	err = pantoerr.PanicToErrorNil("error pulling chunks", func() {
-		destDB.PullChunks(ctx, srcDB, commit, progChan)
+		destDB.PushChunks(ctx, srcDB, commit, progChan)
 	})
 
 	if err != nil {

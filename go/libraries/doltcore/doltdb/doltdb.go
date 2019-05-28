@@ -425,8 +425,15 @@ func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
 	return err
 }
 
-// PullChunks initiates a pull into this database from the source database given, at the commit given. The pull occurs
-// asynchronously, and progress is communicated over the provided channel.
+// PushChunks initiates a push into a database from the source database given, at the commit given. Pull progress is
+// communicated over the provided channel.
+func (ddb *DoltDB) PushChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
+	datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
+	return nil
+}
+
+// PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
+// communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
 	datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
 	return nil
