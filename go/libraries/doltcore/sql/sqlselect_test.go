@@ -413,7 +413,7 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "select *, binary / in where",
+			name:           "select *, binary * in where",
 			query:          "select * from people where age * 2 = 80",
 			expectedRows:   compressRows(peopleTestSchema, homer, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
@@ -446,7 +446,7 @@ func TestExecuteSelect(t *testing.T) {
 			expectedErr: "Type mismatch evaluating expression 'first / 2'",
 		},
 		{
-			name:        "select *, binary / in where type mismatch",
+			name:        "select *, binary * in where type mismatch",
 			query:       "select * from people where first * 2 = 80",
 			expectedErr: "Type mismatch evaluating expression 'first * 2'",
 		},
@@ -479,6 +479,17 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer, moe, barney),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "f", types.StringKind),
 		},
+		{
+			name:           "column selected more than once",
+			query:          "select first, first from people where age >= 40 order by id",
+			expectedRows:   rs(
+				newResultSetRow(types.String("Homer"), types.String("Homer")),
+				newResultSetRow(types.String("Moe"), types.String("Moe")),
+				newResultSetRow(types.String("Barney"), types.String("Barney")),
+			),
+			expectedSchema: newResultSetSchema("first", types.StringKind, "first", types.StringKind),
+		},
+
 		// TODO: fix this. To make this work we need to track selected tables along with their aliases. It's not an error to
 		//  select the same table multiple times, as long as each occurrence has a unique name
 		// {

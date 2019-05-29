@@ -35,7 +35,7 @@ type SelectStatement struct {
 	// Input table schemas, keyed by table name
 	inputSchemas map[string]schema.Schema
 	// Columns to be selected
-	selectedCols []QualifiedColumn
+	selectedCols []SelectedColumn
 	// Referenced columns (selected or in where / having clause)
 	referencedCols []QualifiedColumn
 	// Join expressions
@@ -50,6 +50,13 @@ type SelectStatement struct {
 	limit int
 	// Offset for results (skip N)
 	offset int
+}
+
+// A SelectedColumn is a column in the result set. It has a name and a way to extract it from an intermediate row.
+type SelectedColumn struct {
+	Name   string
+	Col    QualifiedColumn // TODO: remove me
+	Getter RowValGetter
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
@@ -106,7 +113,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processReferencedColumns(selectStmt, s.Where, s.OrderBy); err != nil {
+	if err := processReferencedColumns(selectStmt, s.SelectExprs, s.Where, s.OrderBy); err != nil {
 		return nil, nil, err
 	}
 
@@ -218,26 +225,28 @@ func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy,
 }
 
 // Processes the referenced columns, those appearing either in the select list, the where clause, or the join statement.
-func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Where, orderBy sqlparser.OrderBy) error {
+func processReferencedColumns(selectStmt *SelectStatement, colSelections sqlparser.SelectExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy) error {
 	cols := make([]QualifiedColumn, 0)
-	cols = append(cols, selectStmt.selectedCols...)
-
-	whereCols, err := resolveColumnsInWhereClause(where, selectStmt.inputSchemas, selectStmt.aliases)
-	if err != nil {
+	var selectedCols, whereCols, joinCols, orderByCols []QualifiedColumn
+	var err error
+	
+	if selectedCols, err = resolveColumnsInSelectClause(colSelections, selectStmt.inputTables, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	}
 
-	joinCols, err := resolveColumnsInJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
-	if err != nil {
+	if whereCols, err = resolveColumnsInWhereClause(where, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	}
 
-	obCols, err := resolveColumnsInOrderBy(orderBy, selectStmt.inputSchemas, selectStmt.aliases)
-	if err != nil {
+	if joinCols, err = resolveColumnsInJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	}
 
-	for _, refCols := range [][]QualifiedColumn {whereCols, joinCols, obCols } {
+	if orderByCols, err = resolveColumnsInOrderBy(orderBy, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
+		return err
+	}
+
+	for _, refCols := range [][]QualifiedColumn {selectedCols, whereCols, joinCols, orderByCols} {
 		for _, col := range refCols {
 			if !contains(col, cols) {
 				cols = append(cols, col)
@@ -302,8 +311,6 @@ func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error 
 
 	return nil
 }
-
-
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
@@ -399,26 +406,10 @@ func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
-			if !selectExpr.TableName.IsEmpty() {
-				var targetTable string
-				if aliasedTableName, ok := selectStmt.aliases.TablesByAlias[selectExpr.TableName.Name.String()]; ok {
-					targetTable = aliasedTableName
-				} else {
-					targetTable = selectExpr.TableName.Name.String()
-				}
-				tableSch := selectStmt.inputSchemas[targetTable]
-				tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-					columns = append(columns, QualifiedColumn{targetTable, col.Name})
-					return false
-				})
+			if qcs, err := resolveColumnsInStarExpr(selectExpr, selectStmt.inputTables, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
+				return err
 			} else {
-				for _, tableName := range selectStmt.inputTables {
-					tableSch := selectStmt.inputSchemas[tableName]
-					tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-						columns = append(columns, QualifiedColumn{tableName, col.Name})
-						return false
-					})
-				}
+				columns = append(columns, qcs...)
 			}
 		case *sqlparser.AliasedExpr:
 			switch colExpr := selectExpr.Expr.(type) {
@@ -447,7 +438,17 @@ func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser
 		}
 	}
 
-	selectStmt.selectedCols = columns
+	selectedCols := make([]SelectedColumn, len(columns))
+	for i, col := range columns {
+		name := col.ColumnName
+		if alias, ok := selectStmt.aliases.GetColumnAlias(col); ok {
+			name = alias
+		}
+		// TODO: getters
+		selectedCols[i] = SelectedColumn{Name: name, Col: col, Getter: RowValGetter{}}
+	}
+
+	selectStmt.selectedCols = selectedCols
 	return nil
 }
 
@@ -714,7 +715,7 @@ func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.R
 // from the individual table schemas. Also fills in an intermediate schema, which for some queries contains additional
 // columns necessary to evaluate where clauses but not part of the final result set.
 func createResultSetSchema(statement *SelectStatement) error {
-	rss, err := rssFromColumns(statement.selectedCols, statement.inputSchemas, statement.aliases)
+	rss, err := rssFromSelectedColumns(statement.selectedCols, statement.inputSchemas, statement.aliases)
 	if err != nil {
 		return err
 	}
@@ -727,6 +728,16 @@ func createResultSetSchema(statement *SelectStatement) error {
 	statement.intermediateRss = rss
 
 	return nil
+}
+
+// Returns a result set schema created from the columns given
+func rssFromSelectedColumns(columns []SelectedColumn, inputSchemas map[string]schema.Schema, aliases *Aliases) (*resultset.ResultSetSchema, error) {
+	qcs := make([]QualifiedColumn, len(columns))
+	for i, col := range columns {
+		qcs[i] = col.Col
+	}
+
+	return rssFromColumns(qcs, inputSchemas, aliases)
 }
 
 // Returns a result set schema created from the columns given
