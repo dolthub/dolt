@@ -173,6 +173,69 @@ func resolveColumnsInWhereClause(whereClause *sqlparser.Where, inputSchemas map[
 	return resolveColumnsInExpr(whereClause.Expr, inputSchemas, aliases.TableAliasesOnly())
 }
 
+// resolveColumnsInSelectClause returns the qualified columns referenced by the select clause
+func resolveColumnsInSelectClause(selectExprs sqlparser.SelectExprs, tableNames []string, schemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	if selectExprs == nil {
+		return nil, nil
+	}
+
+	cols := make([]QualifiedColumn, 0)
+	for _, colSelection := range selectExprs {
+		switch selectExpr := colSelection.(type) {
+		case *sqlparser.StarExpr:
+			if qcs, err := resolveColumnsInStarExpr(selectExpr, tableNames, schemas, aliases); err != nil {
+				return nil, err
+			} else {
+				cols = append(cols, qcs...)
+			}
+		case *sqlparser.AliasedExpr:
+			switch colExpr := selectExpr.Expr.(type) {
+			case *sqlparser.ColName:
+				if qc, err := resolveColumn(getColumnNameString(colExpr), schemas, aliases.TableAliasesOnly()); err != nil {
+					return nil, err
+				} else {
+					cols = append(cols, qc)
+				}
+			default:
+				return nil, errFmt("Only column selections or * are supported")
+			}
+		default:
+			// do nothing
+		}
+	}
+
+	return cols, nil
+}
+
+func resolveColumnsInStarExpr(selectExpr *sqlparser.StarExpr, tableNames []string, schemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	columns := make([]QualifiedColumn, 0)
+	if !selectExpr.TableName.IsEmpty() {
+		var targetTable string
+		if aliasedTableName, ok := aliases.TablesByAlias[selectExpr.TableName.Name.String()]; ok {
+			targetTable = aliasedTableName
+		} else {
+			targetTable = selectExpr.TableName.Name.String()
+		}
+		tableSch := schemas[targetTable]
+		tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+			columns = append(columns, QualifiedColumn{targetTable, col.Name})
+			return false
+		})
+	} else {
+		for _, tableName := range tableNames {
+			tableSch := schemas[tableName]
+			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+				columns = append(columns, QualifiedColumn{tableName, col.Name})
+				return false
+			})
+		}
+	}
+
+	return columns, nil
+}
+
+
+
 // resolveColumnsInOrderBy returns the qualified columns referenced in the order by clause.
 func resolveColumnsInOrderBy(orderBy sqlparser.OrderBy, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
 	if orderBy == nil {
