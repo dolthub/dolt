@@ -288,11 +288,24 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "select *, in clause",
+			name:           "select *, in clause string",
 			query:          "select * from people where first in ('Homer', 'Marge')",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
+		{
+			name:           "select *, in clause integer",
+			query:          "select * from people where age in (-10, 40)",
+			expectedRows:   compressRows(peopleTestSchema, homer, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		// TODO: fix this
+		// {
+		// 	name:           "select *, in clause float",
+		// 	query:          "select * from people where rating in (-10.0, 8.5)",
+		// 	expectedRows:   compressRows(peopleTestSchema, homer),
+		// 	expectedSchema: compressSchema(peopleTestSchema),
+		// },
 		{
 			name:        "select *, in clause, mixed types",
 			query:       "select * from people where first in ('Homer', 40)",
