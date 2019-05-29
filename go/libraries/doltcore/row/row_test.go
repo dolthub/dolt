@@ -2,6 +2,9 @@ package row
 
 import (
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -45,27 +48,53 @@ func TestGetFieldByNameWithDefault(t *testing.T) {
 func TestIsValid(t *testing.T) {
 	r := newTestRow()
 
-	if !IsValid(r, sch) {
-		t.Error("Not valid")
-	}
+	assert.True(t, IsValid(r, sch))
+	assert.Nil(t, GetInvalidCol(r, sch))
+	column, colConstraint := GetInvalidConstraint(r, sch)
+	assert.Nil(t, column)
+	assert.Nil(t, colConstraint)
 
-	invalidRow, _ := r.SetColVal(lnColTag, nil, sch)
+	updatedRow, err := r.SetColVal(lnColTag, nil, sch)
+	assert.NoError(t, err)
 
-	if IsValid(invalidRow, sch) {
-		t.Error("This row should not be valid")
-	}
+	assert.False(t, IsValid(updatedRow, sch))
 
-	col := GetInvalidCol(invalidRow, sch)
+	col := GetInvalidCol(updatedRow, sch)
+	assert.NotNil(t, col)
+	assert.Equal(t, col.Tag, uint64(lnColTag))
 
-	if col.Tag != lnColTag {
-		t.Error("Unexpected column returned by GetInvalidCol")
-	}
+	col, cnst := GetInvalidConstraint(updatedRow, sch)
+	assert.NotNil(t, col)
+	assert.Equal(t, col.Tag, uint64(lnColTag))
+	assert.Equal(t, cnst, schema.NotNullConstraint{})
 
-	if !AreEqual(r, r, sch) {
-		t.Error("Row should definitely be equal to itself")
-	}
+	// Test getting a bad column without the constraint failure
+	t.Run("invalid type", func(t *testing.T) {
+		nonPkCols := []schema.Column{
+			{addrColName, addrColTag, types.BoolKind, false, nil},
+		}
+		nonKeyColColl, _ := schema.NewColCollection(nonPkCols...)
+		newSch, err := schema.SchemaFromPKAndNonPKCols(testKeyColColl, nonKeyColColl)
+		require.NoError(t, err)
 
-	if AreEqual(r, invalidRow, sch) {
-		t.Error("Row should not be equal to invalidRow")
-	}
+		assert.False(t, IsValid(r, newSch))
+
+		col = GetInvalidCol(r, newSch)
+		require.NotNil(t, col)
+		assert.Equal(t, col.Tag, uint64(addrColTag))
+
+		col, cnst = GetInvalidConstraint(r, newSch)
+		assert.Nil(t, cnst)
+		assert.Equal(t, col.Tag, uint64(addrColTag))
+	})
+}
+
+func TestAreEqual(t *testing.T) {
+	r := newTestRow()
+
+	updatedRow, err := r.SetColVal(lnColTag, types.String("new"), sch)
+	assert.NoError(t, err)
+
+	assert.True(t, AreEqual(r, r, sch))
+	assert.False(t, AreEqual(r, updatedRow, sch))
 }
