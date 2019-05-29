@@ -57,46 +57,40 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 	}
 }
 
-// IsValid returns whether the row given satisfies all the constraints of the schema given.
+// IsValid returns whether the row given matches the types and satisfies all the constraints of the schema given.
 func IsValid(r Row, sch schema.Schema) bool {
-	allCols := sch.GetAllCols()
-
-	valid := true
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-		if len(col.Constraints) > 0 {
-			val, _ := r.GetColVal(tag)
-
-			for _, cnst := range col.Constraints {
-				if !cnst.SatisfiesConstraint(val) {
-					valid = false
-					return true
-				}
-			}
-		}
-
-		return false
-	})
-
-	return valid
+	column, constraint := findInvalidCol(r, sch)
+	return column == nil && constraint == nil
 }
 
 // GetInvalidCol returns the first column in the schema that fails a constraint, or nil if none do.
 func GetInvalidCol(r Row, sch schema.Schema) *schema.Column {
-	badCol, _ := GetInvalidConstraint(r, sch)
+	badCol, _ := findInvalidCol(r, sch)
 	return badCol
 }
 
 // GetInvalidConstraint returns the failed constraint for the row given (previously identified by IsValid) along with
-// the column with that constraint.
+// the column with that constraint. Note that if there is a problem with the row besides the constraint, the constraint
+// return value will be nil.
 func GetInvalidConstraint(r Row, sch schema.Schema) (*schema.Column, schema.ColConstraint) {
+	return findInvalidCol(r, sch)
+}
+
+// Returns the first encountered invalid column and its constraint, or nil if the row is valid. Column will always be
+// set if the row is invalid. Constraint will be set if the first encountered problem is a constraint failure.
+func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstraint) {
 	allCols := sch.GetAllCols()
 
 	var badCol *schema.Column
 	var badCnst schema.ColConstraint
 	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
-		if len(col.Constraints) > 0 {
-			val, _ := r.GetColVal(tag)
+		val, colSet := r.GetColVal(tag)
+		if colSet && !types.IsNull(val) && val.Kind() != col.Kind {
+			badCol = &col
+			return true
+		}
 
+		if len(col.Constraints) > 0 {
 			for _, cnst := range col.Constraints {
 				if !cnst.SatisfiesConstraint(val) {
 					badCol = &col

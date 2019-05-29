@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
 )
@@ -78,51 +79,59 @@ func TestItrRowCols(t *testing.T) {
 	}
 }
 
-func validateRow(t *testing.T, r Row, expected TaggedValues) {
-	for expTag, expVal := range expected {
-		val, ok := r.GetColVal(expTag)
+func TestSetColVal(t *testing.T) {
+	t.Run("valid update", func(t *testing.T) {
+		expected := map[uint64]types.Value{
+			lnColTag:    lnVal,
+			fnColTag:    fnVal,
+			ageColTag:   ageVal,
+			addrColTag:  addrVal,
+			titleColTag: titleVal}
 
-		if !ok {
-			t.Error("missing value")
-		} else if val != nil && !val.Equals(expVal) {
-			t.Error(types.EncodedValue(context.Background(), val), "!=", types.EncodedValue(context.Background(), expVal))
-		}
-	}
+		updatedVal := types.String("sanchez")
 
-	val, ok := r.GetColVal(45667456)
+		r := newTestRow()
+		assert.Equal(t, r, New(sch, expected))
 
-	if ok {
-		t.Error("Should not be ok")
-	} else if val != nil {
-		t.Error("missing value should be nil")
-	}
-}
+		updated, err := r.SetColVal(lnColTag, updatedVal, sch)
+		assert.NoError(t, err)
 
-func TestRowSet(t *testing.T) {
-	updatedVal := types.String("sanchez")
+		// validate calling set does not mutate the original row
+		assert.Equal(t, r, New(sch, expected))
+		expected[lnColTag] = updatedVal
+		assert.Equal(t, updated, New(sch, expected))
 
-	expected := map[uint64]types.Value{
-		lnColTag:    lnVal,
-		fnColTag:    fnVal,
-		ageColTag:   ageVal,
-		addrColTag:  addrVal,
-		titleColTag: titleVal}
+		// set to a nil value
+		updated, err = updated.SetColVal(titleColTag, nil, sch)
+		assert.NoError(t, err)
+		delete(expected, titleColTag)
+		assert.Equal(t, updated, New(sch, expected))
+	})
 
-	r := newTestRow()
+	t.Run("invalid update", func(t *testing.T) {
+		expected := map[uint64]types.Value{
+			lnColTag:    lnVal,
+			fnColTag:    fnVal,
+			ageColTag:   ageVal,
+			addrColTag:  addrVal,
+			titleColTag: titleVal}
 
-	validateRow(t, r, expected)
+		r := newTestRow()
 
-	updated, err := r.SetColVal(lnColTag, updatedVal, sch)
+		assert.Equal(t, r, New(sch, expected))
 
-	if err != nil {
-		t.Error("failed to update:", err)
-	}
+		// SetColVal allows an incorrect type to be set for a column
+		updatedRow, err := r.SetColVal(lnColTag, types.Bool(true), sch)
+		assert.NoError(t, err)
+		// IsValid fails for the type problem
+		assert.False(t, IsValid(updatedRow, sch))
+		invalidCol := GetInvalidCol(updatedRow, sch)
+		assert.NotNil(t, invalidCol)
+		assert.Equal(t, uint64(lnColTag), invalidCol.Tag)
 
-	// validate calling set does not mutate the original row
-	validateRow(t, r, expected)
-
-	expected[lnColTag] = updatedVal
-	validateRow(t, updated, expected)
+		// validate calling set does not mutate the original row
+		assert.Equal(t, r, New(sch, expected))
+	})
 }
 
 func TestConvToAndFromTuple(t *testing.T) {

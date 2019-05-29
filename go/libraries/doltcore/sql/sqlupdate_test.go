@@ -215,6 +215,12 @@ func TestExecuteUpdate(t *testing.T) {
 			query:       `update people set first = null where id = 0`,
 			expectedErr: "Constraint failed for column 'first': Not null",
 		},
+		// TODO: this should have a type mismatch message (right now: "invalid row for current schema")
+		// {
+		// 	name:        "type mismatch list -> string",
+		// 	query:       `update people set first = ("one", "two") where id = 0`,
+		// 	expectedErr: "Type mismatch:",
+		// },
 		{
 			name:        "type mismatch int -> string",
 			query:       `update people set first = 1 where id = 0`,
