@@ -55,7 +55,7 @@ func (nr nomsRow) SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row
 			rowVal = nr.value.Set(tag, val)
 		}
 
-		return nomsRow{rowKey, rowVal}, nil
+		return fromTaggedVals(sch, rowKey, rowVal), nil
 	}
 
 	panic("can't set a column whose tag isn't in the schema.  verify before calling this function.")
