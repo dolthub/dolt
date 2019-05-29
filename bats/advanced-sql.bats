@@ -171,13 +171,13 @@ teardown() {
     [[ "$output" =~ "Offset must be >= 0" ]] || false
 }
 
-@test "addition on both left and right side of comparison operator" {
-    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,0,5,10,15,20)"
-    run dolt sql -q "select pk from one_pk where c2+c1<=5-0"
-    skip "This fails right now with a numeric value but non-nuneric column error"
+@test "addition on both left and right sides of comparison operator" {
+    dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (11,5,5,10,15,20)"
+    run dolt sql -q "select pk from one_pk where c2+c1<=5+5"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
-    [[ "$output" =~ "11" ]] || false
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ 0 ]] || false
+    [[ "$output" =~ 11 ]] || false
 }
 
 @test "select with in list" {
