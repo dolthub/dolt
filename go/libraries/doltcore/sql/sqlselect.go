@@ -42,6 +42,10 @@ type SelectStatement struct {
 	joins []*sqlparser.JoinTableExpr
 	// Aliases for columns and tables
 	aliases *Aliases
+	// Filter for the where clause
+	whereFilter *RowFilter
+	// Filter for the join clauses
+	joinFilter *RowFilter
 	// Filter function for the result set
 	filterFn *RowFilter
 	// Ordering function for the result set
@@ -49,7 +53,7 @@ type SelectStatement struct {
 	// Limit of results returned
 	limit int
 	// Offset for results (skip N)
-	offset int
+	offset     int
 }
 
 // A SelectedColumn is a column in the result set. It has a name and a way to extract it from an intermediate row.
@@ -118,6 +122,14 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
+	if err := processWhereClause(selectStmt, s.Where); err != nil {
+		return nil, nil, err
+	}
+
+	if err := processJoins(selectStmt); err != nil {
+		return nil, nil, err
+	}
+
 	if err := createResultSetSchema(selectStmt); err != nil {
 		return nil, nil, err
 	}
@@ -132,6 +144,25 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 	}
 
 	return p, selectStmt, nil
+}
+
+func processJoins(selectStmt *SelectStatement) error {
+	joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
+	if err != nil {
+		return err
+	}
+
+	selectStmt.joinFilter = joinFilter
+	return nil
+}
+
+func processWhereClause(selectStmt *SelectStatement, where *sqlparser.Where) error {
+	if whereFilter, err := createFilterForWhere(where, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
+		return err
+	} else {
+		selectStmt.whereFilter = whereFilter
+	}
+	return nil
 }
 
 type orderDirection bool
@@ -460,27 +491,16 @@ func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string
 }
 
 // Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
-func createResultSetFilter(selectStmt *SelectStatement, s *sqlparser.Select, rss *resultset.ResultSetSchema) error {
-	whereFilter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases)
-	if err != nil {
-		return err
-	}
-	rowFilter := whereFilter
+func createResultSetFilter(selectStmt *SelectStatement, rss *resultset.ResultSetSchema) error {
 
-	if len(selectStmt.joins) > 0 {
-		joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
-		if err != nil {
+	rowFilter := newRowFilter(func(r row.Row) (matchesFilter bool) {
+		return selectStmt.whereFilter.filter(r) && selectStmt.joinFilter.filter(r)
+	})
+	rowFilter.InitFn = func(resolver TagResolver) error {
+		if err := selectStmt.whereFilter.Init(resolver); err != nil {
 			return err
 		}
-		rowFilter = newRowFilter(func(r row.Row) (matchesFilter bool) {
-			return whereFilter.filter(r) && joinFilter.filter(r)
-		})
-		rowFilter.InitFn = func(resolver TagResolver) error {
-			if err := whereFilter.Init(resolver); err != nil {
-				return err
-			}
-			return joinFilter.Init(resolver)
-		}
+		return selectStmt.joinFilter.Init(resolver)
 	}
 
 	selectStmt.filterFn = rowFilter
@@ -509,7 +529,7 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
 		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
 		// table for where clause filtering, then convert those rows to the result set schema.
-		if err := createResultSetFilter(selectStmt, s, resultset.Identity(tableName, tableSch)); err != nil {
+		if err := createResultSetFilter(selectStmt, resultset.Identity(tableName, tableSch)); err != nil {
 			return nil, err
 		}
 
@@ -562,7 +582,7 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 	crossProduct := selectStmt.intermediateRss.CrossProduct(results)
 	source := sourceFuncForRows(crossProduct)
 
-	if err := createResultSetFilter(selectStmt, s, selectStmt.intermediateRss); err != nil {
+	if err := createResultSetFilter(selectStmt, selectStmt.intermediateRss); err != nil {
 		return nil, err
 	}
 
