@@ -13,6 +13,8 @@ import (
 
 // binaryNomsOperation knows how to combine two noms values into a single one, e.g. addition
 type binaryNomsOperation func(left, right types.Value) types.Value
+
+// unaryNomsOperation knows how to combine a single noms value into another one, e.g. negation
 type unaryNomsOperation func(val types.Value) types.Value
 
 // TagResolver knows how to find a tag number for a qualified table in a result set.
@@ -30,6 +32,7 @@ type InitValue interface {
 }
 
 // RowValGetter knows how to retrieve a Value from a Row.
+// TODO: panic if get() is called before Init()
 type RowValGetter struct {
 	// The value type returned by this getter. Types are approximate and may need to be coerced, e.g. Float -> Int.
 	NomsKind types.NomsKind
@@ -244,6 +247,9 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 	unaryGetter := RowValGetterForKind(getter.NomsKind)
 	unaryGetter.Get = func(r row.Row) types.Value {
 		return opFn(getter.Get(r))
+	}
+	unaryGetter.InitFn = func(resolver TagResolver) error {
+		return getter.Init(resolver)
 	}
 
 	return unaryGetter, nil
