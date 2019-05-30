@@ -1379,7 +1379,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			p.Wait()
 
 			assert.Equal(t, tt.expectedNumRows, outputRows)
-			assert.Equal(t, tt.expectedSchema, statement.ResultSetSchema.Schema())
+			assert.Equal(t, tt.expectedSchema, statement.resultSetSchema)
 		})
 	}
 }

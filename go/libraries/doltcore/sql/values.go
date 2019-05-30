@@ -124,7 +124,35 @@ func LiteralValueGetter(value types.Value) *RowValGetter {
 	}
 }
 
-// Returns a comparison value getter for the expression given, which could be a column value or a literal
+// Returns a RowValGetter for the column given, or an error
+func getterForColumn(qc QualifiedColumn, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
+	tableSch, ok := inputSchemas[qc.TableName]
+	if !ok {
+		return nil, errFmt("Unresolved table %v", qc.TableName)
+	}
+
+	column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
+	if !ok {
+		return nil, errFmt(UnknownColumnErrFmt, qc.ColumnName)
+	}
+
+	getter := RowValGetterForKind(column.Kind)
+
+	var tag uint64
+	getter.initFn = func(resolver TagResolver) error {
+		var err error
+		tag, err = resolver.ResolveTag(qc.TableName, qc.ColumnName)
+		return err
+	}
+	getter.getFn = func(r row.Row) types.Value {
+		value, _ := r.GetColVal(tag)
+		return value
+	}
+
+	return getter, nil
+}
+
+// Returns RowValGetter for the expression given, or an error
 func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
 	switch e := expr.(type) {
 	case *sqlparser.NullVal:
@@ -139,31 +167,8 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		if err != nil {
 			return nil, err
 		}
-		tableSch, ok := inputSchemas[qc.TableName]
-		if !ok {
-			return nil, errFmt("Unresolved table %v", qc.TableName)
-		}
 
-		column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
-		if !ok {
-			return nil, errFmt(UnknownColumnErrFmt, colNameStr)
-		}
-
-		getter := RowValGetterForKind(column.Kind)
-
-		var tag uint64
-		getter.initFn = func(resolver TagResolver) error {
-			var err error
-			tag, err = resolver.ResolveTag(qc.TableName, qc.ColumnName)
-			return err
-		}
-		getter.getFn = func(r row.Row) types.Value {
-			value, _ := r.GetColVal(tag)
-			return value
-		}
-
-		return getter, nil
-
+		return getterForColumn(qc, inputSchemas, aliases)
 	case *sqlparser.SQLVal:
 		val, err := divineNomsValueFromSQLVal(e)
 		if err != nil {
