@@ -22,8 +22,6 @@ type TagResolver interface {
 	ResolveTag(tableName string, columnName string) (uint64, error)
 }
 
-type InitFn func(TagResolver) error
-
 // InitValue is a value type that knows how to initialize itself before the value is retrieved.
 type InitValue interface {
 	// Init() resolves late-bound information for this getter, like the tag number of a column in a result set. Returns
@@ -31,25 +29,43 @@ type InitValue interface {
 	Init(TagResolver) error
 }
 
+// GetValue is a value type that know how to retrieve a value from a row.
+type GetValue interface {
+	// Get() returns a value from the row given (which needn't actually be a value from that row).
+	Get(row.Row) types.Value
+}
+
 // RowValGetter knows how to retrieve a Value from a Row.
-// TODO: panic if get() is called before Init()
 type RowValGetter struct {
 	// The value type returned by this getter. Types are approximate and may need to be coerced, e.g. Float -> Int.
 	NomsKind types.NomsKind
-	// InitFn performs whatever logic necessary to initialize the getter, and returns any errors in the initialization
+	// initFn performs whatever logic necessary to initialize the getter, and returns any errors in the initialization
 	// process. Leave unset to perform no initialization logic. Client should call the interface method Init() rather than
 	// calling this method directly.
-	InitFn InitFn
-	// Get() returns the value for this getter for the row given.
-	Get func(r row.Row) types.Value
+	initFn func(TagResolver) error
+	// getFn returns the value for this getter for the row given. Clients shouldcall the interface method Get() rather
+	// than calling this method directly.
+	getFn func(r row.Row) types.Value
+	// Whether this value has been initialized.
+	inited bool
+	// Clients should use these interface methods, rather than getFn and initFn directly.
 	InitValue
+	GetValue
 }
 
 func (rvg *RowValGetter) Init(resolver TagResolver) error {
-	if rvg.InitFn != nil {
-		return rvg.InitFn(resolver)
+	rvg.inited = true
+	if rvg.initFn != nil {
+		return rvg.initFn(resolver)
 	}
 	return nil
+}
+
+func (rvg *RowValGetter) Get(r row.Row) types.Value {
+	if !rvg.inited {
+		panic("Get() called without Init(). This is a bug.")
+	}
+	return rvg.getFn(r)
 }
 
 // Returns a new RowValGetter with default values filled in.
@@ -74,11 +90,11 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 
 	return &RowValGetter{
 		NomsKind: destKind,
-		Get: func(r row.Row) types.Value {
+		getFn: func(r row.Row) types.Value {
 			val := getter.Get(r)
 			return converterFn(val)
 		},
-		InitFn: getter.InitFn,
+		initFn: getter.initFn,
 	}, nil
 }
 
@@ -86,7 +102,7 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 func LiteralValueGetter(value types.Value) *RowValGetter {
 	return &RowValGetter{
 		NomsKind: value.Kind(),
-		Get: func(r row.Row) types.Value {
+		getFn: func(r row.Row) types.Value {
 			return value
 		},
 	}
@@ -97,7 +113,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 	switch e := expr.(type) {
 	case *sqlparser.NullVal:
 		getter := RowValGetterForKind(types.NullKind)
-		getter.Get = func(r row.Row) types.Value { return nil }
+		getter.getFn = func(r row.Row) types.Value { return nil }
 		return getter, nil
 
 	case *sqlparser.ColName:
@@ -120,12 +136,12 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		getter := RowValGetterForKind(column.Kind)
 
 		var tag uint64
-		getter.InitFn = func(resolver TagResolver) error {
+		getter.initFn = func(resolver TagResolver) error {
 			var err error
 			tag, err = resolver.ResolveTag(qc.TableName, qc.ColumnName)
 			return err
 		}
-		getter.Get = func(r row.Row) types.Value {
+		getter.getFn = func(r row.Row) types.Value {
 			value, _ := r.GetColVal(tag)
 			return value
 		}
@@ -245,10 +261,10 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 	}
 
 	unaryGetter := RowValGetterForKind(getter.NomsKind)
-	unaryGetter.Get = func(r row.Row) types.Value {
+	unaryGetter.getFn = func(r row.Row) types.Value {
 		return opFn(getter.Get(r))
 	}
-	unaryGetter.InitFn = func(resolver TagResolver) error {
+	unaryGetter.initFn = func(resolver TagResolver) error {
 		return getter.Init(resolver)
 	}
 
@@ -362,7 +378,7 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 	}
 
 	getter := RowValGetterForKind(leftGetter.NomsKind)
-	getter.Get = func(r row.Row) types.Value {
+	getter.getFn = func(r row.Row) types.Value {
 		leftVal := leftGetter.Get(r)
 		rightVal := rightGetter.Get(r)
 		if types.IsNull(leftVal) || types.IsNull(rightVal) {
@@ -370,7 +386,7 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 		}
 		return opFn(leftVal, rightVal)
 	}
-	getter.InitFn = func(resolver TagResolver) error {
+	getter.initFn = func(resolver TagResolver) error {
 		if err := leftGetter.Init(resolver); err != nil {
 			return err
 		}
