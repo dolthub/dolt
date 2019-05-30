@@ -34,10 +34,8 @@ type InitValue interface {
 func ComposeInits(ivs ...InitValue) func(TagResolver) error{
 	return func(resolver TagResolver) error {
 		for _, iv := range ivs {
-			if iv != nil {
-				if err := iv.Init(resolver); err != nil {
-					return err
-				}
+			if err := iv.Init(resolver); err != nil {
+				return err
 			}
 		}
 		return nil
