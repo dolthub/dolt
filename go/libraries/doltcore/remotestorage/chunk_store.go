@@ -5,19 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/snappy"
-	"io/ioutil"
-	"net/http"
-	"sort"
-	"strconv"
-	"sync"
-	"time"
-
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/nbs"
+	"github.com/golang/snappy"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"sync"
 )
 
 var ErrUploadFailed = errors.New("upload failed")
@@ -93,14 +92,23 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 }
 
 const (
-	getLocsBatchSize      = 2048
-	getLocsMaxConcurrency = 1
+	getLocsBatchSize      = 4096
+	getLocsMaxConcurrency = 32
 )
 
-func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (map[string][]*remotesapi.RangeChunk, error) {
-	dlLocChan := make(chan *remotesapi.DownloadLoc, len(hashes))
-	urlToRanges := make(map[string][]*remotesapi.RangeChunk)
+type urlAndRanges struct {
+	Url    string
+	Ranges []*remotesapi.RangeChunk
+}
 
+func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (map[string]urlAndRanges, error) {
+	// results aggregated in resourceToUrlAndRanges
+	resourceToUrlAndRanges := make(map[string]urlAndRanges)
+
+	// channel for receiving results from go routines making grpc calls to get download locations for chunks
+	dlLocChan := make(chan *remotesapi.DownloadLoc, len(hashes))
+
+	// go routine for receiving the results of the grpc calls and aggregating the results into resourceToUrlAndRanges
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -111,11 +119,16 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 				panic("deprecated")
 			case *remotesapi.DownloadLoc_HttpGetRange:
 				if len(typedLoc.HttpGetRange.Ranges) > 0 {
-					url := typedLoc.HttpGetRange.Url
-					if ranges, ok := urlToRanges[url]; ok {
-						urlToRanges[url] = append(ranges, typedLoc.HttpGetRange.Ranges...)
+					urlStr := typedLoc.HttpGetRange.Url
+					urlObj, _ := url.Parse(urlStr)
+
+					resourcePath := fmt.Sprintf("%s://%s%s", urlObj.Scheme, urlObj.Host, urlObj.Path)
+
+					if uAndR, ok := resourceToUrlAndRanges[resourcePath]; ok {
+						uAndR.Ranges = append(uAndR.Ranges, typedLoc.HttpGetRange.Ranges...)
+						resourceToUrlAndRanges[resourcePath] = uAndR
 					} else {
-						urlToRanges[url] = typedLoc.HttpGetRange.Ranges
+						resourceToUrlAndRanges[resourcePath] = urlAndRanges{urlStr, typedLoc.HttpGetRange.Ranges}
 					}
 				}
 			}
@@ -124,6 +137,9 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 
 	hashesBytes := HashesToSlices(hashes)
 	var work []func() error
+
+	// batchItr creates work functions which request a batch of chunk download locations and write the results to the
+	// dlLocChan
 	batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
 		batch := hashesBytes[st:end]
 		f := func() error {
@@ -145,31 +161,38 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 		return false
 	})
 
-	err := concurrentExec(work, getLocsMaxConcurrency)
-	close(dlLocChan)
+	var err error
 
+	// execute the work and close the channel after as no more results will come in
+	func() {
+		defer close(dlLocChan)
+		err = concurrentExec(work, getLocsMaxConcurrency)
+	}()
+
+	// wait for the result aggregator go routine to exit
 	wg.Wait()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return urlToRanges, nil
+	return resourceToUrlAndRanges, nil
 }
 
 func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan *chunks.Chunk) error {
-	startGetLocs := time.Now()
-	urlToRanges, err := dcs.getDLLocs(ctx, notCached)
-	endGetLocs := time.Now()
-	getLocsDelta := endGetLocs.Sub(startGetLocs)
+	// get the locations where the chunks can be downloaded from
+	resourceToUrlAndRanges, err := dcs.getDLLocs(ctx, notCached)
 
 	if err != nil {
 		return err
 	}
 
 	var wg sync.WaitGroup
-	chunkChan := make(chan *chunks.Chunk)
 
+	// channel to receive chunks on
+	chunkChan := make(chan *chunks.Chunk, 128)
+
+	// start a go routine to receive the downloaded chunks on
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -185,20 +208,18 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 		}
 	}()
 
-	startDL := time.Now()
-	err = dcs.downloadChunks(ctx, urlToRanges, chunkChan)
-	close(chunkChan)
+	// download the chunks and close the channel after
+	func() {
+		defer close(chunkChan)
+		err = dcs.downloadChunks(ctx, resourceToUrlAndRanges, chunkChan)
+	}()
 
+	// wait for all the results to finish processing
 	wg.Wait()
 
 	if err != nil {
 		return err
 	}
-
-	endDL := time.Now()
-	dl := endDL.Sub(startDL)
-
-	fmt.Sprintf("For %d chunks: Get Locs %f ms, Download %f ms\n", len(notCached), getLocsDelta.Seconds()*1000.0, dl.Seconds()*1000.0)
 
 	return nil
 }
@@ -455,32 +476,48 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 	return nil
 }
 
-func aggregateDownloads(aggDistance uint64, urlToRanges map[string][]*remotesapi.RangeChunk) []*remotesapi.DownloadLoc {
+// aggregateDownloads looks for byte ranges that need to be downloaded, and tries to aggregate them into a smaller number
+// of larger downloads.  It does this by sorting the ranges of bytes that are needed, and then comparing how close together
+// neighboring ranges are.  If they are within the threshold the two ranges will be aggregated into a single request for
+// the entire range of data.
+func aggregateDownloads(aggDistance uint64, resourceToUrlAndRanges map[string]urlAndRanges) []*remotesapi.DownloadLoc {
+	// results are aggregated into here, and each element will represent a request to be made
 	var aggregatedLocs []*remotesapi.DownloadLoc
-	for url, ranges := range urlToRanges {
+
+	// for each file that we need to download chunks from
+	for _, urlAndRanges := range resourceToUrlAndRanges {
+		urlStr := urlAndRanges.Url
+		ranges := urlAndRanges.Ranges
+
+		// sort the ranges we need to get by the starting offset
 		sort.Slice(ranges, func(i, j int) bool {
 			return ranges[i].Offset < ranges[j].Offset
 		})
 
+		// for each range in the sorted list of ranges group items that are less than aggDistance apart
 		last := ranges[0]
 		aggregatedRanges := []*remotesapi.RangeChunk{last}
 		for i := 1; i < len(ranges); i++ {
 			curr := ranges[i]
-			distance := last.Offset + uint64(last.Length) - curr.Offset - 1
+			distance := last.Offset + uint64(last.Length) - curr.Offset
 
 			if distance <= aggDistance {
+				// When close enough together aggregate
 				aggregatedRanges = append(aggregatedRanges, curr)
 			} else {
-				getRange := &remotesapi.HttpGetRange{Url: url, Ranges: aggregatedRanges}
+				// When not close enough together add a DownloadLoc encompassing all the aggregated chunks
+				getRange := &remotesapi.HttpGetRange{Url: urlStr, Ranges: aggregatedRanges}
 				aggregatedLocs = append(aggregatedLocs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 
+				// start a new aggregation of ranges
 				aggregatedRanges = []*remotesapi.RangeChunk{curr}
 			}
 
 			last = curr
 		}
 
-		getRange := &remotesapi.HttpGetRange{Url: url, Ranges: aggregatedRanges}
+		// add the last DownloadLoc
+		getRange := &remotesapi.HttpGetRange{Url: urlStr, Ranges: aggregatedRanges}
 		aggregatedLocs = append(aggregatedLocs, &remotesapi.DownloadLoc{Location: &remotesapi.DownloadLoc_HttpGetRange{HttpGetRange: getRange}})
 	}
 
@@ -488,15 +525,17 @@ func aggregateDownloads(aggDistance uint64, urlToRanges map[string][]*remotesapi
 }
 
 const (
-	chunkAggDistance       = 0
-	maxDownloadConcurrency = 1
+	chunkAggDistance       = 8 * 1024
+	maxDownloadConcurrency = 256
 )
 
-// getting this working using the simplest approach first
-func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, urlToRanges map[string][]*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) error {
+// creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
+// to chunkChan
+func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndRanges map[string]urlAndRanges, chunkChan chan *chunks.Chunk) error {
 	var allChunks []chunks.Chunk
-	aggLocs := aggregateDownloads(chunkAggDistance, urlToRanges)
+	aggLocs := aggregateDownloads(chunkAggDistance, resourceToUrlAndRanges)
 
+	// loop over all the aggLocs that need to be downloaded and create a work function for each
 	var work []func() error
 	for _, loc := range aggLocs {
 		var err error
@@ -517,44 +556,47 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, urlToRanges map[s
 		allChunks = append(allChunks, chnks...)
 	}
 
+	// execute the work
 	err := concurrentExec(work, maxDownloadConcurrency)
 
 	return err
 }
 
-type bytesResult struct {
-	r    *remotesapi.RangeChunk
-	data []byte
-	err  error
-}
-
-func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, url string, ranges []*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) func() error {
+// getRangeDownloadFunc returns a work function that does the downloading of one or more chunks and writes those chunks
+// to the chunkChan
+func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) func() error {
 	numRanges := len(ranges)
 	offset := ranges[0].Offset
 	length := ranges[numRanges-1].Offset - offset + uint64(ranges[numRanges-1].Length)
 
 	return func() error {
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		// create the request
+		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
 		if err != nil {
 			return err
 		}
 
 		rangeVal := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
 		req.Header.Set("Range", rangeVal)
+
+		//execute the request
 		resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
 
 		if err != nil {
 			return err
 		} else if resp.StatusCode/100 != 2 {
-			return errors.New(url + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))
+			return errors.New(urlStr + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))
 		}
 
+		// read the results
 		comprData, err := ioutil.ReadAll(resp.Body)
 
 		if err != nil {
 			return err
 		}
 
+		// loop over the ranges of bytes and extract those bytes from the data that was downloaded.  The extracted bytes
+		// are then decoded to chunks and written to the chunkChan
 		for _, r := range ranges {
 			chunkStart := r.Offset - offset
 			chunkEnd := chunkStart + uint64(r.Length) - 4
