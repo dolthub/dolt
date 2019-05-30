@@ -55,7 +55,7 @@ func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[str
 			}), nil
 	}
 
-	rowFilters := make([]*RowFilter, 0)
+	rowFilters := make([]InitValue, 0)
 	for _, je := range joins {
 		if filterFn, err := createFilterForJoin(je, inputSchemas, aliases); err != nil {
 			return nil, err
@@ -66,20 +66,14 @@ func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[str
 
 	rowFilter := newRowFilter(func(r row.Row) (matchesFilter bool) {
 		for _, rf := range rowFilters {
-			if !rf.filter(r) {
+			if !rf.(*RowFilter).filter(r) {
 				return false
 			}
 		}
 		return true
 	})
-	rowFilter.initFn = func(resolver TagResolver) error {
-		for _, rf := range rowFilters {
-			if err := rf.Init(resolver); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
+
+	rowFilter.initFn = ComposeInits(rowFilters...)
 
 	return rowFilter, nil
 }
@@ -360,14 +354,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 	}
 
 	rowFilter := newRowFilter(rowFilterFn)
-	rowFilter.initFn = func(resolver TagResolver) error {
-		for _, getter := range gettersToInit {
-			if err := getter.Init(resolver); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
+	rowFilter.initFn = ComposeInits(gettersToInit...)
 
 	return rowFilter, nil
 }
