@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
 )
@@ -16,12 +15,38 @@ import (
 type binaryNomsOperation func(left, right types.Value) types.Value
 type unaryNomsOperation func(val types.Value) types.Value
 
+// TagResolver knows how to find a tag number for a qualified table in a result set.
+type TagResolver interface {
+	ResolveTag(tableName string, columnName string) (uint64, error)
+}
+
+type InitFn func(TagResolver) error
+
+// InitValue is a value type that knows how to initialize itself before the value is retrieved.
+type InitValue interface {
+	// Init() resolves late-bound information for this getter, like the tag number of a column in a result set. Returns
+	// any error in initialization. Init() must be called before other methods on an object.
+	Init(TagResolver) error
+}
+
 // RowValGetter knows how to retrieve a Value from a Row.
 type RowValGetter struct {
 	// The value type returned by this getter. Types are approximate and may need to be coerced, e.g. Float -> Int.
 	NomsKind types.NomsKind
-	// Get() returns the value for this getter for the row given
+	// InitFn performs whatever logic necessary to initialize the getter, and returns any errors in the initialization
+	// process. Leave unset to perform no initialization logic. Client should call the interface method Init() rather than
+	// calling this method directly.
+	InitFn InitFn
+	// Get() returns the value for this getter for the row given.
 	Get func(r row.Row) types.Value
+	InitValue
+}
+
+func (rvg *RowValGetter) Init(resolver TagResolver) error {
+	if rvg.InitFn != nil {
+		return rvg.InitFn(resolver)
+	}
+	return nil
 }
 
 // Returns a new RowValGetter with default values filled in.
@@ -50,6 +75,7 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 			val := getter.Get(r)
 			return converterFn(val)
 		},
+		InitFn: getter.InitFn,
 	}, nil
 }
 
@@ -64,7 +90,7 @@ func LiteralValueGetter(value types.Value) *RowValGetter {
 }
 
 // Returns a comparison value getter for the expression given, which could be a column value or a literal
-func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
+func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
 	switch e := expr.(type) {
 	case *sqlparser.NullVal:
 		getter := RowValGetterForKind(types.NullKind)
@@ -87,11 +113,17 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		if !ok {
 			return nil, errFmt(UnknownColumnErrFmt, colNameStr)
 		}
-		resultSetTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
 
 		getter := RowValGetterForKind(column.Kind)
+
+		var tag uint64
+		getter.InitFn = func(resolver TagResolver) error {
+			var err error
+			tag, err = resolver.ResolveTag(qc.TableName, qc.ColumnName)
+			return err
+		}
 		getter.Get = func(r row.Row) types.Value {
-			value, _ := r.GetColVal(resultSetTag)
+			value, _ := r.GetColVal(tag)
 			return value
 		}
 
@@ -140,9 +172,9 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		return getter, nil
 
 	case *sqlparser.BinaryExpr:
-		return getterForBinaryExpr(e, inputSchemas, aliases, rss)
+		return getterForBinaryExpr(e, inputSchemas, aliases)
 	case *sqlparser.UnaryExpr:
-		return getterForUnaryExpr(e, inputSchemas, aliases, rss)
+		return getterForUnaryExpr(e, inputSchemas, aliases)
 	default:
 		return nil, errFmt("Unsupported type %v", nodeToString(e))
 	}
@@ -150,8 +182,8 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 
 // getterForUnaryExpr returns a getter for the given unary expression, where calls to Get() evaluates the full
 // expression for the row given
-func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
-	getter, err := getterFor(e.Expr, inputSchemas, aliases, rss)
+func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
+	getter, err := getterFor(e.Expr, inputSchemas, aliases)
 	if err != nil {
 		return nil, err
 	}
@@ -219,12 +251,12 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 
 // getterForBinaryExpr returns a getter for the given binary expression, where calls to Get() evaluates the full
 // expression for the row given
-func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
-	leftGetter, err := getterFor(e.Left, inputSchemas, aliases, rss)
+func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
+	leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
 	if err != nil {
 		return nil, err
 	}
-	rightGetter, err := getterFor(e.Right, inputSchemas, aliases, rss)
+	rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
 	if err != nil {
 		return nil, err
 	}
@@ -331,6 +363,15 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 			return nil
 		}
 		return opFn(leftVal, rightVal)
+	}
+	getter.InitFn = func(resolver TagResolver) error {
+		if err := leftGetter.Init(resolver); err != nil {
+			return err
+		}
+		if err := rightGetter.Init(resolver); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	return getter, nil

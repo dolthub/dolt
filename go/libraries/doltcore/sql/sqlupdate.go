@@ -56,7 +56,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	setVals := make(map[uint64]*RowValGetter)
 	schemas := map[string]schema.Schema{tableName: tableSch}
 	aliases := NewAliases()
-	rss := resultset.Identity(tableSch)
+	rss := resultset.Identity(tableName, tableSch)
 
 	for _, update := range s.Exprs {
 		colName := update.Name.Name.String()
@@ -74,9 +74,12 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		}
 
 		// TODO: support aliases, multiple table updates
-		getter, err := getterFor(update.Expr, schemas, aliases, rss)
+		getter, err := getterFor(update.Expr, schemas, aliases)
 		if err != nil {
 			return nil, err
+		}
+		if err = getter.Init(rss); err != nil {
+			return errUpdate(err.Error())
 		}
 
 		if getter.NomsKind != column.Kind {
@@ -90,8 +93,11 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	// TODO: support aliases in where clauses
-	filter, err := createFilterForWhere(s.Where, schemas, aliases, rss)
+	filter, err := createFilterForWhere(s.Where, schemas, aliases)
 	if err != nil {
+		return errUpdate(err.Error())
+	}
+	if err := filter.Init(rss); err != nil {
 		return errUpdate(err.Error())
 	}
 
@@ -110,7 +116,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			return nil, err
 		}
 
-		if !filter(r) {
+		if !filter.filter(r) {
 			continue
 		}
 
