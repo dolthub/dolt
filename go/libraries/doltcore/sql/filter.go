@@ -15,13 +15,13 @@ type RowFilterFn func(r row.Row) (matchesFilter bool)
 // clients before using filter().
 type RowFilter struct {
 	filter RowFilterFn
-	InitFn func(resolver TagResolver) error
+	initFn func(resolver TagResolver) error
 	InitValue
 }
 
 func (rf *RowFilter) Init(resolver TagResolver) error {
-	if rf.InitFn != nil {
-		return rf.InitFn(resolver)
+	if rf.initFn != nil {
+		return rf.initFn(resolver)
 	}
 	return nil
 }
@@ -72,7 +72,7 @@ func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[str
 		}
 		return true
 	})
-	rowFilter.InitFn = func(resolver TagResolver) error {
+	rowFilter.initFn = func(resolver TagResolver) error {
 		for _, rf := range rowFilters {
 			if err := rf.Init(resolver); err != nil {
 				return err
@@ -360,7 +360,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 	}
 
 	rowFilter := newRowFilter(rowFilterFn)
-	rowFilter.InitFn = func(resolver TagResolver) error {
+	rowFilter.initFn = func(resolver TagResolver) error {
 		for _, getter := range gettersToInit {
 			if err := getter.Init(resolver); err != nil {
 				return err

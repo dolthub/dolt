@@ -29,6 +29,21 @@ type InitValue interface {
 	Init(TagResolver) error
 }
 
+// Composes zero or more InitValue into a new Init() function, where Init() is called on each InitValue in turn,
+// returning any error encountered.
+func ComposeInits(ivs ...InitValue) func(TagResolver) error{
+	return func(resolver TagResolver) error {
+		for _, iv := range ivs {
+			if iv != nil {
+				if err := iv.Init(resolver); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+}
+
 // GetValue is a value type that know how to retrieve a value from a row.
 type GetValue interface {
 	// Get() returns a value from the row given (which needn't actually be a value from that row).
