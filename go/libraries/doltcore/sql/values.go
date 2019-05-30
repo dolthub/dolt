@@ -43,7 +43,7 @@ type RowValGetter struct {
 	// process. Leave unset to perform no initialization logic. Client should call the interface method Init() rather than
 	// calling this method directly.
 	initFn func(TagResolver) error
-	// getFn returns the value for this getter for the row given. Clients shouldcall the interface method Get() rather
+	// getFn returns the value for this getter for the row given. Clients should call the interface method Get() rather
 	// than calling this method directly.
 	getFn func(r row.Row) types.Value
 	// Whether this value has been initialized.
@@ -62,6 +62,7 @@ func (rvg *RowValGetter) Init(resolver TagResolver) error {
 }
 
 func (rvg *RowValGetter) Get(r row.Row) types.Value {
+	// TODO: find a way to not impede performance with this check
 	if !rvg.inited {
 		panic("Get() called without Init(). This is a bug.")
 	}
@@ -94,7 +95,9 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 			val := getter.Get(r)
 			return converterFn(val)
 		},
-		initFn: getter.initFn,
+		initFn: func(resolver TagResolver) error {
+			return getter.Init(resolver)
+		},
 	}, nil
 }
 

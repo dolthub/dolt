@@ -48,6 +48,13 @@ func createFilterForWhere(whereClause *sqlparser.Where, inputSchemas map[string]
 
 // createFilterForWhere creates a filter function from the joins given
 func createFilterForJoins(joins []*sqlparser.JoinTableExpr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowFilter, error) {
+	if len(joins) == 0 {
+		return newRowFilter(
+			func(r row.Row) bool {
+				return true
+			}), nil
+	}
+
 	rowFilters := make([]*RowFilter, 0)
 	for _, je := range joins {
 		if filterFn, err := createFilterForJoin(je, inputSchemas, aliases); err != nil {
