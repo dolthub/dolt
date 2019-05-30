@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -46,10 +45,8 @@ type SelectStatement struct {
 	whereFilter *RowFilter
 	// Filter for the join clauses
 	joinFilter *RowFilter
-	// Filter function for the result set
-	filterFn *RowFilter
-	// Ordering function for the result set
-	orderFn rowLesserFn
+	// Sorter for the result set
+	orderBy *RowSorter
 	// Limit of results returned
 	limit int
 	// Offset for results (skip N)
@@ -130,6 +127,10 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
+	if err := processOrderByClause(selectStmt, s.OrderBy); err != nil {
+		return nil, nil, err
+	}
+
 	if err := createResultSetSchema(selectStmt); err != nil {
 		return nil, nil, err
 	}
@@ -138,7 +139,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	p, err := createPipeline(ctx, root, s, selectStmt)
+	p, err := createPipeline(ctx, root, selectStmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -146,6 +147,22 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 	return p, selectStmt, nil
 }
 
+// Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
+func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy) error {
+	if len(orderBy) == 0 {
+		return nil
+	}
+
+	sorter, err := createRowSorter(statement, orderBy)
+	if err != nil {
+		return err
+	}
+
+	statement.orderBy = sorter
+	return nil
+}
+
+// Processes the joins previously recorded in the statement and applies an appropriate filter to the statement.
 func processJoins(selectStmt *SelectStatement) error {
 	joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
 	if err != nil {
@@ -156,103 +173,13 @@ func processJoins(selectStmt *SelectStatement) error {
 	return nil
 }
 
+// Processes the where clause and applies an appropriate filter to the statement.
 func processWhereClause(selectStmt *SelectStatement, where *sqlparser.Where) error {
 	if whereFilter, err := createFilterForWhere(where, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	} else {
 		selectStmt.whereFilter = whereFilter
 	}
-	return nil
-}
-
-type orderDirection bool
-const (
-	asc  orderDirection = true
-	desc orderDirection = false
-)
-
-// Returns the appropriate less value for sorting, reversing the sort order for desc orders.
-func (od orderDirection) lessVal(less bool) bool {
-	switch od {
-	case asc:
-		return less
-	case desc:
-		return !less
-	}
-	panic("impossible")
-}
-
-// order-by struct
-type ob struct {
-	qc            QualifiedColumn
-	comparisonTag uint64
-	direction     orderDirection
-}
-
-// Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
-func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy, rss *resultset.ResultSetSchema) error {
-	if len(orderBy) == 0 {
-		return nil
-	}
-
-	obs := make([]ob, len(orderBy))
-	for i, o := range orderBy {
-		qcs, err := resolveColumnsInExpr(o.Expr, statement.inputSchemas, statement.aliases)
-		if err != nil {
-			return err
-		}
-
-		if len(qcs) == 0 {
-			return errFmt("Found no column in order by clause: %v", nodeToString(o))
-		} else if len(qcs) > 1 {
-			return errFmt("Found more than one column in order by clause: %v", nodeToString(o))
-		}
-
-		qc := qcs[0]
-
-		tableSch, ok := statement.inputSchemas[qc.TableName]
-		if !ok {
-			return errFmt("Unresolved table %v", qc.TableName)
-		}
-
-		column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
-		if !ok {
-			return errFmt(UnknownColumnErrFmt, qc.ColumnName)
-		}
-
-		comparisonTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
-
-		dir := asc
-		if o.Direction == sqlparser.DescScr {
-			dir = desc
-		}
-
-		obs[i] = ob{qc, comparisonTag, dir}
-	}
-
-	// less function for sorting, returns whether left < right
-	statement.orderFn = func(rLeft, rRight row.Row) bool {
-		for _, ob := range obs {
-			leftVal, _ := rLeft.GetColVal(ob.comparisonTag)
-			rightVal, _ := rRight.GetColVal(ob.comparisonTag)
-
-			// MySQL behavior is that nulls sort first in asc, last in desc
-			if types.IsNull(leftVal) {
-				return  ob.direction.lessVal(true)
-			} else if types.IsNull(rightVal) {
-				return ob.direction.lessVal(false)
-			}
-
-			if leftVal.Less(rightVal) {
-				return ob.direction.lessVal(true)
-			} else if rightVal.Less(leftVal) {
-				return ob.direction.lessVal(false)
-			}
-		}
-
-		return false
-	}
-
 	return nil
 }
 
@@ -490,21 +417,10 @@ func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string
 	return tbl.GetSchema(ctx)
 }
 
-// Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
-func createResultSetFilter(selectStmt *SelectStatement, rss *resultset.ResultSetSchema) error {
-
-	rowFilter := newRowFilter(func(r row.Row) (matchesFilter bool) {
-		return selectStmt.whereFilter.filter(r) && selectStmt.joinFilter.filter(r)
-	})
-	rowFilter.InitFn = func(resolver TagResolver) error {
-		if err := selectStmt.whereFilter.Init(resolver); err != nil {
-			return err
-		}
-		return selectStmt.joinFilter.Init(resolver)
-	}
-
-	selectStmt.filterFn = rowFilter
-	return rowFilter.Init(rss)
+// Binds the tag numbers used by the various components in the statement to those provided by the given resolver.
+func bindTagNumbers(statement *SelectStatement, resolver TagResolver) error {
+	initFunc := ComposeInits(statement.joinFilter, statement.whereFilter, statement.orderBy)
+	return initFunc(resolver)
 }
 
 // The result of running a single select pipeline.
@@ -516,7 +432,7 @@ type singleTablePipelineResult struct {
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Select, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
+func createPipeline(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
 
 	if len(selectStmt.inputSchemas) == 1 {
 		var tableName string
@@ -529,13 +445,7 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
 		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
 		// table for where clause filtering, then convert those rows to the result set schema.
-		if err := createResultSetFilter(selectStmt, resultset.Identity(tableName, tableSch)); err != nil {
-			return nil, err
-		}
-
-		if err := processOrderByClause(selectStmt, s.OrderBy, resultset.Identity(tableName, tableSch)); err != nil {
-			return nil, err
-		}
+		bindTagNumbers(selectStmt, resultset.Identity(tableName, tableSch))
 
 		return createSingleTablePipeline(ctx, root, selectStmt, tableName, true)
 	}
@@ -582,18 +492,12 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 	crossProduct := selectStmt.intermediateRss.CrossProduct(results)
 	source := sourceFuncForRows(crossProduct)
 
-	if err := createResultSetFilter(selectStmt, selectStmt.intermediateRss); err != nil {
-		return nil, err
-	}
-
-	if err := processOrderByClause(selectStmt, s.OrderBy, selectStmt.intermediateRss); err != nil {
-		return nil, err
-	}
+	bindTagNumbers(selectStmt, selectStmt.intermediateRss)
 
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
-	if selectStmt.orderFn != nil {
-		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderFn)})
+	if selectStmt.orderBy != nil {
+		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderBy.Less)})
 	}
 	if selectStmt.limit != noLimit {
 		p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(selectStmt, p)))
@@ -693,14 +597,19 @@ func createLimitAndOffsetFn(statement *SelectStatement, p *pipeline.Pipeline) pi
 	}
 }
 
+// Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
+func createResultSetFilter(selectStmt *SelectStatement) *RowFilter {
+	return newRowFilter(func(r row.Row) (matchesFilter bool) {
+		return selectStmt.whereFilter.filter(r) && selectStmt.joinFilter.filter(r)
+	})
+}
+
 // Returns a transform function to filter the set of rows to match the where / join clauses.
 func createWhereFn(statement *SelectStatement) pipeline.TransformRowFunc {
-	if statement.filterFn == nil {
-		panic("Called createWhereFn without a filterFn specified")
-	}
+	rowFilter := createResultSetFilter(statement)
 
 	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
-		if statement.filterFn.filter(inRow) {
+		if rowFilter.filter(inRow) {
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
 		return nil, ""
@@ -719,8 +628,8 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 
 	if isTerminal {
 		p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(statement)))
-		if statement.orderFn != nil {
-			p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(statement.orderFn)})
+		if statement.orderBy != nil {
+			p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(statement.orderBy.Less)})
 		}
 		if statement.limit != noLimit {
 			p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(statement, p)))
