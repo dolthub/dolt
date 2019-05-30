@@ -2,6 +2,7 @@ package remotestorage
 
 import "github.com/attic-labs/noms/go/hash"
 
+// HashesToSlices takes a
 func HashesToSlices(hashes []hash.Hash) [][]byte {
 	slices := make([][]byte, len(hashes))
 
@@ -13,6 +14,7 @@ func HashesToSlices(hashes []hash.Hash) [][]byte {
 	return slices
 }
 
+// HashSetToSlices takes a HashSet and converts it to a slice of hashes, and a slice of byte slices
 func HashSetToSlices(hashes hash.HashSet) ([]hash.Hash, [][]byte) {
 	hashSl := make([]hash.Hash, len(hashes))
 	bytesSl := make([][]byte, len(hashes))
@@ -28,6 +30,8 @@ func HashSetToSlices(hashes hash.HashSet) ([]hash.Hash, [][]byte) {
 	return hashSl, bytesSl
 }
 
+// ParseByteSlices takes a slice of byte slices and converts it to a HashSet, and a map from hash to it's index in the
+// original slice
 func ParseByteSlices(byteSlices [][]byte) (hash.HashSet, map[hash.Hash]int) {
 	hs := make(hash.HashSet)
 	hashToIndex := make(map[hash.Hash]int)
