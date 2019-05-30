@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
@@ -26,7 +26,7 @@ type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
 // Struct to represent the salient results of parsing a select statement.
 type SelectStatement struct {
 	// Result set schema
-	ResultSetSchema *resultset.ResultSetSchema
+	resultSetSchema schema.Schema
 	// Intermediate result set schema, used for processing results
 	intermediateRss *resultset.ResultSetSchema
 	// Input tables in order of selection
@@ -56,9 +56,7 @@ type SelectStatement struct {
 // A SelectedColumn is a column in the result set. It has a name and a way to extract it from an intermediate row.
 type SelectedColumn struct {
 	Name    string
-	Ordinal int
-	Col     QualifiedColumn // TODO: remove me
-	Getter  RowValGetter
+	Getter  *RowValGetter
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
@@ -94,7 +92,7 @@ func ExecuteSelect(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Sel
 		return nil, nil, executionErr
 	}
 
-	return rows, statement.ResultSetSchema.Schema(), nil
+	return rows, statement.resultSetSchema, nil
 }
 
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
@@ -131,11 +129,15 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
+	if err := processLimitClause(s, selectStmt); err != nil {
+		return nil, nil, err
+	}
+
 	if err := createResultSetSchema(selectStmt); err != nil {
 		return nil, nil, err
 	}
 
-	if err := processLimitClause(s, selectStmt); err != nil {
+	if err := createIntermediateSchema(selectStmt); err != nil {
 		return nil, nil, err
 	}
 
@@ -145,6 +147,22 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 	}
 
 	return p, selectStmt, nil
+}
+
+// Creates the final result set schema and applies it to the statement given.
+func createResultSetSchema(selectStmt *SelectStatement) error {
+	cols := make([]schema.Column, len(selectStmt.selectedCols))
+	for i, selectedCol := range selectStmt.selectedCols {
+		cols[i] = schema.NewColumn(selectedCol.Name, uint64(i), selectedCol.Getter.NomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		return err
+	}
+
+	selectStmt.resultSetSchema = schema.UnkeyedSchemaFromCols(collection)
+	return nil
 }
 
 // Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
@@ -361,53 +379,49 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 // Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
 // or returns an error if it cannot. All table aliases must be established in the SelectStatement.
 func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
-	var columns []QualifiedColumn
+	var selected []SelectedColumn
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
 			if qcs, err := resolveColumnsInStarExpr(selectExpr, selectStmt.inputTables, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 				return err
 			} else {
-				columns = append(columns, qcs...)
+				for _, qc := range qcs {
+					getter, err := getterForColumn(qc, selectStmt.inputSchemas, selectStmt.aliases)
+					if err != nil {
+						return nil
+					}
+					selected = append(selected, SelectedColumn{Name: qc.ColumnName, Getter: getter})
+				}
 			}
 		case *sqlparser.AliasedExpr:
-			switch colExpr := selectExpr.Expr.(type) {
-			case *sqlparser.ColName:
 
-				qc, err := resolveColumn(getColumnNameString(colExpr), selectStmt.inputSchemas, selectStmt.aliases)
-				if err != nil {
-					return err
-				}
-
-				// an absent column alias will be empty
-				if selectExpr.As.String() != "" {
-					selectStmt.aliases.AddColumnAlias(qc, selectExpr.As.String())
-				} else {
-					// This isn't a true alias, but we want the column header to exactly match the original select statement, even
-					// if we found a case-insensitive match for the column name.
-					selectStmt.aliases.AddColumnAlias(qc, colExpr.Name.String())
-				}
-
-				columns = append(columns, qc)
-			default:
-				return errFmt("Only column selections or * are supported")
+			getter, err := getterFor(selectExpr.Expr, selectStmt.inputSchemas, selectStmt.aliases.TableAliasesOnly())
+			if err != nil {
+				return err
 			}
+
+			// an absent column alias will be empty
+			colName := ""
+			if selectExpr.As.String() != "" {
+				// TODO: fix aliases
+				//selectStmt.aliases.AddColumnAlias(qc, selectExpr.As.String())
+				colName = selectExpr.As.String()
+			} else {
+				// This isn't a true alias, but we want the column header to exactly match the original select statement, even
+				// if we found a case-insensitive match for the column name.
+				//selectStmt.aliases.AddColumnAlias(qc, colExpr.Name.String())
+				colName = nodeToString(selectExpr)
+			}
+
+			selected = append(selected, SelectedColumn{Name: colName, Getter: getter})
+
 		case sqlparser.Nextval:
 			return errFmt("Next value is not supported: %v", nodeToString(selectExpr))
 		}
 	}
 
-	selectedCols := make([]SelectedColumn, len(columns))
-	for i, col := range columns {
-		name := col.ColumnName
-		if alias, ok := selectStmt.aliases.GetColumnAlias(col); ok {
-			name = alias
-		}
-		// the getter will be filled in later, when we know the column number relative to the result set
-		selectedCols[i] = SelectedColumn{ Name: name, Ordinal: i, Col: col}
-	}
-
-	selectStmt.selectedCols = selectedCols
+	selectStmt.selectedCols = selected
 	return nil
 }
 
@@ -419,8 +433,12 @@ func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string
 
 // Binds the tag numbers used by the various components in the statement to those provided by the given resolver.
 func bindTagNumbers(statement *SelectStatement, resolver TagResolver) error {
-	initFunc := ComposeInits(statement.joinFilter, statement.whereFilter, statement.orderBy)
-	return initFunc(resolver)
+	var initVals []InitValue
+	for _, col := range statement.selectedCols {
+		initVals = append(initVals, col.Getter)
+	}
+	initVals = append(initVals, statement.joinFilter, statement.whereFilter, statement.orderBy)
+	return ComposeInits(initVals...)(resolver)
 }
 
 // The result of running a single select pipeline.
@@ -503,11 +521,7 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, selectStmt *Sel
 		p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(selectStmt, p)))
 	}
 
-	reductionTransform, err := schemaReductionTransform(selectStmt)
-	if err != nil {
-		return nil, err
-	}
-	p.AddStage(reductionTransform)
+	p.AddStage(createOutputSchemaMappingTransform(selectStmt))
 
 	return p, nil
 }
@@ -550,17 +564,6 @@ func newSortingTransform(lesser rowLesserFn) pipeline.TransformFunc {
 			}
 		}
 	}
-}
-
-// Returns a transform stage to reduce the intermediate schema to the final one.
-// TODO: this is unnecessary for many queries and could be skipped.
-func schemaReductionTransform(selectStmt *SelectStatement) (pipeline.NamedTransform, error) {
-	mapping, err := rowconv.TagMapping(selectStmt.intermediateRss.Schema(), selectStmt.ResultSetSchema.Schema())
-	if err != nil {
-		return pipeline.NamedTransform{}, err
-	}
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	return pipeline.NewNamedTransform("transform to result schema", rowconv.GetRowConvTransformFunc(rConv)), nil
 }
 
 // Returns a source func that yields the rows given in order.
@@ -634,56 +637,39 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 		if statement.limit != noLimit {
 			p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(statement, p)))
 		}
-		p.AddStage(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
+		p.AddStage(createOutputSchemaMappingTransform(statement))
 	}
 
 	return p, nil
 }
 
-func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.ResultSetSchema) pipeline.NamedTransform {
-	mapping := rss.Mapping(tableSch)
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	return pipeline.NewNamedTransform("mapToResultSet", rowconv.GetRowConvTransformFunc(rConv))
+func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.NamedTransform {
+  var transformFunc pipeline.TransformRowFunc
+	transformFunc = func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
+		taggedVals := make(row.TaggedValues)
+		for i, selectedCol := range selectStmt.selectedCols {
+			val := selectedCol.Getter.Get(inRow)
+			if !types.IsNull(val) {
+				taggedVals[uint64(i)] = val
+			}
+		}
+		r := row.New(selectStmt.resultSetSchema, taggedVals)
+		return []*pipeline.TransformedRowResult{{r, nil}}, ""
+	}
+
+	return pipeline.NewNamedTransform("create result set", transformFunc)
 }
 
-// Fills in a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
-// from the individual table schemas. Also fills in an intermediate schema, which for some queries contains additional
-// columns necessary to evaluate where clauses but not part of the final result set.
-func createResultSetSchema(statement *SelectStatement) error {
-	rss, err := rssFromSelectedColumns(statement.selectedCols, statement.inputSchemas)
-	if err != nil {
-		return err
-	}
-	statement.ResultSetSchema = rss
-
-	rss, err = rssFromColumns(statement.referencedCols, statement.inputSchemas, statement.aliases)
+// Fills in a an intermediate ResultSetSchema for the given select statement, which contains the schema of the
+// intermediate result set.
+func createIntermediateSchema(statement *SelectStatement) error {
+	rss, err := rssFromColumns(statement.referencedCols, statement.inputSchemas, statement.aliases)
 	if err != nil {
 		return err
 	}
 	statement.intermediateRss = rss
 
 	return nil
-}
-
-// Returns a result set schema created from the columns given
-func rssFromSelectedColumns(columns []SelectedColumn, inputSchemas map[string]schema.Schema) (*resultset.ResultSetSchema, error) {
-	cols := make([]resultset.ColWithSchema, len(columns))
-	for i, selectedCol := range columns {
-		colName := selectedCol.Col.ColumnName
-		tableName := selectedCol.Col.TableName
-
-		if tableSch, ok := inputSchemas[tableName]; !ok {
-			panic("Unknown table " + tableName)
-		} else {
-			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
-				panic(fmt.Sprintf(UnknownColumnErrFmt, colName))
-			} else {
-				col.Name = selectedCol.Name
-				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}
-			}
-		}
-	}
-	return resultset.NewFromColumns(inputSchemas, cols...)
 }
 
 // Returns a result set schema created from the columns given
