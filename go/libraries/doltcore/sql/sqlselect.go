@@ -43,7 +43,7 @@ type SelectStatement struct {
 	// Aliases for columns and tables
 	aliases *Aliases
 	// Filter function for the result set
-	filterFn rowFilterFn
+	filterFn *RowFilter
 	// Ordering function for the result set
 	orderFn rowLesserFn
 	// Limit of results returned
@@ -54,9 +54,10 @@ type SelectStatement struct {
 
 // A SelectedColumn is a column in the result set. It has a name and a way to extract it from an intermediate row.
 type SelectedColumn struct {
-	Name   string
-	Col    QualifiedColumn // TODO: remove me
-	Getter RowValGetter
+	Name    string
+	Ordinal int
+	Col     QualifiedColumn // TODO: remove me
+	Getter  RowValGetter
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
@@ -444,8 +445,8 @@ func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser
 		if alias, ok := selectStmt.aliases.GetColumnAlias(col); ok {
 			name = alias
 		}
-		// TODO: getters
-		selectedCols[i] = SelectedColumn{Name: name, Col: col, Getter: RowValGetter{}}
+		// the getter will be filled in later, when we know the column number relative to the result set
+		selectedCols[i] = SelectedColumn{ Name: name, Ordinal: i, Col: col}
 	}
 
 	selectStmt.selectedCols = selectedCols
@@ -460,25 +461,30 @@ func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string
 
 // Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
 func createResultSetFilter(selectStmt *SelectStatement, s *sqlparser.Select, rss *resultset.ResultSetSchema) error {
-	var rowFilter rowFilterFn
-	whereFilter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases, rss)
+	whereFilter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases)
 	if err != nil {
 		return err
 	}
-	rowFilter = whereFilter
+	rowFilter := whereFilter
 
 	if len(selectStmt.joins) > 0 {
-		joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases, rss)
+		joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
 		if err != nil {
 			return err
 		}
-		rowFilter = func(r row.Row) (matchesFilter bool) {
-			return whereFilter(r) && joinFilter(r)
+		rowFilter = newRowFilter(func(r row.Row) (matchesFilter bool) {
+			return whereFilter.filter(r) && joinFilter.filter(r)
+		})
+		rowFilter.InitFn = func(resolver TagResolver) error {
+			if err := whereFilter.Init(resolver); err != nil {
+				return err
+			}
+			return joinFilter.Init(resolver)
 		}
 	}
 
 	selectStmt.filterFn = rowFilter
-	return nil
+	return rowFilter.Init(rss)
 }
 
 // The result of running a single select pipeline.
@@ -503,11 +509,11 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
 		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
 		// table for where clause filtering, then convert those rows to the result set schema.
-		if err := createResultSetFilter(selectStmt, s, resultset.Identity(tableSch)); err != nil {
+		if err := createResultSetFilter(selectStmt, s, resultset.Identity(tableName, tableSch)); err != nil {
 			return nil, err
 		}
 
-		if err := processOrderByClause(selectStmt, s.OrderBy, resultset.Identity(tableSch)); err != nil {
+		if err := processOrderByClause(selectStmt, s.OrderBy, resultset.Identity(tableName, tableSch)); err != nil {
 			return nil, err
 		}
 
@@ -674,7 +680,7 @@ func createWhereFn(statement *SelectStatement) pipeline.TransformRowFunc {
 	}
 
 	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
-		if statement.filterFn(inRow) {
+		if statement.filterFn.filter(inRow) {
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
 		return nil, ""
@@ -715,7 +721,7 @@ func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.R
 // from the individual table schemas. Also fills in an intermediate schema, which for some queries contains additional
 // columns necessary to evaluate where clauses but not part of the final result set.
 func createResultSetSchema(statement *SelectStatement) error {
-	rss, err := rssFromSelectedColumns(statement.selectedCols, statement.inputSchemas, statement.aliases)
+	rss, err := rssFromSelectedColumns(statement.selectedCols, statement.inputSchemas)
 	if err != nil {
 		return err
 	}
@@ -731,13 +737,24 @@ func createResultSetSchema(statement *SelectStatement) error {
 }
 
 // Returns a result set schema created from the columns given
-func rssFromSelectedColumns(columns []SelectedColumn, inputSchemas map[string]schema.Schema, aliases *Aliases) (*resultset.ResultSetSchema, error) {
-	qcs := make([]QualifiedColumn, len(columns))
-	for i, col := range columns {
-		qcs[i] = col.Col
-	}
+func rssFromSelectedColumns(columns []SelectedColumn, inputSchemas map[string]schema.Schema) (*resultset.ResultSetSchema, error) {
+	cols := make([]resultset.ColWithSchema, len(columns))
+	for i, selectedCol := range columns {
+		colName := selectedCol.Col.ColumnName
+		tableName := selectedCol.Col.TableName
 
-	return rssFromColumns(qcs, inputSchemas, aliases)
+		if tableSch, ok := inputSchemas[tableName]; !ok {
+			panic("Unknown table " + tableName)
+		} else {
+			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
+				panic(fmt.Sprintf(UnknownColumnErrFmt, colName))
+			} else {
+				col.Name = selectedCol.Name
+				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}
+			}
+		}
+	}
+	return resultset.NewFromColumns(inputSchemas, cols...)
 }
 
 // Returns a result set schema created from the columns given
@@ -762,5 +779,5 @@ func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Sc
 		}
 	}
 
-	return resultset.NewFromColumns(cols...)
+	return resultset.NewFromColumns(inputSchemas, cols...)
 }

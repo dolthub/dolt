@@ -9,14 +9,16 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
+// TODO: fix this hot mess
+
 // A result set schema understands how to map values from multiple schemas together into a final result schema.
 type ResultSetSchema struct {
 	mapping        map[schema.Schema]*rowconv.FieldMapping
+	schemas        map[string]schema.Schema
 	destSch        schema.Schema
 	maxSchTag      uint64
 	maxAssignedTag uint64
 }
-
 
 // Schema returns the schema for this result set.
 func (rss *ResultSetSchema) Schema() schema.Schema {
@@ -26,6 +28,26 @@ func (rss *ResultSetSchema) Schema() schema.Schema {
 // Mapping returns the field mapping for the given schema.
 func (rss *ResultSetSchema) Mapping(sch schema.Schema) *rowconv.FieldMapping {
 	return rss.mapping[sch]
+}
+
+func (rss *ResultSetSchema) ResolveTag(tableName string, columnName string) (uint64, error) {
+	sch, ok := rss.schemas[tableName]
+	if !ok {
+		return schema.InvalidTag, errors.New("cannot find table " + tableName)
+	}
+
+	column, ok := sch.GetAllCols().GetByName(columnName)
+	if !ok {
+		return schema.InvalidTag, errors.New("cannot find column " + columnName)
+	}
+
+	mapping := rss.mapping[sch]
+	tag, ok := mapping.SrcToDest[column.Tag]
+	if !ok {
+		return schema.InvalidTag, errors.New("no mapping for column " + columnName)
+	}
+
+	return tag, nil
 }
 
 // Creates a new result set schema for the destination schema given. Successive calls to AddSchema will flesh out the
@@ -64,11 +86,12 @@ func validateSchema(sch schema.Schema) (uint64, error) {
 }
 
 // Creates an identity result set schema, to be used for intermediate result sets that haven't yet been compressed.
-func Identity(sch schema.Schema) *ResultSetSchema {
+func Identity(tableName string, sch schema.Schema) *ResultSetSchema {
 	fieldMapping := rowconv.IdentityMapping(sch)
 	return &ResultSetSchema{
-		mapping:   map[schema.Schema]*rowconv.FieldMapping{sch: fieldMapping},
-		destSch:   sch,
+		mapping: map[schema.Schema]*rowconv.FieldMapping{sch: fieldMapping},
+		destSch: sch,
+		schemas: map[string]schema.Schema{tableName: sch},
 	}
 }
 
@@ -120,7 +143,7 @@ func (rss *ResultSetSchema) addSchema(sch schema.Schema) error {
 
 // Creates a new result set schema for columns given. Tag numbers in the result schema will be rewritten as necessary,
 // starting from 0.
-func NewFromColumns(columns ...ColWithSchema) (*ResultSetSchema, error) {
+func NewFromColumns(schemas map[string]schema.Schema, columns ...ColWithSchema) (*ResultSetSchema, error) {
 	var sch schema.Schema
 	var rss *ResultSetSchema
 	var err error
@@ -141,6 +164,7 @@ func NewFromColumns(columns ...ColWithSchema) (*ResultSetSchema, error) {
 	if rss, err = newFromDestSchema(sch); err != nil {
 		return nil, err
 	}
+	rss.schemas = schemas
 
 	for _, col := range columns {
 		if err = rss.addColumn(col.Sch, col.Col); err != nil {
@@ -167,7 +191,6 @@ func (rss *ResultSetSchema) addColumn(sourceSchema schema.Schema, column schema.
 	rss.mapping[sourceSchema] = fieldMapping
 	return nil
 }
-
 
 // SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Column names
 // must be verified before subsetting. Unrecognized column names will cause a panic.
