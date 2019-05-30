@@ -78,15 +78,16 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		if err != nil {
 			return nil, err
 		}
-		if err = getter.Init(rss); err != nil {
-			return errUpdate(err.Error())
-		}
 
 		if getter.NomsKind != column.Kind {
 			getter, err = ConversionValueGetter(getter, column.Kind)
 			if err != nil {
 				return errUpdate("Error processing update clause '%v': %v", nodeToString(update), err.Error())
 			}
+		}
+
+		if err = getter.Init(rss); err != nil {
+			return errUpdate(err.Error())
 		}
 
 		setVals[column.Tag] = getter
