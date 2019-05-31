@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"runtime/debug"
 	"time"
 
@@ -113,9 +115,19 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			remoteRef, verr = getTrackingRef(dest, remote)
 
 			if verr == nil {
-				destDB := remote.GetRemoteDB(ctx)
+				destDB, err := remote.GetRemoteDB(ctx)
 
-				if src == ref.EmptyBranchRef {
+				if err != nil {
+					bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
+
+					if err == remotestorage.ErrInvalidDoltSpecPath {
+						urlObj, _ := earl.Parse(remote.Url)
+						bdr.AddDetails("For the remote: %s %s", remote.Name, remote.Url)
+						bdr.AddDetails("'%s' should be in the format '/organization/repo'", urlObj.Path)
+					}
+
+					verr = bdr.Build()
+				} else if src == ref.EmptyBranchRef {
 					verr = deleteRemoteBranch(ctx, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				} else {
 					verr = pushToRemoteBranch(ctx, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)

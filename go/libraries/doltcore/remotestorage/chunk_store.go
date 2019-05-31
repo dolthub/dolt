@@ -5,21 +5,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
 	"github.com/attic-labs/noms/go/hash"
 	"github.com/attic-labs/noms/go/nbs"
 	"github.com/golang/snappy"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
-	"io/ioutil"
-	"net/http"
-	"net/url"
-	"sort"
-	"strconv"
-	"sync"
 )
 
 var ErrUploadFailed = errors.New("upload failed")
+var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
 var globalHttpFetcher HTTPFetcher = &http.Client{}
 
@@ -34,6 +37,19 @@ type DoltChunkStore struct {
 	csClient    remotesapi.ChunkStoreServiceClient
 	cache       chunkCache
 	httpFetcher HTTPFetcher
+}
+
+func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+	tokens := strings.Split(strings.Trim(path, "/"), "/")
+	if len(tokens) != 2 {
+		return nil, ErrInvalidDoltSpecPath
+	}
+
+	// this may just be a dolthub thing.  Need to revisit how we do this.
+	org := tokens[0]
+	repoName := tokens[1]
+
+	return NewDoltChunkStore(org, repoName, host, csClient), nil
 }
 
 func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {

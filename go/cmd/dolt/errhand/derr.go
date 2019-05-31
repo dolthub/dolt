@@ -121,10 +121,6 @@ func (derr *DError) Verbose() string {
 		sections = append(sections, derr.Error())
 	}
 
-	if derr.details != "" {
-		sections = append(sections, derr.details)
-	}
-
 	if derr.cause != nil {
 		var causeStr string
 		if vCause, ok := derr.cause.(VerboseError); ok {
@@ -138,6 +134,10 @@ func (derr *DError) Verbose() string {
 		copy(indentStrBytes, "cause:")
 
 		sections = append(sections, string(indentStrBytes))
+	}
+
+	if derr.details != "" {
+		sections = append(sections, derr.details)
 	}
 
 	return strings.Join(sections, "\n")

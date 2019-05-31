@@ -1,5 +1,7 @@
 package pantoerr
 
+import "github.com/attic-labs/noms/go/d"
+
 // RecoverPanic is used to convert panics to errors.  The attic-labs noms codebase loves to panic.  This is not
 // idiomatic for Go code. RecoverPanic wraps the cause of the panic retrieved from the recover call, and implements
 // the error interface so it can be treated like a standard error.
@@ -52,6 +54,10 @@ func PanicToError(errMsg string, f func() error) error {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
+				if re, ok := r.(d.WrappedError); ok {
+					r = d.Unwrap(re)
+				}
+
 				err = &RecoveredPanic{r, errMsg}
 			}
 		}()
@@ -67,6 +73,10 @@ func PanicToErrorNil(errMsg string, f func()) error {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
+				if re, ok := r.(d.WrappedError); ok {
+					r = d.Unwrap(re)
+				}
+
 				err = &RecoveredPanic{r, errMsg}
 			}
 		}()
