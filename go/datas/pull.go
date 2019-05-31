@@ -77,15 +77,16 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 	persistChunks(ctx, sinkDB.chunkStore())
 }
 
-func PullFromSlowDB(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) {
-	// by increasing the batch size to MaxInt32 we effectively remove batching here.  This means all chunks will be
-	// retrieved from the underlying chunk store in one call, which pushes the optimization problem down to the
-	// chunk store which can make smarter decisions.
+// PullWithoutBatching effectively removes the batching of chunk retrieval done on each level of the tree.  This means
+// all chunks from one level of the tree will be retrieved from the underlying chunk store in one call, which pushes the
+// optimization problem down to the chunk store which can make smarter decisions.
+func PullWithoutBatching(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) {
+	// by increasing the batch size to MaxInt32 we effectively remove batching here.
 	pull(ctx, srcDB, sinkDB, sourceRef, progressCh, math.MaxInt32)
 }
 
+// concurrently pull all chunks from this batch that the sink is missing out of the source
 func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64)) map[hash.Hash]*chunks.Chunk {
-	// Concurrently pull all chunks from this batch that the sink is missing out of the source
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
 	found := make(chan *chunks.Chunk)
 
@@ -107,9 +108,9 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 	return neededChunks
 }
 
+// put the chunks that were downloaded into the sink IN ORDER and at the same time gather up an ordered, uniquified list
+// of all the children of the chunks and add them to the list of the next level tree chunks.
 func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, neededChunks map[hash.Hash]*chunks.Chunk, nextLevel hash.HashSet, uniqueOrdered hash.HashSlice) hash.HashSlice {
-	// Now, put the absent chunks into the sink IN ORDER.
-	// At the same time, gather up an ordered, uniquified list of all the children of the chunks in |batch| and add them to those in previous batches. This list is what we'll use to descend to the next level of the tree.
 	for _, h := range hashes {
 		c := neededChunks[h]
 		sinkDB.chunkStore().Put(ctx, *c)
@@ -124,8 +125,9 @@ func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, need
 	return uniqueOrdered
 }
 
+// ask sinkDB which of the next level's hashes it doesn't have, and add those chunks to the absent list which will need
+// to be retrieved.
 func nextLevelMissingChunks(ctx context.Context, sinkDB Database, nextLevel hash.HashSet, absent hash.HashSlice, uniqueOrdered hash.HashSlice) hash.HashSlice {
-	// Ask sinkDB which of the next level's hashes it doesn't have.
 	missingFromSink := sinkDB.chunkStore().HasMany(ctx, nextLevel)
 	absent = absent[:0]
 	for _, h := range uniqueOrdered {
