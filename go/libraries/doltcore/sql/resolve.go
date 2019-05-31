@@ -206,15 +206,10 @@ func resolveColumnsInSelectClause(selectExprs sqlparser.SelectExprs, tableNames 
 				cols = append(cols, qcs...)
 			}
 		case *sqlparser.AliasedExpr:
-			switch colExpr := selectExpr.Expr.(type) {
-			case *sqlparser.ColName:
-				if qc, err := resolveColumn(getColumnNameString(colExpr), schemas, aliases.TableAliasesOnly()); err != nil {
-					return nil, err
-				} else {
-					cols = append(cols, qc)
-				}
-			default:
-				return nil, errFmt("Only column selections or * are supported")
+			if qcs, err := resolveColumnsInExpr(selectExpr.Expr, schemas, aliases.TableAliasesOnly()); err != nil {
+				return nil, err
+			} else {
+				cols = append(cols, qcs...)
 			}
 		default:
 			// do nothing
