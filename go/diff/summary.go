@@ -7,6 +7,7 @@ package diff
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/types"
@@ -37,10 +38,16 @@ func Summary(ctx context.Context, value1, value2 types.Value) {
 		}
 	}
 
+	var rp atomic.Value
 	ch := make(chan diffSummaryProgress)
 	go func() {
+		defer close(ch)
+		defer func() {
+			if r := recover(); r != nil {
+				rp.Store(r)
+			}
+		}()
 		diffSummary(ctx, ch, value1, value2)
-		close(ch)
 	}()
 
 	acc := diffSummaryProgress{}
@@ -54,6 +61,11 @@ func Summary(ctx context.Context, value1, value2 types.Value) {
 			formatStatus(acc, singular, plural)
 		}
 	}
+
+	if r := rp.Load(); r != nil {
+		panic(r)
+	}
+
 	formatStatus(acc, singular, plural)
 	status.Done()
 }
@@ -89,9 +101,15 @@ func diffSummaryList(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	var rp atomic.Value
 	go func() {
+		defer close(spliceChan)
+		defer func() {
+			if r := recover(); r != nil {
+				rp.Store(r)
+			}
+		}()
 		v2.Diff(ctx, v1, spliceChan, stopChan)
-		close(spliceChan)
 	}()
 
 	for splice := range spliceChan {
@@ -100,6 +118,10 @@ func diffSummaryList(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 
 		} else {
 			ch <- diffSummaryProgress{Adds: splice.SpAdded, Removes: splice.SpRemoved}
 		}
+	}
+
+	if r := rp.Load(); r != nil {
+		panic(r)
 	}
 }
 
@@ -130,11 +152,20 @@ func diffSummaryValueChanged(ch chan<- diffSummaryProgress, oldSize, newSize uin
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	var rp atomic.Value
 	go func() {
+		defer close(changeChan)
+		defer func() {
+			if r := recover(); r != nil {
+				rp.Store(r)
+			}
+		}()
 		f(changeChan, stopChan)
-		close(changeChan)
 	}()
 	reportChanges(ch, changeChan)
+	if r := rp.Load(); r != nil {
+		panic(r)
+	}
 }
 
 func reportChanges(ch chan<- diffSummaryProgress, changeChan chan types.ValueChanged) {
