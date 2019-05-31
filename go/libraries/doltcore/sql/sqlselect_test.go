@@ -382,6 +382,23 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: newResultSetSchema("a", types.IntKind),
 		},
 		{
+			name:           "and expression in select",
+			query:          "select is_married and age >= 40 from people where last = 'Simpson' order by id limit 2",
+			expectedRows:   rs(newResultSetRow(types.Bool(true)), newResultSetRow(types.Bool(false))),
+			expectedSchema: newResultSetSchema("is_married and age >= 40", types.BoolKind),
+		},
+		{
+			name:  "or expression in select",
+			query: "select first, age <= 10 or age >= 40 as not_marge from people where last = 'Simpson' order by id desc",
+			expectedRows: rs(
+				newResultSetRow(types.String("Lisa"), types.Bool(true)),
+				newResultSetRow(types.String("Bart"), types.Bool(true)),
+				newResultSetRow(types.String("Marge"), types.Bool(false)),
+				newResultSetRow(types.String("Homer"), types.Bool(true)),
+			),
+			expectedSchema: newResultSetSchema("first", types.StringKind, "not_marge", types.BoolKind),
+		},
+		{
 			name:        "unary expression in select",
 			query:       "select -age as age from people where is_married order by age",
 			expectedRows:   rs(newResultSetRow(types.Int(-40)), newResultSetRow(types.Int(-38))),
@@ -1389,7 +1406,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			p.Wait()
 
 			assert.Equal(t, tt.expectedNumRows, outputRows)
-			assert.Equal(t, tt.expectedSchema, statement.resultSetSchema)
+			assert.Equal(t, tt.expectedSchema, statement.ResultSetSchema)
 		})
 	}
 }
