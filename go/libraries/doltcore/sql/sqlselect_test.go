@@ -377,9 +377,21 @@ func TestExecuteSelect(t *testing.T) {
 		},
 		{
 			name:        "binary expression in select",
-			query:       "select age + 1 as age from people where is_married",
-			expectedRows:   rs(newResultSetRow(types.Int(41)), newResultSetRow(types.Int(39))),
-			expectedSchema: newResultSetSchema("age", types.FloatKind),
+			query:       "select age + 1 as a from people where is_married order by a",
+			expectedRows:   rs(newResultSetRow(types.Int(39)), newResultSetRow(types.Int(41))),
+			expectedSchema: newResultSetSchema("a", types.IntKind),
+		},
+		{
+			name:        "unary expression in select",
+			query:       "select -age as age from people where is_married order by age",
+			expectedRows:   rs(newResultSetRow(types.Int(-40)), newResultSetRow(types.Int(-38))),
+			expectedSchema: newResultSetSchema("age", types.IntKind),
+		},
+		{
+			name:        "unary expression in select, alias named after column",
+			query:       "select -age as age from people where is_married order by people.age",
+			expectedRows:   rs(newResultSetRow(types.Int(-38)), newResultSetRow(types.Int(-40))),
+			expectedSchema: newResultSetSchema("age", types.IntKind),
 		},
 		{
 			name:           "select *, -column",

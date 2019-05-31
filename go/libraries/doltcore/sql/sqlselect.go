@@ -401,13 +401,13 @@ func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser
 				return err
 			}
 
-			// an absent column alias will be empty
 			colName := ""
+			// an absent column alias will be empty
 			if selectExpr.As.String() != "" {
 				colName = selectExpr.As.String()
 			} else {
 				// not a true alias, but makes the column name expression available to the rest of the query
-				colName = nodeToString(selectExpr)
+				colName = resultSetColumnName(selectExpr.Expr)
 			}
 			selectStmt.aliases.AddColumnAlias(colName, getter)
 
@@ -420,6 +420,16 @@ func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser
 
 	selectStmt.selectedCols = selected
 	return nil
+}
+
+// resultSetColumnName returns the appropriate name for a result set column that doesn't have an alias assigned
+func resultSetColumnName(expr sqlparser.Expr) string {
+	switch ce := expr.(type) {
+	case *sqlparser.ColName:
+		return ce.Name.String()
+	default:
+		return nodeToString(expr)
+	}
 }
 
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
