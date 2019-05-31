@@ -6,6 +6,8 @@ package diff
 
 import (
 	"context"
+	"sync/atomic"
+
 	"github.com/attic-labs/noms/go/types"
 )
 
@@ -115,9 +117,15 @@ func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) 
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1s, so this won't block if diff already finished
 
+	var paniced_r atomic.Value
 	go func() {
+		defer close(spliceChan)
+		defer func() {
+			if r := recover(); r != nil {
+				paniced_r.Store(r)
+			}
+		}()
 		v2.Diff(ctx, v1, spliceChan, stopChan)
-		close(spliceChan)
 	}()
 
 	for splice := range spliceChan {
@@ -160,6 +168,11 @@ func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) 
 		for range spliceChan {
 		}
 	}
+
+	if r := paniced_r.Load(); r != nil {
+		panic(r)
+	}
+
 	return
 }
 
@@ -225,9 +238,15 @@ func (d differ) diffOrdered(ctx context.Context, p types.Path, ppf pathPartFunc,
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
+	var paniced_r atomic.Value
 	go func() {
+		defer close(changeChan)
+		defer func() {
+			if r := recover(); r != nil {
+				paniced_r.Store(r)
+			}
+		}()
 		df(changeChan, stopChan)
-		close(changeChan)
 	}()
 
 	for change := range changeChan {
@@ -262,6 +281,10 @@ func (d differ) diffOrdered(ctx context.Context, p types.Path, ppf pathPartFunc,
 		stopChan <- struct{}{}
 		for range changeChan {
 		}
+	}
+
+	if r := paniced_r.Load(); r != nil {
+		panic(r)
 	}
 
 	return
