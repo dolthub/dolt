@@ -404,15 +404,12 @@ func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser
 			// an absent column alias will be empty
 			colName := ""
 			if selectExpr.As.String() != "" {
-				// TODO: fix aliases
-				//selectStmt.aliases.AddColumnAlias(qc, selectExpr.As.String())
 				colName = selectExpr.As.String()
 			} else {
-				// This isn't a true alias, but we want the column header to exactly match the original select statement, even
-				// if we found a case-insensitive match for the column name.
-				//selectStmt.aliases.AddColumnAlias(qc, colExpr.Name.String())
+				// not a true alias, but makes the column name expression available to the rest of the query
 				colName = nodeToString(selectExpr)
 			}
+			selectStmt.aliases.AddColumnAlias(colName, getter)
 
 			selected = append(selected, SelectedColumn{Name: colName, Getter: getter})
 

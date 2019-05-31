@@ -375,20 +375,18 @@ func TestExecuteSelect(t *testing.T) {
 			query:       "select * from people where age is true",
 			expectedErr: "Type mismatch:",
 		},
-		// TODO: support operations in select clause
-		// {
-		// 	name:        "binary expression in select",
-		// 	query:       "select age + 1 as age from people where is_married",
-		// 	expectedRows:   rs(newResultSetRow(types.Int(41)), newResultSetRow(types.Int(39))),
-		// 	expectedSchema: newResultSetSchema("age", types.FloatKind),
-		// },
-		// TODO: support -column numeric expressions
-		// {
-		// 	name:           "select *, -column",
-		// 	query:          "select * from people where -rating = -8.5",
-		// 	expectedRows:   compressRows(peopleTestSchema, homer),
-		// 	expectedSchema: compressSchema(peopleTestSchema),
-		// },
+		{
+			name:        "binary expression in select",
+			query:       "select age + 1 as age from people where is_married",
+			expectedRows:   rs(newResultSetRow(types.Int(41)), newResultSetRow(types.Int(39))),
+			expectedSchema: newResultSetSchema("age", types.FloatKind),
+		},
+		{
+			name:           "select *, -column",
+			query:          "select * from people where -rating = -8.5",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
 		{
 			name:        "select *, -column, string type",
 			query:       "select * from people where -first = 'Homer'",
