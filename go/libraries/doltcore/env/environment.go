@@ -40,7 +40,8 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	DoltDB *doltdb.DoltDB
+	DoltDB      *doltdb.DoltDB
+	DBLoadError error
 
 	FS  filesys.Filesys
 	loc doltdb.Location
@@ -51,7 +52,7 @@ type DoltEnv struct {
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.Location) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	ddb := doltdb.LoadDoltDB(ctx, loc)
+	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, loc)
 
 	dEnv := &DoltEnv{
 		config,
@@ -59,6 +60,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, loc dolt
 		repoState,
 		rsErr,
 		ddb,
+		dbLoadErr,
 		fs,
 		loc,
 		hdp,
@@ -152,9 +154,10 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
 
 	if err != nil {
 		dEnv.bestEffortDeleteAll(doltdb.DoltDir)
+		return err
 	}
 
-	dEnv.DoltDB = doltdb.LoadDoltDB(ctx, dEnv.loc)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.loc)
 
 	return err
 }
@@ -186,8 +189,14 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 }
 
 func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) error {
-	dEnv.DoltDB = doltdb.LoadDoltDB(ctx, dEnv.loc)
-	err := dEnv.DoltDB.WriteEmptyRepo(ctx, name, email)
+	var err error
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.loc)
+
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.DoltDB.WriteEmptyRepo(ctx, name, email)
 
 	if err != nil {
 		return doltdb.ErrNomsIO

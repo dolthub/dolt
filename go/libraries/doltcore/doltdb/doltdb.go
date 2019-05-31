@@ -63,14 +63,14 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
-func LoadDoltDB(ctx context.Context, loc Location) *DoltDB {
+func LoadDoltDB(ctx context.Context, loc Location) (*DoltDB, error) {
 	if loc == LocalDirDoltDB {
 		exists, isDir := filesys.LocalFS.Exists(DoltDataDir)
 
 		if !exists {
-			return nil
+			return nil, errors.New("missing dolt data directory")
 		} else if !isDir {
-			panic("A file exists where the dolt data directory should be.")
+			return nil, errors.New("file exists where the dolt data directory should be")
 		}
 	}
 
@@ -79,8 +79,28 @@ func LoadDoltDB(ctx context.Context, loc Location) *DoltDB {
 	// There is the possibility of this panicking, but have decided specifically not to recover (as is normally done in
 	// this codebase. For failure to occur getting a database for the current directory, or an in memory database
 	// something would have to be drastically wrong.
-	db := dbSpec.GetDatabase(ctx)
-	return &DoltDB{db}
+
+	var db datas.Database
+	err := pantoerr.PanicToError("failed to get database", func() error {
+		db = dbSpec.GetDatabase(ctx)
+		return nil
+	})
+
+	if err != nil {
+		panicObj := err.(*pantoerr.RecoveredPanic).PanicCause
+
+		if dbSpec.Protocol == "nbs" || dbSpec.Protocol == "mem" {
+			panic(panicObj)
+		}
+
+		if v, ok := panicObj.(error); ok {
+			return nil, v
+		}
+
+		return nil, err
+	}
+
+	return &DoltDB{db}, nil
 }
 
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid

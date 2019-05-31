@@ -107,7 +107,11 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rsToRem map[ref.RemoteRefSpec]env.Remote) 
 	ctx := context.TODO()
 
 	for rs, rem := range rsToRem {
-		srcDB := rem.GetRemoteDB(ctx)
+		srcDB, err := rem.GetRemoteDB(context.TODO())
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+		}
 
 		branchRefs := srcDB.GetRefs(ctx)
 		for _, branchRef := range branchRefs {

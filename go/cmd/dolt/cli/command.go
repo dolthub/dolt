@@ -55,6 +55,10 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 					PrintErrln(color.RedString("The current directories repository state is invalid"))
 					PrintErrln(dEnv.RSLoadErr.Error())
 					return 2
+				} else if dEnv.DBLoadError != nil {
+					PrintErrln(color.RedString("Failed to load database."))
+					PrintErrln(dEnv.DBLoadError.Error())
+					return 2
 				}
 			}
 

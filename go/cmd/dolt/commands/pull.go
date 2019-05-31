@@ -62,7 +62,12 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
-	srcDB := r.GetRemoteDB(context.TODO())
+	srcDB, err := r.GetRemoteDB(context.TODO())
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
+	}
+
 	verr = fetchRemoteBranch(r, srcDB, dEnv.DoltDB, srcRef, destRef)
 
 	if verr == nil {

@@ -22,7 +22,7 @@ func IsInsecure(r Remote) bool {
 	return r.Insecure != nil && *r.Insecure
 }
 
-func (r *Remote) GetRemoteDB(ctx context.Context) *doltdb.DoltDB {
+func (r *Remote) GetRemoteDB(ctx context.Context) (*doltdb.DoltDB, error) {
 	remoteLocStr := DoltNomsProtocolID + ":" + r.Name
 	return doltdb.LoadDoltDB(ctx, doltdb.Location(remoteLocStr))
 }

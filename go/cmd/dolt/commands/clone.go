@@ -46,7 +46,17 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	dir, urlStr, verr := parseArgs(apr)
 
 	if verr == nil {
-		verr = cloneRemote(context.Background(), dir, remoteName, urlStr, branch, insecure, dEnv.FS)
+		dEnv, verr = clonedEnv(dir, dEnv.FS)
+
+		if verr == nil {
+			verr = cloneRemote(context.Background(), remoteName, urlStr, branch, insecure, dEnv)
+
+			// Make best effort to delete the directory we created.
+			if verr != nil {
+				_ = os.Chdir("../")
+				_ = dEnv.FS.Delete(dir, true)
+			}
+		}
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -125,19 +135,29 @@ func createRemote(remoteName, remoteUrlIn string, insecure bool, dEnv *env.DoltE
 		return nil, errhand.BuildDError("error: unable to create repo state with remote " + remoteName).AddCause(err).Build()
 	}
 
-	return r.GetRemoteDB(context.TODO()), nil
+	ddb, err := r.GetRemoteDB(context.TODO())
+
+	if err != nil {
+		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
+
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(remoteUrl)
+			bdr.AddDetails("'%s' should be in the format 'organization/repo'", urlObj.Path)
+		}
+
+		return nil, bdr.Build()
+	}
+
+	return ddb, nil
 }
 
-func cloneRemote(ctx context.Context, dir, remoteName, remoteUrl, branch string, insecure bool, fs filesys.Filesys) (verr errhand.VerboseError) {
+func cloneRemote(ctx context.Context, remoteName, remoteUrl, branch string, insecure bool, dEnv *env.DoltEnv) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
 			verr = remotePanicRecover(r, stack)
 		}
 	}()
-
-	var dEnv *env.DoltEnv
-	dEnv, verr = clonedEnv(dir, fs)
 
 	if verr == nil {
 		var srcDB *doltdb.DoltDB

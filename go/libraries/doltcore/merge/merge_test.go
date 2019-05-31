@@ -216,7 +216,7 @@ func init() {
 }
 
 func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
-	ddb := doltdb.LoadDoltDB(context.Background(), doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), doltdb.InMemDoltDB)
 	vrw := ddb.ValueReadWriter()
 
 	err := ddb.WriteEmptyRepo(context.Background(), name, email)

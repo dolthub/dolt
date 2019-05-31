@@ -1,7 +1,6 @@
 package env
 
 import (
-	"errors"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/spec"
@@ -9,7 +8,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"regexp"
-	"strings"
 )
 
 const (
@@ -36,14 +34,6 @@ func (dhp DoltProtocol) NewChunkStore(sp spec.Spec) (chunks.ChunkStore, error) {
 		return nil, err
 	}
 
-	tokens := strings.Split(strings.Trim(remoteUrl.Path, "/"), "/")
-	if len(tokens) != 2 {
-		return nil, errors.New("dolt chunk store spec invalid")
-	}
-
-	org := tokens[0]
-	repoName := tokens[1]
-
 	conn, err := dhp.dEnv.GrpcConn(remoteUrl.Host, IsInsecure(r))
 
 	if err != nil {
@@ -51,7 +41,7 @@ func (dhp DoltProtocol) NewChunkStore(sp spec.Spec) (chunks.ChunkStore, error) {
 	}
 
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
-	return remotestorage.NewDoltChunkStore(org, repoName, remoteUrl.Host, csClient), nil
+	return remotestorage.NewDoltChunkStoreFromPath(remoteUrl.Path, remoteUrl.Host, csClient)
 }
 
 func (dhp DoltProtocol) NewDatabase(sp spec.Spec) (datas.Database, error) {
