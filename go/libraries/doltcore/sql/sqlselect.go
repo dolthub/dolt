@@ -663,7 +663,7 @@ func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.Na
 // Fills in a an intermediate ResultSetSchema for the given select statement, which contains the schema of the
 // intermediate result set.
 func createIntermediateSchema(statement *SelectStatement) error {
-	rss, err := rssFromColumns(statement.referencedCols, statement.inputSchemas, statement.aliases)
+	rss, err := rssFromColumns(statement.referencedCols, statement.inputSchemas)
 	if err != nil {
 		return err
 	}
@@ -673,7 +673,7 @@ func createIntermediateSchema(statement *SelectStatement) error {
 }
 
 // Returns a result set schema created from the columns given
-func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Schema, aliases *Aliases) (*resultset.ResultSetSchema, error) {
+func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Schema) (*resultset.ResultSetSchema, error) {
 	cols := make([]resultset.ColWithSchema, len(columns))
 	for i, selectedCol := range columns {
 		colName := selectedCol.ColumnName
@@ -685,10 +685,6 @@ func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Sc
 			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
 				panic(fmt.Sprintf(UnknownColumnErrFmt, colName))
 			} else {
-				// Rename any aliased columns for output. Column names only matter for the end result, not any intermediate ones.
-				if alias, ok := aliases.GetColumnAlias(selectedCol); ok {
-					col.Name = alias
-				}
 				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}
 			}
 		}

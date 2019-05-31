@@ -46,16 +46,7 @@ func resolveTable(tableNameExpr string, allTableNames []string, aliases *Aliases
 //
 // colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
 func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
-	// First try matching any known aliases directly. This is only appropriate in some contexts, e.g. in the ORDER BY but
-	// not the WHERE clause. Callers should use Aliases.TableAliasesOnly for cases when the column aliases shouldn't be
-	// considered.
-	if qc, err := aliases.GetColumnForAlias(colNameExpr); err != nil {
-		return QualifiedColumn{}, err
-	} else if !ColumnsEqual(qc, QualifiedColumn{}) {
-		return qc, nil
-	}
-
-	// Then try getting the table from the column name string itself, eg. "t.col"
+	// Try getting the table from the column name string itself, eg. "t.col"
 	qc := parseQualifiedColumnString(colNameExpr)
 	if qc.TableName != "" {
 		tableName, err := resolveTable(qc.TableName, keys(schemas), aliases)
@@ -233,8 +224,6 @@ func resolveColumnsInStarExpr(selectExpr *sqlparser.StarExpr, tableNames []strin
 
 	return columns, nil
 }
-
-
 
 // resolveColumnsInOrderBy returns the qualified columns referenced in the order by clause.
 func resolveColumnsInOrderBy(orderBy sqlparser.OrderBy, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
