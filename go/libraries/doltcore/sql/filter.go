@@ -97,7 +97,7 @@ func createFilterForJoin(expr *sqlparser.JoinTableExpr, schemas map[string]schem
 // expressions. Supported parser types here must be kept in sync with resolveColumnsInExpr
 func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowFilter, error) {
 	var rowFilterFn RowFilterFn
-	var gettersToInit []InitValue
+	var initVals []InitValue
 	switch expr := whereExpr.(type) {
 	case *sqlparser.ComparisonExpr:
 
@@ -118,7 +118,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			}
 		}
 
-		gettersToInit = append(gettersToInit, leftGetter, rightGetter)
+		initVals = append(initVals, leftGetter, rightGetter)
 
 		// All the operations differ only in their filter logic
 		switch expr.Operator {
@@ -221,7 +221,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			return nil, errFmt("Type mismatch: cannot use column %v as boolean expression", nodeToString(expr))
 		}
 
-		gettersToInit = append(gettersToInit, getter)
+		initVals = append(initVals, getter)
 
 		rowFilterFn = func(r row.Row) bool {
 			colVal := getter.Get(r)
@@ -244,7 +244,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			return leftFilter.filter(r) && rightFilter.filter(r)
 		}
 
-		gettersToInit = append(gettersToInit, leftFilter, rightFilter)
+		initVals = append(initVals, leftFilter, rightFilter)
 
 	case *sqlparser.OrExpr:
 		var leftFilter, rightFilter *RowFilter
@@ -259,7 +259,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			return leftFilter.filter(r) || rightFilter.filter(r)
 		}
 
-		gettersToInit = append(gettersToInit, leftFilter, rightFilter)
+		initVals = append(initVals, leftFilter, rightFilter)
 
 	case *sqlparser.IsExpr:
 		getter, err := getterFor(expr.Expr, inputSchemas, aliases)
@@ -298,7 +298,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 			return nil, errFmt("Unrecognized is comparison: %v", expr.Operator)
 		}
 
-		gettersToInit = append(gettersToInit, getter)
+		initVals = append(initVals, getter)
 
 	// Unary and Binary operators are supported in getterFor(), but not as top-level nodes here.
 	case *sqlparser.BinaryExpr:
@@ -354,7 +354,7 @@ func createFilterForWhereExpr(whereExpr sqlparser.Expr, inputSchemas map[string]
 	}
 
 	rowFilter := newRowFilter(rowFilterFn)
-	rowFilter.initFn = ComposeInits(gettersToInit...)
+	rowFilter.initFn = ComposeInits(initVals...)
 
 	return rowFilter, nil
 }

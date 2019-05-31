@@ -199,7 +199,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
 	// 1) Coerce all the values in each row into strings
 	// 2) Convert null values to printed values
 	// 3) Run them through a fixed width transformer to make them print pretty
-	untypedSch, untypingTransform := newUntypingTransformer(statement.ResultSetSchema.Schema())
+	untypedSch, untypingTransform := newUntypingTransformer(statement.ResultSetSchema)
 	p.AddStage(untypingTransform)
 
 	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
@@ -218,12 +218,12 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, statement.ResultSetSchema.Schema())))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, statement.ResultSetSchema)))
 		return true
 	})
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(statement.ResultSetSchema.Schema())))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(statement.ResultSetSchema)))
 
 	p.Start()
 	err = p.Wait()

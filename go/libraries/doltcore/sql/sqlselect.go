@@ -26,7 +26,7 @@ type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
 // Struct to represent the salient results of parsing a select statement.
 type SelectStatement struct {
 	// Result set schema
-	resultSetSchema schema.Schema
+	ResultSetSchema schema.Schema
 	// Intermediate result set schema, used for processing results
 	intermediateRss *resultset.ResultSetSchema
 	// Input tables in order of selection
@@ -92,7 +92,7 @@ func ExecuteSelect(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Sel
 		return nil, nil, executionErr
 	}
 
-	return rows, statement.resultSetSchema, nil
+	return rows, statement.ResultSetSchema, nil
 }
 
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
@@ -161,7 +161,7 @@ func createResultSetSchema(selectStmt *SelectStatement) error {
 		return err
 	}
 
-	selectStmt.resultSetSchema = schema.UnkeyedSchemaFromCols(collection)
+	selectStmt.ResultSetSchema = schema.UnkeyedSchemaFromCols(collection)
 	return nil
 }
 
@@ -660,7 +660,7 @@ func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.Na
 				taggedVals[uint64(i)] = val
 			}
 		}
-		r := row.New(selectStmt.resultSetSchema, taggedVals)
+		r := row.New(selectStmt.ResultSetSchema, taggedVals)
 		return []*pipeline.TransformedRowResult{{r, nil}}, ""
 	}
 

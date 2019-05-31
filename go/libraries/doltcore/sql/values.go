@@ -217,6 +217,137 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		getter.NomsKind = kind
 		return getter, nil
 
+		// TODO: combine with CreateFilterForWhere
+	case *sqlparser.ComparisonExpr:
+
+		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: better type checking. This always converts the right type to the left. Probably not appropriate in all
+		//  cases.
+		if leftGetter.NomsKind != rightGetter.NomsKind {
+			if rightGetter, err = ConversionValueGetter(rightGetter, leftGetter.NomsKind); err != nil {
+				return nil, err
+			}
+		}
+
+		// Composite function to do comparison with null semantics
+		nullSafeBoolOp := func(left, right *RowValGetter, fn func(left, right types.Value) bool) func(r row.Row) types.Value {
+			return func(r row.Row) types.Value {
+				leftVal := left.Get(r)
+				rightVal := right.Get(r)
+				if types.IsNull(leftVal) || types.IsNull(rightVal) {
+						return nil
+				}
+				return types.Bool(fn(leftVal, rightVal))
+			}
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		switch e.Operator {
+		case sqlparser.EqualStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				return left.Equals(right)
+			})
+		case sqlparser.LessThanStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				return left.Less(right)
+			})
+		case sqlparser.GreaterThanStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				return right.Less(left)
+			})
+		case sqlparser.LessEqualStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				return left.Less(right) || left.Equals(right)
+			})
+		case sqlparser.GreaterEqualStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				return right.Less(left) || right.Equals(left)
+			})
+		case sqlparser.NotEqualStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				return !left.Equals(right)
+			})
+		case sqlparser.InStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				set := right.(types.Set)
+				return set.Has(context.Background(), left)
+			})
+		case sqlparser.NotInStr:
+			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+				set := right.(types.Set)
+				return !set.Has(context.Background(), left)
+			})
+		case sqlparser.NullSafeEqualStr:
+			return nil, errFmt("null safe equal operation not supported")
+		case sqlparser.LikeStr:
+			return nil, errFmt("like keyword not supported")
+		case sqlparser.NotLikeStr:
+			return nil, errFmt("like keyword not supported")
+		case sqlparser.RegexpStr:
+			return nil, errFmt("regular expressions not supported")
+		case sqlparser.NotRegexpStr:
+			return nil, errFmt("regular expressions not supported")
+		case sqlparser.JSONExtractOp:
+			return nil, errFmt("json not supported")
+		case sqlparser.JSONUnquoteExtractOp:
+			return nil, errFmt("json not supported")
+		}
+
+ 	getter.initFn = ComposeInits(leftGetter, rightGetter)
+ 	return getter, nil
+
+	case *sqlparser.AndExpr:
+		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		getter.getFn = func(r row.Row) types.Value {
+			leftVal := leftGetter.Get(r)
+			rightVal := rightGetter.Get(r)
+			if types.IsNull(leftVal) || types.IsNull(rightVal) {
+				return nil
+			}
+			return leftVal.(types.Bool) && rightVal.(types.Bool)
+		}
+		getter.initFn = ComposeInits(leftGetter, rightGetter)
+		return getter, nil
+
+	case *sqlparser.OrExpr:
+		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		getter.getFn = func(r row.Row) types.Value {
+			leftVal := leftGetter.Get(r)
+			rightVal := rightGetter.Get(r)
+			if types.IsNull(leftVal) || types.IsNull(rightVal) {
+				return nil
+			}
+			return leftVal.(types.Bool) || rightVal.(types.Bool)
+		}
+		getter.initFn = ComposeInits(leftGetter, rightGetter)
+		return getter, nil
+
 	case *sqlparser.BinaryExpr:
 		return getterForBinaryExpr(e, inputSchemas, aliases)
 	case *sqlparser.UnaryExpr:
