@@ -163,6 +163,12 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 	case *sqlparser.ColName:
 		colNameStr := getColumnNameString(e)
 
+		if getter, err := resolveColumnAlias(colNameStr, aliases); err != nil {
+			return nil, err
+		} else if getter != nil {
+			return getter, nil
+		}
+
 		qc, err := resolveColumn(colNameStr, inputSchemas, aliases)
 		if err != nil {
 			return nil, err

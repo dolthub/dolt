@@ -11,21 +11,15 @@ type Aliases struct {
 	ColumnAliases map[string][]*RowValGetter
 }
 
-// A qualified column names its table and its column.
-// Both names are case-sensitive and match the name as defined in the schema.
-type QualifiedColumn struct {
-	TableName  string
-	ColumnName string
-}
-
 func NewAliases() *Aliases {
 	return &Aliases{
 		TablesByAlias:  make(map[string]string),
 		AliasesByTable: make(map[string][]string),
+		ColumnAliases:  make(map[string][]*RowValGetter),
 	}
 }
 
-// Returns a copy of the aliases with only table aliases filled in.`
+// Returns a copy of the aliases with only table aliases filled in.
 func (a *Aliases) TableAliasesOnly() *Aliases {
 	return &Aliases{
 		TablesByAlias:  a.TablesByAlias,
@@ -44,7 +38,6 @@ func (a *Aliases) AddTableAlias(tableName, alias string) error {
 	return nil
 }
 
-// Returns whether the two columns given are equal
-func ColumnsEqual(c1, c2 QualifiedColumn) bool {
-	return c1.TableName == c2.TableName && c1.ColumnName == c2.ColumnName
+func (a *Aliases) AddColumnAlias(alias string, getter *RowValGetter) {
+	a.ColumnAliases[alias] = append(a.ColumnAliases[alias], getter)
 }
