@@ -117,12 +117,12 @@ func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) 
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1s, so this won't block if diff already finished
 
-	var paniced_r atomic.Value
+	var rp atomic.Value
 	go func() {
 		defer close(spliceChan)
 		defer func() {
 			if r := recover(); r != nil {
-				paniced_r.Store(r)
+				rp.Store(r)
 			}
 		}()
 		v2.Diff(ctx, v1, spliceChan, stopChan)
@@ -169,7 +169,7 @@ func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) 
 		}
 	}
 
-	if r := paniced_r.Load(); r != nil {
+	if r := rp.Load(); r != nil {
 		panic(r)
 	}
 
@@ -238,12 +238,12 @@ func (d differ) diffOrdered(ctx context.Context, p types.Path, ppf pathPartFunc,
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
-	var paniced_r atomic.Value
+	var rp atomic.Value
 	go func() {
 		defer close(changeChan)
 		defer func() {
 			if r := recover(); r != nil {
-				paniced_r.Store(r)
+				rp.Store(r)
 			}
 		}()
 		df(changeChan, stopChan)
@@ -283,7 +283,7 @@ func (d differ) diffOrdered(ctx context.Context, p types.Path, ppf pathPartFunc,
 		}
 	}
 
-	if r := paniced_r.Load(); r != nil {
+	if r := rp.Load(); r != nil {
 		panic(r)
 	}
 

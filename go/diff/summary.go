@@ -38,13 +38,13 @@ func Summary(ctx context.Context, value1, value2 types.Value) {
 		}
 	}
 
-	var paniced_r atomic.Value
+	var rp atomic.Value
 	ch := make(chan diffSummaryProgress)
 	go func() {
 		defer close(ch)
 		defer func() {
 			if r := recover(); r != nil {
-				paniced_r.Store(r)
+				rp.Store(r)
 			}
 		}()
 		diffSummary(ctx, ch, value1, value2)
@@ -62,7 +62,7 @@ func Summary(ctx context.Context, value1, value2 types.Value) {
 		}
 	}
 
-	if r := paniced_r.Load(); r != nil {
+	if r := rp.Load(); r != nil {
 		panic(r)
 	}
 
@@ -101,12 +101,12 @@ func diffSummaryList(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 
 	spliceChan := make(chan types.Splice)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
-	var paniced_r atomic.Value
+	var rp atomic.Value
 	go func() {
 		defer close(spliceChan)
 		defer func() {
 			if r := recover(); r != nil {
-				paniced_r.Store(r)
+				rp.Store(r)
 			}
 		}()
 		v2.Diff(ctx, v1, spliceChan, stopChan)
@@ -120,7 +120,7 @@ func diffSummaryList(ctx context.Context, ch chan<- diffSummaryProgress, v1, v2 
 		}
 	}
 
-	if r := paniced_r.Load(); r != nil {
+	if r := rp.Load(); r != nil {
 		panic(r)
 	}
 }
@@ -152,18 +152,18 @@ func diffSummaryValueChanged(ch chan<- diffSummaryProgress, oldSize, newSize uin
 	changeChan := make(chan types.ValueChanged)
 	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
 
-	var paniced_r atomic.Value
+	var rp atomic.Value
 	go func() {
 		defer close(changeChan)
 		defer func() {
 			if r := recover(); r != nil {
-				paniced_r.Store(r)
+				rp.Store(r)
 			}
 		}()
 		f(changeChan, stopChan)
 	}()
 	reportChanges(ch, changeChan)
-	if r := paniced_r.Load(); r != nil {
+	if r := rp.Load(); r != nil {
 		panic(r)
 	}
 }
