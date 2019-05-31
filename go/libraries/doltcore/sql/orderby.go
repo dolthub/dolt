@@ -86,6 +86,8 @@ func createRowSorter(statement *SelectStatement, orderBy sqlparser.OrderBy) (*Ro
 
 	obs := make([]*OrderBy, len(orderBy))
 	for i, o := range orderBy {
+		// first to see if the order by expression is one of the selected column aliases
+
 		getter, err := getterFor(o.Expr, statement.inputSchemas, statement.aliases)
 		if err != nil {
 			return nil, err
