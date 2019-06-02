@@ -2,7 +2,7 @@ package remotestorage
 
 import "github.com/attic-labs/noms/go/hash"
 
-// HashesToSlices takes a
+// HashesToSlices takes a list of hashes and converts each hash to a byte slice returning a slice of byte slices
 func HashesToSlices(hashes []hash.Hash) [][]byte {
 	slices := make([][]byte, len(hashes))
 

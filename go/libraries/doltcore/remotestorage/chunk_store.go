@@ -197,11 +197,11 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	go func() {
 		defer wg.Done()
 		for chunk := range chunkChan {
-			h := chunk.Hash()
 			if !dcs.cache.PutChunk(chunk) {
 				continue
 			}
 
+			h := chunk.Hash()
 			if _, ok := hashes[h]; ok {
 				foundChunks <- chunk
 			}

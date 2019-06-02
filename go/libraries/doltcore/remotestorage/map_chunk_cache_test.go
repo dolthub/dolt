@@ -3,6 +3,7 @@ package remotestorage
 import (
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -39,21 +40,15 @@ func TestMapChunkCache(t *testing.T) {
 	mapChunkCache.Put(chks)
 	hashToChunk := mapChunkCache.Get(hashes)
 
-	if len(hashToChunk) != chunkBatchSize {
-		t.Error("Did not read back all chunks")
-	}
+	assert.Equal(t, len(hashToChunk), chunkBatchSize, "Did not read back all chunks")
 
 	absent := mapChunkCache.Has(hashes)
 
-	if len(absent) != 0 {
-		t.Error("Missing chunks that were added")
-	}
+	assert.Equal(t, len(absent), 0, "Missing chunks that were added")
 
 	toFlush := mapChunkCache.GetAndClearChunksToFlush()
 
-	if !reflect.DeepEqual(toFlush, hashToChunk) {
-		t.Error("unexpected or missing chunks to flush")
-	}
+	assert.True(t, reflect.DeepEqual(toFlush, hashToChunk), "unexpected or missing chunks to flush")
 
 	moreHashes, moreChks := genRandomChunks(chunkBatchSize)
 
@@ -69,21 +64,11 @@ func TestMapChunkCache(t *testing.T) {
 
 	absent = mapChunkCache.Has(joinedHashes)
 
-	if !reflect.DeepEqual(absent, moreHashes) {
-		t.Error("unexpected absent hashset")
-	}
-
-	if mapChunkCache.PutChunk(&chks[0]) {
-		t.Error("existing chunk should return false")
-	}
-
-	if !mapChunkCache.PutChunk(&moreChks[0]) {
-		t.Error("new chunk should return true")
-	}
+	assert.True(t, reflect.DeepEqual(absent, moreHashes), "unexpected absent hashset")
+	assert.False(t, mapChunkCache.PutChunk(&chks[0]), "existing chunk should return false")
+	assert.True(t, mapChunkCache.PutChunk(&moreChks[0]), "new chunk should return true")
 
 	toFlush = mapChunkCache.GetAndClearChunksToFlush()
 
-	if !reflect.DeepEqual(toFlush, map[hash.Hash]chunks.Chunk{moreChks[0].Hash(): moreChks[0]}) {
-		t.Error("Missing or unexpected chunks to flush")
-	}
+	assert.True(t, reflect.DeepEqual(toFlush, map[hash.Hash]chunks.Chunk{moreChks[0].Hash(): moreChks[0]}), "Missing or unexpected chunks to flush")
 }
