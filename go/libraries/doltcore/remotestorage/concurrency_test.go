@@ -2,7 +2,6 @@ package remotestorage
 
 import (
 	"errors"
-	"fmt"
 	"math/rand"
 	"sync"
 	"testing"
@@ -51,39 +50,38 @@ func TestConcurrentExec(t *testing.T) {
 	const numBufferedTests = 16
 	const numErrTests = 16
 
-	for i := 0; i < numUnbufferedTests; i++ {
-		concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
-		name := fmt.Sprintf("unbuffered - concurrency %d", concurrency)
-
-		t.Run(name, func(t *testing.T) {
+	t.Run("Unbuffered", func(t *testing.T) {
+		for i := 0; i < numUnbufferedTests; i++ {
+			concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
 			concurrentTest(t, concurrency, numWorkItems, -1, make(chan int))
-		})
-	}
+		}
+	})
 
-	for i := 0; i < numBufferedTests; i++ {
-		concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
-		chanBuffSize := rng.Int() % numWorkItems
-		name := fmt.Sprintf("buffered - chan buff size %d, concurrency %d", chanBuffSize, concurrency)
-
-		t.Run(name, func(t *testing.T) {
+	t.Run("Buffered", func(t *testing.T) {
+		for i := 0; i < numBufferedTests; i++ {
+			concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
+			chanBuffSize := rng.Int() % numWorkItems
 			concurrentTest(t, concurrency, numWorkItems, -1, make(chan int, chanBuffSize))
-		})
-	}
+		}
+	})
 
-	for i := 0; i < numErrTests; i++ {
-		concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
-		chanBuffSize := rng.Int() % numWorkItems
-		firstErrIdx := rng.Int() % numWorkItems
-		name := fmt.Sprintf("error tests - chan buff size %d, concurrency %d, first err %d", chanBuffSize, concurrency, firstErrIdx)
-
-		t.Run(name, func(t *testing.T) {
+	t.Run("Error", func(t *testing.T) {
+		for i := 0; i < numErrTests; i++ {
+			concurrency := (rng.Int() % (maxConcurrency - 1)) + 1
+			chanBuffSize := rng.Int() % numWorkItems
+			firstErrIdx := rng.Int() % numWorkItems
 			concurrentTest(t, concurrency, numWorkItems, firstErrIdx, make(chan int, chanBuffSize))
-		})
-	}
+		}
+	})
 
 	t.Run("more concurrency than work", func(t *testing.T) {
 		concurrentTest(t, maxConcurrency*2, numWorkItems, -1, make(chan int))
 	})
+
+	t.Run("no work", func(t *testing.T) {
+		concurrentTest(t, maxConcurrency, 0, -1, make(chan int))
+	})
+
 }
 
 func concurrentTest(t *testing.T, concurrency, numWorkItems, firstErrIdx int, resultChan chan int) {

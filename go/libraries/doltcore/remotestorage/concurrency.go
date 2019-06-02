@@ -2,6 +2,7 @@ package remotestorage
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 func concurrentExec(work []func() error, concurrency int) error {
@@ -16,8 +17,8 @@ func concurrentExec(work []func() error, concurrency int) error {
 	workChan := make(chan func() error, len(work))
 
 	var wg sync.WaitGroup
-	var firstErr error
-	mu := &sync.Mutex{}
+	var firstErr atomic.Value
+	var closeOnce sync.Once
 
 	// start worker go routines based on the supplied concurrency
 	stopChan := make(chan struct{})
@@ -50,15 +51,10 @@ func concurrentExec(work []func() error, concurrency int) error {
 					if err != nil {
 						// If one or more errors occur, the first error will close the stopChan and be saved as the
 						// error that gets returned.
-						func() {
-							mu.Lock()
-							defer mu.Unlock()
-
-							if firstErr == nil {
-								close(stopChan)
-								firstErr = err
-							}
-						}()
+						closeOnce.Do(func() {
+							close(stopChan)
+							firstErr.Store(err)
+						})
 
 						return
 					}
@@ -79,7 +75,13 @@ func concurrentExec(work []func() error, concurrency int) error {
 	close(workChan)
 	wg.Wait()
 
-	return firstErr
+	firstErrVal := firstErr.Load()
+
+	if firstErrVal != nil {
+		return firstErrVal.(error)
+	}
+
+	return nil
 }
 
 func batchItr(elemCount, batchSize int, cb func(start, end int) (stop bool)) {
