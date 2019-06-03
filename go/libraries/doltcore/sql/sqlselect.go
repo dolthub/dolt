@@ -141,7 +141,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	p, err := createPipeline(ctx, root, selectStmt)
+	p, err := createSelectPipeline(ctx, root, selectStmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -455,9 +455,9 @@ type singleTablePipelineResult struct {
 	err  error
 }
 
-// createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
+// createSelectPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
+func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
 
 	if len(selectStmt.inputSchemas) == 1 {
 		var tableName string
