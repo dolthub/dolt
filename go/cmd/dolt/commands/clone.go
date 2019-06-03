@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"os"
@@ -179,8 +180,11 @@ func cloneRemote(ctx context.Context, remoteName, remoteUrl, branch string, inse
 }
 
 func cloneAllBranchRefs(branches []ref.DoltRef, verr errhand.VerboseError, srcDB *doltdb.DoltDB, ctx context.Context, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
+	var dref ref.DoltRef
+	var masterHash hash.Hash
+	var h hash.Hash
 	for i := 0; i < len(branches) && verr == nil; i++ {
-		dref := branches[i]
+		dref = branches[i]
 		branch := dref.GetPath()
 
 		if !srcDB.HasRef(ctx, dref) {
@@ -215,20 +219,30 @@ func cloneAllBranchRefs(branches []ref.DoltRef, verr errhand.VerboseError, srcDB
 
 		localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
 		localCommit, _ := dEnv.DoltDB.Resolve(ctx, localCommitSpec)
-		h, err := dEnv.DoltDB.WriteRootValue(ctx, localCommit.GetRootValue())
+
+		h, err = dEnv.DoltDB.WriteRootValue(ctx, localCommit.GetRootValue())
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to write to database.").AddCause(err).Build()
 		}
 
-		dEnv.RepoState.Head = ref.MarshalableRef{dref}
-		dEnv.RepoState.Staged = h.String()
-		dEnv.RepoState.Working = h.String()
-		err = dEnv.RepoState.Save()
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
+		if branch == "master" {
+			masterHash = h
 		}
+	}
+
+	if !masterHash.IsEmpty() {
+		h = masterHash
+		dref = ref.NewBranchRef("master")
+	}
+
+	dEnv.RepoState.Head = ref.MarshalableRef{dref}
+	dEnv.RepoState.Staged = h.String()
+	dEnv.RepoState.Working = h.String()
+	err := dEnv.RepoState.Save()
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
 	}
 
 	return nil
