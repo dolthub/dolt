@@ -123,7 +123,13 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 					if err == remotestorage.ErrInvalidDoltSpecPath {
 						urlObj, _ := earl.Parse(remote.Url)
 						bdr.AddDetails("For the remote: %s %s", remote.Name, remote.Url)
-						bdr.AddDetails("'%s' should be in the format '/organization/repo'", urlObj.Path)
+
+						path := urlObj.Path
+						if path[0] == '/' {
+							path = path[1:]
+						}
+
+						bdr.AddDetails("'%s' should be in the format 'organization/repo'", path)
 					}
 
 					verr = bdr.Build()
