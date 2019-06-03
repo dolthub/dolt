@@ -311,3 +311,36 @@ teardown() {
     run dolt log
     [[ "$output" =~ "Fixed conflicts" ]] || false
 }
+
+@test "clone sets your current branch appropriately" {
+    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+    dolt checkout -b aaa
+    dolt checkout -b zzz
+    dolt push test-remote aaa
+    dolt push test-remote zzz
+    cd "dolt-repo-clones"
+    dolt clone localhost:50051/test-org/test-repo --insecure
+    cd test-repo
+
+    # master hasn't been pushed so expect zzz to be the current branch and the string master should not be present
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "aaa" ]] || false    
+    [[ "$output" =~ "* zzz" ]] || false
+    [[ ! "$output" =~ "master" ]] || false
+    cd ../..
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    dolt clone localhost:50051/test-org/test-repo test-repo2 --insecure
+    cd test-repo2
+
+    # master pushed so it should be the current branch.
+    run dolt branch
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "aaa" ]] || false    
+    [[ "$output" =~ "zzz" ]] || false
+    [[ "$output" =~ "* master" ]] || false
+}
