@@ -61,6 +61,29 @@ func TestSqlSelect(t *testing.T) {
 	}
 }
 
+// Smoke tests, values are printed to console
+func TestSqlShow(t *testing.T) {
+	tests := []struct {
+		query       string
+		expectedRes int
+	}{
+		{"show tables", 0},
+		{"show all tables", 1},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-q", test.query}
+
+			commandStr := "dolt sql"
+			result := Sql(commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+		})
+	}
+}
+
 func TestBadInput(t *testing.T) {
 	tests := []struct {
 		name        string
