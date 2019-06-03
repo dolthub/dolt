@@ -14,7 +14,10 @@ import (
 // binaryNomsOperation knows how to combine two noms values into a single one, e.g. addition
 type binaryNomsOperation func(left, right types.Value) types.Value
 
-// unaryNomsOperation knows how to combine a single noms value into another one, e.g. negation
+// predicate function for two noms values, e.g. <
+type binaryNomsPredicate func(left, right types.Value) bool
+
+// unaryNomsOperation knows how to turn a single noms value into another one, e.g. negation
 type unaryNomsOperation func(val types.Value) types.Value
 
 // TagResolver knows how to find a tag number for a qualified table in a result set.
@@ -152,6 +155,20 @@ func getterForColumn(qc QualifiedColumn, inputSchemas map[string]schema.Schema, 
 	return getter, nil
 }
 
+// nullSafeBoolOp applies null checking semantics to a binary expression, so that if either of the two operands are
+// null, the expression is null. Callers supply left and right RowValGetters and a predicate function for the extracted
+// non-null row values.
+func nullSafeBoolOp(left, right *RowValGetter, fn binaryNomsPredicate) func(r row.Row) types.Value {
+	return func(r row.Row) types.Value {
+		leftVal := left.Get(r)
+		rightVal := right.Get(r)
+		if types.IsNull(leftVal) || types.IsNull(rightVal) {
+			return nil
+		}
+		return types.Bool(fn(leftVal, rightVal))
+	}
+}
+
 // Returns RowValGetter for the expression given, or an error
 func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
 	switch e := expr.(type) {
@@ -237,54 +254,43 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			}
 		}
 
-		// Composite function to do comparison with null semantics
-		nullSafeBoolOp := func(left, right *RowValGetter, fn func(left, right types.Value) bool) func(r row.Row) types.Value {
-			return func(r row.Row) types.Value {
-				leftVal := left.Get(r)
-				rightVal := right.Get(r)
-				if types.IsNull(leftVal) || types.IsNull(rightVal) {
-						return nil
-				}
-				return types.Bool(fn(leftVal, rightVal))
-			}
-		}
-
 		getter := RowValGetterForKind(types.BoolKind)
+		var predicate binaryNomsPredicate
 		switch e.Operator {
 		case sqlparser.EqualStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				return left.Equals(right)
-			})
+			}
 		case sqlparser.LessThanStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				return left.Less(right)
-			})
+			}
 		case sqlparser.GreaterThanStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				return right.Less(left)
-			})
+			}
 		case sqlparser.LessEqualStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				return left.Less(right) || left.Equals(right)
-			})
+			}
 		case sqlparser.GreaterEqualStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				return right.Less(left) || right.Equals(left)
-			})
+			}
 		case sqlparser.NotEqualStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				return !left.Equals(right)
-			})
+			}
 		case sqlparser.InStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				set := right.(types.Set)
 				return set.Has(context.Background(), left)
-			})
+			}
 		case sqlparser.NotInStr:
-			getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			predicate = func(left, right types.Value) bool {
 				set := right.(types.Set)
 				return !set.Has(context.Background(), left)
-			})
+			}
 		case sqlparser.NullSafeEqualStr:
 			return nil, errFmt("null safe equal operation not supported")
 		case sqlparser.LikeStr:
@@ -301,6 +307,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			return nil, errFmt("json not supported")
 		}
 
+	getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, predicate)
  	getter.initFn = ComposeInits(leftGetter, rightGetter)
  	return getter, nil
 
@@ -315,14 +322,9 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 
 		getter := RowValGetterForKind(types.BoolKind)
-		getter.getFn = func(r row.Row) types.Value {
-			leftVal := leftGetter.Get(r)
-			rightVal := rightGetter.Get(r)
-			if types.IsNull(leftVal) || types.IsNull(rightVal) {
-				return nil
-			}
-			return leftVal.(types.Bool) && rightVal.(types.Bool)
-		}
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			return bool(left.(types.Bool) && right.(types.Bool))
+		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)
 		return getter, nil
 
@@ -337,14 +339,9 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 
 		getter := RowValGetterForKind(types.BoolKind)
-		getter.getFn = func(r row.Row) types.Value {
-			leftVal := leftGetter.Get(r)
-			rightVal := rightGetter.Get(r)
-			if types.IsNull(leftVal) || types.IsNull(rightVal) {
-				return nil
-			}
-			return leftVal.(types.Bool) || rightVal.(types.Bool)
-		}
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			return bool(left.(types.Bool) || right.(types.Bool))
+		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)
 		return getter, nil
 
