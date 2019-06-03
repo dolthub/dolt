@@ -14,6 +14,8 @@ import (
 )
 
 func TestExecuteShow(t *testing.T) {
+	peopleSchemaStr, _ := SchemaAsCreateStmt("people", peopleTestSchema)
+
 	tests := []struct {
 		name           string
 		query          string
@@ -22,14 +24,22 @@ func TestExecuteShow(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:           "show tables",
-			query:          "show tables",
-			expectedRows:   rs(
+			name:  "show create table",
+			query: "show create table people",
+			expectedRows: rs(
+				newResultSetRow(types.String("people"), types.String(peopleSchemaStr)),
+			),
+			expectedSchema: showCreateTableSchema(),
+		},
+		{
+			name:  "show tables",
+			query: "show tables",
+			expectedRows: rs(
 				newResultSetRow(types.String("appearances")),
 				newResultSetRow(types.String("episodes")),
 				newResultSetRow(types.String("people")),
 			),
-			expectedSchema: createShowTablesSchema(),
+			expectedSchema: showTablesSchema(),
 		},
 		{
 			name:        "show databases",

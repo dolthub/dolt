@@ -47,18 +47,47 @@ func ExecuteShow(ctx context.Context, root *doltdb.RootValue, show *sqlparser.Sh
 	return rows, schema, nil
 }
 
-func createShowTablesSchema() schema.Schema {
+func showTablesSchema() schema.Schema {
 	colCollection, _ := schema.NewColCollection(schema.NewColumn("tables", 0, types.StringKind, false))
+	return schema.UnkeyedSchemaFromCols(colCollection)
+}
+
+func showCreateTableSchema() schema.Schema {
+	colCollection, _ := schema.NewColCollection(
+		schema.NewColumn("Table", 0, types.StringKind, false),
+		schema.NewColumn("Create Table", 1, types.StringKind, false),
+	)
 	return schema.UnkeyedSchemaFromCols(colCollection)
 }
 
 func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlparser.Show) (*pipeline.Pipeline, schema.Schema, error) {
 
 	switch show.Type {
+	case "create table":
+		tableName := show.Table.Name.String()
+		if !root.HasTable(ctx, tableName) {
+			return nil, nil, errFmt(UnknownTableErrFmt, tableName)
+		}
+
+		table, _ := root.GetTable(ctx, tableName)
+
+		sch := table.GetSchema(ctx)
+		schemaStr, err := SchemaAsCreateStmt(tableName, sch)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		resultSch := showCreateTableSchema()
+		rows := toRows(([][]string{{tableName, schemaStr}}), resultSch)
+		source := sourceFuncForRows(rows)
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+
+		return p, resultSch, nil
+
 	case "tables":
 		tableNames := root.GetTableNames(ctx)
-		sch := createShowTablesSchema()
-		rows := toRows(tableNames, sch)
+		sch := showTablesSchema()
+		rows := toRows(transpose(tableNames), sch)
 		source := sourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 		return p, sch, nil
@@ -69,14 +98,24 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 	return nil, nil, nil
 }
 
-func toRows(strings []string, sch schema.Schema) []row.Row {
-	if sch.GetAllCols().Size() != 1 {
-		panic("toRows requires a schema with a single column")
+// Takes a single-dimensional array of strings and transposes it to a 2D array, with a single element per row.
+func transpose(ss []string) [][]string {
+	ret := make([][]string, len(ss))
+	for i, s := range ss {
+		ret [i] = []string{s}
 	}
+	return ret
+}
 
-	rows := make([]row.Row, len(strings))
-	for i, s := range strings {
-		rows[i] = row.New(sch, row.TaggedValues{0: types.String(s)})
+// Returns a new result set row with the schema given from the 2D array of row values given.
+func toRows(ss [][]string, sch schema.Schema) []row.Row {
+	rows := make([]row.Row, len(ss))
+	for i, r := range ss {
+		taggedVals := make(row.TaggedValues)
+		for tag, col := range r {
+			taggedVals[uint64(tag)] = types.String(col)
+		}
+		rows[i] = row.New(sch, taggedVals)
 	}
 	return rows
 }
