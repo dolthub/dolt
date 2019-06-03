@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/xwb1989/sqlparser"
 	"testing"
 )
@@ -116,7 +117,7 @@ func TestExecuteDelete(t *testing.T) {
 				assert.Nil(t, tt.deletedRows, "incorrect test setup: cannot assert both an error and deleted ids")
 				return
 			} else {
-				assert.Nil(t, err, "unexpected error")
+				require.Nil(t, err, "unexpected error")
 			}
 
 			assert.Equal(t, tt.expectedResult.NumRowsDeleted, result.NumRowsDeleted)

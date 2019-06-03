@@ -7,21 +7,82 @@ import (
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
 )
 
 // binaryNomsOperation knows how to combine two noms values into a single one, e.g. addition
 type binaryNomsOperation func(left, right types.Value) types.Value
+
+// predicate function for two noms values, e.g. <
+type binaryNomsPredicate func(left, right types.Value) bool
+
+// unaryNomsOperation knows how to turn a single noms value into another one, e.g. negation
 type unaryNomsOperation func(val types.Value) types.Value
+
+// TagResolver knows how to find a tag number for a qualified table in a result set.
+type TagResolver interface {
+	ResolveTag(tableName string, columnName string) (uint64, error)
+}
+
+// InitValue is a value type that knows how to initialize itself before the value is retrieved.
+type InitValue interface {
+	// Init() resolves late-bound information for this getter, like the tag number of a column in a result set. Returns
+	// any error in initialization. Init() must be called before other methods on an object.
+	Init(TagResolver) error
+}
+
+// Composes zero or more InitValue into a new Init() function, where Init() is called on each InitValue in turn,
+// returning any error encountered.
+func ComposeInits(ivs ...InitValue) func(TagResolver) error{
+	return func(resolver TagResolver) error {
+		for _, iv := range ivs {
+			if err := iv.Init(resolver); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+// GetValue is a value type that know how to retrieve a value from a row.
+type GetValue interface {
+	// Get() returns a value from the row given (which needn't actually be a value from that row).
+	Get(row.Row) types.Value
+}
 
 // RowValGetter knows how to retrieve a Value from a Row.
 type RowValGetter struct {
 	// The value type returned by this getter. Types are approximate and may need to be coerced, e.g. Float -> Int.
 	NomsKind types.NomsKind
-	// Get() returns the value for this getter for the row given
-	Get func(r row.Row) types.Value
+	// initFn performs whatever logic necessary to initialize the getter, and returns any errors in the initialization
+	// process. Leave unset to perform no initialization logic. Client should call the interface method Init() rather than
+	// calling this method directly.
+	initFn func(TagResolver) error
+	// getFn returns the value for this getter for the row given. Clients should call the interface method Get() rather
+	// than calling this method directly.
+	getFn func(r row.Row) types.Value
+	// Whether this value has been initialized.
+	inited bool
+	// Clients should use these interface methods, rather than getFn and initFn directly.
+	InitValue
+	GetValue
+}
+
+func (rvg *RowValGetter) Init(resolver TagResolver) error {
+	rvg.inited = true
+	if rvg.initFn != nil {
+		return rvg.initFn(resolver)
+	}
+	return nil
+}
+
+func (rvg *RowValGetter) Get(r row.Row) types.Value {
+	// TODO: find a way to not impede performance with this check
+	if !rvg.inited {
+		panic("Get() called without Init(). This is a bug.")
+	}
+	return rvg.getFn(r)
 }
 
 // Returns a new RowValGetter with default values filled in.
@@ -46,9 +107,12 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 
 	return &RowValGetter{
 		NomsKind: destKind,
-		Get: func(r row.Row) types.Value {
+		getFn: func(r row.Row) types.Value {
 			val := getter.Get(r)
 			return converterFn(val)
+		},
+		initFn: func(resolver TagResolver) error {
+			return getter.Init(resolver)
 		},
 	}, nil
 }
@@ -57,52 +121,82 @@ func ConversionValueGetter(getter *RowValGetter, destKind types.NomsKind) (*RowV
 func LiteralValueGetter(value types.Value) *RowValGetter {
 	return &RowValGetter{
 		NomsKind: value.Kind(),
-		Get: func(r row.Row) types.Value {
+		getFn: func(r row.Row) types.Value {
 			return value
 		},
 	}
 }
 
-// Returns a comparison value getter for the expression given, which could be a column value or a literal
-func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
+// Returns a RowValGetter for the column given, or an error
+func getterForColumn(qc QualifiedColumn, inputSchemas map[string]schema.Schema) (*RowValGetter, error) {
+	tableSch, ok := inputSchemas[qc.TableName]
+	if !ok {
+		return nil, errFmt("Unresolved table %v", qc.TableName)
+	}
+
+	column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
+	if !ok {
+		return nil, errFmt(UnknownColumnErrFmt, qc.ColumnName)
+	}
+
+	getter := RowValGetterForKind(column.Kind)
+
+	var tag uint64
+	getter.initFn = func(resolver TagResolver) error {
+		var err error
+		tag, err = resolver.ResolveTag(qc.TableName, qc.ColumnName)
+		return err
+	}
+	getter.getFn = func(r row.Row) types.Value {
+		value, _ := r.GetColVal(tag)
+		return value
+	}
+
+	return getter, nil
+}
+
+// nullSafeBoolOp applies null checking semantics to a binary expression, so that if either of the two operands are
+// null, the expression is null. Callers supply left and right RowValGetters and a predicate function for the extracted
+// non-null row values.
+func nullSafeBoolOp(left, right *RowValGetter, fn binaryNomsPredicate) func(r row.Row) types.Value {
+	return func(r row.Row) types.Value {
+		leftVal := left.Get(r)
+		rightVal := right.Get(r)
+		if types.IsNull(leftVal) || types.IsNull(rightVal) {
+			return nil
+		}
+		return types.Bool(fn(leftVal, rightVal))
+	}
+}
+
+// Returns RowValGetter for the expression given, or an error
+func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
 	switch e := expr.(type) {
 	case *sqlparser.NullVal:
 		getter := RowValGetterForKind(types.NullKind)
-		getter.Get = func(r row.Row) types.Value { return nil }
+		getter.getFn = func(r row.Row) types.Value { return nil }
 		return getter, nil
 
 	case *sqlparser.ColName:
 		colNameStr := getColumnNameString(e)
 
+		if getter, err := resolveColumnAlias(colNameStr, aliases); err != nil {
+			return nil, err
+		} else if getter != nil {
+			return getter, nil
+		}
+
 		qc, err := resolveColumn(colNameStr, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
 		}
-		tableSch, ok := inputSchemas[qc.TableName]
-		if !ok {
-			return nil, errFmt("Unresolved table %v", qc.TableName)
-		}
 
-		column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
-		if !ok {
-			return nil, errFmt(UnknownColumnErrFmt, colNameStr)
-		}
-		resultSetTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
-
-		getter := RowValGetterForKind(column.Kind)
-		getter.Get = func(r row.Row) types.Value {
-			value, _ := r.GetColVal(resultSetTag)
-			return value
-		}
-
-		return getter, nil
-
+		return getterForColumn(qc, inputSchemas)
 	case *sqlparser.SQLVal:
 		val, err := divineNomsValueFromSQLVal(e)
 		if err != nil {
 			return nil, err
 		}
-
 		return LiteralValueGetter(val), nil
 
 	case sqlparser.BoolVal:
@@ -139,19 +233,174 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		getter.NomsKind = kind
 		return getter, nil
 
+		// TODO: combine with CreateFilterForWhere
+	case *sqlparser.ComparisonExpr:
+
+		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		// TODO: better type checking. This always converts the right type to the left. Probably not appropriate in all
+		//  cases.
+		if leftGetter.NomsKind != rightGetter.NomsKind {
+			if rightGetter, err = ConversionValueGetter(rightGetter, leftGetter.NomsKind); err != nil {
+				return nil, err
+			}
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		var predicate binaryNomsPredicate
+		switch e.Operator {
+		case sqlparser.EqualStr:
+			predicate = func(left, right types.Value) bool {
+				return left.Equals(right)
+			}
+		case sqlparser.LessThanStr:
+			predicate = func(left, right types.Value) bool {
+				return left.Less(right)
+			}
+		case sqlparser.GreaterThanStr:
+			predicate = func(left, right types.Value) bool {
+				return right.Less(left)
+			}
+		case sqlparser.LessEqualStr:
+			predicate = func(left, right types.Value) bool {
+				return left.Less(right) || left.Equals(right)
+			}
+		case sqlparser.GreaterEqualStr:
+			predicate = func(left, right types.Value) bool {
+				return right.Less(left) || right.Equals(left)
+			}
+		case sqlparser.NotEqualStr:
+			predicate = func(left, right types.Value) bool {
+				return !left.Equals(right)
+			}
+		case sqlparser.InStr:
+			predicate = func(left, right types.Value) bool {
+				set := right.(types.Set)
+				return set.Has(context.Background(), left)
+			}
+		case sqlparser.NotInStr:
+			predicate = func(left, right types.Value) bool {
+				set := right.(types.Set)
+				return !set.Has(context.Background(), left)
+			}
+		case sqlparser.NullSafeEqualStr:
+			return nil, errFmt("null safe equal operation not supported")
+		case sqlparser.LikeStr:
+			return nil, errFmt("like keyword not supported")
+		case sqlparser.NotLikeStr:
+			return nil, errFmt("like keyword not supported")
+		case sqlparser.RegexpStr:
+			return nil, errFmt("regular expressions not supported")
+		case sqlparser.NotRegexpStr:
+			return nil, errFmt("regular expressions not supported")
+		case sqlparser.JSONExtractOp:
+			return nil, errFmt("json not supported")
+		case sqlparser.JSONUnquoteExtractOp:
+			return nil, errFmt("json not supported")
+		}
+
+	getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, predicate)
+ 	getter.initFn = ComposeInits(leftGetter, rightGetter)
+ 	return getter, nil
+
+	case *sqlparser.AndExpr:
+		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			return bool(left.(types.Bool) && right.(types.Bool))
+		})
+		getter.initFn = ComposeInits(leftGetter, rightGetter)
+		return getter, nil
+
+	case *sqlparser.OrExpr:
+		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+		rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+			return bool(left.(types.Bool) || right.(types.Bool))
+		})
+		getter.initFn = ComposeInits(leftGetter, rightGetter)
+		return getter, nil
+
+	case *sqlparser.IsExpr:
+		exprGetter, err := getterFor(e.Expr, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		getter.initFn = ComposeInits(exprGetter)
+
+		op := e.Operator
+		switch op {
+		case sqlparser.IsNullStr, sqlparser.IsNotNullStr:
+			getter.getFn = func(r row.Row) types.Value {
+				val := exprGetter.Get(r)
+				if (types.IsNull(val) && op == sqlparser.IsNullStr) || (!types.IsNull(val) && op == sqlparser.IsNotNullStr) {
+					return types.Bool(true)
+				}
+				return types.Bool(false)
+			}
+
+		case sqlparser.IsTrueStr, sqlparser.IsNotTrueStr, sqlparser.IsFalseStr, sqlparser.IsNotFalseStr:
+			if exprGetter.NomsKind != types.BoolKind {
+				return nil, errFmt("Type mismatch: cannot use expression %v as boolean", nodeToString(expr))
+			}
+
+			getter.getFn = func(r row.Row) types.Value {
+				val := exprGetter.Get(r)
+				if types.IsNull(val) {
+					return types.Bool(false)
+				}
+				// TODO: this may not be the correct nullness semantics for "is not" comparisons
+				if val.Equals(types.Bool(true)) {
+					return types.Bool(op == sqlparser.IsTrueStr || op == sqlparser.IsNotFalseStr)
+				} else {
+					return types.Bool(op == sqlparser.IsFalseStr || op == sqlparser.IsNotTrueStr)
+				}
+			}
+
+		default:
+			return nil, errFmt("Unrecognized is comparison: %v", e.Operator)
+		}
+
+	return getter, nil
+
 	case *sqlparser.BinaryExpr:
-		return getterForBinaryExpr(e, inputSchemas, aliases, rss)
+		return getterForBinaryExpr(e, inputSchemas, aliases)
 	case *sqlparser.UnaryExpr:
-		return getterForUnaryExpr(e, inputSchemas, aliases, rss)
+		return getterForUnaryExpr(e, inputSchemas, aliases)
 	default:
-		return nil, errFmt("Unsupported type %v", nodeToString(e))
+		return nil, errFmt("Unsupported expression: '%v'", nodeToString(e))
 	}
 }
 
 // getterForUnaryExpr returns a getter for the given unary expression, where calls to Get() evaluates the full
 // expression for the row given
-func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
-	getter, err := getterFor(e.Expr, inputSchemas, aliases, rss)
+func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
+	getter, err := getterFor(e.Expr, inputSchemas, aliases)
 	if err != nil {
 		return nil, err
 	}
@@ -210,8 +459,11 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 	}
 
 	unaryGetter := RowValGetterForKind(getter.NomsKind)
-	unaryGetter.Get = func(r row.Row) types.Value {
+	unaryGetter.getFn = func(r row.Row) types.Value {
 		return opFn(getter.Get(r))
+	}
+	unaryGetter.initFn = func(resolver TagResolver) error {
+		return getter.Init(resolver)
 	}
 
 	return unaryGetter, nil
@@ -219,12 +471,12 @@ func getterForUnaryExpr(e *sqlparser.UnaryExpr, inputSchemas map[string]schema.S
 
 // getterForBinaryExpr returns a getter for the given binary expression, where calls to Get() evaluates the full
 // expression for the row given
-func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases, rss *resultset.ResultSetSchema) (*RowValGetter, error) {
-	leftGetter, err := getterFor(e.Left, inputSchemas, aliases, rss)
+func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
+	leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
 	if err != nil {
 		return nil, err
 	}
-	rightGetter, err := getterFor(e.Right, inputSchemas, aliases, rss)
+	rightGetter, err := getterFor(e.Right, inputSchemas, aliases)
 	if err != nil {
 		return nil, err
 	}
@@ -324,13 +576,22 @@ func getterForBinaryExpr(e *sqlparser.BinaryExpr, inputSchemas map[string]schema
 	}
 
 	getter := RowValGetterForKind(leftGetter.NomsKind)
-	getter.Get = func(r row.Row) types.Value {
+	getter.getFn = func(r row.Row) types.Value {
 		leftVal := leftGetter.Get(r)
 		rightVal := rightGetter.Get(r)
 		if types.IsNull(leftVal) || types.IsNull(rightVal) {
 			return nil
 		}
 		return opFn(leftVal, rightVal)
+	}
+	getter.initFn = func(resolver TagResolver) error {
+		if err := leftGetter.Init(resolver); err != nil {
+			return err
+		}
+		if err := rightGetter.Init(resolver); err != nil {
+			return err
+		}
+		return nil
 	}
 
 	return getter, nil

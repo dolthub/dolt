@@ -288,11 +288,24 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "select *, in clause",
+			name:           "select *, in clause string",
 			query:          "select * from people where first in ('Homer', 'Marge')",
 			expectedRows:   compressRows(peopleTestSchema, homer, marge),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
+		{
+			name:           "select *, in clause integer",
+			query:          "select * from people where age in (-10, 40)",
+			expectedRows:   compressRows(peopleTestSchema, homer, barney),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
+		// TODO: fix this
+		// {
+		// 	name:           "select *, in clause float",
+		// 	query:          "select * from people where rating in (-10.0, 8.5)",
+		// 	expectedRows:   compressRows(peopleTestSchema, homer),
+		// 	expectedSchema: compressSchema(peopleTestSchema),
+		// },
 		{
 			name:        "select *, in clause, mixed types",
 			query:       "select * from people where first in ('Homer', 40)",
@@ -362,20 +375,47 @@ func TestExecuteSelect(t *testing.T) {
 			query:       "select * from people where age is true",
 			expectedErr: "Type mismatch:",
 		},
-		// TODO: support operations in select clause
-		// {
-		// 	name:        "binary expression in select",
-		// 	query:       "select age + 1 as age from people where is_married",
-		// 	expectedRows:   rs(newResultSetRow(types.Int(41)), newResultSetRow(types.Int(39))),
-		// 	expectedSchema: newResultSetSchema("age", types.FloatKind),
-		// },
-		// TODO: support -column numeric expressions
-		// {
-		// 	name:           "select *, -column",
-		// 	query:          "select * from people where -rating = -8.5",
-		// 	expectedRows:   compressRows(peopleTestSchema, homer),
-		// 	expectedSchema: compressSchema(peopleTestSchema),
-		// },
+		{
+			name:        "binary expression in select",
+			query:       "select age + 1 as a from people where is_married order by a",
+			expectedRows:   rs(newResultSetRow(types.Int(39)), newResultSetRow(types.Int(41))),
+			expectedSchema: newResultSetSchema("a", types.IntKind),
+		},
+		{
+			name:           "and expression in select",
+			query:          "select is_married and age >= 40 from people where last = 'Simpson' order by id limit 2",
+			expectedRows:   rs(newResultSetRow(types.Bool(true)), newResultSetRow(types.Bool(false))),
+			expectedSchema: newResultSetSchema("is_married and age >= 40", types.BoolKind),
+		},
+		{
+			name:  "or expression in select",
+			query: "select first, age <= 10 or age >= 40 as not_marge from people where last = 'Simpson' order by id desc",
+			expectedRows: rs(
+				newResultSetRow(types.String("Lisa"), types.Bool(true)),
+				newResultSetRow(types.String("Bart"), types.Bool(true)),
+				newResultSetRow(types.String("Marge"), types.Bool(false)),
+				newResultSetRow(types.String("Homer"), types.Bool(true)),
+			),
+			expectedSchema: newResultSetSchema("first", types.StringKind, "not_marge", types.BoolKind),
+		},
+		{
+			name:        "unary expression in select",
+			query:       "select -age as age from people where is_married order by age",
+			expectedRows:   rs(newResultSetRow(types.Int(-40)), newResultSetRow(types.Int(-38))),
+			expectedSchema: newResultSetSchema("age", types.IntKind),
+		},
+		{
+			name:        "unary expression in select, alias named after column",
+			query:       "select -age as age from people where is_married order by people.age",
+			expectedRows:   rs(newResultSetRow(types.Int(-38)), newResultSetRow(types.Int(-40))),
+			expectedSchema: newResultSetSchema("age", types.IntKind),
+		},
+		{
+			name:           "select *, -column",
+			query:          "select * from people where -rating = -8.5",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
 		{
 			name:        "select *, -column, string type",
 			query:       "select * from people where -first = 'Homer'",
@@ -400,7 +440,7 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
 		{
-			name:           "select *, binary / in where",
+			name:           "select *, binary * in where",
 			query:          "select * from people where age * 2 = 80",
 			expectedRows:   compressRows(peopleTestSchema, homer, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
@@ -433,7 +473,7 @@ func TestExecuteSelect(t *testing.T) {
 			expectedErr: "Type mismatch evaluating expression 'first / 2'",
 		},
 		{
-			name:        "select *, binary / in where type mismatch",
+			name:        "select *, binary * in where type mismatch",
 			query:       "select * from people where first * 2 = 80",
 			expectedErr: "Type mismatch evaluating expression 'first * 2'",
 		},
@@ -466,6 +506,17 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(resultset.SubsetSchema(peopleTestSchema, "first", "last"), homer, moe, barney),
 			expectedSchema: newResultSetSchema("f", types.StringKind, "f", types.StringKind),
 		},
+		{
+			name:           "column selected more than once",
+			query:          "select first, first from people where age >= 40 order by id",
+			expectedRows:   rs(
+				newResultSetRow(types.String("Homer"), types.String("Homer")),
+				newResultSetRow(types.String("Moe"), types.String("Moe")),
+				newResultSetRow(types.String("Barney"), types.String("Barney")),
+			),
+			expectedSchema: newResultSetSchema("first", types.StringKind, "first", types.StringKind),
+		},
+
 		// TODO: fix this. To make this work we need to track selected tables along with their aliases. It's not an error to
 		//  select the same table multiple times, as long as each occurrence has a unique name
 		// {
@@ -1355,7 +1406,7 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			p.Wait()
 
 			assert.Equal(t, tt.expectedNumRows, outputRows)
-			assert.Equal(t, tt.expectedSchema, statement.ResultSetSchema.Schema())
+			assert.Equal(t, tt.expectedSchema, statement.ResultSetSchema)
 		})
 	}
 }
