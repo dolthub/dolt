@@ -128,7 +128,7 @@ func LiteralValueGetter(value types.Value) *RowValGetter {
 }
 
 // Returns a RowValGetter for the column given, or an error
-func getterForColumn(qc QualifiedColumn, inputSchemas map[string]schema.Schema, aliases *Aliases) (*RowValGetter, error) {
+func getterForColumn(qc QualifiedColumn, inputSchemas map[string]schema.Schema) (*RowValGetter, error) {
 	tableSch, ok := inputSchemas[qc.TableName]
 	if !ok {
 		return nil, errFmt("Unresolved table %v", qc.TableName)
@@ -191,7 +191,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			return nil, err
 		}
 
-		return getterForColumn(qc, inputSchemas, aliases)
+		return getterForColumn(qc, inputSchemas)
 	case *sqlparser.SQLVal:
 		val, err := divineNomsValueFromSQLVal(e)
 		if err != nil {
@@ -344,13 +344,56 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)
 		return getter, nil
+	case *sqlparser.IsExpr:
+		exprGetter, err := getterFor(e.Expr, inputSchemas, aliases)
+		if err != nil {
+			return nil, err
+		}
+
+		getter := RowValGetterForKind(types.BoolKind)
+		getter.initFn = ComposeInits(exprGetter)
+
+		op := e.Operator
+		switch op {
+		case sqlparser.IsNullStr, sqlparser.IsNotNullStr:
+			getter.getFn = func(r row.Row) types.Value {
+				val := exprGetter.Get(r)
+				if (types.IsNull(val) && op == sqlparser.IsNullStr) || (!types.IsNull(val) && op == sqlparser.IsNotNullStr) {
+					return types.Bool(true)
+				}
+				return types.Bool(false)
+			}
+
+		case sqlparser.IsTrueStr, sqlparser.IsNotTrueStr, sqlparser.IsFalseStr, sqlparser.IsNotFalseStr:
+			if exprGetter.NomsKind != types.BoolKind {
+				return nil, errFmt("Type mismatch: cannot use expression %v as boolean", nodeToString(expr))
+			}
+
+			getter.getFn = func(r row.Row) types.Value {
+				val := exprGetter.Get(r)
+				if types.IsNull(val) {
+					return types.Bool(false)
+				}
+				// TODO: this may not be the correct nullness semantics for "is not" comparisons
+				if val.Equals(types.Bool(true)) {
+					return types.Bool(op == sqlparser.IsTrueStr || op == sqlparser.IsNotFalseStr)
+				} else {
+					return types.Bool(op == sqlparser.IsFalseStr || op == sqlparser.IsNotTrueStr)
+				}
+			}
+
+		default:
+			return nil, errFmt("Unrecognized is comparison: %v", e.Operator)
+		}
+
+	return getter, nil
 
 	case *sqlparser.BinaryExpr:
 		return getterForBinaryExpr(e, inputSchemas, aliases)
 	case *sqlparser.UnaryExpr:
 		return getterForUnaryExpr(e, inputSchemas, aliases)
 	default:
-		return nil, errFmt("Unsupported type %v", nodeToString(e))
+		return nil, errFmt("Unsupported expression: '%v'", nodeToString(e))
 	}
 }
 

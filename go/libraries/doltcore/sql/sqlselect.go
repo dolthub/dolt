@@ -387,7 +387,7 @@ func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser
 				return err
 			} else {
 				for _, qc := range qcs {
-					getter, err := getterForColumn(qc, selectStmt.inputSchemas, selectStmt.aliases)
+					getter, err := getterForColumn(qc, selectStmt.inputSchemas)
 					if err != nil {
 						return nil
 					}
