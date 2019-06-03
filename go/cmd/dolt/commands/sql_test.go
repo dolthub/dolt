@@ -68,6 +68,7 @@ func TestSqlShow(t *testing.T) {
 		expectedRes int
 	}{
 		{"show tables", 0},
+		{"show create table people", 0},
 		{"show all tables", 1},
 	}
 
