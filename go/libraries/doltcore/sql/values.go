@@ -197,7 +197,6 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		if err != nil {
 			return nil, err
 		}
-
 		return LiteralValueGetter(val), nil
 
 	case sqlparser.BoolVal:
@@ -344,6 +343,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)
 		return getter, nil
+
 	case *sqlparser.IsExpr:
 		exprGetter, err := getterFor(e.Expr, inputSchemas, aliases)
 		if err != nil {
