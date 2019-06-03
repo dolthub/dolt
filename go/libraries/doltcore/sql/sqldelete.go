@@ -48,10 +48,14 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 	table, _ := root.GetTable(ctx, tableName)
 	tableSch := table.GetSchema(ctx)
+	rss := resultset.Identity(tableName, tableSch)
 
 	// TODO: support aliases
-	filter, err := createFilterForWhere(s.Where, map[string]schema.Schema{tableName: tableSch}, NewAliases(), resultset.Identity(tableSch))
+	filter, err := createFilterForWhere(s.Where, map[string]schema.Schema{tableName: tableSch}, NewAliases())
 	if err != nil {
+		return errDelete(err.Error())
+	}
+	if err = filter.Init(rss); err != nil {
 		return errDelete(err.Error())
 	}
 
@@ -70,7 +74,7 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			return nil, err
 		}
 
-		if !filter(r) {
+		if !filter.filter(r) {
 			continue
 		}
 

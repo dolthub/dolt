@@ -7,7 +7,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
@@ -27,7 +26,7 @@ type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
 // Struct to represent the salient results of parsing a select statement.
 type SelectStatement struct {
 	// Result set schema
-	ResultSetSchema *resultset.ResultSetSchema
+	ResultSetSchema schema.Schema
 	// Intermediate result set schema, used for processing results
 	intermediateRss *resultset.ResultSetSchema
 	// Input tables in order of selection
@@ -35,21 +34,29 @@ type SelectStatement struct {
 	// Input table schemas, keyed by table name
 	inputSchemas map[string]schema.Schema
 	// Columns to be selected
-	selectedCols []QualifiedColumn
+	selectedCols []SelectedColumn
 	// Referenced columns (selected or in where / having clause)
 	referencedCols []QualifiedColumn
 	// Join expressions
 	joins []*sqlparser.JoinTableExpr
 	// Aliases for columns and tables
 	aliases *Aliases
-	// Filter function for the result set
-	filterFn rowFilterFn
-	// Ordering function for the result set
-	orderFn rowLesserFn
+	// Filter for the where clause
+	whereFilter *RowFilter
+	// Filter for the join clauses
+	joinFilter *RowFilter
+	// Sorter for the result set
+	orderBy *RowSorter
 	// Limit of results returned
 	limit int
 	// Offset for results (skip N)
-	offset int
+	offset     int
+}
+
+// A SelectedColumn is a column in the result set. It has a name and a way to extract it from an intermediate row.
+type SelectedColumn struct {
+	Name    string
+	Getter  *RowValGetter
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
@@ -85,7 +92,7 @@ func ExecuteSelect(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Sel
 		return nil, nil, executionErr
 	}
 
-	return rows, statement.ResultSetSchema.Schema(), nil
+	return rows, statement.ResultSetSchema, nil
 }
 
 // BuildSelectQueryPipeline interprets the select statement given, builds a pipeline to execute it, and returns the pipeline
@@ -106,11 +113,19 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processReferencedColumns(selectStmt, s.Where, s.OrderBy); err != nil {
+	if err := processReferencedColumns(selectStmt, s.SelectExprs, s.Where, s.OrderBy); err != nil {
 		return nil, nil, err
 	}
 
-	if err := createResultSetSchema(selectStmt); err != nil {
+	if err := processWhereClause(selectStmt, s.Where); err != nil {
+		return nil, nil, err
+	}
+
+	if err := processJoins(selectStmt); err != nil {
+		return nil, nil, err
+	}
+
+	if err := processOrderByClause(selectStmt, s.OrderBy); err != nil {
 		return nil, nil, err
 	}
 
@@ -118,7 +133,15 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	p, err := createPipeline(ctx, root, s, selectStmt)
+	if err := createResultSetSchema(selectStmt); err != nil {
+		return nil, nil, err
+	}
+
+	if err := createIntermediateSchema(selectStmt); err != nil {
+		return nil, nil, err
+	}
+
+	p, err := createPipeline(ctx, root, selectStmt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -126,118 +149,81 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 	return p, selectStmt, nil
 }
 
-type orderDirection bool
-const (
-	asc  orderDirection = true
-	desc orderDirection = false
-)
-
-// Returns the appropriate less value for sorting, reversing the sort order for desc orders.
-func (od orderDirection) lessVal(less bool) bool {
-	switch od {
-	case asc:
-		return less
-	case desc:
-		return !less
+// Creates the final result set schema and applies it to the statement given.
+func createResultSetSchema(selectStmt *SelectStatement) error {
+	cols := make([]schema.Column, len(selectStmt.selectedCols))
+	for i, selectedCol := range selectStmt.selectedCols {
+		cols[i] = schema.NewColumn(selectedCol.Name, uint64(i), selectedCol.Getter.NomsKind, false)
 	}
-	panic("impossible")
-}
 
-// order-by struct
-type ob struct {
-	qc            QualifiedColumn
-	comparisonTag uint64
-	direction     orderDirection
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		return err
+	}
+
+	selectStmt.ResultSetSchema = schema.UnkeyedSchemaFromCols(collection)
+	return nil
 }
 
 // Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
-func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy, rss *resultset.ResultSetSchema) error {
+func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy) error {
 	if len(orderBy) == 0 {
 		return nil
 	}
 
-	obs := make([]ob, len(orderBy))
-	for i, o := range orderBy {
-		qcs, err := resolveColumnsInExpr(o.Expr, statement.inputSchemas, statement.aliases)
-		if err != nil {
-			return err
-		}
-
-		if len(qcs) == 0 {
-			return errFmt("Found no column in order by clause: %v", nodeToString(o))
-		} else if len(qcs) > 1 {
-			return errFmt("Found more than one column in order by clause: %v", nodeToString(o))
-		}
-
-		qc := qcs[0]
-
-		tableSch, ok := statement.inputSchemas[qc.TableName]
-		if !ok {
-			return errFmt("Unresolved table %v", qc.TableName)
-		}
-
-		column, ok := tableSch.GetAllCols().GetByName(qc.ColumnName)
-		if !ok {
-			return errFmt(UnknownColumnErrFmt, qc.ColumnName)
-		}
-
-		comparisonTag := rss.Mapping(tableSch).SrcToDest[column.Tag]
-
-		dir := asc
-		if o.Direction == sqlparser.DescScr {
-			dir = desc
-		}
-
-		obs[i] = ob{qc, comparisonTag, dir}
+	sorter, err := createRowSorter(statement, orderBy)
+	if err != nil {
+		return err
 	}
 
-	// less function for sorting, returns whether left < right
-	statement.orderFn = func(rLeft, rRight row.Row) bool {
-		for _, ob := range obs {
-			leftVal, _ := rLeft.GetColVal(ob.comparisonTag)
-			rightVal, _ := rRight.GetColVal(ob.comparisonTag)
+	statement.orderBy = sorter
+	return nil
+}
 
-			// MySQL behavior is that nulls sort first in asc, last in desc
-			if types.IsNull(leftVal) {
-				return  ob.direction.lessVal(true)
-			} else if types.IsNull(rightVal) {
-				return ob.direction.lessVal(false)
-			}
-
-			if leftVal.Less(rightVal) {
-				return ob.direction.lessVal(true)
-			} else if rightVal.Less(leftVal) {
-				return ob.direction.lessVal(false)
-			}
-		}
-
-		return false
+// Processes the joins previously recorded in the statement and applies an appropriate filter to the statement.
+func processJoins(selectStmt *SelectStatement) error {
+	joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
+	if err != nil {
+		return err
 	}
 
+	selectStmt.joinFilter = joinFilter
+	return nil
+}
+
+// Processes the where clause and applies an appropriate filter to the statement.
+func processWhereClause(selectStmt *SelectStatement, where *sqlparser.Where) error {
+	if whereFilter, err := createFilterForWhere(where, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
+		return err
+	} else {
+		selectStmt.whereFilter = whereFilter
+	}
 	return nil
 }
 
 // Processes the referenced columns, those appearing either in the select list, the where clause, or the join statement.
-func processReferencedColumns(selectStmt *SelectStatement, where *sqlparser.Where, orderBy sqlparser.OrderBy) error {
+func processReferencedColumns(selectStmt *SelectStatement, colSelections sqlparser.SelectExprs, where *sqlparser.Where, orderBy sqlparser.OrderBy) error {
 	cols := make([]QualifiedColumn, 0)
-	cols = append(cols, selectStmt.selectedCols...)
-
-	whereCols, err := resolveColumnsInWhereClause(where, selectStmt.inputSchemas, selectStmt.aliases)
-	if err != nil {
+	var selectedCols, whereCols, joinCols, orderByCols []QualifiedColumn
+	var err error
+	
+	if selectedCols, err = resolveColumnsInSelectClause(colSelections, selectStmt.inputTables, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	}
 
-	joinCols, err := resolveColumnsInJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases)
-	if err != nil {
+	if whereCols, err = resolveColumnsInWhereClause(where, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	}
 
-	obCols, err := resolveColumnsInOrderBy(orderBy, selectStmt.inputSchemas, selectStmt.aliases)
-	if err != nil {
+	if joinCols, err = resolveColumnsInJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	}
 
-	for _, refCols := range [][]QualifiedColumn {whereCols, joinCols, obCols } {
+	if orderByCols, err = resolveColumnsInOrderBy(orderBy, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
+		return err
+	}
+
+	for _, refCols := range [][]QualifiedColumn {selectedCols, whereCols, joinCols, orderByCols} {
 		for _, col := range refCols {
 			if !contains(col, cols) {
 				cols = append(cols, col)
@@ -302,8 +288,6 @@ func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error 
 
 	return nil
 }
-
-
 
 // Processes the from clause of the select statement, storing the result of the analysis in the selectStmt given or
 // returning any error encountered.
@@ -395,60 +379,57 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 // Processes the select expression (columns to return from the query). Adds the results to the SelectStatement given,
 // or returns an error if it cannot. All table aliases must be established in the SelectStatement.
 func processSelectedColumns(selectStmt *SelectStatement, colSelections sqlparser.SelectExprs) error {
-	var columns []QualifiedColumn
+	var selected []SelectedColumn
 	for _, colSelection := range colSelections {
 		switch selectExpr := colSelection.(type) {
 		case *sqlparser.StarExpr:
-			if !selectExpr.TableName.IsEmpty() {
-				var targetTable string
-				if aliasedTableName, ok := selectStmt.aliases.TablesByAlias[selectExpr.TableName.Name.String()]; ok {
-					targetTable = aliasedTableName
-				} else {
-					targetTable = selectExpr.TableName.Name.String()
-				}
-				tableSch := selectStmt.inputSchemas[targetTable]
-				tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-					columns = append(columns, QualifiedColumn{targetTable, col.Name})
-					return false
-				})
+			if qcs, err := resolveColumnsInStarExpr(selectExpr, selectStmt.inputTables, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
+				return err
 			} else {
-				for _, tableName := range selectStmt.inputTables {
-					tableSch := selectStmt.inputSchemas[tableName]
-					tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-						columns = append(columns, QualifiedColumn{tableName, col.Name})
-						return false
-					})
+				for _, qc := range qcs {
+					getter, err := getterForColumn(qc, selectStmt.inputSchemas)
+					if err != nil {
+						return nil
+					}
+					selected = append(selected, SelectedColumn{Name: qc.ColumnName, Getter: getter})
 				}
 			}
 		case *sqlparser.AliasedExpr:
-			switch colExpr := selectExpr.Expr.(type) {
-			case *sqlparser.ColName:
 
-				qc, err := resolveColumn(getColumnNameString(colExpr), selectStmt.inputSchemas, selectStmt.aliases)
-				if err != nil {
-					return err
-				}
-
-				// an absent column alias will be empty
-				if selectExpr.As.String() != "" {
-					selectStmt.aliases.AddColumnAlias(qc, selectExpr.As.String())
-				} else {
-					// This isn't a true alias, but we want the column header to exactly match the original select statement, even
-					// if we found a case-insensitive match for the column name.
-					selectStmt.aliases.AddColumnAlias(qc, colExpr.Name.String())
-				}
-
-				columns = append(columns, qc)
-			default:
-				return errFmt("Only column selections or * are supported")
+			getter, err := getterFor(selectExpr.Expr, selectStmt.inputSchemas, selectStmt.aliases.TableAliasesOnly())
+			if err != nil {
+				return err
 			}
+
+			colName := ""
+			// an absent column alias will be empty
+			if selectExpr.As.String() != "" {
+				colName = selectExpr.As.String()
+			} else {
+				// not a true alias, but makes the column name expression available to the rest of the query
+				colName = resultSetColumnName(selectExpr.Expr)
+			}
+			selectStmt.aliases.AddColumnAlias(colName, getter)
+
+			selected = append(selected, SelectedColumn{Name: colName, Getter: getter})
+
 		case sqlparser.Nextval:
 			return errFmt("Next value is not supported: %v", nodeToString(selectExpr))
 		}
 	}
 
-	selectStmt.selectedCols = columns
+	selectStmt.selectedCols = selected
 	return nil
+}
+
+// resultSetColumnName returns the appropriate name for a result set column that doesn't have an alias assigned
+func resultSetColumnName(expr sqlparser.Expr) string {
+	switch ce := expr.(type) {
+	case *sqlparser.ColName:
+		return ce.Name.String()
+	default:
+		return nodeToString(expr)
+	}
 }
 
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
@@ -457,27 +438,14 @@ func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string
 	return tbl.GetSchema(ctx)
 }
 
-// Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
-func createResultSetFilter(selectStmt *SelectStatement, s *sqlparser.Select, rss *resultset.ResultSetSchema) error {
-	var rowFilter rowFilterFn
-	whereFilter, err := createFilterForWhere(s.Where, selectStmt.inputSchemas, selectStmt.aliases, rss)
-	if err != nil {
-		return err
+// Binds the tag numbers used by the various components in the statement to those provided by the given resolver.
+func bindTagNumbers(statement *SelectStatement, resolver TagResolver) error {
+	var initVals []InitValue
+	for _, col := range statement.selectedCols {
+		initVals = append(initVals, col.Getter)
 	}
-	rowFilter = whereFilter
-
-	if len(selectStmt.joins) > 0 {
-		joinFilter, err := createFilterForJoins(selectStmt.joins, selectStmt.inputSchemas, selectStmt.aliases, rss)
-		if err != nil {
-			return err
-		}
-		rowFilter = func(r row.Row) (matchesFilter bool) {
-			return whereFilter(r) && joinFilter(r)
-		}
-	}
-
-	selectStmt.filterFn = rowFilter
-	return nil
+	initVals = append(initVals, statement.joinFilter, statement.whereFilter, statement.orderBy)
+	return ComposeInits(initVals...)(resolver)
 }
 
 // The result of running a single select pipeline.
@@ -489,7 +457,7 @@ type singleTablePipelineResult struct {
 
 // createPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
 // an output set, and must be supplied one before execution.
-func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Select, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
+func createPipeline(ctx context.Context, root *doltdb.RootValue, selectStmt *SelectStatement) (*pipeline.Pipeline, error) {
 
 	if len(selectStmt.inputSchemas) == 1 {
 		var tableName string
@@ -502,13 +470,7 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
 		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
 		// table for where clause filtering, then convert those rows to the result set schema.
-		if err := createResultSetFilter(selectStmt, s, resultset.Identity(tableSch)); err != nil {
-			return nil, err
-		}
-
-		if err := processOrderByClause(selectStmt, s.OrderBy, resultset.Identity(tableSch)); err != nil {
-			return nil, err
-		}
+		bindTagNumbers(selectStmt, resultset.Identity(tableName, tableSch))
 
 		return createSingleTablePipeline(ctx, root, selectStmt, tableName, true)
 	}
@@ -555,28 +517,18 @@ func createPipeline(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Se
 	crossProduct := selectStmt.intermediateRss.CrossProduct(results)
 	source := sourceFuncForRows(crossProduct)
 
-	if err := createResultSetFilter(selectStmt, s, selectStmt.intermediateRss); err != nil {
-		return nil, err
-	}
-
-	if err := processOrderByClause(selectStmt, s.OrderBy, selectStmt.intermediateRss); err != nil {
-		return nil, err
-	}
+	bindTagNumbers(selectStmt, selectStmt.intermediateRss)
 
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
-	if selectStmt.orderFn != nil {
-		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderFn)})
+	if selectStmt.orderBy != nil {
+		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderBy.Less)})
 	}
 	if selectStmt.limit != noLimit {
 		p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(selectStmt, p)))
 	}
 
-	reductionTransform, err := schemaReductionTransform(selectStmt)
-	if err != nil {
-		return nil, err
-	}
-	p.AddStage(reductionTransform)
+	p.AddStage(createOutputSchemaMappingTransform(selectStmt))
 
 	return p, nil
 }
@@ -621,17 +573,6 @@ func newSortingTransform(lesser rowLesserFn) pipeline.TransformFunc {
 	}
 }
 
-// Returns a transform stage to reduce the intermediate schema to the final one.
-// TODO: this is unnecessary for many queries and could be skipped.
-func schemaReductionTransform(selectStmt *SelectStatement) (pipeline.NamedTransform, error) {
-	mapping, err := rowconv.TagMapping(selectStmt.intermediateRss.Schema(), selectStmt.ResultSetSchema.Schema())
-	if err != nil {
-		return pipeline.NamedTransform{}, err
-	}
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	return pipeline.NewNamedTransform("transform to result schema", rowconv.GetRowConvTransformFunc(rConv)), nil
-}
-
 // Returns a source func that yields the rows given in order.
 func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
 	idx := 0
@@ -666,14 +607,19 @@ func createLimitAndOffsetFn(statement *SelectStatement, p *pipeline.Pipeline) pi
 	}
 }
 
+// Fills in the result set filter function in selectStmt using the conditions in the where clause and the join.
+func createResultSetFilter(selectStmt *SelectStatement) *RowFilter {
+	return newRowFilter(func(r row.Row) (matchesFilter bool) {
+		return selectStmt.whereFilter.filter(r) && selectStmt.joinFilter.filter(r)
+	})
+}
+
 // Returns a transform function to filter the set of rows to match the where / join clauses.
 func createWhereFn(statement *SelectStatement) pipeline.TransformRowFunc {
-	if statement.filterFn == nil {
-		panic("Called createWhereFn without a filterFn specified")
-	}
+	rowFilter := createResultSetFilter(statement)
 
 	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
-		if statement.filterFn(inRow) {
+		if rowFilter.filter(inRow) {
 			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
 		}
 		return nil, ""
@@ -692,35 +638,39 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 
 	if isTerminal {
 		p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(statement)))
-		if statement.orderFn != nil {
-			p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(statement.orderFn)})
+		if statement.orderBy != nil {
+			p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(statement.orderBy.Less)})
 		}
 		if statement.limit != noLimit {
 			p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(statement, p)))
 		}
-		p.AddStage(createOutputSchemaMappingTransform(tblSch, statement.ResultSetSchema))
+		p.AddStage(createOutputSchemaMappingTransform(statement))
 	}
 
 	return p, nil
 }
 
-func createOutputSchemaMappingTransform(tableSch schema.Schema, rss *resultset.ResultSetSchema) pipeline.NamedTransform {
-	mapping := rss.Mapping(tableSch)
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	return pipeline.NewNamedTransform("mapToResultSet", rowconv.GetRowConvTransformFunc(rConv))
+func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.NamedTransform {
+  var transformFunc pipeline.TransformRowFunc
+	transformFunc = func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
+		taggedVals := make(row.TaggedValues)
+		for i, selectedCol := range selectStmt.selectedCols {
+			val := selectedCol.Getter.Get(inRow)
+			if !types.IsNull(val) {
+				taggedVals[uint64(i)] = val
+			}
+		}
+		r := row.New(selectStmt.ResultSetSchema, taggedVals)
+		return []*pipeline.TransformedRowResult{{r, nil}}, ""
+	}
+
+	return pipeline.NewNamedTransform("create result set", transformFunc)
 }
 
-// Fills in a ResultSetSchema for the given select statement, which contains a target schema and mappings to get there
-// from the individual table schemas. Also fills in an intermediate schema, which for some queries contains additional
-// columns necessary to evaluate where clauses but not part of the final result set.
-func createResultSetSchema(statement *SelectStatement) error {
-	rss, err := rssFromColumns(statement.selectedCols, statement.inputSchemas, statement.aliases)
-	if err != nil {
-		return err
-	}
-	statement.ResultSetSchema = rss
-
-	rss, err = rssFromColumns(statement.referencedCols, statement.inputSchemas, statement.aliases)
+// Fills in a an intermediate ResultSetSchema for the given select statement, which contains the schema of the
+// intermediate result set.
+func createIntermediateSchema(statement *SelectStatement) error {
+	rss, err := rssFromColumns(statement.referencedCols, statement.inputSchemas)
 	if err != nil {
 		return err
 	}
@@ -730,7 +680,7 @@ func createResultSetSchema(statement *SelectStatement) error {
 }
 
 // Returns a result set schema created from the columns given
-func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Schema, aliases *Aliases) (*resultset.ResultSetSchema, error) {
+func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Schema) (*resultset.ResultSetSchema, error) {
 	cols := make([]resultset.ColWithSchema, len(columns))
 	for i, selectedCol := range columns {
 		colName := selectedCol.ColumnName
@@ -742,14 +692,10 @@ func rssFromColumns(columns []QualifiedColumn, inputSchemas map[string]schema.Sc
 			if col, ok := tableSch.GetAllCols().GetByName(colName); !ok {
 				panic(fmt.Sprintf(UnknownColumnErrFmt, colName))
 			} else {
-				// Rename any aliased columns for output. Column names only matter for the end result, not any intermediate ones.
-				if alias, ok := aliases.GetColumnAlias(selectedCol); ok {
-					col.Name = alias
-				}
 				cols[i] = resultset.ColWithSchema{Col: col, Sch: tableSch}
 			}
 		}
 	}
 
-	return resultset.NewFromColumns(cols...)
+	return resultset.NewFromColumns(inputSchemas, cols...)
 }

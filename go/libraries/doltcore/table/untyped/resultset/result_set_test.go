@@ -340,7 +340,12 @@ func TestNewFromColumns(t *testing.T) {
 			{mustGetCol(peopleTestSchema, "last"), peopleTestSchema},
 		}
 
-		rss, err := NewFromColumns(cols...)
+		schemas := map[string]schema.Schema {
+			"people": peopleTestSchema,
+			"episodes": episodesTestSchema,
+		}
+
+		rss, err := NewFromColumns(schemas, cols...)
 		if err != nil {
 			assert.FailNow(t, err.Error())
 		}

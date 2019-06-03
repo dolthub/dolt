@@ -6,6 +6,18 @@ import (
 	"strings"
 )
 
+// A qualified column names its table and its column.
+// Both names are case-sensitive and match the name as defined in the schema.
+type QualifiedColumn struct {
+	TableName  string
+	ColumnName string
+}
+
+// Returns whether the two columns given are equal
+func ColumnsEqual(c1, c2 QualifiedColumn) bool {
+	return c1.TableName == c2.TableName && c1.ColumnName == c2.ColumnName
+}
+
 // Resolves the table name expression given by returning the canonical name of the table, or an error if no such table
 // exists in the given root. The table name returned will always match the expression given except for case sensitivity.
 // If an exact case-sensitive match for table name exists, it will be returned. Otherwise, a case-insensitive match will
@@ -46,16 +58,7 @@ func resolveTable(tableNameExpr string, allTableNames []string, aliases *Aliases
 //
 // colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
 func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases *Aliases) (QualifiedColumn, error) {
-	// First try matching any known aliases directly. This is only appropriate in some contexts, e.g. in the ORDER BY but
-	// not the WHERE clause. Callers should use Aliases.TableAliasesOnly for cases when the column aliases shouldn't be
-	// considered.
-	if qc, err := aliases.GetColumnForAlias(colNameExpr); err != nil {
-		return QualifiedColumn{}, err
-	} else if !ColumnsEqual(qc, QualifiedColumn{}) {
-		return qc, nil
-	}
-
-	// Then try getting the table from the column name string itself, eg. "t.col"
+	// Try getting the table from the column name string itself, eg. "t.col"
 	qc := parseQualifiedColumnString(colNameExpr)
 	if qc.TableName != "" {
 		tableName, err := resolveTable(qc.TableName, keys(schemas), aliases)
@@ -72,6 +75,20 @@ func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases
 
 	// Finally, look through all input schemas to see if there's an exact match and dying if there's any ambiguity
 	return resolveColumnInTables(colNameExpr, schemas)
+}
+
+// Finds the column name given in the aliases given. Returns nil if it can't be found, or an error if there's any
+// ambiguity (column aliases can be non-distinct)
+//
+// colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
+func resolveColumnAlias(colNameExpr string, aliases *Aliases) (*RowValGetter, error) {
+	if getters, ok := aliases.ColumnAliases[colNameExpr]; ok {
+		if len(getters) > 1 {
+			return nil, errFmt(AmbiguousColumnErrFmt, colNameExpr)
+		}
+		return getters[0], nil
+	}
+	return nil, nil
 }
 
 // Returns the best match column for the name given in the schemas given. An exact case-sensitive match is preferred.
@@ -173,6 +190,62 @@ func resolveColumnsInWhereClause(whereClause *sqlparser.Where, inputSchemas map[
 	return resolveColumnsInExpr(whereClause.Expr, inputSchemas, aliases.TableAliasesOnly())
 }
 
+// resolveColumnsInSelectClause returns the qualified columns referenced by the select clause
+func resolveColumnsInSelectClause(selectExprs sqlparser.SelectExprs, tableNames []string, schemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	if selectExprs == nil {
+		return nil, nil
+	}
+
+	cols := make([]QualifiedColumn, 0)
+	for _, colSelection := range selectExprs {
+		switch selectExpr := colSelection.(type) {
+		case *sqlparser.StarExpr:
+			if qcs, err := resolveColumnsInStarExpr(selectExpr, tableNames, schemas, aliases); err != nil {
+				return nil, err
+			} else {
+				cols = append(cols, qcs...)
+			}
+		case *sqlparser.AliasedExpr:
+			if qcs, err := resolveColumnsInExpr(selectExpr.Expr, schemas, aliases.TableAliasesOnly()); err != nil {
+				return nil, err
+			} else {
+				cols = append(cols, qcs...)
+			}
+		default:
+			// do nothing
+		}
+	}
+
+	return cols, nil
+}
+
+func resolveColumnsInStarExpr(selectExpr *sqlparser.StarExpr, tableNames []string, schemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
+	columns := make([]QualifiedColumn, 0)
+	if !selectExpr.TableName.IsEmpty() {
+		var targetTable string
+		if aliasedTableName, ok := aliases.TablesByAlias[selectExpr.TableName.Name.String()]; ok {
+			targetTable = aliasedTableName
+		} else {
+			targetTable = selectExpr.TableName.Name.String()
+		}
+		tableSch := schemas[targetTable]
+		tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+			columns = append(columns, QualifiedColumn{targetTable, col.Name})
+			return false
+		})
+	} else {
+		for _, tableName := range tableNames {
+			tableSch := schemas[tableName]
+			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+				columns = append(columns, QualifiedColumn{tableName, col.Name})
+				return false
+			})
+		}
+	}
+
+	return columns, nil
+}
+
 // resolveColumnsInOrderBy returns the qualified columns referenced in the order by clause.
 func resolveColumnsInOrderBy(orderBy sqlparser.OrderBy, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
 	if orderBy == nil {
@@ -220,8 +293,8 @@ func resolveColumnsInJoin(expr *sqlparser.JoinTableExpr, schemas map[string]sche
 	return resolveColumnsInExpr(expr.Condition.On, schemas, aliases)
 }
 
-// resolveColumnsInExpr is the helper function for resolveColumnsInExpr, which can be used recursively on sub
-// expressions. Supported parser types here must be kept in sync with createFilterForWhereExpr
+// resolveColumnsInExpr returns the set of columns referenced by the expression given.
+// Supported parser types here must be kept in sync with createFilterForWhereExpr
 func resolveColumnsInExpr(colExpr sqlparser.Expr, inputSchemas map[string]schema.Schema, aliases *Aliases) ([]QualifiedColumn, error) {
 
 	cols := make([]QualifiedColumn, 0)
@@ -239,6 +312,13 @@ func resolveColumnsInExpr(colExpr sqlparser.Expr, inputSchemas map[string]schema
 		cols = append(cols, rightCols...)
 	case *sqlparser.ColName:
 		colNameStr := getColumnNameString(expr)
+
+		// if the colName given is actually an alias, there are no columns to resolve (only a getter that may or may not
+		// refer to an expression involving a column)
+		if _, ok := aliases.ColumnAliases[colNameStr]; ok {
+			return nil, nil
+		}
+
 		qc, err := resolveColumn(colNameStr, inputSchemas, aliases)
 		if err != nil {
 			return nil, err
