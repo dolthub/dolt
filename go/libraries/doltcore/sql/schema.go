@@ -34,7 +34,9 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) (string, error) {
 		} else {
 			sb.WriteRune(',')
 		}
+		sb.WriteRune('`')
 		sb.WriteString(col.Name)
+		sb.WriteRune('`')
 		return false
 	})
 
@@ -52,6 +54,7 @@ func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
 // space count, name width, and type width.  If nameWidth or typeWidth are 0 or less than the length of the name or
 // type, then the length of the name or type will be used.
 func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr string, col schema.Column) string {
+	colName = "`" + colName + "`"
 	fmtStr := fmt.Sprintf("%%%ds%%%ds %%%ds", indent, nameWidth, typeWidth)
 	colStr := fmt.Sprintf(fmtStr, "", colName, typeStr)
 
