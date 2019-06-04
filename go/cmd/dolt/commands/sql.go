@@ -189,7 +189,7 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	}
 }
 
-//
+// Executes a SQL show statement and prints the result to the CLI.
 func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
 	p, sch, err := sql.BuildShowPipeline(context.TODO(), root, show)
 	if err != nil {

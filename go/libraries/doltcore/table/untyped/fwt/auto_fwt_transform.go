@@ -85,14 +85,14 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 	}
 }
 
-func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
-	if asWr.fwtTr == nil {
-		fwtSch := NewFWTSchemaWithWidths(asWr.sch, asWr.printWidths, asWr.maxRunes)
-		asWr.fwtTr = NewFWTTransformer(fwtSch, asWr.tooLngBhv)
+func (asTr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
+	if asTr.fwtTr == nil {
+		fwtSch := NewFWTSchemaWithWidths(asTr.sch, asTr.printWidths, asTr.maxRunes)
+		asTr.fwtTr = NewFWTTransformer(fwtSch, asTr.tooLngBhv)
 	}
 
-	for i := 0; i < len(asWr.rowBuffer); i++ {
-		asWr.processRow(asWr.rowBuffer[i], outChan, badRowChan)
+	for i := 0; i < len(asTr.rowBuffer); i++ {
+		asTr.processRow(asTr.rowBuffer[i], outChan, badRowChan)
 
 		if i%100 == 0 {
 			select {
@@ -103,7 +103,7 @@ func (asWr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps
 		}
 	}
 
-	asWr.rowBuffer = nil
+	asTr.rowBuffer = nil
 }
 
 func (asTr *AutoSizingFWTTransformer) processRow(rowWithProps pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure) {
