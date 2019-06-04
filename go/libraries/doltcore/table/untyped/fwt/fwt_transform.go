@@ -82,9 +82,8 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 				buf = []rune(str)
 			} else {
 				n := copy(buf, []rune(str))
-				// it's possible, in the case of non-printing characters, for there to be more runes than column width. In this
-				// case, truncate to the length of the buffer.
-				for i := 0; i < colWidth - strWidth && n + i < len(buf); i++ {
+				// Character widths are tricky. Always overwrite from where we left off to the end of the buffer to clear it.
+				for i := 0; n + i < len(buf); i++ {
 					buf[n + i] = ' '
 				}
 			}
