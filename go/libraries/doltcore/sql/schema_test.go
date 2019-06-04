@@ -3,28 +3,27 @@ package sql
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-const expectedSQL = `CREATE TABLE table_name (
-  id int not null comment 'tag:0',
-  first varchar not null comment 'tag:1',
-  last varchar not null comment 'tag:2',
-  is_married bool comment 'tag:3',
-  age int comment 'tag:4',
-  rating float comment 'tag:6',
-  uuid uuid comment 'tag:7',
-  num_episodes int unsigned comment 'tag:8',
-  primary key (id)
-);`
+const expectedSQL = "CREATE TABLE table_name (\n" +
+"  `id` int not null comment 'tag:0',\n" +
+"  `first` varchar not null comment 'tag:1',\n" +
+"  `last` varchar not null comment 'tag:2',\n" +
+"  `is_married` bool comment 'tag:3',\n" +
+"  `age` int comment 'tag:4',\n" +
+"  `rating` float comment 'tag:6',\n" +
+"  `uuid` uuid comment 'tag:7',\n" +
+"  `num_episodes` int unsigned comment 'tag:8',\n" +
+"  primary key (`id`)\n" +
+");"
 
 func TestSchemaAsCreateStmt(t *testing.T) {
 	tSchema := createPeopleTestSchema()
 	str, _ := SchemaAsCreateStmt("table_name", tSchema)
 
-	if str != expectedSQL {
-		t.Error("\n", str, "\n\t!=\n", expectedSQL)
-	}
+	assert.Equal(t, expectedSQL, str)
 }
 
 func TestFmtCol(t *testing.T) {
@@ -40,38 +39,35 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"first varchar comment 'tag:0'",
+			"`first` varchar comment 'tag:0'",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),
 			2,
 			0,
 			0,
-			"  last int comment 'tag:123'",
+			"  `last` int comment 'tag:123'",
 		},
 		{
 			schema.NewColumn("title", 2, types.UintKind, true),
 			0,
 			10,
 			0,
-			"     title int unsigned comment 'tag:2'",
+			"   `title` int unsigned comment 'tag:2'",
 		},
 		{
 			schema.NewColumn("aoeui", 52, types.UintKind, true),
 			0,
 			10,
 			15,
-			"     aoeui    int unsigned comment 'tag:52'",
+			"   `aoeui`    int unsigned comment 'tag:52'",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.Expected, func(t *testing.T) {
 			actual := FmtCol(test.Indent, test.NameWidth, test.TypeWidth, test.Col)
-
-			if actual != test.Expected {
-				t.Errorf("\n'%s' \n\t!= \n'%s'", actual, test.Expected)
-			}
+			assert.Equal(t, test.Expected, actual)
 		})
 	}
 }
