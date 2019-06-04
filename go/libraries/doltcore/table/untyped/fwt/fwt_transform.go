@@ -1,9 +1,11 @@
 package fwt
 
 import (
+	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
+	"os"
 )
 
 // TooLongBehavior determines how the FWTTransformer should behave when it encounters a column that is longer than what
@@ -37,6 +39,7 @@ func NewFWTTransformer(fwtSch *FWTSchema, tooLngBhv TooLongBehavior) *FWTTransfo
 	colBuffs := make(map[uint64][]rune, numFields)
 
 	for tag, numRunes := range fwtSch.TagToMaxRunes {
+		_, _ = fmt.Fprintf(os.Stderr, "width for %v is %v\n", tag, numRunes)
 		colBuffs[tag] = make([]rune, numRunes)
 	}
 
@@ -82,6 +85,8 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 				buf = []rune(str)
 			} else {
 				n := copy(buf, []rune(str))
+				// it's possible, in the case of non-printing characters, for there to be more runes than column width. In this
+				// case, truncate to the length of the buffer.
 				for i := 0; i < colWidth - strWidth && n + i < len(buf); i++ {
 					buf[n + i] = ' '
 				}
