@@ -82,7 +82,7 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 				buf = []rune(str)
 			} else {
 				n := copy(buf, []rune(str))
-				for i := 0; i < colWidth - strWidth; i++ {
+				for i := 0; i < colWidth - strWidth && n + i < len(buf); i++ {
 					buf[n + i] = ' '
 				}
 			}
