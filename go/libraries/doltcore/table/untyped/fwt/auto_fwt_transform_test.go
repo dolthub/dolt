@@ -38,6 +38,7 @@ func TestHandleRow(t *testing.T) {
 				testRow("12345", "12345"),
 			),
 		},
+		// This could be a lot better, but it's exactly as broken as the MySQL shell so we're leaving it as is.
 		{
 			name: "embedded newlines",
 			inputRows: rs(
@@ -45,11 +46,10 @@ func TestHandleRow(t *testing.T) {
 				testRow("12345", "12345\n12345"),
 			),
 			expectedRows: rs(
-				testRow("aaaaa\naaaaa", "a    "),
-				testRow("12345", "12345\n12345"),
+				testRow("aaaaa\naaaaa", "a          "),
+				testRow("12345      ", "12345\n12345"),
 			),
 		},
-
 	}
 
 	for _, tt := range tests {
