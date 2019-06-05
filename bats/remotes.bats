@@ -10,6 +10,7 @@ setup() {
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir remotes-$$
+    mkdir remotes-$$/test-org-empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     mkdir dolt-repo-$$
@@ -115,6 +116,15 @@ teardown() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
+}
+
+@test "clone an empty remote" {
+    skip "Cloning an empty remote is busted"
+    run dolt clone localhost:50051/test-org/empty
+    [ "$status" -eq 0 ]
+    cd empty
+    run dolt status
+    [ "$status" -eq 0 ]
 }
 
 @test "clone a non-existant remote" {
