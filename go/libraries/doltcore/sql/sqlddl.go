@@ -38,7 +38,7 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	// Callers should call ParseStrictDDL themselves if they want to verify a DDL statement parses correctly.
 	_, err := sqlparser.ParseStrictDDL(query)
 	if err != nil {
-		return &doltdb.RootValue{}, nil, err
+		return nil, nil, err
 	}
 
 	tableName := ddl.Table.Name.String()
@@ -62,6 +62,77 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	root = root.PutTable(ctx, db, tableName, tbl)
 
 	return root, sch, nil
+}
+
+// ExecuteAlter executes the given create statement and returns the new root value of the database and its
+// accompanying schema.
+func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
+	if ddl.Action != sqlparser.AlterStr {
+		panic("expected alter statement")
+	}
+
+	// Unlike other SQL statements, DDL statements can have an error but still return a statement from Parse().
+	// Callers should call ParseStrictDDL themselves if they want to verify a DDL statement parses correctly.
+	_, err := sqlparser.ParseStrictDDL(query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tableName := ddl.Table.Name.String()
+	if !doltdb.IsValidTableName(tableName) {
+		return errCreate("Invalid table name: '%v'", tableName)
+	}
+
+	if !root.HasTable(ctx, tableName) {
+		return nil, nil, errFmt(UnknownTableErrFmt, tableName)
+	}
+
+	switch ddl.ColumnAction {
+	case sqlparser.AddStr:
+		return ExecuteAddColumn(ctx, db, root, tableName, ddl.TableSpec)
+	default:
+		return nil, nil, errFmt("Unsupported alter table statement: '%v'", nodeToString(ddl))
+	}
+}
+
+func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, schema.Schema, error) {
+	table, _ := root.GetTable(ctx, tableName)
+	sch := table.GetSchema(ctx)
+
+	// TODO: assign random tags, not sequential
+	var maxTag uint64
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		if tag > maxTag {
+			maxTag = tag
+		}
+		return false
+	})
+
+	colDef := spec.Columns[0]
+	col, err := getColumn(colDef, spec.Indexes, maxTag + 1)
+	if err != nil {
+		return nil, nil, err
+	}
+	if col.IsPartOfPK {
+		return nil, nil, errFmt("Adding primary keys is not supported")
+	}
+
+	// TODO: type checking and other error handling
+	collection, err := sch.GetAllCols().Append(col)
+	if err != nil {
+		return nil, nil, err
+	}
+	newSch := schema.SchemaFromCols(collection)
+
+	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), newSch)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, table.GetRowData(ctx))
+	root = root.PutTable(ctx, db, tableName, tbl)
+
+	return root, newSch, nil
 }
 
 func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {

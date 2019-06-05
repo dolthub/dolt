@@ -32,6 +32,7 @@ const (
 	ratingTag
 	uuidTag
 	numEpisodesTag
+	firstUnusedTag // keep at end
 )
 
 const (
@@ -71,6 +72,15 @@ var appearancesTableName = "appearances"
 func createSchema(columns ...schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
 	return schema.SchemaFromCols(colColl)
+}
+
+func addColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
+	columns := sch.GetAllCols()
+	columns, err := columns.Append(col)
+	if err != nil {
+		panic(err)
+	}
+	return schema.SchemaFromCols(columns)
 }
 
 func createPeopleTestSchema() schema.Schema {
