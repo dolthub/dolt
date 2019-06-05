@@ -226,3 +226,58 @@ func TestExecuteCreate(t *testing.T) {
 		})
 	}
 }
+
+func TestExecuteAlter(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectedSchema schema.Schema
+		expectedErr    string
+	}{
+		{
+			name:  "Test alter add column",
+			query: "alter table people add (newColumn varchar(80) not null)",
+			expectedSchema: addColumnToSchema(peopleTestSchema,
+				schema.NewColumn("newColumn", numEpisodesTag + 1, types.StringKind, false, schema.NotNullConstraint{})),
+		},
+		{
+			name:  "Test alter add column nullable",
+			query: "alter table people add (newColumn bigint)",
+			expectedSchema: addColumnToSchema(peopleTestSchema,
+				schema.NewColumn("newColumn", numEpisodesTag + 1, types.IntKind, false)),
+		},
+		{
+			name:  "Test alter add column with optional column keyword",
+			query: "alter table people add column (newColumn varchar(80) not null)",
+			expectedSchema: addColumnToSchema(peopleTestSchema,
+				schema.NewColumn("newColumn", numEpisodesTag + 1, types.StringKind, false, schema.NotNullConstraint{})),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			root, _ := dEnv.WorkingRoot(context.Background())
+
+			sqlStatement, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+
+			s := sqlStatement.(*sqlparser.DDL)
+
+			updatedRoot, sch, err := ExecuteAlter(context.Background(), dEnv.DoltDB, root, s, tt.query)
+
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
+			}
+
+			assert.NotNil(t, updatedRoot)
+			assert.Equal(t, tt.expectedSchema, sch)
+		})
+	}
+}
+
