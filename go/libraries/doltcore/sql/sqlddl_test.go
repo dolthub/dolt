@@ -264,6 +264,11 @@ func TestExecuteAlter(t *testing.T) {
 			expectedErr: "Type mismatch",
 		},
 		{
+			name:  "alter add column with tag conflict",
+			query: "alter table people add (newColumn float default 1.0 comment 'tag:1')",
+			expectedErr: "two different columns with the same tag",
+		},
+		{
 			name:  "alter add column not null without default",
 			query: "alter table people add (newColumn varchar(80) not null comment 'tag:100')",
 			expectedErr: "a default value must be provided",
