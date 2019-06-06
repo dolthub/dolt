@@ -11,6 +11,10 @@ import (
 const gitDoltVersion = 0
 
 func main() {
+	if _, err := exec.LookPath("dolt"); err != nil {
+		die("It looks like Dolt is not installed on your system. Make sure that the `dolt` binary is in your PATH before attempting to run git-dolt commands.")
+	}
+
 	nArgs := len(os.Args)
 
 	if nArgs == 1 {
@@ -66,6 +70,11 @@ func lastSegment(s string) string {
 
 func check(e error) {
 	if e != nil {
-		panic(e)
+		die("error: " + e.Error())
 	}
+}
+
+func die(reason interface{}) {
+	fmt.Println(reason)
+	os.Exit(1)
 }
