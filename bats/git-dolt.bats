@@ -48,10 +48,13 @@ teardown() {
 }
 
 @test "git dolt fails helpfully when dolt is not installed" {
-  DOLT_DIR=`which dolt | xargs dirname`
-  mv ${DOLT_DIR}/dolt ${DOLT_DIR}/_dolt
-  run git dolt
-  mv ${DOLT_DIR}/_dolt ${DOLT_DIR}/dolt
+  mkdir TMP_PATH
+  pushd TMP_PATH
+  which git | xargs ln -sf
+  which git-dolt | xargs ln -sf
+  popd
+  PATH=`pwd`/TMP_PATH run git dolt
+  rm -rf TMP_PATH
   [ "$status" -eq 1 ]
   [[ "$output" =~ "It looks like Dolt is not installed on your system" ]]
 }
