@@ -217,12 +217,12 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 		return errhand.BuildDError(newFieldType + " is not a valid type for this new column.").SetPrintUsage().Build()
 	}
 
-	var defaultVal *types.Value
+	var defaultVal types.Value
 	if val, ok := apr.GetValue(defaultParam); ok {
 		if nomsVal, err := doltcore.StringToValue(val, newFieldKind); err != nil {
 			return errhand.VerboseErrorFromError(err)
 		} else {
-			defaultVal = &nomsVal
+			defaultVal = nomsVal
 		}
 	}
 

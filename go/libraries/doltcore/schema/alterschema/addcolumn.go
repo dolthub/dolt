@@ -20,7 +20,7 @@ const(
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToSchema(ctx context.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal *types.Value) (*doltdb.Table, error) {
+func AddColumnToSchema(ctx context.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
 	tblSch := tbl.GetSchema(ctx)
 
 	var err error
@@ -66,6 +66,8 @@ func AddColumnToSchema(ctx context.Context, dEnv *env.DoltEnv, tbl *doltdb.Table
 	if defaultVal == nil {
 		newTable := doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
 		return newTable, nil
+	} else if defaultVal.Kind() != colKind {
+		return nil, errhand.BuildDError("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[colKind]).Build()
 	}
 
 	me := rowData.Edit()
@@ -73,7 +75,7 @@ func AddColumnToSchema(ctx context.Context, dEnv *env.DoltEnv, tbl *doltdb.Table
 	var updateErr error
 	rowData.Iter(ctx, func(k, v types.Value) (stop bool) {
 		oldRow, _ := tbl.GetRow(ctx, k.(types.Tuple), newSchema)
-		newRow, err := oldRow.SetColVal(tag, *defaultVal, newSchema)
+		newRow, err := oldRow.SetColVal(tag, defaultVal, newSchema)
 		if err != nil {
 			updateErr = err
 			return true
