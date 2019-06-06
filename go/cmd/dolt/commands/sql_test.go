@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"

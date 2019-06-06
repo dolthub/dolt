@@ -2,7 +2,7 @@ package sql
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/xwb1989/sqlparser"
 	"testing"

@@ -3,7 +3,7 @@ package sql
 import (
 	"context"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

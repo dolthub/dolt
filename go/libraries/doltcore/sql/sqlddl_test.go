@@ -3,7 +3,7 @@ package sql
 import (
 	"context"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -22,13 +22,13 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:  "Test create single column schema",
 			query: "create table testTable (id int primary key)",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{})),
 		},
 		{
 			name:  "Test create two column schema",
 			query: "create table testTable (id int primary key, age int)",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
@@ -55,7 +55,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:  "Test types",
 			query: "create table testTable (id int primary key, age int, first varchar, is_married boolean)",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false),
 				schema.NewColumn("first", 2, types.StringKind, false),
@@ -92,7 +92,7 @@ func TestExecuteCreate(t *testing.T) {
 							c25 mediumint unsigned,
 							c26 bigint unsigned,
               c27 uuid)`,
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("c0", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("c1", 1, types.IntKind, false),
 				schema.NewColumn("c2", 2, types.IntKind, false),
@@ -126,7 +126,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:  "Test primary keys",
 			query: "create table testTable (id int, age int, first varchar(80), is_married bool, primary key (id, age))",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first", 2, types.StringKind, false),
@@ -135,7 +135,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:  "Test not null constraints",
 			query: "create table testTable (id int, age int, first varchar(80) not null, is_married bool, primary key (id, age))",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first", 2, types.StringKind, false, schema.NotNullConstraint{}),
@@ -144,7 +144,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:  "Test quoted columns",
 			query: "create table testTable (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("timestamp", 2, types.StringKind, false),
@@ -153,14 +153,14 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:  "Test tag comments",
 			query: "create table testTable (id int primary key comment 'tag:5', age int comment 'tag:10')",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 5, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 10, types.IntKind, false)),
 		},
 		{
 			name:  "Test faulty tag comments",
 			query: "create table testTable (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
@@ -172,7 +172,7 @@ func TestExecuteCreate(t *testing.T) {
   country char(2) NOT NULL default '',
   PRIMARY KEY (ip)
 );`,
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("ip", 0, types.UintKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("country", 1, types.StringKind, false, schema.NotNullConstraint{})),
 		},
@@ -188,7 +188,7 @@ func TestExecuteCreate(t *testing.T) {
   lon float NOT NULL default '0',
   PRIMARY KEY (code)
 );`,
-			expectedSchema: createSchema(
+			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("code", 0, types.StringKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("iso_code_2", 1, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("iso_code_3", 2, types.StringKind, false),
@@ -237,19 +237,19 @@ func TestExecuteAlter(t *testing.T) {
 		{
 			name:  "Test alter add column",
 			query: "alter table people add (newColumn varchar(80) not null)",
-			expectedSchema: addColumnToSchema(peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(peopleTestSchema,
 				schema.NewColumn("newColumn", numEpisodesTag + 1, types.StringKind, false, schema.NotNullConstraint{})),
 		},
 		{
 			name:  "Test alter add column nullable",
 			query: "alter table people add (newColumn bigint)",
-			expectedSchema: addColumnToSchema(peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(peopleTestSchema,
 				schema.NewColumn("newColumn", numEpisodesTag + 1, types.IntKind, false)),
 		},
 		{
 			name:  "Test alter add column with optional column keyword",
 			query: "alter table people add column (newColumn varchar(80) not null)",
-			expectedSchema: addColumnToSchema(peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(peopleTestSchema,
 				schema.NewColumn("newColumn", numEpisodesTag + 1, types.StringKind, false, schema.NotNullConstraint{})),
 		},
 	}
