@@ -5,7 +5,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -347,7 +347,7 @@ func TestExecuteUpdate(t *testing.T) {
 
 				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(peopleTestSchema).Value(ctx).(types.Tuple), peopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
-				opts := cmp.Options{cmp.AllowUnexported(expectedRow), floatComparer}
+				opts := cmp.Options{cmp.AllowUnexported(expectedRow), dtestutils.FloatComparer}
 				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))
 			}
 		})

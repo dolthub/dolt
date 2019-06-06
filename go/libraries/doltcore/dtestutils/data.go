@@ -25,6 +25,7 @@ const (
 	AgeTag
 	IsMarriedTag
 	TitleTag
+	NextTag // leave last
 )
 
 var typedColColl, _ = schema.NewColCollection(

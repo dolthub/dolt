@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
-	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -13,7 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/stretchr/testify/require"
-	"math"
 	"reflect"
 	"testing"
 )
@@ -68,20 +66,6 @@ var episodesTableName = "episodes"
 var appearancesTestSchema = createAppearancesTestSchema()
 var untypedAppearacesSch = untyped.UntypeUnkeySchema(appearancesTestSchema)
 var appearancesTableName = "appearances"
-
-func createSchema(columns ...schema.Column) schema.Schema {
-	colColl, _ := schema.NewColCollection(columns...)
-	return schema.SchemaFromCols(colColl)
-}
-
-func addColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
-	columns := sch.GetAllCols()
-	columns, err := columns.Append(col)
-	if err != nil {
-		panic(err)
-	}
-	return schema.SchemaFromCols(columns)
-}
 
 func createPeopleTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
@@ -216,11 +200,6 @@ func findRowIndex(find row.Row, rows []row.Row) int {
 	}
 	return idx
 }
-
-// Compares two noms Floats for approximate equality
-var floatComparer = cmp.Comparer(func(x, y types.Float) bool {
-	return math.Abs(float64(x)-float64(y)) < .001
-})
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
 func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {

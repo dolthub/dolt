@@ -9,6 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"strings"
@@ -203,35 +204,11 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	tblSch := tbl.GetSchema(context.TODO())
 	newFieldName := apr.Arg(1)
 
-	var defaultVal *string
-	if val, ok := apr.GetValue(defaultParam); ok {
-		defaultVal = &val
-	}
-
 	var tag uint64
 	if val, ok := apr.GetUint(tagParam); ok {
 		tag = val
 	} else {
 		tag = schema.AutoGenerateTag(tblSch)
-	}
-
-	var verr errhand.VerboseError
-
-	cols := tblSch.GetAllCols()
-	cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool) {
-		if currColTag == tag {
-			verr = errhand.BuildDError("A column with the tag %d already exists.", tag).Build()
-			return true
-		} else if currCol.Name == newFieldName {
-			verr = errhand.BuildDError("A column with the name %s already exists.", newFieldName).Build()
-			return true
-		}
-
-		return false
-	})
-
-	if verr != nil {
-		return verr
 	}
 
 	newFieldType := strings.ToLower(apr.Arg(2))
@@ -240,70 +217,29 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 		return errhand.BuildDError(newFieldType + " is not a valid type for this new column.").SetPrintUsage().Build()
 	}
 
-	notNull := apr.Contains(notNullFlag)
-
-	if notNull && defaultVal == nil && tbl.GetRowData(context.TODO()).Len() > 0 {
-		return errhand.BuildDError("When adding a column that may not be null to a table with existing rows, a default value must be provided.").Build()
+	var defaultVal *types.Value
+	if val, ok := apr.GetValue(defaultParam); ok {
+		if nomsVal, err := doltcore.StringToValue(val, newFieldKind); err != nil {
+			return errhand.VerboseErrorFromError(err)
+		} else {
+			defaultVal = &nomsVal
+		}
 	}
 
-	newTable, err := addFieldToSchema(tbl, dEnv, newFieldName, newFieldKind, tag, notNull, defaultVal)
+	nullable := alterschema.Null
+	if apr.Contains(notNullFlag) {
+		nullable = alterschema.NotNull
+	}
+
+	newTable, err := alterschema.AddColumnToSchema(context.TODO(), dEnv, tbl, tag, newFieldName, newFieldKind, nullable, defaultVal)
 	if err != nil {
-		return errhand.BuildDError("failed to add column").AddCause(err).Build()
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTable)
 	return UpdateWorkingWithVErr(dEnv, root)
 }
 
-// need to refactor this so it can be moved into the libraries
-func addFieldToSchema(tbl *doltdb.Table, dEnv *env.DoltEnv, name string, kind types.NomsKind, tag uint64, notNull bool, defaultVal *string) (*doltdb.Table, error) {
-	var col schema.Column
-	if notNull {
-		col = schema.NewColumn(name, tag, kind, false, schema.NotNullConstraint{})
-	} else {
-		col = schema.NewColumn(name, tag, kind, false)
-	}
-
-	sch := tbl.GetSchema(context.TODO())
-	updatedCols, err := sch.GetAllCols().Append(col)
-
-	if err != nil {
-		return nil, err
-	}
-
-	vrw := dEnv.DoltDB.ValueReadWriter()
-	newSchema := schema.SchemaFromCols(updatedCols)
-	newSchemaVal, err := encoding.MarshalAsNomsValue(context.TODO(), vrw, newSchema)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if defaultVal == nil {
-		newTable := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, tbl.GetRowData(context.TODO()))
-		return newTable, nil
-	}
-
-	rowData := tbl.GetRowData(context.TODO())
-	me := rowData.Edit()
-	defVal, _ := doltcore.StringToValue(*defaultVal, kind)
-
-	rowData.Iter(context.TODO(), func(k, v types.Value) (stop bool) {
-		oldRow, _ := tbl.GetRow(context.TODO(), k.(types.Tuple), newSchema)
-		newRow, err := oldRow.SetColVal(tag, defVal, newSchema)
-
-		if err != nil {
-			return true
-		}
-
-		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
-
-		return false
-	})
-
-	updatedTbl := doltdb.NewTable(context.TODO(), vrw, newSchemaVal, me.Map(context.TODO()))
-	return updatedTbl, nil
-}
 
 func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 3 {
