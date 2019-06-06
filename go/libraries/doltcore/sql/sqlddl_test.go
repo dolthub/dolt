@@ -236,21 +236,21 @@ func TestExecuteAlter(t *testing.T) {
 	}{
 		{
 			name:  "Test alter add column",
-			query: "alter table people add (newColumn varchar(80) not null)",
+			query: "alter table people add (newColumn varchar(80) comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(peopleTestSchema,
-				schema.NewColumn("newColumn", numEpisodesTag + 1, types.StringKind, false, schema.NotNullConstraint{})),
+				schema.NewColumn("newColumn", 100, types.StringKind, false)),
 		},
 		{
 			name:  "Test alter add column nullable",
-			query: "alter table people add (newColumn bigint)",
+			query: "alter table people add (newColumn bigint comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(peopleTestSchema,
-				schema.NewColumn("newColumn", numEpisodesTag + 1, types.IntKind, false)),
+				schema.NewColumn("newColumn", 100, types.IntKind, false)),
 		},
 		{
 			name:  "Test alter add column with optional column keyword",
-			query: "alter table people add column (newColumn varchar(80) not null)",
+			query: "alter table people add column (newColumn varchar(80) comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(peopleTestSchema,
-				schema.NewColumn("newColumn", numEpisodesTag + 1, types.StringKind, false, schema.NotNullConstraint{})),
+				schema.NewColumn("newColumn", 100, types.StringKind, false)),
 		},
 	}
 
