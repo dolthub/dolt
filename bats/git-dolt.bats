@@ -47,7 +47,16 @@ teardown() {
   [[ "${lines[0]}" =~ "test-repo" ]] || false
 }
 
+@test "git dolt fails helpfully when dolt is not installed" {
+  DOLT_DIR=`which dolt | xargs dirname`
+  mv ${DOLT_DIR}/dolt ${DOLT_DIR}/_dolt
+  run git dolt
+  mv ${DOLT_DIR}/_dolt ${DOLT_DIR}/dolt
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "It looks like Dolt is not installed on your system" ]]
+}
+
 @test "git dolt prints usage information with no arguments" {
   run git dolt
-  [[ "$output" =~ Usage ]]
+  [[ "$output" =~ Usage ]] || false
 }
