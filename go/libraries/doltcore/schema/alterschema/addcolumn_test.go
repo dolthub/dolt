@@ -18,7 +18,7 @@ import (
 
 const tableName = "people"
 
-func TestAddColumnToSchema(t *testing.T) {
+func TestAddColumnToTable(t *testing.T) {
 	tests := []struct {
 		name           string
 		tag            uint64
@@ -99,7 +99,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			defaultVal: types.String("default"),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.StringKind, false, schema.NotNullConstraint{})),
-			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.String("default")),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.String("default")),
 		},
 		{
 			name:       "int column with default",
@@ -110,7 +110,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			defaultVal: types.Int(42),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false, schema.NotNullConstraint{})),
-			expectedRows:addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
 		},
 		{
 			name:       "uint column with default",
@@ -121,7 +121,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			defaultVal: types.Uint(64),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.UintKind, false, schema.NotNullConstraint{})),
-			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Uint(64)),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Uint(64)),
 		},
 		{
 			name:       "float column with default",
@@ -132,7 +132,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			defaultVal: types.Float(33.33),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.FloatKind, false, schema.NotNullConstraint{})),
-			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Float(33.33)),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Float(33.33)),
 		},
 		{
 			name:       "bool column with default",
@@ -143,7 +143,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			defaultVal: types.Bool(true),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.BoolKind, false, schema.NotNullConstraint{})),
-			expectedRows: addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Bool(true)),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Bool(true)),
 		},
 		{
 			name:       "uuid column with default",
@@ -154,7 +154,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			defaultVal: types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000")),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.UUIDKind, false, schema.NotNullConstraint{})),
-			expectedRows: addColToRows(t,
+			expectedRows: dtestutils.AddColToRows(t,
 				dtestutils.TypedRows, dtestutils.NextTag, types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))),
 		},
 		{
@@ -177,7 +177,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			defaultVal: types.Int(42),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false)),
-			expectedRows:addColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
 		},
 		{
 			name:       "non-nullable with nil default",
@@ -208,7 +208,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			assert.NoError(t, err)
 			tbl, _ := root.GetTable(ctx, tableName)
 
-			updatedTable, err := AddColumnToTable(ctx, dEnv, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal)
+			updatedTable, err := AddColumnToTable(ctx, dEnv.DoltDB, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal)
 			if len(tt.expectedErr) > 0 {
 			  require.Error(t, err)
 			  assert.Contains(t, err.Error(), tt.expectedErr)
@@ -253,23 +253,4 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	}
 
 	return dEnv
-}
-
-// Adds a column to all the rows given and returns it. This method relies on the fact that noms_row.SetColVal doesn't
-// need a full schema, just one that includes the column being set.
-func addColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row.Row {
-	if types.IsNull(val) {
-		return rs
-	}
-
-	colColl, err := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
-	require.NoError(t, err)
-	fakeSch := schema.UnkeyedSchemaFromCols(colColl)
-
-	newRows := make([]row.Row, len(rs))
-	for i, r := range rs {
-		newRows[i], err = r.SetColVal(tag, val, fakeSch)
-		require.NoError(t, err)
-	}
-	return newRows
 }

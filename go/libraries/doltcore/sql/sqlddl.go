@@ -102,7 +102,7 @@ func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootV
 	tag := schema.AutoGenerateTag(sch)
 
 	colDef := spec.Columns[0]
-	col, err := getColumn(colDef, spec.Indexes, tag)
+	col, defaultVal, err := getColumn(colDef, spec.Indexes, tag)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -116,7 +116,7 @@ func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootV
 	}
 
 	// TODO: support default val
-	updatedTable, err := alterschema.AddColumnToTable(ctx, db, table, col.Tag, col.Name, col.Kind, nullable, nil)
+	updatedTable, err := alterschema.AddColumnToTable(ctx, db, table, col.Tag, col.Name, col.Kind, nullable, defaultVal)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -131,7 +131,8 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 	var tag uint64
 	var seenPk bool
 	for i, colDef := range spec.Columns {
-		col, err := getColumn(colDef, spec.Indexes, tag)
+		// TODO: support default value
+		col, _, err := getColumn(colDef, spec.Indexes, tag)
 		if err != nil {
 			return nil, err
 		}
@@ -153,7 +154,15 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 	return schema.SchemaFromCols(colColl), nil
 }
 
-func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDefinition, tag uint64) (schema.Column, error) {
+type FakeResolver struct {
+	TagResolver
+}
+
+func (FakeResolver) ResolveTag(tableName string, columnName string) (uint64, error) {
+	return schema.InvalidTag, errors.New("Fake ResolveTag called")
+}
+
+func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDefinition, tag uint64) (schema.Column, types.Value, error) {
 	columnType := colDef.Type
 
 	// Primary key info can either be specified in the column's type info (for in-line declarations), or in a slice of
@@ -185,6 +194,7 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 		tag = commentTag
 	}
 
+	var colKind types.NomsKind
 	switch columnType.Type {
 
 	// integer-like types
@@ -193,29 +203,29 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 		if columnType.Unsigned {
 			kind = types.UintKind
 		}
-		return schema.NewColumn(colDef.Name.String(), tag, kind, isPkey, constraints...), nil
+		colKind = kind
 
 	// UUID type
 	case UUID:
-		return schema.NewColumn(colDef.Name.String(), tag, types.UUIDKind, isPkey, constraints...), nil
+		colKind = types.UUIDKind
 
 	// string-like types
 	// TODO: enforce length constraints for string types
 	// TODO: support different charsets
 	case TEXT, TINYTEXT, MEDIUMTEXT, LONGTEXT, CHAR, VARCHAR:
-		return schema.NewColumn(colDef.Name.String(), tag, types.StringKind, isPkey, constraints...), nil
+		colKind = types.StringKind
 
 	// blob-like types
 	case BLOB, TINYBLOB, MEDIUMBLOB, LONGBLOB:
-		return schema.NewColumn(colDef.Name.String(), tag, types.BlobKind, isPkey, constraints...), nil
+		colKind = types.BlobKind
 
 	// float-like types
 	case FLOAT_TYPE, DOUBLE, DECIMAL:
-		return schema.NewColumn(colDef.Name.String(), tag, types.FloatKind, isPkey, constraints...), nil
+		colKind = types.FloatKind
 
 	// bool-like types
 	case BIT, BOOLEAN, BOOL:
-		return schema.NewColumn(colDef.Name.String(), tag, types.BoolKind, isPkey, constraints...), nil
+		colKind = types.BoolKind
 
 	// time-like types (not yet supported in noms, but should be)
 	case DATE, TIME, DATETIME, TIMESTAMP, YEAR:
@@ -233,6 +243,48 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 	default:
 		return errColumn("Unrecognized column type %v", columnType.Type)
 	}
+
+	column := schema.NewColumn(colDef.Name.String(), tag, colKind, isPkey, constraints...)
+
+	if colDef.Type.Default == nil {
+		return column, nil, nil
+	}
+
+	// Get the default value. This can be any expression (usually a literal value). We aren't using the simpler semantics
+	// of extractNomsValueFromSQLVal here, that doesn't cover the full range of expressions permitted by SQL (like -1.0,
+	// 2+2, CONCAT("a", "b")).
+	getter, err := getterFor(colDef.Type.Default, nil, NewAliases())
+	if err != nil {
+		return schema.InvalidCol, nil, err
+	}
+
+	if getter.NomsKind != colKind {
+		return errColumn("Type mismatch for default value of column %v: %v", column.Name, nodeToString(colDef.Type.Default))
+	}
+
+	if err = getter.Init(FakeResolver{}); err != nil {
+		return errColumn("Unsupported default expression for column %v: '%v'", column.Name, nodeToString(colDef.Type.Default))
+	}
+
+	var defaultVal types.Value
+	// Extracting the default value this way requires us to be prepared to panic, since we're using a nil row to extract
+	// the value. This should work fine for literal expressions, but might panic otherwise.
+	func() {
+		defer func() {
+			rp := recover()
+			if rp != nil {
+				err = errFmt("Unsupported default expression for column %v: '%v'", column.Name, nodeToString(colDef.Type.Default))
+			}
+		}()
+
+		defaultVal = getter.Get(nil)
+	}()
+
+	if err != nil {
+		return schema.InvalidCol, nil, err
+	}
+
+	return column, defaultVal, nil
 }
 
 // Extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
@@ -260,8 +312,8 @@ func extractTag(columnType sqlparser.ColumnType) uint64 {
 	return schema.InvalidTag
 }
 
-func errColumn(errFmt string, args ...interface{}) (schema.Column, error) {
-	return schema.Column{}, errors.New(fmt.Sprintf(errFmt, args...))
+func errColumn(errFmt string, args ...interface{}) (schema.Column, types.Value, error) {
+	return schema.InvalidCol, nil, errors.New(fmt.Sprintf(errFmt, args...))
 }
 
 func errCreate(errFmt string, args ...interface{}) (*doltdb.RootValue, schema.Schema, error) {

@@ -7,7 +7,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/stretchr/testify/require"
 	"strconv"
+	"testing"
 )
 
 var UUIDS = []uuid.UUID{
@@ -89,4 +91,23 @@ func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
 	}
 
 	return imt, sch
+}
+
+// Adds a column to all the rows given and returns it. This method relies on the fact that noms_row.SetColVal doesn't
+// need a full schema, just one that includes the column being set.
+func AddColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row.Row {
+	if types.IsNull(val) {
+		return rs
+	}
+
+	colColl, err := schema.NewColCollection(schema.NewColumn("unused", tag, val.Kind(), false))
+	require.NoError(t, err)
+	fakeSch := schema.UnkeyedSchemaFromCols(colColl)
+
+	newRows := make([]row.Row, len(rs))
+	for i, r := range rs {
+		newRows[i], err = r.SetColVal(tag, val, fakeSch)
+		require.NoError(t, err)
+	}
+	return newRows
 }
