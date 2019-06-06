@@ -7,6 +7,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
@@ -98,18 +99,10 @@ func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, schema.Schema, error) {
 	table, _ := root.GetTable(ctx, tableName)
 	sch := table.GetSchema(ctx)
-
-	// TODO: assign random tags, not sequential
-	var maxTag uint64
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-		if tag > maxTag {
-			maxTag = tag
-		}
-		return false
-	})
+	tag := schema.AutoGenerateTag(sch)
 
 	colDef := spec.Columns[0]
-	col, err := getColumn(colDef, spec.Indexes, maxTag + 1)
+	col, err := getColumn(colDef, spec.Indexes, tag)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -117,22 +110,19 @@ func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootV
 		return nil, nil, errFmt("Adding primary keys is not supported")
 	}
 
-	// TODO: type checking and other error handling
-	collection, err := sch.GetAllCols().Append(col)
+	nullable := alterschema.NotNull
+	if col.IsNullable() {
+		nullable = alterschema.Null
+	}
+
+	// TODO: support default val
+	updatedTable, err := alterschema.AddColumnToTable(ctx, db, table, col.Tag, col.Name, col.Kind, nullable, nil)
 	if err != nil {
 		return nil, nil, err
 	}
-	newSch := schema.SchemaFromCols(collection)
 
-	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), newSch)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, table.GetRowData(ctx))
-	root = root.PutTable(ctx, db, tableName, tbl)
-
-	return root, newSch, nil
+	root = root.PutTable(ctx, db, tableName, updatedTable)
+	return root, updatedTable.GetSchema(ctx), nil
 }
 
 func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {

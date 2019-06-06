@@ -30,7 +30,6 @@ func TestAddColumnToSchema(t *testing.T) {
 		expectedRows   []row.Row
 		expectedErr    string
 	}{
-		// TODO: use this method in the SQL code
 		{
 			name:       "string column no default",
 			tag:        dtestutils.NextTag,
@@ -209,7 +208,7 @@ func TestAddColumnToSchema(t *testing.T) {
 			assert.NoError(t, err)
 			tbl, _ := root.GetTable(ctx, tableName)
 
-			updatedTable, err := AddColumnToSchema(ctx, dEnv, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal)
+			updatedTable, err := AddColumnToTable(ctx, dEnv, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal)
 			if len(tt.expectedErr) > 0 {
 			  require.Error(t, err)
 			  assert.Contains(t, err.Error(), tt.expectedErr)

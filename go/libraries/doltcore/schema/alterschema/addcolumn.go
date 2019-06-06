@@ -5,7 +5,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 )
@@ -20,7 +19,7 @@ const(
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToSchema(ctx context.Context, dEnv *env.DoltEnv, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
 	tblSch := tbl.GetSchema(ctx)
 
 	var err error
@@ -50,7 +49,7 @@ func AddColumnToSchema(ctx context.Context, dEnv *env.DoltEnv, tbl *doltdb.Table
 		return nil, err
 	}
 
-	vrw := dEnv.DoltDB.ValueReadWriter()
+	vrw := db.ValueReadWriter()
 	newSchema := schema.SchemaFromCols(updatedCols)
 	newSchemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSchema)
 	if err != nil {

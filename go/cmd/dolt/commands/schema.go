@@ -231,7 +231,7 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 		nullable = alterschema.NotNull
 	}
 
-	newTable, err := alterschema.AddColumnToSchema(context.TODO(), dEnv, tbl, tag, newFieldName, newFieldKind, nullable, defaultVal)
+	newTable, err := alterschema.AddColumnToTable(context.TODO(), dEnv.DoltDB, tbl, tag, newFieldName, newFieldKind, nullable, defaultVal)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
