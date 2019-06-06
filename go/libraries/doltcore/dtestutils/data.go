@@ -38,42 +38,54 @@ var typedColColl, _ = schema.NewColCollection(
 
 var TypedSchema = schema.SchemaFromCols(typedColColl)
 var UntypedSchema = untyped.UntypeSchema(TypedSchema)
+var TypedRows []row.Row
+var UntypedRows []row.Row
+
+func init() {
+	for i := 0; i < len(UUIDS); i++ {
+
+		taggedVals := row.TaggedValues{
+			IdTag:        types.UUID(UUIDS[i]),
+			NameTag:      types.String(Names[i]),
+			AgeTag:       types.Uint(Ages[i]),
+			TitleTag:     types.String(Titles[i]),
+			IsMarriedTag: types.Bool(MaritalStatus[i]),
+		}
+
+		marriedStr := "true"
+		if !MaritalStatus[i] {
+			marriedStr = "false"
+		}
+
+		TypedRows = append(TypedRows, row.New(TypedSchema, taggedVals))
+
+		taggedVals = row.TaggedValues{
+			IdTag:        types.String(UUIDS[i].String()),
+			NameTag:      types.String(Names[i]),
+			AgeTag:       types.String(strconv.FormatUint(Ages[i], 10)),
+			TitleTag:     types.String(Titles[i]),
+			IsMarriedTag: types.String(marriedStr),
+		}
+
+		UntypedRows = append(UntypedRows, row.New(UntypedSchema, taggedVals))
+	}
+}
 
 func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
 	sch := TypedSchema
+	rows := TypedRows
 	if !typed {
 		sch = UntypedSchema
+		rows = UntypedRows
 	}
 
 	imt := table.NewInMemTable(sch)
 
-	for i := 0; i < len(UUIDS); i++ {
-		var taggedVals row.TaggedValues
-
-		if typed {
-			taggedVals = row.TaggedValues{
-				IdTag:        types.UUID(UUIDS[i]),
-				NameTag:      types.String(Names[i]),
-				AgeTag:       types.Uint(Ages[i]),
-				TitleTag:     types.String(Titles[i]),
-				IsMarriedTag: types.Bool(MaritalStatus[i]),
-			}
-		} else {
-			marriedStr := "true"
-			if !MaritalStatus[i] {
-				marriedStr = "false"
-			}
-
-			taggedVals = row.TaggedValues{
-				IdTag:        types.String(UUIDS[i].String()),
-				NameTag:      types.String(Names[i]),
-				AgeTag:       types.String(strconv.FormatUint(Ages[i], 10)),
-				TitleTag:     types.String(Titles[i]),
-				IsMarriedTag: types.String(marriedStr),
-			}
+	for _, r := range rows {
+		err := imt.AppendRow(r)
+		if err != nil {
+			panic(err)
 		}
-
-		imt.AppendRow(row.New(sch, taggedVals))
 	}
 
 	return imt, sch
