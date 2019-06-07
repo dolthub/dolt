@@ -27,31 +27,38 @@ func main() {
 
 	if cmd == "link" {
 		remote := os.Args[2]
-		dirname := lastSegment(remote)
-		_, err := exec.Command("dolt", "clone", remote, "--insecure").Output()
-		check(err)
-
-		revision := currentRevision(dirname)
-
-		ptrFile, err := os.Create(fmt.Sprintf("%s.git-dolt", dirname))
-		check(err)
-		defer ptrFile.Close()
-
-		_, err = ptrFile.WriteString(fmt.Sprintf("version %d\nremote %s\nrevision %s\n", gitDoltVersion, remote, revision))
-		check(err)
-
-		giFile, err := os.OpenFile(".gitignore", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-		check(err)
-		defer giFile.Close()
-
-		_, err = giFile.WriteString(fmt.Sprintf("%s\n", dirname))
-		check(err)
-
-		fmt.Printf("\nSuccess!\n\n")
-		fmt.Printf("* Dolt repository cloned to %s at revision %s\n", dirname, revision)
-		fmt.Printf("* Pointer file created at %s.git-dolt\n", dirname)
-		fmt.Printf("* %s added to .gitignore\n\nYou should git commit these results.\n", dirname)
+		link(remote)
+		return
 	}
+
+	die("Unknown command " + cmd)
+}
+
+func link(remote string) {
+	dirname := lastSegment(remote)
+	_, err := exec.Command("dolt", "clone", remote, "--insecure").Output()
+	check(err)
+
+	revision := currentRevision(dirname)
+
+	ptrFile, err := os.Create(fmt.Sprintf("%s.git-dolt", dirname))
+	check(err)
+	defer ptrFile.Close()
+
+	_, err = ptrFile.WriteString(fmt.Sprintf("version %d\nremote %s\nrevision %s\n", gitDoltVersion, remote, revision))
+	check(err)
+
+	giFile, err := os.OpenFile(".gitignore", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	check(err)
+	defer giFile.Close()
+
+	_, err = giFile.WriteString(fmt.Sprintf("%s\n", dirname))
+	check(err)
+
+	fmt.Printf("\nSuccess!\n\n")
+	fmt.Printf("* Dolt repository cloned to %s at revision %s\n", dirname, revision)
+	fmt.Printf("* Pointer file created at %s.git-dolt\n", dirname)
+	fmt.Printf("* %s added to .gitignore\n\nYou should git commit these results.\n", dirname)
 }
 
 var hashRegex = regexp.MustCompile(`[0-9a-v]{32}`)

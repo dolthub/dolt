@@ -59,6 +59,12 @@ teardown() {
   [[ "$output" =~ "It looks like Dolt is not installed on your system" ]]
 }
 
+@test "git dolt errors on unknown commands" {
+  run git dolt nonsense
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "Unknown command" ]] || false
+}
+
 @test "git dolt prints usage information with no arguments" {
   run git dolt
   [[ "$output" =~ Usage ]] || false
