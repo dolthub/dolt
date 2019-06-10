@@ -64,7 +64,6 @@ teardown() {
     [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
     [[ "$output" =~ "primary key (\`pk\`)" ]] || false
     [[ ! "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
-    skip "This panics right now."
     dolt table select test
 }
 
@@ -95,7 +94,6 @@ teardown() {
     [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
     [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
     dolt schema --drop-column test c0
-    skip "This panics right now."
     dolt diff
 }
 
