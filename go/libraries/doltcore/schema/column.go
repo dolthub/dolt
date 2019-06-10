@@ -63,6 +63,16 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 	}
 }
 
+// IsNullable returns whether the column can be set to a null value.
+func (c Column) IsNullable() bool {
+	for _, cnst := range c.Constraints {
+		if cnst.GetConstraintType() == NotNullConstraintType {
+			return false
+		}
+	}
+	return true
+}
+
 // Equals tests equality between two columns.
 func (c Column) Equals(other Column) bool {
 	return c.Name == other.Name &&

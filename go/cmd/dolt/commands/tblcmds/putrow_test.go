@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
@@ -17,10 +17,10 @@ var expectedId = types.UUID(uuid.Must(uuid.Parse("11111111-1111-1111-1111-111111
 var tableName = "people"
 
 var expectedFieldVals = map[uint64]types.Value{
-	dtestutils.IdTag:         expectedId,
-	dtestutils.NameTag:       types.String("Eric Ericson"),
-	dtestutils.AgeTag:        types.Uint(45),
-	dtestutils.IsMarriedTag:  types.Bool(true),
+	dtestutils.IdTag:        expectedId,
+	dtestutils.NameTag:      types.String("Eric Ericson"),
+	dtestutils.AgeTag:       types.Uint(45),
+	dtestutils.IsMarriedTag: types.Bool(true),
 }
 
 func TestPutRow(t *testing.T) {
