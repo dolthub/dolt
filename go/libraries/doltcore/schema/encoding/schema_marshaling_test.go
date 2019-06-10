@@ -2,8 +2,8 @@ package encoding
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"reflect"
 	"testing"
@@ -33,13 +33,12 @@ func createTestSchema() schema.Schema {
 
 func TestNomsMarshalling(t *testing.T) {
 	tSchema := createTestSchema()
-	dbSpec, err := spec.ForDatabase("mem")
+	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nil, nil)
 
 	if err != nil {
 		t.Fatal("Could not create in mem noms db.")
 	}
 
-	db := dbSpec.GetDatabase(context.Background())
 	val, err := MarshalAsNomsValue(context.Background(), db, tSchema)
 
 	if err != nil {

@@ -2,60 +2,72 @@ package commands
 
 import (
 	"context"
+	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"os"
 	"path"
 	"path/filepath"
 	"runtime/debug"
-
-	"github.com/attic-labs/noms/go/datas"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
 const (
-	insecureFlag = "insecure"
-	remoteParam  = "remote"
-	branchParam  = "branch"
+	remoteParam = "remote"
+	branchParam = "branch"
 )
 
 var cloneShortDesc = ""
 var cloneLongDesc = ""
 var cloneSynopsis = []string{
-	"[-remote <remote>] [-branch <branch>] [-insecure] <remote-url> <new-dir>",
+	"[-remote <remote>] [-branch <branch>] <remote-url> <new-dir>",
 }
 
 func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(insecureFlag, "", "Use an unencrypted connection.")
 	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
 	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
+	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
+	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
+	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
 	branch := apr.GetValueOrDefault(branchParam, "")
-	insecure := apr.Contains(insecureFlag)
 	dir, urlStr, verr := parseArgs(apr)
 
+	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.Config, urlStr)
+
+	if err != nil {
+		verr = errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
+	}
+
 	if verr == nil {
-		dEnv, verr = clonedEnv(dir, dEnv.FS)
+		var params map[string]string
+		params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
 
 		if verr == nil {
-			verr = cloneRemote(context.Background(), remoteName, urlStr, branch, insecure, dEnv)
+			dEnv, verr = clonedEnv(dir, dEnv.FS)
 
-			// Make best effort to delete the directory we created.
-			if verr != nil {
-				_ = os.Chdir("../")
-				_ = dEnv.FS.Delete(dir, true)
+			if verr == nil {
+				verr = cloneRemote(context.Background(), remoteName, remoteUrl, branch, params, dEnv)
+
+				// Make best effort to delete the directory we created.
+				if verr != nil {
+					_ = os.Chdir("../")
+					_ = dEnv.FS.Delete(dir, true)
+				}
 			}
 		}
 	}
@@ -91,7 +103,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 }
 
 func clonedEnv(dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
-	exists, _ := fs.Exists(filepath.Join(dir, doltdb.DoltDir))
+	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
 	if exists {
 		return nil, errhand.BuildDError("error: data repository already exists at " + dir).Build()
@@ -119,16 +131,12 @@ func clonedEnv(dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseErr
 	return dEnv, nil
 }
 
-func createRemote(remoteName, remoteUrlIn string, insecure bool, dEnv *env.DoltEnv) (*doltdb.DoltDB, errhand.VerboseError) {
-	remoteUrl, err := getAbsRemoteUrl(dEnv.Config, remoteUrlIn)
-
-	if err != nil {
-		return nil, errhand.BuildDError("error: '%s' is not valid.", remoteUrlIn).Build()
-	}
-
+func createRemote(remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (*doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
-	r := env.NewRemote(remoteName, remoteUrl, insecure)
 
+	r := env.NewRemote(remoteName, remoteUrl, params)
+
+	var err error
 	dEnv.RSLoadErr = nil
 	dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
 
@@ -152,7 +160,7 @@ func createRemote(remoteName, remoteUrlIn string, insecure bool, dEnv *env.DoltE
 	return ddb, nil
 }
 
-func cloneRemote(ctx context.Context, remoteName, remoteUrl, branch string, insecure bool, dEnv *env.DoltEnv) (verr errhand.VerboseError) {
+func cloneRemote(ctx context.Context, remoteName, remoteUrl, branch string, params map[string]string, dEnv *env.DoltEnv) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
@@ -162,7 +170,7 @@ func cloneRemote(ctx context.Context, remoteName, remoteUrl, branch string, inse
 
 	if verr == nil {
 		var srcDB *doltdb.DoltDB
-		srcDB, verr = createRemote(remoteName, remoteUrl, insecure, dEnv)
+		srcDB, verr = createRemote(remoteName, remoteUrl, params, dEnv)
 
 		if verr == nil {
 			var branches []ref.DoltRef

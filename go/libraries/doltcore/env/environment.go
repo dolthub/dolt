@@ -5,10 +5,10 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -43,16 +43,16 @@ type DoltEnv struct {
 	DoltDB      *doltdb.DoltDB
 	DBLoadError error
 
-	FS  filesys.Filesys
-	loc doltdb.Location
-	hdp HomeDirProvider
+	FS     filesys.Filesys
+	urlStr string
+	hdp    HomeDirProvider
 }
 
 // Load loads the DoltEnv for the current directory of the cli
-func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, loc doltdb.Location) *DoltEnv {
+func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, loc)
+	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, urlStr)
 
 	dEnv := &DoltEnv{
 		config,
@@ -62,11 +62,11 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, loc dolt
 		ddb,
 		dbLoadErr,
 		fs,
-		loc,
+		urlStr,
 		hdp,
 	}
 
-	spec.ExternalProtocols[DoltNomsProtocolID] = &DoltProtocol{dEnv}
+	dbfactory.InitializeFactories(dEnv)
 
 	return dEnv
 }
@@ -85,16 +85,16 @@ func (dEnv *DoltEnv) GetDoltDir() string {
 	if !dEnv.HasDoltDataDir() {
 		panic("No dolt dir")
 	}
-	return filepath.Join("./", doltdb.DoltDir)
+	return filepath.Join("./", dbfactory.DoltDir)
 }
 
 func (dEnv *DoltEnv) hasDoltDir(path string) bool {
-	exists, isDir := dEnv.FS.Exists(filepath.Join(path, doltdb.DoltDir))
+	exists, isDir := dEnv.FS.Exists(filepath.Join(path, dbfactory.DoltDir))
 	return exists && isDir
 }
 
 func (dEnv *DoltEnv) hasDoltDataDir(path string) bool {
-	exists, isDir := dEnv.FS.Exists(filepath.Join(path, doltdb.DoltDataDir))
+	exists, isDir := dEnv.FS.Exists(filepath.Join(path, dbfactory.DoltDataDir))
 	return exists && isDir
 }
 
@@ -137,7 +137,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { /
 	}
 
 	if err != nil {
-		dEnv.bestEffortDeleteAll(doltdb.DoltDir)
+		dEnv.bestEffortDeleteAll(dbfactory.DoltDir)
 	}
 
 	return err
@@ -153,26 +153,26 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
 	err = dEnv.configureRepo(doltDir)
 
 	if err != nil {
-		dEnv.bestEffortDeleteAll(doltdb.DoltDir)
+		dEnv.bestEffortDeleteAll(dbfactory.DoltDir)
 		return err
 	}
 
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.loc)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.urlStr)
 
 	return err
 }
 
 func (dEnv *DoltEnv) createDirectories(dir string) (string, error) {
-	doltDir := filepath.Join(dir, doltdb.DoltDir)
+	doltDir := filepath.Join(dir, dbfactory.DoltDir)
 	if dEnv.hasDoltDir(doltDir) {
 		return "", ErrPreexistingDoltDir
 	}
 
-	doltDataDir := filepath.Join(doltDir, doltdb.DataDir)
+	doltDataDir := filepath.Join(doltDir, dbfactory.DataDir)
 	err := dEnv.FS.MkDirs(doltDataDir)
 
 	if err != nil {
-		return "", fmt.Errorf("unable to make directory %s within the working directory", doltdb.DoltDataDir)
+		return "", fmt.Errorf("unable to make directory %s within the working directory", dbfactory.DoltDataDir)
 	}
 
 	return doltDir, nil
@@ -190,7 +190,7 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 
 func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) error {
 	var err error
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.loc)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.urlStr)
 
 	if err != nil {
 		return err

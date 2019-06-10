@@ -30,7 +30,7 @@ teardown() {
 }
 
 @test "add a remote using dolt remote" {
-    run dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    run dolt remote add test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt remote -v 
@@ -42,7 +42,7 @@ teardown() {
 }
 
 @test "rename a remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt remote rename test-remote renamed-remote
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -56,7 +56,7 @@ teardown() {
 }
 
 @test "remove a remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt remote remove test-remote
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -69,7 +69,7 @@ teardown() {
 }
 
 @test "push and pull master branch from a remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote master
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -81,7 +81,7 @@ teardown() {
 }
 
 @test "push and pull an unknown remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push poop master
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unknown remote" ]] || false
@@ -91,7 +91,7 @@ teardown() {
 }
 
 @test "push and pull non-master branch from remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     run dolt push test-remote test-branch
     [ "$status" -eq 0 ]
@@ -103,15 +103,15 @@ teardown() {
 }
 
 @test "clone a remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone localhost:50051/test-org/test-repo --insecure
+    run dolt clone http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    [ "$output" = "cloning localhost:50051/test-org/test-repo" ]
+    [ "$output" = "cloning http://localhost:50051/test-org/test-repo" ]
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -128,7 +128,7 @@ teardown() {
 }
 
 @test "clone a non-existant remote" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     cd "dolt-repo-clones"
     run dolt clone foo/bar
     [ "$status" -eq 1 ]
@@ -139,16 +139,16 @@ teardown() {
 }
 
 @test "clone a different branch than master" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote test-branch
     cd "dolt-repo-clones"
-    run dolt clone -b test-branch localhost:50051/test-org/test-repo --insecure
+    run dolt clone -b test-branch http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    [ "$output" = "cloning localhost:50051/test-org/test-repo" ]
+    [ "$output" = "cloning http://localhost:50051/test-org/test-repo" ]
     cd test-repo
     run dolt branch
     [ "$status" -eq 0 ]
@@ -160,15 +160,15 @@ teardown() {
 }
 
 @test "call a clone's remote something other than origin" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    run dolt clone --remote test-remote localhost:50051/test-org/test-repo --insecure
+    run dolt clone --remote test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    [ "$output" = "cloning localhost:50051/test-org/test-repo" ]
+    [ "$output" = "cloning http://localhost:50051/test-org/test-repo" ]
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -180,7 +180,7 @@ teardown() {
 }
 
 @test "dolt fetch" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     run dolt fetch
     [ "$status" -eq 0 ]
@@ -200,11 +200,11 @@ teardown() {
 } 
 
 @test "dolt merge with origin/master syntax." {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     dolt fetch
     cd "dolt-repo-clones"
-    dolt clone localhost:50051/test-org/test-repo --insecure
+    dolt clone http://localhost:50051/test-org/test-repo
     cd ..
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
@@ -230,10 +230,10 @@ teardown() {
 }
 
 @test "dolt fetch and merge with remotes/origin/master syntax" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone localhost:50051/test-org/test-repo --insecure
+    dolt clone http://localhost:50051/test-org/test-repo
     cd ..
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
@@ -253,10 +253,10 @@ teardown() {
 }
 
 @test "try to push a remote that is behind tip" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone localhost:50051/test-org/test-repo --insecure
+    dolt clone http://localhost:50051/test-org/test-repo
     cd ..
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
@@ -274,10 +274,10 @@ teardown() {
 }
 
 @test "generate a merge with no conflict with a remote branch" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone localhost:50051/test-org/test-repo --insecure
+    dolt clone http://localhost:50051/test-org/test-repo
     cd ..
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
@@ -293,13 +293,13 @@ teardown() {
 }
 
 @test "generate a merge with a conflict with a remote branch" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "created table"
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone localhost:50051/test-org/test-repo --insecure
+    dolt clone http://localhost:50051/test-org/test-repo
     cd ..
     dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
     dolt add test
@@ -323,7 +323,7 @@ teardown() {
 }
 
 @test "clone sets your current branch appropriately" {
-    dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
     dolt add test
     dolt commit -m "test commit"
@@ -332,7 +332,7 @@ teardown() {
     dolt push test-remote aaa
     dolt push test-remote zzz
     cd "dolt-repo-clones"
-    dolt clone localhost:50051/test-org/test-repo --insecure
+    dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
 
     # master hasn't been pushed so expect zzz to be the current branch and the string master should not be present
@@ -344,7 +344,7 @@ teardown() {
     cd ../..
     dolt push test-remote master
     cd "dolt-repo-clones"
-    dolt clone localhost:50051/test-org/test-repo test-repo2 --insecure
+    dolt clone http://localhost:50051/test-org/test-repo test-repo2
     cd test-repo2
 
     # master pushed so it should be the current branch.

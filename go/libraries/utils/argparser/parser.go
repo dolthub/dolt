@@ -11,6 +11,25 @@ const (
 	whitespaceChars      = " \r\n\t"
 )
 
+func ValidatorFromStrList(paramName string, validStrList []string) ValidationFunc {
+	errSuffix := " is not a valid option for '" + paramName + "'. valid options are: " + strings.Join(validStrList, "|")
+	validStrSet := make(map[string]struct{})
+
+	for _, str := range validStrList {
+		validStrSet[strings.ToLower(str)] = struct{}{}
+	}
+
+	return func(s string) error {
+		_, ok := validStrSet[strings.ToLower(s)]
+
+		if !ok {
+			return errors.New(s + errSuffix)
+		}
+
+		return nil
+	}
+}
+
 type ArgParser struct {
 	Supported         []*Option
 	NameOrAbbrevToOpt map[string]*Option
@@ -61,6 +80,11 @@ func (ap *ArgParser) SupportsFlag(name, abbrev, desc string) {
 // Adds support for a new string argument with the description given. See SupportOpt for details on params.
 func (ap *ArgParser) SupportsString(name, abbrev, valDesc, desc string) {
 	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, nil}
+	ap.SupportOption(opt)
+}
+
+func (ap *ArgParser) SupportsValidatedString(name, abbrev, valDesc, desc string, validator ValidationFunc) {
+	opt := &Option{name, abbrev, valDesc, OptionalValue, desc, validator}
 	ap.SupportOption(opt)
 }
 

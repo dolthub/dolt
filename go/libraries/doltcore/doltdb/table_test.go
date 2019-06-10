@@ -2,9 +2,9 @@ package doltdb
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
@@ -48,8 +48,7 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 }
 
 func TestTables(t *testing.T) {
-	dbSPec, _ := spec.ForDatabase("mem")
-	db := dbSPec.GetDatabase(context.Background())
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), nil, nil)
 
 	tSchema := createTestSchema()
 	rowData, rows := createTestRowData(db, tSchema)
