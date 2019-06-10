@@ -266,7 +266,7 @@ func TestExecuteAlter(t *testing.T) {
 		{
 			name:  "alter add column with tag conflict",
 			query: "alter table people add (newColumn float default 1.0 comment 'tag:1')",
-			expectedErr: "two different columns with the same tag",
+			expectedErr: "A column with the tag 1 already exists",
 		},
 		{
 			name:  "alter add column not null without default",
