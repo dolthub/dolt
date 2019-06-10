@@ -104,6 +104,9 @@ func ExecuteDropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.Root
 
 	updatedTable, err := alterschema.DropColumn(ctx, db, table, col.String())
 	if err != nil {
+		if err == schema.ErrColNotFound {
+			return nil, nil, errFmt(UnknownColumnErrFmt, col.String())
+		}
 		return nil, nil, err
 	}
 

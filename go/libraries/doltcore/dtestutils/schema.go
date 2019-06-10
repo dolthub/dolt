@@ -24,14 +24,15 @@ func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	return schema.SchemaFromCols(columns)
 }
 
-func RemoveColumnFromSchema(sch schema.Schema, tag uint64) schema.Schema {
-	cols := sch.GetAllCols().GetColumns()
+func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema {
 	var newCols []schema.Column
-	for _, col := range cols {
-			if col.Tag != tag {
-				newCols = append(newCols, col)
-			}
-	}
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		if tag != tagToRemove {
+			newCols = append(newCols, col)
+		}
+		return false
+	})
+
 	columns, err := schema.NewColCollection(newCols...)
 	if err != nil {
 		panic(err)
