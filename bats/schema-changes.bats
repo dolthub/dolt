@@ -37,14 +37,14 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE test" ]] || false
-    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (pk)" ]] || false
-    [[ "$output" =~ "c0 int comment 'tag:1'" ]] || false
-    [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`c0\` int comment 'tag:1'" ]] || false
+    [[ ! "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     dolt table select test
 }
 
@@ -57,13 +57,13 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE test" ]] || false
-    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (pk)" ]] || false
-    [[ ! "$output" =~ "c1 int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ ! "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     skip "This panics right now."
     dolt table select test
 }
@@ -75,15 +75,15 @@ teardown() {
     dolt schema --add-column test c0 int
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+c0 ]] || false
+    [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
     [[ "$output" =~ "| c0 |" ]] || false
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+c0 ]] || false
+    [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
     [[ ! "$output" =~ "| c0 |" ]] || false
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ \+[[:space:]]+c0 ]] || false
+    [[ ! "$output" =~ \+[[:space:]]+\`c0\` ]] || false
     [[ "$output" =~ "| c0 |" ]] || false
     [[ "$output" =~ ">" ]] || false
     [[ "$output" =~ "<" ]] || false
