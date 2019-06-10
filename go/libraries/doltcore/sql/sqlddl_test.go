@@ -343,6 +343,27 @@ func TestDropColumn(t *testing.T) {
 			expectedSchema: dtestutils.RemoveColumnFromSchema(peopleTestSchema, ratingTag),
 			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(peopleTestSchema, ratingTag), allPeopleRows...),
 		},
+		{
+			name:  "alter drop column with optional column keyword",
+			query: "alter table people drop column rating",
+			expectedSchema: dtestutils.RemoveColumnFromSchema(peopleTestSchema, ratingTag),
+			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(peopleTestSchema, ratingTag), allPeopleRows...),
+		},
+		{
+			name:  "table not found",
+			query: "alter table people drop column id",
+			expectedErr: "Cannot drop column in primary key",
+		},
+		{
+			name:  "table not found",
+			query: "alter table notFound drop column id",
+			expectedErr: "Unknown table: 'notFound'",
+		},
+		{
+			name:  "column not found",
+			query: "alter table people drop column notFound",
+			expectedErr: "Unknown column: 'notFound'",
+		},
 	}
 
 	for _, tt := range tests {

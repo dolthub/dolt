@@ -140,7 +140,6 @@ func (si *schemaImpl) GetPKCols() *ColCollection {
 
 func (si *schemaImpl) String() string {
 	var b strings.Builder
-	b.WriteString("pkCols: [")
 	writeColFn := func(tag uint64, col Column) (stop bool) {
 		b.WriteString("tag: ")
 		b.WriteString(strconv.FormatUint(tag, 10))
@@ -151,9 +150,10 @@ func (si *schemaImpl) String() string {
 		b.WriteString(",\n")
 		return false
 	}
-	si.pkCols.IterInSortedOrder(writeColFn)
+	b.WriteString("pkCols: [")
+	si.pkCols.Iter(writeColFn)
 	b.WriteString("]\nnonPkCols: [")
-	si.nonPKCols.IterInSortedOrder(writeColFn)
+	si.nonPKCols.Iter(writeColFn)
 	b.WriteString("]")
 	return b.String()
 }

@@ -2,6 +2,7 @@ package alterschema
 
 import (
 	"context"
+	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
@@ -15,17 +16,22 @@ func DropColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, c
 
 	tblSch := tbl.GetSchema(ctx)
 	allCols := tblSch.GetAllCols()
-	_, ok := allCols.GetByName(colName)
 
-	if !ok {
+	if col, ok := allCols.GetByName(colName); !ok {
 		return nil, schema.ErrColNotFound
+	} else if col.IsPartOfPK {
+		return nil, errors.New("Cannot drop column in primary key")
 	}
 
-	colMap := allCols.NameToCol
-	delete(colMap, colName)
+	cols := make([]schema.Column, 0)
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		if col.Name != colName {
+			cols = append(cols, col)
+		}
+		return false
+	})
 
-	colColl, err := schema.NewColCollectionFromMap(colMap)
-
+	colColl, err := schema.NewColCollection(cols...)
 	if err != nil {
 		return nil, err
 	}
