@@ -24,6 +24,21 @@ func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	return schema.SchemaFromCols(columns)
 }
 
+func RemoveColumnFromSchema(sch schema.Schema, tag uint64) schema.Schema {
+	cols := sch.GetAllCols().GetColumns()
+	var newCols []schema.Column
+	for _, col := range cols {
+			if col.Tag != tag {
+				newCols = append(newCols, col)
+			}
+	}
+	columns, err := schema.NewColCollection(newCols...)
+	if err != nil {
+		panic(err)
+	}
+	return schema.SchemaFromCols(columns)
+}
+
 // Compares two noms Floats for approximate equality
 var FloatComparer = cmp.Comparer(func(x, y types.Float) bool {
 	return math.Abs(float64(x)-float64(y)) < .001

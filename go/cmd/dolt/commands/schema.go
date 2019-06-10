@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 )
 
@@ -255,7 +254,7 @@ func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	oldColName := apr.Arg(1)
 	newColName := apr.Arg(2)
 
-	newTbl, err := actions.RenameColumnOfSchema(context.Background(), oldColName, newColName, tbl, dEnv.DoltDB)
+	newTbl, err := alterschema.RenameColumnOfSchema(context.Background(), dEnv.DoltDB, tbl, oldColName, newColName)
 	if err != nil {
 		return errToVerboseErr(oldColName, newColName, err)
 	}
@@ -291,7 +290,7 @@ func removeColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	tbl, _ := root.GetTable(context.TODO(), tblName)
 	colName := apr.Arg(1)
 
-	newTbl, err := actions.RemoveColumnFromTable(context.Background(), colName, tbl, dEnv.DoltDB)
+	newTbl, err := alterschema.DropColumn(context.Background(), dEnv.DoltDB, tbl, colName)
 
 	if err != nil {
 		return errToVerboseErr(colName, "", err)

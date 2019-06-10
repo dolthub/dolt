@@ -229,7 +229,7 @@ func TestExecuteCreate(t *testing.T) {
 	}
 }
 
-func TestExecuteAlter(t *testing.T) {
+func TestAddColumn(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
@@ -321,6 +321,62 @@ func TestExecuteAlter(t *testing.T) {
 			var foundRows []row.Row
 			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
 				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
+				return false
+			})
+
+			assert.Equal(t, tt.expectedRows, foundRows)
+		})
+	}
+}
+
+func TestDropColumn(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectedSchema schema.Schema
+		expectedRows   []row.Row
+		expectedErr    string
+	}{
+		{
+			name:  "alter drop column",
+			query: "alter table people drop rating",
+			expectedSchema: dtestutils.RemoveColumnFromSchema(peopleTestSchema, ratingTag),
+			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(peopleTestSchema, ratingTag), allPeopleRows...),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			ctx := context.Background()
+			root, _ := dEnv.WorkingRoot(ctx)
+
+			sqlStatement, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+
+			s := sqlStatement.(*sqlparser.DDL)
+
+			updatedRoot, sch, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
+
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
+			}
+
+			require.NotNil(t, updatedRoot)
+			assert.Equal(t, tt.expectedSchema, sch)
+
+			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
+			require.True(t, ok)
+
+			rowData := updatedTable.GetRowData(ctx)
+			var foundRows []row.Row
+			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
+				foundRows = append(foundRows, row.FromNoms(updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
 				return false
 			})
 
