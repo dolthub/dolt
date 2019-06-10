@@ -93,8 +93,8 @@ func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
 	return imt, sch
 }
 
-// Adds a column to all the rows given and returns it. This method relies on the fact that noms_row.SetColVal doesn't
-// need a full schema, just one that includes the column being set.
+// AddColToRows adds a column to all the rows given and returns it. This method relies on the fact that
+// noms_row.SetColVal doesn't need a full schema, just one that includes the column being set.
 func AddColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row.Row {
 	if types.IsNull(val) {
 		return rs

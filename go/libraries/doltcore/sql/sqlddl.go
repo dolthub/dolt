@@ -154,11 +154,11 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 	return schema.SchemaFromCols(colColl), nil
 }
 
-type FakeResolver struct {
+type fakeResolver struct {
 	TagResolver
 }
 
-func (FakeResolver) ResolveTag(tableName string, columnName string) (uint64, error) {
+func (fakeResolver) ResolveTag(tableName string, columnName string) (uint64, error) {
 	return schema.InvalidTag, errors.New("Fake ResolveTag called")
 }
 
@@ -262,7 +262,7 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 		return errColumn("Type mismatch for default value of column %v: %v", column.Name, nodeToString(colDef.Type.Default))
 	}
 
-	if err = getter.Init(FakeResolver{}); err != nil {
+	if err = getter.Init(fakeResolver{}); err != nil {
 		return errColumn("Unsupported default expression for column %v: '%v'", column.Name, nodeToString(colDef.Type.Default))
 	}
 
