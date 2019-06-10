@@ -6,7 +6,6 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/stretchr/testify/assert"
-	"reflect"
 	"testing"
 )
 
@@ -23,6 +22,7 @@ const (
 	ageColTag       = 4
 	titleColTag     = 40
 	reservedColTag  = 50
+	unusedTag       = 100
 )
 
 var lnVal = types.String("astley")
@@ -66,17 +66,133 @@ func TestItrRowCols(t *testing.T) {
 		return false
 	})
 
-	matchesExpectation := reflect.DeepEqual(itrVals, TaggedValues{
+	assert.Equal(t, TaggedValues{
 		lnColTag:    lnVal,
 		fnColTag:    fnVal,
 		ageColTag:   ageVal,
 		addrColTag:  addrVal,
 		titleColTag: titleVal,
+	}, itrVals)
+}
+
+func TestFromNoms(t *testing.T) {
+	// New() will faithfully return null values in the row, but such columns won't ever be set when loaded from Noms.
+	// So we use a row here with no null values set to avoid this inconsistency.
+	expectedRow := New(sch, TaggedValues{
+		fnColTag:   fnVal,
+		lnColTag:   lnVal,
+		addrColTag: addrVal,
+		ageColTag:  ageVal,
 	})
 
-	if !matchesExpectation {
-		t.Error("Unexpected iteration results")
-	}
+	t.Run("all values specified", func(t *testing.T) {
+		keys := types.NewTuple(
+			types.Uint(fnColTag), fnVal,
+			types.Uint(lnColTag), lnVal,
+		)
+		vals := types.NewTuple(
+			types.Uint(addrColTag), addrVal,
+			types.Uint(ageColTag), ageVal,
+			types.Uint(titleColTag), titleVal,
+		)
+
+		r := FromNoms(sch, keys, vals)
+		assert.Equal(t, expectedRow, r)
+	})
+
+	t.Run("only key", func(t *testing.T) {
+		keys := types.NewTuple(
+			types.Uint(fnColTag), fnVal,
+			types.Uint(lnColTag), lnVal,
+		)
+		vals := types.NewTuple()
+
+		expectedRow := New(sch, TaggedValues{
+			fnColTag:   fnVal,
+			lnColTag:   lnVal,
+		})
+		r := FromNoms(sch, keys, vals)
+		assert.Equal(t, expectedRow, r)
+	})
+
+	t.Run("additional tag not in schema is silently dropped", func(t *testing.T) {
+		keys := types.NewTuple(
+			types.Uint(fnColTag), fnVal,
+			types.Uint(lnColTag), lnVal,
+		)
+		vals := types.NewTuple(
+			types.Uint(addrColTag), addrVal,
+			types.Uint(ageColTag), ageVal,
+			types.Uint(titleColTag), titleVal,
+			types.Uint(unusedTag), fnVal,
+		)
+
+		r := FromNoms(sch, keys, vals)
+		assert.Equal(t, expectedRow, r)
+	})
+
+	t.Run("bad type", func(t *testing.T) {
+		keys := types.NewTuple(
+			types.Uint(fnColTag), fnVal,
+			types.Uint(lnColTag), lnVal,
+		)
+		vals := types.NewTuple(
+			types.Uint(addrColTag), addrVal,
+			types.Uint(ageColTag), fnVal,
+		)
+
+		assert.Panics(t, func() {
+			FromNoms(sch, keys, vals)
+		})
+	})
+
+	t.Run("key col set in vals", func(t *testing.T) {
+		keys := types.NewTuple(
+			types.Uint(fnColTag), fnVal,
+			types.Uint(lnColTag), lnVal,
+		)
+		vals := types.NewTuple(
+			types.Uint(addrColTag), addrVal,
+			types.Uint(fnColTag), fnVal,
+		)
+
+		assert.Panics(t, func() {
+			FromNoms(sch, keys, vals)
+		})
+	})
+
+	t.Run("unknown tag in key", func(t *testing.T) {
+		keys := types.NewTuple(
+			types.Uint(fnColTag), fnVal,
+			types.Uint(lnColTag), lnVal,
+			types.Uint(unusedTag), fnVal,
+		)
+		vals := types.NewTuple(
+			types.Uint(addrColTag), addrVal,
+			types.Uint(ageColTag), ageVal,
+			types.Uint(titleColTag), titleVal,
+		)
+
+		assert.Panics(t, func() {
+			FromNoms(sch, keys, vals)
+		})
+	})
+
+	t.Run("value tag in key", func(t *testing.T) {
+		keys := types.NewTuple(
+			types.Uint(fnColTag), fnVal,
+			types.Uint(lnColTag), lnVal,
+			types.Uint(ageColTag), ageVal,
+		)
+		vals := types.NewTuple(
+			types.Uint(addrColTag), addrVal,
+			types.Uint(titleColTag), titleVal,
+		)
+
+		assert.Panics(t, func() {
+			FromNoms(sch, keys, vals)
+		})
+	})
 }
 
 func TestSetColVal(t *testing.T) {
