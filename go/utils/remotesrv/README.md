@@ -35,8 +35,8 @@ In order to point the dolt cli to use this server you will need to add a remote 
 
 #### add remote
 
-    dolt remote add <remote> localhost:<PORT>/<ORG>/<REPO> --insecure
+    dolt remote add <remote> http://localhost:<PORT>/<ORG>/<REPO>
    
 #### clone
 
-    dolt clone localhost:<PORT>/<ORG>/<REPO> --insecure
+    dolt clone http://localhost:<PORT>/<ORG>/<REPO>

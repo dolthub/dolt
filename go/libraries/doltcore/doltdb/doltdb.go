@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/attic-labs/noms/go/chunks"
+	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types/edits"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"path/filepath"
 	"strings"
 
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
@@ -30,21 +30,11 @@ const (
 	CommitStructName = "Commit"
 )
 
-// Location represents a location where a DoltDB database lives.
-type Location string
-
-const (
-	// InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
-	InMemDoltDB = Location("mem")
-
-	DoltDir = ".dolt"
-	DataDir = "noms"
-)
-
-var DoltDataDir = filepath.Join(DoltDir, DataDir)
-
 // LocalDirDoltDB stores the db in the current directory
-var LocalDirDoltDB = Location("nbs:" + DoltDataDir)
+var LocalDirDoltDB = "file://./"
+
+// InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
+var InMemDoltDB = "mem://"
 
 // DoltDB wraps access to the underlying noms database and hides some of the details of the underlying storage.
 // Additionally the noms codebase uses panics in a way that is non idiomatic and I've opted to recover and return
@@ -63,9 +53,13 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
-func LoadDoltDB(ctx context.Context, loc Location) (*DoltDB, error) {
-	if loc == LocalDirDoltDB {
-		exists, isDir := filesys.LocalFS.Exists(DoltDataDir)
+func LoadDoltDB(ctx context.Context, urlStr string) (*DoltDB, error) {
+	return LoadDoltDBWithParams(ctx, urlStr, nil)
+}
+
+func LoadDoltDBWithParams(ctx context.Context, urlStr string, params map[string]string) (*DoltDB, error) {
+	if urlStr == LocalDirDoltDB {
+		exists, isDir := filesys.LocalFS.Exists(dbfactory.DoltDataDir)
 
 		if !exists {
 			return nil, errors.New("missing dolt data directory")
@@ -74,29 +68,9 @@ func LoadDoltDB(ctx context.Context, loc Location) (*DoltDB, error) {
 		}
 	}
 
-	dbSpec, _ := spec.ForDatabase(string(loc))
-
-	// There is the possibility of this panicking, but have decided specifically not to recover (as is normally done in
-	// this codebase. For failure to occur getting a database for the current directory, or an in memory database
-	// something would have to be drastically wrong.
-
-	var db datas.Database
-	err := pantoerr.PanicToError("failed to get database", func() error {
-		db = dbSpec.GetDatabase(ctx)
-		return nil
-	})
+	db, err := dbfactory.CreateDB(ctx, urlStr, params)
 
 	if err != nil {
-		panicObj := err.(*pantoerr.RecoveredPanic).PanicCause
-
-		if dbSpec.Protocol == "nbs" || dbSpec.Protocol == "mem" {
-			panic(panicObj)
-		}
-
-		if v, ok := panicObj.(error); ok {
-			return nil, v
-		}
-
 		return nil, err
 	}
 

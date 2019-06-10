@@ -62,6 +62,18 @@ func (res *ArgParseResults) GetValue(name string) (string, bool) {
 	return val, ok
 }
 
+func (res *ArgParseResults) GetValues(names ...string) map[string]string {
+	vals := make(map[string]string)
+
+	for _, name := range names {
+		if val, ok := res.options[name]; ok {
+			vals[name] = val
+		}
+	}
+
+	return vals
+}
+
 func (res *ArgParseResults) MustGetValue(name string) string {
 	val, ok := res.options[name]
 

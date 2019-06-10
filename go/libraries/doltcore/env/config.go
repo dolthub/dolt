@@ -2,10 +2,10 @@ package env
 
 import (
 	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"path/filepath"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
@@ -20,9 +20,6 @@ const (
 
 	// should be able to have remote specific creds?
 	UserCreds = "user.creds"
-
-	// should be per remote?
-	GrpcInsecure = "grpc.insecure"
 
 	DoltEditor = "core.editor"
 
@@ -111,11 +108,11 @@ func (dcc *DoltCliConfig) CreateLocalConfig(vals map[string]string) error {
 }
 
 func (dcc *DoltCliConfig) createLocalConfigAt(dir string, vals map[string]string) error {
-	doltDir := filepath.Join(dir, doltdb.DoltDir)
+	doltDir := filepath.Join(dir, dbfactory.DoltDir)
 	if exists, isDir := dcc.fs.Exists(doltDir); !exists {
-		return errors.New(doltdb.DoltDir + " directory not found. Is the current directory a repository directory?")
+		return errors.New(dbfactory.DoltDir + " directory not found. Is the current directory a repository directory?")
 	} else if !isDir {
-		return errors.New("A file exists with the name \"" + doltdb.DoltDir + "\". This is not a valid file within a data repository directory.")
+		return errors.New("A file exists with the name \"" + dbfactory.DoltDir + "\". This is not a valid file within a data repository directory.")
 	}
 
 	path := filepath.Join(dir, getLocalConfigPath())

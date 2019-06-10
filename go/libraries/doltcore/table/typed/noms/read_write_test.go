@@ -2,9 +2,9 @@ package noms
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
@@ -64,8 +64,7 @@ func createRows(onlyUpdated, updatedAge bool) []row.Row {
 }
 
 func TestReadWrite(t *testing.T) {
-	dbSPec, _ := spec.ForDatabase("mem")
-	db := dbSPec.GetDatabase(context.Background())
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), nil, nil)
 
 	rows := createRows(false, false)
 

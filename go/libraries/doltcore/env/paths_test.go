@@ -1,6 +1,7 @@
 package env
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"path/filepath"
 	"testing"
@@ -8,7 +9,7 @@ import (
 
 func TestGetGlobalCfgPath(t *testing.T) {
 	homeDir := "/user/bheni"
-	expected := filepath.Join(homeDir, doltdb.DoltDir, globalConfig)
+	expected := filepath.Join(homeDir, dbfactory.DoltDir, globalConfig)
 	actual, _ := getGlobalCfgPath(func() (string, error) {
 		return homeDir, nil
 	})

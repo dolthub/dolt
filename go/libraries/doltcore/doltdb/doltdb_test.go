@@ -85,7 +85,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	}
 
 	contents := []byte("not a directory")
-	ioutil.WriteFile(filepath.Join(testDir, DoltDataDir), contents, 0644)
+	ioutil.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
 
 	ddb, err := LoadDoltDB(context.Background(), LocalDirDoltDB)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")
@@ -104,7 +104,7 @@ func TestLDNoms(t *testing.T) {
 
 	// Create an empty repo in a temp dir on the filesys
 	{
-		err := filesys.LocalFS.MkDirs(filepath.Join(testDir, DoltDataDir))
+		err := filesys.LocalFS.MkDirs(filepath.Join(testDir, dbfactory.DoltDataDir))
 
 		if err != nil {
 			t.Fatal("Failed to create noms directory")

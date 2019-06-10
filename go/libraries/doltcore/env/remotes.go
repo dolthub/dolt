@@ -8,21 +8,31 @@ import (
 var NoRemote = Remote{}
 
 type Remote struct {
-	Name       string   `json:"name"`
-	Url        string   `json:"url"`
-	Insecure   *bool    `json:"insecure"`
-	FetchSpecs []string `json:"fetch_specs"`
+	Name       string            `json:"name"`
+	Url        string            `json:"url"`
+	FetchSpecs []string          `json:"fetch_specs"`
+	Params     map[string]string `json:"params"`
 }
 
-func NewRemote(name, url string, insecure bool) Remote {
-	return Remote{name, url, &insecure, []string{"refs/heads/*:refs/remotes/" + name + "/*"}}
+func NewRemote(name, url string, params map[string]string) Remote {
+	return Remote{name, url, []string{"refs/heads/*:refs/remotes/" + name + "/*"}, params}
 }
 
-func IsInsecure(r Remote) bool {
-	return r.Insecure != nil && *r.Insecure
+func (r *Remote) GetParam(pName string) (string, bool) {
+	val, ok := r.Params[pName]
+	return val, ok
+}
+
+func (r *Remote) GetParamOrDefault(pName, defVal string) string {
+	val, ok := r.Params[pName]
+
+	if !ok {
+		return defVal
+	}
+
+	return val
 }
 
 func (r *Remote) GetRemoteDB(ctx context.Context) (*doltdb.DoltDB, error) {
-	remoteLocStr := DoltNomsProtocolID + ":" + r.Name
-	return doltdb.LoadDoltDB(ctx, doltdb.Location(remoteLocStr))
+	return doltdb.LoadDoltDBWithParams(ctx, r.Url, r.Params)
 }

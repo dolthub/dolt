@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/attic-labs/noms/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
@@ -25,7 +26,7 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 	initialFiles := map[string][]byte{}
 
 	if isInitialized {
-		doltDir := filepath.Join(workingDir, doltdb.DoltDir)
+		doltDir := filepath.Join(workingDir, dbfactory.DoltDir)
 		initialDirs = append(initialDirs, doltDir)
 
 		hashStr := hash.Hash{}.String()
