@@ -24,6 +24,8 @@ func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	return schema.SchemaFromCols(columns)
 }
 
+// RemoveColumnFromSchema returns a new schema with the given tag missing, but otherwise identical. At least one
+// primary column must remain.
 func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema {
 	var newCols []schema.Column
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
