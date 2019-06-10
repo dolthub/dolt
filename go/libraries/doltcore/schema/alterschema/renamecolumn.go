@@ -1,4 +1,4 @@
-package actions
+package alterschema
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 )
 
 // RenameColumnOfSchema takes a table and renames a column from oldName to newName
-func RenameColumnOfSchema(ctx context.Context, oldName string, newName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
+func RenameColumnOfSchema(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, oldName, newName string) (*doltdb.Table, error) {
 	if newName == oldName {
 		return tbl, nil
 	} else if tbl == nil || doltDB == nil {
@@ -54,39 +54,3 @@ func RenameColumnOfSchema(ctx context.Context, oldName string, newName string, t
 	return newTable, nil
 }
 
-// RemoveColumnFromTable takes a table and removes a column
-func RemoveColumnFromTable(ctx context.Context, colName string, tbl *doltdb.Table, doltDB *doltdb.DoltDB) (*doltdb.Table, error) {
-	if tbl == nil || doltDB == nil {
-		panic("invalid parameters")
-	}
-
-	tblSch := tbl.GetSchema(ctx)
-	allCols := tblSch.GetAllCols()
-	_, ok := allCols.GetByName(colName)
-
-	if !ok {
-		return nil, schema.ErrColNotFound
-	}
-
-	colMap := allCols.NameToCol
-	delete(colMap, colName)
-
-	colColl, err := schema.NewColCollectionFromMap(colMap)
-
-	if err != nil {
-		return nil, err
-	}
-
-	newSch := schema.SchemaFromCols(colColl)
-
-	vrw := doltDB.ValueReadWriter()
-	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData(ctx))
-
-	return newTable, nil
-}

@@ -91,11 +91,27 @@ func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 	switch ddl.ColumnAction {
 	case sqlparser.AddStr:
 		return ExecuteAddColumn(ctx, db, root, tableName, ddl.TableSpec)
+	case sqlparser.DropStr:
+		return ExecuteDropColumn(ctx, db, root, tableName, ddl.Column)
 	default:
 		return nil, nil, errFmt("Unsupported alter table statement: '%v'", nodeToString(ddl))
 	}
 }
 
+// Drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.
+func ExecuteDropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, col sqlparser.ColIdent) (*doltdb.RootValue, schema.Schema, error) {
+	table, _ := root.GetTable(ctx, tableName)
+
+	updatedTable, err := alterschema.DropColumn(ctx, db, table, col.String())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root = root.PutTable(ctx, db, tableName, updatedTable)
+	return root, updatedTable.GetSchema(ctx), nil
+}
+
+// Adds the column given to the table named. Returns the new root value and new schema, or an error if one occurs.
 func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, schema.Schema, error) {
 	table, _ := root.GetTable(ctx, tableName)
 	sch := table.GetSchema(ctx)
@@ -115,7 +131,6 @@ func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootV
 		nullable = alterschema.Null
 	}
 
-	// TODO: support default val
 	updatedTable, err := alterschema.AddColumnToTable(ctx, db, table, col.Tag, col.Name, col.Kind, nullable, defaultVal)
 	if err != nil {
 		return nil, nil, err
@@ -154,6 +169,8 @@ func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 	return schema.SchemaFromCols(colColl), nil
 }
 
+// fakeResolver satisfies the TagResolver interface to let us fetch a value from a RowValGetter, without needing an
+// actual row. This only works for literal values.
 type fakeResolver struct {
 	TagResolver
 }
@@ -162,6 +179,8 @@ func (fakeResolver) ResolveTag(tableName string, columnName string) (uint64, err
 	return schema.InvalidTag, errors.New("Fake ResolveTag called")
 }
 
+// getColumn returns the column given by the definition, indexes, and tag given, as well as its default value if
+// specified by the definition. The tag may be overridden if the column definition includes a tag already.
 func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDefinition, tag uint64) (schema.Column, types.Value, error) {
 	columnType := colDef.Type
 
@@ -259,7 +278,7 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 	}
 
 	if getter.NomsKind != colKind {
-		return errColumn("Type mismatch for default value of column %v: %v", column.Name, nodeToString(colDef.Type.Default))
+		return errColumn("Type mismatch for default value of column %v: '%v'", column.Name, nodeToString(colDef.Type.Default))
 	}
 
 	if err = getter.Init(fakeResolver{}); err != nil {

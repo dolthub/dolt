@@ -111,3 +111,19 @@ func AddColToRows(t *testing.T, rs []row.Row, tag uint64, val types.Value) []row
 	}
 	return newRows
 }
+
+// Coerces the rows given into the schema given. Only possible if the types are equivalent.
+func ConvertToSchema(sch schema.Schema, rs ...row.Row) []row.Row {
+	newRows := make([]row.Row, len(rs))
+	for i, r := range rs {
+		taggedVals := make(row.TaggedValues)
+		r.IterCols(func(tag uint64, val types.Value) (stop bool) {
+			if _, ok := sch.GetAllCols().GetByTag(tag); ok {
+				taggedVals[tag] = val
+			}
+			return false
+		})
+		newRows[i] = row.New(sch, taggedVals)
+	}
+	return newRows
+}
