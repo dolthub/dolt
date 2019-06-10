@@ -209,13 +209,13 @@ teardown() {
     run bash -c "dolt schema"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE test" ]] || false
-    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "c1 int comment 'tag:1'" ]] || false
-    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (pk)" ]] || false
+    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
 }
 
 @test "create a table with sql with multiple primary keys" {
@@ -225,14 +225,14 @@ teardown() {
     run bash -c "dolt schema"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE test" ]] || false
-    [[ "$output" =~ "pk1 int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "pk2 int not null comment 'tag:1'" ]] || false
-    [[ "$output" =~ "c1 int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "c2 int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "c3 int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "c4 int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "c5 int comment 'tag:6'" ]] || false
-    [[ "$output" =~ "primary key (pk1,pk2)" ]] || false
+    [[ "$output" =~ "\`pk1\` int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "\`pk2\` int not null comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c1\` int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c2\` int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c3\` int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c4\` int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "\`c5\` int comment 'tag:6'" ]] || false
+    [[ "$output" =~ "primary key (\`pk1\`,\`pk2\`)" ]] || false
 }
 
 @test "create a table using sql with not null constraint" {
@@ -242,13 +242,13 @@ teardown() {
     run dolt schema test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE test" ]] || false
-    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "c1 int comment 'tag:1'" ]] || false
-    [[ "$output" =~ "c2 int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "c3 int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "c4 int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "c5 int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (pk)" ]] || false
+    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
+    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
 }
 
 @test "create a table using sql with a float" {
@@ -258,9 +258,9 @@ teardown() {
     run dolt schema test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE test " ]] || false
-    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "c1 float comment 'tag:1'" ]] || false
-    [[ "$output" =~ "primary key (pk)" ]] || false
+    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` float comment 'tag:1'" ]] || false
+    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
 }
 
    
@@ -271,9 +271,9 @@ teardown() {
     run dolt schema test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE test" ]] || false
-    [[ "$output" =~ "pk int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "c1 varchar comment 'tag:1'" ]] || false
-    [[ "$output" =~ "primary key (pk)" ]] || false
+    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` varchar comment 'tag:1'" ]] || false
+    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
 }
 
 
