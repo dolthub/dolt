@@ -1,17 +1,14 @@
 package sql
 
 import (
-	"context"
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/stretchr/testify/require"
 	"reflect"
 	"testing"
 )
@@ -270,29 +267,9 @@ func newResultSetRow(colVals ...types.Value) row.Row {
 	return row.New(sch, taggedVals)
 }
 
-func createTestTable(dEnv *env.DoltEnv, t *testing.T, tableName string, sch schema.Schema, rs ...row.Row) {
-	imt := table.NewInMemTable(sch)
-
-	for _, r := range rs {
-		imt.AppendRow(r)
-	}
-
-	rd := table.NewInMemTableReader(imt)
-	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
-
-	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
-	rd.Close(context.Background())
-	wr.Close(context.Background())
-
-	require.Nil(t, err, "Failed to seed initial data")
-
-	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
-	require.Nil(t, err, "Unable to put initial value of table in in mem noms db")
-}
-
 // Creates a test database with the test data set in it
 func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	createTestTable(dEnv, t, peopleTableName, peopleTestSchema, allPeopleRows...)
-	createTestTable(dEnv, t, episodesTableName, episodesTestSchema, allEpsRows...)
-	createTestTable(dEnv, t, appearancesTableName, appearancesTestSchema, allAppsRows...)
+	dtestutils.CreateTestTable(t, dEnv, peopleTableName, peopleTestSchema, allPeopleRows)
+	dtestutils.CreateTestTable(t, dEnv, episodesTableName, episodesTestSchema, allEpsRows)
+	dtestutils.CreateTestTable(t, dEnv, appearancesTableName, appearancesTestSchema, allAppsRows)
 }

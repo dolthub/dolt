@@ -1,10 +1,17 @@
 package dtestutils
 
 import (
+	"context"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/stretchr/testify/require"
 	"math"
+	"testing"
 )
 
 // CreateSchema returns a schema from the columns given, panicking on any errors.
@@ -46,4 +53,25 @@ func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema
 var FloatComparer = cmp.Comparer(func(x, y types.Float) bool {
 	return math.Abs(float64(x)-float64(y)) < .001
 })
+
+// CreateTestTable creates a new test table with the name, schema, and rows given.
+func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch schema.Schema, rs ...row.Row) {
+	imt := table.NewInMemTable(sch)
+
+	for _, r := range rs {
+		imt.AppendRow(r)
+	}
+
+	rd := table.NewInMemTableReader(imt)
+	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
+
+	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
+	rd.Close(context.Background())
+	wr.Close(context.Background())
+
+	require.Nil(t, err, "Failed to seed initial data")
+
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
+	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
+}
 
