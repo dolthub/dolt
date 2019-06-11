@@ -93,9 +93,17 @@ func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 		return ExecuteAddColumn(ctx, db, root, tableName, ddl.TableSpec)
 	case sqlparser.DropStr:
 		return ExecuteDropColumn(ctx, db, root, tableName, ddl.Column)
+	case sqlparser.RenameStr:
+		return ExecuteRenameColumn(ctx, db, root, tableName, ddl.Column, ddl.ToColumn)
 	default:
 		return nil, nil, errFmt("Unsupported alter table statement: '%v'", nodeToString(ddl))
 	}
+}
+
+// ExecuteRenameColumn renames the column named. Returns the new root value and new schema, or an error if one occurs.
+func ExecuteRenameColumn(ctx context.Context, db *doltdb.DoltDB, value *doltdb.RootValue, tableName string, fromCol sqlparser.ColIdent, toCol sqlparser.ColIdent) (*doltdb.RootValue, schema.Schema, error) {
+
+	return nil, nil, nil
 }
 
 // Drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.

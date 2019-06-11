@@ -46,19 +46,6 @@ type ColCollection struct {
 	LowerNameToCol map[string]Column
 }
 
-// NewColCollectionFromMap creates a column collection from a map.  The keys are ignored and the columns are extracted.
-func NewColCollectionFromMap(colMap map[string]Column) (*ColCollection, error) {
-	cols := make([]Column, len(colMap))
-
-	i := 0
-	for _, col := range colMap {
-		cols[i] = col
-		i++
-	}
-
-	return NewColCollection(cols...)
-}
-
 // NewColCollection creates a new collection from a list of columns. All columns must have unique tags or this method
 // returns an error. If any columns have the same name, by-name lookups from this collection will not function
 // correctly, and this column collection cannot be used to create a schema. If any columns have the same case-
