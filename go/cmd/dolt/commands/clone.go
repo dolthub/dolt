@@ -26,10 +26,18 @@ const (
 	branchParam = "branch"
 )
 
-var cloneShortDesc = ""
-var cloneLongDesc = ""
+var cloneShortDesc = "Clone a data repository into a new directory"
+var cloneLongDesc = "Clones a repository into a newly created directory, creates remote-tracking branches for each " +
+	"branch in the cloned repository (visible using git branch -a), and creates and checks out an initial branch that " +
+	"is forked from the cloned repository's currently active branch.\n" +
+	"\n" +
+	"After the clone, a plain dolt fetch without arguments will update all the remote-tracking branches, and a dolt " +
+	"pull without arguments will in addition merge the remote branch into the current branch\n" +
+	"\n" +
+	"This default configuration is achieved by creating references to the remote branch heads under refs/remotes/origin " +
+	"and by creating a remote named 'origin'."
 var cloneSynopsis = []string{
-	"[-remote <remote>] [-branch <branch>] <remote-url> <new-dir>",
+	"[-remote <remote>] [-branch <branch>]  [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <remote-url> <new-dir>",
 }
 
 func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
