@@ -15,7 +15,7 @@ setup() {
   mkdir dolt-repo-$$
   cd dolt-repo-$$
   dolt init
-  dolt remote add test-remote localhost:50051/test-org/test-repo --insecure
+  dolt remote add test-remote http://localhost:50051/test-org/test-repo
   dolt push test-remote master
 }
 
@@ -29,7 +29,7 @@ teardown() {
   mkdir ../git-repo-$$
   cd ../git-repo-$$
   git init
-  run git dolt link localhost:50051/test-org/test-repo
+  run git dolt link http://localhost:50051/test-org/test-repo
   [ "$status" -eq 0 ]
   [[ "${lines[0]}" =~ "Success!" ]] || false
   [[ "${lines[1]}" =~ "Dolt repository cloned to test-repo" ]] || false
@@ -40,7 +40,7 @@ teardown() {
 
   run cat test-repo.git-dolt
   [[ "${lines[0]}" =~ "version 0" ]] || false
-  [[ "${lines[1]}" =~ "remote localhost:50051/test-org/test-repo" ]] || false
+  [[ "${lines[1]}" =~ "remote http://localhost:50051/test-org/test-repo" ]] || false
   [[ "${lines[2]}" =~ ^(revision [0-9a-v]{32})$ ]] || false
 
   run cat .gitignore

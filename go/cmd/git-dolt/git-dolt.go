@@ -36,7 +36,7 @@ func main() {
 
 func link(remote string) {
 	dirname := lastSegment(remote)
-	_, err := exec.Command("dolt", "clone", remote, "--insecure").Output()
+	_, err := exec.Command("dolt", "clone", remote).Output()
 	check(err)
 
 	revision := currentRevision(dirname)
@@ -72,7 +72,8 @@ func currentRevision(dirname string) string {
 }
 
 func lastSegment(s string) string {
-	return strings.Split(s, "/")[2]
+	tokens := strings.Split(s, "/")
+	return tokens[len(tokens)-1]
 }
 
 func check(e error) {
