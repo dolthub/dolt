@@ -1133,7 +1133,7 @@ func TestCaseSensitivity(t *testing.T) {
 			createTestDatabase(dEnv, t)
 
 			if tt.tableName != "" {
-				dtestutils.CreateTestTable(t, dEnv, tt.tableName, tt.tableSchema, tt.initialRows)
+				dtestutils.CreateTestTable(t, dEnv, tt.tableName, tt.tableSchema, tt.initialRows...)
 			}
 			if tt.additionalSetup != nil {
 				tt.additionalSetup(t, dEnv)
