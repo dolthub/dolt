@@ -55,7 +55,7 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	branch := apr.GetValueOrDefault(branchParam, "")
 	dir, urlStr, verr := parseArgs(apr)
 
-	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.Config, urlStr)
+	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
 
 	if err != nil {
 		verr = errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
@@ -66,10 +66,14 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		params, verr = parseRemoteArgs(apr, scheme, remoteUrl)
 
 		if verr == nil {
-			dEnv, verr = clonedEnv(dir, dEnv.FS)
+			var r env.Remote
+			var srcDB *doltdb.DoltDB
+			r, srcDB, verr = createRemote(remoteName, remoteUrl, params)
+
+			dEnv, verr = clonedEnv(r, dir, dEnv.FS)
 
 			if verr == nil {
-				verr = cloneRemote(context.Background(), remoteName, remoteUrl, branch, params, dEnv)
+				verr = cloneRemote(context.Background(), srcDB, remoteName, branch, dEnv)
 
 				// Make best effort to delete the directory we created.
 				if verr != nil {
@@ -110,7 +114,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-func clonedEnv(dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
+func clonedEnv(r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
 	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
 	if exists {
@@ -136,21 +140,20 @@ func clonedEnv(dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseErr
 		return nil, errhand.BuildDError("error: unable to initialize repo without data").AddCause(err).Build()
 	}
 
-	return dEnv, nil
-}
-
-func createRemote(remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (*doltdb.DoltDB, errhand.VerboseError) {
-	cli.Printf("cloning %s\n", remoteUrl)
-
-	r := env.NewRemote(remoteName, remoteUrl, params)
-
-	var err error
 	dEnv.RSLoadErr = nil
 	dEnv.RepoState, err = env.CloneRepoState(dEnv.FS, r)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: unable to create repo state with remote " + remoteName).AddCause(err).Build()
+		return nil, errhand.BuildDError("error: unable to create repo state with remote " + r.Name).AddCause(err).Build()
 	}
+
+	return dEnv, nil
+}
+
+func createRemote(remoteName, remoteUrl string, params map[string]string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
+	cli.Printf("cloning %s\n", remoteUrl)
+
+	r := env.NewRemote(remoteName, remoteUrl, params)
 
 	ddb, err := r.GetRemoteDB(context.TODO())
 
@@ -162,13 +165,13 @@ func createRemote(remoteName, remoteUrl string, params map[string]string, dEnv *
 			bdr.AddDetails("'%s' should be in the format 'organization/repo'", urlObj.Path)
 		}
 
-		return nil, bdr.Build()
+		return env.NoRemote, nil, bdr.Build()
 	}
 
-	return ddb, nil
+	return r, ddb, nil
 }
 
-func cloneRemote(ctx context.Context, remoteName, remoteUrl, branch string, params map[string]string, dEnv *env.DoltEnv) (verr errhand.VerboseError) {
+func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) (verr errhand.VerboseError) {
 	defer func() {
 		if r := recover(); r != nil {
 			stack := debug.Stack()
@@ -177,8 +180,6 @@ func cloneRemote(ctx context.Context, remoteName, remoteUrl, branch string, para
 	}()
 
 	if verr == nil {
-		var srcDB *doltdb.DoltDB
-		srcDB, verr = createRemote(remoteName, remoteUrl, params, dEnv)
 
 		if verr == nil {
 			var branches []ref.DoltRef
