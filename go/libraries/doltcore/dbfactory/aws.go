@@ -178,22 +178,26 @@ func awsConfigFromParams(params map[string]string) (session.Options, error) {
 		awsConfig = awsConfig.WithCredentials(credentials.NewEnvCredentials())
 	case FileCS:
 		if filePath, ok := params[AWSCredsFileParam]; !ok {
-
+			return opts, os.ErrNotExist
 		} else {
 			creds := credentials.NewSharedCredentials(filePath, awsCredsProfile)
 			awsConfig = awsConfig.WithCredentials(creds)
 		}
 	case AutoCS:
+		// start by trying to get the credentials from the environment
 		envCreds := credentials.NewEnvCredentials()
 		if _, err := envCreds.Get(); err == nil {
 			awsConfig = awsConfig.WithCredentials(envCreds)
-		}
-
-		if filePath, ok := params[AWSCredsFileParam]; ok {
-			if _, err := os.Stat(filePath); err == nil {
-				creds := credentials.NewSharedCredentials(filePath, awsCredsProfile)
-				awsConfig = awsConfig.WithCredentials(creds)
+		} else {
+			// if env credentials don't exist try looking for a credentials file
+			if filePath, ok := params[AWSCredsFileParam]; ok {
+				if _, err := os.Stat(filePath); err == nil {
+					creds := credentials.NewSharedCredentials(filePath, awsCredsProfile)
+					awsConfig = awsConfig.WithCredentials(creds)
+				}
 			}
+
+			// if file and env do not return valid credentials use the default credentials of the box (same as role)
 		}
 	case RoleCS:
 	default:
