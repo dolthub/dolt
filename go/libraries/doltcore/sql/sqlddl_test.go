@@ -350,7 +350,7 @@ func TestDropColumn(t *testing.T) {
 			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(peopleTestSchema, ratingTag), allPeopleRows...),
 		},
 		{
-			name:  "table not found",
+			name:  "drop primary key",
 			query: "alter table people drop column id",
 			expectedErr: "Cannot drop column in primary key",
 		},
@@ -363,6 +363,131 @@ func TestDropColumn(t *testing.T) {
 			name:  "column not found",
 			query: "alter table people drop column notFound",
 			expectedErr: "Unknown column: 'notFound'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			ctx := context.Background()
+			root, _ := dEnv.WorkingRoot(ctx)
+
+			sqlStatement, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+
+			s := sqlStatement.(*sqlparser.DDL)
+
+			updatedRoot, sch, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
+
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
+			}
+
+			require.NotNil(t, updatedRoot)
+			assert.Equal(t, tt.expectedSchema, sch)
+
+			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
+			require.True(t, ok)
+
+			rowData := updatedTable.GetRowData(ctx)
+			var foundRows []row.Row
+			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
+				foundRows = append(foundRows, row.FromNoms(updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
+				return false
+			})
+
+			assert.Equal(t, tt.expectedRows, foundRows)
+		})
+	}
+}
+
+func TestRenameColumn(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectedSchema schema.Schema
+		expectedRows   []row.Row
+		expectedErr    string
+	}{
+		{
+			name:  "alter rename column",
+			query: "alter table people rename rating newRating",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", idTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", ageTag, types.IntKind, false),
+				schema.NewColumn("newRating", ratingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", numEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: allPeopleRows,
+		},
+		{
+			name:  "alter rename column with optional column and as keywords",
+			query: "alter table people rename column rating as newRating",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", idTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", ageTag, types.IntKind, false),
+				schema.NewColumn("newRating", ratingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", numEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: allPeopleRows,
+		},
+		{
+			name:  "alter rename column with with to keyword",
+			query: "alter table people rename rating to newRating",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", idTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", ageTag, types.IntKind, false),
+				schema.NewColumn("newRating", ratingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", numEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: allPeopleRows,
+		},
+		{
+			name:  "alter rename primary key column",
+			query: "alter table people rename id to newId",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("newId", idTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", ageTag, types.IntKind, false),
+				schema.NewColumn("rating", ratingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", numEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: allPeopleRows,
+		},
+		{
+			name:  "table not found",
+			query: "alter table notFound rename column id to newId",
+			expectedErr: "Unknown table: 'notFound'",
+		},
+		{
+			name:  "column not found",
+			query: "alter table people rename notFound to newNotFound",
+			expectedErr: "Unknown column: 'notFound'",
+		},
+		{
+			name:  "column name collision",
+			query: "alter table people rename id to age",
+			expectedErr: "A column with the name 'age' already exists",
 		},
 	}
 
