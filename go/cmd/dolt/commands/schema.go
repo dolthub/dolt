@@ -254,7 +254,7 @@ func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	oldColName := apr.Arg(1)
 	newColName := apr.Arg(2)
 
-	newTbl, err := alterschema.RenameColumnOfSchema(context.Background(), dEnv.DoltDB, tbl, oldColName, newColName)
+	newTbl, err := alterschema.RenameColumn(context.Background(), dEnv.DoltDB, tbl, oldColName, newColName)
 	if err != nil {
 		return errToVerboseErr(oldColName, newColName, err)
 	}
