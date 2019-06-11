@@ -86,18 +86,45 @@ func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 
 // executeRename renames a set of tables and returns the new root value.
 func executeRename(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
+	if len(ddl.FromTables) != len(ddl.ToTables) {
+		panic("Expected from tables and to tables of equal length")
+	}
 
-	return nil, nil
+	for i := range ddl.FromTables {
+		fromTable := ddl.FromTables[i]
+		toTable := ddl.ToTables[i]
+		if err := validateTable(ctx, root, fromTable.Name.String()); err != nil {
+			return nil, err
+		}
+
+		var err error
+		if root, err = alterschema.RenameTable(ctx, db, root, fromTable.Name.String(), toTable.Name.String()); err != nil {
+			if err == doltdb.ErrTableExists {
+				return nil, errFmt("A table with the name '%v' already exists", toTable.Name.String())
+			}
+			return nil, err
+		}
+	}
+
+	return root, nil
+}
+
+func validateTable(ctx context.Context, root *doltdb.RootValue, tableName string) error {
+	if !doltdb.IsValidTableName(tableName) {
+		return errFmt("Invalid table name: '%v'", tableName)
+	}
+
+	if !root.HasTable(ctx, tableName) {
+		return errFmt(UnknownTableErrFmt, tableName)
+	}
+
+	return nil
 }
 
 func executeAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	tableName := ddl.Table.Name.String()
-	if !doltdb.IsValidTableName(tableName) {
-		return nil, errFmt("Invalid table name: '%v'", tableName)
-	}
-
-	if !root.HasTable(ctx, tableName) {
-		return nil, errFmt(UnknownTableErrFmt, tableName)
+	if err := validateTable(ctx, root, tableName); err != nil {
+		return nil, err
 	}
 
 	switch ddl.ColumnAction {
