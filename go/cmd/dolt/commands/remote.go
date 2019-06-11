@@ -56,7 +56,7 @@ var remoteLongDesc = "With no arguments, shows a list of existing remotes. Sever
 
 var remoteSynopsis = []string{
 	"[-v | --verbose]",
-	"add [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] <name> <url>",
+	"add [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <name> <url>",
 	"rename <old> <new>",
 	"remove <name>",
 }
@@ -76,6 +76,7 @@ func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["region"] = "cloud provider region associated with this remote."
 	ap.ArgListHelp["creds-type"] = "credential type.  Valid options are role, env, and file.  See the help section for additional details."
+	ap.ArgListHelp["profile"] = "AWS profile to use."
 	ap.SupportsFlag(verboseFlag, "v", "When printing the list of remotes adds additional details.")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
