@@ -51,7 +51,7 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 
 	if len(unknown) > 0 {
 		var err error
-		currRoot, err = currRoot.RemoveTables(ctx, unknown)
+		currRoot, err = currRoot.RemoveTables(ctx, unknown...)
 
 		if err != nil {
 			return err

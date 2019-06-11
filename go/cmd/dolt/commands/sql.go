@@ -306,15 +306,13 @@ func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query
 			return nil, errFmt("Error creating table: %v", err)
 		}
 		return newRoot, nil
-	case sqlparser.AlterStr:
-		newRoot, _, err := sql.ExecuteAlter(context.Background(), dEnv.DoltDB, root, ddl, query)
+	case sqlparser.AlterStr, sqlparser.RenameStr:
+		newRoot, err := sql.ExecuteAlter(context.Background(), dEnv.DoltDB, root, ddl, query)
 		if err != nil {
 			return nil, errFmt("Error altering table: %v", err)
 		}
 		return newRoot, nil
 	case sqlparser.DropStr:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
-	case sqlparser.RenameStr:
 		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	case sqlparser.TruncateStr:
 		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
