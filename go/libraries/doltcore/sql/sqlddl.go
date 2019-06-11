@@ -101,9 +101,21 @@ func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 }
 
 // ExecuteRenameColumn renames the column named. Returns the new root value and new schema, or an error if one occurs.
-func ExecuteRenameColumn(ctx context.Context, db *doltdb.DoltDB, value *doltdb.RootValue, tableName string, fromCol sqlparser.ColIdent, toCol sqlparser.ColIdent) (*doltdb.RootValue, schema.Schema, error) {
+func ExecuteRenameColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, fromCol, toCol sqlparser.ColIdent) (*doltdb.RootValue, schema.Schema, error) {
+	table, _ := root.GetTable(ctx, tableName)
 
-	return nil, nil, nil
+	updatedTable, err := alterschema.RenameColumn(ctx, db, table, fromCol.String(), toCol.String())
+	if err != nil {
+		if err == schema.ErrColNotFound {
+			return nil, nil, errFmt(UnknownColumnErrFmt, fromCol.String())
+		} else if err == schema.ErrColNameCollision {
+			return nil, nil, errFmt("A column with the name '%v' already exists", toCol.String())
+		}
+		return nil, nil, err
+	}
+
+	root = root.PutTable(ctx, db, tableName, updatedTable)
+	return root, updatedTable.GetSchema(ctx), nil
 }
 
 // Drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.
