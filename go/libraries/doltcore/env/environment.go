@@ -355,6 +355,14 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 }
 
 func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, insecure bool, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
+	if strings.IndexRune(hostAndPort, ':') == -1 {
+		if insecure {
+			hostAndPort += ":80"
+		} else {
+			hostAndPort += ":443"
+		}
+	}
+
 	var dialOpts grpc.DialOption
 	if insecure {
 		dialOpts = grpc.WithInsecure()

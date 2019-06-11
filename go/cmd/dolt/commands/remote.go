@@ -3,10 +3,8 @@ package commands
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"path"
-	"strconv"
 	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -187,24 +185,7 @@ func getAbsRemoteUrl(cfg config.ReadableConfig, urlArg string) (string, string, 
 
 	hostName = strings.TrimSpace(hostName)
 
-	portStr, err := cfg.GetString(env.RemotesApiHostPortKey)
-
-	if err != nil {
-		if err != config.ErrConfigParamNotFound {
-			return "", "", err
-		}
-
-		portStr = "443"
-	}
-
-	portStr = strings.TrimSpace(portStr)
-	portNum, err := strconv.ParseUint(portStr, 10, 16)
-
-	if err != nil {
-		return "", "", ErrInvalidPort
-	}
-
-	return "https", path.Join(fmt.Sprintf("https://%s:%d", hostName, portNum), u.Path), nil
+	return "https", "https://" + path.Join(hostName, u.Path), nil
 }
 
 func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
