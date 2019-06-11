@@ -28,11 +28,11 @@ const (
 
 var cloneShortDesc = "Clone a data repository into a new directory"
 var cloneLongDesc = "Clones a repository into a newly created directory, creates remote-tracking branches for each " +
-	"branch in the cloned repository (visible using git branch -a), and creates and checks out an initial branch that " +
+	"branch in the cloned repository (visible using dolt branch -a), and creates and checks out an initial branch that " +
 	"is forked from the cloned repository's currently active branch.\n" +
 	"\n" +
-	"After the clone, a plain dolt fetch without arguments will update all the remote-tracking branches, and a dolt " +
-	"pull without arguments will in addition merge the remote branch into the current branch\n" +
+	"After the clone, a plain <b>dolt fetch</b> without arguments will update all the remote-tracking branches, and a <b>dolt " +
+	"pull</b> without arguments will in addition merge the remote branch into the current branch\n" +
 	"\n" +
 	"This default configuration is achieved by creating references to the remote branch heads under refs/remotes/origin " +
 	"and by creating a remote named 'origin'."
@@ -46,8 +46,8 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
-	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
-	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
+	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
