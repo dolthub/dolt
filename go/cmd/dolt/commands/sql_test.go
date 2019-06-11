@@ -143,6 +143,62 @@ func TestCreateTable(t *testing.T) {
 	}
 }
 
+// Tests of the create table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// create table SQL command are in the sql package.
+func TestShowTables(t *testing.T) {
+	tests := []struct {
+		query       string
+		expectedRes int
+	}{
+		{"show ", 1},                 // bad syntax
+		{"show table", 1},        // bad syntax
+		{"show tables", 0},
+		{"show create table people", 0},
+		{"show create table dne", 1},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-q", test.query}
+			commandStr := "dolt sql"
+			result := Sql(commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+		})
+	}
+}
+
+
+// Tests of the create table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// create table SQL command are in the sql package.
+func TestAlterTable(t *testing.T) {
+	tests := []struct {
+		query       string
+		expectedRes int
+	}{
+		{"alter table", 1},                 // bad syntax
+		{"alter table people rename", 1},        // bad syntax
+		{"alter table dne rename id to newId", 1},        // unknown column
+		{"alter table people rename id to newId", 0}, // no primary key
+		{"alter table people rename to newPeople", 0},
+		{"rename table people to newPeople", 0},
+		{"alter table people add column (newCol int not null default 10)", 0},
+		{"alter table people drop column title", 0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-q", test.query}
+			commandStr := "dolt sql"
+			result := Sql(commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+		})
+	}
+}
+
 // Tests of the insert SQL command, mostly a smoke test for errors in the command line handler. Most tests of
 // insert SQL command are in the sql package.
 func TestInsert(t *testing.T) {
