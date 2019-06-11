@@ -13,6 +13,7 @@ var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is no
 var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
 var ErrTableNotFound = errors.New("table not found")
+var ErrTableExists = errors.New("table already exists")
 var ErrAlreadyOnBranch = errors.New("Already on branch")
 
 var ErrNomsIO = errors.New("error reading from or writing to noms")

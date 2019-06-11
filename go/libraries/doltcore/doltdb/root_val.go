@@ -231,7 +231,7 @@ func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []str
 	return newRootValue(root.vrw, rootValSt)
 }
 
-func (root *RootValue) RemoveTables(ctx context.Context, tables []string) (*RootValue, error) {
+func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*RootValue, error) {
 	tableMap := root.valueSt.Get(tablesKey).(types.Map)
 	me := tableMap.Edit()
 	for _, tbl := range tables {
