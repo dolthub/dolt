@@ -269,7 +269,7 @@ func newResultSetRow(colVals ...types.Value) row.Row {
 
 // Creates a test database with the test data set in it
 func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	dtestutils.CreateTestTable(t, dEnv, peopleTableName, peopleTestSchema, allPeopleRows)
-	dtestutils.CreateTestTable(t, dEnv, episodesTableName, episodesTestSchema, allEpsRows)
-	dtestutils.CreateTestTable(t, dEnv, appearancesTableName, appearancesTestSchema, allAppsRows)
+	dtestutils.CreateTestTable(t, dEnv, peopleTableName, peopleTestSchema, allPeopleRows...)
+	dtestutils.CreateTestTable(t, dEnv, episodesTableName, episodesTestSchema, allEpsRows...)
+	dtestutils.CreateTestTable(t, dEnv, appearancesTableName, appearancesTestSchema, allAppsRows...)
 }
