@@ -177,6 +177,7 @@ var app9 = newAppsRow(lisaId, 3, "Lisa is the best Simpson")
 var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
 
 // nobody in episode 4, that one was terrible
+// Unlike the other tables, you can't count on the order of these rows matching the insertion order.
 var allAppsRows = rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10)
 
 // Convenience func to avoid the boilerplate of typing []row.Row{} all the time
