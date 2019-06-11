@@ -562,7 +562,7 @@ func TestRenameTable(t *testing.T) {
 		},
 		{
 			name:  "rename multiple tables",
-			query: "rename table people rename to newPeople, appearances to newAppearances",
+			query: "rename table people to newPeople, appearances to newAppearances",
 			oldTableName: "appearances",
 			newTableName: "newAppearances",
 			expectedSchema: appearancesTestSchema,
@@ -615,7 +615,9 @@ func TestRenameTable(t *testing.T) {
 				return false
 			})
 
-			assert.Equal(t, tt.expectedRows, foundRows)
+			// Some test cases deal with rows declared in a different order than noms returns them, so use an order-
+			// insensitive comparison here.
+			assert.ElementsMatch(t, tt.expectedRows, foundRows)
 		})
 	}
 }
