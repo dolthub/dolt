@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 	"sort"
 	"strings"
 
@@ -76,16 +77,18 @@ func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return deleteBranches(dEnv, apr, usage)
 	case apr.Contains(deleteForceFlag):
 		return deleteForceBranches(dEnv, apr, usage)
+	case apr.Contains(listFlag):
+		return printBranches(dEnv, apr, usage)
 	case apr.NArg() > 0:
 		return createBranch(dEnv, apr, usage)
-	case apr.Contains(listFlag):
-		fallthrough
 	default:
 		return printBranches(dEnv, apr, usage)
 	}
 }
 
 func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
+	branchSet := set.NewStrSet(apr.Args())
+
 	verbose := apr.Contains(verboseFlag)
 	printAll := apr.Contains(allParam)
 
@@ -96,6 +99,10 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 	})
 
 	for _, branch := range branches {
+		if branchSet.Size() > 0 && !branchSet.Contains(branch.GetPath()) {
+			continue
+		}
+
 		cs, _ := doltdb.NewCommitSpec("HEAD", branch.String())
 
 		if branch.GetType() != ref.BranchRefType && !printAll {
