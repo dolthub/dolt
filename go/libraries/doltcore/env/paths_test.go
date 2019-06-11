@@ -2,7 +2,6 @@ package env
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"path/filepath"
 	"testing"
 )

@@ -3,78 +3,79 @@ package commands
 import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestGetAbsRemoteUrl(t *testing.T) {
 	tests := []struct {
-		str         string
-		cfg         *config.MapConfig
-		expectedUrl string
-		expectErr   bool
+		str            string
+		cfg            *config.MapConfig
+		expectedUrl    string
+		expectedScheme string
+		expectErr      bool
 	}{
 		{
 			"",
 			config.NewMapConfig(map[string]string{}),
-			"dolthub.com:443",
+			"https://dolthub.com",
+			"https",
 			false,
 		},
 		{
 			"ts/emp",
 			config.NewMapConfig(map[string]string{}),
-			"dolthub.com:443/ts/emp",
+			"https://dolthub.com/ts/emp",
+			"https",
 			false,
 		},
 		{"ts/emp",
 			config.NewMapConfig(map[string]string{
 				env.RemotesApiHostKey: "host.dom",
 			}),
-			"host.dom:443/ts/emp",
+			"https://host.dom/ts/emp",
+			"https",
 			false,
 		},
 		{
-			"ts/emp",
-			config.NewMapConfig(map[string]string{
-				env.RemotesApiHostPortKey: "8080",
-			}),
-			"dolthub.com:8080/ts/emp",
-			false,
-		},
-		{"ts/emp",
-			config.NewMapConfig(map[string]string{
-				env.RemotesApiHostKey:     "host.dom",
-				env.RemotesApiHostPortKey: "8080",
-			}),
-			"host.dom:8080/ts/emp",
+			"http://dolthub.com/ts/emp",
+			config.NewMapConfig(map[string]string{}),
+			"http://dolthub.com/ts/emp",
+			"http",
 			false,
 		},
 		{
-			"test.org/ts/emp",
+			"https://test.org:443/ts/emp",
 			config.NewMapConfig(map[string]string{
-				env.RemotesApiHostKey:     "host.dom",
-				env.RemotesApiHostPortKey: "8080",
+				env.RemotesApiHostKey: "host.dom",
 			}),
-			"test.org/ts/emp",
+			"https://test.org:443/ts/emp",
+			"https",
 			false,
 		},
 		{
 			"localhost/ts/emp",
 			config.NewMapConfig(map[string]string{
-				env.RemotesApiHostKey:     "host.dom",
-				env.RemotesApiHostPortKey: "8080",
+				env.RemotesApiHostKey: "host.dom",
 			}),
-			"localhost/ts/emp",
+			"https://localhost/ts/emp",
+			"https",
 			false,
 		},
 	}
 
 	for _, test := range tests {
-		actualUrl, err := getAbsRemoteUrl(test.cfg, test.str)
+		t.Run(test.str, func(t *testing.T) {
+			actualScheme, actualUrl, err := getAbsRemoteUrl(test.cfg, test.str)
 
-		if (err != nil) != test.expectErr {
-			t.Error("input:", test.str, "config:", test.cfg, "got error:", err != nil, "expected error:", test.expectErr, "result:", actualUrl, "err:", err)
-		} else if actualUrl != test.expectedUrl {
-			t.Error(actualUrl, "!=", test.expectedUrl)
-		}
+			if test.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, test.expectedUrl, actualUrl)
+			assert.Equal(t, test.expectedScheme, actualScheme)
+		})
 	}
 }
