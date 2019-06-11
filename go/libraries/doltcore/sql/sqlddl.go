@@ -65,77 +65,87 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	return root, sch, nil
 }
 
-// ExecuteAlter executes the given create statement and returns the new root value of the database and its
-// accompanying schema.
-func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
-	if ddl.Action != sqlparser.AlterStr {
-		panic("expected alter statement")
-	}
-
+// ExecuteAlter executes the given alter table statement and returns the new root value of the database.
+func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	// Unlike other SQL statements, DDL statements can have an error but still return a statement from Parse().
 	// Callers should call ParseStrictDDL themselves if they want to verify a DDL statement parses correctly.
 	_, err := sqlparser.ParseStrictDDL(query)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
+	switch ddl.Action {
+	case sqlparser.AlterStr:
+		return executeAlter(ctx, db, root, ddl, query)
+	case sqlparser.RenameStr:
+		return executeRename(ctx, db, root, ddl, query)
+	default:
+		return nil, errFmt("Unsupported alter statement: '%v'", query)
+	}
+}
+
+// executeRename renames a set of tables and returns the new root value.
+func executeRename(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
+
+	return nil, nil
+}
+
+func executeAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	tableName := ddl.Table.Name.String()
 	if !doltdb.IsValidTableName(tableName) {
-		return errCreate("Invalid table name: '%v'", tableName)
+		return nil, errFmt("Invalid table name: '%v'", tableName)
 	}
 
 	if !root.HasTable(ctx, tableName) {
-		return nil, nil, errFmt(UnknownTableErrFmt, tableName)
+		return nil, errFmt(UnknownTableErrFmt, tableName)
 	}
 
 	switch ddl.ColumnAction {
 	case sqlparser.AddStr:
-		return ExecuteAddColumn(ctx, db, root, tableName, ddl.TableSpec)
+		return addColumn(ctx, db, root, tableName, ddl.TableSpec)
 	case sqlparser.DropStr:
-		return ExecuteDropColumn(ctx, db, root, tableName, ddl.Column)
+		return dropColumn(ctx, db, root, tableName, ddl.Column)
 	case sqlparser.RenameStr:
-		return ExecuteRenameColumn(ctx, db, root, tableName, ddl.Column, ddl.ToColumn)
+		return renameColumn(ctx, db, root, tableName, ddl.Column, ddl.ToColumn)
 	default:
-		return nil, nil, errFmt("Unsupported alter table statement: '%v'", nodeToString(ddl))
+		return nil, errFmt("Unsupported alter table statement: '%v'", query)
 	}
 }
 
-// ExecuteRenameColumn renames the column named. Returns the new root value and new schema, or an error if one occurs.
-func ExecuteRenameColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, fromCol, toCol sqlparser.ColIdent) (*doltdb.RootValue, schema.Schema, error) {
+// renameColumn renames the column named. Returns the new root value and new schema, or an error if one occurs.
+func renameColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, fromCol, toCol sqlparser.ColIdent) (*doltdb.RootValue, error) {
 	table, _ := root.GetTable(ctx, tableName)
 
 	updatedTable, err := alterschema.RenameColumn(ctx, db, table, fromCol.String(), toCol.String())
 	if err != nil {
 		if err == schema.ErrColNotFound {
-			return nil, nil, errFmt(UnknownColumnErrFmt, fromCol.String())
+			return nil, errFmt(UnknownColumnErrFmt, fromCol.String())
 		} else if err == schema.ErrColNameCollision {
-			return nil, nil, errFmt("A column with the name '%v' already exists", toCol.String())
+			return nil, errFmt("A column with the name '%v' already exists", toCol.String())
 		}
-		return nil, nil, err
+		return nil, err
 	}
 
-	root = root.PutTable(ctx, db, tableName, updatedTable)
-	return root, updatedTable.GetSchema(ctx), nil
+	return root.PutTable(ctx, db, tableName, updatedTable), nil
 }
 
-// Drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.
-func ExecuteDropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, col sqlparser.ColIdent) (*doltdb.RootValue, schema.Schema, error) {
+// dropColumn drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.
+func dropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, col sqlparser.ColIdent) (*doltdb.RootValue, error) {
 	table, _ := root.GetTable(ctx, tableName)
 
 	updatedTable, err := alterschema.DropColumn(ctx, db, table, col.String())
 	if err != nil {
 		if err == schema.ErrColNotFound {
-			return nil, nil, errFmt(UnknownColumnErrFmt, col.String())
+			return nil, errFmt(UnknownColumnErrFmt, col.String())
 		}
-		return nil, nil, err
+		return nil, err
 	}
 
-	root = root.PutTable(ctx, db, tableName, updatedTable)
-	return root, updatedTable.GetSchema(ctx), nil
+	return root.PutTable(ctx, db, tableName, updatedTable), nil
 }
 
-// Adds the column given to the table named. Returns the new root value and new schema, or an error if one occurs.
-func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, schema.Schema, error) {
+// addColumn adds the column given to the table named. Returns the new root value and new schema, or an error if one occurs.
+func addColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, error) {
 	table, _ := root.GetTable(ctx, tableName)
 	sch := table.GetSchema(ctx)
 	tag := schema.AutoGenerateTag(sch)
@@ -143,10 +153,10 @@ func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootV
 	colDef := spec.Columns[0]
 	col, defaultVal, err := getColumn(colDef, spec.Indexes, tag)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if col.IsPartOfPK {
-		return nil, nil, errFmt("Adding primary keys is not supported")
+		return nil, errFmt("Adding primary keys is not supported")
 	}
 
 	nullable := alterschema.NotNull
@@ -156,11 +166,10 @@ func ExecuteAddColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootV
 
 	updatedTable, err := alterschema.AddColumnToTable(ctx, db, table, col.Tag, col.Name, col.Kind, nullable, defaultVal)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	root = root.PutTable(ctx, db, tableName, updatedTable)
-	return root, updatedTable.GetSchema(ctx), nil
+	return root.PutTable(ctx, db, tableName, updatedTable), nil
 }
 
 func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {

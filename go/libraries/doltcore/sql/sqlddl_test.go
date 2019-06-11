@@ -301,7 +301,7 @@ func TestAddColumn(t *testing.T) {
 
 			s := sqlStatement.(*sqlparser.DDL)
 
-			updatedRoot, sch, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
+			updatedRoot, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -312,7 +312,8 @@ func TestAddColumn(t *testing.T) {
 			}
 
 			assert.NotNil(t, updatedRoot)
-			assert.Equal(t, tt.expectedSchema, sch)
+			table, _ := updatedRoot.GetTable(ctx, peopleTableName)
+			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
 
 			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
 			require.True(t, ok)
@@ -378,7 +379,7 @@ func TestDropColumn(t *testing.T) {
 
 			s := sqlStatement.(*sqlparser.DDL)
 
-			updatedRoot, sch, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
+			updatedRoot, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -389,7 +390,8 @@ func TestDropColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			assert.Equal(t, tt.expectedSchema, sch)
+			table, _ := updatedRoot.GetTable(ctx, peopleTableName)
+			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
 
 			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
 			require.True(t, ok)
@@ -503,7 +505,7 @@ func TestRenameColumn(t *testing.T) {
 
 			s := sqlStatement.(*sqlparser.DDL)
 
-			updatedRoot, sch, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
+			updatedRoot, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
 
 			if tt.expectedErr == "" {
 				require.NoError(t, err)
@@ -514,7 +516,8 @@ func TestRenameColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			assert.Equal(t, tt.expectedSchema, sch)
+			table, _ := updatedRoot.GetTable(ctx, peopleTableName)
+			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
 
 			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
 			require.True(t, ok)
@@ -531,3 +534,88 @@ func TestRenameColumn(t *testing.T) {
 	}
 }
 
+func TestRenameTable(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		oldTableName   string
+		newTableName   string
+		expectedSchema schema.Schema
+		expectedRows   []row.Row
+		expectedErr    string
+	}{
+		{
+			name:  "alter rename table",
+			query: "rename table people to newPeople",
+			oldTableName: "people",
+			newTableName: "newPeople",
+			expectedSchema: peopleTestSchema,
+			expectedRows: allPeopleRows,
+		},
+		{
+			name:  "alter rename table with alter syntax",
+			query: "alter table people rename to newPeople",
+			oldTableName: "people",
+			newTableName: "newPeople",
+			expectedSchema: peopleTestSchema,
+			expectedRows: allPeopleRows,
+		},
+		{
+			name:  "rename multiple tables",
+			query: "rename table people rename to newPeople, appearances to newAppearances",
+			oldTableName: "appearances",
+			newTableName: "newAppearances",
+			expectedSchema: appearancesTestSchema,
+			expectedRows: allAppsRows,
+		},
+		{
+			name:  "table not found",
+			query: "rename table notFound to newNowFound",
+			expectedErr: "Unknown table: 'notFound'",
+		},
+		{
+			name:  "table name in use",
+			query: "rename table people to appearances",
+			expectedErr: "A table with the name 'appearances' already exists",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			ctx := context.Background()
+			root, _ := dEnv.WorkingRoot(ctx)
+
+			sqlStatement, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+
+			s := sqlStatement.(*sqlparser.DDL)
+
+			updatedRoot, err := ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
+			if len(tt.expectedErr) > 0 {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
+			} else {
+				require.NoError(t, err)
+			}
+			require.NotNil(t, updatedRoot)
+
+			assert.False(t, updatedRoot.HasTable(ctx, tt.oldTableName))
+			newTable, ok := updatedRoot.GetTable(ctx, tt.newTableName)
+			require.True(t, ok)
+
+			require.Equal(t, tt.expectedSchema, newTable.GetSchema(ctx))
+
+			rowData := newTable.GetRowData(ctx)
+			var foundRows []row.Row
+			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
+				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
+				return false
+			})
+
+			assert.Equal(t, tt.expectedRows, foundRows)
+		})
+	}
+}
