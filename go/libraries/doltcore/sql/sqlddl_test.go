@@ -399,6 +399,64 @@ func TestAddColumn(t *testing.T) {
 	}
 }
 
+func TestUnsupportedAlterStatements(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectedErr    string
+	}{
+		{
+			name:  "alter add index",
+			query: "alter table people add index myidx on (id, first)",
+			expectedErr: "Unsupported",
+		},
+		{
+			name:  "create index",
+			query: "create index myidx on people (id, first)",
+			expectedErr: "Unsupported",
+		},
+		{
+			name:  "alter drop index",
+			query: "alter table people drop index myidx",
+			expectedErr: "Unsupported",
+		},
+		{
+			name:  "drop index",
+			query: "drop index myidx on people",
+			expectedErr: "Unsupported",
+		},
+		{
+			name:  "alter change column",
+			query: "alter table people change id newId (varchar(80) not null)",
+			expectedErr: "Unsupported",
+		},
+		{
+			name:  "alter add foreign key",
+			query: "alter table appearances add constraint people_id_ref foreign key (id) references people (id)",
+			expectedErr: "Unsupported",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			ctx := context.Background()
+			root, _ := dEnv.WorkingRoot(ctx)
+
+			sqlStatement, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+
+			s := sqlStatement.(*sqlparser.DDL)
+
+			_, err = ExecuteAlter(ctx, dEnv.DoltDB, root, s, tt.query)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.expectedErr)
+		})
+	}
+}
+
+
 func TestDropColumn(t *testing.T) {
 	tests := []struct {
 		name           string
