@@ -170,7 +170,7 @@ func TestShowTables(t *testing.T) {
 }
 
 
-// Tests of the create table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// Tests of the alter table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
 // create table SQL command are in the sql package.
 func TestAlterTable(t *testing.T) {
 	tests := []struct {
@@ -185,6 +185,31 @@ func TestAlterTable(t *testing.T) {
 		{"rename table people to newPeople", 0},
 		{"alter table people add column (newCol int not null default 10)", 0},
 		{"alter table people drop column title", 0},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			dEnv := createEnvWithSeedData(t)
+
+			args := []string{"-q", test.query}
+			commandStr := "dolt sql"
+			result := Sql(commandStr, args, dEnv)
+			assert.Equal(t, test.expectedRes, result)
+		})
+	}
+}
+
+// Tests of the drop table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
+// create table SQL command are in the sql package.
+func TestDropTable(t *testing.T) {
+	tests := []struct {
+		query       string
+		expectedRes int
+	}{
+		{"drop table", 1},
+		{"drop table people", 0},
+		{"drop table dne", 1},
+		{"drop table if exists dne", 0},
 	}
 
 	for _, test := range tests {

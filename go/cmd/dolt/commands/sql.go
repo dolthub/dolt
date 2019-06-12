@@ -38,13 +38,13 @@ dolt-interest@liquidata.co
 Reasonably well supported functionality:
 * SELECT statements, including most kinds of joins
 * CREATE TABLE statements
+* ALTER TABLE / DROP TABLE statements
 * UPDATE and DELETE statements
 * Table and column aliases
 * ORDER BY and LIMIT clauses
 
 Known limitations:
-* Some expresssions in SELECT statements
-* ALTER TABLE / DROP TABLE statements
+* Some expressions in SELECT statements
 * GROUP BY or aggregate functions
 * Subqueries
 * Column functions, e.g. CONCAT
@@ -282,11 +282,11 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
-			return nil, errFmt("Error parsing SQL: %v.", err.Error())
+			return nil, errFmt("Error parsing DDL: %v.", err.Error())
 		}
 		return sqlDDL(dEnv, root, s, query)
 	default:
-		return nil, errFmt("Unhandled SQL statement: '%v'.", query)
+		return nil, errFmt("Unsupported SQL statement: '%v'.", query)
 	}
 }
 
@@ -414,14 +414,12 @@ func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query
 		}
 		return newRoot, nil
 	case sqlparser.DropStr:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		newRoot, err := sql.ExecuteDrop(context.Background(), dEnv.DoltDB, root, ddl, query)
+		if err != nil {
+			return nil, errFmt("Error dropping table: %v", err)
+		}
+		return newRoot, nil
 	case sqlparser.TruncateStr:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
-	case sqlparser.CreateVindexStr:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
-	case sqlparser.AddColVindexStr:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
-	case sqlparser.DropColVindexStr:
 		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
 	default:
 		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)

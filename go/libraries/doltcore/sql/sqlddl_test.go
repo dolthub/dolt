@@ -229,6 +229,76 @@ func TestExecuteCreate(t *testing.T) {
 	}
 }
 
+func TestExecuteDrop(t *testing.T) {
+	tests := []struct {
+		name        string
+		query       string
+		tableNames  []string
+		expectedErr string
+	}{
+		{
+			name:       "drop table",
+			query:      "drop table people",
+			tableNames: []string{"people"},
+		},
+		{
+			name:       "drop table if exists",
+			query:      "drop table if exists people",
+			tableNames: []string{"people"},
+		},
+		{
+			name:        "drop non existent",
+			query:       "drop table notfound",
+			expectedErr: "Unknown table: 'notfound'",
+		},
+		{
+			name:       "drop non existent if exists",
+			query:      "drop table if exists notFound",
+			tableNames: []string{"notFound"},
+		},
+		{
+			name:       "drop many tables",
+			query:      "drop table people, appearances, episodes",
+			tableNames: []string{"people", "appearances", "episodes"},
+		},
+		{
+			name:       "drop many tables, some don't exist",
+			query:      "drop table if exists people, not_real, appearances, episodes",
+			tableNames: []string{"people", "appearances", "not_real", "episodes"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			createTestDatabase(dEnv, t)
+			ctx := context.Background()
+			root, _ := dEnv.WorkingRoot(ctx)
+
+			sqlStatement, err := sqlparser.Parse(tt.query)
+			require.NoError(t, err)
+
+			s := sqlStatement.(*sqlparser.DDL)
+
+			updatedRoot, err := ExecuteDrop(ctx, dEnv.DoltDB, root, s, tt.query)
+
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
+			}
+
+			require.NotNil(t, updatedRoot)
+			for _, tableName := range tt.tableNames {
+				assert.False(t, updatedRoot.HasTable(ctx, tableName))
+			}
+		})
+	}
+}
+
+
 func TestAddColumn(t *testing.T) {
 	tests := []struct {
 		name           string
