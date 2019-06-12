@@ -19,6 +19,9 @@ type ReadableFS interface {
 
 	// Exists will tell you if a file or directory with a given path already exists, and if it does is it a directory
 	Exists(path string) (exists bool, isDir bool)
+
+	// converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
+	Abs(path string) (string, error)
 }
 
 // WritableFS is an interface providing write access to objs in a filesystem
