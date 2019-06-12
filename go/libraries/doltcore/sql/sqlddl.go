@@ -30,6 +30,49 @@ var tagCommentPrefix = "tag:"
 
 // ExecuteCreate executes the given create statement and returns the new root value of the database and its
 // accompanying schema.
+func ExecuteDrop(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
+	if ddl.Action != sqlparser.DropStr {
+		panic("expected drop statement")
+	}
+
+	// Unlike other SQL statements, DDL statements can have an error but still return a statement from Parse().
+	// Callers should call ParseStrictDDL themselves if they want to verify a DDL statement parses correctly.
+	if _, err := sqlparser.ParseStrictDDL(query); err != nil {
+		return nil, err
+	}
+
+	if len(ddl.FromTables) == 0 {
+		panic("FromTables empty")
+	}
+
+	tablesToDrop := make([]string, len(ddl.FromTables))
+	for i, tableName := range ddl.FromTables {
+		tablesToDrop[i] = tableName.Name.String()
+	}
+
+	var filtered []string
+	for _, tableName := range tablesToDrop {
+		if !root.HasTable(ctx, tableName) {
+			if ddl.IfExists {
+				continue
+			} else {
+				return nil, errFmt(UnknownTableErrFmt, tableName)
+			}
+		} else {
+			filtered = append(filtered, tableName)
+		}
+	}
+
+	var err error
+	if root, err = root.RemoveTables(ctx, filtered...); err != nil {
+		return nil, err
+	}
+
+	return root, nil
+}
+
+// ExecuteCreate executes the given create statement and returns the new root value of the database and its
+// accompanying schema.
 func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
 	if ddl.Action != sqlparser.CreateStr {
 		panic("expected create statement")
@@ -44,11 +87,11 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 	tableName := ddl.Table.Name.String()
 	if !doltdb.IsValidTableName(tableName) {
-		return errCreate("Invalid table name: '%v'", tableName)
+		return nil, nil, errFmt("Invalid table name: '%v'", tableName)
 	}
 
 	if root.HasTable(ctx, tableName) {
-		return errCreate("Table %v already exists", tableName)
+		return nil, nil, errFmt("Table '%v' already exists", tableName)
 	}
 
 	spec := ddl.TableSpec
@@ -199,6 +242,7 @@ func addColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, t
 	return root.PutTable(ctx, db, tableName, updatedTable), nil
 }
 
+// getSchema returns the schema corresponding to the TableSpec given
 func getSchema(spec *sqlparser.TableSpec) (schema.Schema, error) {
 	cols := make([]schema.Column, len(spec.Columns))
 
@@ -392,8 +436,4 @@ func extractTag(columnType sqlparser.ColumnType) uint64 {
 
 func errColumn(errFmt string, args ...interface{}) (schema.Column, types.Value, error) {
 	return schema.InvalidCol, nil, errors.New(fmt.Sprintf(errFmt, args...))
-}
-
-func errCreate(errFmt string, args ...interface{}) (*doltdb.RootValue, schema.Schema, error) {
-	return nil, nil, errors.New(fmt.Sprintf(errFmt, args...))
 }
