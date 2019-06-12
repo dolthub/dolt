@@ -129,3 +129,8 @@ func (fs *localFS) Delete(path string, force bool) error {
 		return os.RemoveAll(path)
 	}
 }
+
+// converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
+func (fs *localFS) Abs(path string) (string, error) {
+	return filepath.Abs(path)
+}

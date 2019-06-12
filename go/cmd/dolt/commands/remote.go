@@ -173,6 +173,11 @@ func getAbsRemoteUrl(fs filesys.Filesys, cfg config.ReadableConfig, urlArg strin
 	if u.Scheme != "" {
 		if u.Scheme == dbfactory.FileScheme {
 			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, fs)
+
+			if err != nil {
+				return "", "", err
+			}
+
 			return dbfactory.FileScheme, absUrl, err
 		}
 
@@ -197,14 +202,12 @@ func getAbsRemoteUrl(fs filesys.Filesys, cfg config.ReadableConfig, urlArg strin
 }
 
 func getAbsFileRemoteUrl(urlStr string, fs filesys.Filesys) (string, error) {
+	var err error
 	urlStr = filepath.Clean(urlStr)
-	if !filepath.IsAbs(urlStr) {
-		var err error
-		urlStr, err = filepath.Abs(urlStr)
+	urlStr, err = fs.Abs(urlStr)
 
-		if err != nil {
-			return "", err
-		}
+	if err != nil {
+		return "", err
 	}
 
 	exists, isDir := fs.Exists(urlStr)
