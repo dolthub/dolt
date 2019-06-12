@@ -354,3 +354,36 @@ teardown() {
     [[ "$output" =~ "zzz" ]] || false
     [[ "$output" =~ "* master" ]] || false
 }
+
+@test "file based remotes" {
+    # seed with some data
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+
+    # push to a file based remote
+    mkdir remotedir
+    dolt remote add origin file://remotedir
+    dolt push origin master
+
+    # clone from a directory
+    cd dolt-repo-clones
+    dolt clone file://../remotedir test-repo
+    cd test-repo
+
+    # make modifications
+    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:1
+    dolt add test
+    dolt commit -m "put row"
+
+    # push back to the other directory
+    dolt push origin master
+    run dolt branch --list master -v
+    master_state1=$output
+
+    # check that the remote master was updated
+    cd ../..
+    dolt pull
+    run dolt branch --list master -v
+    [[ "$output" = "$master_state1" ]] || false
+}

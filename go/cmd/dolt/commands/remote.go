@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
@@ -160,7 +163,7 @@ func renameRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	return nil
 }
 
-func getAbsRemoteUrl(cfg config.ReadableConfig, urlArg string) (string, string, error) {
+func getAbsRemoteUrl(fs filesys.Filesys, cfg config.ReadableConfig, urlArg string) (string, string, error) {
 	u, err := earl.Parse(urlArg)
 
 	if err != nil {
@@ -168,9 +171,19 @@ func getAbsRemoteUrl(cfg config.ReadableConfig, urlArg string) (string, string, 
 	}
 
 	if u.Scheme != "" {
+		if u.Scheme == dbfactory.FileScheme {
+			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, fs)
+
+			if err != nil {
+				return "", "", err
+			}
+
+			return dbfactory.FileScheme, absUrl, err
+		}
+
 		return u.Scheme, urlArg, nil
 	} else if u.Host != "" {
-		return "https", "https://" + urlArg, nil
+		return dbfactory.HTTPSScheme, "https://" + urlArg, nil
 	}
 
 	hostName, err := cfg.GetString(env.RemotesApiHostKey)
@@ -185,7 +198,27 @@ func getAbsRemoteUrl(cfg config.ReadableConfig, urlArg string) (string, string, 
 
 	hostName = strings.TrimSpace(hostName)
 
-	return "https", "https://" + path.Join(hostName, u.Path), nil
+	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
+}
+
+func getAbsFileRemoteUrl(urlStr string, fs filesys.Filesys) (string, error) {
+	var err error
+	urlStr = filepath.Clean(urlStr)
+	urlStr, err = fs.Abs(urlStr)
+
+	if err != nil {
+		return "", err
+	}
+
+	exists, isDir := fs.Exists(urlStr)
+
+	if !exists {
+		return "", os.ErrNotExist
+	} else if !isDir {
+		return "", filesys.ErrIsFile
+	}
+
+	return dbfactory.FileScheme + "://" + urlStr, nil
 }
 
 func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -200,7 +233,7 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 	}
 
 	remoteUrl := apr.Arg(2)
-	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.Config, remoteUrl)
+	scheme, remoteUrl, err := getAbsRemoteUrl(dEnv.FS, dEnv.Config, remoteUrl)
 
 	if err != nil {
 		return errhand.BuildDError("error: '%s' is not valid.", remoteUrl).Build()
