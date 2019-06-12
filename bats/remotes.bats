@@ -41,20 +41,6 @@ teardown() {
     [[ "$output" =~ "usage:" ]] || false
 }
 
-@test "rename a remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    run dolt remote rename test-remote renamed-remote
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    run dolt remote -v
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "renamed-remote" ]] || false
-    [[ ! "$output" =~ "test-remote" ]] || false
-    run dolt remote rename poop test-remote
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote poop" ]] || false
-}
-
 @test "remove a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt remote remove test-remote
