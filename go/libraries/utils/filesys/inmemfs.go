@@ -350,3 +350,12 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 
 	return nil
 }
+
+// converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
+func (fs *InMemFS) Abs(path string) (string, error) {
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+
+	return filepath.Join(fs.cwd, path), nil
+}

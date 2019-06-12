@@ -7,8 +7,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 )
 
-// RenameColumnOfSchema takes a table and renames a column from oldName to newName
-func RenameColumnOfSchema(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, oldName, newName string) (*doltdb.Table, error) {
+// RenameColumn takes a table and renames a column from oldName to newName
+func RenameColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, oldName, newName string) (*doltdb.Table, error) {
 	if newName == oldName {
 		return tbl, nil
 	} else if tbl == nil || doltDB == nil {
@@ -17,25 +17,25 @@ func RenameColumnOfSchema(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltd
 
 	tblSch := tbl.GetSchema(ctx)
 	allCols := tblSch.GetAllCols()
-	col, ok := allCols.GetByName(oldName)
 
-	if !ok {
-		return nil, schema.ErrColNotFound
-	}
-
-	_, ok = allCols.GetByName(newName)
-
-	if ok {
+	if _, ok := allCols.GetByName(newName); ok {
 		return nil, schema.ErrColNameCollision
 	}
 
-	col.Name = newName
-	colMap := allCols.NameToCol
-	colMap[newName] = col
-	delete(colMap, oldName)
+	if _, ok := allCols.GetByName(oldName); !ok {
+		return nil, schema.ErrColNotFound
+	}
 
-	colColl, err := schema.NewColCollectionFromMap(colMap)
+	cols := make([]schema.Column, 0)
+	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		if col.Name == oldName {
+			col.Name = newName
+		}
+		cols = append(cols, col)
+		return false
+	})
 
+	colColl, err := schema.NewColCollection(cols...)
 	if err != nil {
 		return nil, err
 	}

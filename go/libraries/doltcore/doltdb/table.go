@@ -26,7 +26,8 @@ const (
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 
-// IsValidTableName returns true if the name matches the regular expression `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
+// IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
+// Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
 	return tableNameRegex.MatchString(name)
 }

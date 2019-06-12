@@ -960,8 +960,8 @@ func TestCaseSensitivity(t *testing.T) {
 			tableName:   "tableName",
 			tableSchema: newSchema("test", types.StringKind),
 			additionalSetup: func(t *testing.T, dEnv *env.DoltEnv) {
-				createTestTable(dEnv, t, "TABLENAME", newSchema("test", types.StringKind))
-				createTestTable(dEnv, t, "tablename", newSchema("test", types.StringKind))
+				dtestutils.CreateTestTable(t, dEnv, "TABLENAME", newSchema("test", types.StringKind))
+				dtestutils.CreateTestTable(t, dEnv, "tablename", newSchema("test", types.StringKind))
 			},
 			initialRows: rs(newRow(types.String("1"))),
 			query:       "select test from tableName",
@@ -973,7 +973,7 @@ func TestCaseSensitivity(t *testing.T) {
 			tableName:   "tableName",
 			tableSchema: newSchema("test", types.StringKind),
 			additionalSetup: func(t *testing.T, dEnv *env.DoltEnv) {
-				createTestTable(dEnv, t, "TABLENAME", newSchema("test", types.StringKind))
+				dtestutils.CreateTestTable(t, dEnv, "TABLENAME", newSchema("test", types.StringKind))
 			},
 			initialRows: rs(newRow(types.String("1"))),
 			query:       "select test from tablename",
@@ -984,7 +984,7 @@ func TestCaseSensitivity(t *testing.T) {
 			tableName:   "tableName",
 			tableSchema: newSchema("test", types.StringKind),
 			additionalSetup: func(t *testing.T, dEnv *env.DoltEnv) {
-				createTestTable(dEnv, t, "other", newSchema("othercol", types.StringKind))
+				dtestutils.CreateTestTable(t, dEnv, "other", newSchema("othercol", types.StringKind))
 			},
 			initialRows: rs(newRow(types.String("1"))),
 			query:       "select other.test from tablename as other, other",
@@ -1133,7 +1133,7 @@ func TestCaseSensitivity(t *testing.T) {
 			createTestDatabase(dEnv, t)
 
 			if tt.tableName != "" {
-				createTestTable(dEnv, t, tt.tableName, tt.tableSchema, tt.initialRows...)
+				dtestutils.CreateTestTable(t, dEnv, tt.tableName, tt.tableSchema, tt.initialRows...)
 			}
 			if tt.additionalSetup != nil {
 				tt.additionalSetup(t, dEnv)

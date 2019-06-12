@@ -47,7 +47,7 @@ func Rm(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func removeTables(dEnv *env.DoltEnv, tables []string, working *doltdb.RootValue) errhand.VerboseError {
-	working, err := working.RemoveTables(context.TODO(), tables)
+	working, err := working.RemoveTables(context.TODO(), tables...)
 
 	if err != nil {
 		return errhand.BuildDError("Unable to remove table(s)").AddCause(err).Build()
