@@ -1,12 +1,12 @@
 package commands
 
-
 import (
 	"context"
 	"errors"
 	"fmt"
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
+	"github.com/flynn-archive/go-shlex"
 	"github.com/liquidata-inc/ishell"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -79,9 +79,8 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	query, ok := apr.GetValue(queryFlag)
-	if ok {
-		// run a single command and exit
+	// run a single command and exit
+	if query, ok := apr.GetValue(queryFlag); ok {
 		if newRoot, err := processQuery(query, dEnv, root); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		} else if newRoot != nil {
@@ -91,6 +90,19 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 	}
 
+	// start an interactive shell
+	root = runShell(dEnv, root)
+
+	// If the SQL session wrote a new root value, update the working set with it
+	if root != nil {
+		return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, root), usage)
+	}
+
+	return 0
+}
+
+// runShell starts a SQL shell. Returns when the user exits the shell with the root value resulting from any queries.
+func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	// start the doltsql shell
@@ -114,6 +126,8 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	shell := ishell.NewUninterpreted(&shellConf)
 	shell.SetMultiPrompt( "      -> ")
+	// TODO: update completer on create / drop / alter statements
+	shell.CustomCompleter(newCompleter(dEnv))
 
 	shell.EOF(func(c *ishell.Context) {
 		c.Stop()
@@ -127,7 +141,7 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	})
 
 	shell.Uninterpreted(func(c *ishell.Context) {
-		query = c.Args[0]
+		query := c.Args[0]
 		if len(strings.TrimSpace(query)) == 0 {
 			return
 		}
@@ -153,11 +167,98 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	shell.Run()
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
-	if root != nil {
-		return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, root), usage)
+	return root
+}
+
+// Returns a new auto completer with table names, column names, and SQL keywords.
+func newCompleter(dEnv *env.DoltEnv) *sqlCompleter {
+	var completionWords []string
+
+	root, err := dEnv.WorkingRoot(context.TODO())
+	if err != nil {
+		return &sqlCompleter{}
 	}
 
-	return 0
+	tableNames := root.GetTableNames(context.TODO())
+	completionWords = append(completionWords, tableNames...)
+	var columnNames []string
+	for _, tableName := range tableNames {
+		tbl, _ := root.GetTable(context.TODO(), tableName)
+		sch := tbl.GetSchema(context.TODO())
+		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+			completionWords = append(completionWords, col.Name)
+			columnNames = append(columnNames, col.Name)
+			return false
+		})
+	}
+
+	completionWords = append(completionWords, sql.CommonKeywords...)
+
+	return &sqlCompleter{
+		allWords: completionWords,
+		columnNames: columnNames,
+	}
+}
+
+type sqlCompleter struct {
+	allWords []string
+	columnNames []string
+}
+
+// Do function for autocompletion, defined by the Readline library. Mostly stolen from ishell.
+func (c *sqlCompleter) Do(line []rune, pos int) (newLine [][]rune, length int) {
+	var words []string
+	if w, err := shlex.Split(string(line)); err == nil {
+		words = w
+	} else {
+		// fall back
+		words = strings.Fields(string(line))
+	}
+
+	var cWords []string
+	prefix := ""
+	lastWord := ""
+	if len(words) > 0 && pos > 0 && line[pos-1] != ' ' {
+		lastWord = words[len(words)-1]
+		prefix = strings.ToLower(lastWord)
+	} else if len(words) > 0 {
+		lastWord = words[len(words)-1]
+	}
+
+	cWords = c.getWords(lastWord)
+
+	var suggestions [][]rune
+	for _, w := range cWords {
+		lowered := strings.ToLower(w)
+		if strings.HasPrefix(lowered, prefix) {
+			suggestions = append(suggestions, []rune(strings.TrimPrefix(lowered, prefix)))
+		}
+	}
+	if len(suggestions) == 1 && prefix != "" && string(suggestions[0]) == "" {
+		suggestions = [][]rune{[]rune(" ")}
+	}
+
+	return suggestions, len(prefix)
+}
+
+// Simple suggestion function. Returns column name suggestions if the last word in the input has exactly one '.' in it,
+// otherwise returns all tables, columns, and reserved words.
+func (c *sqlCompleter) getWords(lastWord string) (s []string) {
+	lastDot := strings.LastIndex(lastWord, ".")
+	if lastDot > 0 && strings.Count(lastWord, ".") == 1 {
+		alias := lastWord[:lastDot]
+		return prepend(alias + ".", c.columnNames)
+	}
+
+	return c.allWords
+}
+
+func prepend(s string, ss []string) []string {
+	newSs := make([]string, len(ss))
+	for i := range ss {
+		newSs[i] = s + ss[i]
+	}
+	return newSs
 }
 
 // Processes a single query and returns the new root value of the DB, or an error encountered.

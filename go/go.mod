@@ -8,6 +8,7 @@ require (
 	github.com/aws/aws-sdk-go v1.16.26
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.7.0
+	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
 	github.com/gizak/termui/v3 v3.0.0
 	github.com/golang/protobuf v1.3.1
 	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db
