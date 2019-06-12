@@ -70,7 +70,7 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			var srcDB *doltdb.DoltDB
 			r, srcDB, verr = createRemote(remoteName, remoteUrl, params)
 
-			dEnv, verr = clonedEnv(r, dir, dEnv.FS)
+			dEnv, verr = envForClone(r, dir, dEnv.FS)
 
 			if verr == nil {
 				verr = cloneRemote(context.Background(), srcDB, remoteName, branch, dEnv)
@@ -114,7 +114,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-func clonedEnv(r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
+func envForClone(r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
 	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
 	if exists {
