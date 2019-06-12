@@ -223,11 +223,11 @@ func resolveColumnsInStarExpr(selectExpr *sqlparser.StarExpr, tableNames []strin
 	columns := make([]QualifiedColumn, 0)
 	if !selectExpr.TableName.IsEmpty() {
 		var targetTable string
-		if aliasedTableName, ok := aliases.TablesByAlias[selectExpr.TableName.Name.String()]; ok {
-			targetTable = aliasedTableName
-		} else {
-			targetTable = selectExpr.TableName.Name.String()
+		var err error
+		if targetTable, err = resolveTable(selectExpr.TableName.Name.String(), tableNames, aliases); err != nil {
+			return nil, err
 		}
+
 		tableSch := schemas[targetTable]
 		tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
 			columns = append(columns, QualifiedColumn{targetTable, col.Name})
