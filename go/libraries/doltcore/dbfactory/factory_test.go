@@ -10,7 +10,7 @@ import (
 func TestCreateFileDB(t *testing.T) {
 	ctx := context.Background()
 
-	db, err := CreateDB(ctx, "file://testdata/", nil)
+	db, err := CreateDB(ctx, "file://testdata/.dolt/noms", nil)
 
 	assert.NoError(t, err)
 
