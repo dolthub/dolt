@@ -28,8 +28,7 @@ const (
 var ErrNoPrimaryKeyColumns = errors.New("at least one primary key column must be specified")
 var tagCommentPrefix = "tag:"
 
-// ExecuteCreate executes the given create statement and returns the new root value of the database and its
-// accompanying schema.
+// ExecuteDrop executes the given drop statement and returns the new root value of the database.
 func ExecuteDrop(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	if ddl.Action != sqlparser.DropStr {
 		panic("expected drop statement")
