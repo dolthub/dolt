@@ -2,11 +2,11 @@ package dbfactory
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
+/*
 func TestCreateFileDB(t *testing.T) {
 	ctx := context.Background()
 
@@ -33,6 +33,7 @@ func TestCreateFileDB(t *testing.T) {
 	_, fakeOK := datasets.MaybeGet(ctx, types.String("refs/heads/fake"))
 	assert.False(t, fakeOK)
 }
+*/
 
 func TestCreateMemDB(t *testing.T) {
 	ctx := context.Background()
