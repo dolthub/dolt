@@ -51,7 +51,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:        "Test in use table name",
 			query:       "create table people (id int primary key, age int)",
-			expectedErr: "Table people already exists",
+			expectedErr: "Table 'people' already exists",
 		},
 		{
 			name:  "Test types",
