@@ -31,7 +31,7 @@ const (
 )
 
 // LocalDirDoltDB stores the db in the current directory
-var LocalDirDoltDB = "file://./"
+var LocalDirDoltDB = "file://./" + dbfactory.DoltDataDir
 
 // InMemDoltDB stores the DoltDB db in memory and is primarily used for testing
 var InMemDoltDB = "mem://"

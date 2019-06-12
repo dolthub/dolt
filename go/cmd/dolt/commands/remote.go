@@ -1,9 +1,11 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"os"
 	"path"
@@ -47,9 +49,6 @@ var remoteLongDesc = "With no arguments, shows a list of existing remotes. Sever
 	"\n" +
 	"The local filesystem can be used as a remote by providing a repository url in the format file://absolute path. See" +
 	"https://en.wikipedia.org/wiki/File_URI_scheme for details." +
-	"\n<b>rename</b>\n" +
-	"Rename the remote named <old> to <new>. All remote-tracking branches and configuration" +
-	"settings for the remote are updated." +
 	"\n" +
 	"\n<b>remove, rm</b>\n" +
 	"Remove the remote named <name>. All remote-tracking branches and configuration settings" +
@@ -58,7 +57,6 @@ var remoteLongDesc = "With no arguments, shows a list of existing remotes. Sever
 var remoteSynopsis = []string{
 	"[-v | --verbose]",
 	"add [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <name> <url>",
-	"rename <old> <new>",
 	"remove <name>",
 }
 
@@ -74,6 +72,8 @@ var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, 
 var credTypes = []string{dbfactory.RoleCS.String(), dbfactory.EnvCS.String(), dbfactory.FileCS.String()}
 
 func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ctx := context.Background()
+
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["region"] = "cloud provider region associated with this remote."
 	ap.ArgListHelp["creds-type"] = "credential type.  Valid options are role, env, and file.  See the help section for additional details."
@@ -93,10 +93,8 @@ func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		verr = printRemotes(dEnv, apr)
 	case apr.Arg(0) == addRemoteId:
 		verr = addRemote(dEnv, apr)
-	case apr.Arg(0) == renameRemoteId:
-		verr = renameRemote(dEnv, apr)
 	case apr.Arg(0) == removeRemoteId:
-		verr = removeRemote(dEnv, apr)
+		verr = removeRemote(ctx, dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -104,7 +102,7 @@ func Remote(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func removeRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+func removeRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -119,45 +117,27 @@ func removeRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 
 	if _, ok := remotes[old]; !ok {
 		return errhand.BuildDError("error: unknown remote " + old).Build()
-	} else {
-		delete(dEnv.RepoState.Remotes, old)
-		err := dEnv.RepoState.Save()
+	}
 
-		if err != nil {
-			return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
+	refs := dEnv.DoltDB.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
+
+	for _, r := range refs {
+		rr := r.(ref.RemoteRef)
+
+		if rr.GetRemote() == old {
+			err = dEnv.DoltDB.DeleteBranch(ctx, rr)
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to delete remote tracking ref '%s'", rr.String()).Build()
+			}
 		}
 	}
 
-	return nil
-}
-
-func renameRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
-	if apr.NArg() != 3 {
-		return errhand.BuildDError("").SetPrintUsage().Build()
-	}
-
-	old := strings.TrimSpace(apr.Arg(1))
-	new := strings.TrimSpace(apr.Arg(2))
-
-	remotes, err := dEnv.GetRemotes()
+	delete(dEnv.RepoState.Remotes, old)
+	err = dEnv.RepoState.Save()
 
 	if err != nil {
-		return errhand.BuildDError("error: unable to read remotes").Build()
-	}
-
-	if r, ok := remotes[old]; !ok {
-		return errhand.BuildDError("error: unknown remote " + old).Build()
-	} else {
-		delete(dEnv.RepoState.Remotes, old)
-
-		r.Name = new
-		dEnv.RepoState.AddRemote(r)
-
-		err := dEnv.RepoState.Save()
-
-		if err != nil {
-			return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
-		}
+		return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
 	}
 
 	return nil
@@ -230,6 +210,10 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 
 	if strings.IndexAny(remoteName, " \t\n\r./\\!@#$%^&*(){}[],.<>'\"?=+|") != -1 {
 		return errhand.BuildDError("invalid remote name: " + remoteName).Build()
+	}
+
+	if _, ok := dEnv.RepoState.Remotes[remoteName]; ok {
+		return errhand.BuildDError("error: A remote named '%s' already exists.", remoteName).AddDetails("remove it before running this command again").Build()
 	}
 
 	remoteUrl := apr.Arg(2)
