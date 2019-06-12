@@ -298,7 +298,6 @@ func TestExecuteDrop(t *testing.T) {
 	}
 }
 
-
 func TestAddColumn(t *testing.T) {
 	tests := []struct {
 		name           string
