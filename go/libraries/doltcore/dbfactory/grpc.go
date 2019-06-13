@@ -2,6 +2,7 @@ package dbfactory
 
 import (
 	"context"
+	"fmt"
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/datas"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
@@ -55,5 +56,11 @@ func (fact DoltRemoteFactory) newChunkStore(urlObj *url.URL, params map[string]s
 	}
 
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
-	return remotestorage.NewDoltChunkStoreFromPath(urlObj.Path, urlObj.Host, csClient)
+	cs, err := remotestorage.NewDoltChunkStoreFromPath(urlObj.Path, urlObj.Host, csClient)
+
+	if err == remotestorage.ErrInvalidDoltSpecPath {
+		return nil, fmt.Errorf("invalid dolt url '%s'", urlObj.String())
+	}
+
+	return cs, err
 }
