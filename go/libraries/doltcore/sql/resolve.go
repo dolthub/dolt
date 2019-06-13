@@ -23,7 +23,7 @@ func ColumnsEqual(c1, c2 QualifiedColumn) bool {
 // If an exact case-sensitive match for table name exists, it will be returned. Otherwise, a case-insensitive match will
 // be returned if one exists. If no case-insensitive match exists, or if multiple exist, an error will be returned.
 func resolveTable(tableNameExpr string, allTableNames []string, aliases *Aliases) (canonicalTableName string, err error) {
-	if tableName, ok := aliases.TablesByAlias[tableNameExpr]; ok {
+	if tableName, ok := aliases.GetTableByAlias(tableNameExpr); ok {
 		return tableName, nil
 	}
 
@@ -82,10 +82,11 @@ func resolveColumn(colNameExpr string, schemas map[string]schema.Schema, aliases
 //
 // colName is the string column selection statement, e.g. "col" or "table.column". See getColumnNameString
 func resolveColumnAlias(colNameExpr string, aliases *Aliases) (*RowValGetter, error) {
-	if getters, ok := aliases.ColumnAliases[colNameExpr]; ok {
-		if len(getters) > 1 {
-			return nil, errFmt(AmbiguousColumnErrFmt, colNameExpr)
-		}
+	getters := aliases.GetColumnByAlias(colNameExpr)
+	if len(getters) > 1 {
+		return nil, errFmt(AmbiguousColumnErrFmt, colNameExpr)
+	}
+	if len(getters) == 1 {
 		return getters[0], nil
 	}
 	return nil, nil
@@ -315,7 +316,7 @@ func resolveColumnsInExpr(colExpr sqlparser.Expr, inputSchemas map[string]schema
 
 		// if the colName given is actually an alias, there are no columns to resolve (only a getter that may or may not
 		// refer to an expression involving a column)
-		if _, ok := aliases.ColumnAliases[colNameStr]; ok {
+		if len(aliases.GetColumnByAlias(colNameStr)) > 0 {
 			return nil, nil
 		}
 

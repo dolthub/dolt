@@ -303,12 +303,8 @@ func processFromClause(ctx context.Context, root *doltdb.RootValue, selectStmt *
 
 // Validates that the tables and aliases from the select have unique names.
 func validateTablesAndAliases(selectStatement *SelectStatement) error {
-	seen := make(map[string]bool)
-	for alias := range selectStatement.aliases.TablesByAlias {
-		seen[alias] = true
-	}
 	for tableName := range selectStatement.inputSchemas {
-		if seen[tableName] {
+		if _, ok := selectStatement.aliases.GetTableByAlias(tableName); ok {
 			return errFmt("Non-unique table name / alias: '%v'", tableName)
 		}
 	}
