@@ -4,6 +4,9 @@ import (
 	"strings"
 )
 
+// Error format string for reporting non-unique table names / aliases in a select
+const NonUniqueTableNameErrFmt = "Non-unique table name / alias: '%v'"
+
 // Aliases tracks the aliased identifiers in a query
 type Aliases struct {
 	// Table aliases by their name. Table aliases must be distinct and are case-insensitive
@@ -31,7 +34,7 @@ func (a *Aliases) TableAliasesOnly() *Aliases {
 func (a *Aliases) AddTableAlias(tableName, alias string) error {
 	lowerAlias := strings.ToLower(alias)
 	if _, ok := a.tableAliases[lowerAlias]; ok {
-		return errFmt("Duplicate table alias: '%v'", alias)
+		return errFmt(NonUniqueTableNameErrFmt, alias)
 	}
 	a.tableAliases[lowerAlias] = tableName
 

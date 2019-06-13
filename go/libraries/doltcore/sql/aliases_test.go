@@ -1,6 +1,7 @@
 
 package sql
 
+// TODO: fix me
 /**
 func TestTableAliases(t *testing.T) {
 	a := NewAliases()
