@@ -31,8 +31,12 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 
 func (ad *AsyncDiffer) Start(ctx context.Context, v1, v2 types.Value) {
 	go func() {
+		defer close(ad.diffChan)
+		defer func() {
+			// Ignore a panic from Diff...
+			recover()
+		}()
 		diff.Diff(ctx, v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
-		close(ad.diffChan)
 	}()
 }
 
