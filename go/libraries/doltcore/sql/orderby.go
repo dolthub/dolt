@@ -3,7 +3,9 @@ package sql
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/xwb1989/sqlparser"
+	"sort"
 )
 
 // A row sorter knows how to sort rows in a result set using its provided Less function. Init() must be called before
@@ -102,4 +104,47 @@ func createRowSorter(statement *SelectStatement, orderBy sqlparser.OrderBy) (*Ro
 	}
 
 	return &RowSorter{orderBys: obs}, nil
+}
+
+// Boolean lesser function for rows. Returns whether rLeft < rRight
+type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
+
+// Returns a sorting transform for the rowLesserFn given. The transform will necessarily block until it receives all
+// input rows before sending rows to the rest of the pipeline.
+func newSortingTransform(lesser rowLesserFn) pipeline.TransformFunc {
+	rows := make([]pipeline.RowWithProps, 0)
+
+	sortAndWrite := func(outChan chan<- pipeline.RowWithProps) {
+		sort.Slice(rows, func(i, j int) bool {
+			return lesser(rows[i].Row, rows[j].Row)
+		})
+		for _, r := range rows {
+			outChan <- r
+		}
+	}
+
+	return func(inChan <-chan pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
+		for {
+			select {
+			case <-stopChan:
+				sortAndWrite(outChan)
+				return
+			default:
+			}
+
+			select {
+			case r, ok := <-inChan:
+				if ok {
+					rows = append(rows, r)
+				} else {
+					sortAndWrite(outChan)
+					return
+				}
+
+			case <-stopChan:
+				sortAndWrite(outChan)
+				return
+			}
+		}
+	}
 }
