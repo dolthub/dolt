@@ -1027,6 +1027,17 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedErr: "Non-unique table name / alias: 'other'",
 		},
 		{
+			name:        "two table aliases with same name",
+			tableName:   "tableName",
+			tableSchema: newSchema("test", types.StringKind),
+			additionalSetup: func(t *testing.T, dEnv *env.DoltEnv) {
+				dtestutils.CreateTestTable(t, dEnv, "other", newSchema("othercol", types.StringKind))
+			},
+			initialRows: rs(newRow(types.String("1"))),
+			query:       "select bad.test from tablename as bad, other as bad",
+			expectedErr: "Non-unique table name / alias: 'bad'",
+		},
+		{
 			name:        "column name has mixed case, select lower case",
 			tableName:   "test",
 			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
