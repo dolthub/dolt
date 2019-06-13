@@ -30,7 +30,7 @@ require (
 	golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c
 	golang.org/x/oauth2 v0.0.0-20190115181402-5dab4167f31c // indirect
 	google.golang.org/genproto v0.0.0-20190128161407-8ac453e89fca // indirect
-	google.golang.org/grpc v1.18.0
+	google.golang.org/grpc v1.21.1
 	gopkg.in/square/go-jose.v2 v2.3.1
 )
 
