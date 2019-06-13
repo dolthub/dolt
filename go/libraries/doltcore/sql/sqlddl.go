@@ -90,6 +90,11 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	if root.HasTable(ctx, tableName) {
+		if ddl.IfNotExists {
+			table, _ := root.GetTable(ctx, tableName)
+			sch := table.GetSchema(ctx)
+			return root, sch, nil
+		}
 		return nil, nil, errFmt("Table '%v' already exists", tableName)
 	}
 
@@ -151,6 +156,7 @@ func executeRename(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	return root, nil
 }
 
+// validateTable returns an error if the given table name is invalid or if the table doesn't exist
 func validateTable(ctx context.Context, root *doltdb.RootValue, tableName string) error {
 	if !doltdb.IsValidTableName(tableName) {
 		return errFmt("Invalid table name: '%v'", tableName)
@@ -163,6 +169,7 @@ func validateTable(ctx context.Context, root *doltdb.RootValue, tableName string
 	return nil
 }
 
+// executeAlter executes an alter statement and returns the updated root
 func executeAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	tableName := ddl.Table.Name.String()
 	if err := validateTable(ctx, root, tableName); err != nil {
