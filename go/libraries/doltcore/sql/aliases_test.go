@@ -1,12 +1,7 @@
 
 package sql
 
-import (
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
-)
-
+/**
 func TestTableAliases(t *testing.T) {
 	a := NewAliases()
 	alias1 := "alias"
@@ -32,3 +27,4 @@ func TestTableAliases(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "Duplicate table alias")
 }
+*/
