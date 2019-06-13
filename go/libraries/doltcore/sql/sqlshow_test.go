@@ -16,6 +16,17 @@ import (
 func TestExecuteShow(t *testing.T) {
 	peopleSchemaStr, _ := SchemaAsCreateStmt("people", peopleTestSchema)
 
+	peopleSchemaRows := rs(
+		newResultSetRow(types.String("id"), types.String("int"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
+		newResultSetRow(types.String("first"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		newResultSetRow(types.String("last"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		newResultSetRow(types.String("is_married"), types.String("bool"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		newResultSetRow(types.String("age"), types.String("int"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		newResultSetRow(types.String("rating"), types.String("float"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		newResultSetRow(types.String("uuid"), types.String("uuid"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		newResultSetRow(types.String("num_episodes"), types.String("int unsigned"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+	)
+
 	tests := []struct {
 		name           string
 		query          string
@@ -32,6 +43,14 @@ func TestExecuteShow(t *testing.T) {
 			expectedSchema: showCreateTableSchema(),
 		},
 		{
+			name:  "show create table case insensitive",
+			query: "show create table PeOPle",
+			expectedRows: rs(
+				newResultSetRow(types.String("people"), types.String(peopleSchemaStr)),
+			),
+			expectedSchema: showCreateTableSchema(),
+		},
+		{
 			name:  "show tables",
 			query: "show tables",
 			expectedRows: rs(
@@ -40,6 +59,40 @@ func TestExecuteShow(t *testing.T) {
 				newResultSetRow(types.String("people")),
 			),
 			expectedSchema: showTablesSchema(),
+		},
+		{
+			name:           "show columns from table",
+			query:          "show columns from people",
+			expectedRows:   peopleSchemaRows,
+			expectedSchema: showColumnsSchema(),
+		},
+		{
+			name:           "show columns from table case insensitive",
+			query:          "show columns from PeOpLe",
+			expectedRows:   peopleSchemaRows,
+			expectedSchema: showColumnsSchema(),
+		},
+		{
+			name:        "show columns from unknown table",
+			query:       "show columns from notFound",
+			expectedErr: "Unknown table: 'notFound'",
+		},
+		{
+			name:           "describe table",
+			query:          "describe people",
+			expectedRows:   peopleSchemaRows,
+			expectedSchema: showColumnsSchema(),
+		},
+		{
+			name:           "describe table case insensitive",
+			query:          "describe PeOpLE",
+			expectedRows:   peopleSchemaRows,
+			expectedSchema: showColumnsSchema(),
+		},
+		{
+			name:        "describe unknown table",
+			query:       "describe notFound",
+			expectedErr: "Unknown table: 'notFound'",
 		},
 		{
 			name:        "show databases",
