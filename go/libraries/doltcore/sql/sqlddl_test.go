@@ -54,6 +54,11 @@ func TestExecuteCreate(t *testing.T) {
 			expectedErr: "Table 'people' already exists",
 		},
 		{
+			name:        "Test in use table name with if not exists",
+			query:       "create table if not exists people (id int primary key, age int)",
+			expectedSchema: peopleTestSchema,
+		},
+		{
 			name:  "Test types",
 			query: "create table testTable (id int primary key, age int, first varchar, is_married boolean)",
 			expectedSchema: dtestutils.CreateSchema(
