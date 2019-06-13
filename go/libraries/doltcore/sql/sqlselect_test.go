@@ -527,7 +527,7 @@ func TestExecuteSelect(t *testing.T) {
 		{
 			name:        "duplicate table alias",
 			query:       "select * from people p, people p where age >= 40",
-			expectedErr: "Duplicate table alias: 'p'",
+			expectedErr: "Non-unique table name / alias: 'p'",
 		},
 		{
 			name:        "column aliases in where clause",
