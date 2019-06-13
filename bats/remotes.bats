@@ -168,16 +168,17 @@ teardown() {
 @test "dolt fetch" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
-    run dolt fetch
+    run dolt fetch test-remote
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt fetch refs/heads/master:refs/remotes/test-remote/master
+    run dolt fetch test-remote refs/heads/master:refs/remotes/test-remote/master
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt fetch refs/heads/master:refs/remotes/poop/master
+    run dolt fetch poop refs/heads/master:refs/remotes/poop/master
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote 'poop'" ]] || false
-    run dolt fetch refs/heads/master:refs/remotes/test-remote/poop
+    echo $output
+    [[ "$output" =~ "unknown remote" ]] || false
+    run dolt fetch test-remote refs/heads/master:refs/remotes/test-remote/poop
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt branch -v -a
@@ -188,7 +189,7 @@ teardown() {
 @test "dolt merge with origin/master syntax." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote master
-    dolt fetch
+    dolt fetch test-remote
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
@@ -372,4 +373,41 @@ teardown() {
     dolt pull
     run dolt branch --list master -v
     [[ "$output" = "$master_state1" ]] || false
+}
+
+@test "multiple remotes" {
+    # seed with some data
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt add test
+    dolt commit -m "test commit"
+
+    # create the remote data storage directories
+    mkdir remote1
+    mkdir remote2
+
+    # push to a file based remote
+    dolt remote add remote2 file://remote2
+    dolt push remote2 master
+
+    # fetch fail for unspecified remote
+    run dolt fetch
+    [ "$status" -eq 1 ]
+
+    # succeed when specifying a remote
+    dolt fetch remote2
+
+    #add origin push and fetch
+    dolt remote add origin file://remote1
+    dolt push master:notmaster
+
+    #fetch should now work without a specified remote because origin exists
+    dolt fetch
+
+    # fetch master into some garbage tracking branches
+    dolt fetch refs/heads/notmaster:refs/remotes/anything/master
+    dolt fetch remote2 refs/heads/master:refs/remotes/something/master
+
+    run dolt branch -a
+    [[ "$output" =~ "remotes/anything/master" ]] || false
+    [[ "$output" =~ "remotes/something/master" ]] || false
 }
