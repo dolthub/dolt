@@ -52,6 +52,18 @@ func showTablesSchema() schema.Schema {
 	return schema.UnkeyedSchemaFromCols(colCollection)
 }
 
+func showColumnsSchema() schema.Schema {
+	colCollection, _ := schema.NewColCollection(
+		schema.NewColumn("Field", 0, types.StringKind, false),
+		schema.NewColumn("Type", 1, types.StringKind, false),
+		schema.NewColumn("Null", 2, types.StringKind, false),
+		schema.NewColumn("Key", 3, types.StringKind, false),
+		schema.NewColumn("Default", 4, types.StringKind, false),
+		schema.NewColumn("Extra", 5, types.StringKind, false),
+	)
+	return schema.UnkeyedSchemaFromCols(colCollection)
+}
+
 func showCreateTableSchema() schema.Schema {
 	colCollection, _ := schema.NewColCollection(
 		schema.NewColumn("Table", 0, types.StringKind, false),
@@ -64,9 +76,9 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 
 	switch show.Type {
 	case "create table":
-		tableName := show.Table.Name.String()
-		if !root.HasTable(ctx, tableName) {
-			return nil, nil, errFmt(UnknownTableErrFmt, tableName)
+		tableName, err := resolveTable(show.Table.Name.String(), root.GetTableNames(ctx), NewAliases())
+		if err != nil {
+			return nil, nil, err
 		}
 
 		table, _ := root.GetTable(ctx, tableName)
@@ -84,6 +96,21 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 
 		return p, resultSch, nil
 
+	case "columns":
+		tableName, err := resolveTable(show.OnTable.Name.String(), root.GetTableNames(ctx), NewAliases())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		table, _ := root.GetTable(ctx, tableName)
+
+		tableSch := table.GetSchema(ctx)
+		rows := schemaAsShowColumnRows(tableSch)
+
+		source := sourceFuncForRows(rows)
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+		return p, showColumnsSchema(), nil
+
 	case "tables":
 		tableNames := root.GetTableNames(ctx)
 		sch := showTablesSchema()
@@ -96,6 +123,40 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 	}
 
 	return nil, nil, nil
+}
+
+// schemaAsShowColumnRows returns the rows for a `show columns from table` or `describe table` for the schema given.
+func schemaAsShowColumnRows(tableSch schema.Schema) []row.Row {
+	rs := make([]row.Row, tableSch.GetAllCols().Size())
+	i := 0
+	tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		rs[i] = describeColumn(col)
+		i++
+		return false
+	})
+	return rs
+}
+
+// describeColumn returns a row describing the column given, using the schema from showColumnsSchema
+func describeColumn(col schema.Column) row.Row {
+	nullStr := "NO"
+	if col.IsNullable() {
+		nullStr = "YES"
+	}
+	keyStr := ""
+	if col.IsPartOfPK {
+		keyStr = "PRI"
+	}
+
+	taggedVals := row.TaggedValues{
+		0: types.String(col.Name),
+		1: types.String(DoltToSQLType[col.Kind]),
+		2: types.String(nullStr),
+		3: types.String(keyStr),
+		4: types.String("NULL"), // TODO: when schemas store defaults, use them here
+		5: types.String(""), // Extra column reserved for future use
+	}
+	return row.New(showColumnsSchema(), taggedVals)
 }
 
 // Takes a single-dimensional array of strings and transposes it to a 2D array, with a single element per row.
