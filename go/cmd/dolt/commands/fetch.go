@@ -18,10 +18,12 @@ var fetchShortDesc = "Download objects and refs from another repository"
 var fetchLongDesc = "Fetch refs, along with the objects necessary to complete their histories and update " +
 	"remote-tracking branches." +
 	"\n" +
-	"\nWhen no refspec(s) are specified on the command line, the fetch_specs for the default remote are used. (If there " +
-	"is more than one remote, a remote named 'origin' will be assumed to be the default)."
+	"\n By default dolt will attempt to fetch from a remote named 'origin'.  The <remote> parameter allows you to " +
+	"specify the name of a different remote you wish to pull from by the remote's name." +
+	"\n" +
+	"\nWhen no refspec(s) are specified on the command line, the fetch_specs for the default remote are used."
 var fetchSynopsis = []string{
-	"[<refspec> ...]",
+	"[<remote>] [<refspec> ...]",
 }
 
 func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -30,40 +32,55 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	apr := cli.ParseArgs(ap, args, help)
 
 	remotes, _ := dEnv.GetRemotes()
-
-	var verr errhand.VerboseError
-	if len(remotes) == 0 {
-		verr = errhand.BuildDError("error: no remotes set").
-			AddDetails("to add a remote run: dolt remote add <remote> <url>").Build()
-	}
+	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
 
 	if verr == nil {
-		var refSpecs []ref.RemoteRefSpec
-		refSpecs, verr = getRefSpecs(apr, dEnv, remotes)
-
-		if verr == nil {
-			var rsToRem map[ref.RemoteRefSpec]env.Remote
-			if rsToRem, verr = mapRefspecsToRemotes(refSpecs, dEnv); verr == nil {
-				verr = fetchRefSpecs(dEnv, rsToRem)
-			}
-		}
+		verr = fetchRefSpecs(dEnv, r, refSpecs)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getRefSpecs(apr *argparser.ArgParseResults, dEnv *env.DoltEnv, remotes map[string]env.Remote) ([]ref.RemoteRefSpec, errhand.VerboseError) {
-	if apr.NArg() != 0 {
-		return parseRSFromArgs(apr, remotes)
+func getRefSpecs(args []string, dEnv *env.DoltEnv, remotes map[string]env.Remote) (env.Remote, []ref.RemoteRefSpec, errhand.VerboseError) {
+	if len(remotes) == 0 {
+		return env.NoRemote, nil, errhand.BuildDError("error: no remotes set").AddDetails("to add a remote run: dolt remote add <remote> <url>").Build()
 	}
 
-	return dEnv.GetRefSpecs("")
+	remName := "origin"
+	remote, remoteOK := remotes[remName]
+
+	if len(args) != 0 {
+		if val, ok := remotes[args[0]]; ok {
+			remName = args[0]
+			remote = val
+			remoteOK = ok
+			args = args[1:]
+		}
+	}
+
+	if !remoteOK {
+		return env.NoRemote, nil, errhand.BuildDError("error: unknown remote").SetPrintUsage().Build()
+	}
+
+	var rs []ref.RemoteRefSpec
+	var verr errhand.VerboseError
+	if len(args) != 0 {
+		rs, verr = parseRSFromArgs(args)
+	} else {
+		rs, verr = dEnv.GetRefSpecs(remName)
+	}
+
+	if verr != nil {
+		return env.NoRemote, nil, verr
+	}
+
+	return remote, rs, verr
 }
 
-func parseRSFromArgs(apr *argparser.ArgParseResults, remotes map[string]env.Remote) ([]ref.RemoteRefSpec, errhand.VerboseError) {
+func parseRSFromArgs(args []string) ([]ref.RemoteRefSpec, errhand.VerboseError) {
 	var refSpecs []ref.RemoteRefSpec
-	for i := 0; i < apr.NArg(); i++ {
-		rsStr := apr.Arg(i)
+	for i := 0; i < len(args); i++ {
+		rsStr := args[i]
 		rs, err := ref.ParseRefSpec(rsStr)
 
 		if err != nil {
@@ -73,12 +90,6 @@ func parseRSFromArgs(apr *argparser.ArgParseResults, remotes map[string]env.Remo
 		if rrs, ok := rs.(ref.RemoteRefSpec); !ok {
 			return nil, errhand.BuildDError("error: '%s' is not a valid refspec referring to a remote tracking branch", rsStr).Build()
 		} else {
-			remName := rrs.GetRemote()
-
-			if _, ok := remotes[remName]; !ok {
-				return nil, errhand.BuildDError("error: unknown remote '%s'", remName).Build()
-			}
-
 			refSpecs = append(refSpecs, rrs)
 		}
 	}
@@ -103,10 +114,10 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 	return rsToRem, nil
 }
 
-func fetchRefSpecs(dEnv *env.DoltEnv, rsToRem map[ref.RemoteRefSpec]env.Remote) errhand.VerboseError {
+func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
 	ctx := context.TODO()
 
-	for rs, rem := range rsToRem {
+	for _, rs := range refSpecs {
 		srcDB, err := rem.GetRemoteDB(context.TODO())
 
 		if err != nil {
