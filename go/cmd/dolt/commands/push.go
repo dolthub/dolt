@@ -48,63 +48,86 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	remotes, err := dEnv.GetRemotes()
+
+	if err != nil {
+		cli.PrintErrln("error: failed to read remotes from config.")
+		return 1
+	}
+
+	remoteName := "origin"
+	remote, remoteOK := remotes[remoteName]
+
 	currentBranch := dEnv.RepoState.Head.Ref
 	upstream, hasUpstream := dEnv.RepoState.Branches[currentBranch.GetPath()]
 
-	var verr errhand.VerboseError
-	var remoteName string
 	var refSpec ref.RefSpec
-	if !hasUpstream && apr.NArg() == 0 {
-		remoteName = "<remote>"
-		if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
-			remoteName = defRemote.Name
-		}
-
-		cli.Println("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.")
-		cli.Println("To push the current branch and set the remote as upstream, use")
-		cli.Println()
-		cli.Println("\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath())
-		return 1
-	} else if !hasUpstream && apr.NArg() != 2 {
-		verr = errhand.BuildDError("").SetPrintUsage().Build()
-	} else if hasUpstream && !apr.Contains(SetUpstreamFlag) && apr.NArg() == 0 {
-		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
-			cli.Println("fatal: The upstream branch of your current branch does not match")
-			cli.Println("the name of your current branch.  To push to the upstream branch")
-			cli.Println("on the remote, use")
-			cli.Println()
-			cli.Println("\tdolt push origin HEAD:" + currentBranch.GetPath())
-			cli.Println()
-			cli.Println("To push to the branch of the same name on the remote, use")
-			cli.Println()
-			cli.Println("\tdolt push origin HEAD")
-			return 1
-		} else {
-			remoteName = upstream.Remote
-			refSpec, _ = ref.NewBranchToBranchRefSpec(currentBranch.(ref.BranchRef), upstream.Merge.Ref.(ref.BranchRef))
-		}
-	} else {
-		remoteName = apr.Arg(0)
-		refSpecStr := apr.Arg(1)
-
-		var err error
+	var verr errhand.VerboseError
+	if remoteOK && apr.NArg() == 1 {
+		refSpecStr := apr.Arg(0)
 		refSpec, err = ref.ParseRefSpec(refSpecStr)
 
 		if err != nil {
-			verr = errhand.BuildDError("error: '%s' is not a valid refspec.", refSpecStr).SetPrintUsage().Build()
+			verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
 		}
+	} else if apr.NArg() == 2 {
+		remoteName = apr.Arg(0)
+		refSpecStr := apr.Arg(1)
+		refSpec, err = ref.ParseRefSpec(refSpecStr)
+
+		if err != nil {
+			verr = errhand.BuildDError("error: invalid refspec '%s'", refSpecStr).AddCause(err).Build()
+		}
+	} else if apr.Contains(SetUpstreamFlag) {
+		verr = errhand.BuildDError("error: --set-upstream requires <remote> and <refspec> params.").SetPrintUsage().Build()
+	} else if hasUpstream {
+		if apr.NArg() > 0 {
+			cli.PrintErrf("fatal: upstream branch set for '%s'.  Use 'dolt push' without arguments to push.\n", currentBranch)
+			return 1
+		}
+
+		if currentBranch.GetPath() != upstream.Merge.Ref.GetPath() {
+			cli.PrintErrln("fatal: The upstream branch of your current branch does not match")
+			cli.PrintErrln("the name of your current branch.  To push to the upstream branch")
+			cli.PrintErrln("on the remote, use")
+			cli.PrintErrln()
+			cli.PrintErrln("\tdolt push origin HEAD:" + currentBranch.GetPath())
+			cli.PrintErrln()
+			cli.PrintErrln("To push to the branch of the same name on the remote, use")
+			cli.PrintErrln()
+			cli.PrintErrln("\tdolt push origin HEAD")
+			return 1
+		}
+
+		remoteName = upstream.Remote
+		refSpec, _ = ref.NewBranchToBranchRefSpec(currentBranch.(ref.BranchRef), upstream.Merge.Ref.(ref.BranchRef))
+	} else {
+		if apr.NArg() == 0 {
+			remoteName = "<remote>"
+			if defRemote, verr := dEnv.GetDefaultRemote(); verr == nil {
+				remoteName = defRemote.Name
+			}
+
+			cli.PrintErrln("fatal: The current branch " + currentBranch.GetPath() + " has no upstream branch.")
+			cli.PrintErrln("To push the current branch and set the remote as upstream, use")
+			cli.PrintErrln()
+			cli.PrintErrln("\tdolt push --set-upstream " + remoteName + " " + currentBranch.GetPath())
+			return 1
+		}
+
+		verr = errhand.BuildDError("").SetPrintUsage().Build()
+	}
+
+	remote, remoteOK = remotes[remoteName]
+
+	if !remoteOK {
+		cli.PrintErrln("fatal: unknown remote " + remoteName)
+		return 1
 	}
 
 	if verr == nil {
-		remotes, err := dEnv.GetRemotes()
 
-		if err != nil {
-			verr = errhand.BuildDError("error: failed to read remotes from config.").Build()
-		}
-
-		if remote, ok := remotes[remoteName]; !ok {
-			verr = errhand.BuildDError("fatal: unknown remote " + remoteName).Build()
-		} else if !dEnv.DoltDB.HasRef(context.TODO(), currentBranch) {
+		if !dEnv.DoltDB.HasRef(context.TODO(), currentBranch) {
 			verr = errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
 		} else {
 			ctx := context.Background()
@@ -140,7 +163,7 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				}
 			}
 
-			if verr == nil {
+			if verr == nil && apr.Contains(SetUpstreamFlag) {
 				if dEnv.RepoState.Branches == nil {
 					dEnv.RepoState.Branches = map[string]env.BranchConfig{}
 				}
