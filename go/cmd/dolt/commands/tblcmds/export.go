@@ -17,10 +17,12 @@ var exportSynopsis = []string{
 	"[-f] [-pk <field>] [-schema <file>] [-map <file>] [-continue] [-file-type <type>] <table> <file>",
 }
 
-func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (*mvdata.DataLocation, *mvdata.DataLocation) {
+// validateExportArgs validates the input from the arg parser, and returns the tuple:
+// (table name to export, data location of table to export, data location to export to)
+func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (string, *mvdata.DataLocation, *mvdata.DataLocation) {
 	if apr.NArg() != 2 {
 		usage()
-		return nil, nil
+		return "", nil, nil
 	}
 
 	tableName := apr.Arg(0)
@@ -28,7 +30,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		cli.PrintErrln(
 			color.RedString("'%s' is not a valid table name\n", tableName),
 			"table names must match the regular expression:", doltdb.TableNameRegexStr)
-		return nil, nil
+		return "", nil, nil
 	}
 
 	path := apr.Arg(1)
@@ -39,12 +41,12 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		cli.PrintErrln(
 			color.RedString("Could not infer type file '%s'\n", path),
 			"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
-		return nil, nil
+		return "", nil, nil
 	}
 
 	tableLoc := &mvdata.DataLocation{tableName, mvdata.DoltDB}
 
-	return tableLoc, fileLoc
+	return tableName, tableLoc, fileLoc
 }
 
 func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOptions) {
@@ -60,7 +62,7 @@ func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, exportShortDesc, exportLongDesc, exportSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	tableLoc, fileLoc := validateExportArgs(apr, usage)
+	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
 	if fileLoc == nil || tableLoc == nil {
 		return false, nil
@@ -71,13 +73,14 @@ func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 	primaryKey, _ := apr.GetValue(primaryKeyParam)
 
 	return apr.Contains(forceParam), &mvdata.MoveOptions{
-		mvdata.OverwriteOp,
-		apr.Contains(contOnErrParam),
-		schemaFile,
-		mappingFile,
-		primaryKey,
-		tableLoc,
-		fileLoc,
+		Operation:   mvdata.OverwriteOp,
+		ContOnErr:   apr.Contains(contOnErrParam),
+		TableName:   tableName,
+		SchFile:     schemaFile,
+		MappingFile: mappingFile,
+		PrimaryKey:  primaryKey,
+		Src:         tableLoc,
+		Dest:        fileLoc,
 	}
 }
 

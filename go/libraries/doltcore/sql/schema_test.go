@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const expectedSQL = "CREATE TABLE table_name (\n" +
+const expectedSQL = "CREATE TABLE `table_name` (\n" +
 "  `id` int not null comment 'tag:0',\n" +
 "  `first` varchar not null comment 'tag:1',\n" +
 "  `last` varchar not null comment 'tag:2',\n" +
@@ -21,7 +21,7 @@ const expectedSQL = "CREATE TABLE table_name (\n" +
 
 func TestSchemaAsCreateStmt(t *testing.T) {
 	tSchema := createPeopleTestSchema()
-	str, _ := SchemaAsCreateStmt("table_name", tSchema)
+	str := SchemaAsCreateStmt("table_name", tSchema)
 
 	assert.Equal(t, expectedSQL, str)
 }
