@@ -564,7 +564,7 @@ teardown() {
     run dolt schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
@@ -575,7 +575,7 @@ teardown() {
     run dolt schema test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false

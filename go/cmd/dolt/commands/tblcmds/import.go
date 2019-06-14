@@ -213,8 +213,13 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	if mvOpts.Src.Format == ".json" && mvOpts.SchFile == "" {
-		cli.Println("Please specify schema file for .json tables.")
+	if mvOpts.Src.Format == mvdata.SqlFile {
+		cli.Println(color.RedString("For SQL import, please pipe SQL input files to `dolt sql`"))
+		return 1
+	}
+
+	if mvOpts.Src.Format == mvdata.JsonFile && mvOpts.SchFile == "" {
+		cli.Println(color.RedString("Please specify schema file for .json tables."))
 		return 1
 	}
 
