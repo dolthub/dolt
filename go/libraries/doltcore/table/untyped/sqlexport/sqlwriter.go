@@ -15,9 +15,10 @@ import (
 )
 
 type SqlExportWriter struct {
-	tableName string
-	sch       schema.Schema
-	wr        io.WriteCloser
+	tableName       string
+	sch             schema.Schema
+	wr              io.WriteCloser
+	writtenFirstRow bool
 }
 
 func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, sch schema.Schema) (*SqlExportWriter, error) {
@@ -40,11 +41,30 @@ func (w *SqlExportWriter) GetSchema() schema.Schema {
 
 // WriteRow will write a row to a table
 func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
+	if err := w.maybeWriteDropCreate(); err != nil {
+			return err
+	}
+
 	return iohelp.WriteLine(w.wr, w.insertStatementForRow(r))
+}
+
+func (w *SqlExportWriter) maybeWriteDropCreate() error {
+	if !w.writtenFirstRow {
+		if err := iohelp.WriteLine(w.wr, w.dropCreateStatement()); err != nil {
+			return err
+		}
+		w.writtenFirstRow = true
+	}
+	return nil
 }
 
 // Close should flush all writes, release resources being held
 func (w *SqlExportWriter) Close(ctx context.Context) error {
+	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
+	if err := w.maybeWriteDropCreate(); err != nil {
+		return err
+	}
+
 	if w.wr != nil {
 		return w.wr.Close()
 	}
@@ -88,7 +108,7 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) string {
 func (w *SqlExportWriter) dropCreateStatement() string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE IF EXISTS ")
-	b.WriteString(w.tableName)
+	b.WriteString(sql.QuoteIdentifier(w.tableName))
 	b.WriteString(";\n")
 	b.WriteString(sql.SchemaAsCreateStmt(w.tableName, w.sch))
 
