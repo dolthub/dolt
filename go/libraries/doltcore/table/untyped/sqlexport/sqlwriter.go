@@ -14,6 +14,8 @@ import (
 	"strings"
 )
 
+const doubleQuot = "\""
+
 type SqlExportWriter struct {
 	tableName       string
 	sch             schema.Schema
@@ -74,7 +76,7 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 func (w *SqlExportWriter) insertStatementForRow(r row.Row) string {
 	var b strings.Builder
 	b.WriteString("INSERT INTO ")
-	b.WriteString(w.tableName)
+	b.WriteString(sql.QuoteIdentifier(w.tableName))
 	b.WriteString(" ")
 
 	b.WriteString("(")
@@ -130,10 +132,11 @@ func (w *SqlExportWriter) sqlString(value types.Value) string {
 	case types.UUIDKind:
 		convFn := doltcore.GetConvFunc(value.Kind(), types.StringKind)
 		str, _ := convFn(value)
-		return "\"" + string(str.(types.String)) + "\""
+		return doubleQuot + string(str.(types.String)) + doubleQuot
 	case types.StringKind:
-		// TODO: escape quotes
-		return "\"" + string(value.(types.String)) + "\""
+		s := string(value.(types.String))
+		s = strings.ReplaceAll(s, doubleQuot, "\\\"")
+		return doubleQuot + s + doubleQuot
 	default:
 		convFn := doltcore.GetConvFunc(value.Kind(), types.StringKind)
 		str, _ := convFn(value)

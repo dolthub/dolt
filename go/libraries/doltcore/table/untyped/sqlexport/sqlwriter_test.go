@@ -28,10 +28,10 @@ func TestWriteRow(t *testing.T) {
 	dropCreateStatement := "DROP TABLE IF EXISTS `people`;\n" + sql.SchemaAsCreateStmt(tableName, dtestutils.TypedSchema)
 
 	type test struct {
-		name              string
-		rows              []row.Row
-		sch               schema.Schema
-		expectedStatement string
+		name           string
+		rows           []row.Row
+		sch            schema.Schema
+		expectedOutput string
 	}
 
 	tests := []test{
@@ -39,8 +39,16 @@ func TestWriteRow(t *testing.T) {
 			name: "simple row",
 			rows: rs(dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie"))),
 			sch:  dtestutils.TypedSchema,
-			expectedStatement: dropCreateStatement + "\n" + "INSERT INTO people (`id`,`name`,`age`,`is_married`,`title`) " +
+			expectedOutput: dropCreateStatement + "\n" + "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
 					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` +
+					"\n",
+		},
+		{
+			name: "embedded quotes",
+			rows: rs(dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie"))),
+			sch:  dtestutils.TypedSchema,
+			expectedOutput: dropCreateStatement + "\n" + "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
+					`VALUES ("00000000-0000-0000-0000-000000000000","It's \"Mister Perfect\" to you",100,FALSE,"normie");` +
 					"\n",
 		},
 		{
@@ -49,17 +57,17 @@ func TestWriteRow(t *testing.T) {
 				dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 				dtestutils.NewTypedRow(id, "guy personson", 0, true, strPointer("officially a person"))),
 			sch: dtestutils.TypedSchema,
-			expectedStatement: dropCreateStatement + "\n" +
-					"INSERT INTO people (`id`,`name`,`age`,`is_married`,`title`) " +
+			expectedOutput: dropCreateStatement + "\n" +
+					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
 					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` + "\n" +
-					"INSERT INTO people (`id`,`name`,`age`,`is_married`,`title`) " +
+					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
 					`VALUES ("00000000-0000-0000-0000-000000000000","guy personson",0,TRUE,"officially a person");` + "\n",
 		},
 		{
 			name: "null values",
 			rows: rs(dtestutils.NewTypedRow(id, "some guy", 100, false, nil)),
 			sch:  dtestutils.TypedSchema,
-			expectedStatement: dropCreateStatement + "\n" + "INSERT INTO people (`id`,`name`,`age`,`is_married`,`title`) " +
+			expectedOutput: dropCreateStatement + "\n" + "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
 					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,NULL);` +
 					"\n",
 		},
@@ -75,7 +83,7 @@ func TestWriteRow(t *testing.T) {
 		name: "negative values and columns with spaces",
 		rows: rs(dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42))),
 		sch:  trickySch,
-		expectedStatement: dropCreateTricky + "\n" + "INSERT INTO people (`a name with spaces`,`anotherColumn`) " +
+		expectedOutput: dropCreateTricky + "\n" + "INSERT INTO `people` (`a name with spaces`,`anotherColumn`) " +
 				`VALUES (-3.14,-42);` +
 				"\n",
 	})
@@ -92,7 +100,7 @@ func TestWriteRow(t *testing.T) {
 			for _, r := range tt.rows {
 				assert.NoError(t, w.WriteRow(context.Background(), r))
 			}
-			assert.Equal(t, tt.expectedStatement, stringWr.String())
+			assert.Equal(t, tt.expectedOutput, stringWr.String())
 		})
 	}
 }
@@ -118,9 +126,9 @@ func TestEndToEnd(t *testing.T) {
 				dtestutils.NewTypedRow(id, "guy personson", 0, true, strPointer("officially a person"))),
 			sch: dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" +
-					"INSERT INTO people (`id`,`name`,`age`,`is_married`,`title`) " +
+					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
 					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` + "\n" +
-					"INSERT INTO people (`id`,`name`,`age`,`is_married`,`title`) " +
+					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
 					`VALUES ("00000000-0000-0000-0000-000000000000","guy personson",0,TRUE,"officially a person");` + "\n",
 		},
 		{
