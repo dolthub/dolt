@@ -208,7 +208,7 @@ teardown() {
     # use bash -c so I can | the output to grep
     run bash -c "dolt schema"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
@@ -224,7 +224,7 @@ teardown() {
     [ "$output" = "" ]
     run bash -c "dolt schema"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk1\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`pk2\` int not null comment 'tag:1'" ]] || false
     [[ "$output" =~ "\`c1\` int comment 'tag:2'" ]] || false
@@ -241,7 +241,7 @@ teardown() {
     [ "$output" = "" ]
     run dolt schema test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
@@ -257,7 +257,7 @@ teardown() {
     [ "$output" = "" ]
     run dolt schema test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE test " ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\` " ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` float comment 'tag:1'" ]] || false
     [[ "$output" =~ "primary key (\`pk\`)" ]] || false
@@ -270,7 +270,7 @@ teardown() {
     [ "$output" = "" ]
     run dolt schema test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` varchar comment 'tag:1'" ]] || false
     [[ "$output" =~ "primary key (\`pk\`)" ]] || false
