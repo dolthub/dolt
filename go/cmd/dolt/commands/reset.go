@@ -53,7 +53,7 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
 			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
 		} else if apr.Contains(HardResetParam) {
-			verr = resetHard(ctx, dEnv, workingRoot, headRoot)
+			verr = resetHard(ctx, dEnv, apr, workingRoot, headRoot)
 		} else {
 			verr = resetSoft(dEnv, apr, stagedRoot, headRoot)
 		}
@@ -62,7 +62,11 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func resetHard(ctx context.Context, dEnv *env.DoltEnv, workingRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
+func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
+	if apr.NArg() != 0 {
+		return errhand.BuildDError("--%s does not support additional params", HardResetParam).SetPrintUsage().Build()
+	}
+
 	// need to save the state of files that aren't tracked
 	untrackedTables := make(map[string]*doltdb.Table)
 	for _, tblName := range workingRoot.GetTableNames(ctx) {
