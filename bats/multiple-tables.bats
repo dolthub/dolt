@@ -76,8 +76,6 @@ teardown() {
 }
 
 @test "dolt reset . resets all tables" {
-    dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -88,4 +86,41 @@ teardown() {
     run dolt status 
     [[ ! "$output" =~ "Changes to be committed" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
+}
+
+@test "dolt reset --hard" {
+    dolt add --all
+    run dolt status
+    [[ "$output" =~ "Changes to be committed" ]] || false
+    [[ ! "$output" =~ "Untracked files" ]] || false
+    run dolt reset .
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status 
+    [[ ! "$output" =~ "Changes to be committed" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+
+    dolt add --all
+    dolt commit -m "commit file1 and file2"
+
+    dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test3
+    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test4
+
+    run dolt status
+    [[ "$output" =~ modified.*test1 ]] || false
+    [[ "$output" =~ modified.*test2 ]] || false
+    [[ "$output" =~ file.*test3 ]] || false
+    [[ "$output" =~ file.*test4 ]] || false
+
+    dolt add test1 test2 test3
+    dolt reset --hard
+
+    run dolt status
+    [[ ! "$output" =~ "test1" ]] || false
+    [[ ! "$output" =~ "test2" ]] || false
+    [[ "$output" =~ file.*test3 ]] || false
+    [[ "$output" =~ file.*test4 ]] || false
 }
