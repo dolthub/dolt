@@ -169,10 +169,17 @@ func TestCreateRdWr(t *testing.T) {
 
 	ddb, root, fs := createRootAndFS()
 
+	mvOpts := &MoveOptions{
+		Operation:   OverwriteOp,
+		ContOnErr:   false,
+		SchFile:     schemaFile,
+		MappingFile: mappingFile,
+	}
+
 	for _, test := range tests {
 		loc := test.dl
 
-		wr, err := loc.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema, nil)
+		wr, err := loc.CreateOverwritingDataWriter(context.Background(), mvOpts, root, fs, true, fakeSchema, nil)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)
