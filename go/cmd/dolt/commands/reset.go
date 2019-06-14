@@ -13,6 +13,11 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
 
+const (
+	SoftResetParam = "soft"
+	HardResetParam = "hard"
+)
+
 var resetShortDesc = "Resets staged tables to their HEAD state"
 var resetLongDesc = `Sets the state of a table in the staging area to be that table's value at HEAD
 
@@ -30,36 +35,90 @@ dolt reset .
 
 var resetSynopsis = []string{
 	"<tables>...",
+	"[--hard | --soft]",
 }
 
 func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ctx := context.TODO()
+
 	ap := argparser.NewArgParser()
-	help, _ := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
+	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since <commit> are discarded.")
+	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
+	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	stagedRoot, headRoot, verr := getStagedAndHead(dEnv)
+	workingRoot, stagedRoot, headRoot, verr := getAllRoots(dEnv)
 
 	if verr == nil {
-		tbls := apr.Args()
-
-		if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
-			tbls = actions.AllTables(context.TODO(), stagedRoot, headRoot)
-		}
-
-		verr = ValidateTablesWithVErr(tbls, stagedRoot, headRoot)
-
-		if verr == nil {
-			stagedRoot, verr = resetStaged(dEnv, tbls, stagedRoot, headRoot)
-
-			if verr == nil {
-				printNotStaged(dEnv, stagedRoot)
-				return 0
-			}
+		if apr.ContainsAll(HardResetParam, SoftResetParam) {
+			verr = errhand.BuildDError("error: --%s and --%s are mutually exclusive options.", HardResetParam, SoftResetParam).Build()
+		} else if apr.Contains(HardResetParam) {
+			verr = resetHard(ctx, dEnv, apr, workingRoot, headRoot)
+		} else {
+			verr = resetSoft(dEnv, apr, stagedRoot, headRoot)
 		}
 	}
 
-	cli.PrintErrln(verr.Verbose())
-	return 1
+	return HandleVErrAndExitCode(verr, usage)
+}
+
+func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, workingRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
+	if apr.NArg() != 0 {
+		return errhand.BuildDError("--%s does not support additional params", HardResetParam).SetPrintUsage().Build()
+	}
+
+	// need to save the state of files that aren't tracked
+	untrackedTables := make(map[string]*doltdb.Table)
+	for _, tblName := range workingRoot.GetTableNames(ctx) {
+		untrackedTables[tblName], _ = workingRoot.GetTable(ctx, tblName)
+	}
+
+	for _, tblName := range headRoot.GetTableNames(ctx) {
+		delete(untrackedTables, tblName)
+	}
+
+	newWkRoot := headRoot
+	for tblName, tbl := range untrackedTables {
+		newWkRoot = newWkRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+	}
+
+	// TODO: update working and staged in one repo_state write.
+	err := dEnv.UpdateWorkingRoot(ctx, newWkRoot)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to update the working tables.").AddCause(err).Build()
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, headRoot)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to update the staged tables.").AddCause(err).Build()
+	}
+
+	return nil
+}
+
+func resetSoft(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
+	tbls := apr.Args()
+
+	if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
+		tbls = actions.AllTables(context.TODO(), stagedRoot, headRoot)
+	}
+
+	verr := ValidateTablesWithVErr(tbls, stagedRoot, headRoot)
+
+	if verr != nil {
+		return verr
+	}
+
+	stagedRoot, verr = resetStaged(dEnv, tbls, stagedRoot, headRoot)
+
+	if verr != nil {
+		return verr
+	}
+
+	printNotStaged(dEnv, stagedRoot)
+	return nil
 }
 
 func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
@@ -94,18 +153,24 @@ func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValu
 	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)
 }
 
-func getStagedAndHead(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
+func getAllRoots(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
+	workingRoot, err := dEnv.WorkingRoot(context.Background())
+
+	if err != nil {
+		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
+	}
+
 	stagedRoot, err := dEnv.StagedRoot(context.Background())
 
 	if err != nil {
-		return nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
+		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
 	}
 
 	headRoot, err := dEnv.HeadRoot(context.TODO())
 
 	if err != nil {
-		return nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()
+		return nil, nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()
 	}
 
-	return stagedRoot, headRoot, nil
+	return workingRoot, stagedRoot, headRoot, nil
 }

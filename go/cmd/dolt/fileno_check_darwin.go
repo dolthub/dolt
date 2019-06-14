@@ -27,10 +27,9 @@ func warnIfMaxFilesTooLow() {
 	}
 	if lim.Cur < warningThreshold {
 		cli.Printf("%s\n", yellow("WARNING"))
-		cli.Printf("%s\n", yellow(fmt.Sprintf("Only %d file descriptors are available for this process. This is less than the recommended amount of %d.", lim.Cur, warningThreshold)))
+		cli.Printf("%s\n", yellow(fmt.Sprintf("Only %d file descriptors are available for this process, which is less than the recommended amount, %d.", lim.Cur, warningThreshold)))
 		cli.Printf("%s\n", yellow("You may experience I/O errors by continuing to run dolt in this configuration."))
 		cli.Printf("\n")
-		cli.Printf("%s\n", yellow("To increase the maximum number of file descriptors please run the following:"))
-		cli.Printf("%s\n", yellow("    sudo "))
+
 	}
 }
