@@ -233,7 +233,6 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		getter.NomsKind = kind
 		return getter, nil
 
-		// TODO: combine with CreateFilterForWhere
 	case *sqlparser.ComparisonExpr:
 
 		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)

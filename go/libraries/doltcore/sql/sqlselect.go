@@ -462,7 +462,9 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
 		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
 		// table for where clause filtering, then convert those rows to the result set schema.
-		bindTagNumbers(selectStmt, resultset.Identity(tableName, tableSch))
+		if err := bindTagNumbers(selectStmt, resultset.Identity(tableName, tableSch)); err != nil {
+			return nil, err
+		}
 
 		return createSingleTablePipeline(ctx, root, selectStmt, tableName, true)
 	}
@@ -506,10 +508,18 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		})
 	}
 
-	crossProduct := selectStmt.intermediateRss.CrossProduct(results)
+	var crossProduct []row.Row
+	cb := func(r row.Row) {
+		crossProduct = append(crossProduct, r)
+	}
+
+	selectStmt.intermediateRss.CrossProduct(results, cb)
+
 	source := sourceFuncForRows(crossProduct)
 
-	bindTagNumbers(selectStmt, selectStmt.intermediateRss)
+	if err := bindTagNumbers(selectStmt, selectStmt.intermediateRss); err != nil {
+		return nil, err
+	}
 
 	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))

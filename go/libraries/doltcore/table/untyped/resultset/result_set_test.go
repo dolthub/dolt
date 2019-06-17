@@ -383,9 +383,18 @@ func TestNewFromColumns(t *testing.T) {
 			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
+}
+
+func getCrossProduct(rss *ResultSetSchema, tables []TableResult) []row.Row {
+	result := make([]row.Row, 0)
+	cb := func(r row.Row) {
+		result = append(result, r)
+	}
+	rss.CrossProduct(tables, cb)
+	return result
 }
 
 // Creates a new row for a result set specified by the given values
@@ -576,7 +585,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -595,7 +604,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -616,7 +625,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -635,7 +644,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{bart, peopleTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -650,7 +659,7 @@ func TestCrossProduct(t *testing.T) {
 
 		expectedResult := make([]row.Row, 0)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -658,10 +667,9 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas()
 		assert.Nil(t, err)
 
-		tables := []TableResult{}
-		expectedResult := rs()
+		expectedResult := make([]row.Row, 0)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, []TableResult{})
 		assert.Equal(t, expectedResult, result)
 	})
 }
