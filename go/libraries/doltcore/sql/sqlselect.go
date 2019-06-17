@@ -508,25 +508,21 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		})
 	}
 
-	var p *pipeline.Pipeline
-	var cpChan chan row.Row
-	func() {
-		cpChan = make(chan row.Row)
-		cb := func(r row.Row) {
-			cpChan <- r
-		}
-		go func() {
-			defer close(cpChan)
-			selectStmt.intermediateRss.CrossProduct(results, cb)
-		}()
-	}()
+	cpChan := make(chan row.Row)
+	cb := func(r row.Row) {
+		cpChan <- r
+	}
 
-	p = pipeline.NewPartialPipeline(inFuncForChannel(cpChan))
+	go func() {
+		defer close(cpChan)
+		selectStmt.intermediateRss.CrossProduct(results, cb)
+	}()
 
 	if err := bindTagNumbers(selectStmt, selectStmt.intermediateRss); err != nil {
 		return nil, err
 	}
 
+	p := pipeline.NewPartialPipeline(inFuncForChannel(cpChan))
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
 	if selectStmt.orderBy != nil {
 		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderBy.Less)})
