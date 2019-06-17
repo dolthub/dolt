@@ -5,13 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/retry"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/constants"
@@ -24,7 +25,9 @@ import (
 var ErrUploadFailed = errors.New("upload failed")
 var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
-var globalHttpFetcher HTTPFetcher = &http.Client{}
+var globalHttpFetcher HTTPFetcher = &http.Client{
+	Timeout: time.Second * 30,
+}
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -49,10 +52,18 @@ func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStore
 	org := tokens[0]
 	repoName := tokens[1]
 
-	return NewDoltChunkStore(org, repoName, host, csClient), nil
+	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
+		csClient = RetryingChunkStoreServiceClient{csClient}
+	}
+
+	return NewDoltChunkStore(org, repoName, host, RetryingChunkStoreServiceClient{csClient}), nil
 }
 
 func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
+	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
+		csClient = RetryingChunkStoreServiceClient{csClient}
+	}
+
 	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher}
 }
 
@@ -473,20 +484,29 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	return hashToCount, nil
 }
 
+var uploadRetryParams = retry.RetryParams{
+	NumRetries: 5,
+	MaxDelay:   2 * time.Second,
+	Backoff:    200 * time.Millisecond,
+}
+
 func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostChunk, data []byte) error {
 	//resp, err := http(post.Url, "application/octet-stream", bytes.NewBuffer(data))
 	req, err := http.NewRequest(http.MethodPut, post.Url, bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
-	resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
+
+	var resp *http.Response
+	success := retry.CallWithRetries(uploadRetryParams, func() retry.RetriableCallState {
+		resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
+		return retry.ProcessHttpResp(resp, err)
+	})
 
 	if err != nil {
 		return err
-	}
-
-	if resp.StatusCode/100 != 2 {
-		return ErrUploadFailed
+	} else if !success {
+		return errors.New("error: failed to upload file")
 	}
 
 	return nil
@@ -542,7 +562,7 @@ func aggregateDownloads(aggDistance uint64, resourceToUrlAndRanges map[string]ur
 
 const (
 	chunkAggDistance       = 8 * 1024
-	maxDownloadConcurrency = 256
+	maxDownloadConcurrency = 64
 )
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
@@ -578,6 +598,12 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndR
 	return err
 }
 
+var downRetryParams = retry.RetryParams{
+	NumRetries: 5,
+	MaxDelay:   2 * time.Second,
+	Backoff:    200 * time.Millisecond,
+}
+
 // getRangeDownloadFunc returns a work function that does the downloading of one or more chunks and writes those chunks
 // to the chunkChan
 func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) func() error {
@@ -595,20 +621,36 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 		rangeVal := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
 		req.Header.Set("Range", rangeVal)
 
-		//execute the request
-		resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
-
-		if err != nil {
-			return err
-		} else if resp.StatusCode/100 != 2 {
-			return errors.New(urlStr + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))
+		debugUrl := urlStr
+		if idx := strings.IndexRune(debugUrl, '?'); idx != -1 {
+			debugUrl = debugUrl[:idx]
 		}
 
-		// read the results
-		comprData, err := ioutil.ReadAll(resp.Body)
+		//execute the request
+		var comprData []byte
+		success := retry.CallWithRetries(downRetryParams, func() retry.RetriableCallState {
+			var resp *http.Response
+			resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
+			getResult := retry.ProcessHttpResp(resp, err)
+
+			if getResult != retry.Success {
+				return getResult
+			}
+
+			// read the results
+			comprData, err = ioutil.ReadAll(resp.Body)
+
+			if err != nil {
+				return retry.RetriableFailure
+			}
+
+			return retry.Success
+		})
 
 		if err != nil {
 			return err
+		} else if !success {
+			return fmt.Errorf("error: failed to download '%s' range: '%s'", urlStr, rangeVal)
 		}
 
 		// loop over the ranges of bytes and extract those bytes from the data that was downloaded.  The extracted bytes
