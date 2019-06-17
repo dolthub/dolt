@@ -25,7 +25,9 @@ import (
 var ErrUploadFailed = errors.New("upload failed")
 var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
-var globalHttpFetcher HTTPFetcher = &http.Client{}
+var globalHttpFetcher HTTPFetcher = &http.Client{
+	Timeout: time.Second * 30,
+}
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
