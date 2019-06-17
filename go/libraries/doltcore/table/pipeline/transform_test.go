@@ -180,12 +180,9 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 		rd, _ := csv.NewCSVReader(ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
-		tc := NewTransformCollection(
+		addedStages := []NamedTransform {
 			NewNamedTransform("identity", identityTransFunc),
 			NewNamedTransform("label", labelTransFunc),
-		)
-
-		addedStages := []NamedTransform{
 			NewNamedTransform("dupe", dupeTransFunc),
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
@@ -193,7 +190,7 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 		inProcFunc := ProcFuncForReader(context.Background(), rd)
 		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 
-		p := NewPartialPipeline(inProcFunc, tc)
+		p := NewPartialPipeline(inProcFunc)
 		for _, stage := range addedStages {
 			p.AddStage(stage)
 		}

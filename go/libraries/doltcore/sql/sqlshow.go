@@ -89,7 +89,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		resultSch := showCreateTableSchema()
 		rows := toRows(([][]string{{tableName, schemaStr}}), resultSch)
 		source := pipeline.SourceFuncForRows(rows)
-		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 
 		return p, resultSch, nil
 
@@ -105,7 +105,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		rows := schemaAsShowColumnRows(tableSch)
 
 		source := pipeline.SourceFuncForRows(rows)
-		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 		return p, showColumnsSchema(), nil
 
 	case "tables":
@@ -113,7 +113,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		sch := showTablesSchema()
 		rows := toRows(transpose(tableNames), sch)
 		source := pipeline.SourceFuncForRows(rows)
-		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 		return p, sch, nil
 	default:
 		return nil, nil, errFmt("Unsupported show statement: '%v'", nodeToString(show))
