@@ -371,9 +371,9 @@ func TestNewFromColumns(t *testing.T) {
 		assert.Equal(t, expectedMapping, rss.mapping)
 		assert.Equal(t, expectedDestSchema, rss.Schema())
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(ep1, ep2), episodesTestSchema),
 		}
 
 		expectedResult := rs(
@@ -388,7 +388,7 @@ func TestNewFromColumns(t *testing.T) {
 	})
 }
 
-func getCrossProduct(rss *ResultSetSchema, tables []TableResult) []row.Row {
+func getCrossProduct(rss *ResultSetSchema, tables []*TableResult) []row.Row {
 	result := make([]row.Row, 0)
 	cb := func(r row.Row) {
 		result = append(result, r)
@@ -567,10 +567,10 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
-			{Rows: rs(app1, app2), Schema: appearancesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(ep1, ep2), episodesTestSchema),
+			newTableResultForTest(rs(app1, app2), appearancesTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -593,10 +593,10 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer), Schema: peopleTestSchema},
-			{Rows: rs(ep1), Schema: episodesTestSchema},
-			{Rows: rs(app1), Schema: appearancesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer), peopleTestSchema),
+			newTableResultForTest(rs(ep1), episodesTestSchema),
+			newTableResultForTest(rs(app1), appearancesTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -612,9 +612,9 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(ep1, ep2), episodesTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -633,8 +633,8 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge, bart), Schema: peopleTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge, bart), peopleTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -652,9 +652,9 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(), Schema: episodesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(), episodesTestSchema),
 		}
 
 		expectedResult := make([]row.Row, 0)
@@ -669,7 +669,7 @@ func TestCrossProduct(t *testing.T) {
 
 		expectedResult := make([]row.Row, 0)
 
-		result := getCrossProduct(rss, []TableResult{})
+		result := getCrossProduct(rss, []*TableResult{})
 		assert.Equal(t, expectedResult, result)
 	})
 }

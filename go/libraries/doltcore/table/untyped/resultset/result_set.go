@@ -233,7 +233,7 @@ type CrossProductRowCallback func(r row.Row)
 // CrossProduct computes the cross-product of the table results given, calling the given callback once for each row in
 // the result set. The resultant rows will have the schema of this result set, and will have (N * M * ... X) rows, one
 // for every possible combination of entries in the table results given.
-func (rss *ResultSetSchema) CrossProduct(tables []TableResult, cb CrossProductRowCallback) {
+func (rss *ResultSetSchema) CrossProduct(tables []*TableResult, cb CrossProductRowCallback) {
 	// special case: no tables means no rows
 	if len(tables) == 0 {
 		return
@@ -244,7 +244,7 @@ func (rss *ResultSetSchema) CrossProduct(tables []TableResult, cb CrossProductRo
 }
 
 // Recursive helper function for CrossProduct
-func (rss *ResultSetSchema) cph(r RowWithSchema, tables []TableResult, cb CrossProductRowCallback) {
+func (rss *ResultSetSchema) cph(r RowWithSchema, tables []*TableResult, cb CrossProductRowCallback) {
 	if len(tables) == 0 {
 		cb(r.Row)
 		return
