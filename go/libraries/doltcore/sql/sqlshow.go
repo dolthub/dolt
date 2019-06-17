@@ -88,7 +88,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 
 		resultSch := showCreateTableSchema()
 		rows := toRows(([][]string{{tableName, schemaStr}}), resultSch)
-		source := sourceFuncForRows(rows)
+		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 
 		return p, resultSch, nil
@@ -104,7 +104,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		tableSch := table.GetSchema(ctx)
 		rows := schemaAsShowColumnRows(tableSch)
 
-		source := sourceFuncForRows(rows)
+		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 		return p, showColumnsSchema(), nil
 
@@ -112,7 +112,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		tableNames := root.GetTableNames(ctx)
 		sch := showTablesSchema()
 		rows := toRows(transpose(tableNames), sch)
-		source := sourceFuncForRows(rows)
+		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
 		return p, sch, nil
 	default:
