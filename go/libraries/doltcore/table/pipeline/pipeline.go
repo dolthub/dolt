@@ -81,8 +81,8 @@ func NewAsyncPipeline(inFunc InFunc, outFunc OutFunc, stages *TransformCollectio
 
 // NewPartialPipeline creates a pipeline stub that doesn't have an output func set on it yet. An OutFunc must be
 // applied via a call to SetOutput before calling Start().
-func NewPartialPipeline(inFunc InFunc, stages *TransformCollection) *Pipeline {
-	return NewAsyncPipeline(inFunc, nil, stages, nil)
+func NewPartialPipeline(inFunc InFunc) *Pipeline {
+	return NewAsyncPipeline(inFunc, nil, &TransformCollection{}, nil)
 }
 
 // AddStage adds a new named transform to the set of stages

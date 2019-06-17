@@ -508,10 +508,6 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		})
 	}
 
-	if err := bindTagNumbers(selectStmt, selectStmt.intermediateRss); err != nil {
-		return nil, err
-	}
-
 	var p *pipeline.Pipeline
 	var cpChan chan row.Row
 	func() {
@@ -525,8 +521,11 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		}()
 	}()
 
-	source := inFuncForChannel(cpChan)
-	p = pipeline.NewPartialPipeline(source, &pipeline.TransformCollection{})
+	p = pipeline.NewPartialPipeline(inFuncForChannel(cpChan))
+
+	if err := bindTagNumbers(selectStmt, selectStmt.intermediateRss); err != nil {
+		return nil, err
+	}
 
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
 	if selectStmt.orderBy != nil {
@@ -541,6 +540,8 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 	return p, nil
 }
 
+// inFuncForChannel returns an InFunc that reads off the channel given. Probably belongs in the pipeline package
+// eventually.
 func inFuncForChannel(cpChan <-chan row.Row) pipeline.InFunc {
 	return func(p *pipeline.Pipeline, ch chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, noMoreChan <-chan struct{}) {
 		defer close(ch)
@@ -618,7 +619,7 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 
 	rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
-	p := pipeline.NewPartialPipeline(rdProcFunc, &pipeline.TransformCollection{})
+	p := pipeline.NewPartialPipeline(rdProcFunc)
 	p.RunAfter(func() { rd.Close(ctx) })
 
 	if isTerminal {
