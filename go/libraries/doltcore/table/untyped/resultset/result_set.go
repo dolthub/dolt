@@ -227,30 +227,35 @@ func concatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
 	return schema.UnkeyedSchemaFromCols(colCollection), nil
 }
 
-// Returns the cross-product of the table results given. The returned rows will have the schema of this result set, and
-// will have (N * M * ... X) rows, one for every possible combination of entries in the table results given.
-func (rss *ResultSetSchema) CrossProduct(tables []TableResult) []row.Row {
+// CrossProductRowCallback is called once for each row produced by the CrossProduct call
+type CrossProductRowCallback func(r row.Row)
+
+// CrossProduct computes the cross-product of the table results given, calling the given callback once for each row in
+// the result set. The resultant rows will have the schema of this result set, and will have (N * M * ... X) rows, one
+// for every possible combination of entries in the table results given.
+func (rss *ResultSetSchema) CrossProduct(tables []TableResult, cb CrossProductRowCallback) {
 	// special case: no tables means no rows
 	if len(tables) == 0 {
-		return nil
+		return
 	}
+
 	emptyRow := RowWithSchema{row.New(rss.destSch, row.TaggedValues{}), rss.destSch}
-	return rss.cph(emptyRow, tables)
+	rss.cph(emptyRow, tables, cb)
 }
 
 // Recursive helper function for CrossProduct
-func (rss *ResultSetSchema) cph(r RowWithSchema, tables []TableResult) []row.Row {
+func (rss *ResultSetSchema) cph(r RowWithSchema, tables []TableResult, cb CrossProductRowCallback) {
 	if len(tables) == 0 {
-		return []row.Row{r.Row}
+		cb(r.Row)
+		return
 	}
 
-	resultSet := make([]row.Row, 0)
 	table := tables[0]
-	for _, r2 := range table.Rows {
+	itr := table.Iterator()
+	for r2 := itr.NextRow(); r2 != nil; r2 = itr.NextRow() {
 		partialRow := rss.combineRows(r, RowWithSchema{r2, table.Schema})
-		resultSet = append(resultSet, rss.cph(partialRow, tables[1:])...)
+		rss.cph(partialRow, tables[1:], cb)
 	}
-	return resultSet
 }
 
 // CombineRows writes all values from r2 into r1 and returns it. r1 must have the same schema as the result set.
@@ -265,12 +270,10 @@ func (rss *ResultSetSchema) combineRows(r1 RowWithSchema, r2 RowWithSchema) RowW
 	}
 
 	r2.Row.IterCols(func(tag uint64, val types.Value) (stop bool) {
-		var err error
-
 		mappedTag, ok := fieldMapping.SrcToDest[tag]
 		if ok {
-			if err = r1.SetColVal(mappedTag, val); err != nil {
-				panic(err.Error())
+			if err := r1.SetColVal(mappedTag, val); err != nil {
+				panic(err)
 			}
 		}
 		return false
