@@ -104,6 +104,20 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 	}
 }
 
+
+// SourceFuncForRows returns a source func that yields the rows given in order.
+func SourceFuncForRows(rows []row.Row) SourceFunc {
+	idx := 0
+	return func() (row.Row, ImmutableProperties, error) {
+		if idx >= len(rows) {
+			return nil, NoProps, io.EOF
+		}
+		r := rows[idx]
+		idx++
+		return r, NoProps, nil
+	}
+}
+
 // ProcFuncForWriter adapts a standard TableWriter to work as an InFunc for a pipeline
 func ProcFuncForWriter(ctx context.Context, wr table.TableWriter) OutFunc {
 	return ProcFuncForSinkFunc(func(r row.Row, props ReadableMap) error {

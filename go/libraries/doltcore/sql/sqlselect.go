@@ -12,8 +12,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/xwb1989/sqlparser"
-	"io"
 	"strconv"
+	"time"
 )
 
 // No limit marker for limit statements in select
@@ -508,20 +508,26 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		})
 	}
 
-	var crossProduct []row.Row
-	cb := func(r row.Row) {
-		crossProduct = append(crossProduct, r)
-	}
-
-	selectStmt.intermediateRss.CrossProduct(results, cb)
-
-	source := sourceFuncForRows(crossProduct)
-
 	if err := bindTagNumbers(selectStmt, selectStmt.intermediateRss); err != nil {
 		return nil, err
 	}
 
-	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+	var p *pipeline.Pipeline
+	var cpChan chan row.Row
+	func() {
+		cpChan = make(chan row.Row)
+		cb := func(r row.Row) {
+			cpChan <- r
+		}
+		go func() {
+			defer close(cpChan)
+			selectStmt.intermediateRss.CrossProduct(results, cb)
+		}()
+	}()
+
+	source := inFuncForChannel(cpChan)
+	p = pipeline.NewPartialPipeline(source, &pipeline.TransformCollection{})
+
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
 	if selectStmt.orderBy != nil {
 		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderBy.Less)})
@@ -535,16 +541,33 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 	return p, nil
 }
 
-// Returns a source func that yields the rows given in order.
-func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
-	idx := 0
-	return func() (row.Row, pipeline.ImmutableProperties, error) {
-		if idx >= len(rows) {
-			return nil, pipeline.NoProps, io.EOF
+func inFuncForChannel(cpChan <-chan row.Row) pipeline.InFunc {
+	return func(p *pipeline.Pipeline, ch chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, noMoreChan <-chan struct{}) {
+		defer close(ch)
+
+		for {
+			select {
+			case <-noMoreChan:
+				return
+			default:
+				break
+			}
+
+			if p.IsStopping() {
+				return
+			}
+
+			select {
+			case r, ok := <-cpChan:
+				if ok {
+					ch <- pipeline.RowWithProps{Row: r, Props: pipeline.NoProps}
+				} else {
+					return
+				}
+			case <-time.After(100 * time.Millisecond):
+				// wake up and check stop condition
+			}
 		}
-		r := rows[idx]
-		idx++
-		return r, pipeline.NoProps, nil
 	}
 }
 
