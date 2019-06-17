@@ -442,9 +442,9 @@ func bindTagNumbers(statement *SelectStatement, resolver TagResolver) error {
 
 // The result of running a single select pipeline.
 type singleTablePipelineResult struct {
-	p    *pipeline.Pipeline
-	rows []row.Row
-	err  error
+	p       *pipeline.Pipeline
+	outChan chan row.Row
+	err     error
 }
 
 // createSelectPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
@@ -476,12 +476,12 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 			return nil, err
 		}
 
-		result := &singleTablePipelineResult{p: p, rows: make([]row.Row, 0)}
+		result := &singleTablePipelineResult{p: p, outChan: make(chan row.Row)}
 		pipelines[tableName] = result
 
 		rowSink := pipeline.ProcFuncForSinkFunc(
 			func(r row.Row, props pipeline.ReadableMap) error {
-				result.rows = append(result.rows, r)
+				result.outChan <- r
 				return nil
 			})
 
@@ -491,32 +491,37 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 			return true
 		}
 
+		p.RunAfter(func() {
+			close(result.outChan)
+		})
+
+		// TODO: this adds an unnecessary stage to the pipeline
 		p.SetOutput(rowSink)
 		p.SetBadRowCallback(errSink)
 		p.Start()
 	}
 
-	results := make([]resultset.TableResult, 0)
+	results := make([]*resultset.TableResult, 0)
 	for _, tableName := range selectStmt.inputTables {
 		result := pipelines[tableName]
-		if err := result.p.Wait(); err != nil || result.err != nil {
-			return nil, err
-		}
-		results = append(results, resultset.TableResult{
-			Schema: selectStmt.inputSchemas[tableName],
-			Rows:   result.rows,
-		})
+		results = append(results, resultset.NewTableResult(result.outChan, selectStmt.inputSchemas[tableName]))
 	}
 
 	cpChan := make(chan row.Row)
 	cb := func(r row.Row) {
 		cpChan <- r
 	}
-
 	go func() {
 		defer close(cpChan)
 		selectStmt.intermediateRss.CrossProduct(results, cb)
 	}()
+
+	// TODO: we need to check errors in pipeline execution without blocking
+	// for _, result := range pipelines {
+	// 	if err := result.p.Wait(); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	if err := bindTagNumbers(selectStmt, selectStmt.intermediateRss); err != nil {
 		return nil, err
