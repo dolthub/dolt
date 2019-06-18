@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
 	"github.com/stretchr/testify/assert"
 	"io"
@@ -126,7 +125,7 @@ func NewFixedRateDataGenerator(bytesPerInterval int, interval time.Duration) *Fi
 	}
 }
 
-func (gen *FixedRateDataGenerator) Read(p []byte) (n int, err error) {
+func (gen *FixedRateDataGenerator) Read(p []byte) (int, error) {
 	nextRead := gen.Interval - (time.Now().Sub(gen.lastRead))
 
 	select {
@@ -148,7 +147,7 @@ type ErroringReader struct {
 	Err error
 }
 
-func (er ErroringReader) Read(p []byte) (n int, err error) {
+func (er ErroringReader) Read(p []byte) (int, error) {
 	return 0, er.Err
 }
 
@@ -185,7 +184,7 @@ func NewReaderCollection(readerSizePair ...ReaderSizePair) *ReaderCollection {
 	return &ReaderCollection{readerSizePair, 0, 0}
 }
 
-func (rc *ReaderCollection) Read(p []byte) (n int, err error) {
+func (rc *ReaderCollection) Read(p []byte) (int, error) {
 	if rc.currIdx < len(rc.ReadersAndSizes) {
 		currReader := rc.ReadersAndSizes[rc.currIdx].Reader
 		currSize := rc.ReadersAndSizes[rc.currIdx].Size
@@ -265,15 +264,22 @@ func TestReadWithMinThroughput(t *testing.T) {
 			false,
 			true,
 		},
+		{
+			"5MB then stops",
+			10 * 1024 * 1024,
+			NewReaderCollection(
+				ReaderSizePair{NewFixedRateDataGenerator(100*1024, time.Millisecond), 5 * 1024 * 1024},
+				ReaderSizePair{NewFixedRateDataGenerator(0, 100*time.Second), 5 * 1024 * 1024},
+			),
+			MinThroughputCheckParams{50 * 1024 * 1024, 5 * time.Millisecond, 10},
+			false,
+			true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			start := time.Now()
 			data, err := ReadWithMinThroughput(test.reader, test.numBytes, test.mtcp)
-			delta := time.Now().Sub(start)
-
-			fmt.Println("avg throughput:", float64(test.numBytes)/delta.Seconds())
 
 			if test.expErr || test.expThroughErr {
 				if test.expThroughErr {

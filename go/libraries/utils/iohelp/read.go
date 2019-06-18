@@ -138,12 +138,22 @@ func ReadLine(br *bufio.Reader) (line string, done bool, err error) {
 	line, err = br.ReadMap()
 }*/
 
+// ErrThroughput is the error that is returned by ReadWithMinThroughput if the throughput drops below the threshold
 var ErrThroughput = errors.New("throughput below minimum allowable")
 
+// MinThroughputCheckParams defines the miminimum throughput, how often it should be checked, and what the time window
+// size is
 type MinThroughputCheckParams struct {
+	// MinBytesPerSec is the minimum throughput.  If ReadWithMinThroughput drops below this value for the most recent
+	// time window then it will fail.
 	MinBytesPerSec int64
-	CheckInterval  time.Duration
-	NumIntervals   int
+
+	// CheckInterval how often should the throughput be checked
+	CheckInterval time.Duration
+
+	// NumIntervals defines the number of intervals that should be considered when looking at the throughput.
+	// NumIntervals*CheckInterval defines the window size
+	NumIntervals int
 }
 
 type datapoint struct {
@@ -153,17 +163,15 @@ type datapoint struct {
 
 type datapoints []datapoint
 
-func (dps datapoints) getThroughput(duration time.Duration) (datapoints, int64) {
-	if len(dps) == 0 {
-		return dps, 0
-	}
-
+// getThroughput returns the throughput for the most recent time window
+func (initialDps datapoints) getThroughput(duration time.Duration) (datapoints, int64) {
+	dps := initialDps
 	now := time.Now()
+	cutoff := now.Add(-duration)
 
+	// restrict datapoints to datapoints within the time window
 	for len(dps) > 1 {
-		nextDelta := now.Sub(dps[1].ts)
-
-		if nextDelta > duration {
+		if cutoff.After(dps[0].ts) {
 			dps = dps[1:]
 		} else {
 			break
@@ -180,7 +188,8 @@ func (dps datapoints) getThroughput(duration time.Duration) (datapoints, int64) 
 	return dps, int64(float64(bytesRead) / elapsed.Seconds())
 }
 
-func safeCloseReader(c io.Closer) {
+// safeClose closes the provided closer recovering from any errors.
+func safeClose(c io.Closer) {
 	defer func() {
 		recover()
 	}()
@@ -193,7 +202,9 @@ type readResults struct {
 	err   error
 }
 
-func ReadAllWithProgress(r io.Reader, n int64, bytesReadSync *int64) ([]byte, error) {
+// ReadNWithProgress reads n bytes from reader r.  As it reads it atomically updates the value pointed at by
+// bytesRead.  In order to cancel this read the reader should be closed.
+func ReadNWithProgress(r io.Reader, n int64, bytesRead *int64) ([]byte, error) {
 	var totalRead int64
 	bytes := make([]byte, n)
 
@@ -208,8 +219,8 @@ func ReadAllWithProgress(r io.Reader, n int64, bytesReadSync *int64) ([]byte, er
 
 		totalRead += int64(read)
 
-		if bytesReadSync != nil {
-			atomic.StoreInt64(bytesReadSync, totalRead)
+		if bytesRead != nil {
+			atomic.StoreInt64(bytesRead, totalRead)
 		}
 
 		if err == io.EOF {
@@ -223,6 +234,8 @@ func ReadAllWithProgress(r io.Reader, n int64, bytesReadSync *int64) ([]byte, er
 	return bytes[:totalRead], err
 }
 
+// ReadWithMinThroughput reads n bytes from reader r erroring if the throughput ever drops below the threshold
+// defined by MinThroughputCheckParams.
 func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputCheckParams) ([]byte, error) {
 	wg := &sync.WaitGroup{}
 
@@ -234,7 +247,7 @@ func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputChec
 		defer wg.Done()
 		defer func() { recover() }()
 
-		bytes, err := ReadAllWithProgress(r, n, &bytesReadSync)
+		bytes, err := ReadNWithProgress(r, n, &bytesReadSync)
 		atomicRes.Store(readResults{bytes, err})
 	}()
 
@@ -259,7 +272,7 @@ func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputChec
 			points, bps = points.getThroughput(checkDuration)
 
 			if bps < mtcParams.MinBytesPerSec {
-				safeCloseReader(r)
+				safeClose(r)
 				throughputErr = true
 			}
 		}
