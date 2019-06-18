@@ -47,12 +47,15 @@ teardown() {
     run dolt sql -q "select pk,c1 as foo,c1 as bar from one_pk"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "foo" ]] || false
+    [[ "$output" =~ "bar" ]] || false
 }
 
 @test "sql select same column twice using table aliases" {
     run dolt sql -q "select pk,foo.c1,bar.c1 from one_pk as foo, one_pk as bar"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "<NULL>" ]] || false
+    [[ "$output" =~ "c1" ]] || false
 }
 
 @test "sql basic inner join" {
@@ -222,4 +225,59 @@ teardown() {
     run dolt sql -q "update one_pk set pk=11 where pk=0"
     [ $status -eq 1 ]
     [[ "$output" =~ "Cannot update primary key column 'pk'" ]] || false
+}
+
+@test "sql show tables" {
+    run dolt sql -q "show tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "one_pk" ]] || false
+    [[ "$output" =~ "two_pk" ]] || false
+}
+
+@test "sql describe" {
+    run dolt sql -q "describe one_pk"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 10 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "c5" ]] || false
+}
+
+@test "sql alter table to add and delete a column" {
+    run dolt sql -q "alter table one_pk add (c6 int)"
+    [ $status -eq 0 ]
+    run dolt sql -q "describe one_pk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "c6" ]] || false
+    run dolt schema one_pk
+    [[ "$output" =~ "c6" ]] || false
+    run dolt sql -q "alter table one_pk drop column c6"
+    [ $status -eq 0 ]
+    run dolt sql -q "describe one_pk"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "c6" ]] || false
+    run dolt schema one_pk
+    [[ ! "$output" =~ "c6" ]] || false
+}
+
+@test "sql alter table to add and delete a column" {
+    dolt sql -q "alter table one_pk add (c6 int)"
+    run dolt sql -q "alter table one_pk rename column c6 to c7"
+    [ $status -eq 0 ]
+    run dolt sql -q "describe one_pk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "c7" ]] || false
+    [[ ! "$output" =~ "c6" ]] || false
+}
+
+@test "sql alter table without parentheses" {
+    run dolt sql -q "alter table one_pk add c6 int"
+    skip "alter table requires parentheses. above is valid sql."
+    [ $status -eq 0 ]
+}
+
+@test "sql alter table to change column type not supported" {
+    run dolt sql -q "alter table one_pk modify column c5 varchar"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Unsupported alter table statement" ]] || false
 }
