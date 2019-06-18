@@ -299,24 +299,22 @@ func TestExecuteSelect(t *testing.T) {
 			expectedRows:   compressRows(peopleTestSchema, homer, barney),
 			expectedSchema: compressSchema(peopleTestSchema),
 		},
-		// TODO: fix this
-		// {
-		// 	name:           "select *, in clause float",
-		// 	query:          "select * from people where rating in (-10.0, 8.5)",
-		// 	expectedRows:   compressRows(peopleTestSchema, homer),
-		// 	expectedSchema: compressSchema(peopleTestSchema),
-		// },
+		{
+			name:           "select *, in clause float",
+			query:          "select * from people where rating in (-10.0, 8.5)",
+			expectedRows:   compressRows(peopleTestSchema, homer),
+			expectedSchema: compressSchema(peopleTestSchema),
+		},
 		{
 			name:        "select *, in clause, mixed types",
 			query:       "select * from people where first in ('Homer', 40)",
 			expectedErr: "Type mismatch: mixed types in list literal '('Homer', 40)'",
 		},
-		// TODO: fix this
-		// {
-		// 	name:        "select *, in clause, mixed numeric types",
-		// 	query:       "select * from people where age in (-10.0, 40)",
-		// 	expectedErr: "Type mismatch: mixed types in list literal '(-10.0, 40)'",
-		// },
+		{
+			name:        "select *, in clause, mixed numeric types",
+			query:       "select * from people where age in (-10.0, 40)",
+			expectedErr: "Type mismatch: mixed types in list literal '(-10.0, 40)'",
+		},
 		{
 			name:           "select *, not in clause",
 			query:          "select * from people where first not in ('Homer', 'Marge')",
