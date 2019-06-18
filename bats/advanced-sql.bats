@@ -223,3 +223,33 @@ teardown() {
     [ $status -eq 1 ]
     [[ "$output" =~ "Cannot update primary key column 'pk'" ]] || false
 }
+
+@test "sql show tables" {
+    run dolt sql -q "show tables"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "one_pk" ]] || false
+    [[ "$output" =~ "two_pk" ]] || false
+}
+
+@test "sql describe" {
+    run dolt sql -q "describe one_pk"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 10 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "c5" ]] || false
+}
+
+@test "sql alter table to add and delete a column" {
+    run dolt sql -q "alter table one_pk add c6 int"
+    skip "This breaks right now and I'm not sure why"
+    [ $status -eq 0 ]
+    run dolt sql -q "alter table one_pk drop column c6"
+    [ $status -eq 0 ]
+}
+
+@test "sql alter table to change column type not supported" {
+    run dolt sql -q "alter table one_pk modify column c5 varchar"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Unsupported alter table statement" ]] || false
+}
