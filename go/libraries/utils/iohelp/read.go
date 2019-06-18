@@ -2,7 +2,11 @@ package iohelp
 
 import (
 	"bufio"
+	"errors"
 	"io"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // ErrPreservingReader is a utility class that provides methods to read from a reader where errors can be ignored and
@@ -133,3 +137,146 @@ func ReadLine(br *bufio.Reader) (line string, done bool, err error) {
 /*func ReadLineFromJSON(br *bufio.Reader) (line map[string]interface{}, done bool, err error) {
 	line, err = br.ReadMap()
 }*/
+
+var ErrThroughput = errors.New("throughput below minimum allowable")
+
+type MinThroughputCheckParams struct {
+	MinBytesPerSec int64
+	CheckInterval  time.Duration
+	NumIntervals   int
+}
+
+type datapoint struct {
+	ts  time.Time
+	val int64
+}
+
+type datapoints []datapoint
+
+func (dps datapoints) getThroughput(duration time.Duration) (datapoints, int64) {
+	if len(dps) == 0 {
+		return dps, 0
+	}
+
+	now := time.Now()
+
+	for len(dps) > 1 {
+		nextDelta := now.Sub(dps[1].ts)
+
+		if nextDelta > duration {
+			dps = dps[1:]
+		} else {
+			break
+		}
+	}
+
+	if len(dps) <= 1 {
+		return dps, 0
+	}
+
+	elapsed := now.Sub(dps[0].ts)
+	bytesRead := dps[len(dps)-1].val - dps[0].val
+
+	return dps, int64(float64(bytesRead) / elapsed.Seconds())
+}
+
+func safeCloseReader(c io.Closer) {
+	defer func() {
+		recover()
+	}()
+
+	c.Close()
+}
+
+type readResults struct {
+	bytes []byte
+	err   error
+}
+
+func ReadAllWithProgress(r io.Reader, n int64, bytesReadSync *int64) ([]byte, error) {
+	var totalRead int64
+	bytes := make([]byte, n)
+
+	var err error
+	for totalRead < n && err == nil {
+		var read int
+		read, err = r.Read(bytes[totalRead:])
+
+		if err != nil && err != io.EOF {
+			break
+		}
+
+		totalRead += int64(read)
+
+		if bytesReadSync != nil {
+			atomic.StoreInt64(bytesReadSync, totalRead)
+		}
+
+		if err == io.EOF {
+			err = nil
+			if totalRead != n {
+				err = io.ErrUnexpectedEOF
+			}
+		}
+	}
+
+	return bytes[:totalRead], err
+}
+
+func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputCheckParams) ([]byte, error) {
+	wg := &sync.WaitGroup{}
+
+	var atomicRes atomic.Value
+	var bytesReadSync int64
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() { recover() }()
+
+		bytes, err := ReadAllWithProgress(r, n, &bytesReadSync)
+		atomicRes.Store(readResults{bytes, err})
+	}()
+
+	checkDuration := mtcParams.CheckInterval * time.Duration(mtcParams.NumIntervals)
+	ticker := time.NewTicker(mtcParams.CheckInterval)
+	defer ticker.Stop()
+
+	var points datapoints
+	var throughputErr bool
+	for !throughputErr {
+		if val := atomicRes.Load(); val != nil {
+			res := val.(readResults)
+			return res.bytes, res.err
+		}
+
+		<-ticker.C
+		read := atomic.LoadInt64(&bytesReadSync)
+		points = append(points, datapoint{time.Now(), read})
+
+		if len(points) >= mtcParams.NumIntervals {
+			var bps int64
+			points, bps = points.getThroughput(checkDuration)
+
+			if bps < mtcParams.MinBytesPerSec {
+				safeCloseReader(r)
+				throughputErr = true
+			}
+		}
+	}
+
+	wg.Wait()
+
+	if val := atomicRes.Load(); val != nil {
+		res := val.(readResults)
+		err := res.err
+
+		if throughputErr {
+			err = ErrThroughput
+		}
+
+		return res.bytes, err
+	}
+
+	panic("bug.  Should never reach here.")
+}
