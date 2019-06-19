@@ -34,51 +34,6 @@ func EncodeValue(v Value) chunks.Chunk {
 	panic("unreachable")
 }
 
-func WriteValue(v Value, w io.Writer) (int, error) {
-	var buf [128]byte
-	bnw := binaryNomsWriter{buf[:], 0}
-
-	switch v.Kind() {
-	case BoolKind:
-		bnw.writeBool(bool(v.(Bool)))
-	case StringKind:
-		s := string(v.(String))
-		if len(s) > len(bnw.buff) {
-			bigBuf := make([]byte, len(s)+32)
-			bnw = binaryNomsWriter{bigBuf, 0}
-		}
-		bnw.writeString(s)
-	case FloatKind:
-		bnw.writeFloat(v.(Float))
-	case IntKind:
-		bnw.writeInt(v.(Int))
-	case UintKind:
-		bnw.writeUint(v.(Uint))
-	case UUIDKind:
-		id := v.(UUID)
-		bnw.writeBytes(id[:])
-	case NullKind:
-		bnw.writeNull()
-	default:
-		return 0, errors.New("Unsupported type")
-	}
-
-	bytes := bnw.data()
-
-	totalWritten := 0
-	for totalWritten < len(bytes) {
-		n, err := w.Write(bytes)
-
-		if err != nil {
-			return 0, err
-		}
-
-		totalWritten += n
-	}
-
-	return totalWritten, nil
-}
-
 func readNBytes(r io.Reader, n int) ([]byte, error) {
 	bytes := make([]byte, n)
 
