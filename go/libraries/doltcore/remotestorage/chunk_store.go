@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/retry"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"sort"
@@ -25,9 +25,7 @@ import (
 var ErrUploadFailed = errors.New("upload failed")
 var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
-var globalHttpFetcher HTTPFetcher = &http.Client{
-	Timeout: time.Second * 30,
-}
+var globalHttpFetcher HTTPFetcher = &http.Client{}
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -604,6 +602,13 @@ var downRetryParams = retry.RetryParams{
 	Backoff:    200 * time.Millisecond,
 }
 
+// We may need this to be configurable for users with really bad internet
+var downThroughputCheck = iohelp.MinThroughputCheckParams{
+	MinBytesPerSec: 1024,
+	CheckInterval:  1 * time.Second,
+	NumIntervals:   5,
+}
+
 // getRangeDownloadFunc returns a work function that does the downloading of one or more chunks and writes those chunks
 // to the chunkChan
 func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) func() error {
@@ -618,17 +623,14 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 			return err
 		}
 
-		rangeVal := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
-		req.Header.Set("Range", rangeVal)
-
-		debugUrl := urlStr
-		if idx := strings.IndexRune(debugUrl, '?'); idx != -1 {
-			debugUrl = debugUrl[:idx]
-		}
-
 		//execute the request
-		var comprData []byte
+		var allBufs [][]byte
+		currOffset := offset
+		currLength := length
 		success := retry.CallWithRetries(downRetryParams, func() retry.RetriableCallState {
+			rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
+			req.Header.Set("Range", rangeVal)
+
 			var resp *http.Response
 			resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
 			getResult := retry.ProcessHttpResp(resp, err)
@@ -638,7 +640,14 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 			}
 
 			// read the results
-			comprData, err = ioutil.ReadAll(resp.Body)
+			comprData, err := iohelp.ReadWithMinThroughput(resp.Body, int64(currLength), downThroughputCheck)
+
+			dataRead := len(comprData)
+			if dataRead > 0 {
+				allBufs = append(allBufs, comprData)
+				currLength -= uint64(dataRead)
+				currOffset += uint64(dataRead)
+			}
 
 			if err != nil {
 				return retry.RetriableFailure
@@ -650,7 +659,20 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 		if err != nil {
 			return err
 		} else if !success {
-			return fmt.Errorf("error: failed to download '%s' range: '%s'", urlStr, rangeVal)
+			fullRange := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
+			return fmt.Errorf("error: failed to download '%s' range: '%s'", urlStr, fullRange)
+		}
+
+		comprData := allBufs[0]
+
+		if len(allBufs) > 1 {
+			comprData = make([]byte, length)
+
+			pos := 0
+			for i := 0; i < len(allBufs); i++ {
+				copy(comprData[pos:], allBufs[i])
+				pos += len(allBufs[i])
+			}
 		}
 
 		// loop over the ranges of bytes and extract those bytes from the data that was downloaded.  The extracted bytes
