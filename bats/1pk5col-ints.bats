@@ -566,10 +566,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully exported data." ]
     [ -f export.sql ]
-    run diff $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
-    echo $output
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    diff $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 }
 
 @test "dolt schema" {
