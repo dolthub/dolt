@@ -16,6 +16,8 @@ import (
 
 const doubleQuot = "\""
 
+// SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
+// SQL database.
 type SqlExportWriter struct {
 	tableName       string
 	sch             schema.Schema
@@ -23,6 +25,7 @@ type SqlExportWriter struct {
 	writtenFirstRow bool
 }
 
+// OpenSQLExportWriter returns a new SqlWriter for the table given writing to a file with the path given.
 func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, sch schema.Schema) (*SqlExportWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 	if err != nil {
@@ -37,6 +40,7 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
 }
 
+// Returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
