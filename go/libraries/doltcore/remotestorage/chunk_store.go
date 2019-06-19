@@ -34,12 +34,18 @@ var downThroughputCheck = iohelp.MinThroughputCheckParams{
 	NumIntervals:   5,
 }
 
-var uploadRetryParams backoff.BackOff
-var downRetryParams backoff.BackOff
+const (
+	downRetryCount   = 5
+	uploadRetryCount = 5
+)
+
+var uploadRetryParams = backoff.NewExponentialBackOff()
+var downRetryParams = backoff.NewExponentialBackOff()
 
 func init() {
-	uploadRetryParams = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5)
-	downRetryParams = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5)
+	uploadRetryParams.MaxInterval = 5 * time.Second
+
+	downRetryParams.MaxInterval = 5 * time.Second
 }
 
 type HTTPFetcher interface {
@@ -511,7 +517,7 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 		return processHttpResp(resp, err)
 	}
 
-	err = backoff.Retry(op, uploadRetryParams)
+	err = backoff.Retry(op, backoff.WithMaxRetries(uploadRetryParams, uploadRetryCount))
 
 	if err != nil {
 		return err
@@ -653,8 +659,10 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 	currOffset := offset
 	currLength := length
 
+	callNumber := -1
 	//execute the request
 	op := func() error {
+		callNumber++
 		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
 		req.Header.Set("Range", rangeVal)
 
@@ -662,7 +670,7 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 		resp, err = fetcher.Do(req.WithContext(ctx))
 		respErr := processHttpResp(resp, err)
 
-		if respErr == nil {
+		if respErr != nil {
 			return respErr
 		}
 
@@ -679,7 +687,7 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 		return err
 	}
 
-	err = backoff.Retry(op, downRetryParams)
+	err = backoff.Retry(op, backoff.WithMaxRetries(downRetryParams, downRetryCount))
 
 	if err != nil {
 		return nil, err
