@@ -16,6 +16,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
+	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -23,6 +24,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	sqle "github.com/src-d/go-mysql-server"
 	"github.com/xwb1989/sqlparser"
 	"path/filepath"
 	"strings"
@@ -263,6 +265,12 @@ func prepend(s string, ss []string) []string {
 
 // Processes a single query and returns the new root value of the DB, or an error encountered.
 func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	db := dsqle.NewDatabase("dolt", dEnv)
+	engine := sqle.NewDefault()
+	engine.AddDatabase(db)
+
+	engine.Query(nil, nil, nil)
+
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, errFmt("Error parsing SQL: %v.", err.Error())
