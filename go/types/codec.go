@@ -50,7 +50,7 @@ func readNBytes(r io.Reader, n int) ([]byte, error) {
 	return bytes, nil
 }
 
-func DecodeFromBytes(data []byte, vrw ValueReadWriter) Value {
+func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
 	dec := newValueDecoder(data, vrw)
 	v := dec.readValue()
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
@@ -68,7 +68,7 @@ func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) Value {
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
 func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) Value {
 	d.PanicIfTrue(c.IsEmpty())
-	return DecodeFromBytes(c.Data(), vrw)
+	return decodeFromBytes(c.Data(), vrw)
 }
 
 type nomsWriter interface {

@@ -329,7 +329,7 @@ func TestWriteStructTooMuchData(t *testing.T) {
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
-		DecodeFromBytes(buff, nil)
+		decodeFromBytes(buff, nil)
 	})
 }
 
