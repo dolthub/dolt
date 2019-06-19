@@ -237,9 +237,11 @@ func ReadNWithProgress(r io.Reader, n int64, bytesRead *int64) ([]byte, error) {
 // ReadWithMinThroughput reads n bytes from reader r erroring if the throughput ever drops below the threshold
 // defined by MinThroughputCheckParams.
 func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputCheckParams) ([]byte, error) {
+	resChan := make(chan readResults, 1)
+	defer close(resChan)
+
 	wg := &sync.WaitGroup{}
 
-	var atomicRes atomic.Value
 	var bytesReadSync int64
 
 	wg.Add(1)
@@ -248,7 +250,8 @@ func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputChec
 		defer func() { recover() }()
 
 		bytes, err := ReadNWithProgress(r, n, &bytesReadSync)
-		atomicRes.Store(readResults{bytes, err})
+		res := readResults{bytes, err}
+		resChan <- res
 	}()
 
 	checkDuration := mtcParams.CheckInterval * time.Duration(mtcParams.NumIntervals)
@@ -258,12 +261,12 @@ func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputChec
 	var points datapoints
 	var throughputErr bool
 	for !throughputErr {
-		if val := atomicRes.Load(); val != nil {
-			res := val.(readResults)
+		select {
+		case res := <-resChan:
 			return res.bytes, res.err
+		case <-ticker.C:
 		}
 
-		<-ticker.C
 		read := atomic.LoadInt64(&bytesReadSync)
 		points = append(points, datapoint{time.Now(), read})
 
@@ -280,8 +283,8 @@ func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputChec
 
 	wg.Wait()
 
-	if val := atomicRes.Load(); val != nil {
-		res := val.(readResults)
+	select {
+	case res := <-resChan:
 		err := res.err
 
 		if throughputErr {
@@ -289,7 +292,7 @@ func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputChec
 		}
 
 		return res.bytes, err
+	default:
+		panic("bug.  Should never reach here.")
 	}
-
-	panic("bug.  Should never reach here.")
 }
