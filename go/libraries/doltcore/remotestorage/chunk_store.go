@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cenkalti/backoff"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/retry"
 	"net/http"
 	"net/url"
 	"sort"
@@ -26,6 +26,21 @@ var ErrUploadFailed = errors.New("upload failed")
 var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
 var globalHttpFetcher HTTPFetcher = &http.Client{}
+
+// We may need this to be configurable for users with really bad internet
+var downThroughputCheck = iohelp.MinThroughputCheckParams{
+	MinBytesPerSec: 1024,
+	CheckInterval:  1 * time.Second,
+	NumIntervals:   5,
+}
+
+var uploadRetryParams backoff.BackOff
+var downRetryParams backoff.BackOff
+
+func init() {
+	uploadRetryParams = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5)
+	downRetryParams = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 5)
+}
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -482,12 +497,6 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	return hashToCount, nil
 }
 
-var uploadRetryParams = retry.RetryParams{
-	NumRetries: 5,
-	MaxDelay:   2 * time.Second,
-	Backoff:    200 * time.Millisecond,
-}
-
 func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostChunk, data []byte) error {
 	//resp, err := http(post.Url, "application/octet-stream", bytes.NewBuffer(data))
 	req, err := http.NewRequest(http.MethodPut, post.Url, bytes.NewBuffer(data))
@@ -496,15 +505,16 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 	}
 
 	var resp *http.Response
-	success := retry.CallWithRetries(uploadRetryParams, func() retry.RetriableCallState {
+	op := func() error {
+		var err error
 		resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
-		return retry.ProcessHttpResp(resp, err)
-	})
+		return processHttpResp(resp, err)
+	}
+
+	err = backoff.Retry(op, uploadRetryParams)
 
 	if err != nil {
 		return err
-	} else if !success {
-		return errors.New("error: failed to upload file")
 	}
 
 	return nil
@@ -596,19 +606,6 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndR
 	return err
 }
 
-var downRetryParams = retry.RetryParams{
-	NumRetries: 5,
-	MaxDelay:   2 * time.Second,
-	Backoff:    200 * time.Millisecond,
-}
-
-// We may need this to be configurable for users with really bad internet
-var downThroughputCheck = iohelp.MinThroughputCheckParams{
-	MinBytesPerSec: 1024,
-	CheckInterval:  1 * time.Second,
-	NumIntervals:   5,
-}
-
 // getRangeDownloadFunc returns a work function that does the downloading of one or more chunks and writes those chunks
 // to the chunkChan
 func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) func() error {
@@ -657,16 +654,16 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 	currLength := length
 
 	//execute the request
-	success := retry.CallWithRetries(downRetryParams, func() retry.RetriableCallState {
+	op := func() error {
 		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
 		req.Header.Set("Range", rangeVal)
 
 		var resp *http.Response
 		resp, err = fetcher.Do(req.WithContext(ctx))
-		getResult := retry.ProcessHttpResp(resp, err)
+		respErr := processHttpResp(resp, err)
 
-		if getResult != retry.Success {
-			return getResult
+		if respErr == nil {
+			return respErr
 		}
 
 		// read the results
@@ -679,18 +676,13 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 			currOffset += uint64(dataRead)
 		}
 
-		if err != nil {
-			return retry.RetriableFailure
-		}
+		return err
+	}
 
-		return retry.Success
-	})
+	err = backoff.Retry(op, downRetryParams)
 
 	if err != nil {
 		return nil, err
-	} else if !success {
-		fullRange := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
-		return nil, fmt.Errorf("error: failed to download '%s' range: '%s'", urlStr, fullRange)
 	}
 
 	return collapseBuffers(allBufs, length), nil
