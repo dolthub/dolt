@@ -5,9 +5,7 @@
 package types
 
 import (
-	"bufio"
 	"encoding/binary"
-	"errors"
 	"io"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -50,82 +48,6 @@ func readNBytes(r io.Reader, n int) ([]byte, error) {
 	}
 
 	return bytes, nil
-}
-
-func ReadValue(k NomsKind, br *bufio.Reader) (Value, error) {
-	switch k {
-	case BoolKind:
-		var buf [1]byte
-		n, err := br.Read(buf[:])
-		if n != 1 {
-			if err == nil {
-				err = errors.New("Unable to read desired bytes")
-			}
-
-			return nil, err
-		}
-		bnr := binaryNomsReader{buf[:], 0}
-		return Bool(bnr.readBool()), nil
-	case StringKind:
-		size, err := binary.ReadUvarint(br)
-
-		if err != nil {
-			return nil, err
-		}
-
-		data, err := readNBytes(br, int(size))
-
-		if err != nil {
-			return nil, err
-		}
-
-		return String(data), nil
-	case FloatKind:
-		// b.assertCanRead(binary.MaxVarintLen64 * 2)
-		i, err := binary.ReadVarint(br)
-
-		if err != nil {
-			return nil, err
-		}
-
-		exp, err := binary.ReadVarint(br)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return Float(fracExpToFloat(i, int(exp))), nil
-
-	case IntKind:
-		val, err := binary.ReadVarint(br)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return Int(val), nil
-	case UintKind:
-		val, err := binary.ReadUvarint(br)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return Uint(val), nil
-	case UUIDKind:
-		buf, err := readNBytes(br, uuidNumBytes)
-
-		if err != nil {
-			return nil, err
-		}
-
-		bnr := binaryNomsReader{buf[:], 0}
-		return UUID(bnr.readUUID()), nil
-	case NullKind:
-		return NullValue, nil
-	default:
-		return nil, errors.New("Unsupported type")
-	}
 }
 
 func DecodeFromBytes(data []byte, vrw ValueReadWriter) Value {
