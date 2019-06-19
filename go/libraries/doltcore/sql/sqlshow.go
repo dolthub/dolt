@@ -84,10 +84,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		table, _ := root.GetTable(ctx, tableName)
 
 		sch := table.GetSchema(ctx)
-		schemaStr, err := SchemaAsCreateStmt(tableName, sch)
-		if err != nil {
-			return nil, nil, err
-		}
+		schemaStr := SchemaAsCreateStmt(tableName, sch)
 
 		resultSch := showCreateTableSchema()
 		rows := toRows(([][]string{{tableName, schemaStr}}), resultSch)

@@ -14,7 +14,7 @@ import (
 )
 
 func TestExecuteShow(t *testing.T) {
-	peopleSchemaStr, _ := SchemaAsCreateStmt("people", peopleTestSchema)
+	peopleSchemaStr := SchemaAsCreateStmt("people", peopleTestSchema)
 
 	peopleSchemaRows := rs(
 		newResultSetRow(types.String("id"), types.String("int"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),

@@ -2,6 +2,7 @@ package mvdata
 
 import (
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,53 +28,43 @@ const (
 	PsvFile           DataFormat = ".psv"
 	XlsxFile          DataFormat = ".xlsx"
 	JsonFile          DataFormat = ".json"
-
-	//NbfFile           DataFormat = ".nbf"
+	SqlFile           DataFormat = ".sql"
 )
 
 func (df DataFormat) ReadableStr() string {
 	switch df {
 	case DoltDB:
 		return "dolt table"
-
 	case CsvFile:
 		return "csv file"
-
 	case PsvFile:
 		return "psv file"
-
 	case XlsxFile:
 		return "xlsx file"
-
 	case JsonFile:
 		return "json file"
-
-		//case NbfFile:
-		//	return "nbf file"
+	case SqlFile:
+		return "sql file"
+	default:
+		return "invalid"
 	}
-
-	return "invalid"
 }
 
 func DFFromString(dfStr string) DataFormat {
 	switch strings.ToLower(dfStr) {
 	case "csv", ".csv":
 		return CsvFile
-
 	case "psv", ".psv":
 		return PsvFile
-
 	case "xlsx", ".xlsx":
 		return XlsxFile
-
 	case "json", ".json":
 		return JsonFile
-
-		//case "nbf", ".nbf":
-		//	return NbfFile
+	case "sql", ".sql":
+		return SqlFile
+	default:
+		return InvalidDataFormat
 	}
-
-	return InvalidDataFormat
 }
 
 type DataLocation struct {
@@ -86,29 +77,27 @@ func (dl *DataLocation) String() string {
 }
 
 func NewDataLocation(path, fileFmtStr string) *DataLocation {
-	dataFmt := DFFromString(fileFmtStr)
+	var dataFmt DataFormat
 
 	if fileFmtStr == "" {
 		if doltdb.IsValidTableName(path) {
 			dataFmt = DoltDB
+		} else {
+			switch strings.ToLower(filepath.Ext(path)) {
+			case string(CsvFile):
+				dataFmt = CsvFile
+			case string(PsvFile):
+				dataFmt = PsvFile
+			case string(XlsxFile):
+				dataFmt = XlsxFile
+			case string(JsonFile):
+				dataFmt = JsonFile
+			case string(SqlFile):
+				dataFmt = SqlFile
+			}
 		}
-		ext := filepath.Ext(path)
-
-		switch strings.ToLower(ext) {
-		case string(CsvFile):
-			dataFmt = CsvFile
-		case string(PsvFile):
-			dataFmt = PsvFile
-
-		case string(XlsxFile):
-			dataFmt = XlsxFile
-
-		case string(JsonFile):
-			dataFmt = JsonFile
-
-			//case string(NbfFile):
-			//	dataFmt = NbfFile
-		}
+	} else {
+		dataFmt = DFFromString(fileFmtStr)
 	}
 
 	return &DataLocation{path, dataFmt}
@@ -161,11 +150,6 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 		case JsonFile:
 			rd, err := json.OpenJSONReader(dl.Path, fs, json.NewJSONInfo(), schPath)
 			return rd, false, err
-
-			//case NbfFile:
-			//	rd, err := nbf.OpenNBFReader(dl.Path, fs)
-			//	return rd, true, err
-
 		}
 	}
 
@@ -187,7 +171,7 @@ func (dl *DataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs f
 
 var ErrNoPK = errors.New("schema does not contain a primary key")
 
-func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	if dl.RequiresPK() && outSch.GetPKCols().Size() == 0 {
 		return nil, ErrNoPK
 	}
@@ -202,26 +186,15 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *d
 		}
 
 	case CsvFile:
-		tWr, err := csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo())
-		return tWr, err
-
+		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo())
 	case PsvFile:
-		csvInfo := csv.NewCSVInfo()
-		csvInfo.Delim = '|'
-		tWr, err := csv.OpenCSVWriter(dl.Path, fs, outSch, csvInfo)
-		return tWr, err
-
+		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo().SetDelim('|'))
 	case XlsxFile:
-		tWr, err := xlsx.OpenXLSXWriter(dl.Path, fs, outSch, xlsx.NewXLSXInfo())
-		return tWr, err
-
+		return xlsx.OpenXLSXWriter(dl.Path, fs, outSch, xlsx.NewXLSXInfo())
 	case JsonFile:
-		tWr, err := json.OpenJSONWriter(dl.Path, fs, outSch, json.NewJSONInfo())
-		return tWr, err
-
-		//case NbfFile:
-		//	tWr, err := nbf.OpenNBFWriter(dl.Path, fs, outSch)
-		//	return tWr, err
+		return json.OpenJSONWriter(dl.Path, fs, outSch, json.NewJSONInfo())
+	case SqlFile:
+		return sqlexport.OpenSQLExportWriter(dl.Path, mvOpts.TableName, fs, outSch)
 	}
 
 	panic("Invalid Data Format." + string(dl.Format))
@@ -229,7 +202,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, root *d
 
 // CreateUpdatingDataWriter will create a TableWriteCloser for a DataLocation that will update and append rows based
 // on their primary key.
-func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case DoltDB:
 		tableName := dl.Path
@@ -242,7 +215,7 @@ func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *dolt
 		m := tbl.GetRowData(ctx)
 		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
 
-	case CsvFile, PsvFile, JsonFile, XlsxFile:
+	case CsvFile, PsvFile, JsonFile, XlsxFile, SqlFile:
 		panic("Update not supported for this file type.")
 	}
 
@@ -251,36 +224,14 @@ func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, root *dolt
 
 // MustWriteSorted returns whether this DataLocation must be written to in primary key order
 func (dl *DataLocation) MustWriteSorted() bool {
-	return false //dl.Format == NbfFile
+	return false
 }
 
 // RequiresPK returns whether this DataLocation requires a primary key
 func (dl *DataLocation) RequiresPK() bool {
-	return /*dl.Format == NbfFile ||*/ dl.Format == DoltDB
+	return dl.Format == DoltDB
 }
 
-func mapByTag(src *DataLocation, dest *DataLocation) bool {
-	switch src.Format {
-
-	case PsvFile, CsvFile, JsonFile, XlsxFile:
-
-		return false
-	case DoltDB:
-		break
-	default:
-		panic("unhandled case")
-	}
-
-	switch dest.Format {
-
-	case PsvFile, CsvFile, JsonFile, XlsxFile:
-
-		return false
-	case DoltDB:
-		break
-	default:
-		panic("unhandled case")
-	}
-
-	return true
+func mapByTag(src, dest *DataLocation) bool {
+	return src.Format == DoltDB && dest.Format == DoltDB
 }

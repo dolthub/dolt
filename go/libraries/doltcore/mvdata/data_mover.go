@@ -29,6 +29,7 @@ type MoveOptions struct {
 	Operation   MoveOperation
 	ContOnErr   bool
 	SchFile     string
+	TableName   string
 	MappingFile string
 	PrimaryKey  string
 	Src         *DataLocation
@@ -110,9 +111,9 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 
 	var wr table.TableWriteCloser
 	if mvOpts.Operation == OverwriteOp {
-		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, root, fs, srcIsSorted, outSch, statsCB)
+		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
 	} else {
-		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(ctx, root, fs, srcIsSorted, outSch, statsCB)
+		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
 	}
 
 	if err != nil {

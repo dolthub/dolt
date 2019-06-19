@@ -111,7 +111,7 @@ func TestDataMover(t *testing.T) {
 
 		src := test.mvOpts.Src
 
-		seedWr, err := src.CreateOverwritingDataWriter(context.Background(), root, fs, true, fakeSchema, nil)
+		seedWr, err := src.CreateOverwritingDataWriter(context.Background(), test.mvOpts, root, fs, true, fakeSchema, nil)
 
 		if err != nil {
 			t.Fatal(err.Error())
