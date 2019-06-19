@@ -332,7 +332,7 @@ func decodeValue(bs []byte, asValue bool, vrw ValueReadWriter) ([]byte, Value) {
 		// never change since we are backing the values by this data.
 		data := make([]byte, encodedLen)
 		copy(data, bs[5:5+encodedLen])
-		v = DecodeFromBytes(data, vrw)
+		v = decodeFromBytes(data, vrw)
 		return bs[5+encodedLen:], v
 	}
 	return bs[1+hash.ByteLen:], nil
