@@ -6,27 +6,6 @@ import (
 	"testing"
 )
 
-func TestBranchRegex(t *testing.T) {
-	tests := map[string]bool{
-		"branch":                     true,
-		"my-branch-with-dashes":      true,
-		"my-branch-with_underscores": true,
-		"ab":                         true,
-		"a":                          false,
-		"__create__":                 false,
-		"__bad-start":                false,
-		"bad-end__":                  false,
-		"invalid+char":               false,
-		"":                           false,
-	}
-
-	for k, v := range tests {
-		if userBranchRegex.MatchString(k) != v {
-			t.Error(k)
-		}
-	}
-}
-
 func TestCommitRegex(t *testing.T) {
 	for i := 0; i < 32; i++ {
 		data := test.RandomData(hash.ByteLen)
@@ -56,7 +35,7 @@ func TestNewCommitSpec(t *testing.T) {
 		{"head", "refs/heads/master", "refs/heads/master", "", false},
 		{"head^~2", "master", "refs/heads/master", "^~2", false},
 		{"00000000000000000000000000000000", "", "00000000000000000000000000000000", "", false},
-		{"__invalid__^~2", "", "", "", true},
+		{"head", "", "", "", true},
 	}
 
 	for _, test := range tests {
