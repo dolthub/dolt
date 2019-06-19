@@ -9,27 +9,26 @@ import (
 func TestCallWithRetries(t *testing.T) {
 	const (
 		goRoutines      = 1000
-		testsPerRoutine = 2
+		testsPerRoutine = 1
 		numTests        = goRoutines * testsPerRoutine
-		numRetries      = 5
+		numRetries      = 4
 
 		// within 10% of ideal
 		minPercentOfIdeal = 0.90
 		maxPercentOfIdeal = 1.10
 	)
 
-	idealAvgDelays := [numRetries]time.Duration{
-		(10 * time.Millisecond) / 2,
-		(20 * time.Millisecond) / 2,
-		(40 * time.Millisecond) / 2,
-		(80 * time.Millisecond) / 2,
-		(80 * time.Millisecond) / 2, // should hit the max here
-	}
-
 	rp := RetryParams{
 		NumRetries: numRetries,
-		MaxDelay:   80 * time.Millisecond,
-		Backoff:    10 * time.Millisecond,
+		MaxDelay:   1000 * time.Millisecond,
+		Backoff:    200 * time.Millisecond,
+	}
+
+	idealAvgDelays := [numRetries]time.Duration{
+		(200 * time.Millisecond) / 2,
+		(400 * time.Millisecond) / 2,
+		(800 * time.Millisecond) / 2,
+		(1000 * time.Millisecond) / 2, //hit the max
 	}
 
 	wg := &sync.WaitGroup{}
