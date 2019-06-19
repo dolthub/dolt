@@ -17,6 +17,8 @@ var InvalidBranchNameRegex = regexp.MustCompile(strings.Join([]string{
 	`\.lock\z`, `\.lock\/`,
 	// An exact name of "", "HEAD" or "-"
 	`\A\z`, `\AHEAD\z`, `\A-\z`,
+	// A name that looks exactly like a commit id
+	`\A[0-9a-v]{32}\z`,
 	// Any appearance of ".." or "@{"
 	`\.\.`, `@{`,
 	// Any empty component; that is, starting or ending with "/" or any appearance of "//"
