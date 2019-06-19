@@ -617,62 +617,10 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 	length := ranges[numRanges-1].Offset - offset + uint64(ranges[numRanges-1].Length)
 
 	return func() error {
-		// create the request
-		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
-		if err != nil {
-			return err
-		}
-
-		//execute the request
-		var allBufs [][]byte
-		currOffset := offset
-		currLength := length
-		success := retry.CallWithRetries(downRetryParams, func() retry.RetriableCallState {
-			rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
-			req.Header.Set("Range", rangeVal)
-
-			var resp *http.Response
-			resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
-			getResult := retry.ProcessHttpResp(resp, err)
-
-			if getResult != retry.Success {
-				return getResult
-			}
-
-			// read the results
-			comprData, err := iohelp.ReadWithMinThroughput(resp.Body, int64(currLength), downThroughputCheck)
-
-			dataRead := len(comprData)
-			if dataRead > 0 {
-				allBufs = append(allBufs, comprData)
-				currLength -= uint64(dataRead)
-				currOffset += uint64(dataRead)
-			}
-
-			if err != nil {
-				return retry.RetriableFailure
-			}
-
-			return retry.Success
-		})
+		comprData, err := rangeDownloadWithRetries(ctx, dcs.httpFetcher, offset, length, urlStr)
 
 		if err != nil {
 			return err
-		} else if !success {
-			fullRange := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
-			return fmt.Errorf("error: failed to download '%s' range: '%s'", urlStr, fullRange)
-		}
-
-		comprData := allBufs[0]
-
-		if len(allBufs) > 1 {
-			comprData = make([]byte, length)
-
-			pos := 0
-			for i := 0; i < len(allBufs); i++ {
-				copy(comprData[pos:], allBufs[i])
-				pos += len(allBufs[i])
-			}
 		}
 
 		// loop over the ranges of bytes and extract those bytes from the data that was downloaded.  The extracted bytes
@@ -692,6 +640,74 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 
 		return nil
 	}
+}
+
+// rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
+// is executed with retries and if progress was made, downloads will be resumed from where they left off on subsequent attempts.
+func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStr string) ([]byte, error) {
+	// create the request
+	req, err := http.NewRequest(http.MethodGet, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// parameters used for resuming downloads.
+	var allBufs [][]byte
+	currOffset := offset
+	currLength := length
+
+	//execute the request
+	success := retry.CallWithRetries(downRetryParams, func() retry.RetriableCallState {
+		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
+		req.Header.Set("Range", rangeVal)
+
+		var resp *http.Response
+		resp, err = fetcher.Do(req.WithContext(ctx))
+		getResult := retry.ProcessHttpResp(resp, err)
+
+		if getResult != retry.Success {
+			return getResult
+		}
+
+		// read the results
+		comprData, err := iohelp.ReadWithMinThroughput(resp.Body, int64(currLength), downThroughputCheck)
+
+		dataRead := len(comprData)
+		if dataRead > 0 {
+			allBufs = append(allBufs, comprData)
+			currLength -= uint64(dataRead)
+			currOffset += uint64(dataRead)
+		}
+
+		if err != nil {
+			return retry.RetriableFailure
+		}
+
+		return retry.Success
+	})
+
+	if err != nil {
+		return nil, err
+	} else if !success {
+		fullRange := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
+		return nil, fmt.Errorf("error: failed to download '%s' range: '%s'", urlStr, fullRange)
+	}
+
+	return collapseBuffers(allBufs, length), nil
+}
+
+func collapseBuffers(allBufs [][]byte, length uint64) []byte {
+	collapsed := allBufs[0]
+	if len(allBufs) > 1 {
+		collapsed = make([]byte, length)
+
+		pos := 0
+		for i := 0; i < len(allBufs); i++ {
+			copy(collapsed[pos:], allBufs[i])
+			pos += len(allBufs[i])
+		}
+	}
+	return collapsed
 }
 
 func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *remotesapi.HttpGetRange, chunkChan chan *chunks.Chunk) []func() error {
