@@ -20,6 +20,15 @@ func CreateSchema(columns ...schema.Column) schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
+// Creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
+func NewRow(sch schema.Schema, values ...types.Value) row.Row {
+	taggedVals := make(row.TaggedValues)
+	for i := range values {
+		taggedVals[uint64(i)] = values[i]
+	}
+	return row.New(sch, taggedVals)
+}
+
 // AddColumnToSchema returns a new schema by adding the given column to the given schema. Will panic on an invalid
 // schema, e.g. tag collision.
 func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {

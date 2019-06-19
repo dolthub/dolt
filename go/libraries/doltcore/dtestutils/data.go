@@ -73,6 +73,23 @@ func init() {
 	}
 }
 
+func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *string) row.Row {
+	var titleVal types.Value
+	if title != nil {
+		titleVal = types.String(*title)
+	}
+
+	taggedVals := row.TaggedValues{
+		IdTag:        types.UUID(id),
+		NameTag:      types.String(name),
+		AgeTag:       types.Uint(age),
+		IsMarriedTag: types.Bool(isMarried),
+		TitleTag:     titleVal,
+	}
+
+	return row.New(TypedSchema, taggedVals)
+}
+
 func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
 	sch := TypedSchema
 	rows := TypedRows

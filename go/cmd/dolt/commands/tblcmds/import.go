@@ -19,6 +19,8 @@ import (
 const (
 	createParam      = "create-table"
 	updateParam      = "update-table"
+	tableParam       = "table"
+	fileParam        = "file"
 	outSchemaParam   = "schema"
 	mappingFileParam = "map"
 	forceParam       = "force"
@@ -164,20 +166,20 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 	primaryKey, _ := apr.GetValue(primaryKeyParam)
 
 	return apr.Contains(forceParam), &mvdata.MoveOptions{
-		moveOp,
-		apr.Contains(contOnErrParam),
-		schemaFile,
-		mappingFile,
-		primaryKey,
-		fileLoc,
-		tableLoc,
+		Operation:   moveOp,
+		ContOnErr:   apr.Contains(contOnErrParam),
+		SchFile:     schemaFile,
+		MappingFile: mappingFile,
+		PrimaryKey:  primaryKey,
+		Src:         fileLoc,
+		Dest:        tableLoc,
 	}
 }
 
 func createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The new or existing table being imported to."
-	ap.ArgListHelp["file"] = "The file being imported. Supported file types are csv, psv, and nbf."
+	ap.ArgListHelp[tableParam] = "The new or existing table being imported to."
+	ap.ArgListHelp[fileParam] = "The file being imported. Supported file types are csv, psv, and nbf."
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
@@ -211,8 +213,13 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	if mvOpts.Src.Format == ".json" && mvOpts.SchFile == "" {
-		cli.Println("Please specify schema file for .json tables.")
+	if mvOpts.Src.Format == mvdata.SqlFile {
+		cli.Println(color.RedString("For SQL import, please pipe SQL input files to `dolt sql`"))
+		return 1
+	}
+
+	if mvOpts.Src.Format == mvdata.JsonFile && mvOpts.SchFile == "" {
+		cli.Println(color.RedString("Please specify schema file for .json tables."))
 		return 1
 	}
 
