@@ -18,8 +18,7 @@ func IsInOrder(itr types.EditProvider) (bool, int) {
 	count := 1
 
 	for {
-		var curr *types.KVP
-		curr = itr.Next()
+		curr := itr.Next()
 
 		if curr == nil {
 			break

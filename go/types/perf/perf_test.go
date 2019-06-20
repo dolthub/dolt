@@ -19,8 +19,7 @@ import (
 
 type perfSuite struct {
 	suite.PerfSuite
-	r  *rand.Rand
-	ds string
+	r *rand.Rand
 }
 
 func (s *perfSuite) SetupSuite() {

@@ -90,7 +90,7 @@ func TestSizeCacheWithExpiry(t *testing.T) {
 	}
 
 	c.Add("big", 5, "thing")
-	sort.Sort(sort.StringSlice(expired))
+	sort.Strings(expired)
 	assert.Equal(t, data, expired)
 }
 

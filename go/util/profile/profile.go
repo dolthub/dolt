@@ -18,9 +18,6 @@ var (
 	cpuProfile      string
 	memProfile      string
 	blockProfile    string
-	cpuProfileVal   *string
-	memProfileVal   *string
-	blockProfileVal *string
 	flagsRegistered = false
 )
 

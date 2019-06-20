@@ -6,7 +6,6 @@ package spec
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -44,7 +43,7 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 	resolvePathFunc := func(path string) (types.Value, error) {
 		absPath, err := NewAbsolutePath(path)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("Bad path for meta-p: %s", path))
+			return nil, fmt.Errorf("bad path for meta-p: %s", path)
 		}
 		return absPath.Resolve(ctx, db), nil
 	}
@@ -56,10 +55,10 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 		for _, m := range ms {
 			kv := strings.Split(m, "=")
 			if len(kv) != 2 {
-				return errors.New(fmt.Sprintf("Unable to parse meta value: %s", m))
+				return fmt.Errorf("unable to parse meta value: %s", m)
 			}
 			if !types.IsValidStructFieldName(kv[0]) {
-				return errors.New(fmt.Sprintf("Invalid meta key: %s", kv[0]))
+				return fmt.Errorf("invalid meta key: %s", kv[0])
 			}
 			if resolveAsPaths {
 				v, err := resolvePathFunc(kv[1])
@@ -83,13 +82,13 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 
 	for k, v := range keyValueStrings {
 		if !types.IsValidStructFieldName(k) {
-			return types.EmptyStruct, errors.New(fmt.Sprintf("Invalid meta key: %s", k))
+			return types.EmptyStruct, fmt.Errorf("invalid meta key: %s", k)
 		}
 		metaValues[k] = types.String(v)
 	}
 	for k, v := range keyValuePaths {
 		if !types.IsValidStructFieldName(k) {
-			return types.EmptyStruct, errors.New(fmt.Sprintf("Invalid meta key: %s", k))
+			return types.EmptyStruct, fmt.Errorf("invalid meta key: %s", k)
 		}
 		metaValues[k] = v
 	}
@@ -102,7 +101,7 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 	} else {
 		_, err := time.Parse(CommitMetaDateFormat, date)
 		if err != nil {
-			return types.EmptyStruct, errors.New(fmt.Sprintf("Unable to parse date: %s, error: %s", date, err))
+			return types.EmptyStruct, fmt.Errorf("unable to parse date: %s, error: %s", date, err)
 		}
 	}
 	metaValues["date"] = types.String(date)

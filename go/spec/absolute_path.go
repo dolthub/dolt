@@ -40,7 +40,7 @@ type AbsolutePath struct {
 // NewAbsolutePath attempts to parse 'str' and return an AbsolutePath.
 func NewAbsolutePath(str string) (AbsolutePath, error) {
 	if len(str) == 0 {
-		return AbsolutePath{}, errors.New("Empty path")
+		return AbsolutePath{}, errors.New("empty path")
 	}
 
 	var h hash.Hash
@@ -50,21 +50,21 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 	if str[0] == '#' {
 		tail := str[1:]
 		if len(tail) < hash.StringLen {
-			return AbsolutePath{}, errors.New("Invalid hash: " + tail)
+			return AbsolutePath{}, errors.New("invalid hash: " + tail)
 		}
 
 		hashStr := tail[:hash.StringLen]
 		if h2, ok := hash.MaybeParse(hashStr); ok {
 			h = h2
 		} else {
-			return AbsolutePath{}, errors.New("Invalid hash: " + hashStr)
+			return AbsolutePath{}, errors.New("invalid hash: " + hashStr)
 		}
 
 		pathStr = tail[hash.StringLen:]
 	} else {
 		datasetParts := datasetCapturePrefixRe.FindStringSubmatch(str)
 		if datasetParts == nil {
-			return AbsolutePath{}, fmt.Errorf("Invalid dataset name: %s", str)
+			return AbsolutePath{}, fmt.Errorf("invalid dataset name: %s", str)
 		}
 
 		dataset = datasetParts[1]
@@ -131,12 +131,12 @@ func ReadAbsolutePaths(ctx context.Context, db datas.Database, paths ...string) 
 	for _, ps := range paths {
 		p, err := NewAbsolutePath(ps)
 		if err != nil {
-			return nil, fmt.Errorf("Invalid input path '%s'", ps)
+			return nil, fmt.Errorf("invalid input path '%s'", ps)
 		}
 
 		v := p.Resolve(ctx, db)
 		if v == nil {
-			return nil, fmt.Errorf("Input path '%s' does not exist in database", ps)
+			return nil, fmt.Errorf("input path '%s' does not exist in database", ps)
 		}
 
 		r = append(r, v)
