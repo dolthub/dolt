@@ -94,7 +94,7 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		dEnv := dtestutils.CreateTestEnv()
-		sqltestutil.createTestDatabase(dEnv, t)
+		sqltestutil.CreateTestDatabase(dEnv, t)
 		root, _ := dEnv.WorkingRoot(context.Background())
 
 		sqlStatement, _ := sqlparser.Parse(tt.query)

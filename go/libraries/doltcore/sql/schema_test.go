@@ -21,7 +21,7 @@ const expectedSQL = "CREATE TABLE table_name (\n" +
 ");"
 
 func TestSchemaAsCreateStmt(t *testing.T) {
-	tSchema := sqltestutil.createPeopleTestSchema()
+	tSchema := sqltestutil.PeopleTestSchema
 	str, _ := SchemaAsCreateStmt("table_name", tSchema)
 
 	assert.Equal(t, expectedSQL, str)
