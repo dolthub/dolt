@@ -440,6 +440,8 @@ func TestMarshalTypeCanSkipUnexportedField(t *testing.T) {
 		notExported bool `noms:"-"`
 	}
 	var s S
+	assert.False(s.notExported) // here to remove compiler warning about notExported not being used.
+
 	typ, err := MarshalType(s)
 	assert.NoError(err)
 	assert.True(types.MakeStructTypeFromFields("S", types.FieldMap{
@@ -527,7 +529,7 @@ func TestTypeMarshalerPrimitiveStructTypeNoMarshalNomsType(t *testing.T) {
 	var u primitiveStructType
 	_, err := MarshalType(u)
 	assert.Error(err)
-	assert.Equal("Cannot marshal type which implements marshal.Marshaler, perhaps implement marshal.TypeMarshaler for marshal.primitiveStructType", err.Error())
+	assert.Equal("cannot marshal type which implements marshal.Marshaler, perhaps implement marshal.TypeMarshaler for marshal.primitiveStructType", err.Error())
 }
 
 func (u builtinType) MarshalNomsType() (*types.Type, error) {

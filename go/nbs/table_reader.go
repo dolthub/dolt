@@ -131,7 +131,7 @@ func (ti tableIndex) prefixIdx(prefix uint64) (idx uint32) {
 // Return true IFF the suffix at insertion order |ordinal| matches the address |a|.
 func (ti tableIndex) ordinalSuffixMatches(ordinal uint32, h addr) bool {
 	li := uint64(ordinal) * addrSuffixSize
-	return bytes.Compare(h[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize]) == 0
+	return bytes.Equal(h[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
 }
 
 // returns the ordinal of |h| if present. returns |ti.chunkCount| if absent
@@ -341,8 +341,6 @@ func (tr tableReader) getManyAtOffsets(
 		go tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, wg, stats)
 		batch = nil
 	}
-
-	return
 }
 
 // findOffsets iterates over |reqs| and |tr.prefixes| (both sorted by

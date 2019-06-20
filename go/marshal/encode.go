@@ -590,7 +590,7 @@ func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
 		init.RLock()
 		defer init.RUnlock()
-		values := make([]types.Value, v.Len(), v.Len())
+		values := make([]types.Value, v.Len())
 		for i, k := range v.MapKeys() {
 			values[i] = encoder(ctx, k, vrw)
 		}

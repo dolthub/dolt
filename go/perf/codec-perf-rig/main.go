@@ -27,7 +27,6 @@ var (
 const numberSize = uint64(8)
 const strPrefix = "i am a 32 bytes.....%12d"
 const stringSize = uint64(32)
-const boolSize = uint64(1)
 const structSize = uint64(64)
 
 func main() {
@@ -108,7 +107,7 @@ func main() {
 	blob.Copy(context.Background(), buff)
 	outBytes := buff.Bytes()
 	readDuration := time.Since(t1)
-	d.PanicIfFalse(bytes.Compare(blobBytes, outBytes) == 0)
+	d.PanicIfFalse(bytes.Equal(blobBytes, outBytes))
 	fmt.Printf("\t\t\t%s\t\t%s\n\n", rate(buildDuration, *blobSize), rate(readDuration, *blobSize))
 }
 
@@ -137,21 +136,6 @@ func createString(i uint64) types.Value {
 func createNumber(i uint64) types.Value {
 	return types.Float(i)
 }
-
-var structType = types.MakeStructType("S1",
-	types.StructField{
-		Name: "bool",
-		Type: types.BoolType,
-	},
-	types.StructField{
-		Name: "num",
-		Type: types.FloaTType,
-	},
-	types.StructField{
-		Name: "str",
-		Type: types.StringType,
-	},
-)
 
 var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str"})
 

@@ -98,11 +98,6 @@ func (s *testSuite) Test02Def() {
 	s.waitForSmidge()
 }
 
-func (s *testSuite) testNothing() {
-	s.nothing++
-	s.waitForSmidge()
-}
-
 func (s *testSuite) Testimate() {
 	s.testimate++
 	s.waitForSmidge()

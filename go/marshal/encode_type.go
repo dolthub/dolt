@@ -94,7 +94,7 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 		// There is no way to determine the noms type now. For Marshal it can be
 		// different each time MarshalNoms is called and is handled further up the
 		// stack.
-		err := fmt.Errorf("Cannot marshal type which implements %s, perhaps implement %s for %s", marshalerInterface, typeMarshalerInterface, t)
+		err := fmt.Errorf("cannot marshal type which implements %s, perhaps implement %s for %s", marshalerInterface, typeMarshalerInterface, t)
 		panic(&marshalNomsError{err})
 	}
 
@@ -125,7 +125,7 @@ func encodeType(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTa
 			return types.ValueType
 		}
 
-		err := fmt.Errorf("Cannot marshal type %s, it requires type parameters", t)
+		err := fmt.Errorf("cannot marshal type %s, it requires type parameters", t)
 		panic(&marshalNomsError{err})
 	}
 
