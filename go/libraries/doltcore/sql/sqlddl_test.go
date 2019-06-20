@@ -57,7 +57,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:           "Test in use table name with if not exists",
 			query:          "create table if not exists people (id int primary key, age int)",
-			expectedSchema: sqltestutil.peopleTestSchema,
+			expectedSchema: sqltestutil.PeopleTestSchema,
 		},
 		{
 			name:  "Test types",
@@ -211,7 +211,7 @@ func TestExecuteCreate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			root, _ := dEnv.WorkingRoot(context.Background())
 
 			sqlStatement, err := sqlparser.Parse(tt.query)
@@ -277,7 +277,7 @@ func TestExecuteDrop(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -315,23 +315,23 @@ func TestAddColumn(t *testing.T) {
 		{
 			name:  "alter add column not null",
 			query: "alter table people add (newColumn varchar(80) not null default 'default' comment 'tag:100')",
-			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.PeopleTestSchema,
 				schema.NewColumn("newColumn", 100, types.StringKind, false, schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, sqltestutil.allPeopleRows, 100, types.String("default")),
+			expectedRows: dtestutils.AddColToRows(t, sqltestutil.AllPeopleRows, 100, types.String("default")),
 		},
 		{
 			name:  "alter add column not null with expression default",
 			query: "alter table people add (newColumn int not null default 2+2/2 comment 'tag:100')",
-			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.PeopleTestSchema,
 				schema.NewColumn("newColumn", 100, types.IntKind, false, schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, sqltestutil.allPeopleRows, 100, types.Int(3)),
+			expectedRows: dtestutils.AddColToRows(t, sqltestutil.AllPeopleRows, 100, types.Int(3)),
 		},
 		{
 			name:  "alter add column not null with negative expression",
 			query: "alter table people add (newColumn float not null default -1.1 comment 'tag:100')",
-			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.PeopleTestSchema,
 				schema.NewColumn("newColumn", 100, types.FloatKind, false, schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, sqltestutil.allPeopleRows, 100, types.Float(-1.1)),
+			expectedRows: dtestutils.AddColToRows(t, sqltestutil.AllPeopleRows, 100, types.Float(-1.1)),
 		},
 		{
 			name:  "alter add column not null with type mismatch in default",
@@ -351,23 +351,23 @@ func TestAddColumn(t *testing.T) {
 		{
 			name:  "alter add column nullable",
 			query: "alter table people add (newColumn bigint comment 'tag:100')",
-			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.PeopleTestSchema,
 				schema.NewColumn("newColumn", 100, types.IntKind, false)),
-			expectedRows: sqltestutil.allPeopleRows,
+			expectedRows: sqltestutil.AllPeopleRows,
 		},
 		{
 			name:  "alter add column with optional column keyword",
 			query: "alter table people add column (newColumn varchar(80) comment 'tag:100')",
-			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.peopleTestSchema,
+			expectedSchema: dtestutils.AddColumnToSchema(sqltestutil.PeopleTestSchema,
 				schema.NewColumn("newColumn", 100, types.StringKind, false)),
-			expectedRows: sqltestutil.allPeopleRows,
+			expectedRows: sqltestutil.AllPeopleRows,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -387,7 +387,7 @@ func TestAddColumn(t *testing.T) {
 			}
 
 			assert.NotNil(t, updatedRoot)
-			table, _ := updatedRoot.GetTable(ctx, sqltestutil.peopleTableName)
+			table, _ := updatedRoot.GetTable(ctx, sqltestutil.PeopleTableName)
 			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
 
 			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
@@ -446,7 +446,7 @@ func TestUnsupportedAlterStatements(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -474,14 +474,14 @@ func TestDropColumn(t *testing.T) {
 		{
 			name:  "alter drop column",
 			query: "alter table people drop rating",
-			expectedSchema: dtestutils.RemoveColumnFromSchema(sqltestutil.peopleTestSchema, sqltestutil.ratingTag),
-			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(sqltestutil.peopleTestSchema, sqltestutil.ratingTag), sqltestutil.allPeopleRows...),
+			expectedSchema: dtestutils.RemoveColumnFromSchema(sqltestutil.PeopleTestSchema, sqltestutil.RatingTag),
+			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(sqltestutil.PeopleTestSchema, sqltestutil.RatingTag), sqltestutil.AllPeopleRows...),
 		},
 		{
 			name:  "alter drop column with optional column keyword",
 			query: "alter table people drop column rating",
-			expectedSchema: dtestutils.RemoveColumnFromSchema(sqltestutil.peopleTestSchema, sqltestutil.ratingTag),
-			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(sqltestutil.peopleTestSchema, sqltestutil.ratingTag), sqltestutil.allPeopleRows...),
+			expectedSchema: dtestutils.RemoveColumnFromSchema(sqltestutil.PeopleTestSchema, sqltestutil.RatingTag),
+			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(sqltestutil.PeopleTestSchema, sqltestutil.RatingTag), sqltestutil.AllPeopleRows...),
 		},
 		{
 			name:  "drop primary key",
@@ -503,7 +503,7 @@ func TestDropColumn(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -523,7 +523,7 @@ func TestDropColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			table, _ := updatedRoot.GetTable(ctx, sqltestutil.peopleTableName)
+			table, _ := updatedRoot.GetTable(ctx, sqltestutil.PeopleTableName)
 			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
 
 			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
@@ -553,61 +553,61 @@ func TestRenameColumn(t *testing.T) {
 			name:  "alter rename column",
 			query: "alter table people rename rating newRating",
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", sqltestutil.idTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first", sqltestutil.firstTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("last", sqltestutil.lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", sqltestutil.isMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", sqltestutil.ageTag, types.IntKind, false),
-				schema.NewColumn("newRating", sqltestutil.ratingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", sqltestutil.uuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", sqltestutil.numEpisodesTag, types.UintKind, false),
+				schema.NewColumn("id", sqltestutil.IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", sqltestutil.FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", sqltestutil.LastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", sqltestutil.IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", sqltestutil.AgeTag, types.IntKind, false),
+				schema.NewColumn("newRating", sqltestutil.RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", sqltestutil.UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", sqltestutil.NumEpisodesTag, types.UintKind, false),
 			),
-			expectedRows: sqltestutil.allPeopleRows,
+			expectedRows: sqltestutil.AllPeopleRows,
 		},
 		{
 			name:  "alter rename column with optional column and as keywords",
 			query: "alter table people rename column rating as newRating",
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", sqltestutil.idTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first", sqltestutil.firstTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("last", sqltestutil.lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", sqltestutil.isMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", sqltestutil.ageTag, types.IntKind, false),
-				schema.NewColumn("newRating", sqltestutil.ratingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", sqltestutil.uuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", sqltestutil.numEpisodesTag, types.UintKind, false),
+				schema.NewColumn("id", sqltestutil.IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", sqltestutil.FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", sqltestutil.LastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", sqltestutil.IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", sqltestutil.AgeTag, types.IntKind, false),
+				schema.NewColumn("newRating", sqltestutil.RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", sqltestutil.UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", sqltestutil.NumEpisodesTag, types.UintKind, false),
 			),
-			expectedRows: sqltestutil.allPeopleRows,
+			expectedRows: sqltestutil.AllPeopleRows,
 		},
 		{
 			name:  "alter rename column with with to keyword",
 			query: "alter table people rename rating to newRating",
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", sqltestutil.idTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first", sqltestutil.firstTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("last", sqltestutil.lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", sqltestutil.isMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", sqltestutil.ageTag, types.IntKind, false),
-				schema.NewColumn("newRating", sqltestutil.ratingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", sqltestutil.uuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", sqltestutil.numEpisodesTag, types.UintKind, false),
+				schema.NewColumn("id", sqltestutil.IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", sqltestutil.FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", sqltestutil.LastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", sqltestutil.IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", sqltestutil.AgeTag, types.IntKind, false),
+				schema.NewColumn("newRating", sqltestutil.RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", sqltestutil.UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", sqltestutil.NumEpisodesTag, types.UintKind, false),
 			),
-			expectedRows: sqltestutil.allPeopleRows,
+			expectedRows: sqltestutil.AllPeopleRows,
 		},
 		{
 			name:  "alter rename primary key column",
 			query: "alter table people rename id to newId",
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("newId", sqltestutil.idTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first", sqltestutil.firstTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("last", sqltestutil.lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", sqltestutil.isMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", sqltestutil.ageTag, types.IntKind, false),
-				schema.NewColumn("rating", sqltestutil.ratingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", sqltestutil.uuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", sqltestutil.numEpisodesTag, types.UintKind, false),
+				schema.NewColumn("newId", sqltestutil.IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first", sqltestutil.FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last", sqltestutil.LastTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", sqltestutil.IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", sqltestutil.AgeTag, types.IntKind, false),
+				schema.NewColumn("rating", sqltestutil.RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", sqltestutil.UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", sqltestutil.NumEpisodesTag, types.UintKind, false),
 			),
-			expectedRows: sqltestutil.allPeopleRows,
+			expectedRows: sqltestutil.AllPeopleRows,
 		},
 		{
 			name:  "table not found",
@@ -629,7 +629,7 @@ func TestRenameColumn(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 
@@ -649,7 +649,7 @@ func TestRenameColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			table, _ := updatedRoot.GetTable(ctx, sqltestutil.peopleTableName)
+			table, _ := updatedRoot.GetTable(ctx, sqltestutil.PeopleTableName)
 			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
 
 			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
@@ -682,24 +682,24 @@ func TestRenameTable(t *testing.T) {
 			query:          "rename table people to newPeople",
 			oldTableName:   "people",
 			newTableName:   "newPeople",
-			expectedSchema: sqltestutil.peopleTestSchema,
-			expectedRows:   sqltestutil.allPeopleRows,
+			expectedSchema: sqltestutil.PeopleTestSchema,
+			expectedRows:   sqltestutil.AllPeopleRows,
 		},
 		{
 			name:           "alter rename table with alter syntax",
 			query:          "alter table people rename to newPeople",
 			oldTableName:   "people",
 			newTableName:   "newPeople",
-			expectedSchema: sqltestutil.peopleTestSchema,
-			expectedRows:   sqltestutil.allPeopleRows,
+			expectedSchema: sqltestutil.PeopleTestSchema,
+			expectedRows:   sqltestutil.AllPeopleRows,
 		},
 		{
 			name:           "rename multiple tables",
 			query:          "rename table people to newPeople, appearances to newAppearances",
 			oldTableName:   "appearances",
 			newTableName:   "newAppearances",
-			expectedSchema: sqltestutil.appearancesTestSchema,
-			expectedRows:   sqltestutil.allAppsRows,
+			expectedSchema: sqltestutil.AppearancesTestSchema,
+			expectedRows:   sqltestutil.AllAppsRows,
 		},
 		{
 			name:  "table not found",
@@ -716,7 +716,7 @@ func TestRenameTable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			ctx := context.Background()
 			root, _ := dEnv.WorkingRoot(ctx)
 

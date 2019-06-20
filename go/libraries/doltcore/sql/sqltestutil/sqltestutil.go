@@ -18,15 +18,15 @@ import (
 // transforming row results, and so on.
 
 const (
-	idTag = iota
-	firstTag
-	lastTag
-	isMarriedTag
-	ageTag
+	IdTag = iota
+	FirstTag
+	LastTag
+	IsMarriedTag
+	AgeTag
 	emptyTag
-	ratingTag
-	uuidTag
-	numEpisodesTag
+	RatingTag
+	UuidTag
+	NumEpisodesTag
 	firstUnusedTag // keep at end
 )
 
@@ -52,29 +52,29 @@ const (
 	barneyId
 )
 
-var peopleTestSchema = createPeopleTestSchema()
-var untypedPeopleSch = untyped.UntypeUnkeySchema(peopleTestSchema)
-var peopleTableName = "people"
+var PeopleTestSchema = createPeopleTestSchema()
+var untypedPeopleSch = untyped.UntypeUnkeySchema(PeopleTestSchema)
+var PeopleTableName = "people"
 
-var episodesTestSchema = createEpisodesTestSchema()
-var untypedEpisodesSch = untyped.UntypeUnkeySchema(episodesTestSchema)
+var EpisodesTestSchema = createEpisodesTestSchema()
+var untypedEpisodesSch = untyped.UntypeUnkeySchema(EpisodesTestSchema)
 var episodesTableName = "episodes"
 
-var appearancesTestSchema = createAppearancesTestSchema()
-var untypedAppearacesSch = untyped.UntypeUnkeySchema(appearancesTestSchema)
+var AppearancesTestSchema = createAppearancesTestSchema()
+var untypedAppearacesSch = untyped.UntypeUnkeySchema(AppearancesTestSchema)
 var appearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("id", idTag, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
-		schema.NewColumn("age", ageTag, types.IntKind, false),
+		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("first", FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last", LastTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+		schema.NewColumn("age", AgeTag, types.IntKind, false),
 		//		schema.NewColumn("empty", emptyTag, types.IntKind, false),
-		schema.NewColumn("rating", ratingTag, types.FloatKind, false),
-		schema.NewColumn("uuid", uuidTag, types.UUIDKind, false),
-		schema.NewColumn("num_episodes", numEpisodesTag, types.UintKind, false),
+		schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+		schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+		schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
@@ -98,17 +98,17 @@ func createAppearancesTestSchema() schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
-func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
+func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
-		idTag:        types.Int(id),
-		firstTag:     types.String(first),
-		lastTag:      types.String(last),
-		isMarriedTag: types.Bool(isMarried),
-		ageTag:       types.Int(age),
-		ratingTag:    types.Float(rating),
+		IdTag:        types.Int(id),
+		FirstTag:     types.String(first),
+		LastTag:      types.String(last),
+		IsMarriedTag: types.Bool(isMarried),
+		AgeTag:       types.Int(age),
+		RatingTag:    types.Float(rating),
 	}
 
-	return row.New(peopleTestSchema, vals)
+	return row.New(PeopleTestSchema, vals)
 }
 
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
@@ -119,7 +119,7 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 		epRatingTag:  types.Float(rating),
 	}
 
-	return row.New(episodesTestSchema, vals)
+	return row.New(EpisodesTestSchema, vals)
 }
 
 func newAppsRow(charId, epId int, comment string) row.Row {
@@ -129,40 +129,40 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 		appCommentsTag:  types.String(comment),
 	}
 
-	return row.New(appearancesTestSchema, vals)
+	return row.New(AppearancesTestSchema, vals)
 }
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
-func newPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
+func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
 	vals := row.TaggedValues{
-		idTag:          types.Int(id),
-		firstTag:       types.String(first),
-		lastTag:        types.String(last),
-		isMarriedTag:   types.Bool(isMarried),
-		ageTag:         types.Int(age),
-		ratingTag:      types.Float(rating),
-		uuidTag:        types.UUID(uid),
-		numEpisodesTag: types.Uint(numEpisodes),
+		IdTag:          types.Int(id),
+		FirstTag:       types.String(first),
+		LastTag:        types.String(last),
+		IsMarriedTag:   types.Bool(isMarried),
+		AgeTag:         types.Int(age),
+		RatingTag:      types.Float(rating),
+		UuidTag:        types.UUID(uid),
+		NumEpisodesTag: types.Uint(numEpisodes),
 	}
 
-	return row.New(peopleTestSchema, vals)
+	return row.New(PeopleTestSchema, vals)
 }
 
 // 6 characters
-var homer = newPeopleRow(homerId, "Homer", "Simpson", true, 40, 8.5)
-var marge = newPeopleRowWithOptionalFields(margeId, "Marge", "Simpson", true, 38, 8, uuid.MustParse("00000000-0000-0000-0000-000000000001"), 111)
-var bart = newPeopleRowWithOptionalFields(bartId, "Bart", "Simpson", false, 10, 9, uuid.MustParse("00000000-0000-0000-0000-000000000002"), 222)
-var lisa = newPeopleRowWithOptionalFields(lisaId, "Lisa", "Simpson", false, 8, 10, uuid.MustParse("00000000-0000-0000-0000-000000000003"), 333)
-var moe = newPeopleRowWithOptionalFields(moeId, "Moe", "Szyslak", false, 48, 6.5, uuid.MustParse("00000000-0000-0000-0000-000000000004"), 444)
-var barney = newPeopleRowWithOptionalFields(barneyId, "Barney", "Gumble", false, 40, 4, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 555)
-var allPeopleRows = rs(homer, marge, bart, lisa, moe, barney)
+var Homer = NewPeopleRow(homerId, "Homer", "Simpson", true, 40, 8.5)
+var Marge = NewPeopleRowWithOptionalFields(margeId, "Marge", "Simpson", true, 38, 8, uuid.MustParse("00000000-0000-0000-0000-000000000001"), 111)
+var Bart = NewPeopleRowWithOptionalFields(bartId, "Bart", "Simpson", false, 10, 9, uuid.MustParse("00000000-0000-0000-0000-000000000002"), 222)
+var Lisa = NewPeopleRowWithOptionalFields(lisaId, "Lisa", "Simpson", false, 8, 10, uuid.MustParse("00000000-0000-0000-0000-000000000003"), 333)
+var Moe = NewPeopleRowWithOptionalFields(moeId, "Moe", "Szyslak", false, 48, 6.5, uuid.MustParse("00000000-0000-0000-0000-000000000004"), 444)
+var Barney = NewPeopleRowWithOptionalFields(barneyId, "Barney", "Gumble", false, 40, 4, uuid.MustParse("00000000-0000-0000-0000-000000000005"), 555)
+var AllPeopleRows = Rs(Homer, Marge, Bart, Lisa, Moe, Barney)
 
 // Actually the first 4 episodes of the show
-var ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
-var ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
-var ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
-var ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
-var allEpsRows = rs(ep1, ep2, ep3, ep4)
+var Ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
+var Ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
+var Ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
+var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
+var allEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
 
 // These are made up, not the actual show data
 var app1 = newAppsRow(homerId, 1, "Homer is great in this one")
@@ -178,19 +178,19 @@ var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
 
 // nobody in episode 4, that one was terrible
 // Unlike the other tables, you can't count on the order of these rows matching the insertion order.
-var allAppsRows = rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10)
+var AllAppsRows = Rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10)
 
 // Convenience func to avoid the boilerplate of typing []row.Row{} all the time
-func rs(rows ...row.Row) []row.Row {
+func Rs(rows ...row.Row) []row.Row {
 	return rows
 }
 
 // Returns the index of the first row in the list that has the same primary key as the one given, or -1 otherwise.
-func findRowIndex(find row.Row, rows []row.Row) int {
+func FindRowIndex(find row.Row, rows []row.Row) int {
 	idx := -1
 	for i, updatedRow := range rows {
-		rowId, _ := find.GetColVal(idTag)
-		updatedId, _ := updatedRow.GetColVal(idTag)
+		rowId, _ := find.GetColVal(IdTag)
+		updatedId, _ := updatedRow.GetColVal(IdTag)
 		if rowId.Equals(updatedId) {
 			idx = i
 			break
@@ -200,7 +200,7 @@ func findRowIndex(find row.Row, rows []row.Row) int {
 }
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
-func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
+func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 	if len(tagsAndVals)%2 != 0 {
 		panic("expected pairs of tags and values")
 	}
@@ -239,7 +239,7 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 			nomsVal = nil
 		}
 
-		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, peopleTestSchema)
+		mutated, err = mutated.SetColVal(uint64(tag), nomsVal, PeopleTestSchema)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -249,7 +249,7 @@ func mutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 }
 
 // Creates a new row for a result set specified by the given values
-func newResultSetRow(colVals ...types.Value) row.Row {
+func NewResultSetRow(colVals ...types.Value) row.Row {
 
 	taggedVals := make(row.TaggedValues)
 	cols := make([]schema.Column, len(colVals))
@@ -269,8 +269,8 @@ func newResultSetRow(colVals ...types.Value) row.Row {
 }
 
 // Creates a test database with the test data set in it
-func createTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
-	dtestutils.CreateTestTable(t, dEnv, peopleTableName, peopleTestSchema, allPeopleRows...)
-	dtestutils.CreateTestTable(t, dEnv, episodesTableName, episodesTestSchema, allEpsRows...)
-	dtestutils.CreateTestTable(t, dEnv, appearancesTableName, appearancesTestSchema, allAppsRows...)
+func CreateTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
+	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
+	dtestutils.CreateTestTable(t, dEnv, episodesTableName, EpisodesTestSchema, allEpsRows...)
+	dtestutils.CreateTestTable(t, dEnv, appearancesTableName, AppearancesTestSchema, AllAppsRows...)
 }

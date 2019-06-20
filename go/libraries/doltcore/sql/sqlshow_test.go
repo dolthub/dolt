@@ -15,17 +15,17 @@ import (
 )
 
 func TestExecuteShow(t *testing.T) {
-	peopleSchemaStr, _ := SchemaAsCreateStmt("people", sqltestutil.peopleTestSchema)
+	peopleSchemaStr, _ := SchemaAsCreateStmt("people", sqltestutil.PeopleTestSchema)
 
-	peopleSchemaRows := sqltestutil.rs(
-		sqltestutil.newResultSetRow(types.String("id"), types.String("int"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
-		sqltestutil.newResultSetRow(types.String("first"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
-		sqltestutil.newResultSetRow(types.String("last"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
-		sqltestutil.newResultSetRow(types.String("is_married"), types.String("bool"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		sqltestutil.newResultSetRow(types.String("age"), types.String("int"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		sqltestutil.newResultSetRow(types.String("rating"), types.String("float"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		sqltestutil.newResultSetRow(types.String("uuid"), types.String("uuid"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		sqltestutil.newResultSetRow(types.String("num_episodes"), types.String("int unsigned"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+	peopleSchemaRows := sqltestutil.Rs(
+		sqltestutil.NewResultSetRow(types.String("id"), types.String("int"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
+		sqltestutil.NewResultSetRow(types.String("first"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		sqltestutil.NewResultSetRow(types.String("last"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		sqltestutil.NewResultSetRow(types.String("is_married"), types.String("bool"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		sqltestutil.NewResultSetRow(types.String("age"), types.String("int"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		sqltestutil.NewResultSetRow(types.String("rating"), types.String("float"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		sqltestutil.NewResultSetRow(types.String("uuid"), types.String("uuid"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		sqltestutil.NewResultSetRow(types.String("num_episodes"), types.String("int unsigned"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 	)
 
 	tests := []struct {
@@ -38,26 +38,26 @@ func TestExecuteShow(t *testing.T) {
 		{
 			name:  "show create table",
 			query: "show create table people",
-			expectedRows: sqltestutil.rs(
-				sqltestutil.newResultSetRow(types.String("people"), types.String(peopleSchemaStr)),
+			expectedRows: sqltestutil.Rs(
+				sqltestutil.NewResultSetRow(types.String("people"), types.String(peopleSchemaStr)),
 			),
 			expectedSchema: showCreateTableSchema(),
 		},
 		{
 			name:  "show create table case insensitive",
 			query: "show create table PeOPle",
-			expectedRows: sqltestutil.rs(
-				sqltestutil.newResultSetRow(types.String("people"), types.String(peopleSchemaStr)),
+			expectedRows: sqltestutil.Rs(
+				sqltestutil.NewResultSetRow(types.String("people"), types.String(peopleSchemaStr)),
 			),
 			expectedSchema: showCreateTableSchema(),
 		},
 		{
 			name:  "show tables",
 			query: "show tables",
-			expectedRows: sqltestutil.rs(
-				sqltestutil.newResultSetRow(types.String("appearances")),
-				sqltestutil.newResultSetRow(types.String("episodes")),
-				sqltestutil.newResultSetRow(types.String("people")),
+			expectedRows: sqltestutil.Rs(
+				sqltestutil.NewResultSetRow(types.String("appearances")),
+				sqltestutil.NewResultSetRow(types.String("episodes")),
+				sqltestutil.NewResultSetRow(types.String("people")),
 			),
 			expectedSchema: showTablesSchema(),
 		},
@@ -105,7 +105,7 @@ func TestExecuteShow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
-			sqltestutil.createTestDatabase(dEnv, t)
+			sqltestutil.CreateTestDatabase(dEnv, t)
 			root, _ := dEnv.WorkingRoot(context.Background())
 
 			sqlStatement, err := sqlparser.Parse(tt.query)
