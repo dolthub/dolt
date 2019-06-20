@@ -117,7 +117,7 @@ func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSiz
 
 			index++
 			previousIndex++
-			break
+
 		case UPDATED:
 			if splice == nil {
 				splice = &Splice{index, 0, 0, SPLICE_UNASSIGNED}
@@ -131,7 +131,7 @@ func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSiz
 			splice.SpAdded++
 			index++
 			previousIndex++
-			break
+
 		case INSERTED:
 			if splice == nil {
 				splice = &Splice{index, 0, 0, SPLICE_UNASSIGNED}
@@ -143,7 +143,7 @@ func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSiz
 			}
 
 			previousIndex++
-			break
+
 		case REMOVED:
 			if splice == nil {
 				splice = &Splice{index, 0, 0, SPLICE_UNASSIGNED}
@@ -151,7 +151,6 @@ func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSiz
 
 			splice.SpRemoved++
 			index++
-			break
 		}
 	}
 

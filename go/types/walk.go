@@ -87,16 +87,3 @@ func WalkValues(ctx context.Context, target Value, vr ValueReader, cb SkipValueC
 		}
 	}
 }
-
-func mightContainStructs(ctx context.Context, t *Type) (mightHaveStructs bool) {
-	if t.TargetKind() == StructKind || t.TargetKind() == ValueKind {
-		mightHaveStructs = true
-		return
-	}
-
-	t.WalkValues(ctx, func(v Value) {
-		mightHaveStructs = mightHaveStructs || mightContainStructs(ctx, v.(*Type))
-	})
-
-	return
-}

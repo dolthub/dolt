@@ -12,12 +12,6 @@ import (
 	"github.com/attic-labs/noms/go/hash"
 )
 
-const (
-	objectWindowSize          = 8
-	orderedSequenceWindowSize = 1
-	objectPattern             = uint32(1<<6 - 1) // Average size of 64 elements
-)
-
 var emptyKey = orderedKey{}
 
 func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) metaTuple {
@@ -130,37 +124,6 @@ type metaSequence struct {
 
 func newMetaSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
 	return metaSequence{newSequenceImpl(vrw, buff, offsets, len)}
-}
-
-// readLeafSequence reads the data provided by a decoder and moves the decoder forward.
-func readMetaSequence(dec *valueDecoder) metaSequence {
-	start := dec.pos()
-	offsets, len := skipMetaSequence(dec)
-	end := dec.pos()
-	return newMetaSequence(dec.vrw, dec.byteSlice(start, end), offsets, len)
-}
-
-func skipMetaSequence(dec *valueDecoder) ([]uint32, uint64) {
-	kindPos := dec.pos()
-	dec.skipKind()
-	levelPos := dec.pos()
-	dec.skipCount() // level
-	countPos := dec.pos()
-	count := dec.readCount()
-	valuesPos := dec.pos()
-	offsets := make([]uint32, count+sequencePartValues+1)
-	offsets[sequencePartKind] = kindPos
-	offsets[sequencePartLevel] = levelPos
-	offsets[sequencePartCount] = countPos
-	offsets[sequencePartValues] = valuesPos
-	length := uint64(0)
-	for i := uint64(0); i < count; i++ {
-		dec.skipValue()           // ref
-		dec.skipValue()           // v
-		length += dec.readCount() // numLeaves
-		offsets[i+sequencePartValues+1] = dec.pos()
-	}
-	return offsets, length
 }
 
 func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
@@ -408,10 +371,6 @@ func (es emptySequence) getKey(idx int) orderedKey {
 }
 
 func (es emptySequence) search(key orderedKey) int {
-	panic("empty sequence")
-}
-
-func (es emptySequence) getValue(idx int) Value {
 	panic("empty sequence")
 }
 

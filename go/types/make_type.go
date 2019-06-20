@@ -64,14 +64,6 @@ func MakeStructType(name string, fields ...StructField) *Type {
 	return simplifyType(makeStructType(name, fs), false)
 }
 
-// MakeUnionTypeIntersectStructs is a bit of strange function. It creates a
-// simplified union type except for structs, where it creates interesection
-// types.
-// This function will go away so do not use it!
-func MakeUnionTypeIntersectStructs(elemTypes ...*Type) *Type {
-	return simplifyType(makeUnionType(elemTypes...), true)
-}
-
 func MakeCycleType(name string) *Type {
 	d.PanicIfTrue(name == "")
 	return newType(CycleDesc(name))
@@ -138,9 +130,3 @@ type structTypeFields []StructField
 func (s structTypeFields) Len() int           { return len(s) }
 func (s structTypeFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s structTypeFields) Less(i, j int) bool { return s[i].Name < s[j].Name }
-
-type tupleTypeFields []*Type
-
-func (s tupleTypeFields) Len() int           { return len(s) }
-func (s tupleTypeFields) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s tupleTypeFields) Less(i, j int) bool { return i < j }

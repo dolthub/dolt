@@ -52,10 +52,6 @@ func generateNumbersAsValuesFromToBy(from, to, by int) ValueSlice {
 	return nums
 }
 
-func generateNumbersAsStructs(n int) ValueSlice {
-	return generateNumbersAsValuesFromToBy(0, n, 1)
-}
-
 func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 	d.Chk.True(to >= from, "to must be greater than or equal to from")
 	d.Chk.True(by > 0, "must be an integer greater than zero")

@@ -38,33 +38,6 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) 
 	return newLeafSequence(vrw, w.data(), offsets, count)
 }
 
-// readLeafSequence reads the data provided by a decoder and moves the decoder forward.
-func readLeafSequence(dec *valueDecoder) leafSequence {
-	start := dec.pos()
-	offsets, seqLen := skipLeafSequence(dec)
-	end := dec.pos()
-	return newLeafSequence(dec.vrw, dec.byteSlice(start, end), offsets, seqLen)
-}
-
-func skipLeafSequence(dec *valueDecoder) ([]uint32, uint64) {
-	kindPos := dec.pos()
-	dec.skipKind()
-	levelPos := dec.pos()
-	dec.skipCount() // level
-	countPos := dec.pos()
-	count := dec.readCount()
-	offsets := make([]uint32, count+sequencePartValues+1)
-	offsets[sequencePartKind] = kindPos
-	offsets[sequencePartLevel] = levelPos
-	offsets[sequencePartCount] = countPos
-	offsets[sequencePartValues] = dec.pos()
-	for i := uint64(0); i < count; i++ {
-		dec.skipValue()
-		offsets[i+sequencePartValues+1] = dec.pos()
-	}
-	return offsets, count
-}
-
 func (seq leafSequence) values() []Value {
 	return seq.valuesSlice(0, math.MaxUint64)
 }

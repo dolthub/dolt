@@ -258,7 +258,6 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			}
 		})
 		delete(lvs.withBufferedChildren, parent)
-		return
 	}
 
 	// Enforce invariant (1)
@@ -374,10 +373,4 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) bool
 // Close closes the underlying ChunkStore
 func (lvs *ValueStore) Close() error {
 	return lvs.cs.Close()
-}
-
-func getTargetType(refBase Ref) *Type {
-	refType := TypeOf(refBase)
-	d.PanicIfFalse(RefKind == refType.TargetKind())
-	return refType.Desc.(CompoundDesc).ElemTypes[0]
 }

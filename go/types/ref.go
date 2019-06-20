@@ -51,13 +51,6 @@ func constructRef(targetHash hash.Hash, targetType *Type, height uint64) Ref {
 	return Ref{valueImpl{nil, w.data(), offsets}}
 }
 
-func writeRefPartsTo(w nomsWriter, targetHash hash.Hash, targetType *Type, height uint64) {
-	RefKind.writeTo(w)
-	w.writeHash(targetHash)
-	targetType.writeToAsType(w, map[string]*Type{})
-	w.writeCount(height)
-}
-
 // readRef reads the data provided by a reader and moves the reader forward.
 func readRef(dec *typedBinaryNomsReader) Ref {
 	start := dec.pos()

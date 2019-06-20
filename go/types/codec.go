@@ -6,8 +6,6 @@ package types
 
 import (
 	"encoding/binary"
-	"io"
-
 	"github.com/attic-labs/noms/go/chunks"
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/hash"
@@ -30,24 +28,6 @@ func EncodeValue(v Value) chunks.Chunk {
 	}
 
 	panic("unreachable")
-}
-
-func readNBytes(r io.Reader, n int) ([]byte, error) {
-	bytes := make([]byte, n)
-
-	var err error
-	for totalRead := 0; totalRead < n; {
-		if err != nil {
-			return nil, err
-		}
-
-		read := 0
-		read, err = r.Read(bytes[totalRead:])
-
-		totalRead += read
-	}
-
-	return bytes, nil
 }
 
 func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
@@ -169,11 +149,6 @@ func (b *binaryNomsReader) readUint() Uint {
 	return Uint(v)
 }
 
-func (b *binaryNomsReader) readNull() Null {
-	b.offset++
-	return NullValue
-}
-
 func (b *binaryNomsReader) readUUID() UUID {
 	id := UUID{}
 	copy(id[:uuidNumBytes], b.buff[b.offset:])
@@ -250,7 +225,7 @@ func (b *binaryNomsWriter) ensureCapacity(n uint32) {
 	for b.offset+n > length {
 		length = length * 2
 	}
-	b.buff = make([]byte, length, length)
+	b.buff = make([]byte, length)
 
 	copy(b.buff, old)
 }
@@ -284,12 +259,6 @@ func (b *binaryNomsWriter) writeUint(v Uint) {
 	b.ensureCapacity(binary.MaxVarintLen64)
 	count := binary.PutUvarint(b.buff[b.offset:], uint64(v))
 	b.offset += uint32(count)
-}
-
-func (b *binaryNomsWriter) writeNull() {
-	b.ensureCapacity(1)
-	b.buff[b.offset] = byte(NullKind)
-	b.offset += 1
 }
 
 func (b *binaryNomsWriter) writeFloat(v Float) {
