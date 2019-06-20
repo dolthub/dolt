@@ -18,6 +18,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
+	"io"
 	"path/filepath"
 	"strings"
 )
@@ -285,6 +286,10 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
 		// TODO: make this print pretty tables like original sql commands
 		cli.Println(r)
+	}
+
+	if err == io.EOF {
+		return nil, nil
 	}
 
 	return nil, err
