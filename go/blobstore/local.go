@@ -17,7 +17,6 @@ const (
 	lfsVerSize = 16
 	bsExt      = ".bs"
 	lockExt    = ".lock"
-	writeMode  = os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 )
 
 type localBlobRangeReadCloser struct {
@@ -78,7 +77,7 @@ func (bs *LocalBlobstore) Get(ctx context.Context, key string, br BlobRange) (io
 
 	if n != lfsVerSize {
 		f.Close()
-		return nil, "", errors.New("Failed to read version")
+		return nil, "", errors.New("failed to read version")
 	} else if err != nil {
 		f.Close()
 		return nil, "", err

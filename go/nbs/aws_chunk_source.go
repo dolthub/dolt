@@ -63,10 +63,6 @@ type awsTableReaderAt struct {
 	chunkCount uint32
 }
 
-func (atra *awsTableReaderAt) hash() addr {
-	return atra.name
-}
-
 func (atra *awsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	atra.once.Do(func() { atra.tra = atra.getTableReaderAt(ctx, stats) })
 	return atra.tra.ReadAtWithStats(ctx, p, off, stats)

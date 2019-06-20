@@ -26,8 +26,6 @@ const (
 var (
 	ctestRoot = os.TempDir()
 
-	x = DbConfig{nbsSpec, nil}
-
 	ldbConfig = &Config{
 		"",
 		map[string]DbConfig{
@@ -100,9 +98,9 @@ type paths struct {
 }
 
 func getPaths(assert *assert.Assertions, base string) paths {
-	abs, err := filepath.Abs(ctestRoot)
+	_, err := filepath.Abs(ctestRoot)
 	assert.NoError(err)
-	abs, err = filepath.EvalSymlinks(ctestRoot)
+	abs, err := filepath.EvalSymlinks(ctestRoot)
 	assert.NoError(err)
 	home := filepath.Join(abs, base)
 	config := filepath.Join(home, NomsConfigFile)
@@ -197,7 +195,7 @@ func TestNoConfig(t *testing.T) {
 	assert.NoError(os.MkdirAll(path.home, os.ModePerm))
 	assert.NoError(os.Chdir(path.home))
 	_, err := FindNomsConfig()
-	assert.Equal(NoConfig, err)
+	assert.Equal(ErrNoConfig, err)
 }
 
 func TestBadConfig(t *testing.T) {

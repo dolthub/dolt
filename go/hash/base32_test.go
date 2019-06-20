@@ -13,7 +13,7 @@ import (
 func TestBase32Encode(t *testing.T) {
 	assert := assert.New(t)
 
-	d := make([]byte, 20, 20)
+	d := make([]byte, ByteLen)
 	assert.Equal("00000000000000000000000000000000", encode(d))
 	d[19] = 1
 	assert.Equal("00000000000000000000000000000001", encode(d))
@@ -31,7 +31,7 @@ func TestBase32Encode(t *testing.T) {
 	assert.Equal("00000000000000000000000000000020", encode(d))
 
 	// Largest!
-	for i := 0; i < 20; i++ {
+	for i := 0; i < ByteLen; i++ {
 		d[i] = 0xff
 	}
 	assert.Equal("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv", encode(d))
@@ -40,7 +40,7 @@ func TestBase32Encode(t *testing.T) {
 func TestBase32Decode(t *testing.T) {
 	assert := assert.New(t)
 
-	d := make([]byte, 20, 20)
+	d := make([]byte, ByteLen)
 	assert.Equal(d, decode("00000000000000000000000000000000"))
 
 	d[19] = 1
@@ -59,7 +59,7 @@ func TestBase32Decode(t *testing.T) {
 	assert.Equal(d, decode("00000000000000000000000000000020"))
 
 	// Largest!
-	for i := 0; i < 20; i++ {
+	for i := 0; i < ByteLen; i++ {
 		d[i] = 0xff
 	}
 	assert.Equal(d, decode("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv"))

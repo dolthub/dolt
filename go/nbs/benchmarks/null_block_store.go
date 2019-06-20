@@ -11,7 +11,6 @@ import (
 )
 
 type nullBlockStore struct {
-	bogus int32
 }
 
 func newNullBlockStore() chunks.ChunkStore {

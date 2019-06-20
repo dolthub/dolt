@@ -6,8 +6,6 @@ package datas
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -116,15 +114,6 @@ func toRefSet(vrw types.ValueReadWriter, commits ...types.Struct) types.Set {
 		set.Insert(types.NewRef(p))
 	}
 	return set.Set(context.Background())
-}
-
-// Convert Set<Ref<Struct>> to a string of Struct.Get("value")'s
-func toValuesString(refSet types.Set, vr types.ValueReader) string {
-	values := []string{}
-	refSet.IterAll(context.Background(), func(v types.Value) {
-		values = append(values, fmt.Sprintf("%v", v.(types.Ref).TargetValue(context.Background(), vr).(types.Struct).Get("value")))
-	})
-	return strings.Join(values, ",")
 }
 
 func TestFindCommonAncestor(t *testing.T) {

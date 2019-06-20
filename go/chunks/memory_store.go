@@ -112,7 +112,6 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 			foundChunks <- &c
 		}
 	}
-	return
 }
 
 func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) bool {

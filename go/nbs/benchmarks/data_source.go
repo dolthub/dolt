@@ -21,8 +21,6 @@ import (
 
 var readFile = flag.String("input-file", "", "A file full of test data. Creates and saves associated .chunks file at runtime if it doesn't yet exist. If none is specified, data and .chunks files will be generated and saved.")
 
-const averageChunkSize = 4 * 1024
-
 type hashSlice []hash.Hash
 
 func (s hashSlice) Len() int {
@@ -134,9 +132,9 @@ func (src *dataSource) readTuples(tuples chan<- offsetTuple) {
 }
 
 func (src *dataSource) reset() {
-	_, err := src.data.Seek(0, os.SEEK_SET)
+	_, err := src.data.Seek(0, io.SeekStart)
 	d.Chk.NoError(err)
-	_, err = src.cm.Seek(0, os.SEEK_SET)
+	_, err = src.cm.Seek(0, io.SeekStart)
 	d.Chk.NoError(err)
 	src.dataRead = 0
 }

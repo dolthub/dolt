@@ -106,7 +106,7 @@ func (suite *DatabaseSuite) TestRebase() {
 
 	// Setup:
 	// ds1: |a| <- |b|
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
+	ds1, _ = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
 	b := types.String("b")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
 	suite.NoError(err)
@@ -366,18 +366,6 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.True(present, "Dataset %s should be present", datasetID2)
 }
 
-type waitDuringUpdateRootChunkStore struct {
-	chunks.ChunkStore
-	preUpdateRootHook func()
-}
-
-func (w *waitDuringUpdateRootChunkStore) Commit(current, last hash.Hash) bool {
-	if w.preUpdateRootHook != nil {
-		w.preUpdateRootHook()
-	}
-	return w.ChunkStore.Commit(context.Background(), current, last)
-}
-
 func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	datasetID := "ds1"
 	ds1 := suite.db.GetDataset(context.Background(), datasetID)
@@ -385,7 +373,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 
 	// Setup:
 	// ds1: |a| <- |b|
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
+	ds1, _ = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
 	b := types.String("b")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
 	suite.NoError(err)
@@ -432,7 +420,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 
 	// Setup:
 	// ds1: |a| <- |b|
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
+	ds1, _ = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
 	b := types.String("b")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
 	suite.NoError(err)

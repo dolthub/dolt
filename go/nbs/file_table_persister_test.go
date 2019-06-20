@@ -11,7 +11,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,15 +77,6 @@ func removeTables(dir string, names ...addr) error {
 		}
 	}
 	return nil
-}
-
-func contains(s sort.StringSlice, e string) bool {
-	for _, c := range s {
-		if c == e {
-			return true
-		}
-	}
-	return false
 }
 
 func TestFSTablePersisterPersist(t *testing.T) {
@@ -161,7 +151,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	assertChunksInReader(testChunks, src, assert)
 
 	// Evict |name| from cache
-	src, err := persistTableData(fts, []byte{0xff})
+	_, err := persistTableData(fts, []byte{0xff})
 	assert.NoError(err)
 
 	present := fc.reportEntries()
