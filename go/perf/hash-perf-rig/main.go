@@ -28,7 +28,6 @@ func main() {
 	flag.Usage = func() {
 		fmt.Printf("%s <big-file>\n", os.Args[0])
 		flag.PrintDefaults()
-		return
 	}
 
 	if len(flag.Args()) < 1 {

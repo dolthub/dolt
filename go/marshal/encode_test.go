@@ -669,8 +669,7 @@ func TestEncodeInterface(t *testing.T) {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	var i interface{}
-	i = []string{"a", "b"}
+	var i interface{} = []string{"a", "b"}
 	v, err := Marshal(context.Background(), vs, i)
 	assert.NoError(err)
 	assert.True(types.NewList(context.Background(), vs, types.String("a"), types.String("b")).Equals(v))
@@ -873,10 +872,9 @@ func TestEncodeOriginal(t *testing.T) {
 
 	var s S
 	var err error
-	var orig types.Struct
 
 	// New field value clobbers old field value
-	orig = types.NewStruct("S", types.StructData{
+	orig := types.NewStruct("S", types.StructData{
 		"foo": types.Float(42),
 	})
 	err = Unmarshal(context.Background(), orig, &s)

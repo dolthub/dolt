@@ -446,6 +446,7 @@ func TestDecodeNonExportedField(tt *testing.T) {
 		x int
 	}
 	var ts TestStruct
+	assert.Zero(tt, ts.x) // here to remove compiler warning about x not being used.
 	assertDecodeErrorMessage(tt, types.String("hi"), &ts, "Non exported fields are not supported, type: marshal.TestStruct")
 }
 

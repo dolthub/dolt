@@ -124,11 +124,6 @@ type compactionPlan struct {
 	totalCompressedData uint64
 }
 
-func (cp compactionPlan) lengths() []byte {
-	lengthsStart := uint64(cp.chunkCount) * prefixTupleSize
-	return cp.mergedIndex[lengthsStart : lengthsStart+uint64(cp.chunkCount)*lengthSize]
-}
-
 func (cp compactionPlan) suffixes() []byte {
 	suffixesStart := uint64(cp.chunkCount) * (prefixTupleSize + lengthSize)
 	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*addrSuffixSize]
