@@ -5,6 +5,7 @@ import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/xwb1989/sqlparser"
@@ -22,19 +23,19 @@ func TestExecuteDelete(t *testing.T) {
 		{
 			name:           "delete one row, one col, primary key where clause",
 			query:          `delete from people where id = 0`,
-			deletedRows:    []row.Row{homer},
+			deletedRows:    []row.Row{sqltestutil.homer},
 			expectedResult: DeleteResult{NumRowsDeleted: 1},
 		},
 		{
 			name:           "delete one row, non-primary key where clause",
 			query:          `delete from people where first = "Homer"`,
-			deletedRows:    []row.Row{homer},
+			deletedRows:    []row.Row{sqltestutil.homer},
 			expectedResult: DeleteResult{NumRowsDeleted: 1},
 		},
 		{
 			name:           "delete without where clause",
 			query:          `delete from people`,
-			deletedRows:    []row.Row{homer, marge, bart, lisa, moe, barney},
+			deletedRows:    []row.Row{sqltestutil.homer, sqltestutil.marge, sqltestutil.bart, sqltestutil.lisa, sqltestutil.moe, sqltestutil.barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 6},
 		},
 		{
@@ -46,37 +47,37 @@ func TestExecuteDelete(t *testing.T) {
 		{
 			name:           "delete multiple rows, =",
 			query:          `delete from people where last = "Simpson"`,
-			deletedRows:    []row.Row{homer, marge, bart, lisa},
+			deletedRows:    []row.Row{sqltestutil.homer, sqltestutil.marge, sqltestutil.bart, sqltestutil.lisa},
 			expectedResult: DeleteResult{NumRowsDeleted: 4},
 		},
 		{
 			name:           "delete multiple rows, <>",
 			query:          `delete from people where last <> "Simpson"`,
-			deletedRows:    []row.Row{moe, barney},
+			deletedRows:    []row.Row{sqltestutil.moe, sqltestutil.barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 2},
 		},
 		{
 			name:           "delete multiple rows, >",
 			query:          `delete from people where age > 10`,
-			deletedRows:    []row.Row{homer, marge, moe, barney},
+			deletedRows:    []row.Row{sqltestutil.homer, sqltestutil.marge, sqltestutil.moe, sqltestutil.barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 4},
 		},
 		{
 			name:           "delete multiple rows, >=",
 			query:          `delete from people where age >= 10`,
-			deletedRows:    []row.Row{homer, marge, bart, moe, barney},
+			deletedRows:    []row.Row{sqltestutil.homer, sqltestutil.marge, sqltestutil.bart, sqltestutil.moe, sqltestutil.barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 5},
 		},
 		{
 			name:           "delete multiple rows, <",
 			query:          `delete from people where age < 40`,
-			deletedRows:    []row.Row{marge, bart, lisa},
+			deletedRows:    []row.Row{sqltestutil.marge, sqltestutil.bart, sqltestutil.lisa},
 			expectedResult: DeleteResult{NumRowsDeleted: 3},
 		},
 		{
 			name:           "delete multiple rows, <=",
 			query:          `delete from people where age <= 40`,
-			deletedRows:    []row.Row{homer, marge, bart, lisa, barney},
+			deletedRows:    []row.Row{sqltestutil.homer, sqltestutil.marge, sqltestutil.bart, sqltestutil.lisa, sqltestutil.barney},
 			expectedResult: DeleteResult{NumRowsDeleted: 5},
 		},
 		{
@@ -104,7 +105,7 @@ func TestExecuteDelete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			dEnv := dtestutils.CreateTestEnv()
-			createTestDatabase(dEnv, t)
+			sqltestutil.createTestDatabase(dEnv, t)
 			root, _ := dEnv.WorkingRoot(context.Background())
 
 			sqlStatement, _ := sqlparser.Parse(tt.query)
@@ -122,15 +123,15 @@ func TestExecuteDelete(t *testing.T) {
 
 			assert.Equal(t, tt.expectedResult.NumRowsDeleted, result.NumRowsDeleted)
 
-			table, ok := result.Root.GetTable(context.Background(), peopleTableName)
+			table, ok := result.Root.GetTable(context.Background(), sqltestutil.peopleTableName)
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows are deleted
-			for _, r := range allPeopleRows {
-				deletedIdx := findRowIndex(r, tt.deletedRows)
+			for _, r := range sqltestutil.allPeopleRows {
+				deletedIdx := sqltestutil.findRowIndex(r, tt.deletedRows)
 
-				key := r.NomsMapKey(peopleTestSchema)
-				_, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), peopleTestSchema)
+				key := r.NomsMapKey(sqltestutil.peopleTestSchema)
+				_, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), sqltestutil.peopleTestSchema)
 				if deletedIdx >= 0 {
 					assert.False(t, ok, "Row not deleted: %v", r)
 				} else {
