@@ -68,7 +68,6 @@ func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value, ou
 	nextIsKey := true
 	var k Value
 	for v := range kvs {
-		d.PanicIfTrue(v == nil)
 		if nextIsKey {
 			k = v
 			d.PanicIfFalse(lastK == nil || lastK.Less(k))
@@ -126,7 +125,6 @@ func (m Map) WalkValues(ctx context.Context, cb ValueCallback) {
 	iterAll(ctx, m, func(v Value, idx uint64) {
 		cb(v)
 	})
-	return
 }
 
 func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value) {
@@ -148,7 +146,7 @@ func (m Map) Last(ctx context.Context) (Value, Value) {
 
 func (m Map) At(ctx context.Context, idx uint64) (key, value Value) {
 	if idx >= m.Len() {
-		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, m.Len()))
+		panic(fmt.Errorf("out of bounds: %d >= %d", idx, m.Len()))
 	}
 
 	cur := newCursorAtIndex(ctx, m.orderedSequence, idx)
@@ -283,7 +281,7 @@ func buildMapData(values []Value) mapEntrySlice {
 func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
-		mapData := make([]mapEntry, len(items), len(items))
+		mapData := make([]mapEntry, len(items))
 
 		var lastKey Value
 		for i, v := range items {

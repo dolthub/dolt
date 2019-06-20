@@ -53,7 +53,7 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 
 				f.Read(ex)
 				be.Read(context.Background(), ac)
-				assert.True(t, bytes.Compare(ex, ac) == 0)
+				assert.True(t, bytes.Equal(ex, ac))
 			} else {
 				// randon write
 				idx := nextRandInt(0, be.Len())
@@ -86,6 +86,6 @@ func TestBlobReadWriteFuzzer(t *testing.T) {
 		actual := make([]byte, b.Len())
 		b.ReadAt(context.Background(), actual, 0)
 
-		assert.True(t, bytes.Compare(expect, actual) == 0)
+		assert.True(t, bytes.Equal(expect, actual))
 	}
 }

@@ -116,16 +116,6 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, all
 	return false
 }
 
-// clone creates a copy of the cursor
-func (cur *sequenceCursor) clone() *sequenceCursor {
-	var parent *sequenceCursor
-	if cur.parent != nil {
-		parent = cur.parent.clone()
-	}
-	cl := newSequenceCursor(parent, cur.seq, cur.idx)
-	return cl
-}
-
 type cursorIterCallback func(item interface{}) bool
 
 func (cur *sequenceCursor) String() string {

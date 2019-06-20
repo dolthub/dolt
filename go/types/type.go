@@ -76,7 +76,6 @@ func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (t *Type) WalkRefs(cb RefCallback) {
-	return
 }
 
 func (t *Type) typeOf() *Type {

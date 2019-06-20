@@ -39,7 +39,7 @@ type PathPart interface {
 // ParsePath parses str into a Path, or returns an error if parsing failed.
 func ParsePath(str string) (Path, error) {
 	if str == "" {
-		return Path{}, errors.New("Empty path")
+		return Path{}, errors.New("empty path")
 	}
 	return constructPath(Path{}, str)
 }
@@ -68,14 +68,14 @@ func constructPath(p Path, str string) (Path, error) {
 	case '.':
 		idx := fieldNameComponentRe.FindIndex([]byte(tail))
 		if idx == nil {
-			return Path{}, errors.New("Invalid field: " + tail)
+			return Path{}, errors.New("invalid field: " + tail)
 		}
 		p = append(p, FieldPath{tail[:idx[1]]})
 		return constructPath(p, tail[idx[1]:])
 
 	case '[':
 		if len(tail) == 0 {
-			return Path{}, errors.New("Path ends in [")
+			return Path{}, errors.New("path ends in [")
 		}
 
 		idx, h, rem, err := ParsePathIndex(tail)
@@ -105,7 +105,7 @@ func constructPath(p Path, str string) (Path, error) {
 			}
 			idx, err := strconv.ParseInt(arg, 10, 64)
 			if err != nil {
-				return Path{}, fmt.Errorf("Invalid position: %s", arg)
+				return Path{}, fmt.Errorf("invalid position: %s", arg)
 			}
 			return constructPath(append(p, NewAtAnnotation(idx)), rem)
 
@@ -114,14 +114,14 @@ func constructPath(p Path, str string) (Path, error) {
 				return Path{}, fmt.Errorf("@key annotation does not support arguments")
 			}
 			if len(p) == 0 {
-				return Path{}, fmt.Errorf("Cannot use @key annotation at beginning of path")
+				return Path{}, fmt.Errorf("cannot use @key annotation at beginning of path")
 			}
 			lastPart := p[len(p)-1]
 			if ki, ok := lastPart.(keyIndexable); ok {
 				p[len(p)-1] = ki.setIntoKey(true).(PathPart)
 				return constructPath(p, rem)
 			}
-			return Path{}, fmt.Errorf("Cannot use @key annotation on: %s", lastPart.String())
+			return Path{}, fmt.Errorf("cannot use @key annotation on: %s", lastPart.String())
 
 		case "target":
 			if hasArg {
@@ -136,14 +136,14 @@ func constructPath(p Path, str string) (Path, error) {
 			return constructPath(append(p, TypeAnnotation{}), rem)
 
 		default:
-			return Path{}, fmt.Errorf("Unsupported annotation: @%s", ann)
+			return Path{}, fmt.Errorf("unsupported annotation: @%s", ann)
 		}
 
 	case ']':
 		return Path{}, errors.New("] is missing opening [")
 
 	default:
-		return Path{}, fmt.Errorf("Invalid operator: %c", op)
+		return Path{}, fmt.Errorf("invalid operator: %c", op)
 	}
 }
 
@@ -401,7 +401,7 @@ Switch:
 				i++
 				c = str[i]
 				if c != '\\' && c != '"' {
-					err = errors.New(`Only " and \ can be escaped`)
+					err = errors.New(`only " and \ can be escaped`)
 					break Switch
 				}
 			}
@@ -419,12 +419,12 @@ Switch:
 			rem = str[sepIdx:]
 		}
 		if len(idxStr) == 0 {
-			err = errors.New("Empty index value")
+			err = errors.New("empty index value")
 		} else if idxStr[0] == '#' {
 			hashStr := idxStr[1:]
 			h, _ = hash.MaybeParse(hashStr)
 			if h.IsEmpty() {
-				err = errors.New("Invalid hash: " + hashStr)
+				err = errors.New("invalid hash: " + hashStr)
 			}
 		} else if idxStr == "true" {
 			idx = Bool(true)
@@ -434,7 +434,7 @@ Switch:
 			// Should we be more strict here? ParseFloat allows leading and trailing dots, and exponents.
 			idx = Float(i)
 		} else {
-			err = errors.New("Invalid index: " + idxStr)
+			err = errors.New("invalid index: " + idxStr)
 		}
 	}
 

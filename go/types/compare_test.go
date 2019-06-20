@@ -133,7 +133,7 @@ func TestCompareEncodedKeys(t *testing.T) {
 }
 
 func encode(v Value) []byte {
-	w := &binaryNomsWriter{make([]byte, 128, 128), 0}
+	w := &binaryNomsWriter{make([]byte, 128), 0}
 	v.writeTo(w)
 	return w.data()
 }

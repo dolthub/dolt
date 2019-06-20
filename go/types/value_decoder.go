@@ -26,13 +26,6 @@ func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) val
 	return valueDecoder{typedBinaryNomsReader{nr, true}, vrw}
 }
 
-func (r *valueDecoder) copyString(w nomsWriter) {
-	start := r.pos()
-	r.skipString()
-	end := r.pos()
-	w.writeRaw(r.byteSlice(start, end))
-}
-
 func (r *valueDecoder) readRef() Ref {
 	return readRef(&(r.typedBinaryNomsReader))
 }
@@ -376,13 +369,6 @@ func (r *valueDecoder) isStringSame(s string) bool {
 	return true
 }
 
-func (r *valueDecoder) copyValue(w nomsWriter) {
-	start := r.pos()
-	r.skipValue()
-	end := r.pos()
-	w.writeRaw(r.byteSlice(start, end))
-}
-
 func (r *valueDecoder) readStruct() Value {
 	return readStruct(r)
 }
@@ -397,13 +383,6 @@ func (r *valueDecoder) skipStruct() {
 
 func (r *valueDecoder) skipTuple() {
 	skipTuple(r)
-}
-
-func boolToUint32(b bool) uint32 {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 func (r *valueDecoder) readOrderedKey() orderedKey {

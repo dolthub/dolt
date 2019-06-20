@@ -64,14 +64,6 @@ func newTestList(length int) testList {
 	return generateNumbersAsValues(length)
 }
 
-func newTestListFromList(list List) testList {
-	tl := testList{}
-	list.IterAll(context.Background(), func(v Value, idx uint64) {
-		tl = append(tl, v)
-	})
-	return tl
-}
-
 func validateList(t *testing.T, vrw ValueReadWriter, l List, values ValueSlice) {
 	assert.True(t, l.Equals(NewList(context.Background(), vrw, values...)))
 	out := ValueSlice{}
@@ -240,20 +232,6 @@ func getTestListWithLen(length int) testList {
 		values[i] = Float(s.Int63() & 0xff)
 	}
 
-	return values
-}
-
-func getTestListUnique() testList {
-	length := int(getTestListLen())
-	s := rand.NewSource(42)
-	uniques := map[int64]bool{}
-	for len(uniques) < length {
-		uniques[s.Int63()] = true
-	}
-	values := make([]Value, 0, length)
-	for k := range uniques {
-		values = append(values, Float(k))
-	}
 	return values
 }
 

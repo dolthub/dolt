@@ -547,24 +547,6 @@ func TestWriteListOfTypes(t *testing.T) {
 	)
 }
 
-func nomsTestWriteRecursiveStruct(t *testing.T) {
-	vrw := newTestValueStore()
-
-	// struct A6 {
-	//   cs: List<A6>
-	//   v: Float
-	// }
-	assertEncoding(t,
-		[]interface{}{
-			StructKind, "A6", uint64(2) /* len */, "cs", ListKind, CycleKind, uint64(0), "v", FloatKind,
-			ListKind, UnionKind, uint64(0) /* len */, false, uint64(0), /* len */
-			FloatKind, Float(42),
-		},
-		// {v: 42, cs: [{v: 555, cs: []}]}
-		NewStruct("A6", StructData{"cs": NewList(context.Background(), vrw), "v": Float(42)}),
-	)
-}
-
 func TestWriteUnionList(t *testing.T) {
 	vrw := newTestValueStore()
 

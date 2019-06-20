@@ -105,7 +105,7 @@ func NewStruct(name string, data StructData) Struct {
 		i++
 	}
 
-	sort.Sort(sort.StringSlice(fieldNames))
+	sort.Strings(fieldNames)
 	for i = 0; i < len(fieldNames); i++ {
 		values[i] = data[fieldNames[i]]
 	}
@@ -410,45 +410,11 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 var escapeChar = "Q"
 var headFieldNamePattern = regexp.MustCompile("[a-zA-Z]")
 var tailFieldNamePattern = regexp.MustCompile("[a-zA-Z0-9_]")
-var spaceRegex = regexp.MustCompile("[ ]")
 var escapeRegex = regexp.MustCompile(escapeChar)
 
 var fieldNameComponentRe = regexp.MustCompile("^" + headFieldNamePattern.String() + tailFieldNamePattern.String() + "*")
-var fieldNameRe = regexp.MustCompile(fieldNameComponentRe.String() + "$")
 
 type encodingFunc func(string, *regexp.Regexp) string
-
-func CamelCaseFieldName(input string) string {
-	//strip invalid struct characters and leave spaces
-	encode := func(s1 string, p *regexp.Regexp) string {
-		if p.MatchString(s1) || spaceRegex.MatchString(s1) {
-			return s1
-		}
-		return ""
-	}
-
-	strippedField := escapeField(input, encode)
-	splitField := strings.Fields(strippedField)
-
-	if len(splitField) == 0 {
-		return ""
-	}
-
-	//Camelcase field
-	output := strings.ToLower(splitField[0])
-	if len(splitField) > 1 {
-		for _, field := range splitField[1:] {
-			output += strings.Title(strings.ToLower(field))
-		}
-	}
-	//Because we are removing characters, we may generate an invalid field name
-	//i.e. -- 1A B, we will remove the first bad chars and process until 1aB
-	//1aB is invalid struct field name so we will return ""
-	if !IsValidStructFieldName(output) {
-		return ""
-	}
-	return output
-}
 
 func escapeField(input string, encode encodingFunc) string {
 	output := ""

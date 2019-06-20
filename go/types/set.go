@@ -59,7 +59,6 @@ func readSetInput(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value, 
 	ch := newEmptySetSequenceChunker(ctx, vrw)
 	var lastV Value
 	for v := range vChan {
-		d.PanicIfTrue(v == nil)
 		if lastV != nil {
 			d.PanicIfFalse(lastV.Less(v))
 		}
@@ -123,7 +122,7 @@ func (s Set) First(ctx context.Context) Value {
 
 func (s Set) At(ctx context.Context, idx uint64) Value {
 	if idx >= s.Len() {
-		panic(fmt.Errorf("Out of bounds: %d >= %d", idx, s.Len()))
+		panic(fmt.Errorf("out of bounds: %d >= %d", idx, s.Len()))
 	}
 
 	cur := newCursorAtIndex(ctx, s.orderedSequence, idx)
@@ -196,7 +195,7 @@ func buildSetData(values ValueSlice) ValueSlice {
 func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
-		setData := make([]Value, len(items), len(items))
+		setData := make([]Value, len(items))
 
 		var lastValue Value
 		for i, item := range items {
