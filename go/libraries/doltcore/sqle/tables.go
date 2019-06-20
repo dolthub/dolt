@@ -106,7 +106,7 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) sql.Row {
 		return false
 	})
 
-	return sql.NewRow(colVals)
+	return sql.NewRow(colVals...)
 }
 
 func doltColValToSqlColVal(val types.Value) interface{} {
