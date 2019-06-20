@@ -22,6 +22,7 @@ require (
 	github.com/pkg/profile v1.3.0
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
+	github.com/src-d/go-mysql-server v0.4.1-0.20190619104848-eaab1795353a
 	github.com/stretchr/testify v1.3.0
 	github.com/tealeg/xlsx v1.0.3
 	github.com/xwb1989/sqlparser v0.0.0-20180606152119-120387863bf2
@@ -31,9 +32,13 @@ require (
 	google.golang.org/grpc v1.21.1
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
-	gopkg.in/yaml.v2 v2.2.2 // indirect
 )
 
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4
 
-replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.8
+replace github.com/xwb1989/sqlparser => ../../../../liquidata-inc/sqlparser
+
+//replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.8
+
+// The latest release of go-mysql-server has gopkg.in instead of github
+replace github.com/src-d/go-mysql-server => ../../../../src-d/go-mysql-server
