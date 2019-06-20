@@ -30,7 +30,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "reset", Desc: "Remove table changes from the list of staged table changes.", Func: commands.Reset, ReqRepo: true},
 	{Name: "commit", Desc: "Record changes to the repository.", Func: commands.Commit, ReqRepo: true},
 	{Name: "sql", Desc: "Run a SQL query against tables in repository.", Func: commands.Sql, ReqRepo: true},
-	{Name: "sqle", Desc: "Run a SQL query against tables in repository.", Func: sqle.Sql, ReqRepo: true},
+	{Name: "sqle", Desc: "Run a SQL query against tables in repository.", Func: sqle.Sql, ReqRepo: true, HideFromHelp: true},
 	{Name: "log", Desc: "Show commit logs.", Func: commands.Log, ReqRepo: true},
 	{Name: "diff", Desc: "Diff a table.", Func: commands.Diff, ReqRepo: true},
 	{Name: "merge", Desc: "Merge a branch.", Func: commands.Merge, ReqRepo: true},

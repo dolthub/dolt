@@ -21,6 +21,8 @@ type Command struct {
 	// ReqRepo says whether the command must be executed in an initialized dolt data repository directory.  This should
 	// always be set to false for non leaf commands.
 	ReqRepo bool
+	// Hide says whether to hide this command from help listings (for features that aren't ready to be released publicly).
+	HideFromHelp bool
 }
 
 // MapCommands takes a list of commands and maps them based on the commands name
@@ -97,6 +99,8 @@ func printUsage(commandStr string, commands []*Command) {
 	Println("Valid commands for", commandStr, "are")
 
 	for _, command := range commands {
-		Printf("    %16s - %s\n", command.Name, command.Desc)
+		if !command.HideFromHelp {
+			Printf("    %16s - %s\n", command.Name, command.Desc)
+		}
 	}
 }
