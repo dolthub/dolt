@@ -40,8 +40,10 @@ const (
 )
 
 var (
-	catRaw    = false
-	catDecomp = true
+	catRaw        = false
+	catDecomp     = false
+	catNoShow     = false
+	catHashesOnly = false
 )
 
 var nomsCat = &util.Command{
@@ -56,6 +58,8 @@ var nomsCat = &util.Command{
 func setupCatFlags() *flag.FlagSet {
 	catFlagSet := flag.NewFlagSet("cat", flag.ExitOnError)
 	catFlagSet.BoolVar(&catRaw, "raw", false, "If true, includes the raw binary version of each chunk in the nbs file")
+	catFlagSet.BoolVar(&catNoShow, "no-show", false, "If true, skips printing of the value")
+	catFlagSet.BoolVar(&catHashesOnly, "hashes-only", false, "If true, only prints the b32 hashes")
 	catFlagSet.BoolVar(&catDecomp, "decompressed", false, "If true, includes the decompressed binary version of each chunk in the nbs file")
 	return catFlagSet
 }
@@ -74,6 +78,7 @@ type prefixIndex struct {
 type chunkData struct {
 	compressed    []byte
 	uncompressed  []byte
+	dataOffset    uint64
 	crc           uint32
 	decompSuccess bool
 }
@@ -122,6 +127,13 @@ func runCat(ctx context.Context, args []string) int {
 		copy(hashData[prefixSize:], suffixes[cidx])
 		b32Hash := b32Str(hashData[:])
 
+		currCD := cd[cidx]
+
+		if catHashesOnly {
+			fmt.Println("hash:", b32Hash, "offset:", currCD.dataOffset, "size:", len(currCD.compressed))
+			continue
+		}
+
 		fmt.Printf("    prefixIndex[%d].hash:        (HEX) %s    (B32) %s\n", i, hexStr(hashData[:]), b32Hash)
 		fmt.Printf("    prefixIndex[%d].hash.prefix: (HEX) %s\n", i, hexStr(currPI.hashPrefix))
 		fmt.Printf("    prefixIndex[%d].hash.suffix: (HEX) %s\n", i, hexStr(suffixes[cidx]))
@@ -129,7 +141,6 @@ func runCat(ctx context.Context, args []string) int {
 
 		fmt.Printf("    prefixIndex[%d] references chunk[%d]:\n", i, cidx)
 
-		currCD := cd[cidx]
 		chunk := chunks.NewChunkWithHash(hashData, currCD.uncompressed)
 
 		//Want a clean db every loop
@@ -144,6 +155,7 @@ func runCat(ctx context.Context, args []string) int {
 			fmt.Printf("        chunk[%d].raw.data:\n", cidx)
 			fmt.Println(hexView(currCD.compressed, "                               "))
 		}
+
 		fmt.Printf("        chunk[%d].decomp.len:  %d\n", cidx, len(currCD.uncompressed))
 
 		if catDecomp {
@@ -151,10 +163,12 @@ func runCat(ctx context.Context, args []string) int {
 			fmt.Println(hexView(currCD.uncompressed, "                               "))
 		}
 
-		fmt.Printf("        chunk[%d].value.kind:  %s\n", cidx, value.Kind())
-		fmt.Printf("        chunk[%d].value:\n\n", cidx)
-		printValue(ctx, os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)
-		fmt.Println()
+		if !catNoShow {
+			fmt.Printf("        chunk[%d].value.kind:  %s\n", cidx, value.Kind())
+			fmt.Printf("        chunk[%d].value:\n\n", cidx)
+			printValue(ctx, os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)
+			fmt.Println()
+		}
 
 		fmt.Println()
 	}
@@ -236,11 +250,13 @@ func parseChunkSizes(bytes []byte, pos, numChunks int) (int, []int) {
 
 func parseChunks(bytes []byte, pos int, sizes []int) (int, []chunkData) {
 	var crcs []uint32
+	var offsets []uint64
 	var chunkBytes [][]byte
 	for i := 0; i < len(sizes); i++ {
 		size := sizes[len(sizes)-i-1]
 		crcBytes := bytes[pos-crcSize : pos]
-		dataBytes := bytes[pos-size : pos-crcSize]
+		offset := uint64(pos - size)
+		dataBytes := bytes[offset : pos-crcSize]
 		pos -= size
 
 		crcValInFile := binary.BigEndian.Uint32(crcBytes)
@@ -252,6 +268,7 @@ func parseChunks(bytes []byte, pos int, sizes []int) (int, []chunkData) {
 
 		chunkBytes = append(chunkBytes, dataBytes)
 		crcs = append(crcs, crcValInFile)
+		offsets = append(offsets, offset)
 	}
 
 	var cd []chunkData
@@ -262,6 +279,7 @@ func parseChunks(bytes []byte, pos int, sizes []int) (int, []chunkData) {
 			compressed:    chunkBytes[i],
 			uncompressed:  uncompressed,
 			crc:           crcs[i],
+			dataOffset:    offsets[i],
 			decompSuccess: err == nil,
 		})
 	}
