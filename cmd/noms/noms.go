@@ -15,7 +15,6 @@ import (
 
 	"github.com/attic-labs/kingpin"
 
-	"github.com/attic-labs/noms/cmd/noms/splore"
 	"github.com/attic-labs/noms/cmd/util"
 	"github.com/attic-labs/noms/go/util/exit"
 	"github.com/attic-labs/noms/go/util/profile"
@@ -32,7 +31,6 @@ var commands = []*util.Command{
 	nomsLog,
 	nomsMerge,
 	nomsRoot,
-	nomsServe,
 	nomsShow,
 	nomsSync,
 	nomsVersion,
@@ -47,7 +45,6 @@ var kingpinCommands = []util.KingpinCommand{
 	nomsSet,
 	nomsStats,
 	nomsStruct,
-	splore.Cmd,
 }
 
 var actions = []string{
@@ -200,13 +197,6 @@ See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spell
 `)
 	root.Flag("update", "Replaces the entire database with the one with the given hash").String()
 	addDatabaseArg(root)
-
-	// serve
-	serve := noms.Command("serve", `Serves a Noms database over HTTP
-See Spelling Objects at https://github.com/attic-labs/noms/blob/master/doc/spelling.md for details on the database argument.
-`)
-	serve.Flag("port", "port to listen on for HTTP requests").Default("8000").Int()
-	addDatabaseArg(serve)
 
 	// show
 	show := noms.Command("show", `Shows a serialization of a Noms object

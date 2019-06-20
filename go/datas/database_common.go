@@ -36,9 +36,6 @@ type rootTracker interface {
 
 func newDatabase(cs chunks.ChunkStore) *database {
 	vs := types.NewValueStore(cs)
-	if _, ok := cs.(*httpChunkStore); ok {
-		vs.SetEnforceCompleteness(false)
-	}
 
 	return &database{
 		ValueStore: vs, // ValueStore is responsible for closing |cs|

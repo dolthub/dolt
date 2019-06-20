@@ -16,13 +16,11 @@ import (
 )
 
 const (
-	nbsSpec     = "nbs:./local"
-	memSpec     = "mem"
-	httpSpec    = "http://test.com:8080/foo"
-	nbsAbsSpec  = "nbs:/tmp/noms"
-	remoteAlias = "origin"
-	awsAlias    = "awsdb"
-	awsSpec     = "aws://dynamo_table:bucket/db"
+	nbsSpec    = "nbs:./local"
+	memSpec    = "mem"
+	nbsAbsSpec = "nbs:/tmp/noms"
+	awsAlias   = "awsdb"
+	awsSpec    = "aws://dynamo_table:bucket/db"
 )
 
 var (
@@ -34,16 +32,6 @@ var (
 		"",
 		map[string]DbConfig{
 			DefaultDbAlias: {Url: nbsSpec},
-			remoteAlias:    {Url: httpSpec},
-		},
-		AWSConfig{},
-	}
-
-	httpConfig = &Config{
-		"",
-		map[string]DbConfig{
-			DefaultDbAlias: {Url: httpSpec},
-			remoteAlias:    {Url: nbsSpec},
 		},
 		AWSConfig{},
 	}
@@ -52,7 +40,6 @@ var (
 		"",
 		map[string]DbConfig{
 			DefaultDbAlias: {Url: memSpec},
-			remoteAlias:    {Url: httpSpec},
 		},
 		AWSConfig{},
 	}
@@ -61,7 +48,6 @@ var (
 		"",
 		map[string]DbConfig{
 			DefaultDbAlias: {Url: nbsAbsSpec},
-			remoteAlias:    {Url: httpSpec},
 		},
 		AWSConfig{},
 	}
@@ -230,7 +216,7 @@ func TestQualifyingPaths(t *testing.T) {
 	path := getPaths(assert, "home")
 	assert.NoError(os.Chdir(path.home))
 
-	for _, tc := range []*Config{httpConfig, memConfig, ldbAbsConfig} {
+	for _, tc := range []*Config{memConfig, ldbAbsConfig} {
 		writeConfig(assert, tc, path.home)
 		ac, err := FindNomsConfig()
 		assert.NoError(err, path.config)

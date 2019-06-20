@@ -6,6 +6,7 @@ package datas
 
 import (
 	"context"
+	"github.com/attic-labs/noms/go/d"
 	"testing"
 
 	"github.com/attic-labs/noms/go/chunks"
@@ -59,7 +60,7 @@ type RemoteDatabaseSuite struct {
 func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.storage = &chunks.TestStorage{}
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
-		return NewDatabase(newHTTPChunkStoreForTest(cs))
+		return NewDatabase(cs)
 	}
 	suite.db = suite.makeDb(suite.storage.NewView())
 }
@@ -244,6 +245,31 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	suite.NotPanics(func() {
 		assertMapOfStringToRefOfCommit(context.Background(), suite.db.Datasets(context.Background()), datasets, suite.db)
 	})
+}
+
+func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets types.Map, vr types.ValueReader) {
+	stopChan := make(chan struct{})
+	defer close(stopChan)
+	changes := make(chan types.ValueChanged)
+	go func() {
+		defer close(changes)
+		proposed.Diff(ctx, datasets, changes, stopChan)
+	}()
+	for change := range changes {
+		switch change.ChangeType {
+		case types.DiffChangeAdded, types.DiffChangeModified:
+			// Since this is a Map Diff, change.V is the key at which a change was detected.
+			// Go get the Value there, which should be a Ref<Value>, deref it, and then ensure the target is a Commit.
+			val := change.NewValue
+			ref, ok := val.(types.Ref)
+			if !ok {
+				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but key %s maps to a %s", change.Key.(types.String), types.TypeOf(val).Describe(ctx))
+			}
+			if targetValue := ref.TargetValue(ctx, vr); !IsCommit(targetValue) {
+				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but the ref at key %s points to a %s", change.Key.(types.String), types.TypeOf(targetValue).Describe(ctx))
+			}
+		}
+	}
 }
 
 func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {
