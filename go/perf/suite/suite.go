@@ -90,7 +90,6 @@ import (
 	"github.com/attic-labs/noms/go/d"
 	"github.com/attic-labs/noms/go/datas"
 	"github.com/attic-labs/noms/go/marshal"
-	"github.com/attic-labs/noms/go/nbs"
 	"github.com/attic-labs/noms/go/spec"
 	"github.com/attic-labs/noms/go/types"
 	"github.com/shirou/gopsutil/cpu"
@@ -270,9 +269,10 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	for repIdx := 0; repIdx < *perfRepeatFlag; repIdx++ {
 		testReps[repIdx] = testRep{}
 
-		serverHost, stopServerFn := suite.StartRemoteDatabase()
-		suite.DatabaseSpec = serverHost
-		suite.Database = datas.NewDatabase(datas.NewHTTPChunkStore(context.Background(), serverHost, ""))
+		storage := &chunks.MemoryStorage{}
+		memCS := storage.NewView()
+		suite.DatabaseSpec = "mem://"
+		suite.Database = datas.NewDatabase(memCS)
 		defer suite.Database.Close()
 
 		if t, ok := suiteT.(SetupRepSuite); ok {
@@ -330,8 +330,6 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		if t, ok := suiteT.(TearDownRepSuite); ok {
 			t.TearDownRep()
 		}
-
-		stopServerFn()
 	}
 
 	if t, ok := suiteT.(testifySuite.TearDownAllSuite); ok {
@@ -464,47 +462,4 @@ func (suite *PerfSuite) getGitHead(dir string) string {
 		return ""
 	}
 	return strings.TrimSpace(stdout.String())
-}
-
-// StartRemoteDatabase creates a new remote database on an arbitrary free port,
-// running on a separate goroutine. Returns the hostname that that database was
-// started on, and a callback to run to shut down the server.
-//
-// If the -perf.mem flag is specified, the remote database is hosted in memory,
-// not on disk (in a temporary nbs directory).
-//
-// - Why not use a local database + memory store?
-// Firstly, because the spec would be "mem", and the spec library doesn't
-// know how to reuse stores.
-// Secondly, because it's an unrealistic performance measurement.
-//
-// - Why use a remote (HTTP) database?
-// It's more realistic to exercise the HTTP stack, even if it's just talking
-// over localhost.
-//
-// - Why provide an option for nbs vs memory underlying store?
-// Again, nbs is more realistic than memory, and in common cases disk
-// space > memory space.
-// However, on this developer's laptop, there is
-// actually very little disk space, and a lot of memory; plus making the
-// test run a little bit faster locally is nice.
-func (suite *PerfSuite) StartRemoteDatabase() (host string, stopFn func()) {
-	var chunkStore chunks.ChunkStore
-	if *perfMemFlag {
-		st := &chunks.MemoryStorage{}
-		chunkStore = st.NewView()
-	} else {
-		dbDir := suite.TempDir()
-		chunkStore = nbs.NewLocalStore(context.Background(), dbDir, 128*(1<<20))
-	}
-
-	server := datas.NewRemoteDatabaseServer(chunkStore, 0)
-	portChan := make(chan int)
-	server.Ready = func() { portChan <- server.Port() }
-	go server.Run()
-
-	port := <-portChan
-	host = fmt.Sprintf("http://localhost:%d", port)
-	stopFn = func() { server.Stop() }
-	return
 }

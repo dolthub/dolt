@@ -16,7 +16,6 @@ import (
 
 const (
 	localSpec  = nbsSpec
-	remoteSpec = httpSpec
 	testDs     = "testds"
 	testObject = "#pckdvpvr9br1fie6c3pjudrlthe7na18"
 )
@@ -33,44 +32,27 @@ var (
 		"",
 		map[string]DbConfig{
 			DefaultDbAlias: {Url: localSpec},
-			remoteAlias:    {Url: remoteSpec},
 		},
 		AWSConfig{},
 	}
 
 	testConfigWithOptions = &Config{
 		"",
-		map[string]DbConfig{
-			remoteAlias: {Url: remoteSpec, Options: map[string]string{"param": "value"}},
-		},
+		map[string]DbConfig{},
 		AWSConfig{},
 	}
 
 	dbTestsNoAliases = []testData{
 		{localSpec, localSpec},
-		{remoteSpec, remoteSpec},
 	}
 
 	dbTestsWithAliases = []testData{
 		{"", localSpec},
-		{remoteAlias, remoteSpec},
-	}
-
-	pathTestsNoAliases = []testData{
-		{remoteSpec + "::" + testDs, remoteSpec + "::" + testDs},
-		{remoteSpec + "::" + testObject, remoteSpec + "::" + testObject},
 	}
 
 	pathTestsWithAliases = []testData{
 		{spec.Separator + testDs, localSpec + "::" + testDs},
-		{remoteAlias + "::" + testDs, remoteSpec + "::" + testDs},
 		{spec.Separator + testObject, localSpec + "::" + testObject},
-		{remoteAlias + "::" + testObject, remoteSpec + "::" + testObject},
-	}
-
-	pathTestForConfigs = []testData{
-		{remoteAlias + "::" + testDs, remoteSpec + "::" + testDs},
-		{remoteAlias + "::" + testObject, remoteSpec + "::" + testObject},
 	}
 )
 
@@ -120,54 +102,12 @@ func TestResolveDatabaseWithConfig(t *testing.T) {
 	}
 }
 
-func TestResolvePathWithConfig(t *testing.T) {
-	r := withConfig(t)
-	assert := assert.New(t)
-	for _, d := range append(pathTestsNoAliases, pathTestsWithAliases...) {
-		path := r.ResolvePathSpec(d.input)
-		assertPathSpecsEquiv(assert, d.expected, path)
-	}
-}
-
 func TestResolveDatabaseWithoutConfig(t *testing.T) {
 	r := withoutConfig(t)
 	assert := assert.New(t)
 	for _, d := range dbTestsNoAliases {
 		db := r.ResolveDbSpec(d.input)
 		assert.Equal(d.expected, db, d.input)
-	}
-}
-
-func TestResolvePathWithoutConfig(t *testing.T) {
-	r := withoutConfig(t)
-	assert := assert.New(t)
-	for _, d := range pathTestsNoAliases {
-		path := r.ResolvePathSpec(d.input)
-		assertPathSpecsEquiv(assert, d.expected, path)
-	}
-}
-
-func TestDbConfigOptions(t *testing.T) {
-	r := withGivenConfig(rtestConfig, t)
-	assert := assert.New(t)
-
-	dbConfig := r.DbConfigForDbSpec(remoteAlias)
-	assert.Zero(dbConfig.Options)
-	for _, d := range pathTestForConfigs {
-		db, dbConfig := r.ResolvePathSpecAndGetDbConfig(d.input)
-		assertPathSpecsEquiv(assert, d.expected, db)
-		assert.Zero(dbConfig.Options)
-	}
-
-	r = withGivenConfig(testConfigWithOptions, t)
-	dbConfig = r.DbConfigForDbSpec(remoteAlias)
-	assert.Equal(1, len(dbConfig.Options))
-	assert.Equal("value", dbConfig.Options["param"])
-	for _, d := range pathTestForConfigs {
-		db, dbConfig := r.ResolvePathSpecAndGetDbConfig(d.input)
-		assertPathSpecsEquiv(assert, d.expected, db)
-		assert.Equal(1, len(dbConfig.Options))
-		assert.Equal("value", dbConfig.Options["param"])
 	}
 }
 
@@ -191,8 +131,8 @@ func TestResolveDestPathWithDot(t *testing.T) {
 		expSrc  string
 		expDest string
 	}{
-		{"::" + testDs, remoteSpec + "::.", localSpec + "::" + testDs, remoteSpec + "::" + testDs},
-		{remoteSpec + "::" + testDs, "::.", remoteSpec + "::" + testDs, localSpec + "::" + testDs},
+		{"::" + testDs, nbsSpec + "::.", localSpec + "::" + testDs, nbsSpec + "::" + testDs},
+		{nbsSpec + "::" + testDs, "::.", nbsSpec + "::" + testDs, localSpec + "::" + testDs},
 	}
 	for _, d := range data {
 		src := r.ResolvePathSpec(d.src)
@@ -200,5 +140,4 @@ func TestResolveDestPathWithDot(t *testing.T) {
 		assertPathSpecsEquiv(assert, d.expSrc, src)
 		assertPathSpecsEquiv(assert, d.expDest, dest)
 	}
-
 }

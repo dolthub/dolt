@@ -88,7 +88,7 @@ func (suite *RemoteToRemoteSuite) SetupTest() {
 }
 
 func makeRemoteDb(cs chunks.ChunkStore) Database {
-	return NewDatabase(newHTTPChunkStoreForTest(cs))
+	return NewDatabase(cs)
 }
 
 func (suite *PullSuite) TearDownTest() {

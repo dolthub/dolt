@@ -135,11 +135,11 @@ func (so *SpecOptions) AwsCredFileOrDefault() string {
 // its database instance so it therefore does not reflect new commits in
 // the db, by (legacy) design.
 type Spec struct {
-	// Protocol is one of "mem", "ldb", "http", or "https".
+	// Protocol is one of "mem", "aws", "gs", "nbs"
 	Protocol string
 
 	// DatabaseName is the name of the Spec's database, which is the string after
-	// "protocol:". http/https specs include their leading "//" characters.
+	// "protocol:". specs include their leading "//" characters.
 	DatabaseName string
 
 	// Options are the SpecOptions that the Spec was constructed with.
@@ -418,8 +418,6 @@ func (sp Spec) Close() error {
 
 func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 	switch sp.Protocol {
-	case "http", "https":
-		return datas.NewDatabase(datas.NewHTTPChunkStore(ctx, sp.Href(), sp.Options.Authorization))
 	case "aws":
 		return datas.NewDatabase(parseAWSSpec(ctx, sp.Href(), sp.Options))
 	case "gs":
@@ -470,7 +468,7 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	case "nbs":
 		protocol, name = parts[0], parts[1]
 
-	case "http", "https", "aws", "gs":
+	case "aws", "gs":
 		u, perr := url.Parse(spec)
 		if perr != nil {
 			err = perr

@@ -77,6 +77,11 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 	persistChunks(ctx, sinkDB.chunkStore())
 }
 
+func persistChunks(ctx context.Context, cs chunks.ChunkStore) {
+	for !cs.Commit(ctx, cs.Root(ctx), cs.Root(ctx)) {
+	}
+}
+
 // PullWithoutBatching effectively removes the batching of chunk retrieval done on each level of the tree.  This means
 // all chunks from one level of the tree will be retrieved from the underlying chunk store in one call, which pushes the
 // optimization problem down to the chunk store which can make smarter decisions.
