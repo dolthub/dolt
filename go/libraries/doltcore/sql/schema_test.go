@@ -3,6 +3,7 @@ package sql
 import (
 	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -20,7 +21,7 @@ const expectedSQL = "CREATE TABLE table_name (\n" +
 ");"
 
 func TestSchemaAsCreateStmt(t *testing.T) {
-	tSchema := createPeopleTestSchema()
+	tSchema := sqltestutil.createPeopleTestSchema()
 	str, _ := SchemaAsCreateStmt("table_name", tSchema)
 
 	assert.Equal(t, expectedSQL, str)
