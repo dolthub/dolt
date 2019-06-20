@@ -31,13 +31,16 @@ func TestWriteChunks(t *testing.T) {
 	}
 
 	name, data, err := WriteChunks(chunks)
-
 	if err != nil {
 		t.Error(err)
 	}
 
-	err = ioutil.WriteFile("/users/brian/write_chunks_test/"+name, data, os.ModePerm)
+	dir, err := ioutil.TempDir("", "write_chunks_test")
+	if err != nil {
+		t.Error(err)
+	}
 
+	err = ioutil.WriteFile(dir+name, data, os.ModePerm)
 	if err != nil {
 		t.Error(err)
 	}
