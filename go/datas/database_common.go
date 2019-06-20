@@ -23,8 +23,8 @@ type database struct {
 }
 
 var (
-	ErrOptimisticLockFailed = errors.New("Optimistic lock failed on database Root update")
-	ErrMergeNeeded          = errors.New("Dataset head is not ancestor of commit")
+	ErrOptimisticLockFailed = errors.New("optimistic lock failed on database Root update")
+	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 )
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks

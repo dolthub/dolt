@@ -6,7 +6,6 @@ package config
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -46,7 +45,7 @@ const (
 	authParam          = "authorization"
 )
 
-var NoConfig = errors.New(fmt.Sprintf("no %s found", NomsConfigFile))
+var ErrNoConfig = fmt.Errorf("no %s found", NomsConfigFile)
 
 // Find the closest directory containing .nomsconfig starting
 // in cwd and then searching up ancestor tree.
@@ -69,7 +68,7 @@ func FindNomsConfig() (*Config, error) {
 		nextDir := filepath.Dir(curDir)
 		if nextDir == curDir {
 			// stop at root
-			return nil, NoConfig
+			return nil, ErrNoConfig
 		}
 		curDir = nextDir
 	}

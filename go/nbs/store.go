@@ -538,8 +538,8 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 
 var (
 	errLastRootMismatch           = fmt.Errorf("last does not match nbs.Root()")
-	errOptimisticLockFailedRoot   = fmt.Errorf("Root moved")
-	errOptimisticLockFailedTables = fmt.Errorf("Tables changed")
+	errOptimisticLockFailedRoot   = fmt.Errorf("root moved")
+	errOptimisticLockFailedTables = fmt.Errorf("tables changed")
 )
 
 func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last hash.Hash) error {

@@ -14,12 +14,6 @@ import (
 	flag "github.com/juju/gnuflag"
 )
 
-const (
-	KB               = uint64(1 << 10)
-	MB               = uint64(1 << 20)
-	averageChunkSize = 4 * KB
-)
-
 var (
 	genSize    = flag.Uint64("gen", 1024, "MiB of data to generate and chunk")
 	chunkInput = flag.Bool("chunk", false, "Treat arg as data file to chunk")
@@ -53,6 +47,4 @@ func main() {
 
 	cm := gen.OpenOrBuildChunkMap(fileName+".chunks", fd)
 	defer cm.Close()
-
-	return
 }

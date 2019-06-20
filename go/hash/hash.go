@@ -95,7 +95,7 @@ func MaybeParse(s string) (Hash, bool) {
 func Parse(s string) Hash {
 	r, ok := MaybeParse(s)
 	if !ok {
-		d.PanicIfError(fmt.Errorf("Cound not parse Hash: %s", s))
+		d.PanicIfError(fmt.Errorf("cound not parse Hash: %s", s))
 	}
 	return r
 }

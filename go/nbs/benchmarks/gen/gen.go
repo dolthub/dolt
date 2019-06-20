@@ -26,10 +26,10 @@ const (
 func OpenOrGenerateDataFile(name string, totalData uint64) (data *os.File, err error) {
 	data, err = os.Open(name)
 	if os.IsNotExist(err) {
-		data, err = os.Create(name)
+		data, _ = os.Create(name)
 		fmt.Printf("Creating data file with %s\n", humanize.IBytes(totalData))
 		generateData(data, totalData)
-		_, err = data.Seek(0, os.SEEK_SET)
+		_, err = data.Seek(0, io.SeekStart)
 		d.Chk.NoError(err)
 		return data, nil
 	}
@@ -47,12 +47,12 @@ func OpenOrGenerateDataFile(name string, totalData uint64) (data *os.File, err e
 func OpenOrBuildChunkMap(name string, data *os.File) *os.File {
 	cm, err := os.Open(name)
 	if os.IsNotExist(err) {
-		cm, err = os.Create(name)
+		cm, _ = os.Create(name)
 		fmt.Printf("Chunking %s into chunk-map: %s ...", data.Name(), name)
 		cc := chunk(cm, data)
 		fmt.Println(cc, " chunks")
 
-		_, err = cm.Seek(0, os.SEEK_SET)
+		_, err = cm.Seek(0, io.SeekStart)
 		d.Chk.NoError(err)
 		return cm
 	}

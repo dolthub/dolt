@@ -3,6 +3,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"github.com/attic-labs/noms/go/d"
 
 	"github.com/attic-labs/noms/go/blobstore"
 )
@@ -59,6 +60,8 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 	}
 
 	ver, contents, err := manifestVersionAndContents(ctx, bsm.bs)
+
+	d.PanicIfError(err)
 
 	if contents.lock == lastLock {
 		buffer := bytes.NewBuffer(make([]byte, 64*1024)[:0])

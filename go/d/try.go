@@ -48,14 +48,14 @@ func PanicIfError(err error) {
 // If b is true, creates a default error, wraps it and panics.
 func PanicIfTrue(b bool) {
 	if b {
-		panic(Wrap(errors.New("Expected true")))
+		panic(Wrap(errors.New("expected true")))
 	}
 }
 
 // If b is false, creates a default error, wraps it and panics.
 func PanicIfFalse(b bool) {
 	if !b {
-		panic(Wrap(errors.New("Expected false")))
+		panic(Wrap(errors.New("expected false")))
 	}
 }
 

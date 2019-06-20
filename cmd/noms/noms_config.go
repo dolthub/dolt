@@ -30,7 +30,7 @@ func setupConfigFlags() *flag.FlagSet {
 
 func runConfig(ctx context.Context, args []string) int {
 	c, err := config.FindNomsConfig()
-	if err == config.NoConfig {
+	if err == config.ErrNoConfig {
 		fmt.Fprintf(os.Stdout, "no config active\n")
 	} else {
 		d.CheckError(err)

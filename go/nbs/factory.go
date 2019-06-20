@@ -104,7 +104,7 @@ func checkDir(dir string) error {
 		return err
 	}
 	if !stat.IsDir() {
-		return fmt.Errorf("Path is not a directory: %s", dir)
+		return fmt.Errorf("path is not a directory: %s", dir)
 	}
 	return nil
 }

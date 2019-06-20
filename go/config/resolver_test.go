@@ -15,9 +15,8 @@ import (
 )
 
 const (
-	localSpec  = nbsSpec
-	testDs     = "testds"
-	testObject = "#pckdvpvr9br1fie6c3pjudrlthe7na18"
+	localSpec = nbsSpec
+	testDs    = "testds"
 )
 
 type testData struct {
@@ -36,23 +35,12 @@ var (
 		AWSConfig{},
 	}
 
-	testConfigWithOptions = &Config{
-		"",
-		map[string]DbConfig{},
-		AWSConfig{},
-	}
-
 	dbTestsNoAliases = []testData{
 		{localSpec, localSpec},
 	}
 
 	dbTestsWithAliases = []testData{
 		{"", localSpec},
-	}
-
-	pathTestsWithAliases = []testData{
-		{spec.Separator + testDs, localSpec + "::" + testDs},
-		{spec.Separator + testObject, localSpec + "::" + testObject},
 	}
 )
 

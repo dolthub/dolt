@@ -120,7 +120,6 @@ func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) {
 	for _, hrec := range mt.order {
 		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a]}
 	}
-	return
 }
 
 func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []byte, count uint32) {
