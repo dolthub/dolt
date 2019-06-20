@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -35,8 +34,6 @@ const (
 	DefaultAWSRegion       = "us-west-2"
 	DefaultAWSCredsProfile = "default"
 )
-
-var datasetRe = regexp.MustCompile("^" + datas.DatasetRe.String() + "$")
 
 type ProtocolImpl interface {
 	NewChunkStore(sp Spec) (chunks.ChunkStore, error)
@@ -281,7 +278,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	default:
 		impl, ok := ExternalProtocols[sp.Protocol]
 		if !ok {
-			d.PanicIfError(fmt.Errorf("Unknown protocol: %s", sp.Protocol))
+			d.PanicIfError(fmt.Errorf("unknown protocol: %s", sp.Protocol))
 		}
 		r, err := impl.NewChunkStore(sp)
 		d.PanicIfError(err)
@@ -431,7 +428,7 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 	default:
 		impl, ok := ExternalProtocols[sp.Protocol]
 		if !ok {
-			d.PanicIfError(fmt.Errorf("Unknown protocol: %s", sp.Protocol))
+			d.PanicIfError(fmt.Errorf("unknown protocol: %s", sp.Protocol))
 		}
 		r, err := impl.NewDatabase(sp)
 		d.PanicIfError(err)
@@ -441,7 +438,7 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 
 func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 	if len(spec) == 0 {
-		err = fmt.Errorf("Empty spec")
+		err = fmt.Errorf("empty spec")
 		return
 	}
 
@@ -481,10 +478,10 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 		}
 
 	case "mem":
-		err = fmt.Errorf(`In-memory database must be specified as "mem", not "mem:"`)
+		err = fmt.Errorf(`in-memory database must be specified as "mem", not "mem:"`)
 
 	default:
-		err = fmt.Errorf("Invalid database protocol %s in %s", protocol, spec)
+		err = fmt.Errorf("invalid database protocol %s in %s", protocol, spec)
 	}
 	return
 }
@@ -492,7 +489,7 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 func splitDatabaseSpec(spec string) (string, string, error) {
 	lastIdx := strings.LastIndex(spec, Separator)
 	if lastIdx == -1 {
-		return "", "", fmt.Errorf("Missing %s after database in %s", Separator, spec)
+		return "", "", fmt.Errorf("missing %s after database in %s", Separator, spec)
 	}
 
 	return spec[:lastIdx], spec[lastIdx+len(Separator):], nil

@@ -94,7 +94,7 @@ func TestCreateCommitMetaStructBadDate(t *testing.T) {
 
 		meta, err := CreateCommitMetaStruct(context.Background(), nil, argDateString, "", nil, nil)
 		assert.Error(err)
-		assert.True(strings.HasPrefix(err.Error(), "Unable to parse date: "))
+		assert.True(strings.HasPrefix(err.Error(), "unable to parse date: "))
 		assert.True(isEmptyStruct(meta))
 	}
 	testBadDateMultipleWays := func(dateString string) {
@@ -117,7 +117,7 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 
 		meta, err := CreateCommitMetaStruct(context.Background(), nil, "", "", nil, nil)
 		assert.Error(err)
-		assert.True(strings.HasPrefix(err.Error(), "Unable to parse meta value: "))
+		assert.True(strings.HasPrefix(err.Error(), "unable to parse meta value: "))
 		assert.True(isEmptyStruct(meta))
 	}
 
@@ -129,7 +129,7 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 
 		meta, err := CreateCommitMetaStruct(context.Background(), nil, "", "", nil, nil)
 		assert.Error(err)
-		assert.True(strings.HasPrefix(err.Error(), "Invalid meta key: "))
+		assert.True(strings.HasPrefix(err.Error(), "invalid meta key: "))
 		assert.True(isEmptyStruct(meta))
 
 		resetCommitMetaFlags()
@@ -137,7 +137,7 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 		metaValues := map[string]string{k: v}
 		meta, err = CreateCommitMetaStruct(context.Background(), nil, "", "", metaValues, nil)
 		assert.Error(err)
-		assert.True(strings.HasPrefix(err.Error(), "Invalid meta key: "))
+		assert.True(strings.HasPrefix(err.Error(), "invalid meta key: "))
 		assert.True(isEmptyStruct(meta))
 	}
 

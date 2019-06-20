@@ -82,7 +82,6 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(nil, "#"+types.String("baz").Hash().String()+"[0]")
 }
 
-
 func TestReadAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
@@ -104,11 +103,11 @@ func TestReadAbsolutePaths(t *testing.T) {
 
 	vals, err = ReadAbsolutePaths(context.Background(), db, "!!#")
 	assert.Nil(vals)
-	assert.Equal("Invalid input path '!!#'", err.Error())
+	assert.Equal("invalid input path '!!#'", err.Error())
 
 	vals, err = ReadAbsolutePaths(context.Background(), db, "invalid.monkey")
 	assert.Nil(vals)
-	assert.Equal("Input path 'invalid.monkey' does not exist in database", err.Error())
+	assert.Equal("input path 'invalid.monkey' does not exist in database", err.Error())
 }
 
 func TestAbsolutePathParseErrors(t *testing.T) {
@@ -121,11 +120,11 @@ func TestAbsolutePathParseErrors(t *testing.T) {
 		assert.Equal(errMsg, err.Error())
 	}
 
-	test("", "Empty path")
-	test(".foo", "Invalid dataset name: .foo")
-	test(".foo.bar.baz", "Invalid dataset name: .foo.bar.baz")
-	test("#", "Invalid hash: ")
-	test("#abc", "Invalid hash: abc")
+	test("", "empty path")
+	test(".foo", "invalid dataset name: .foo")
+	test(".foo.bar.baz", "invalid dataset name: .foo.bar.baz")
+	test("#", "invalid hash: ")
+	test("#abc", "invalid hash: abc")
 	invHash := strings.Repeat("z", hash.StringLen)
-	test("#"+invHash, "Invalid hash: "+invHash)
+	test("#"+invHash, "invalid hash: "+invHash)
 }

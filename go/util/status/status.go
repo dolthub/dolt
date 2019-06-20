@@ -27,7 +27,7 @@ func Clear() {
 }
 
 func WillPrint() bool {
-	return time.Now().Sub(lastTime) >= Rate
+	return time.Since(lastTime) >= Rate
 }
 
 func Printf(format string, args ...interface{}) {
