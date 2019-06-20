@@ -1,32 +1,23 @@
-package commands
+package sqle
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
 	"github.com/liquidata-inc/ishell"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	dsql "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
-	"github.com/xwb1989/sqlparser"
 	"path/filepath"
 	"strings"
 )
@@ -62,8 +53,10 @@ var sqlSynopsis = []string{
 	"-q <query>",
 }
 
+// TODO: add a port flag and other things needed to support the serve command.
 const (
 	queryFlag = "query"
+	serveFlag = "serve"
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -72,22 +65,27 @@ const (
 func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
+	ap.SupportsFlag(serveFlag, "s", "Start a SQL server")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
 
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
 
-	root, verr := GetWorkingWithVErr(dEnv)
+	root, verr := commands.GetWorkingWithVErr(dEnv)
 	if verr != nil {
-		return HandleVErrAndExitCode(verr, usage)
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	if _, ok := apr.GetValue(serveFlag); ok {
+		return serve(dEnv, root)
 	}
 
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
 		if newRoot, err := processQuery(query, dEnv, root); err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		} else if newRoot != nil {
-			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, newRoot), usage)
+			return commands.HandleVErrAndExitCode(commands.UpdateWorkingWithVErr(dEnv, newRoot), usage)
 		} else {
 			return 0
 		}
@@ -98,9 +96,15 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	// If the SQL session wrote a new root value, update the working set with it
 	if root != nil {
-		return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, root), usage)
+		return commands.HandleVErrAndExitCode(commands.UpdateWorkingWithVErr(dEnv, root), usage)
 	}
 
+	return 0
+}
+
+// TODO: implement me
+func serve(doltEnv *env.DoltEnv, value *doltdb.RootValue) int {
+	cli.Println("Started dolt SQL server (not really)")
 	return 0
 }
 
@@ -279,187 +283,9 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 
 	var r sql.Row
 	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
+		// TODO: make this print pretty tables like original sql commands
 		cli.Println(r)
 	}
+
 	return nil, err
-
-	sqlStatement, err := sqlparser.Parse(query)
-	if err != nil {
-		return nil, errFmt("Error parsing SQL: %v.", err.Error())
-	}
-
-	switch s := sqlStatement.(type) {
-	case *sqlparser.Show:
-		return nil, sqlShow(root, s)
-	case *sqlparser.Select:
-		return nil, sqlSelect(root, s)
-	case *sqlparser.Insert:
-		return sqlInsert(dEnv, root, s, query)
-	case *sqlparser.Update:
-		return sqlUpdate(dEnv, root, s, query)
-	case *sqlparser.Delete:
-		return sqlDelete(dEnv, root, s, query)
-	case *sqlparser.DDL:
-		_, err := sqlparser.ParseStrictDDL(query)
-		if err != nil {
-			return nil, errFmt("Error parsing DDL: %v.", err.Error())
-		}
-		return sqlDDL(dEnv, root, s, query)
-	default:
-		return nil, errFmt("Unsupported SQL statement: '%v'.", query)
-	}
-}
-
-// Executes a SQL show statement and prints the result to the CLI.
-func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
-	p, sch, err := dsql.BuildShowPipeline(context.TODO(), root, show)
-	if err != nil {
-		return err
-	}
-
-	return runPrintingPipeline(p, sch)
-}
-
-// Executes a SQL select statement and prints the result to the CLI.
-func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
-
-	p, statement, err := dsql.BuildSelectQueryPipeline(context.TODO(), root, s)
-	if err != nil {
-		return err
-	}
-
-	// Now that we have the output schema, we add three additional steps to the pipeline:
-	// 1) Coerce all the values in each row into strings
-	// 2) Convert null values to printed values
-	// 3) Run them through a fixed width transformer to make them print pretty
-	resultSchema := statement.ResultSetSchema
-	untypedSch, untypingTransform := newUntypingTransformer(resultSchema)
-	p.AddStage(untypingTransform)
-
-	return runPrintingPipeline(p, untypedSch)
-}
-
-// Adds some print-handling stages to the pipeline given and runs it, returning any error.
-// Adds null-printing and fixed-width transformers. The schema given is assumed to be untyped (string-typed).
-func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
-	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
-	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
-
-	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
-
-	// Redirect output to the CLI
-	cliWr := iohelp.NopWrCloser(cli.CliOut)
-
-	wr := tabular.NewTextTableWriter(cliWr, untypedSch)
-	p.RunAfter(func() { wr.Close(context.TODO()) })
-
-	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
-	p.SetOutput(cliSink)
-
-	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, untypedSch)))
-		return true
-	})
-
-	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(untypedSch)))
-
-	p.Start()
-	if err := p.Wait(); err != nil {
-		return errFmt("error processing results: %v", err)
-	}
-
-	return nil
-}
-
-// Executes a SQL insert statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt, query)
-	if err != nil {
-		return nil, errFmt("Error inserting rows: %v", err.Error())
-	}
-
-	cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
-	if result.NumRowsUpdated > 0 {
-		cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-	}
-	if result.NumErrorsIgnored > 0 {
-		cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
-	}
-
-	return result.Root, nil
-}
-
-// Executes a SQL update statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteUpdate(context.Background(), dEnv.DoltDB, root, update, query)
-	if err != nil {
-		return nil, errFmt("Error during update: %v", err.Error())
-	}
-
-	cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-	if result.NumRowsUnchanged > 0 {
-		cli.Println(fmt.Sprintf("Rows matched but unchanged: %v", result.NumRowsUnchanged))
-	}
-
-	return result.Root, nil
-}
-
-// Executes a SQL delete statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteDelete(context.Background(), dEnv.DoltDB, root, update, query)
-	if err != nil {
-		return nil, errFmt("Error during update: %v", err.Error())
-	}
-
-	cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
-
-	return result.Root, nil
-}
-
-// Executes a SQL DDL statement (create, update, etc.). Returns the new root value to be written as appropriate.
-func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
-	switch ddl.Action {
-	case sqlparser.CreateStr:
-		newRoot, _, err := dsql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
-		if err != nil {
-			return nil, errFmt("Error creating table: %v", err)
-		}
-		return newRoot, nil
-	case sqlparser.AlterStr, sqlparser.RenameStr:
-		newRoot, err := dsql.ExecuteAlter(context.Background(), dEnv.DoltDB, root, ddl, query)
-		if err != nil {
-			return nil, errFmt("Error altering table: %v", err)
-		}
-		return newRoot, nil
-	case sqlparser.DropStr:
-		newRoot, err := dsql.ExecuteDrop(context.Background(), dEnv.DoltDB, root, ddl, query)
-		if err != nil {
-			return nil, errFmt("Error dropping table: %v", err)
-		}
-		return newRoot, nil
-	case sqlparser.TruncateStr:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
-	default:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
-	}
-}
-
-func errFmt(fmtMsg string, args ...interface{}) error {
-	return errors.New(fmt.Sprintf(fmtMsg, args...))
-}
-
-// Returns a new untyping transformer for the schema given.
-// TODO: move this somewhere more appropriate. Import cycles currently make this difficult.
-func newUntypingTransformer(sch schema.Schema) (schema.Schema, pipeline.NamedTransform) {
-	untypedSch := untyped.UntypeUnkeySchema(sch)
-	mapping, err := rowconv.TagMapping(sch, untypedSch)
-
-	if err != nil {
-		panic(err)
-	}
-
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	return untypedSch, pipeline.NewNamedTransform("untype", rowconv.GetRowConvTransformFunc(rConv))
 }
