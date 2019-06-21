@@ -271,7 +271,7 @@ func prepend(s string, ss []string) []string {
 
 // Processes a single query and returns the new root value of the DB, or an error encountered.
 func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-	db := dsqle.NewDatabase("dolt", dEnv)
+	db := dsqle.NewDatabase("dolt", root)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	ctx := sql.NewEmptyContext()
