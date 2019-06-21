@@ -13,11 +13,11 @@ import (
 	"github.com/attic-labs/kingpin"
 
 	"github.com/attic-labs/noms/cmd/util"
-	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/diff"
-	"github.com/attic-labs/noms/go/spec"
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/diff"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 func nomsSet(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {

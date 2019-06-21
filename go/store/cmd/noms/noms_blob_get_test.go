@@ -12,9 +12,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/attic-labs/noms/go/spec"
-	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/util/clienttest"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/util/clienttest"
 	"github.com/stretchr/testify/suite"
 )
 

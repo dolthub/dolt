@@ -10,9 +10,9 @@ import (
 	"os"
 
 	"github.com/attic-labs/noms/cmd/util"
-	"github.com/attic-labs/noms/go/config"
-	"github.com/attic-labs/noms/go/d"
 	flag "github.com/juju/gnuflag"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/config"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
 )
 
 var nomsConfig = &util.Command{

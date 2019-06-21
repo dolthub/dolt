@@ -12,7 +12,7 @@ import (
 	"github.com/attic-labs/kingpin"
 
 	"github.com/attic-labs/noms/cmd/util"
-	"github.com/attic-labs/noms/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
 )
 
 func nomsBlob(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {

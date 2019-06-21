@@ -1,9 +1,9 @@
 package untyped
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

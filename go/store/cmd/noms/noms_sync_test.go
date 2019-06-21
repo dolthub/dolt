@@ -9,11 +9,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/nbs"
-	"github.com/attic-labs/noms/go/spec"
-	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/util/clienttest"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/util/clienttest"
 	"github.com/stretchr/testify/suite"
 )
 

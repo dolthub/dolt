@@ -2,13 +2,13 @@ package dtestutils
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
@@ -83,4 +83,3 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
 	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
 }
-

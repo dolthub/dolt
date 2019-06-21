@@ -2,9 +2,9 @@ package doltdb
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 const (

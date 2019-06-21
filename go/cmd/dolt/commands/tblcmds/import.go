@@ -3,7 +3,6 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -14,6 +13,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 const (
@@ -57,8 +57,7 @@ and dest_field_name is the name of a field in the table being imported to.
 `
 
 var importShortDesc = `Imports data into a dolt table`
-var importLongDesc =
-`If <b>--create-table | -c</b> is given the operation will create <table> and import the contents of file into it.  If a
+var importLongDesc = `If <b>--create-table | -c</b> is given the operation will create <table> and import the contents of file into it.  If a
 table already exists at this location then the operation will fail, unless the <b>--force | -f</b> flag is provided. The
 force flag forces the existing table to be overwritten.
 
@@ -68,7 +67,7 @@ being imported does not support defining a primary key, then the <b>--pk</b> par
 field that should be used as the primary key.
 
 ` + schemaFileHelp +
-`
+	`
 If <b>--update-table | -u</b> is given the operation will update <table> with the contents of file. The table's existing 
 schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -79,7 +78,7 @@ A mapping file can be used to map fields between the file being imported and the
 be used when creating a new table, or updating an existing table.
 
 ` + mappingFileHelp +
-`
+	`
 In both create and update scenarios the file's extension is used to infer the type of the file.  If a file does not 
 have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of 
 the file in one of the supported formats (csv, psv, nbf, json, xlsx)`

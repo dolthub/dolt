@@ -2,12 +2,12 @@ package merge
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"

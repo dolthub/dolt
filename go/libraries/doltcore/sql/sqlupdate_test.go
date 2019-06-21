@@ -2,11 +2,11 @@ package sql
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -126,9 +126,9 @@ func TestExecuteUpdate(t *testing.T) {
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
 		{
-			name: "update reverse rating",
+			name:  "update reverse rating",
 			query: `update people set rating = -rating`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				mutateRow(homer, ratingTag, -8.5),
 				mutateRow(marge, ratingTag, -8.0),
 				mutateRow(bart, ratingTag, -9.0),

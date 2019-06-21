@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -12,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"strings"
 
 	"context"
@@ -233,7 +233,6 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTable)
 	return UpdateWorkingWithVErr(dEnv, root)
 }
-
 
 func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 3 {

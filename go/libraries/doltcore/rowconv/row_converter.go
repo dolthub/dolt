@@ -2,12 +2,12 @@ package rowconv
 
 import (
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 var IdentityConverter = &RowConverter{nil, true, nil}

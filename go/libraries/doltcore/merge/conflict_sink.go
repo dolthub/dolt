@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -12,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"io"
 )
 
@@ -42,7 +42,7 @@ type ConflictSink struct {
 }
 
 const (
-	opColTag = schema.ReservedTagMin
+	opColTag     = schema.ReservedTagMin
 	sourceColTag = schema.ReservedTagMin + 1
 )
 
@@ -121,4 +121,3 @@ func (cs *ConflictSink) Close() error {
 		return errors.New("already closed")
 	}
 }
-

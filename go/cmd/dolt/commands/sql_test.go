@@ -2,13 +2,13 @@ package commands
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -150,8 +150,8 @@ func TestShowTables(t *testing.T) {
 		query       string
 		expectedRes int
 	}{
-		{"show ", 1},                 // bad syntax
-		{"show table", 1},        // bad syntax
+		{"show ", 1},      // bad syntax
+		{"show table", 1}, // bad syntax
 		{"show tables", 0},
 		{"show create table people", 0},
 		{"show create table dne", 1},
@@ -169,7 +169,6 @@ func TestShowTables(t *testing.T) {
 	}
 }
 
-
 // Tests of the alter table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
 // create table SQL command are in the sql package.
 func TestAlterTable(t *testing.T) {
@@ -177,9 +176,9 @@ func TestAlterTable(t *testing.T) {
 		query       string
 		expectedRes int
 	}{
-		{"alter table", 1},                 // bad syntax
-		{"alter table people rename", 1},        // bad syntax
-		{"alter table dne rename id to newId", 1},        // unknown column
+		{"alter table", 1},                           // bad syntax
+		{"alter table people rename", 1},             // bad syntax
+		{"alter table dne rename id to newId", 1},    // unknown column
 		{"alter table people rename id to newId", 0}, // no primary key
 		{"alter table people rename to newPeople", 0},
 		{"rename table people to newPeople", 0},

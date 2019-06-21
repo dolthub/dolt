@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 const (

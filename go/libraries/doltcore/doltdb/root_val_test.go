@@ -2,7 +2,7 @@ package doltdb
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"testing"
 )
 

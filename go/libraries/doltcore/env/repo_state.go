@@ -2,10 +2,10 @@ package env
 
 import (
 	"encoding/json"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
 )
 
 type BranchConfig struct {

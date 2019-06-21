@@ -16,9 +16,9 @@ import (
 	"github.com/attic-labs/kingpin"
 
 	"github.com/attic-labs/noms/cmd/util"
-	"github.com/attic-labs/noms/go/util/exit"
-	"github.com/attic-labs/noms/go/util/profile"
-	"github.com/attic-labs/noms/go/util/verbose"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/util/exit"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/util/profile"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/util/verbose"
 
 	flag "github.com/juju/gnuflag"
 )

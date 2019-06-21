@@ -2,10 +2,10 @@ package sql
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"strconv"
@@ -376,8 +376,8 @@ func TestExecuteSelect(t *testing.T) {
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name:        "binary expression in select",
-			query:       "select age + 1 as a from people where is_married order by a",
+			name:           "binary expression in select",
+			query:          "select age + 1 as a from people where is_married order by a",
 			expectedRows:   rs(newResultSetRow(types.Int(39)), newResultSetRow(types.Int(41))),
 			expectedSchema: newResultSetSchema("a", types.IntKind),
 		},
@@ -399,14 +399,14 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: newResultSetSchema("first", types.StringKind, "not_marge", types.BoolKind),
 		},
 		{
-			name:        "unary expression in select",
-			query:       "select -age as age from people where is_married order by age",
+			name:           "unary expression in select",
+			query:          "select -age as age from people where is_married order by age",
 			expectedRows:   rs(newResultSetRow(types.Int(-40)), newResultSetRow(types.Int(-38))),
 			expectedSchema: newResultSetSchema("age", types.IntKind),
 		},
 		{
-			name:        "unary expression in select, alias named after column",
-			query:       "select -age as age from people where is_married order by people.age",
+			name:           "unary expression in select, alias named after column",
+			query:          "select -age as age from people where is_married order by people.age",
 			expectedRows:   rs(newResultSetRow(types.Int(-38)), newResultSetRow(types.Int(-40))),
 			expectedSchema: newResultSetSchema("age", types.IntKind),
 		},
@@ -507,9 +507,9 @@ func TestExecuteSelect(t *testing.T) {
 			expectedSchema: newResultSetSchema("f", types.StringKind, "f", types.StringKind),
 		},
 		{
-			name:           "column selected more than once",
-			query:          "select first, first from people where age >= 40 order by id",
-			expectedRows:   rs(
+			name:  "column selected more than once",
+			query: "select first, first from people where age >= 40 order by id",
+			expectedRows: rs(
 				newResultSetRow(types.String("Homer"), types.String("Homer")),
 				newResultSetRow(types.String("Moe"), types.String("Moe")),
 				newResultSetRow(types.String("Barney"), types.String("Barney")),
@@ -622,9 +622,9 @@ func TestExecuteSelect(t *testing.T) {
 			expectedErr: `Unknown column: 'dne'`,
 		},
 		{
-			name:         "unsupported comparison",
-			query:        "select * from people where function(first)",
-			expectedErr:  "not supported",
+			name:        "unsupported comparison",
+			query:       "select * from people where function(first)",
+			expectedErr: "not supported",
 		},
 		{
 			name:        "type mismatch in where clause",
@@ -733,13 +733,13 @@ func TestJoins(t *testing.T) {
 			expectedSchema: compressSchemas(peopleTestSchema, episodesTestSchema),
 		},
 		{
-			name:  "ambiguous column in select",
-			query: `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
+			name:        "ambiguous column in select",
+			query:       `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
 			expectedErr: "Ambiguous column: 'id'",
 		},
 		{
-			name:  "ambiguous column in where",
-			query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
+			name:        "ambiguous column in where",
+			query:       `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
 			expectedErr: "Ambiguous column: 'id'",
 		},
 		{
@@ -830,7 +830,7 @@ func TestJoins(t *testing.T) {
 			expectedSchema: newResultSetSchema("name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
 		},
 		{
-			name:  "Natural join with join clause, select subset of columns, order by clause",
+			name: "Natural join with join clause, select subset of columns, order by clause",
 			query: `select e.id, p.id, e.name, p.first, p.last from people p 
 							join episodes e on e.id = p.id
 							order by e.name`,
@@ -844,7 +844,7 @@ func TestJoins(t *testing.T) {
 				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
 		},
 		{
-			name:  "Natural join with join clause, select subset of columns, order by clause on non-selected column",
+			name: "Natural join with join clause, select subset of columns, order by clause on non-selected column",
 			query: `select e.id, p.id, e.name, p.first, p.last from people p 
 							join episodes e on e.id = p.id
 							order by age`,
@@ -938,58 +938,58 @@ func TestCaseSensitivity(t *testing.T) {
 		expectedErr     string
 	}{
 		{
-			name:        "table name has mixed case, select lower case",
-			tableName:   "MiXeDcAsE",
-			tableSchema: newSchema("test", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select test from mixedcase",
+			name:           "table name has mixed case, select lower case",
+			tableName:      "MiXeDcAsE",
+			tableSchema:    newSchema("test", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select test from mixedcase",
 			expectedSchema: newResultSetSchema("test", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "table name has mixed case, select upper case",
-			tableName:   "MiXeDcAsE",
-			tableSchema: newSchema("test", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select test from MIXEDCASE",
+			name:           "table name has mixed case, select upper case",
+			tableName:      "MiXeDcAsE",
+			tableSchema:    newSchema("test", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select test from MIXEDCASE",
 			expectedSchema: newResultSetSchema("test", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "qualified select *",
-			tableName:   "MiXeDcAsE",
-			tableSchema: newSchema("test", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select mixedcAse.* from MIXEDCASE",
+			name:           "qualified select *",
+			tableName:      "MiXeDcAsE",
+			tableSchema:    newSchema("test", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select mixedcAse.* from MIXEDCASE",
 			expectedSchema: newResultSetSchema("test", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "qualified select column",
-			tableName:   "MiXeDcAsE",
-			tableSchema: newSchema("test", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select mixedcAse.TeSt from MIXEDCASE",
+			name:           "qualified select column",
+			tableName:      "MiXeDcAsE",
+			tableSchema:    newSchema("test", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select mixedcAse.TeSt from MIXEDCASE",
 			expectedSchema: newResultSetSchema("TeSt", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "table alias select *",
-			tableName:   "MiXeDcAsE",
-			tableSchema: newSchema("test", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select Mc.* from MIXEDCASE as mc",
+			name:           "table alias select *",
+			tableName:      "MiXeDcAsE",
+			tableSchema:    newSchema("test", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select Mc.* from MIXEDCASE as mc",
 			expectedSchema: newResultSetSchema("test", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "table alias select column",
-			tableName:   "MiXeDcAsE",
-			tableSchema: newSchema("test", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select mC.TeSt from MIXEDCASE as MC",
+			name:           "table alias select column",
+			tableName:      "MiXeDcAsE",
+			tableSchema:    newSchema("test", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select mC.TeSt from MIXEDCASE as MC",
 			expectedSchema: newResultSetSchema("TeSt", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
 			name:        "multiple tables with the same case-insensitive name, exact match",
@@ -999,10 +999,10 @@ func TestCaseSensitivity(t *testing.T) {
 				dtestutils.CreateTestTable(t, dEnv, "TABLENAME", newSchema("test", types.StringKind))
 				dtestutils.CreateTestTable(t, dEnv, "tablename", newSchema("test", types.StringKind))
 			},
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select test from tableName",
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select test from tableName",
 			expectedSchema: newResultSetSchema("test", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
 			name:        "multiple tables with the same case-insensitive name, no exact match",
@@ -1038,49 +1038,49 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedErr: "Non-unique table name / alias: 'bad'",
 		},
 		{
-			name:        "column name has mixed case, select lower case",
-			tableName:   "test",
-			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select mixedcase from test",
+			name:           "column name has mixed case, select lower case",
+			tableName:      "test",
+			tableSchema:    newSchema("MiXeDcAsE", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select mixedcase from test",
 			expectedSchema: newResultSetSchema("mixedcase", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "column name has mixed case, select upper case",
-			tableName:   "test",
-			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select MIXEDCASE from test",
+			name:           "column name has mixed case, select upper case",
+			tableName:      "test",
+			tableSchema:    newSchema("MiXeDcAsE", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select MIXEDCASE from test",
 			expectedSchema: newResultSetSchema("MIXEDCASE", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "select uses incorrect case",
-			tableName:   "test",
-			tableSchema: newSchema("MiXeDcAsE", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select mixedcase from test",
+			name:           "select uses incorrect case",
+			tableName:      "test",
+			tableSchema:    newSchema("MiXeDcAsE", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select mixedcase from test",
 			expectedSchema: newResultSetSchema("mixedcase", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "select with multiple matching columns, exact match",
-			tableName:   "test",
-			tableSchema: newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			initialRows: rs(newRow(types.String("1"), types.String("2"))),
-			query:       "select mixedcase from test",
+			name:           "select with multiple matching columns, exact match",
+			tableName:      "test",
+			tableSchema:    newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"), types.String("2"))),
+			query:          "select mixedcase from test",
 			expectedSchema: newResultSetSchema("mixedcase", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("2"))),
+			expectedRows:   rs(newResultSetRow(types.String("2"))),
 		},
 		{
-			name:        "select with multiple matching columns, exact case #2",
-			tableName:   "test",
-			tableSchema: newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			initialRows: rs(newRow(types.String("1"), types.String("2"))),
-			query:       "select MiXeDcAsE from test",
+			name:           "select with multiple matching columns, exact case #2",
+			tableName:      "test",
+			tableSchema:    newSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
+			initialRows:    rs(newRow(types.String("1"), types.String("2"))),
+			query:          "select MiXeDcAsE from test",
 			expectedSchema: newResultSetSchema("MiXeDcAsE", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
 			name:        "select with multiple matching columns, no exact match",
@@ -1101,8 +1101,8 @@ func TestCaseSensitivity(t *testing.T) {
 		// TODO: this could be handled better (not change the case of the result set schema), but the parser will silently
 		//  lower-case any column name expression that is a reserved word. Changing that is harder.
 		{
-			name:        "column is reserved word, select not backticked",
-			tableName:   "test",
+			name:      "column is reserved word, select not backticked",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -1111,13 +1111,13 @@ func TestCaseSensitivity(t *testing.T) {
 			initialRows: rs(
 				newRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")),
 			),
-			query:       "select Timestamp from test",
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			query:          "select Timestamp from test",
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 			expectedSchema: newResultSetSchema("timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, qualified with table alias",
-			tableName:   "test",
+			name:      "column is reserved word, qualified with table alias",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -1126,23 +1126,23 @@ func TestCaseSensitivity(t *testing.T) {
 			initialRows: rs(
 				newRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")),
 			),
-			query:       "select t.Timestamp from test as t",
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			query:          "select t.Timestamp from test as t",
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 			expectedSchema: newResultSetSchema("timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, select not backticked #2",
-			tableName:   "test",
+			name:      "column is reserved word, select not backticked #2",
+			tableName: "test",
 			tableSchema: newSchema(
 				"YeAr", types.StringKind),
-			initialRows: rs(newRow(types.String("1"))),
-			query:       "select Year from test",
+			initialRows:    rs(newRow(types.String("1"))),
+			query:          "select Year from test",
 			expectedSchema: newResultSetSchema("year", types.StringKind),
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "column is reserved word, select backticked",
-			tableName:   "test",
+			name:      "column is reserved word, select backticked",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -1151,13 +1151,13 @@ func TestCaseSensitivity(t *testing.T) {
 			initialRows: rs(
 				newRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")),
 			),
-			query:       "select `Timestamp` from test",
-			expectedRows: rs(newResultSetRow(types.String("1"))),
+			query:          "select `Timestamp` from test",
+			expectedRows:   rs(newResultSetRow(types.String("1"))),
 			expectedSchema: newResultSetSchema("Timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, select backticked #2",
-			tableName:   "test",
+			name:      "column is reserved word, select backticked #2",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Year", types.StringKind,
 				"and", types.StringKind,
@@ -1241,11 +1241,11 @@ func newRow(colVals ...types.Value) row.Row {
 // Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
 // Uses the first column as the primary key.
 func newSchema(colNamesAndTypes ...interface{}) schema.Schema {
-	if len(colNamesAndTypes) % 2 != 0 {
+	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to newResultSetSchema")
 	}
 
-	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
@@ -1269,7 +1269,7 @@ func newSchema(colNamesAndTypes ...interface{}) schema.Schema {
 // Returns the logical concatenation of the schemas and rows given, rewriting all tag numbers to begin at zero. The row
 // returned will have a new schema identical to the result of compressSchema.
 func concatRows(schemasAndRows ...interface{}) row.Row {
-	if len(schemasAndRows) % 2 != 0 {
+	if len(schemasAndRows)%2 != 0 {
 		panic("Non-even number of inputs passed to concatRows")
 	}
 
@@ -1321,7 +1321,7 @@ func compressRow(sch schema.Schema, r row.Row) row.Row {
 }
 
 // Compresses each of the rows given ala compressRow
-func compressRows(sch schema.Schema, rs ...row.Row, ) []row.Row {
+func compressRows(sch schema.Schema, rs ...row.Row) []row.Row {
 	compressed := make([]row.Row, len(rs))
 	for i := range rs {
 		compressed[i] = compressRow(sch, rs[i])
@@ -1392,11 +1392,11 @@ func compressSchemas(schs ...schema.Schema) schema.Schema {
 // strings, types are NomsKinds.
 func newResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
 
-	if len(colNamesAndTypes) % 2 != 0 {
+	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to newResultSetSchema")
 	}
 
-	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
@@ -1424,10 +1424,10 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			expectedSchema:  compressSchema(peopleTestSchema),
 		},
 		{
-			name:  "Test select columns",
-			query: "select age, id from people",
+			name:            "Test select columns",
+			query:           "select age, id from people",
 			expectedNumRows: len([]row.Row{homer, marge, bart, lisa, moe, barney}),
-			expectedSchema: compressSchema(peopleTestSchema, "age", "id"),
+			expectedSchema:  compressSchema(peopleTestSchema, "age", "id"),
 		},
 	}
 	for _, tt := range tests {

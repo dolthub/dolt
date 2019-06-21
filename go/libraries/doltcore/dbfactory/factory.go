@@ -3,8 +3,8 @@ package dbfactory
 import (
 	"context"
 	"fmt"
-	"github.com/attic-labs/noms/go/datas"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
 	"net/url"
 	"strings"
 )

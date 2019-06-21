@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/hash"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
 	"io"
 	"io/ioutil"
 	"net/http"

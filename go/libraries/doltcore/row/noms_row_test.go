@@ -3,8 +3,8 @@ package row
 import (
 	"context"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
@@ -108,8 +108,8 @@ func TestFromNoms(t *testing.T) {
 		vals := types.NewTuple()
 
 		expectedRow := New(sch, TaggedValues{
-			fnColTag:   fnVal,
-			lnColTag:   lnVal,
+			fnColTag: fnVal,
+			lnColTag: lnVal,
 		})
 		r := FromNoms(sch, keys, vals)
 		assert.Equal(t, expectedRow, r)

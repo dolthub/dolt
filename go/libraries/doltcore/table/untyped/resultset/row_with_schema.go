@@ -1,9 +1,9 @@
 package resultset
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 // For most analysis, rows can be considered independent of their schema (schemas just provide type / tag number

@@ -2,10 +2,10 @@ package sqlexport
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
@@ -17,6 +17,7 @@ import (
 type StringBuilderCloser struct {
 	strings.Builder
 }
+
 func (*StringBuilderCloser) Close() error {
 	return nil
 }
@@ -40,16 +41,16 @@ func TestWriteRow(t *testing.T) {
 			rows: rs(dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie"))),
 			sch:  dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" + "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` +
-					"\n",
+				`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` +
+				"\n",
 		},
 		{
 			name: "embedded quotes",
 			rows: rs(dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie"))),
 			sch:  dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" + "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-					`VALUES ("00000000-0000-0000-0000-000000000000","It's \"Mister Perfect\" to you",100,FALSE,"normie");` +
-					"\n",
+				`VALUES ("00000000-0000-0000-0000-000000000000","It's \"Mister Perfect\" to you",100,FALSE,"normie");` +
+				"\n",
 		},
 		{
 			name: "two rows",
@@ -58,18 +59,18 @@ func TestWriteRow(t *testing.T) {
 				dtestutils.NewTypedRow(id, "guy personson", 0, true, strPointer("officially a person"))),
 			sch: dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" +
-					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` + "\n" +
-					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-					`VALUES ("00000000-0000-0000-0000-000000000000","guy personson",0,TRUE,"officially a person");` + "\n",
+				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
+				`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` + "\n" +
+				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
+				`VALUES ("00000000-0000-0000-0000-000000000000","guy personson",0,TRUE,"officially a person");` + "\n",
 		},
 		{
 			name: "null values",
 			rows: rs(dtestutils.NewTypedRow(id, "some guy", 100, false, nil)),
 			sch:  dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" + "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,NULL);` +
-					"\n",
+				`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,NULL);` +
+				"\n",
 		},
 	}
 
@@ -84,8 +85,8 @@ func TestWriteRow(t *testing.T) {
 		rows: rs(dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42))),
 		sch:  trickySch,
 		expectedOutput: dropCreateTricky + "\n" + "INSERT INTO `people` (`a name with spaces`,`anotherColumn`) " +
-				`VALUES (-3.14,-42);` +
-				"\n",
+			`VALUES (-3.14,-42);` +
+			"\n",
 	})
 
 	for _, tt := range tests {
@@ -126,14 +127,14 @@ func TestEndToEnd(t *testing.T) {
 				dtestutils.NewTypedRow(id, "guy personson", 0, true, strPointer("officially a person"))),
 			sch: dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" +
-					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-					`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` + "\n" +
-					"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-					`VALUES ("00000000-0000-0000-0000-000000000000","guy personson",0,TRUE,"officially a person");` + "\n",
+				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
+				`VALUES ("00000000-0000-0000-0000-000000000000","some guy",100,FALSE,"normie");` + "\n" +
+				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
+				`VALUES ("00000000-0000-0000-0000-000000000000","guy personson",0,TRUE,"officially a person");` + "\n",
 		},
 		{
-			name: "no rows",
-			sch: dtestutils.TypedSchema,
+			name:           "no rows",
+			sch:            dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n",
 		},
 	}

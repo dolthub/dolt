@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"log"
 	"runtime/debug"
 )

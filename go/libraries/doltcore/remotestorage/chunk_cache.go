@@ -1,8 +1,8 @@
 package remotestorage
 
 import (
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
 )
 
 // chunkCache is an interface used for caching chunks

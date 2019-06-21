@@ -11,10 +11,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/attic-labs/noms/go/config"
-	"github.com/attic-labs/noms/go/d"
-	"github.com/attic-labs/noms/go/types"
-	"github.com/attic-labs/noms/go/util/profile"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/config"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/util/profile"
 )
 
 func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrency int) int {

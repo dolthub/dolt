@@ -1,8 +1,8 @@
 package fwt
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 
@@ -12,8 +12,8 @@ import (
 
 func TestHandleRow(t *testing.T) {
 	tests := []struct {
-		name   string
-		inputRows []pipeline.RowWithProps
+		name         string
+		inputRows    []pipeline.RowWithProps
 		expectedRows []pipeline.RowWithProps
 	}{
 		{

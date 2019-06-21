@@ -1,8 +1,8 @@
 package noms
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 // NomsMapWriteCloser is a TableWriteCloser where the resulting map that is being written from can be retrieved after

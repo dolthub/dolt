@@ -1,7 +1,7 @@
 package schema
 
 import (
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"reflect"
@@ -110,11 +110,11 @@ func testSchema(method string, sch Schema, t *testing.T) {
 
 	extracted := ExtractAllColNames(sch)
 	expExt := map[uint64]string{
-		lnColTag: lnColName,
-		fnColTag: fnColName,
-		ageColTag: ageColName,
-		addrColTag: addrColName,
-		titleColTag: titleColName,
+		lnColTag:       lnColName,
+		fnColTag:       fnColName,
+		ageColTag:      ageColName,
+		addrColTag:     addrColName,
+		titleColTag:    titleColName,
 		reservedColTag: reservedColName,
 	}
 

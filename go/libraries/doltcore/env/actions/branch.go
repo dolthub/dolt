@@ -5,11 +5,11 @@ import (
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/util/math"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/util/math"
 )
 
 var ErrAlreadyExists = errors.New("already exists")
