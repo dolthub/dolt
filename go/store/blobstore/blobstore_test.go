@@ -123,6 +123,13 @@ func TestGetMissing(t *testing.T) {
 	}
 }
 
+// CheckAndPutBytes is a utility method calls bs.CheckAndPut by wrapping the supplied []byte
+// in an io.Reader
+func CheckAndPutBytes(ctx context.Context, bs Blobstore, expectedVersion, key string, data []byte) (string, error) {
+	reader := bytes.NewReader(data)
+	return bs.CheckAndPut(ctx, expectedVersion, key, reader)
+}
+
 func testCheckAndPutError(t *testing.T, bs Blobstore) {
 	testData := randBytes(32)
 	badVersion := "bad" //has to be valid hex

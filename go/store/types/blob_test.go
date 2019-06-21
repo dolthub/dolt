@@ -178,34 +178,6 @@ func TestBlobFromReaderThatReturnsDataAndError(t *testing.T) {
 	assert.Equal(byte(2), actual.Bytes()[len(actual.Bytes())-1])
 }
 
-func TestBlobSplice(t *testing.T) {
-	assert := assert.New(t)
-	vrw := newTestValueStore()
-
-	blob := NewEmptyBlob(vrw)
-	buf := new(bytes.Buffer)
-
-	blob = blob.Edit().Splice(0, 0, []byte("I'll do anything")).Blob(context.Background())
-	buf.Reset()
-	buf.ReadFrom(blob.Reader(context.Background()))
-	assert.Equal(buf.String(), "I'll do anything")
-
-	blob = blob.Edit().Splice(16, 0, []byte(" for arv")).Blob(context.Background())
-	buf.Reset()
-	buf.ReadFrom(blob.Reader(context.Background()))
-	assert.Equal(buf.String(), "I'll do anything for arv")
-
-	blob = blob.Edit().Splice(0, 0, []byte("Yes, ")).Blob(context.Background())
-	buf.Reset()
-	buf.ReadFrom(blob.Reader(context.Background()))
-	assert.Equal(buf.String(), "Yes, I'll do anything for arv")
-
-	blob = blob.Edit().Splice(5, 20, []byte("it's hard to satisfy")).Blob(context.Background())
-	buf.Reset()
-	buf.ReadFrom(blob.Reader(context.Background()))
-	assert.Equal(buf.String(), "Yes, it's hard to satisfy arv")
-}
-
 func TestBlobConcat(t *testing.T) {
 	assert := assert.New(t)
 

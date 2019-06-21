@@ -488,10 +488,6 @@ func NewAtAnnotation(idx int64) AtAnnotation {
 	return AtAnnotation{idx, false}
 }
 
-func NewAtAnnotationIntoKeyPath(idx int64) AtAnnotation {
-	return AtAnnotation{idx, true}
-}
-
 func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	ai, ok := getAbsoluteIndex(v, ann.Index)
 	if !ok {

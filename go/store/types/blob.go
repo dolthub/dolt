@@ -28,10 +28,6 @@ func NewEmptyBlob(vrw ValueReadWriter) Blob {
 	return Blob{newBlobLeafSequence(vrw, []byte{})}
 }
 
-func (b Blob) Edit() *BlobEditor {
-	return NewBlobEditor(b)
-}
-
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
 func (b Blob) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error) {
 	// TODO: Support negative off?
