@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"strconv"
@@ -115,7 +115,7 @@ func TestAddingStages(t *testing.T) {
 			NewNamedTransform("label", labelTransFunc),
 		)
 
-		addedStages := []NamedTransform {
+		addedStages := []NamedTransform{
 			NewNamedTransform("dupe", dupeTransFunc),
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
@@ -185,7 +185,7 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 			NewNamedTransform("label", labelTransFunc),
 		)
 
-		addedStages := []NamedTransform {
+		addedStages := []NamedTransform{
 			NewNamedTransform("dupe", dupeTransFunc),
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}

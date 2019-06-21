@@ -2,18 +2,19 @@ package alterschema
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 // Nullable represents whether a column can have a null value.
 type Nullable bool
-const(
+
+const (
 	NotNull Nullable = false
-	Null Nullable = true
+	Null    Nullable = true
 )
 
 // Adds a new column to the schema given and returns the new table value. Non-null column additions rewrite the entire
@@ -89,7 +90,7 @@ func createNewSchema(sch schema.Schema, tag uint64, newColName string, colKind t
 }
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
-func validateNewColumn(ctx context.Context,  tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) error {
+func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) error {
 	var err error
 	sch := tbl.GetSchema(ctx)
 	cols := sch.GetAllCols()
@@ -110,7 +111,7 @@ func validateNewColumn(ctx context.Context,  tbl *doltdb.Table, tag uint64, newC
 
 	if !nullable && defaultVal == nil && tbl.GetRowData(ctx).Len() > 0 {
 		return errhand.BuildDError("When adding a column that may not be null to a table with existing " +
-				"rows, a default value must be provided.").Build()
+			"rows, a default value must be provided.").Build()
 	}
 
 	if !types.IsNull(defaultVal) && defaultVal.Kind() != colKind {
@@ -119,4 +120,3 @@ func validateNewColumn(ctx context.Context,  tbl *doltdb.Table, tag uint64, newC
 
 	return nil
 }
-

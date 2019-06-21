@@ -3,20 +3,20 @@ package diff
 import (
 	"context"
 	"errors"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"io"
 )
 
 const (
 	colorRowProp = "color"
- 	diffColTag = schema.ReservedTagMin
- 	diffColName = "__diff__"
+	diffColTag   = schema.ReservedTagMin
+	diffColName  = "__diff__"
 )
 
 type ColorFunc func(string, ...interface{}) string

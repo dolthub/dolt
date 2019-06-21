@@ -2,11 +2,11 @@ package sql
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
 )
@@ -34,7 +34,7 @@ type InitValue interface {
 
 // Composes zero or more InitValue into a new Init() function, where Init() is called on each InitValue in turn,
 // returning any error encountered.
-func ComposeInits(ivs ...InitValue) func(TagResolver) error{
+func ComposeInits(ivs ...InitValue) func(TagResolver) error {
 	return func(resolver TagResolver) error {
 		for _, iv := range ivs {
 			if err := iv.Init(resolver); err != nil {
@@ -306,9 +306,9 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			return nil, errFmt("json not supported")
 		}
 
-	getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, predicate)
- 	getter.initFn = ComposeInits(leftGetter, rightGetter)
- 	return getter, nil
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, predicate)
+		getter.initFn = ComposeInits(leftGetter, rightGetter)
+		return getter, nil
 
 	case *sqlparser.AndExpr:
 		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
@@ -386,7 +386,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			return nil, errFmt("Unrecognized is comparison: %v", e.Operator)
 		}
 
-	return getter, nil
+		return getter, nil
 
 	case *sqlparser.BinaryExpr:
 		return getterForBinaryExpr(e, inputSchemas, aliases)

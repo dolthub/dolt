@@ -14,12 +14,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/constants"
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/nbs"
 	"github.com/golang/snappy"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
 )
 
 var ErrUploadFailed = errors.New("upload failed")

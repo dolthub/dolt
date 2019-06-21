@@ -2,7 +2,7 @@ package schema
 
 import (
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 // ColConstraint is an interface used for evaluating whether a columns value is valid
@@ -62,7 +62,6 @@ func (nnc NotNullConstraint) GetConstraintParams() map[string]string {
 func (nnc NotNullConstraint) String() string {
 	return "Not null"
 }
-
 
 // ColConstraintsAreEqual validates two ColConstraint slices are identical.
 func ColConstraintsAreEqual(a, b []ColConstraint) bool {

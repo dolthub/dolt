@@ -13,11 +13,11 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/attic-labs/noms/go/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
 
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/golang/snappy"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 
 	flag "github.com/juju/gnuflag"
 

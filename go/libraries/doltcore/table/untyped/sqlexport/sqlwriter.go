@@ -2,13 +2,13 @@ package sqlexport
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"io"
 	"path/filepath"
 	"strings"
@@ -48,7 +48,7 @@ func (w *SqlExportWriter) GetSchema() schema.Schema {
 // WriteRow will write a row to a table
 func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	if err := w.maybeWriteDropCreate(); err != nil {
-			return err
+		return err
 	}
 
 	return iohelp.WriteLine(w.wr, w.insertStatementForRow(r))

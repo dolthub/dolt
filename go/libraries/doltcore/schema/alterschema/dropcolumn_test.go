@@ -2,10 +2,10 @@ package alterschema
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -20,25 +20,25 @@ func TestDropColumn(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:     "remove int",
-			colName:  "age",
+			name:           "remove int",
+			colName:        "age",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.AgeTag),
-			expectedRows: dtestutils.TypedRows,
+			expectedRows:   dtestutils.TypedRows,
 		},
 		{
-			name:     "remove string",
-			colName:  "title",
+			name:           "remove string",
+			colName:        "title",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(dtestutils.TypedSchema, dtestutils.TitleTag),
-			expectedRows: dtestutils.TypedRows,
+			expectedRows:   dtestutils.TypedRows,
 		},
 		{
-			name:     "column not found",
-			colName:  "not found",
+			name:        "column not found",
+			colName:     "not found",
 			expectedErr: "column not found",
 		},
 		{
-			name:     "remove primary key col",
-			colName:  "id",
+			name:        "remove primary key col",
+			colName:     "id",
 			expectedErr: "Cannot drop column in primary key",
 		},
 	}

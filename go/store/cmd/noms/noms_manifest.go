@@ -10,9 +10,9 @@ import (
 
 	"github.com/dustin/go-humanize"
 
-	"github.com/attic-labs/noms/go/nbs"
-	"github.com/attic-labs/noms/go/spec"
 	flag "github.com/juju/gnuflag"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
 
 	"github.com/attic-labs/noms/cmd/util"
 )

@@ -2,10 +2,10 @@ package tabular
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
@@ -23,6 +23,7 @@ const (
 type StringBuilderCloser struct {
 	strings.Builder
 }
+
 func (*StringBuilderCloser) Close() error {
 	return nil
 }
@@ -40,21 +41,21 @@ func TestWriter(t *testing.T) {
 	// Simulate fixed-width string values that the table writer needs to function.
 	// First value in each array is the column name
 	// Note the unicode character in Jim Halpêrt
-	names := []string {
+	names := []string{
 		"name          ",
 		"Michael Scott ",
 		"Pam Beasley   ",
 		"Dwight Schrute",
 		"Jim Halpêrt   ",
 	}
-	ages := []string {
+	ages := []string{
 		"age   ",
 		"43    ",
 		"25    ",
 		"29    ",
 		"<NULL>",
 	}
-	titles := []string {
+	titles := []string{
 		"title                            ",
 		"Regional Manager                 ",
 		"Secretary                        ",
@@ -65,8 +66,8 @@ func TestWriter(t *testing.T) {
 	rows := make([]row.Row, len(ages))
 	for i := range ages {
 		rows[i] = row.New(rowSch, row.TaggedValues{
-			nameColTag: types.String(names[i]),
-			ageColTag: types.String(ages[i]),
+			nameColTag:  types.String(names[i]),
+			ageColTag:   types.String(ages[i]),
 			titleColTag: types.String(titles[i]),
 		})
 	}
@@ -188,7 +189,7 @@ func TestEastAsianLanguages(t *testing.T) {
 	// Simulate fixed-width string values that the table writer needs to function.
 	// First value in each array is the column name
 	// Note the unicode character in Jim Halpêrt
-	names := []string {
+	names := []string{
 		"name          ",
 		"Michael Scott ",
 		"Pam Beasley   ",
@@ -196,7 +197,7 @@ func TestEastAsianLanguages(t *testing.T) {
 		"Jim Halpêrt   ",
 		"つのだ☆HIRO    ",
 	}
-	ages := []string {
+	ages := []string{
 		"age   ",
 		"43    ",
 		"25    ",
@@ -204,7 +205,7 @@ func TestEastAsianLanguages(t *testing.T) {
 		"<NULL>",
 		"aあいう",
 	}
-	titles := []string {
+	titles := []string{
 		"title                            ",
 		"Regional Manager                 ",
 		"Secretary                        ",
@@ -216,8 +217,8 @@ func TestEastAsianLanguages(t *testing.T) {
 	rows := make([]row.Row, len(ages))
 	for i := range ages {
 		rows[i] = row.New(rowSch, row.TaggedValues{
-			nameColTag: types.String(names[i]),
-			ageColTag: types.String(ages[i]),
+			nameColTag:  types.String(names[i]),
+			ageColTag:   types.String(ages[i]),
 			titleColTag: types.String(titles[i]),
 		})
 	}

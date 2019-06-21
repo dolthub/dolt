@@ -5,9 +5,9 @@ import (
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
-	"github.com/attic-labs/noms/go/datas"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")

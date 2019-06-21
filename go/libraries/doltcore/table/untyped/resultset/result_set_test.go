@@ -2,11 +2,11 @@ package resultset
 
 import (
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -340,8 +340,8 @@ func TestNewFromColumns(t *testing.T) {
 			{mustGetCol(peopleTestSchema, "last"), peopleTestSchema},
 		}
 
-		schemas := map[string]schema.Schema {
-			"people": peopleTestSchema,
+		schemas := map[string]schema.Schema{
+			"people":   peopleTestSchema,
 			"episodes": episodesTestSchema,
 		}
 
@@ -412,11 +412,11 @@ func newResultSetRow(colVals ...types.Value) row.Row {
 // strings, types are NomsKinds.
 func newResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
 
-	if len(colNamesAndTypes) % 2 != 0 {
+	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to newResultSetSchema")
 	}
 
-	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
@@ -674,7 +674,6 @@ func mustGetColVal(r row.Row, tag uint64) types.Value {
 	return value
 }
 
-
 // TODO: refactor sqltestutil.go to its own package (probably not sql) and export these values.
 //  This is all copy-pasted from there
 
@@ -760,12 +759,12 @@ func createAppearancesTestSchema() schema.Schema {
 
 func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
-		idTag: types.Int(id),
-		firstTag: types.String(first),
-		lastTag: types.String(last),
+		idTag:        types.Int(id),
+		firstTag:     types.String(first),
+		lastTag:      types.String(last),
 		isMarriedTag: types.Bool(isMarried),
-		ageTag: types.Int(age),
-		ratingTag: types.Float(rating),
+		ageTag:       types.Int(age),
+		ratingTag:    types.Float(rating),
 	}
 
 	return row.New(peopleTestSchema, vals)
@@ -774,9 +773,9 @@ func newPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 	vals := row.TaggedValues{
 		episodeIdTag: types.Int(id),
-		epNameTag: types.String(name),
+		epNameTag:    types.String(name),
 		epAirDateTag: types.Int(airdate),
-		epRatingTag: types.Float(rating),
+		epRatingTag:  types.Float(rating),
 	}
 
 	return row.New(episodesTestSchema, vals)
@@ -785,8 +784,8 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 func newAppsRow(charId, epId int, comment string) row.Row {
 	vals := row.TaggedValues{
 		appCharacterTag: types.Int(charId),
-		appEpTag : types.Int(epId),
-		appCommentsTag: types.String(comment),
+		appEpTag:        types.Int(epId),
+		appCommentsTag:  types.String(comment),
 	}
 
 	return row.New(appearancesTestSchema, vals)
@@ -819,10 +818,11 @@ var app7 = newAppsRow(homerId, 3, "Homer is in every episode")
 var app8 = newAppsRow(margeId, 3, "Marge shows up a lot too")
 var app9 = newAppsRow(lisaId, 3, "Lisa is the best Simpson")
 var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
+
 // nobody in episode 4, that one was terrible
-var allAppsRows = rs(app1,app2,app3,app4,app5,app6,app7,app8,app9,app10)
+var allAppsRows = rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10)
 
 // Convenience func to avoid the boilerplate of typing []row.Row{} all the time
-func rs(rows... row.Row) []row.Row {
+func rs(rows ...row.Row) []row.Row {
 	return rows
 }

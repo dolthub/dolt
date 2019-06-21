@@ -11,8 +11,8 @@ import (
 	"github.com/attic-labs/kingpin"
 
 	"github.com/attic-labs/noms/cmd/util"
-	"github.com/attic-labs/noms/go/config"
-	"github.com/attic-labs/noms/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/config"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
 )
 
 func nomsStats(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {

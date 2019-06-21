@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 )

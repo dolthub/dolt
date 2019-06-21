@@ -3,10 +3,10 @@ package resultset
 import (
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
 )
 
 // TODO: fix this hot mess
@@ -120,7 +120,7 @@ func newFromSourceSchemas(sourceSchemas ...schema.Schema) (*ResultSetSchema, err
 
 // Adds a schema to the result set mapping
 func (rss *ResultSetSchema) addSchema(sch schema.Schema) error {
-	if rss.maxAssignedTag + uint64(len(sch.GetAllCols().GetColumns()) - 1) > rss.maxSchTag {
+	if rss.maxAssignedTag+uint64(len(sch.GetAllCols().GetColumns())-1) > rss.maxSchTag {
 		return errors.New("No room for additional schema in mapping, result set schema too small")
 	}
 
@@ -139,7 +139,6 @@ func (rss *ResultSetSchema) addSchema(sch schema.Schema) error {
 	rss.mapping[sch] = mapping
 	return nil
 }
-
 
 // Creates a new result set schema for columns given. Tag numbers in the result schema will be rewritten as necessary,
 // starting from 0.
