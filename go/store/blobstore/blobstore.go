@@ -39,10 +39,3 @@ func PutBytes(ctx context.Context, bs Blobstore, key string, data []byte) (strin
 	reader := bytes.NewReader(data)
 	return bs.Put(ctx, key, reader)
 }
-
-// CheckAndPutBytes is a utility method calls bs.CheckAndPut by wrapping the supplied []byte
-// in an io.Reader
-func CheckAndPutBytes(ctx context.Context, bs Blobstore, expectedVersion, key string, data []byte) (string, error) {
-	reader := bytes.NewReader(data)
-	return bs.CheckAndPut(ctx, expectedVersion, key, reader)
-}
