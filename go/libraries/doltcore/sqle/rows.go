@@ -55,6 +55,18 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) sql.Row {
 	return sql.NewRow(colVals...)
 }
 
+// Returns a Dolt row representation for SQL row given
+func SqlRowToDoltRow(r sql.Row, doltSchema schema.Schema) row.Row {
+	taggedVals := make(row.TaggedValues)
+	for i, val := range r {
+		if val != nil {
+			taggedVals[uint64(i)] = SqlValToNomsVal(val)
+		}
+	}
+
+	return row.New(doltSchema, taggedVals)
+}
+
 // Returns the column value for a SQL column
 func doltColValToSqlColVal(val types.Value) interface{} {
 	if types.IsNull(val) {

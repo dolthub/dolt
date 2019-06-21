@@ -3,6 +3,7 @@ package sqle
 import (
 	"fmt"
 	"github.com/attic-labs/noms/go/types"
+	"github.com/google/uuid"
 	"github.com/src-d/go-mysql-server/sql"
 )
 
@@ -26,6 +27,24 @@ func nomsTypeToSqlType(kind types.NomsKind) sql.Type {
 	}
 }
 
+func SqlTypeToNomsKind(t sql.Type) types.NomsKind {
+	switch t {
+	case sql.Boolean:
+		return types.BoolKind
+	case sql.Float64:
+		return types.FloatKind
+	case sql.Text:
+		// TODO: handle UUIDs
+		return types.StringKind
+	case sql.Int64:
+		return types.IntKind
+	case sql.Uint64:
+		return types.UintKind
+	default:
+		panic(fmt.Sprintf("Unexpected type %v", t))
+	}
+}
+
 func nomsValToSqlVal(val types.Value) interface{} {
 	switch val.Kind() {
 	case types.BoolKind:
@@ -42,6 +61,30 @@ func nomsValToSqlVal(val types.Value) interface{} {
 		return convertUint(val.(types.Uint))
 	default:
 		panic(fmt.Sprintf("Unexpected kind %v", val.Kind()))
+	}
+}
+
+func SqlValToNomsVal(val interface{}) types.Value {
+	if val == nil {
+		return nil
+	}
+
+	switch e := val.(type) {
+	case int64:
+		return types.Int(e)
+	case float64:
+		return types.Float(e)
+	case string:
+		if u, err := uuid.Parse(e); err == nil {
+			return types.UUID(u)
+		}
+		return types.String(e)
+	case uint64:
+		return types.Uint(e)
+	case bool:
+		return types.Bool(e)
+	default:
+		panic(fmt.Sprintf("Unexpected type %v", val))
 	}
 }
 
