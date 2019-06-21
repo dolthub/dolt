@@ -17,7 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jpillora/backoff"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 const (

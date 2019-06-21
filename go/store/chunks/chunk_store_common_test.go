@@ -8,8 +8,8 @@ import (
 	"context"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 type ChunkStoreTestSuite struct {

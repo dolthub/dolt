@@ -3,7 +3,7 @@ package untyped
 import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )

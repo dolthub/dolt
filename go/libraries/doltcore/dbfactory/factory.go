@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"net/url"
 	"strings"
 )

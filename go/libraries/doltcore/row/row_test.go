@@ -2,7 +2,7 @@ package row
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"

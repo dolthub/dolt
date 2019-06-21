@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {

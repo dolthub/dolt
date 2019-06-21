@@ -9,7 +9,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io/ioutil"
 	"os"
 )

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 )
 

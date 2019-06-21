@@ -3,7 +3,7 @@ package types
 import (
 	"context"
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 const (

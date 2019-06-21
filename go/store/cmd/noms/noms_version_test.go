@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/clienttest"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
 	"github.com/stretchr/testify/suite"
 )
 

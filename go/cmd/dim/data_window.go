@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"log"
 	"runtime/debug"
 )

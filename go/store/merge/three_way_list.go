@@ -8,8 +8,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged types.List, err error) {

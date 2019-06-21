@@ -14,9 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 const (

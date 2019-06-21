@@ -3,9 +3,9 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/blobstore"
+	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
 )
 
 const (

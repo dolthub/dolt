@@ -14,10 +14,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )

@@ -67,8 +67,8 @@ import (
 	"os"
 	"sync/atomic"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/syndtr/goleveldb/leveldb"
 	ldbIterator "github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"

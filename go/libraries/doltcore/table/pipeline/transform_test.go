@@ -8,7 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"strconv"

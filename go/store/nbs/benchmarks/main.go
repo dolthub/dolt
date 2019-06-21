@@ -19,10 +19,10 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/profile"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
 	"github.com/stretchr/testify/assert"
 )
 

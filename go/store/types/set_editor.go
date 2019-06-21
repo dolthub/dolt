@@ -8,7 +8,7 @@ import (
 	"context"
 	"sort"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 // SetEditor allows for efficient editing of Set-typed prolly trees. Edits

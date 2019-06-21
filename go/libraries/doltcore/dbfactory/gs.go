@@ -4,8 +4,8 @@ import (
 	"cloud.google.com/go/storage"
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"net/url"
 )
 

@@ -35,7 +35,7 @@ import (
 	"regexp"
 	"strconv"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 const (

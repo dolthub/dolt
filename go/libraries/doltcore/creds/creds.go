@@ -6,7 +6,7 @@ import (
 	"encoding/base32"
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/datetime"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/datetime"
 	"golang.org/x/crypto/ed25519"
 	"gopkg.in/square/go-jose.v2"
 	"gopkg.in/square/go-jose.v2/jwt"

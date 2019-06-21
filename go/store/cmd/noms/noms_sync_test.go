@@ -9,11 +9,11 @@ import (
 	"os"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/clienttest"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/ld/dolt/go/store/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
 	"github.com/stretchr/testify/suite"
 )
 

@@ -8,8 +8,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type applyFunc func(candidate, types.ValueChanged, types.Value) candidate

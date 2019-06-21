@@ -17,11 +17,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/profile"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
 )
 
 var (

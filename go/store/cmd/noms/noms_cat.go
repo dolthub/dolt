@@ -13,15 +13,15 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 
 	"github.com/golang/snappy"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 
 	flag "github.com/juju/gnuflag"
 
-	"github.com/attic-labs/noms/cmd/util"
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 )
 
 const (

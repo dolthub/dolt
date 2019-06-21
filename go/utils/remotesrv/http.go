@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"io"
 	"io/ioutil"
 	"net/http"

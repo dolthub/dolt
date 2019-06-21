@@ -1,6 +1,6 @@
 package edits
 
-import "github.com/liquidata-inc/ld/dolt/go/store/go/types"
+import "github.com/liquidata-inc/ld/dolt/go/store/types"
 
 // KVPCollItr is a KVPIterator implementation for iterating over a KVPCollection
 type KVPCollItr struct {

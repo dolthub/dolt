@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 var EmptySet Set

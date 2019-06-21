@@ -4,7 +4,7 @@
 
 package types
 
-import "github.com/liquidata-inc/ld/dolt/go/store/go/d"
+import "github.com/liquidata-inc/ld/dolt/go/store/d"
 
 type blobLeafSequence struct {
 	leafSequence

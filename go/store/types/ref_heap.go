@@ -7,7 +7,7 @@ package types
 import (
 	"sort"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 // RefByHeight implements sort.Interface to order by increasing HeightOrder(). It uses increasing order because this causes repeated pushes and pops of the 'tallest' Refs to re-use memory, avoiding reallocations.

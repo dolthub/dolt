@@ -13,8 +13,8 @@ import (
 	"strings"
 	"text/scanner"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // Parser provides ways to parse Noms types.

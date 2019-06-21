@@ -12,7 +12,7 @@ import (
 
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 type BlobEditor struct {

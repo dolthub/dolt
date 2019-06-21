@@ -11,8 +11,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/marshal"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/marshal"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (

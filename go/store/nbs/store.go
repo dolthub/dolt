@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/blobstore"
+	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 var ErrFetchFailure = errors.New("fetch failed")

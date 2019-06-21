@@ -53,6 +53,7 @@ github.com/cjbassi/drawille-go v0.0.0-20190126131713-27dc511fe6fd/go.mod h1:vjcQ
 github.com/clbanning/mxj v1.8.3/go.mod h1:BVjHeAH+rl9rs6f+QIpeRl0tfu10SXn1pUSa5PVGJng=
 github.com/clbanning/mxj v1.8.4/go.mod h1:BVjHeAH+rl9rs6f+QIpeRl0tfu10SXn1pUSa5PVGJng=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
+github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf h1:5ZeQB3mThuz5C2MSER6T5GdtXTF9CMMk42F9BOyRsEQ=
 github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf/go.mod h1:BO2rLUAZMrpgh6GBVKi0Gjdqw2MgCtJrtmUdDeZRKjY=
 github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
@@ -137,6 +138,7 @@ github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClM
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/ld v0.0.0-20190619181319-9747e982ae62 h1:8Fy5pyphDtjDduBSHjHW0huz7a/lqhUDLLSUL6TjPEQ=
 github.com/liquidata-inc/ld v0.0.0-20190619201109-4898f9007cfb h1:/7tbaTw/NpDE4E+/fjzeurb1Rd7fLyn+EPTSFkpO3s8=
+github.com/liquidata-inc/ld v0.0.0-20190621184230-ea012ae39fb0 h1:EuRrbWpow25+Q/ZbUT7PvOSLE7VLIoSZds8b4H/fxTg=
 github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4 h1:itsq4ulIPJ7lWPjhUDXmA4lsBBJhYT2OOttn1qf0krk=
 github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/sqlparser v0.9.8 h1:DH33oMrZiRcVJhWgg/YkEGNizm31NSiceolRWUnUdUw=
@@ -187,6 +189,7 @@ github.com/shirou/gopsutil v2.18.12+incompatible/go.mod h1:5b4v6he4MtMOwMlS0TUMT
 github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4/go.mod h1:qsXQc7+bwAM3Q1u/4XEfrquwF8Lw7D7y5cD8CuHnfIc=
 github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6 h1:cGT4dcuEyBwwu/v6tosyqcDp2yoIo/LwjMGixUvg3nU=
 github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6/go.mod h1:sUM3LWHvSMaG192sy56D9F7CNvL7jUJVXoqM1QKLnog=
+github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e h1:VAzdS5Nw68fbf5RZ8RDVlUvPXNU6Z3jtPCK/qvm4FoQ=
 github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e/go.mod h1:sUM3LWHvSMaG192sy56D9F7CNvL7jUJVXoqM1QKLnog=
 github.com/stretchr/objx v0.1.0 h1:4G4v2dO3VZwixGIRoQ5Lfboy6nUhCyYzaqnIAPPhYs4=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

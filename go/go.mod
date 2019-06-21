@@ -5,9 +5,11 @@ require (
 	github.com/BurntSushi/toml v0.3.1
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
-	github.com/attic-labs/noms v0.0.0-20190508041645-614eb763b982 // indirect
+	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
+	github.com/attic-labs/noms v0.0.0-20190508041645-614eb763b982
 	github.com/aws/aws-sdk-go v1.20.5
 	github.com/cenkalti/backoff v2.1.1+incompatible
+	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/dustin/go-humanize v1.0.0
 	github.com/edsrzf/mmap-go v1.0.0-20181222142022-904c4ced31cd
 	github.com/fatih/color v1.7.0
@@ -24,6 +26,7 @@ require (
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/mattn/go-isatty v0.0.7
 	github.com/mattn/go-runewidth v0.0.4
+	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
 	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.3.0

@@ -9,7 +9,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )

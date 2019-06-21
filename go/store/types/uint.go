@@ -7,7 +7,7 @@ package types
 import (
 	"context"
 	"encoding/binary"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 // Int is a Noms Value wrapper around the primitive int32 type.

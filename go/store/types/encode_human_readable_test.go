@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/test"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/test"
 	"github.com/stretchr/testify/assert"
 )
 

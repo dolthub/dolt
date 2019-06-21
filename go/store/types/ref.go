@@ -8,7 +8,7 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 type Ref struct {

@@ -9,9 +9,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/attic-labs/noms/cmd/util"
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 )
 
 var nomsVersion = &util.Command{

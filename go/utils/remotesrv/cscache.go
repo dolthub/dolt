@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/nbs"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"path/filepath"
 	"sync"
 )

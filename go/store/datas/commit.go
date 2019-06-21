@@ -8,10 +8,10 @@ import (
 	"context"
 	"sort"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/nomdl"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/nomdl"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (

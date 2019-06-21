@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types/edits"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/types/edits"
 	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func init() {

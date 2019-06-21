@@ -8,9 +8,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/clienttest"
+	"github.com/liquidata-inc/ld/dolt/go/store/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
 	"github.com/stretchr/testify/suite"
 )
 
