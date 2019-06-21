@@ -1,0 +1,9 @@
+noms.iml
+*.pyc
+*.swp
+.vscode
+.idea
+.noms
+.nomsconfig
+.DS_Store
+node_modules
