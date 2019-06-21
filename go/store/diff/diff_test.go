@@ -11,9 +11,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/test"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/writers"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/test"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/writers"
 	"github.com/stretchr/testify/assert"
 )
 

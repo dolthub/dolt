@@ -1,7 +1,7 @@
 package edits
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"math/rand"
 	"testing"
 	"time"

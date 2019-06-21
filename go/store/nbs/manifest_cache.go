@@ -10,7 +10,7 @@ import (
 
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 func newManifestCache(maxSize uint64) *manifestCache {

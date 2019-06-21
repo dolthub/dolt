@@ -15,7 +15,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // Marshal converts a Go value to a Noms value.

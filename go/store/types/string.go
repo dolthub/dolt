@@ -8,7 +8,7 @@ import (
 	"context"
 	"encoding/binary"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 // String is a Noms Value wrapper around the primitive string type.

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 var ErrRowNotValid = errors.New("invalid row for current schema")

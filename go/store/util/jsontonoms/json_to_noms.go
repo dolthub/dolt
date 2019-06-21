@@ -8,8 +8,8 @@ import (
 	"context"
 	"reflect"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func nomsValueFromDecodedJSONBase(ctx context.Context, vrw types.ValueReadWriter, o interface{}, useStruct bool, namedStructs bool) types.Value {

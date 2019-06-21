@@ -10,8 +10,8 @@ import (
 	"path"
 
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/exit"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/exit"
 	"github.com/stretchr/testify/suite"
 )
 

@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 // For an annotation like @type, 1st capture group is the annotation.

@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // Apply applies a Patch (list of diffs) to a graph. It fulfills the

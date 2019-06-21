@@ -6,7 +6,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 // CreateEditAcc defines a factory method for EditAccumulator creation

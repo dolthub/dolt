@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/gizak/termui/v3"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/nsf/termbox-go"
 )
 

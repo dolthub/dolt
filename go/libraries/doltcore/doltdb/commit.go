@@ -5,9 +5,9 @@ import (
 	"errors"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (

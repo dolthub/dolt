@@ -7,7 +7,7 @@ package hash
 import (
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/stretchr/testify/assert"
 )
 

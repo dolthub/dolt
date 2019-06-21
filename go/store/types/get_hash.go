@@ -4,7 +4,7 @@
 
 package types
 
-import "github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+import "github.com/liquidata-inc/ld/dolt/go/store/hash"
 
 var getHashOverride func(v Value) hash.Hash
 

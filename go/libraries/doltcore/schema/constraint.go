@@ -2,7 +2,7 @@ package schema
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // ColConstraint is an interface used for evaluating whether a columns value is valid

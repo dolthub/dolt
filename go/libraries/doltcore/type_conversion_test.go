@@ -2,7 +2,7 @@ package doltcore
 
 import (
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
 )
 

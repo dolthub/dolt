@@ -9,8 +9,8 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 // Float is a Noms Value wrapper around the primitive float64 type.

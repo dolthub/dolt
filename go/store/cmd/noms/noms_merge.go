@@ -11,15 +11,15 @@ import (
 	"os"
 	"regexp"
 
-	"github.com/attic-labs/noms/cmd/util"
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/merge"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/status"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/verbose"
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
+	"github.com/liquidata-inc/ld/dolt/go/store/config"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/merge"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/status"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
 
 var (

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type RowFormatFunc func(ctx context.Context, r Row, sch schema.Schema) string

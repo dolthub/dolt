@@ -3,7 +3,7 @@ package row
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type TaggedValues map[uint64]types.Value

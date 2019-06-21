@@ -7,7 +7,7 @@ package chunks
 import (
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 type ReadRequest interface {

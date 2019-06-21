@@ -5,8 +5,8 @@
 package types
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/go/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 // WalkRefs calls cb() on each Ref that can be decoded from |c|. The results

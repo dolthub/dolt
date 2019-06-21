@@ -15,10 +15,10 @@ import (
 
 	"github.com/attic-labs/kingpin"
 
-	"github.com/attic-labs/noms/cmd/util"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/exit"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/profile"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/verbose"
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/exit"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 
 	flag "github.com/juju/gnuflag"
 )

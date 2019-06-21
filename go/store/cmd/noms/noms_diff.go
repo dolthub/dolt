@@ -8,13 +8,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/attic-labs/noms/cmd/util"
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/diff"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/outputpager"
-	"github.com/liquidata-inc/ld/dolt/go/store/go/util/verbose"
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
+	"github.com/liquidata-inc/ld/dolt/go/store/config"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/diff"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/outputpager"
+	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
 
 var stat bool

@@ -1,6 +1,6 @@
 package edits
 
-import "github.com/liquidata-inc/ld/dolt/go/store/go/types"
+import "github.com/liquidata-inc/ld/dolt/go/store/types"
 
 // SortedEditItr is a KVPIterator implementation that takes two KVPCollItr and merges them as it iterates
 type SortedEditItr struct {
