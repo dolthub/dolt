@@ -69,17 +69,3 @@ type ChunkStore interface {
 	// undefined and probably crashy.
 	io.Closer
 }
-
-// Factory allows the creation of namespaced ChunkStore instances. The details
-// of how namespaces are separated is left up to the particular implementation
-// of Factory and ChunkStore.
-type Factory interface {
-	CreateStore(ctx context.Context, ns string) ChunkStore
-
-	// CreateStoreFromCache allows caller to signal to the factory that it's
-	// willing to tolerate an out-of-date ChunkStore.
-	CreateStoreFromCache(ctx context.Context, ns string) ChunkStore
-
-	// Shutter shuts down the factory. Subsequent calls to CreateStore() will fail.
-	Shutter()
-}

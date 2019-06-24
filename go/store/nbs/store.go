@@ -227,10 +227,22 @@ func NewLocalStore(ctx context.Context, dir string, memTableSize uint64) *NomsBl
 	return newNomsBlockStore(ctx, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
+func checkDir(dir string) error {
+	stat, err := os.Stat(dir)
+	if err != nil {
+		return err
+	}
+	if !stat.IsDir() {
+		return fmt.Errorf("path is not a directory: %s", dir)
+	}
+	return nil
+}
+
 func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
+
 	nbs := &NomsBlockStore{
 		mm:       mm,
 		p:        p,

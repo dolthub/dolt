@@ -14,7 +14,7 @@ import (
 
 type ChunkStoreTestSuite struct {
 	suite.Suite
-	Factory Factory
+	Factory *memoryStoreFactory
 }
 
 func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
