@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"testing"
 
@@ -92,7 +91,7 @@ func TestConjoin(t *testing.T) {
 
 		var err error
 		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
-		d.PanicIfError(err)
+		assert.NoError(t, err)
 
 		return
 	}

@@ -70,7 +70,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 	})
 
 	if err != nil {
-		return exists, contents, err
+		return false, manifestContents{}, err
 	}
 
 	// !exists(dbAttr) => unitialized store
@@ -87,7 +87,7 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 			contents.specs, err = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
 
 			if err != nil {
-				return exists, contents, ErrCorruptManifest
+				return false, manifestContents{}, ErrCorruptManifest
 			}
 		}
 	}

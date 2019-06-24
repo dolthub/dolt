@@ -254,7 +254,13 @@ func (ts tableSpec) GetChunkCount() uint32 {
 func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {
-		specs[i].name = ParseAddr([]byte(tableInfo[2*i]))
+		var err error
+		specs[i].name, err = ParseAddr([]byte(tableInfo[2*i]))
+
+		if err != nil {
+			return nil, err
+		}
+
 		c, err := strconv.ParseUint(tableInfo[2*i+1], 10, 32)
 
 		if err != nil {

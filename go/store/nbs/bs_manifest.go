@@ -32,7 +32,7 @@ func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (st
 	contents, err := parseManifest(reader)
 
 	if err != nil {
-		return "", contents, err
+		return "", manifestContents{}, err
 	}
 
 	return ver, contents, nil
