@@ -407,7 +407,13 @@ func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents,
 		specs: canned.specs,
 		lock:  generateLockHash(upstream.root, canned.specs),
 	}
-	upstream = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
+
+	var err error
+	upstream, err = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
 	d.PanicIfFalse(upstream.lock == newContents.lock)
 	return upstream
 }

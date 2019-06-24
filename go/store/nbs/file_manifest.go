@@ -173,7 +173,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	}, nil
 }
 
-func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -200,32 +200,41 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 
 	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
 	manifestPath := filepath.Join(fm.dir, manifestFileName)
-	upstream := func() manifestContents {
+	upstream, err := func() (manifestContents, error) {
 		if f, err := openIfExists(manifestPath); err == nil && f != nil {
 			defer checkClose(f)
 
 			upstream, err := parseManifest(f)
 
-			// TODO - fix panics. moved this one up the stack
-			d.PanicIfError(err)
+			if err != nil {
+				return upstream, err
+			}
 
 			d.PanicIfFalse(constants.NomsVersion == upstream.vers)
-			return upstream
+			return upstream, nil
 		} else if err != nil {
-			// TODO - fix panics. moved this one up the stack
-			d.PanicIfError(err)
+			return manifestContents{}, err
 		}
 
 		d.Chk.True(lastLock == addr{})
-		return manifestContents{}
+		return manifestContents{}, nil
 	}()
 
-	if lastLock != upstream.lock {
-		return upstream
+	if err != nil {
+		return manifestContents{}, err
 	}
+
+	if lastLock != upstream.lock {
+		return upstream, nil
+	}
+
 	rerr := os.Rename(tempManifestPath, manifestPath)
-	d.PanicIfError(rerr)
-	return newContents
+
+	if rerr != nil {
+		return manifestContents{}, err
+	}
+
+	return newContents, nil
 }
 
 func writeManifest(temp io.Writer, contents manifestContents) {

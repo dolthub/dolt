@@ -56,7 +56,7 @@ type manifestUpdater interface {
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents
+	Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
@@ -202,7 +202,7 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 	var err error
 	exists, contents, err = mm.m.ParseIfExists(ctx, stats, nil)
 
-	// TODO - fix panics. moved this one up the stack
+	// TODO: fix panics
 	d.PanicIfError(err)
 
 	mm.cache.Put(mm.Name(), contents, t)
@@ -212,10 +212,10 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
 // intended to be used in a larger critical section along with updateWillFail.
-func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
 		if lastLock != upstream.lock {
-			return upstream
+			return upstream, nil
 		}
 	}
 	t := time.Now()
@@ -223,9 +223,14 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 	mm.lockOutFetch()
 	defer mm.allowFetch()
 
-	contents := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
+	contents, err := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
+
+	if err != nil {
+		return contents, err
+	}
+
 	mm.cache.Put(mm.Name(), contents, t)
-	return contents
+	return contents, nil
 }
 
 func (mm manifestManager) Name() string {

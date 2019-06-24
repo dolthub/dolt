@@ -178,7 +178,10 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		return contents
 	}
 
-	updatedContents := nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
+	updatedContents, err := nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
+
+	// TODO: fix panics.
+	d.PanicIfError(err)
 
 	nbs.upstream = updatedContents
 	nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
@@ -210,6 +213,7 @@ func NewGCSStore(ctx context.Context, bucketName, path string, gcs *storage.Clie
 	bucket := gcs.Bucket(bucketName)
 	bs := blobstore.NewGCSBlobstore(bucket, path)
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
+
 	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}
 	return newNomsBlockStore(ctx, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
@@ -532,7 +536,12 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 			return true
 		} else if err == errOptimisticLockFailedRoot || err == errLastRootMismatch {
 			return false
+		} else if err != errOptimisticLockFailedTables {
+			// TODO: fix panics
+			d.PanicIfError(err)
 		}
+
+		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables
 	}
 }
 
@@ -582,7 +591,12 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		lock:  generateLockHash(current, specs),
 		specs: specs,
 	}
-	upstream := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+
+	upstream, err := nbs.mm.Update(ctx, nbs.upstream.lock, newContents, nbs.stats, nil)
+	if err != nil {
+		return err
+	}
+
 	if newContents.lock != upstream.lock {
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		return handleOptimisticLockFailure(upstream)

@@ -78,23 +78,27 @@ func TestDynamoManifestUpdate(t *testing.T) {
 
 	// First, test winning the race against another process.
 	contents := makeContents("locker", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}})
-	upstream := mm.Update(context.Background(), addr{}, contents, stats, func() {
+	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
 		ddb.putRecord(db, lock[:], newRoot2[:], constants.NomsVersion, "")
+		return nil
 	})
+	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	rejected := makeContents("locker 2", "new root 2", nil)
-	upstream = mm.Update(context.Background(), addr{}, rejected, stats, nil)
+	upstream, err = mm.Update(context.Background(), addr{}, rejected, stats, nil)
+	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
-	upstream = mm.Update(context.Background(), upstream.lock, rejected, stats, nil)
+	upstream, err = mm.Update(context.Background(), upstream.lock, rejected, stats, nil)
+	assert.NoError(err)
 	assert.Equal(rejected.lock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
 	assert.Empty(upstream.specs)
@@ -105,7 +109,8 @@ func TestDynamoManifestUpdate(t *testing.T) {
 	ddb.putRecord(db, jerkLock[:], upstream.root[:], constants.NomsVersion, tableName.String()+":1")
 
 	newContents3 := makeContents("locker 3", "new root 3", nil)
-	upstream = mm.Update(context.Background(), upstream.lock, newContents3, stats, nil)
+	upstream, err = mm.Update(context.Background(), upstream.lock, newContents3, stats, nil)
+	assert.NoError(err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(rejected.root, upstream.root)
 	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)
@@ -135,13 +140,15 @@ func TestDynamoManifestCaching(t *testing.T) {
 	// When failing the optimistic lock, we should hit persistent storage.
 	reads = ddb.numGets
 	contents := makeContents("lock2", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}})
-	upstream := mm.Update(context.Background(), addr{}, contents, stats, nil)
+	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, nil)
+	assert.NoError(err)
 	assert.NotEqual(contents.lock, upstream.lock)
 	assert.Equal(reads+1, ddb.numGets)
 
 	// Successful update should NOT hit persistent storage.
 	reads = ddb.numGets
-	upstream = mm.Update(context.Background(), upstream.lock, contents, stats, nil)
+	upstream, err = mm.Update(context.Background(), upstream.lock, contents, stats, nil)
+	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(reads, ddb.numGets)
 }
@@ -152,7 +159,8 @@ func TestDynamoManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	contents := manifestContents{vers: constants.NomsVersion, lock: computeAddr([]byte{0x01})}
-	upstream := mm.Update(context.Background(), addr{}, contents, stats, nil)
+	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, nil)
+	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
