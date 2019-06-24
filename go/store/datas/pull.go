@@ -78,7 +78,13 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 }
 
 func persistChunks(ctx context.Context, cs chunks.ChunkStore) {
-	for !cs.Commit(ctx, cs.Root(ctx), cs.Root(ctx)) {
+	var success bool
+	for !success {
+		var err error
+		success, err = cs.Commit(ctx, cs.Root(ctx), cs.Root(ctx))
+
+		// TODO: fix panics
+		d.PanicIfError(err)
 	}
 }
 

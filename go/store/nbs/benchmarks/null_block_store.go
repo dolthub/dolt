@@ -57,6 +57,6 @@ func (nb nullBlockStore) Root(ctx context.Context) hash.Hash {
 	return hash.Hash{}
 }
 
-func (nb nullBlockStore) Commit(ctx context.Context, current, last hash.Hash) bool {
-	return true
+func (nb nullBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	return true, nil
 }

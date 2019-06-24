@@ -395,12 +395,11 @@ func (dcs *DoltChunkStore) Root(ctx context.Context) hash.Hash {
 // Commit atomically attempts to persist all novel Chunks and update the
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
-func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) bool {
+func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	hashToChunkCount, err := dcs.uploadChunks(ctx)
 
 	if err != nil {
-		// follow noms convention
-		panic(err)
+		return false, err
 	}
 
 	chnkTblInfo := make([]*remotesapi.ChunkTableInfo, 0, len(hashToChunkCount))
@@ -412,13 +411,11 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 	resp, err := dcs.csClient.Commit(ctx, req)
 
 	if err != nil {
-		rpcErr := NewRpcError(err, "Commit", dcs.host, req)
+		return false, NewRpcError(err, "Commit", dcs.host, req)
 
-		// follow noms convention
-		panic(rpcErr)
 	}
 
-	return resp.Success
+	return resp.Success, nil
 }
 
 // Stats may return some kind of struct that reports statistics about the

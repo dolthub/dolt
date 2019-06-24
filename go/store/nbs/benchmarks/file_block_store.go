@@ -67,7 +67,7 @@ func (fb fileBlockStore) Root(ctx context.Context) hash.Hash {
 	return hash.Hash{}
 }
 
-func (fb fileBlockStore) Commit(ctx context.Context, current, last hash.Hash) bool {
+func (fb fileBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	fb.bw.Flush()
-	return true
+	return true, nil
 }

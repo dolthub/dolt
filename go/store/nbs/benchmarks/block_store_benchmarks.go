@@ -33,7 +33,9 @@ func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.Testin
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
 	store.Put(context.Background(), newRoot)
-	assert.True(t, store.Commit(context.Background(), newRoot.Hash(), root))
+	success, err := store.Commit(context.Background(), newRoot.Hash(), root)
+	assert.NoError(t, err)
+	assert.True(t, success)
 }
 
 func goReadChunks(src *dataSource) <-chan *chunks.Chunk {

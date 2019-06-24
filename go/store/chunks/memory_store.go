@@ -164,11 +164,11 @@ func (ms *MemoryStoreView) Root(ctx context.Context) hash.Hash {
 	return ms.rootHash
 }
 
-func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) bool {
+func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if last != ms.rootHash {
-		return false
+		return false, nil
 	}
 
 	success := ms.storage.Update(current, last, ms.pending)
@@ -176,7 +176,7 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 		ms.pending = nil
 	}
 	ms.rootHash = ms.storage.Root(ctx)
-	return success
+	return success, nil
 }
 
 func (ms *MemoryStoreView) Stats() interface{} {

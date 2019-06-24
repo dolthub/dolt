@@ -31,7 +31,7 @@ var (
 type rootTracker interface {
 	Rebase(ctx context.Context)
 	Root(ctx context.Context) hash.Hash
-	Commit(ctx context.Context, current, last hash.Hash) bool
+	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 
 func newDatabase(cs chunks.ChunkStore) *database {
@@ -224,13 +224,17 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 	return err
 }
 
-func (db *database) tryCommitChunks(ctx context.Context, currentDatasets types.Map, currentRootHash hash.Hash) (err error) {
+func (db *database) tryCommitChunks(ctx context.Context, currentDatasets types.Map, currentRootHash hash.Hash) error {
 	newRootHash := db.WriteValue(ctx, currentDatasets).TargetHash()
 
-	if !db.rt.Commit(ctx, newRootHash, currentRootHash) {
-		err = ErrOptimisticLockFailed
+	if success, err := db.rt.Commit(ctx, newRootHash, currentRootHash); err != nil {
+		// TODO: fix panics
+		d.PanicIfError(err)
+	} else if !success {
+		return ErrOptimisticLockFailed
 	}
-	return
+
+	return nil
 }
 
 func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) types.Struct {
