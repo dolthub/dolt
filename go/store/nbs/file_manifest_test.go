@@ -31,18 +31,20 @@ func TestFileManifestLoadIfExists(t *testing.T) {
 	defer os.RemoveAll(fm.dir)
 	stats := &Stats{}
 
-	exists, upstream := fm.ParseIfExists(context.Background(), stats, nil)
+	exists, upstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+	assert.NoError(err)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
 	jerk := computeAddr([]byte("jerk"))
 	newRoot := hash.Of([]byte("new root"))
 	tableName := hash.Of([]byte("table1"))
-	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", jerk.String(), newRoot.String(), tableName.String(), "0"}, ":"))
+	err = clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", jerk.String(), newRoot.String(), tableName.String(), "0"}, ":"))
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, upstream = fm.ParseIfExists(context.Background(), stats, nil)
+	exists, upstream, err = fm.ParseIfExists(context.Background(), stats, nil)
+	assert.NoError(err)
 	assert.True(exists)
 	assert.Equal("0", upstream.vers)
 	assert.Equal(jerk, upstream.lock)
@@ -67,14 +69,16 @@ func TestFileManifestLoadIfExistsHoldsLock(t *testing.T) {
 	assert.NoError(err)
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, upstream := fm.ParseIfExists(context.Background(), stats, func() {
+	exists, upstream, err := fm.ParseIfExists(context.Background(), stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest.
 		lock := computeAddr([]byte("newlock"))
 		badRoot := hash.Of([]byte("bad root"))
 		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", lock.String(), badRoot.String(), tableName.String(), "0"}, ":"))
 		assert.NoError(err, string(b))
+		return err
 	})
 
+	assert.NoError(err)
 	assert.True(exists)
 	assert.Equal(constants.NomsVersion, upstream.vers)
 	assert.Equal(newRoot, upstream.root)
@@ -110,7 +114,8 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.Empty(upstream.specs)
 
 	fm2 := fileManifest{fm.dir} // Open existent, but empty manifest
-	exists, upstream := fm2.ParseIfExists(context.Background(), stats, nil)
+	exists, upstream, err := fm2.ParseIfExists(context.Background(), stats, nil)
+	assert.NoError(err)
 	assert.True(exists)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())

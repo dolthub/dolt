@@ -66,64 +66,105 @@ func (fm fileManifest) Name() string {
 // that case, the other return values are undefined. If |readHook| is non-nil,
 // it will be executed while ParseIfExists() holds the manifest file lock.
 // This is to allow for race condition testing.
-func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
 
+	var exists bool
+	var contents manifestContents
 	// !exists(lockFileName) => unitialized store
 	if lockFileExists(fm.dir) {
 		var f io.ReadCloser
-		func() {
+		err := func() error {
 			lck := newLock(fm.dir)
-			d.PanicIfError(lck.Lock())
+			err := lck.Lock()
+
+			if err != nil {
+				return err
+			}
+
 			defer lck.Unlock()
 
 			if readHook != nil {
-				readHook()
+				err := readHook()
+
+				if err != nil {
+					return err
+				}
 			}
-			f = openIfExists(filepath.Join(fm.dir, manifestFileName))
+
+			f, err = openIfExists(filepath.Join(fm.dir, manifestFileName))
+
+			if err != nil {
+				return err
+			}
+
+			return nil
 		}()
+
+		if err != nil {
+			return exists, contents, err
+		}
 
 		if f != nil {
 			defer checkClose(f)
 			exists = true
-			contents = parseManifest(f)
+
+			var err error
+			contents, err = parseManifest(f)
+
+			if err != nil {
+				return false, contents, err
+			}
 		}
 	}
-	return
+
+	return exists, contents, nil
 }
 
 // Returns nil if path does not exist
-func openIfExists(path string) *os.File {
+func openIfExists(path string) (*os.File, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
-		return nil
+		return nil, nil
+	} else if err != nil {
+		return nil, err
 	}
-	d.PanicIfError(err)
-	return f
+
+	return f, err
 }
 
 // ParseManifest parses s a manifest file from the supplied reader
-func ParseManifest(r io.Reader) ManifestInfo {
+func ParseManifest(r io.Reader) (ManifestInfo, error) {
 	return parseManifest(r)
 }
 
-func parseManifest(r io.Reader) manifestContents {
+func parseManifest(r io.Reader) (manifestContents, error) {
 	manifest, err := ioutil.ReadAll(r)
-	d.PanicIfError(err)
+
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	slices := strings.Split(string(manifest), ":")
 	if len(slices) < 4 || len(slices)%2 == 1 {
-		d.Chk.Fail("Malformed manifest: " + string(manifest))
+		return manifestContents{}, ErrCorruptManifest
 	}
+
 	d.PanicIfFalse(StorageVersion == string(slices[0]))
+
+	specs, err := parseSpecs(slices[4:])
+
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	return manifestContents{
 		vers:  slices[1],
 		lock:  ParseAddr([]byte(slices[2])),
 		root:  hash.Parse(slices[3]),
-		specs: parseSpecs(slices[4:]),
-	}
+		specs: specs,
+	}, nil
 }
 
 func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
@@ -154,13 +195,21 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
 	manifestPath := filepath.Join(fm.dir, manifestFileName)
 	upstream := func() manifestContents {
-		if f := openIfExists(manifestPath); f != nil {
+		if f, err := openIfExists(manifestPath); err == nil && f != nil {
 			defer checkClose(f)
 
-			upstream := parseManifest(f)
+			upstream, err := parseManifest(f)
+
+			// TODO - fix panics. moved this one up the stack
+			d.PanicIfError(err)
+
 			d.PanicIfFalse(constants.NomsVersion == upstream.vers)
 			return upstream
+		} else if err != nil {
+			// TODO - fix panics. moved this one up the stack
+			d.PanicIfError(err)
 		}
+
 		d.Chk.True(lastLock == addr{})
 		return manifestContents{}
 	}()

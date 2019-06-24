@@ -283,13 +283,14 @@ func (fm *fakeManifest) Name() string { return fm.name }
 
 // ParseIfExists returns any fake manifest data the caller has injected using
 // Update() or set(). It treats an empty |fm.lock| as a non-existent manifest.
-func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 	if fm.contents.lock != (addr{}) {
-		return true, fm.contents
+		return true, fm.contents, nil
 	}
-	return false, manifestContents{}
+
+	return false, manifestContents{}, nil
 }
 
 // Update checks whether |lastLock| == |fm.lock| and, if so, updates internal

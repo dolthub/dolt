@@ -29,7 +29,8 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	mm, ddb := makeDynamoManifestFake(t)
 	stats := &Stats{}
 
-	exists, _ := mm.ParseIfExists(context.Background(), stats, nil)
+	exists, _, err := mm.ParseIfExists(context.Background(), stats, nil)
+	assert.NoError(err)
 	assert.False(exists)
 
 	// Simulate another process writing a manifest (with an old Noms version).
@@ -39,7 +40,8 @@ func TestDynamoManifestParseIfExists(t *testing.T) {
 	ddb.putRecord(db, newLock[:], newRoot[:], "0", tableName.String()+":"+"0")
 
 	// ParseIfExists should now reflect the manifest written above.
-	exists, contents := mm.ParseIfExists(context.Background(), stats, nil)
+	exists, contents, err := mm.ParseIfExists(context.Background(), stats, nil)
+	assert.NoError(err)
 	assert.True(exists)
 	assert.Equal("0", contents.vers)
 	assert.Equal(newLock, contents.lock)
@@ -116,7 +118,8 @@ func TestDynamoManifestCaching(t *testing.T) {
 
 	// ParseIfExists should hit persistent storage no matter what
 	reads := ddb.numGets
-	exists, _ := mm.ParseIfExists(context.Background(), stats, nil)
+	exists, _, err := mm.ParseIfExists(context.Background(), stats, nil)
+	assert.NoError(err)
 	assert.False(exists)
 	assert.Equal(reads+1, ddb.numGets)
 
@@ -124,7 +127,8 @@ func TestDynamoManifestCaching(t *testing.T) {
 	ddb.putRecord(db, lock[:], root[:], constants.NomsVersion, "")
 
 	reads = ddb.numGets
-	exists, _ = mm.ParseIfExists(context.Background(), stats, nil)
+	exists, _, err = mm.ParseIfExists(context.Background(), stats, nil)
+	assert.NoError(err)
 	assert.True(exists)
 	assert.Equal(reads+1, ddb.numGets)
 
