@@ -1,12 +1,12 @@
 package dtestutils
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/require"
 	"strconv"
 	"testing"
@@ -71,6 +71,23 @@ func init() {
 
 		UntypedRows = append(UntypedRows, row.New(UntypedSchema, taggedVals))
 	}
+}
+
+func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *string) row.Row {
+	var titleVal types.Value
+	if title != nil {
+		titleVal = types.String(*title)
+	}
+
+	taggedVals := row.TaggedValues{
+		IdTag:        types.UUID(id),
+		NameTag:      types.String(name),
+		AgeTag:       types.Uint(age),
+		IsMarriedTag: types.Bool(isMarried),
+		TitleTag:     titleVal,
+	}
+
+	return row.New(TypedSchema, taggedVals)
 }
 
 func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {

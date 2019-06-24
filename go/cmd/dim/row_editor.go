@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/gizak/termui/v3"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/nsf/termbox-go"
 )
 

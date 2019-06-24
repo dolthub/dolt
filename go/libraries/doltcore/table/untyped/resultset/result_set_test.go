@@ -2,11 +2,11 @@ package resultset
 
 import (
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -340,8 +340,8 @@ func TestNewFromColumns(t *testing.T) {
 			{mustGetCol(peopleTestSchema, "last"), peopleTestSchema},
 		}
 
-		schemas := map[string]schema.Schema {
-			"people": peopleTestSchema,
+		schemas := map[string]schema.Schema{
+			"people":   peopleTestSchema,
 			"episodes": episodesTestSchema,
 		}
 
@@ -371,9 +371,9 @@ func TestNewFromColumns(t *testing.T) {
 		assert.Equal(t, expectedMapping, rss.mapping)
 		assert.Equal(t, expectedDestSchema, rss.Schema())
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(ep1, ep2), episodesTestSchema),
 		}
 
 		expectedResult := rs(
@@ -383,9 +383,18 @@ func TestNewFromColumns(t *testing.T) {
 			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
+}
+
+func getCrossProduct(rss *ResultSetSchema, tables []*TableResult) []row.Row {
+	result := make([]row.Row, 0)
+	cb := func(r row.Row) {
+		result = append(result, r)
+	}
+	rss.CrossProduct(tables, cb)
+	return result
 }
 
 // Creates a new row for a result set specified by the given values
@@ -412,11 +421,11 @@ func newResultSetRow(colVals ...types.Value) row.Row {
 // strings, types are NomsKinds.
 func newResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
 
-	if len(colNamesAndTypes) % 2 != 0 {
+	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to newResultSetSchema")
 	}
 
-	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
@@ -558,10 +567,10 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
-			{Rows: rs(app1, app2), Schema: appearancesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(ep1, ep2), episodesTestSchema),
+			newTableResultForTest(rs(app1, app2), appearancesTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -576,7 +585,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -584,10 +593,10 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer), Schema: peopleTestSchema},
-			{Rows: rs(ep1), Schema: episodesTestSchema},
-			{Rows: rs(app1), Schema: appearancesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer), peopleTestSchema),
+			newTableResultForTest(rs(ep1), episodesTestSchema),
+			newTableResultForTest(rs(app1), appearancesTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -595,7 +604,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -603,9 +612,9 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(ep1, ep2), Schema: episodesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(ep1, ep2), episodesTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -616,7 +625,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -624,8 +633,8 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge, bart), Schema: peopleTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge, bart), peopleTestSchema),
 		}
 
 		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(rss.destSch, nil)}
@@ -635,7 +644,7 @@ func TestCrossProduct(t *testing.T) {
 			rss.combineAllRows(resultRow.Copy(), RowWithSchema{bart, peopleTestSchema}).Row,
 		)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -643,14 +652,14 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema)
 		assert.Nil(t, err)
 
-		tables := []TableResult{
-			{Rows: rs(homer, marge), Schema: peopleTestSchema},
-			{Rows: rs(), Schema: episodesTestSchema},
+		tables := []*TableResult{
+			newTableResultForTest(rs(homer, marge), peopleTestSchema),
+			newTableResultForTest(rs(), episodesTestSchema),
 		}
 
 		expectedResult := make([]row.Row, 0)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, tables)
 		assert.Equal(t, expectedResult, result)
 	})
 
@@ -658,10 +667,9 @@ func TestCrossProduct(t *testing.T) {
 		rss, err := newFromSourceSchemas()
 		assert.Nil(t, err)
 
-		tables := []TableResult{}
-		expectedResult := rs()
+		expectedResult := make([]row.Row, 0)
 
-		result := rss.CrossProduct(tables)
+		result := getCrossProduct(rss, []*TableResult{})
 		assert.Equal(t, expectedResult, result)
 	})
 }
@@ -673,7 +681,6 @@ func mustGetColVal(r row.Row, tag uint64) types.Value {
 	}
 	return value
 }
-
 
 // TODO: refactor sqltestutil.go to its own package (probably not sql) and export these values.
 //  This is all copy-pasted from there
@@ -760,12 +767,12 @@ func createAppearancesTestSchema() schema.Schema {
 
 func newPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
 	vals := row.TaggedValues{
-		idTag: types.Int(id),
-		firstTag: types.String(first),
-		lastTag: types.String(last),
+		idTag:        types.Int(id),
+		firstTag:     types.String(first),
+		lastTag:      types.String(last),
 		isMarriedTag: types.Bool(isMarried),
-		ageTag: types.Int(age),
-		ratingTag: types.Float(rating),
+		ageTag:       types.Int(age),
+		ratingTag:    types.Float(rating),
 	}
 
 	return row.New(peopleTestSchema, vals)
@@ -774,9 +781,9 @@ func newPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 	vals := row.TaggedValues{
 		episodeIdTag: types.Int(id),
-		epNameTag: types.String(name),
+		epNameTag:    types.String(name),
 		epAirDateTag: types.Int(airdate),
-		epRatingTag: types.Float(rating),
+		epRatingTag:  types.Float(rating),
 	}
 
 	return row.New(episodesTestSchema, vals)
@@ -785,8 +792,8 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 func newAppsRow(charId, epId int, comment string) row.Row {
 	vals := row.TaggedValues{
 		appCharacterTag: types.Int(charId),
-		appEpTag : types.Int(epId),
-		appCommentsTag: types.String(comment),
+		appEpTag:        types.Int(epId),
+		appCommentsTag:  types.String(comment),
 	}
 
 	return row.New(appearancesTestSchema, vals)
@@ -819,10 +826,11 @@ var app7 = newAppsRow(homerId, 3, "Homer is in every episode")
 var app8 = newAppsRow(margeId, 3, "Marge shows up a lot too")
 var app9 = newAppsRow(lisaId, 3, "Lisa is the best Simpson")
 var app10 = newAppsRow(barneyId, 3, "I'm making this all up")
+
 // nobody in episode 4, that one was terrible
-var allAppsRows = rs(app1,app2,app3,app4,app5,app6,app7,app8,app9,app10)
+var allAppsRows = rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10)
 
 // Convenience func to avoid the boilerplate of typing []row.Row{} all the time
-func rs(rows... row.Row) []row.Row {
+func rs(rows ...row.Row) []row.Row {
 	return rows
 }

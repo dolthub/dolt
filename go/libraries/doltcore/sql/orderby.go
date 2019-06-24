@@ -1,9 +1,9 @@
 package sql
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/xwb1989/sqlparser"
 	"sort"
 )
@@ -53,6 +53,7 @@ func (rs *RowSorter) Less(rLeft, rRight row.Row) bool {
 }
 
 type orderDirection bool
+
 const (
 	asc  orderDirection = true
 	desc orderDirection = false
@@ -71,8 +72,8 @@ func (od orderDirection) lessVal(less bool) bool {
 
 // OrderBy represents a single order-by clause of potentially many in a query
 type OrderBy struct {
-	rowValGetter  *RowValGetter
-	direction     orderDirection
+	rowValGetter *RowValGetter
+	direction    orderDirection
 	InitValue
 }
 

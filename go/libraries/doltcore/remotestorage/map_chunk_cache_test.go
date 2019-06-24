@@ -1,8 +1,8 @@
 package remotestorage
 
 import (
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"reflect"

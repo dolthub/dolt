@@ -5,26 +5,48 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"github.com/cenkalti/backoff"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
+	"time"
 
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/constants"
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/nbs"
 	"github.com/golang/snappy"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 )
 
 var ErrUploadFailed = errors.New("upload failed")
 var ErrInvalidDoltSpecPath = errors.New("invalid dolt spec path")
 
 var globalHttpFetcher HTTPFetcher = &http.Client{}
+
+// We may need this to be configurable for users with really bad internet
+var downThroughputCheck = iohelp.MinThroughputCheckParams{
+	MinBytesPerSec: 1024,
+	CheckInterval:  1 * time.Second,
+	NumIntervals:   5,
+}
+
+const (
+	downRetryCount   = 5
+	uploadRetryCount = 5
+)
+
+var uploadRetryParams = backoff.NewExponentialBackOff()
+var downRetryParams = backoff.NewExponentialBackOff()
+
+func init() {
+	uploadRetryParams.MaxInterval = 5 * time.Second
+
+	downRetryParams.MaxInterval = 5 * time.Second
+}
 
 type HTTPFetcher interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -49,10 +71,18 @@ func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStore
 	org := tokens[0]
 	repoName := tokens[1]
 
-	return NewDoltChunkStore(org, repoName, host, csClient), nil
+	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
+		csClient = RetryingChunkStoreServiceClient{csClient}
+	}
+
+	return NewDoltChunkStore(org, repoName, host, RetryingChunkStoreServiceClient{csClient}), nil
 }
 
 func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
+	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
+		csClient = RetryingChunkStoreServiceClient{csClient}
+	}
+
 	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher}
 }
 
@@ -479,14 +509,18 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 	if err != nil {
 		return err
 	}
-	resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
+
+	var resp *http.Response
+	op := func() error {
+		var err error
+		resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
+		return processHttpResp(resp, err)
+	}
+
+	err = backoff.Retry(op, backoff.WithMaxRetries(uploadRetryParams, uploadRetryCount))
 
 	if err != nil {
 		return err
-	}
-
-	if resp.StatusCode/100 != 2 {
-		return ErrUploadFailed
 	}
 
 	return nil
@@ -542,7 +576,7 @@ func aggregateDownloads(aggDistance uint64, resourceToUrlAndRanges map[string]ur
 
 const (
 	chunkAggDistance       = 8 * 1024
-	maxDownloadConcurrency = 256
+	maxDownloadConcurrency = 64
 )
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
@@ -586,26 +620,7 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 	length := ranges[numRanges-1].Offset - offset + uint64(ranges[numRanges-1].Length)
 
 	return func() error {
-		// create the request
-		req, err := http.NewRequest(http.MethodGet, urlStr, nil)
-		if err != nil {
-			return err
-		}
-
-		rangeVal := fmt.Sprintf("bytes=%d-%d", offset, offset+length-1)
-		req.Header.Set("Range", rangeVal)
-
-		//execute the request
-		resp, err := dcs.httpFetcher.Do(req.WithContext(ctx))
-
-		if err != nil {
-			return err
-		} else if resp.StatusCode/100 != 2 {
-			return errors.New(urlStr + " returned " + strconv.FormatInt(int64(resp.StatusCode), 10))
-		}
-
-		// read the results
-		comprData, err := ioutil.ReadAll(resp.Body)
+		comprData, err := rangeDownloadWithRetries(ctx, dcs.httpFetcher, offset, length, urlStr)
 
 		if err != nil {
 			return err
@@ -628,6 +643,71 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 
 		return nil
 	}
+}
+
+// rangeDownloadWithRetries executes an http get with the 'Range' header to get a range of bytes from a file.  Request
+// is executed with retries and if progress was made, downloads will be resumed from where they left off on subsequent attempts.
+func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, length uint64, urlStr string) ([]byte, error) {
+	// create the request
+	req, err := http.NewRequest(http.MethodGet, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// parameters used for resuming downloads.
+	var allBufs [][]byte
+	currOffset := offset
+	currLength := length
+
+	callNumber := -1
+	//execute the request
+	op := func() error {
+		callNumber++
+		rangeVal := fmt.Sprintf("bytes=%d-%d", currOffset, currOffset+currLength-1)
+		req.Header.Set("Range", rangeVal)
+
+		var resp *http.Response
+		resp, err = fetcher.Do(req.WithContext(ctx))
+		respErr := processHttpResp(resp, err)
+
+		if respErr != nil {
+			return respErr
+		}
+
+		// read the results
+		comprData, err := iohelp.ReadWithMinThroughput(resp.Body, int64(currLength), downThroughputCheck)
+
+		dataRead := len(comprData)
+		if dataRead > 0 {
+			allBufs = append(allBufs, comprData)
+			currLength -= uint64(dataRead)
+			currOffset += uint64(dataRead)
+		}
+
+		return err
+	}
+
+	err = backoff.Retry(op, backoff.WithMaxRetries(downRetryParams, downRetryCount))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return collapseBuffers(allBufs, length), nil
+}
+
+func collapseBuffers(allBufs [][]byte, length uint64) []byte {
+	collapsed := allBufs[0]
+	if len(allBufs) > 1 {
+		collapsed = make([]byte, length)
+
+		pos := 0
+		for i := 0; i < len(allBufs); i++ {
+			copy(collapsed[pos:], allBufs[i])
+			pos += len(allBufs[i])
+		}
+	}
+	return collapsed
 }
 
 func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *remotesapi.HttpGetRange, chunkChan chan *chunks.Chunk) []func() error {

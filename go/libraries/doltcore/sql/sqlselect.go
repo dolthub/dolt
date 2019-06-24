@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/xwb1989/sqlparser"
-	"io"
 	"strconv"
+	"time"
 )
 
 // No limit marker for limit statements in select
@@ -46,13 +46,13 @@ type SelectStatement struct {
 	// Limit of results returned
 	limit int
 	// Offset for results (skip N)
-	offset     int
+	offset int
 }
 
 // A SelectedColumn is a column in the result set. It has a name and a way to extract it from an intermediate row.
 type SelectedColumn struct {
-	Name    string
-	Getter  *RowValGetter
+	Name   string
+	Getter *RowValGetter
 }
 
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
@@ -202,7 +202,7 @@ func processReferencedColumns(selectStmt *SelectStatement, colSelections sqlpars
 	cols := make([]QualifiedColumn, 0)
 	var selectedCols, whereCols, joinCols, orderByCols []QualifiedColumn
 	var err error
-	
+
 	if selectedCols, err = resolveColumnsInSelectClause(colSelections, selectStmt.inputTables, selectStmt.inputSchemas, selectStmt.aliases); err != nil {
 		return err
 	}
@@ -219,7 +219,7 @@ func processReferencedColumns(selectStmt *SelectStatement, colSelections sqlpars
 		return err
 	}
 
-	for _, refCols := range [][]QualifiedColumn {selectedCols, whereCols, joinCols, orderByCols} {
+	for _, refCols := range [][]QualifiedColumn{selectedCols, whereCols, joinCols, orderByCols} {
 		for _, col := range refCols {
 			if !contains(col, cols) {
 				cols = append(cols, col)
@@ -246,37 +246,37 @@ func contains(column QualifiedColumn, cols []QualifiedColumn) bool {
 func processLimitClause(s *sqlparser.Select, selectStmt *SelectStatement) error {
 	if s.Limit != nil && s.Limit.Rowcount != nil {
 
-			limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
+		limitVal, ok := s.Limit.Rowcount.(*sqlparser.SQLVal)
+		if !ok {
+			return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+		}
+		limitInt, err := strconv.Atoi(nodeToString(limitVal))
+		if err != nil {
+			return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
+		}
+
+		if limitInt < 0 {
+			return errFmt("Limit must be >= 0 if supplied: '%v'", nodeToString(s.Limit.Rowcount))
+		}
+
+		selectStmt.limit = limitInt
+
+		if s.Limit.Offset != nil {
+			offsetVal, ok := s.Limit.Offset.(*sqlparser.SQLVal)
 			if !ok {
 				return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
 			}
-			limitInt, err := strconv.Atoi(nodeToString(limitVal))
+			offsetInt, err := strconv.Atoi(nodeToString(offsetVal))
 			if err != nil {
 				return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
 			}
 
-			if limitInt < 0 {
-				return errFmt("Limit must be >= 0 if supplied: '%v'", nodeToString(s.Limit.Rowcount))
+			if offsetInt < 0 {
+				return errFmt("Offset must be >= 0 if supplied: '%v'", nodeToString(s.Limit.Offset))
 			}
 
-			selectStmt.limit = limitInt
-
-			if s.Limit.Offset != nil {
-				offsetVal, ok := s.Limit.Offset.(*sqlparser.SQLVal)
-				if !ok {
-					return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
-				}
-				offsetInt, err := strconv.Atoi(nodeToString(offsetVal))
-				if err != nil {
-					return errFmt("Couldn't parse limit clause: %v", nodeToString(s.Limit))
-				}
-
-				if offsetInt < 0 {
-					return errFmt("Offset must be >= 0 if supplied: '%v'", nodeToString(s.Limit.Offset))
-				}
-
-				selectStmt.offset = offsetInt
-			}
+			selectStmt.offset = offsetInt
+		}
 
 	} else {
 		selectStmt.limit = noLimit
@@ -442,9 +442,9 @@ func bindTagNumbers(statement *SelectStatement, resolver TagResolver) error {
 
 // The result of running a single select pipeline.
 type singleTablePipelineResult struct {
-	p    *pipeline.Pipeline
-	rows []row.Row
-	err  error
+	p       *pipeline.Pipeline
+	outChan chan row.Row
+	err     error
 }
 
 // createSelectPipeline constructs a pipeline to execute the statement and returns it. The constructed pipeline doesn't have
@@ -462,7 +462,9 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		// The field mapping used by where clause filtering is different depending on whether we filter the rows before
 		// or after we convert them to the result set schema. For single table selects, we use the schema of the single
 		// table for where clause filtering, then convert those rows to the result set schema.
-		bindTagNumbers(selectStmt, resultset.Identity(tableName, tableSch))
+		if err := bindTagNumbers(selectStmt, resultset.Identity(tableName, tableSch)); err != nil {
+			return nil, err
+		}
 
 		return createSingleTablePipeline(ctx, root, selectStmt, tableName, true)
 	}
@@ -474,12 +476,12 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 			return nil, err
 		}
 
-		result := &singleTablePipelineResult{p: p, rows: make([]row.Row, 0)}
+		result := &singleTablePipelineResult{p: p, outChan: make(chan row.Row)}
 		pipelines[tableName] = result
 
 		rowSink := pipeline.ProcFuncForSinkFunc(
 			func(r row.Row, props pipeline.ReadableMap) error {
-				result.rows = append(result.rows, r)
+				result.outChan <- r
 				return nil
 			})
 
@@ -489,29 +491,43 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 			return true
 		}
 
+		p.RunAfter(func() {
+			close(result.outChan)
+		})
+
+		// TODO: this adds an unnecessary stage to the pipeline
 		p.SetOutput(rowSink)
 		p.SetBadRowCallback(errSink)
 		p.Start()
 	}
 
-	results := make([]resultset.TableResult, 0)
+	results := make([]*resultset.TableResult, 0)
 	for _, tableName := range selectStmt.inputTables {
 		result := pipelines[tableName]
-		if err := result.p.Wait(); err != nil || result.err != nil {
-			return nil, err
-		}
-		results = append(results, resultset.TableResult{
-			Schema: selectStmt.inputSchemas[tableName],
-			Rows:   result.rows,
-		})
+		results = append(results, resultset.NewTableResult(result.outChan, selectStmt.inputSchemas[tableName]))
 	}
 
-	crossProduct := selectStmt.intermediateRss.CrossProduct(results)
-	source := sourceFuncForRows(crossProduct)
+	cpChan := make(chan row.Row)
+	cb := func(r row.Row) {
+		cpChan <- r
+	}
+	go func() {
+		defer close(cpChan)
+		selectStmt.intermediateRss.CrossProduct(results, cb)
+	}()
 
-	bindTagNumbers(selectStmt, selectStmt.intermediateRss)
+	// TODO: we need to check errors in pipeline execution without blocking
+	// for _, result := range pipelines {
+	// 	if err := result.p.Wait(); err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
-	p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+	if err := bindTagNumbers(selectStmt, selectStmt.intermediateRss); err != nil {
+		return nil, err
+	}
+
+	p := pipeline.NewPartialPipeline(inFuncForChannel(cpChan))
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
 	if selectStmt.orderBy != nil {
 		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderBy.Less)})
@@ -525,16 +541,35 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 	return p, nil
 }
 
-// Returns a source func that yields the rows given in order.
-func sourceFuncForRows(rows []row.Row) pipeline.SourceFunc {
-	idx := 0
-	return func() (row.Row, pipeline.ImmutableProperties, error) {
-		if idx >= len(rows) {
-			return nil, pipeline.NoProps, io.EOF
+// inFuncForChannel returns an InFunc that reads off the channel given. Probably belongs in the pipeline package
+// eventually.
+func inFuncForChannel(cpChan <-chan row.Row) pipeline.InFunc {
+	return func(p *pipeline.Pipeline, ch chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, noMoreChan <-chan struct{}) {
+		defer close(ch)
+
+		for {
+			select {
+			case <-noMoreChan:
+				return
+			default:
+				break
+			}
+
+			if p.IsStopping() {
+				return
+			}
+
+			select {
+			case r, ok := <-cpChan:
+				if ok {
+					ch <- pipeline.RowWithProps{Row: r, Props: pipeline.NoProps}
+				} else {
+					return
+				}
+			case <-time.After(100 * time.Millisecond):
+				// wake up and check stop condition
+			}
 		}
-		r := rows[idx]
-		idx++
-		return r, pipeline.NoProps, nil
 	}
 }
 
@@ -585,7 +620,7 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 
 	rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), tblSch)
 	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
-	p := pipeline.NewPartialPipeline(rdProcFunc, &pipeline.TransformCollection{})
+	p := pipeline.NewPartialPipeline(rdProcFunc)
 	p.RunAfter(func() { rd.Close(ctx) })
 
 	if isTerminal {
@@ -603,7 +638,7 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 }
 
 func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.NamedTransform {
-  var transformFunc pipeline.TransformRowFunc
+	var transformFunc pipeline.TransformRowFunc
 	transformFunc = func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 		taggedVals := make(row.TaggedValues)
 		for i, selectedCol := range selectStmt.selectedCols {

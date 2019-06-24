@@ -2,11 +2,11 @@ package sql
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"strconv"
@@ -621,9 +621,9 @@ func TestExecuteSelect(t *testing.T) {
 			expectedErr: `Unknown column: 'dne'`,
 		},
 		{
-			name:         "unsupported comparison",
-			query:        "select * from people where function(first)",
-			expectedErr:  "not supported",
+			name:        "unsupported comparison",
+			query:       "select * from people where function(first)",
+			expectedErr: "not supported",
 		},
 		{
 			name:        "type mismatch in where clause",
@@ -732,13 +732,13 @@ func TestJoins(t *testing.T) {
 			expectedSchema: compressSchemas(PeopleTestSchema, EpisodesTestSchema),
 		},
 		{
-			name:  "ambiguous column in select",
-			query: `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
+			name:        "ambiguous column in select",
+			query:       `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
 			expectedErr: "Ambiguous column: 'id'",
 		},
 		{
-			name:  "ambiguous column in where",
-			query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
+			name:        "ambiguous column in where",
+			query:       `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
 			expectedErr: "Ambiguous column: 'id'",
 		},
 		{
@@ -829,7 +829,7 @@ func TestJoins(t *testing.T) {
 			expectedSchema: newResultSetSchema("name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
 		},
 		{
-			name:  "Natural join with join clause, select subset of columns, order by clause",
+			name: "Natural join with join clause, select subset of columns, order by clause",
 			query: `select e.id, p.id, e.name, p.first, p.last from people p 
 							join episodes e on e.id = p.id
 							order by e.name`,
@@ -843,7 +843,7 @@ func TestJoins(t *testing.T) {
 				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
 		},
 		{
-			name:  "Natural join with join clause, select subset of columns, order by clause on non-selected column",
+			name: "Natural join with join clause, select subset of columns, order by clause on non-selected column",
 			query: `select e.id, p.id, e.name, p.first, p.last from people p 
 							join episodes e on e.id = p.id
 							order by age`,
@@ -1100,8 +1100,8 @@ func TestCaseSensitivity(t *testing.T) {
 		// TODO: this could be handled better (not change the case of the result set schema), but the parser will silently
 		//  lower-case any column name expression that is a reserved word. Changing that is harder.
 		{
-			name:        "column is reserved word, select not backticked",
-			tableName:   "test",
+			name:      "column is reserved word, select not backticked",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -1115,8 +1115,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedSchema: newResultSetSchema("timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, qualified with table alias",
-			tableName:   "test",
+			name:      "column is reserved word, qualified with table alias",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -1130,8 +1130,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedSchema: newResultSetSchema("timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, select not backticked #2",
-			tableName:   "test",
+			name:      "column is reserved word, select not backticked #2",
+			tableName: "test",
 			tableSchema: newSchema(
 				"YeAr", types.StringKind),
 			initialRows:    Rs(newRow(types.String("1"))),
@@ -1140,8 +1140,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "column is reserved word, select backticked",
-			tableName:   "test",
+			name:      "column is reserved word, select backticked",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -1155,8 +1155,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedSchema: newResultSetSchema("Timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, select backticked #2",
-			tableName:   "test",
+			name:      "column is reserved word, select backticked #2",
+			tableName: "test",
 			tableSchema: newSchema(
 				"Year", types.StringKind,
 				"and", types.StringKind,
@@ -1240,11 +1240,11 @@ func newRow(colVals ...types.Value) row.Row {
 // Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
 // Uses the first column as the primary key.
 func newSchema(colNamesAndTypes ...interface{}) schema.Schema {
-	if len(colNamesAndTypes) % 2 != 0 {
+	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to newResultSetSchema")
 	}
 
-	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
@@ -1268,7 +1268,7 @@ func newSchema(colNamesAndTypes ...interface{}) schema.Schema {
 // Returns the logical concatenation of the schemas and rows given, rewriting all tag numbers to begin at zero. The row
 // returned will have a new schema identical to the result of compressSchema.
 func concatRows(schemasAndRows ...interface{}) row.Row {
-	if len(schemasAndRows) % 2 != 0 {
+	if len(schemasAndRows)%2 != 0 {
 		panic("Non-even number of inputs passed to concatRows")
 	}
 
@@ -1320,7 +1320,7 @@ func compressRow(sch schema.Schema, r row.Row) row.Row {
 }
 
 // Compresses each of the rows given ala compressRow
-func compressRows(sch schema.Schema, rs ...row.Row, ) []row.Row {
+func compressRows(sch schema.Schema, rs ...row.Row) []row.Row {
 	compressed := make([]row.Row, len(rs))
 	for i := range rs {
 		compressed[i] = compressRow(sch, rs[i])
@@ -1391,11 +1391,11 @@ func compressSchemas(schs ...schema.Schema) schema.Schema {
 // strings, types are NomsKinds.
 func newResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
 
-	if len(colNamesAndTypes) % 2 != 0 {
+	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to newResultSetSchema")
 	}
 
-	cols := make([]schema.Column, len(colNamesAndTypes) / 2)
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
 	for i := 0; i < len(colNamesAndTypes); i += 2 {
 		name := colNamesAndTypes[i].(string)
 		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)

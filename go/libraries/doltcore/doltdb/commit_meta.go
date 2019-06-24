@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (

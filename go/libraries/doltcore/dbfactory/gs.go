@@ -3,9 +3,9 @@ package dbfactory
 import (
 	"cloud.google.com/go/storage"
 	"context"
-	"github.com/attic-labs/noms/go/datas"
-	"github.com/attic-labs/noms/go/nbs"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"net/url"
 )
 

@@ -2,11 +2,11 @@ package alterschema
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -24,11 +24,11 @@ func TestRenameTable(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:    "rename table",
-			tableName: "people",
-			newTableName: "newPeople",
+			name:           "rename table",
+			tableName:      "people",
+			newTableName:   "newPeople",
 			expectedSchema: dtestutils.TypedSchema,
-			expectedRows: dtestutils.TypedRows,
+			expectedRows:   dtestutils.TypedRows,
 		},
 		{
 			name:         "table not found",

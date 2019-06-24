@@ -1,8 +1,8 @@
 package doltcore
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
 )
 

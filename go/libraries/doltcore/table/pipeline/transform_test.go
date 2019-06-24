@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"strconv"
@@ -115,7 +115,7 @@ func TestAddingStages(t *testing.T) {
 			NewNamedTransform("label", labelTransFunc),
 		)
 
-		addedStages := []NamedTransform {
+		addedStages := []NamedTransform{
 			NewNamedTransform("dupe", dupeTransFunc),
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
@@ -180,12 +180,9 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 		rd, _ := csv.NewCSVReader(ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
-		tc := NewTransformCollection(
+		addedStages := []NamedTransform {
 			NewNamedTransform("identity", identityTransFunc),
 			NewNamedTransform("label", labelTransFunc),
-		)
-
-		addedStages := []NamedTransform {
 			NewNamedTransform("dupe", dupeTransFunc),
 			NewNamedTransform("append", appendColumnPre2000TransFunc),
 		}
@@ -193,7 +190,7 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 		inProcFunc := ProcFuncForReader(context.Background(), rd)
 		outProcFunc := ProcFuncForWriter(context.Background(), wr)
 
-		p := NewPartialPipeline(inProcFunc, tc)
+		p := NewPartialPipeline(inProcFunc)
 		for _, stage := range addedStages {
 			p.AddStage(stage)
 		}

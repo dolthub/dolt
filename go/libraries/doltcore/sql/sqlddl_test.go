@@ -2,10 +2,11 @@ package sql
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -173,19 +174,19 @@ func TestExecuteCreate(t *testing.T) {
 		},
 		// Real world examples for regression testing
 		// TODO: need type conversion for defaults to work here (uint to int)
-// 		{
-// 			name:  "Test ip2nation",
-// 			query: `CREATE TABLE ip2nation (
-//   ip int(11) unsigned NOT NULL default 0,
-//   country char(2) NOT NULL default '',
-//   PRIMARY KEY (ip)
-// );`,
-// 			expectedSchema: dtestutils.CreateSchema(
-// 				schema.NewColumn("ip", 0, types.UintKind, true, schema.NotNullConstraint{}),
-// 				schema.NewColumn("country", 1, types.StringKind, false, schema.NotNullConstraint{})),
-// 		},
+		// 		{
+		// 			name:  "Test ip2nation",
+		// 			query: `CREATE TABLE ip2nation (
+		//   ip int(11) unsigned NOT NULL default 0,
+		//   country char(2) NOT NULL default '',
+		//   PRIMARY KEY (ip)
+		// );`,
+		// 			expectedSchema: dtestutils.CreateSchema(
+		// 				schema.NewColumn("ip", 0, types.UintKind, true, schema.NotNullConstraint{}),
+		// 				schema.NewColumn("country", 1, types.StringKind, false, schema.NotNullConstraint{})),
+		// 		},
 		{
-			name:  "Test ip2nationCountries",
+			name: "Test ip2nationCountries",
 			query: `CREATE TABLE ip2nationCountries (
   code varchar(4) NOT NULL default '',
   iso_code_2 varchar(2) NOT NULL default '',
@@ -205,7 +206,6 @@ func TestExecuteCreate(t *testing.T) {
 				schema.NewColumn("lat", 5, types.FloatKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("lon", 6, types.FloatKind, false, schema.NotNullConstraint{})),
 		},
-
 	}
 
 	for _, tt := range tests {
@@ -334,18 +334,18 @@ func TestAddColumn(t *testing.T) {
 			expectedRows: dtestutils.AddColToRows(t, sqltestutil.AllPeopleRows, 100, types.Float(-1.1)),
 		},
 		{
-			name:  "alter add column not null with type mismatch in default",
-			query: "alter table people add (newColumn float default 'not a number' comment 'tag:100')",
+			name:        "alter add column not null with type mismatch in default",
+			query:       "alter table people add (newColumn float default 'not a number' comment 'tag:100')",
 			expectedErr: "Type mismatch",
 		},
 		{
-			name:  "alter add column with tag conflict",
-			query: "alter table people add (newColumn float default 1.0 comment 'tag:1')",
+			name:        "alter add column with tag conflict",
+			query:       "alter table people add (newColumn float default 1.0 comment 'tag:1')",
 			expectedErr: "A column with the tag 1 already exists",
 		},
 		{
-			name:  "alter add column not null without default",
-			query: "alter table people add (newColumn varchar(80) not null comment 'tag:100')",
+			name:        "alter add column not null without default",
+			query:       "alter table people add (newColumn varchar(80) not null comment 'tag:100')",
 			expectedErr: "a default value must be provided",
 		},
 		{
@@ -407,38 +407,38 @@ func TestAddColumn(t *testing.T) {
 
 func TestUnsupportedAlterStatements(t *testing.T) {
 	tests := []struct {
-		name           string
-		query          string
-		expectedErr    string
+		name        string
+		query       string
+		expectedErr string
 	}{
 		{
-			name:  "alter add index",
-			query: "alter table people add index myidx on (id, first)",
+			name:        "alter add index",
+			query:       "alter table people add index myidx on (id, first)",
 			expectedErr: "Unsupported",
 		},
 		{
-			name:  "create index",
-			query: "create index myidx on people (id, first)",
+			name:        "create index",
+			query:       "create index myidx on people (id, first)",
 			expectedErr: "Unsupported",
 		},
 		{
-			name:  "alter drop index",
-			query: "alter table people drop index myidx",
+			name:        "alter drop index",
+			query:       "alter table people drop index myidx",
 			expectedErr: "Unsupported",
 		},
 		{
-			name:  "drop index",
-			query: "drop index myidx on people",
+			name:        "drop index",
+			query:       "drop index myidx on people",
 			expectedErr: "Unsupported",
 		},
 		{
-			name:  "alter change column",
-			query: "alter table people change id newId (varchar(80) not null)",
+			name:        "alter change column",
+			query:       "alter table people change id newId (varchar(80) not null)",
 			expectedErr: "Unsupported",
 		},
 		{
-			name:  "alter add foreign key",
-			query: "alter table appearances add constraint people_id_ref foreign key (id) references people (id)",
+			name:        "alter add foreign key",
+			query:       "alter table appearances add constraint people_id_ref foreign key (id) references people (id)",
 			expectedErr: "Unsupported",
 		},
 	}
@@ -462,7 +462,6 @@ func TestUnsupportedAlterStatements(t *testing.T) {
 	}
 }
 
-
 func TestDropColumn(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -484,18 +483,18 @@ func TestDropColumn(t *testing.T) {
 			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(sqltestutil.PeopleTestSchema, sqltestutil.RatingTag), sqltestutil.AllPeopleRows...),
 		},
 		{
-			name:  "drop primary key",
-			query: "alter table people drop column id",
+			name:        "drop primary key",
+			query:       "alter table people drop column id",
 			expectedErr: "Cannot drop column in primary key",
 		},
 		{
-			name:  "table not found",
-			query: "alter table notFound drop column id",
+			name:        "table not found",
+			query:       "alter table notFound drop column id",
 			expectedErr: "Unknown table: 'notFound'",
 		},
 		{
-			name:  "column not found",
-			query: "alter table people drop column notFound",
+			name:        "column not found",
+			query:       "alter table people drop column notFound",
 			expectedErr: "Unknown column: 'notFound'",
 		},
 	}
@@ -610,18 +609,18 @@ func TestRenameColumn(t *testing.T) {
 			expectedRows: sqltestutil.AllPeopleRows,
 		},
 		{
-			name:  "table not found",
-			query: "alter table notFound rename column id to newId",
+			name:        "table not found",
+			query:       "alter table notFound rename column id to newId",
 			expectedErr: "Unknown table: 'notFound'",
 		},
 		{
-			name:  "column not found",
-			query: "alter table people rename notFound to newNotFound",
+			name:        "column not found",
+			query:       "alter table people rename notFound to newNotFound",
 			expectedErr: "Unknown column: 'notFound'",
 		},
 		{
-			name:  "column name collision",
-			query: "alter table people rename id to age",
+			name:        "column name collision",
+			query:       "alter table people rename id to age",
 			expectedErr: "A column with the name 'age' already exists",
 		},
 	}
@@ -702,13 +701,13 @@ func TestRenameTable(t *testing.T) {
 			expectedRows:   sqltestutil.AllAppsRows,
 		},
 		{
-			name:  "table not found",
-			query: "rename table notFound to newNowFound",
+			name:        "table not found",
+			query:       "rename table notFound to newNowFound",
 			expectedErr: "Unknown table: 'notFound'",
 		},
 		{
-			name:  "table name in use",
-			query: "rename table people to appearances",
+			name:        "table name in use",
+			query:       "rename table people to appearances",
 			expectedErr: "A table with the name 'appearances' already exists",
 		},
 	}

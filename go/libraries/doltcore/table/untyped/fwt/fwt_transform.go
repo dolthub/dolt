@@ -1,9 +1,9 @@
 package fwt
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // TooLongBehavior determines how the FWTTransformer should behave when it encounters a column that is longer than what
@@ -83,8 +83,8 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 			} else {
 				n := copy(buf, []rune(str))
 				// Character widths are tricky. Always overwrite from where we left off to the end of the buffer to clear it.
-				for i := 0; n + i < len(buf); i++ {
-					buf[n + i] = ' '
+				for i := 0; n+i < len(buf); i++ {
+					buf[n+i] = ' '
 				}
 			}
 

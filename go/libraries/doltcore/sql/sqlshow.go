@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/xwb1989/sqlparser"
 )
 
@@ -84,15 +84,12 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		table, _ := root.GetTable(ctx, tableName)
 
 		sch := table.GetSchema(ctx)
-		schemaStr, err := SchemaAsCreateStmt(tableName, sch)
-		if err != nil {
-			return nil, nil, err
-		}
+		schemaStr := SchemaAsCreateStmt(tableName, sch)
 
 		resultSch := showCreateTableSchema()
 		rows := toRows(([][]string{{tableName, schemaStr}}), resultSch)
-		source := sourceFuncForRows(rows)
-		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+		source := pipeline.SourceFuncForRows(rows)
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 
 		return p, resultSch, nil
 
@@ -107,16 +104,16 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		tableSch := table.GetSchema(ctx)
 		rows := schemaAsShowColumnRows(tableSch)
 
-		source := sourceFuncForRows(rows)
-		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+		source := pipeline.SourceFuncForRows(rows)
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 		return p, showColumnsSchema(), nil
 
 	case "tables":
 		tableNames := root.GetTableNames(ctx)
 		sch := showTablesSchema()
 		rows := toRows(transpose(tableNames), sch)
-		source := sourceFuncForRows(rows)
-		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source), &pipeline.TransformCollection{})
+		source := pipeline.SourceFuncForRows(rows)
+		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 		return p, sch, nil
 	default:
 		return nil, nil, errFmt("Unsupported show statement: '%v'", nodeToString(show))
@@ -154,7 +151,7 @@ func describeColumn(col schema.Column) row.Row {
 		2: types.String(nullStr),
 		3: types.String(keyStr),
 		4: types.String("NULL"), // TODO: when schemas store defaults, use them here
-		5: types.String(""), // Extra column reserved for future use
+		5: types.String(""),     // Extra column reserved for future use
 	}
 	return row.New(showColumnsSchema(), taggedVals)
 }
@@ -163,7 +160,7 @@ func describeColumn(col schema.Column) row.Row {
 func transpose(ss []string) [][]string {
 	ret := make([][]string, len(ss))
 	for i, s := range ss {
-		ret [i] = []string{s}
+		ret[i] = []string{s}
 	}
 	return ret
 }

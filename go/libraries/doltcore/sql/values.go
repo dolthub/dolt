@@ -2,11 +2,11 @@ package sql
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/xwb1989/sqlparser"
 	"strconv"
 )
@@ -34,7 +34,7 @@ type InitValue interface {
 
 // Composes zero or more InitValue into a new Init() function, where Init() is called on each InitValue in turn,
 // returning any error encountered.
-func ComposeInits(ivs ...InitValue) func(TagResolver) error{
+func ComposeInits(ivs ...InitValue) func(TagResolver) error {
 	return func(resolver TagResolver) error {
 		for _, iv := range ivs {
 			if err := iv.Init(resolver); err != nil {
@@ -207,20 +207,20 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		vals := make([]types.Value, len(e))
 		var kind types.NomsKind
 		for i, item := range e {
-			switch v := item.(type) {
-			case *sqlparser.SQLVal:
-				if val, err := divineNomsValueFromSQLVal(v); err != nil {
-					return nil, err
-				} else {
-					if i > 0 && kind != val.Kind() {
-						return nil, errFmt("Type mismatch: mixed types in list literal '%v'", nodeToString(e))
-					}
-					vals[i] = val
-					kind = val.Kind()
-				}
-			default:
-				return nil, errFmt("Unsupported list literal: %v", nodeToString(v))
+			g, err := getterFor(item, inputSchemas, aliases)
+			if err != nil {
+				return nil, err
 			}
+			if err := g.Init(fakeResolver{}); err != nil {
+				return nil, err
+			}
+
+			val := g.Get(nil)
+			if i > 0 && kind != val.Kind() {
+				return nil, errFmt("Type mismatch: mixed types in list literal '%v'", nodeToString(e))
+			}
+			vals[i] = val
+			kind = val.Kind()
 		}
 
 		// TODO: surely there is a better way to do this without resorting to interface{}
@@ -233,7 +233,6 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		getter.NomsKind = kind
 		return getter, nil
 
-		// TODO: combine with CreateFilterForWhere
 	case *sqlparser.ComparisonExpr:
 
 		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
@@ -306,9 +305,9 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			return nil, errFmt("json not supported")
 		}
 
-	getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, predicate)
- 	getter.initFn = ComposeInits(leftGetter, rightGetter)
- 	return getter, nil
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, predicate)
+		getter.initFn = ComposeInits(leftGetter, rightGetter)
+		return getter, nil
 
 	case *sqlparser.AndExpr:
 		leftGetter, err := getterFor(e.Left, inputSchemas, aliases)
@@ -386,7 +385,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			return nil, errFmt("Unrecognized is comparison: %v", e.Operator)
 		}
 
-	return getter, nil
+		return getter, nil
 
 	case *sqlparser.BinaryExpr:
 		return getterForBinaryExpr(e, inputSchemas, aliases)

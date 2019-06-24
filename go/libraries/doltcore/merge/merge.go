@@ -3,13 +3,13 @@ package merge
 import (
 	"context"
 	"errors"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 var ErrFastForward = errors.New("fast forward")

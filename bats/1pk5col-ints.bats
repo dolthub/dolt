@@ -560,11 +560,20 @@ teardown() {
     [ -f export.csv ]
 }
 
+@test "dolt table SQL export" {
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt table export test export.sql
+    [ "$status" -eq 0 ]
+    [ "$output" = "Successfully exported data." ]
+    [ -f export.sql ]
+    diff $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
+}
+
 @test "dolt schema" {
     run dolt schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
@@ -575,7 +584,7 @@ teardown() {
     run dolt schema test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
-    [[ "$output" =~ "CREATE TABLE test" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
     [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
     [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
