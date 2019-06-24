@@ -62,7 +62,7 @@ func ExecuteSelect(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Sel
 		return nil, nil, err
 	}
 
-	var rows []row.Row // your boat
+	rows := make([]row.Row, 0)
 	rowSink := pipeline.ProcFuncForSinkFunc(
 		func(r row.Row, props pipeline.ReadableMap) error {
 			rows = append(rows, r)

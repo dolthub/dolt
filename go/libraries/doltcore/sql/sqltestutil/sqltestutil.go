@@ -182,6 +182,9 @@ var AllAppsRows = Rs(app1, app2, app3, app4, app5, app6, app7, app8, app9, app10
 
 // Convenience func to avoid the boilerplate of typing []row.Row{} all the time
 func Rs(rows ...row.Row) []row.Row {
+	if rows == nil {
+		return make([]row.Row, 0)
+	}
 	return rows
 }
 
