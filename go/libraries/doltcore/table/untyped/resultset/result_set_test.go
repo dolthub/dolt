@@ -682,7 +682,7 @@ func mustGetColVal(r row.Row, tag uint64) types.Value {
 	return value
 }
 
-// TODO: refactor sqltestutil.go to its own package (probably not sql) and export these values.
+// TODO: refactor data.go to its own package (probably not sql) and export these values.
 //  This is all copy-pasted from there
 
 const (
