@@ -196,7 +196,7 @@ type memoryStoreFactory struct {
 	mu     *sync.Mutex
 }
 
-func NewMemoryStoreFactory() Factory {
+func NewMemoryStoreFactory() *memoryStoreFactory {
 	return &memoryStoreFactory{map[string]*MemoryStorage{}, &sync.Mutex{}}
 }
 
