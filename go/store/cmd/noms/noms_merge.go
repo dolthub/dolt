@@ -45,7 +45,7 @@ func setupMergeFlags() *flag.FlagSet {
 
 func checkIfTrue(b bool, format string, args ...interface{}) {
 	if b {
-		d.CheckErrorNoUsage(fmt.Errorf(format, args...))
+		util.CheckErrorNoUsage(fmt.Errorf(format, args...))
 	}
 }
 
@@ -53,10 +53,10 @@ func runMerge(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 
 	if len(args) != 4 {
-		d.CheckErrorNoUsage(fmt.Errorf("Incorrect number of arguments"))
+		util.CheckErrorNoUsage(fmt.Errorf("Incorrect number of arguments"))
 	}
 	db, err := cfg.GetDatabase(ctx, args[0])
-	d.CheckError(err)
+	util.CheckError(err)
 	defer db.Close()
 
 	leftDS, rightDS, outDS := resolveDatasets(ctx, db, args[1], args[2], args[3])
@@ -64,7 +64,7 @@ func runMerge(ctx context.Context, args []string) int {
 	policy := decidePolicy(resolver)
 	pc := newMergeProgressChan()
 	merged, err := policy(ctx, left, right, ancestor, db, pc)
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 	close(pc)
 
 	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(merged, types.NewSet(ctx, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
@@ -79,7 +79,7 @@ func runMerge(ctx context.Context, args []string) int {
 func resolveDatasets(ctx context.Context, db datas.Database, leftName, rightName, outName string) (leftDS, rightDS, outDS datas.Dataset) {
 	makeDS := func(dsName string) datas.Dataset {
 		if !datasetRe.MatchString(dsName) {
-			d.CheckErrorNoUsage(fmt.Errorf("Invalid dataset %s, must match %s", dsName, datas.DatasetRe.String()))
+			util.CheckErrorNoUsage(fmt.Errorf("Invalid dataset %s, must match %s", dsName, datas.DatasetRe.String()))
 		}
 		return db.GetDataset(ctx, dsName)
 	}
@@ -143,7 +143,7 @@ func decidePolicy(policy string) merge.Policy {
 			return cliResolve(os.Stdin, os.Stdout, aType, bType, a, b, path)
 		}
 	default:
-		d.CheckErrorNoUsage(fmt.Errorf("Unsupported merge policy: %s. Choices are n, l, r and a.", policy))
+		util.CheckErrorNoUsage(fmt.Errorf("Unsupported merge policy: %s. Choices are n, l, r and a.", policy))
 	}
 	return merge.NewThreeWay(resolve)
 }

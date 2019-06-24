@@ -11,7 +11,6 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
@@ -38,16 +37,16 @@ func runDs(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	if toDelete != "" {
 		db, set, err := cfg.GetDataset(ctx, toDelete)
-		d.CheckError(err)
+		util.CheckError(err)
 		defer db.Close()
 
 		oldCommitRef, errBool := set.MaybeHeadRef()
 		if !errBool {
-			d.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
+			util.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
 
 		_, err = set.Database().Delete(ctx, set)
-		d.CheckError(err)
+		util.CheckError(err)
 
 		fmt.Printf("Deleted %v (was #%v)\n", toDelete, oldCommitRef.TargetHash().String())
 	} else {
@@ -56,7 +55,7 @@ func runDs(ctx context.Context, args []string) int {
 			dbSpec = args[0]
 		}
 		store, err := cfg.GetDatabase(ctx, dbSpec)
-		d.CheckError(err)
+		util.CheckError(err)
 		defer store.Close()
 
 		store.Datasets(ctx).IterAll(ctx, func(k, v types.Value) {

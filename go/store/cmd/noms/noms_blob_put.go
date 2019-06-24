@@ -8,11 +8,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"io"
 	"os"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
 )
@@ -20,7 +20,7 @@ import (
 func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrency int) int {
 	info, err := os.Stat(filePath)
 	if err != nil {
-		d.CheckError(errors.New("couldn't stat file"))
+		util.CheckError(errors.New("couldn't stat file"))
 	}
 
 	defer profile.MaybeStartProfile().Stop()
@@ -34,7 +34,7 @@ func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrenc
 	readers := make([]io.Reader, fileSize/chunkSize)
 	for i := 0; i < len(readers); i++ {
 		r, err := os.Open(filePath)
-		d.CheckErrorNoUsage(err)
+		util.CheckErrorNoUsage(err)
 		defer r.Close()
 		r.Seek(int64(i)*chunkSize, 0)
 		limit := chunkSize

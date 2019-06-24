@@ -12,7 +12,6 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 func nomsStats(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause, util.KingpinHandler) {
@@ -22,7 +21,7 @@ func nomsStats(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClau
 	return stats, func(input string) int {
 		cfg := config.NewResolver()
 		store, err := cfg.GetDatabase(ctx, *database)
-		d.CheckError(err)
+		util.CheckError(err)
 		defer store.Close()
 
 		fmt.Println(store.StatsSummary())

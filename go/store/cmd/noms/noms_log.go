@@ -75,7 +75,7 @@ func runLog(ctx context.Context, args []string) int {
 
 	resolved := cfg.ResolvePathSpec(args[0])
 	sp, err := spec.ForPath(resolved)
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 	defer sp.Close()
 
 	pinned, ok := sp.Pin(ctx)
@@ -94,7 +94,7 @@ func runLog(ctx context.Context, args []string) int {
 
 	origCommit, ok := database.ReadValue(ctx, absPath.Hash).(types.Struct)
 	if !ok || !datas.IsCommit(origCommit) {
-		d.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
+		util.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 
 	iter := NewCommitIterator(database, origCommit)

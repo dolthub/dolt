@@ -74,7 +74,7 @@ func nomsSetDel(ctx context.Context, specStr string, args []string) int {
 
 func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, ct types.DiffChangeType, args []string) {
 	if rootVal == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
 	db := sp.GetDatabase(ctx)
@@ -82,7 +82,7 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 	for i := 0; i < len(args); i++ {
 		vv, err := argumentToValue(ctx, args[i], db)
 		if err != nil {
-			d.CheckErrorNoUsage(err)
+			util.CheckErrorNoUsage(err)
 		}
 		var pp types.PathPart
 		if types.ValueCanBePathIndex(vv) {

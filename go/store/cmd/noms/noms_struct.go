@@ -71,7 +71,7 @@ func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		if !types.IsValidStructFieldName(args[i]) {
-			d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
+			util.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
 		}
 		patch = append(patch, diff.Difference{
 			Path:       append(basePath, types.FieldPath{Name: args[i]}),
@@ -89,7 +89,7 @@ func splitPath(ctx context.Context, sp spec.Spec) (rootVal types.Value, basePath
 	rootPath.Path = types.Path{}
 	rootVal = rootPath.Resolve(ctx, db)
 	if rootVal == nil {
-		d.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
+		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
 		return
 	}
 	basePath = sp.Path.Path
@@ -98,21 +98,21 @@ func splitPath(ctx context.Context, sp spec.Spec) (rootVal types.Value, basePath
 
 func applyStructEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
 	if len(args)%2 != 0 {
-		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
+		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
 	if rootVal == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
 	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		if !types.IsValidStructFieldName(args[i]) {
-			d.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
+			util.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
 		}
 		nv, err := argumentToValue(ctx, args[i+1], db)
 		if err != nil {
-			d.CheckError(fmt.Errorf("Invalid field value: %s at position %d: %s", args[i+1], i+1, err))
+			util.CheckError(fmt.Errorf("Invalid field value: %s at position %d: %s", args[i+1], i+1, err))
 		}
 		patch = append(patch, diff.Difference{
 			Path:       append(basePath, types.FieldPath{Name: args[i]}),
@@ -127,7 +127,7 @@ func appplyPatch(ctx context.Context, sp spec.Spec, rootVal types.Value, basePat
 	db := sp.GetDatabase(ctx)
 	baseVal := basePath.Resolve(ctx, rootVal, db)
 	if baseVal == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 	}
 
 	newRootVal := diff.Apply(ctx, rootVal, patch)

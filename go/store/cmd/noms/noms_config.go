@@ -12,7 +12,6 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 var nomsConfig = &util.Command{
@@ -33,7 +32,7 @@ func runConfig(ctx context.Context, args []string) int {
 	if err == config.ErrNoConfig {
 		fmt.Fprintf(os.Stdout, "no config active\n")
 	} else {
-		d.CheckError(err)
+		util.CheckError(err)
 		fmt.Fprintf(os.Stdout, "%s\n", c.String())
 	}
 	return 0
