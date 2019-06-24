@@ -11,7 +11,6 @@ import (
 // Creates a new schema for a result set specified by the given pairs of column names and types. Column names are
 // strings, types are NomsKinds.
 func NewResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
-
 	if len(colNamesAndTypes)%2 != 0 {
 		panic("Non-even number of inputs passed to NewResultSetSchema")
 	}
@@ -32,7 +31,6 @@ func NewResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
 
 // Creates a new row for a result set specified by the given values
 func NewResultSetRow(colVals ...types.Value) row.Row {
-
 	taggedVals := make(row.TaggedValues)
 	cols := make([]schema.Column, len(colVals))
 	for i := 0; i < len(colVals); i++ {
