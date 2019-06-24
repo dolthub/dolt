@@ -159,9 +159,15 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, err
 	}
 
+	ad, err := ParseAddr([]byte(slices[2]))
+
+	if err != nil {
+		return manifestContents{}, err
+	}
+
 	return manifestContents{
 		vers:  slices[1],
-		lock:  ParseAddr([]byte(slices[2])),
+		lock:  ad,
 		root:  hash.Parse(slices[3]),
 		specs: specs,
 	}, nil

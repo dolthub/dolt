@@ -71,7 +71,13 @@ func (ftc *fsTableCache) init(concurrency int) {
 			if !isTableFile(info) {
 				return errors.New(path + " is not a table file; cache dir must contain only table files")
 			}
-			infos <- finfo{path, ParseAddr([]byte(info.Name())), uint64(info.Size())}
+
+			ad, err := ParseAddr([]byte(info.Name()))
+
+			// TODO: fix panics
+			d.PanicIfError(err)
+
+			infos <- finfo{path, ad, uint64(info.Size())}
 			return nil
 		})
 	}()

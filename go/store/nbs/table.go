@@ -150,9 +150,10 @@ func (a addr) Checksum() uint32 {
 	return binary.BigEndian.Uint32(a[addrSize-checksumSize:])
 }
 
-func ParseAddr(b []byte) (h addr) {
-	encoding.Decode(h[:], b)
-	return
+func ParseAddr(b []byte) (addr, error) {
+	var h addr
+	_, err := encoding.Decode(h[:], b)
+	return h, err
 }
 
 func ValidateAddr(s string) bool {
