@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 
 	"github.com/stretchr/testify/assert"
@@ -27,19 +27,19 @@ func TestExecuteUpdate(t *testing.T) {
 		{
 			name:           "update one row, one col, primary key where clause",
 			query:          `update people set first = "Domer" where id = 0`,
-			updatedRows:    []row.Row{sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.FirstTag, "Domer")},
+			updatedRows:    []row.Row{MutateRow(Homer, FirstTag, "Domer")},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
 			name:           "update one row, one col, non-primary key where clause",
 			query:          `update people set first = "Domer" where first = "Homer"`,
-			updatedRows:    []row.Row{sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.FirstTag, "Domer")},
+			updatedRows:    []row.Row{MutateRow(Homer, FirstTag, "Domer")},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
 			name:           "update one row, two cols, primary key where clause",
 			query:          `update people set first = "Ned", last = "Flanders" where id = 0`,
-			updatedRows:    []row.Row{sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.FirstTag, "Ned", sqltestutil.LastTag, "Flanders")},
+			updatedRows:    []row.Row{MutateRow(Homer, FirstTag, "Ned", LastTag, "Flanders")},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
@@ -48,9 +48,9 @@ func TestExecuteUpdate(t *testing.T) {
 				age = 45, num_episodes = 150, uuid = '00000000-0000-0000-0000-000000000050'
 				where age = 38`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Ned", sqltestutil.LastTag, "Flanders", sqltestutil.IsMarriedTag, false,
-					sqltestutil.RatingTag, 10.0, sqltestutil.AgeTag, 45, sqltestutil.NumEpisodesTag, uint64(150),
-					sqltestutil.UuidTag, uuid.MustParse("00000000-0000-0000-0000-000000000050"))},
+				MutateRow(Marge, FirstTag, "Ned", LastTag, "Flanders", IsMarriedTag, false,
+					RatingTag, 10.0, AgeTag, 45, NumEpisodesTag, uint64(150),
+					UuidTag, uuid.MustParse("00000000-0000-0000-0000-000000000050"))},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
@@ -66,7 +66,7 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set first = "Homer", last = "Simpson", is_married = null, rating = null, age = null,
 				num_episodes = null, uuid = null
 				where first = "Homer"`,
-			updatedRows:    []row.Row{sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.IsMarriedTag, nil, sqltestutil.RatingTag, nil, sqltestutil.AgeTag, nil)},
+			updatedRows:    []row.Row{MutateRow(Homer, IsMarriedTag, nil, RatingTag, nil, AgeTag, nil)},
 			expectedResult: UpdateResult{NumRowsUpdated: 1},
 		},
 		{
@@ -74,10 +74,10 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set first = "Changed", rating = 0.0
 				where last = "Simpson"`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
+				MutateRow(Homer, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Marge, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Bart, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Lisa, FirstTag, "Changed", RatingTag, 0.0),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 0},
 		},
@@ -92,12 +92,12 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update without where clause",
 			query: `update people set first = "Changed", rating = 0.0`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Moe, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.FirstTag, "Changed", sqltestutil.RatingTag, 0.0),
+				MutateRow(Homer, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Marge, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Bart, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Lisa, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Moe, FirstTag, "Changed", RatingTag, 0.0),
+				MutateRow(Barney, FirstTag, "Changed", RatingTag, 0.0),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
@@ -105,12 +105,12 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update set first = last",
 			query: `update people set first = last`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.FirstTag, "Simpson"),
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Simpson"),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.FirstTag, "Simpson"),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.FirstTag, "Simpson"),
-				sqltestutil.MutateRow(sqltestutil.Moe, sqltestutil.FirstTag, "Szyslak"),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.FirstTag, "Gumble"),
+				MutateRow(Homer, FirstTag, "Simpson"),
+				MutateRow(Marge, FirstTag, "Simpson"),
+				MutateRow(Bart, FirstTag, "Simpson"),
+				MutateRow(Lisa, FirstTag, "Simpson"),
+				MutateRow(Moe, FirstTag, "Szyslak"),
+				MutateRow(Barney, FirstTag, "Gumble"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
@@ -118,12 +118,12 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update increment age",
 			query: `update people set age = age + 1`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.AgeTag, 41),
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.AgeTag, 39),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.AgeTag, 11),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.AgeTag, 9),
-				sqltestutil.MutateRow(sqltestutil.Moe, sqltestutil.AgeTag, 49),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.AgeTag, 41),
+				MutateRow(Homer, AgeTag, 41),
+				MutateRow(Marge, AgeTag, 39),
+				MutateRow(Bart, AgeTag, 11),
+				MutateRow(Lisa, AgeTag, 9),
+				MutateRow(Moe, AgeTag, 49),
+				MutateRow(Barney, AgeTag, 41),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
@@ -131,12 +131,12 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update reverse rating",
 			query: `update people set rating = -rating`,
 			updatedRows:   []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Homer, sqltestutil.RatingTag, -8.5),
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.RatingTag, -8.0),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.RatingTag, -9.0),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.RatingTag, -10.0),
-				sqltestutil.MutateRow(sqltestutil.Moe, sqltestutil.RatingTag, -6.5),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.RatingTag, -4.0),
+				MutateRow(Homer, RatingTag, -8.5),
+				MutateRow(Marge, RatingTag, -8.0),
+				MutateRow(Bart, RatingTag, -9.0),
+				MutateRow(Lisa, RatingTag, -10.0),
+				MutateRow(Moe, RatingTag, -6.5),
+				MutateRow(Barney, RatingTag, -4.0),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 6, NumRowsUnchanged: 0},
 		},
@@ -145,9 +145,9 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set first = "Homer"
 				where last = "Simpson"`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.FirstTag, "Homer"),
+				MutateRow(Marge, FirstTag, "Homer"),
+				MutateRow(Bart, FirstTag, "Homer"),
+				MutateRow(Lisa, FirstTag, "Homer"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 3, NumRowsUnchanged: 1},
 		},
@@ -156,8 +156,8 @@ func TestExecuteUpdate(t *testing.T) {
 			query: `update people set last = "Simpson"
 				where last <> "Simpson"`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Moe, sqltestutil.LastTag, "Simpson"),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.LastTag, "Simpson"),
+				MutateRow(Moe, LastTag, "Simpson"),
+				MutateRow(Barney, LastTag, "Simpson"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 2, NumRowsUnchanged: 0},
 		},
@@ -165,9 +165,9 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update multiple rows, >",
 			query: `update people set first = "Homer" where age > 10`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Moe, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.FirstTag, "Homer"),
+				MutateRow(Marge, FirstTag, "Homer"),
+				MutateRow(Moe, FirstTag, "Homer"),
+				MutateRow(Barney, FirstTag, "Homer"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 3, NumRowsUnchanged: 1},
 		},
@@ -175,10 +175,10 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update multiple rows, >=",
 			query: `update people set first = "Homer" where age >= 10`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Moe, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.FirstTag, "Homer"),
+				MutateRow(Marge, FirstTag, "Homer"),
+				MutateRow(Bart, FirstTag, "Homer"),
+				MutateRow(Moe, FirstTag, "Homer"),
+				MutateRow(Barney, FirstTag, "Homer"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 1},
 		},
@@ -186,8 +186,8 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update multiple rows, <",
 			query: `update people set first = "Bart" where age < 40`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Bart"),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.FirstTag, "Bart"),
+				MutateRow(Marge, FirstTag, "Bart"),
+				MutateRow(Lisa, FirstTag, "Bart"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 2, NumRowsUnchanged: 1},
 		},
@@ -195,10 +195,10 @@ func TestExecuteUpdate(t *testing.T) {
 			name:  "update multiple rows, <=",
 			query: `update people set first = "Homer" where age <= 40`,
 			updatedRows: []row.Row{
-				sqltestutil.MutateRow(sqltestutil.Marge, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Bart, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Lisa, sqltestutil.FirstTag, "Homer"),
-				sqltestutil.MutateRow(sqltestutil.Barney, sqltestutil.FirstTag, "Homer"),
+				MutateRow(Marge, FirstTag, "Homer"),
+				MutateRow(Bart, FirstTag, "Homer"),
+				MutateRow(Lisa, FirstTag, "Homer"),
+				MutateRow(Barney, FirstTag, "Homer"),
 			},
 			expectedResult: UpdateResult{NumRowsUpdated: 4, NumRowsUnchanged: 1},
 		},
@@ -310,7 +310,7 @@ func TestExecuteUpdate(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			ctx := context.Background()
 
-			sqltestutil.CreateTestDatabase(dEnv, t)
+			CreateTestDatabase(dEnv, t)
 			root, _ := dEnv.WorkingRoot(ctx)
 
 			sqlStatement, _ := sqlparser.Parse(tt.query)
@@ -335,19 +335,19 @@ func TestExecuteUpdate(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumRowsUnchanged, result.NumRowsUnchanged)
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 
-			table, ok := result.Root.GetTable(ctx, sqltestutil.PeopleTableName)
+			table, ok := result.Root.GetTable(ctx, PeopleTableName)
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows were updated
-			for _, r := range sqltestutil.AllPeopleRows {
-				updatedIdx := sqltestutil.FindRowIndex(r, tt.updatedRows)
+			for _, r := range AllPeopleRows {
+				updatedIdx := FindRowIndex(r, tt.updatedRows)
 
 				expectedRow := r
 				if updatedIdx >= 0 {
 					expectedRow = tt.updatedRows[updatedIdx]
 				}
 
-				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(sqltestutil.PeopleTestSchema).Value(ctx).(types.Tuple), sqltestutil.PeopleTestSchema)
+				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
 				opts := cmp.Options{cmp.AllowUnexported(expectedRow), dtestutils.FloatComparer}
 				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))
