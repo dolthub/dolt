@@ -54,9 +54,12 @@ func (dm dynamoManifest) Name() string {
 	return dm.table + dm.db
 }
 
-func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents) {
+func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
+
+	var exists bool
+	var contents manifestContents
 
 	result, err := dm.ddbsvc.GetItemWithContext(ctx, &dynamodb.GetItemInput{
 		ConsistentRead: aws.Bool(true), // This doubles the cost :-(
@@ -65,23 +68,31 @@ func (dm dynamoManifest) ParseIfExists(ctx context.Context, stats *Stats, readHo
 			dbAttr: {S: aws.String(dm.db)},
 		},
 	})
-	d.PanicIfError(err)
+
+	if err != nil {
+		return exists, contents, err
+	}
 
 	// !exists(dbAttr) => unitialized store
 	if len(result.Item) > 0 {
 		valid, hasSpecs := validateManifest(result.Item)
 		if !valid {
-			d.Panic("Malformed manifest for %s: %+v", dm.db, result.Item)
+			return false, contents, ErrCorruptManifest
 		}
 		exists = true
 		contents.vers = *result.Item[versAttr].S
 		contents.root = hash.New(result.Item[rootAttr].B)
 		copy(contents.lock[:], result.Item[lockAttr].B)
 		if hasSpecs {
-			contents.specs = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
+			contents.specs, err = parseSpecs(strings.Split(*result.Item[tableSpecsAttr].S, ":"))
+
+			if err != nil {
+				return exists, contents, ErrCorruptManifest
+			}
 		}
 	}
-	return
+
+	return exists, contents, nil
 }
 
 func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs bool) {
@@ -132,11 +143,17 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 	_, ddberr := dm.ddbsvc.PutItemWithContext(ctx, &putArgs)
 	if ddberr != nil {
 		if errIsConditionalCheckFailed(ddberr) {
-			exists, upstream := dm.ParseIfExists(ctx, stats, nil)
+			exists, upstream, err := dm.ParseIfExists(ctx, stats, nil)
+
+			// TODO - fix panics. moved this one up the stack
+			d.PanicIfError(err)
+
 			d.Chk.True(exists)
 			d.Chk.True(upstream.vers == constants.NomsVersion)
 			return upstream
-		} // TODO handle other aws errors?
+		}
+
+		// TODO - fix panics. handle other aws errors?
 		d.PanicIfError(ddberr)
 	}
 

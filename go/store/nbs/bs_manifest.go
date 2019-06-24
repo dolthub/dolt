@@ -29,12 +29,18 @@ func manifestVersionAndContents(ctx context.Context, bs blobstore.Blobstore) (st
 	}
 
 	defer reader.Close()
-	return ver, parseManifest(reader), nil
+	contents, err := parseManifest(reader)
+
+	if err != nil {
+		return "", contents, err
+	}
+
+	return ver, contents, nil
 }
 
 // ParseIfExists looks for a manifest in the specified blobstore.  If one exists
 // will return true and the contents, else false and nil
-func (bsm blobstoreManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (bool, manifestContents) {
+func (bsm blobstoreManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
 	if readHook != nil {
 		panic("Read hooks not supported")
 	}
@@ -43,14 +49,14 @@ func (bsm blobstoreManifest) ParseIfExists(ctx context.Context, stats *Stats, re
 
 	if err != nil {
 		if blobstore.IsNotFoundError(err) {
-			return false, contents
+			return false, contents, nil
 		}
 
-		// io error.  Noms convention is to panic
-		panic("Unable to read manifest due to error " + err.Error())
+		// io error
+		return true, contents, err
 	}
 
-	return true, contents
+	return true, contents, nil
 }
 
 // Update updates the contents of the manifest in the blobstore

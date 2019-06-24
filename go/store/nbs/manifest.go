@@ -7,6 +7,7 @@ package nbs
 import (
 	"context"
 	"crypto/sha512"
+	"errors"
 	"strconv"
 	"sync"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
+
+var ErrCorruptManifest = errors.New("Corrupt manifest")
 
 type manifest interface {
 	// Name returns a stable, unique identifier for the store this manifest describes.
@@ -32,7 +35,7 @@ type manifest interface {
 	// return values are undefined. The |readHook| parameter allows race
 	// condition testing. If it is non-nil, it will be invoked while the
 	// implementation is guaranteeing exclusive access to the manifest.
-	ParseIfExists(ctx context.Context, stats *Stats, readHook func()) (exists bool, contents manifestContents)
+	ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error)
 
 	manifestUpdater
 }
@@ -195,7 +198,13 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 	}
 
 	t = time.Now()
-	exists, contents = mm.m.ParseIfExists(ctx, stats, nil)
+
+	var err error
+	exists, contents, err = mm.m.ParseIfExists(ctx, stats, nil)
+
+	// TODO - fix panics. moved this one up the stack
+	d.PanicIfError(err)
+
 	mm.cache.Put(mm.Name(), contents, t)
 	return
 }
@@ -242,15 +251,20 @@ func (ts tableSpec) GetChunkCount() uint32 {
 	return ts.chunkCount
 }
 
-func parseSpecs(tableInfo []string) []tableSpec {
+func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {
 		specs[i].name = ParseAddr([]byte(tableInfo[2*i]))
 		c, err := strconv.ParseUint(tableInfo[2*i+1], 10, 32)
-		d.PanicIfError(err)
+
+		if err != nil {
+			return nil, err
+		}
+
 		specs[i].chunkCount = uint32(c)
 	}
-	return specs
+
+	return specs, nil
 }
 
 func formatSpecs(specs []tableSpec, tableInfo []string) {

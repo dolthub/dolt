@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"testing"
 
@@ -88,7 +89,11 @@ func TestConjoin(t *testing.T) {
 		p = newFakeTablePersister()
 		fm = &fakeManifest{}
 		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p))
-		_, upstream = fm.ParseIfExists(context.Background(), nil, nil)
+
+		var err error
+		_, upstream, err = fm.ParseIfExists(context.Background(), nil, nil)
+		d.PanicIfError(err)
+
 		return
 	}
 
@@ -114,7 +119,8 @@ func TestConjoin(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
 				conjoin(context.Background(), upstream, fm, p, stats)
-				exists, newUpstream := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				assert.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.postcompact, getSortedSizes(newUpstream.specs))
 				assertContainAll(t, p, upstream.specs, newUpstream.specs)
@@ -141,7 +147,8 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable))
 				}}
 				conjoin(context.Background(), upstream, u, p, stats)
-				exists, newUpstream := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				assert.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, append([]uint32{1}, c.postcompact...), getSortedSizes(newUpstream.specs))
 				assertContainAll(t, p, append(upstream.specs, newTable), newUpstream.specs)
@@ -159,7 +166,8 @@ func TestConjoin(t *testing.T) {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:])
 				}}
 				conjoin(context.Background(), upstream, u, p, stats)
-				exists, newUpstream := fm.ParseIfExists(context.Background(), stats, nil)
+				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
+				assert.NoError(t, err)
 				assert.True(t, exists)
 				assert.Equal(t, c.precompact[1:], getSortedSizes(newUpstream.specs))
 			})
