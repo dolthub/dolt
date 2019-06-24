@@ -35,12 +35,12 @@ func (tf *trackedCommandFunc) equalsState(called bool, cmdStr string, args []str
 func TestCommands(t *testing.T) {
 	child1 := &trackedCommandFunc{}
 	grandChild1 := &trackedCommandFunc{}
-	commands := &Command{appName, "test application", GenSubCommandHandler([]*Command{
-		{"child1", "first child command", child1.commandFunc, false},
-		{"child2", "second child command", GenSubCommandHandler([]*Command{
-			{"grandchild1", "child2's first child", grandChild1.commandFunc, false},
-		}), false},
-	}), false}
+	commands := &Command{Name: appName, Desc: "test application", Func: GenSubCommandHandler([]*Command{
+		{Name: "child1", Desc: "first child command", Func: child1.commandFunc},
+		{Name: "child2", Desc: "second child command", Func: GenSubCommandHandler([]*Command{
+			{Name: "grandchild1", Desc: "child2's first child", Func: grandChild1.commandFunc},
+		})},
+	})}
 
 	res := runCommand(commands, "app")
 
