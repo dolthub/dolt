@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -12,6 +11,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"strings"
 
 	"context"
@@ -147,13 +147,8 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
 	sch := tbl.GetSchema(context.TODO())
-	//schStr, err := encoding.MarshalAsJson(sch)
-	schStr, err := sql.SchemaAsCreateStmt(tblName, sch)
-	if err != nil {
-		return errhand.BuildDError("Failed to encode as json").AddCause(err).Build()
-	}
 
-	cli.Println(schStr)
+	cli.Println(sql.SchemaAsCreateStmt(tblName, sch))
 	return nil
 }
 
@@ -170,7 +165,7 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 	}
 
 	tbl, _ := root.GetTable(context.TODO(), tblName)
-	err := exportTblSchema(tblName, tbl, fileName, dEnv)
+	err := exportTblSchema(tbl, fileName, dEnv)
 	if err != nil {
 		return errhand.BuildDError("file path not valid.").Build()
 	}
@@ -178,7 +173,7 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 	return nil
 }
 
-func exportTblSchema(tblName string, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
+func exportTblSchema(tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
 	sch := tbl.GetSchema(context.TODO())
 	jsonSchStr, err := encoding.MarshalAsJson(sch)
 	if err != nil {
@@ -238,7 +233,6 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTable)
 	return UpdateWorkingWithVErr(dEnv, root)
 }
-
 
 func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 3 {

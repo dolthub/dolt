@@ -3,8 +3,8 @@ package diff
 import (
 	"context"
 	"errors"
-	"github.com/attic-labs/noms/go/diff"
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/diff"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"time"
 )
 

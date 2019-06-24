@@ -2,8 +2,6 @@ package commands
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -21,6 +19,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"reflect"
 	"sort"
 	"strconv"

@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/attic-labs/noms/go/marshal"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/marshal"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type encodedColumn struct {

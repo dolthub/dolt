@@ -2,10 +2,11 @@ package sql
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -15,7 +16,7 @@ import (
 )
 
 func TestExecuteShow(t *testing.T) {
-	peopleSchemaStr, _ := SchemaAsCreateStmt("people", sqltestutil.PeopleTestSchema)
+	peopleSchemaStr := SchemaAsCreateStmt("people", sqltestutil.PeopleTestSchema)
 
 	peopleSchemaRows := sqltestutil.Rs(
 		sqltestutil.NewResultSetRow(types.String("id"), types.String("int"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),

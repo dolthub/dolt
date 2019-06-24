@@ -1,6 +1,6 @@
 package pantoerr
 
-import "github.com/attic-labs/noms/go/d"
+import "github.com/liquidata-inc/ld/dolt/go/store/d"
 
 // RecoverPanic is used to convert panics to errors.  The attic-labs noms codebase loves to panic.  This is not
 // idiomatic for Go code. RecoverPanic wraps the cause of the panic retrieved from the recover call, and implements

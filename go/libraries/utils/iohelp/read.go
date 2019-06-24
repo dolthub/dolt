@@ -2,7 +2,11 @@ package iohelp
 
 import (
 	"bufio"
+	"errors"
 	"io"
+	"sync"
+	"sync/atomic"
+	"time"
 )
 
 // ErrPreservingReader is a utility class that provides methods to read from a reader where errors can be ignored and
@@ -133,3 +137,162 @@ func ReadLine(br *bufio.Reader) (line string, done bool, err error) {
 /*func ReadLineFromJSON(br *bufio.Reader) (line map[string]interface{}, done bool, err error) {
 	line, err = br.ReadMap()
 }*/
+
+// ErrThroughput is the error that is returned by ReadWithMinThroughput if the throughput drops below the threshold
+var ErrThroughput = errors.New("throughput below minimum allowable")
+
+// MinThroughputCheckParams defines the miminimum throughput, how often it should be checked, and what the time window
+// size is
+type MinThroughputCheckParams struct {
+	// MinBytesPerSec is the minimum throughput.  If ReadWithMinThroughput drops below this value for the most recent
+	// time window then it will fail.
+	MinBytesPerSec int64
+
+	// CheckInterval how often should the throughput be checked
+	CheckInterval time.Duration
+
+	// NumIntervals defines the number of intervals that should be considered when looking at the throughput.
+	// NumIntervals*CheckInterval defines the window size
+	NumIntervals int
+}
+
+type datapoint struct {
+	ts  time.Time
+	val int64
+}
+
+type datapoints []datapoint
+
+// getThroughput returns the throughput for the most recent time window
+func (initialDps datapoints) getThroughput(duration time.Duration) (datapoints, int64) {
+	dps := initialDps
+	now := time.Now()
+	cutoff := now.Add(-duration)
+
+	// restrict datapoints to datapoints within the time window
+	for len(dps) > 1 {
+		if cutoff.After(dps[0].ts) {
+			dps = dps[1:]
+		} else {
+			break
+		}
+	}
+
+	if len(dps) <= 1 {
+		return dps, 0
+	}
+
+	elapsed := now.Sub(dps[0].ts)
+	bytesRead := dps[len(dps)-1].val - dps[0].val
+
+	return dps, int64(float64(bytesRead) / elapsed.Seconds())
+}
+
+// safeClose closes the provided closer recovering from any errors.
+func safeClose(c io.Closer) {
+	defer func() {
+		recover()
+	}()
+
+	c.Close()
+}
+
+type readResults struct {
+	bytes []byte
+	err   error
+}
+
+// ReadNWithProgress reads n bytes from reader r.  As it reads it atomically updates the value pointed at by
+// bytesRead.  In order to cancel this read the reader should be closed.
+func ReadNWithProgress(r io.Reader, n int64, bytesRead *int64) ([]byte, error) {
+	var totalRead int64
+	bytes := make([]byte, n)
+
+	var err error
+	for totalRead < n && err == nil {
+		var read int
+		read, err = r.Read(bytes[totalRead:])
+
+		if err != nil && err != io.EOF {
+			break
+		}
+
+		totalRead += int64(read)
+
+		if bytesRead != nil {
+			atomic.StoreInt64(bytesRead, totalRead)
+		}
+
+		if err == io.EOF {
+			err = nil
+			if totalRead != n {
+				err = io.ErrUnexpectedEOF
+			}
+		}
+	}
+
+	return bytes[:totalRead], err
+}
+
+// ReadWithMinThroughput reads n bytes from reader r erroring if the throughput ever drops below the threshold
+// defined by MinThroughputCheckParams.
+func ReadWithMinThroughput(r io.ReadCloser, n int64, mtcParams MinThroughputCheckParams) ([]byte, error) {
+	resChan := make(chan readResults, 1)
+	defer close(resChan)
+
+	wg := &sync.WaitGroup{}
+
+	var bytesReadSync int64
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer func() { recover() }()
+
+		bytes, err := ReadNWithProgress(r, n, &bytesReadSync)
+		res := readResults{bytes, err}
+		resChan <- res
+	}()
+
+	checkDuration := mtcParams.CheckInterval * time.Duration(mtcParams.NumIntervals)
+	ticker := time.NewTicker(mtcParams.CheckInterval)
+	defer ticker.Stop()
+
+	var points datapoints
+	var throughputErr bool
+	for !throughputErr {
+		select {
+		case res := <-resChan:
+			return res.bytes, res.err
+		case <-ticker.C:
+		}
+
+		read := atomic.LoadInt64(&bytesReadSync)
+		points = append(points, datapoint{time.Now(), read})
+
+		if len(points) >= mtcParams.NumIntervals {
+			var bps int64
+			points, bps = points.getThroughput(checkDuration)
+
+			if bps < mtcParams.MinBytesPerSec {
+				safeClose(r)
+				throughputErr = true
+			}
+		}
+	}
+
+	wg.Wait()
+
+	select {
+	case res := <-resChan:
+		err := res.err
+
+		if throughputErr {
+			err = ErrThroughput
+		}
+
+		return res.bytes, err
+	default:
+		panic("bug.  Should never reach here.")
+	}
+}

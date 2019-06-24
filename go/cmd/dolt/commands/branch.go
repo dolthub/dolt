@@ -253,7 +253,6 @@ func createBranchWithStartPt(dEnv *env.DoltEnv, newBranch, startPt string, force
 			return errhand.BuildDError("fatal: A branch named '%s' already exists.", newBranch).Build()
 		} else if err == doltdb.ErrInvBranchName {
 			bdr := errhand.BuildDError("fatal: '%s' is an invalid branch name.", newBranch)
-			bdr.AddDetails("Branches must match the regex '%s'", doltdb.UserBranchRegexStr)
 			return bdr.Build()
 		} else if err == doltdb.ErrInvHash || doltdb.IsNotACommit(err) {
 			bdr := errhand.BuildDError("fatal: '%s' is not a commit and a branch '%s' cannot be created from it", startPt, newBranch)

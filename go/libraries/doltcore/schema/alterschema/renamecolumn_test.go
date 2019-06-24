@@ -2,10 +2,10 @@ package alterschema
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -47,14 +47,14 @@ func TestRenameColumn(t *testing.T) {
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
-			name:     "column not found",
-			colName:  "not found",
+			name:        "column not found",
+			colName:     "not found",
 			expectedErr: "column not found",
 		},
 		{
-			name:     "name collision",
-			colName:  "age",
-			newName:  "title",
+			name:        "name collision",
+			colName:     "age",
+			newName:     "title",
 			expectedErr: "two different columns with the same name exist",
 		},
 	}

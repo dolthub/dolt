@@ -1,24 +1,25 @@
 package sql
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
+
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-const expectedSQL = "CREATE TABLE table_name (\n" +
-"  `id` int not null comment 'tag:0',\n" +
-"  `first` varchar not null comment 'tag:1',\n" +
-"  `last` varchar not null comment 'tag:2',\n" +
-"  `is_married` bool comment 'tag:3',\n" +
-"  `age` int comment 'tag:4',\n" +
-"  `rating` float comment 'tag:6',\n" +
-"  `uuid` uuid comment 'tag:7',\n" +
-"  `num_episodes` int unsigned comment 'tag:8',\n" +
-"  primary key (`id`)\n" +
-");"
+const expectedSQL = "CREATE TABLE `table_name` (\n" +
+	"  `id` int not null comment 'tag:0',\n" +
+	"  `first` varchar not null comment 'tag:1',\n" +
+	"  `last` varchar not null comment 'tag:2',\n" +
+	"  `is_married` bool comment 'tag:3',\n" +
+	"  `age` int comment 'tag:4',\n" +
+	"  `rating` float comment 'tag:6',\n" +
+	"  `uuid` uuid comment 'tag:7',\n" +
+	"  `num_episodes` int unsigned comment 'tag:8',\n" +
+	"  primary key (`id`)\n" +
+	");"
 
 func TestSchemaAsCreateStmt(t *testing.T) {
 	tSchema := sqltestutil.PeopleTestSchema

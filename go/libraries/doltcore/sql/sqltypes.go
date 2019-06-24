@@ -1,7 +1,7 @@
 package sql
 
 import (
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 var DoltToSQLType = map[types.NomsKind]string{
@@ -25,28 +25,28 @@ var convFuncMap = map[types.NomsKind]map[types.NomsKind]TypeConversionFn{
 		types.NullKind:   convToNullFunc,
 	},
 	types.UUIDKind: {
-		types.UUIDKind:   identityConvFunc,
-		types.NullKind:   convToNullFunc,
+		types.UUIDKind: identityConvFunc,
+		types.NullKind: convToNullFunc,
 	},
 	types.UintKind: {
-		types.UintKind:   identityConvFunc,
-		types.IntKind:    convUintToInt,
-		types.FloatKind:  convUintToFloat,
-		types.NullKind:   convToNullFunc,
+		types.UintKind:  identityConvFunc,
+		types.IntKind:   convUintToInt,
+		types.FloatKind: convUintToFloat,
+		types.NullKind:  convToNullFunc,
 	},
 	types.IntKind: {
-		types.UintKind:   convIntToUint,
-		types.IntKind:    identityConvFunc,
-		types.FloatKind:  convIntToFloat,
-		types.NullKind:   convToNullFunc,
+		types.UintKind:  convIntToUint,
+		types.IntKind:   identityConvFunc,
+		types.FloatKind: convIntToFloat,
+		types.NullKind:  convToNullFunc,
 	},
 	types.FloatKind: {
-		types.FloatKind:  identityConvFunc,
-		types.NullKind:   convToNullFunc,
+		types.FloatKind: identityConvFunc,
+		types.NullKind:  convToNullFunc,
 	},
 	types.BoolKind: {
-		types.BoolKind:   identityConvFunc,
-		types.NullKind:   convToNullFunc,
+		types.BoolKind: identityConvFunc,
+		types.NullKind: convToNullFunc,
 	},
 	types.NullKind: {
 		types.StringKind: convToNullFunc,

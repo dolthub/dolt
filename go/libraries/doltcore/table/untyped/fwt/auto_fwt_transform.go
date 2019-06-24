@@ -1,27 +1,27 @@
 package fwt
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // AutoSizingFWTTransformer samples rows to automatically determine maximum column widths to provide to FWTTransformer.
 type AutoSizingFWTTransformer struct {
 	// The number of rows to sample to determine column widths
-	numSamples  int
+	numSamples int
 	// A map of column tag to max print width
 	printWidths map[uint64]int
 	// A map of column tag to max number of runes
-	maxRunes    map[uint64]int
+	maxRunes map[uint64]int
 	// A buffer of rows to process
-	rowBuffer   []pipeline.RowWithProps
+	rowBuffer []pipeline.RowWithProps
 	// The schema being examined
-	sch         schema.Schema
+	sch schema.Schema
 	// The behavior to use for a value that's too long to print
-	tooLngBhv   TooLongBehavior
+	tooLngBhv TooLongBehavior
 	// The underlying fixed width transformer being assembled by row sampling.
-	fwtTr       *FWTTransformer
+	fwtTr *FWTTransformer
 }
 
 func NewAutoSizingFWTTransformer(sch schema.Schema, tooLngBhv TooLongBehavior, numSamples int) *AutoSizingFWTTransformer {

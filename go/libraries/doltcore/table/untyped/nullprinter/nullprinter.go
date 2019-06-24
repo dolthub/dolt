@@ -1,10 +1,10 @@
 package nullprinter
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const PRINTED_NULL = "<NULL>"
@@ -35,6 +35,6 @@ func (np *NullPrinter) ProcessRow(inRow row.Row, props pipeline.ReadableMap) (ro
 
 		return false
 	})
-	
+
 	return []*pipeline.TransformedRowResult{{RowData: row.New(np.Sch, taggedVals)}}, ""
 }

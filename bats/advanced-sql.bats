@@ -260,7 +260,7 @@ teardown() {
     [[ ! "$output" =~ "c6" ]] || false
 }
 
-@test "sql alter table to add and delete a column" {
+@test "sql alter table to rename a column" {
     dolt sql -q "alter table one_pk add (c6 int)"
     run dolt sql -q "alter table one_pk rename column c6 to c7"
     [ $status -eq 0 ]
@@ -280,4 +280,13 @@ teardown() {
     run dolt sql -q "alter table one_pk modify column c5 varchar"
     [ $status -eq 1 ]
     [[ "$output" =~ "Unsupported alter table statement" ]] || false
+}
+
+@test "sql drop table" {
+    dolt sql -q "drop table one_pk"
+    run dolt ls
+    [[ ! "$output" =~ "one_pk" ]] || false
+    run dolt sql -q "drop table poop"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Unknown table" ]] || false
 }

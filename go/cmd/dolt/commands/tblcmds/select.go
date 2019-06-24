@@ -3,7 +3,6 @@ package tblcmds
 import (
 	"context"
 	"errors"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -23,6 +22,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"strings"
 )
 

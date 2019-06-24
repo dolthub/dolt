@@ -3,7 +3,7 @@ package doltcore
 import (
 	"testing"
 
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type strToNomsTypeTests struct {

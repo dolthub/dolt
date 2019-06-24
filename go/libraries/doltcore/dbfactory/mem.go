@@ -2,9 +2,9 @@ package dbfactory
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/chunks"
-	"github.com/attic-labs/noms/go/datas"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"net/url"
 )
 

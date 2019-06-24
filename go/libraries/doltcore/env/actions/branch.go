@@ -5,11 +5,10 @@ import (
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
-	"github.com/attic-labs/noms/go/hash"
-	"github.com/attic-labs/noms/go/util/math"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 var ErrAlreadyExists = errors.New("already exists")
@@ -263,25 +262,6 @@ func getDifferingTables(ctx context.Context, root1, root2 *doltdb.RootValue) []s
 	}
 
 	return differing
-}
-
-func intersect(sl1, sl2 []string) []string {
-	sl1Members := make(map[string]struct{})
-
-	for _, mem := range sl1 {
-		sl1Members[mem] = struct{}{}
-	}
-
-	maxIntSize := math.MaxInt(len(sl1), len(sl2))
-
-	intersection := make([]string, 0, maxIntSize)
-	for _, mem := range sl2 {
-		if _, ok := sl1Members[mem]; ok {
-			intersection = append(intersection, mem)
-		}
-	}
-
-	return intersection
 }
 
 func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootTypeSet, error) {

@@ -1,10 +1,10 @@
 package untyped
 
 import (
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // NewUntypedSchema takes an array of field names and returns a schema where the fields use the provided names, are of

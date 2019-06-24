@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"testing"
 
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const tableName = "people"
@@ -180,39 +180,39 @@ func TestAddColumnToTable(t *testing.T) {
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
 		},
 		{
-			name:       "tag collision",
-			tag:        dtestutils.AgeTag,
-			newColName: "newCol",
-			colKind:    types.IntKind,
-			nullable:   NotNull,
-			defaultVal: nil,
+			name:        "tag collision",
+			tag:         dtestutils.AgeTag,
+			newColName:  "newCol",
+			colKind:     types.IntKind,
+			nullable:    NotNull,
+			defaultVal:  nil,
 			expectedErr: "A column with the tag 2 already exists",
 		},
 		{
-			name:       "name collision",
-			tag:        dtestutils.NextTag,
-			newColName: "age",
-			colKind:    types.IntKind,
-			nullable:   NotNull,
-			defaultVal: types.Int(10),
+			name:        "name collision",
+			tag:         dtestutils.NextTag,
+			newColName:  "age",
+			colKind:     types.IntKind,
+			nullable:    NotNull,
+			defaultVal:  types.Int(10),
 			expectedErr: "A column with the name age already exists",
 		},
 		{
-			name:       "non-nullable with nil default",
-			tag:        dtestutils.NextTag,
-			newColName: "newCol",
-			colKind:    types.IntKind,
-			nullable:   NotNull,
-			defaultVal: nil,
+			name:        "non-nullable with nil default",
+			tag:         dtestutils.NextTag,
+			newColName:  "newCol",
+			colKind:     types.IntKind,
+			nullable:    NotNull,
+			defaultVal:  nil,
 			expectedErr: "default value must be provided",
 		},
 		{
-			name:       "wrong type for default value",
-			tag:        dtestutils.NextTag,
-			newColName: "newCol",
-			colKind:    types.IntKind,
-			nullable:   NotNull,
-			defaultVal: types.String("this shouldn't work"),
+			name:        "wrong type for default value",
+			tag:         dtestutils.NextTag,
+			newColName:  "newCol",
+			colKind:     types.IntKind,
+			nullable:    NotNull,
+			defaultVal:  types.String("this shouldn't work"),
 			expectedErr: "Type of default value (String) doesn't match type of column (Int)",
 		},
 	}
@@ -228,8 +228,8 @@ func TestAddColumnToTable(t *testing.T) {
 
 			updatedTable, err := AddColumnToTable(ctx, dEnv.DoltDB, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal)
 			if len(tt.expectedErr) > 0 {
-			  require.Error(t, err)
-			  assert.Contains(t, err.Error(), tt.expectedErr)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
 				return
 			} else {
 				require.NoError(t, err)
@@ -272,5 +272,3 @@ func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
 
 	return dEnv
 }
-
-

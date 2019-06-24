@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/attic-labs/noms/go/types"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestTupleValsLess(t *testing.T) {

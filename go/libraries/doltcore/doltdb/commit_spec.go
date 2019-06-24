@@ -13,27 +13,18 @@ func (s stringer) String() string {
 	return string(s)
 }
 
-var wordRegex = `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+`
-var UserBranchRegexStr = "^" + wordRegex + "$"
-var RemoteBranchRegexStr = "remotes/" + wordRegex + "/" + wordRegex
 var hashRegex = regexp.MustCompile(`^[0-9a-v]{32}$`)
-var userBranchRegex = regexp.MustCompile(UserBranchRegexStr)
-var remoteBranchRegex = regexp.MustCompile(RemoteBranchRegexStr)
 
 const head string = "head"
 
 // IsValidUserBranchName returns true if name isn't a valid commit hash, it is not named "head" and
 // it matches the regular expression `[0-9a-z]+[-_0-9a-z]*[0-9a-z]+$`
 func IsValidUserBranchName(name string) bool {
-	return !hashRegex.MatchString(name) && userBranchRegex.MatchString(name) && name != head
+	return name != head && !hashRegex.MatchString(name) && ref.IsValidBranchName(name)
 }
 
 func IsValidBranchRef(dref ref.DoltRef) bool {
 	return dref.GetType() == ref.BranchRefType && IsValidUserBranchName(dref.GetPath())
-}
-
-func IsValidRemoteBranchName(name string) bool {
-	return remoteBranchRegex.MatchString(name)
 }
 
 type CommitSpecType string

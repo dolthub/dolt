@@ -8,9 +8,9 @@ import (
 
 // SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
 // create this table
-func SchemaAsCreateStmt(tableName string, sch schema.Schema) (string, error) {
+func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 	sb := &strings.Builder{}
-	fmt.Fprintf(sb, "CREATE TABLE %s (\n", tableName)
+	fmt.Fprintf(sb, "CREATE TABLE %s (\n", QuoteIdentifier(tableName))
 
 	firstLine := true
 	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
@@ -34,14 +34,12 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) (string, error) {
 		} else {
 			sb.WriteRune(',')
 		}
-		sb.WriteRune('`')
-		sb.WriteString(col.Name)
-		sb.WriteRune('`')
+		sb.WriteString(QuoteIdentifier(col.Name))
 		return false
 	})
 
 	sb.WriteString(")\n);")
-	return sb.String(), nil
+	return sb.String()
 }
 
 // FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
@@ -68,4 +66,9 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 	}
 
 	return colStr + fmt.Sprintf(" comment 'tag:%d'", col.Tag)
+}
+
+// Quotes the identifier given with backticks.
+func QuoteIdentifier(s string) string {
+	return "`" + s + "`"
 }

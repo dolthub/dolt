@@ -27,6 +27,9 @@ type BadRowCallback func(*TransformRowFailure) (quit bool)
 // Pipelines can be constructed in phases, with different call sites adding transformations or even redirecting output
 // as required. Once a pipeline is started with Start(), all configuration methods will panic.
 //
+// Pipelines can be supplied with callbacks to run after they complete, which happens when output has finished writing,
+// or when Abort() or StopWithError() is called.
+//
 // Pipelines must be cleaned up by a call to either Wait, Abort, or StopWithError, all of which run any deferred
 // functions registered with the pipeline via calls to RunAfter (e.g. closing readers and writers).
 //
@@ -55,13 +58,15 @@ type Pipeline struct {
 	// A collection of synthetic rows to insert into the pipeline at a particular stage, before any other pipelined
 	// input arrives to that stage.
 	syntheticRowsByStageName map[string][]RowWithProps
-	// A set of functions to run when the pipeline finishes.
+	// A slice of cleanup functions to run when the pipeline finishes.
 	runAfterFuncs []func()
+	// A helper to run cleanup funcs exactly once.
+	runAfter func()
 	// Whether the pipeline is currently running
 	isRunning bool
 }
 
-//NewAsyncPipeline creates a Pipeline from a given InFunc, OutFunc, TransformCollection, and a BadRowCallback.
+// NewAsyncPipeline creates a Pipeline from a given InFunc, OutFunc, TransformCollection, and a BadRowCallback.
 func NewAsyncPipeline(inFunc InFunc, outFunc OutFunc, stages *TransformCollection, badRowCB BadRowCallback) *Pipeline {
 	var wg sync.WaitGroup
 
@@ -76,13 +81,14 @@ func NewAsyncPipeline(inFunc InFunc, outFunc OutFunc, stages *TransformCollectio
 		noMoreChan:               make(chan struct{}),
 		inputChansByStageName:    make(map[string]chan RowWithProps),
 		syntheticRowsByStageName: make(map[string][]RowWithProps),
+		runAfter:                 func() {},
 	}
 }
 
 // NewPartialPipeline creates a pipeline stub that doesn't have an output func set on it yet. An OutFunc must be
 // applied via a call to SetOutput before calling Start().
-func NewPartialPipeline(inFunc InFunc, stages *TransformCollection) *Pipeline {
-	return NewAsyncPipeline(inFunc, nil, stages, nil)
+func NewPartialPipeline(inFunc InFunc) *Pipeline {
+	return NewAsyncPipeline(inFunc, nil, &TransformCollection{}, nil)
 }
 
 // AddStage adds a new named transform to the set of stages
@@ -195,6 +201,8 @@ func (p *Pipeline) Start() {
 		}
 	}
 
+	p.runAfter = runOnce(p.runAfterFuncs)
+
 	// Start all the async processing: the sink, the error handlers, then the source.
 	p.wg.Add(1)
 	go func() {
@@ -206,6 +214,7 @@ func (p *Pipeline) Start() {
 	go func() {
 		defer p.wg.Done()
 		p.outFunc(p, curr, p.badRowChan)
+		p.runAfter()
 	}()
 
 	p.wg.Add(1)
@@ -217,14 +226,28 @@ func (p *Pipeline) Start() {
 	p.isRunning = true
 }
 
+// Returns a function that runs each of the funcs given exactly once (calling the returned func more than once will not
+// result in additional executions of the underlying funcs).
+func runOnce(funcs []func()) func() {
+	mutex := sync.Mutex{}
+	alreadyRun := false
+	return func() {
+		defer mutex.Unlock()
+		mutex.Lock()
+		if alreadyRun {
+			return
+		}
+		for _, fn := range funcs {
+			fn()
+		}
+		alreadyRun = true
+	}
+}
+
 // Wait waits for the pipeline to complete and return any error that occurred during its execution.
 func (p *Pipeline) Wait() error {
 	if !p.isRunning {
 		panic("cannot Wait() a pipeline before a call to Start()")
-	}
-
-	for _, f := range p.runAfterFuncs {
-		defer f()
 	}
 
 	p.wg.Wait()
@@ -245,13 +268,11 @@ func (p *Pipeline) Abort() {
 		p.isRunning = false
 	}()
 
+	defer p.runAfter()
+
 	defer func() {
 		recover() // ignore multiple calls to close channels
 	}()
-
-	for _, f := range p.runAfterFuncs {
-		defer f()
-	}
 
 	close(p.stopChan)
 }

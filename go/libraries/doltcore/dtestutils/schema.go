@@ -2,13 +2,13 @@ package dtestutils
 
 import (
 	"context"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
@@ -18,6 +18,15 @@ import (
 func CreateSchema(columns ...schema.Column) schema.Schema {
 	colColl, _ := schema.NewColCollection(columns...)
 	return schema.SchemaFromCols(colColl)
+}
+
+// Creates a row with the schema given, having the values given. Starts at tag 0 and counts up.
+func NewRow(sch schema.Schema, values ...types.Value) row.Row {
+	taggedVals := make(row.TaggedValues)
+	for i := range values {
+		taggedVals[uint64(i)] = values[i]
+	}
+	return row.New(sch, taggedVals)
 }
 
 // AddColumnToSchema returns a new schema by adding the given column to the given schema. Will panic on an invalid
@@ -74,4 +83,3 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), tableName)
 	require.Nil(t, err, "Unable to put initial value of table in in-mem noms db")
 }
-

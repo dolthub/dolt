@@ -2,8 +2,8 @@ package fwt
 
 import (
 	"errors"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // FWTSchema is a fixed width text schema which includes information on a tables rows, and how wide they should be printed
