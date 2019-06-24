@@ -1,10 +1,13 @@
 package sqltestutil
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"testing"
 )
 
 // This file defines test queries and expected results. The purpose of defining them here is to make them portable --
@@ -22,14 +25,20 @@ type SelectTest struct {
 	ExpectedRows []row.Row
 	// An expected error string
 	ExpectedErr string
+	// Setup logic to run before executing this test, after initial tables have been created and populated
+	AdditionalSetup SetupFn
 	// Whether to skip this test on SqlEngine (go-mysql-server) execution.
 	// Over time, this should become false for every query.
 	SkipOnSqlEngine bool
 }
 
+//
 // Collection of query tests for conformance testing, grouped by categories.
+//
 
-var SelectTests = []SelectTest{
+
+// BasicSelectTests cover basic select statement features and error handling
+var BasicSelectTests = []SelectTest{
 	{
 		Name:           "select * ",
 		Query:          "select * from people",
@@ -677,4 +686,27 @@ var SelectTests = []SelectTest{
 		ExpectedErr: "Type mismatch:",
 		SkipOnSqlEngine: true,
 	},
+}
+
+var CaseSensitivityTests = []SelectTest {
+
+}
+
+// SetupFunc can be run to perform additional setup work before a test case
+type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
+
+// CreateTableFn returns a SetupFunc that creates a table with the rows given
+func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...row.Row) SetupFn {
+	return func(t *testing.T, dEnv *env.DoltEnv) {
+		dtestutils.CreateTestTable(t, dEnv, tableName, tableSchema, initialRows...)
+	}
+}
+
+// Compose takes an arbitrary number of SetupFns and composes them into a single func which executes all funcs given.
+func Compose(fns ...SetupFn) SetupFn {
+	return func(t *testing.T, dEnv *env.DoltEnv) {
+		for _, f := range fns {
+			f(t, dEnv)
+		}
+	}
 }

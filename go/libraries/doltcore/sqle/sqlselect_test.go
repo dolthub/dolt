@@ -6,7 +6,6 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
@@ -18,33 +17,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
-// Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
-// expectedErr is set, asserts instead that the execution returns an error that matches.
-func testSelectQuery(t *testing.T, queryString string, expectedSchema schema.Schema, expectedRows []row.Row, expectedErr string) {
-	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(context.Background())
-
-	if (expectedRows == nil) != (expectedSchema == nil) {
-		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
-	}
-
-	expectedRows, sch, err := ExecuteSelect(context.Background(), expectedSchema, root, queryString)
-	if len(expectedErr) > 0 {
-		require.Error(t, err)
-		require.Contains(t, err.Error(), expectedErr)
-		return
-	} else {
-		require.NoError(t, err)
-	}
-
-	assert.Equal(t, expectedRows, expectedRows)
-	assert.Equal(t, expectedSchema, sch)
-}
-
 func TestExecuteSelect(t *testing.T) {
 
-	for _, tt := range SelectTests {
+	for _, tt := range BasicSelectTests {
 		t.Run(tt.Name, func(t *testing.T) {
 			if tt.SkipOnSqlEngine {
 				t.Skip("Skipping test broken on Sql Engine")
@@ -306,18 +281,18 @@ func TestJoins(t *testing.T) {
 // Tests of case sensitivity handling
 func TestCaseSensitivity(t *testing.T) {
 	tests := []struct {
-		name            string
+		Name            string
 		tableName       string
 		tableSchema     schema.Schema
 		initialRows     []row.Row
-		additionalSetup func(t *testing.T, dEnv *env.DoltEnv)
+		AdditionalSetup SetupFn
 		query           string
 		expectedRows    []row.Row
 		expectedSchema  schema.Schema
 		expectedErr     string
 	}{
 		{
-			name:           "table name has mixed case, select lower case",
+			Name:           "table name has mixed case, select lower case",
 			tableName:      "MiXeDcAsE",
 			tableSchema:    NewSchema("test", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -326,7 +301,7 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		},
 		{
-			name:           "table name has mixed case, select upper case",
+			Name:           "table name has mixed case, select upper case",
 			tableName:      "MiXeDcAsE",
 			tableSchema:    NewSchema("test", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -345,7 +320,7 @@ func TestCaseSensitivity(t *testing.T) {
 		// 	expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		// },
 		{
-			name:           "qualified select column",
+			Name:           "qualified select column",
 			tableName:      "MiXeDcAsE",
 			tableSchema:    NewSchema("test", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -364,7 +339,7 @@ func TestCaseSensitivity(t *testing.T) {
 		// 	expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		// },
 		{
-			name:           "table alias select column",
+			Name:           "table alias select column",
 			tableName:      "MiXeDcAsE",
 			tableSchema:    NewSchema("test", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -420,7 +395,7 @@ func TestCaseSensitivity(t *testing.T) {
 		// 	expectedErr: "Non-unique table name / alias: 'bad'",
 		// },
 		{
-			name:           "column name has mixed case, select lower case",
+			Name:           "column name has mixed case, select lower case",
 			tableName:      "test",
 			tableSchema:    NewSchema("MiXeDcAsE", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -429,7 +404,7 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		},
 		{
-			name:           "column name has mixed case, select upper case",
+			Name:           "column name has mixed case, select upper case",
 			tableName:      "test",
 			tableSchema:    NewSchema("MiXeDcAsE", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -438,7 +413,7 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		},
 		{
-			name:           "select uses incorrect case",
+			Name:           "select uses incorrect case",
 			tableName:      "test",
 			tableSchema:    NewSchema("MiXeDcAsE", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -447,7 +422,7 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		},
 		{
-			name:           "select with multiple matching columns, exact match",
+			Name:           "select with multiple matching columns, exact match",
 			tableName:      "test",
 			tableSchema:    NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"), types.String("2"))),
@@ -484,8 +459,8 @@ func TestCaseSensitivity(t *testing.T) {
 		// TODO: this could be handled better (not change the case of the result set schema), but the parser will silently
 		//  lower-case any column name expression that is a reserved word. Changing that is harder.
 		{
-			name:        "column is reserved word, select not backticked",
-			tableName:   "test",
+			Name:      "column is reserved word, select not backticked",
+			tableName: "test",
 			tableSchema: NewSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -499,8 +474,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedSchema: NewResultSetSchema("timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, qualified with table alias",
-			tableName:   "test",
+			Name:      "column is reserved word, qualified with table alias",
+			tableName: "test",
 			tableSchema: NewSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -514,8 +489,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedSchema: NewResultSetSchema("timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, select not backticked #2",
-			tableName:   "test",
+			Name:      "column is reserved word, select not backticked #2",
+			tableName: "test",
 			tableSchema: NewSchema(
 				"YeAr", types.StringKind),
 			initialRows:    Rs(NewRow(types.String("1"))),
@@ -524,8 +499,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		},
 		{
-			name:        "column is reserved word, select backticked",
-			tableName:   "test",
+			Name:      "column is reserved word, select backticked",
+			tableName: "test",
 			tableSchema: NewSchema(
 				"Timestamp", types.StringKind,
 				"and", types.StringKind,
@@ -539,8 +514,8 @@ func TestCaseSensitivity(t *testing.T) {
 			expectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
 		},
 		{
-			name:        "column is reserved word, select backticked #2",
-			tableName:   "test",
+			Name:      "column is reserved word, select backticked #2",
+			tableName: "test",
 			tableSchema: NewSchema(
 				"Year", types.StringKind,
 				"and", types.StringKind,
@@ -558,15 +533,15 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.Name, func(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			CreateTestDatabase(dEnv, t)
 
+			if tt.AdditionalSetup != nil {
+				tt.AdditionalSetup(t, dEnv)
+			}
 			if tt.tableName != "" {
 				dtestutils.CreateTestTable(t, dEnv, tt.tableName, tt.tableSchema, tt.initialRows...)
-			}
-			if tt.additionalSetup != nil {
-				tt.additionalSetup(t, dEnv)
 			}
 
 			root, _ := dEnv.WorkingRoot(context.Background())
@@ -584,6 +559,31 @@ func TestCaseSensitivity(t *testing.T) {
 			assert.Equal(t, tt.expectedSchema, sch)
 		})
 	}
+}
+
+
+// Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
+// expectedErr is set, asserts instead that the execution returns an error that matches.
+func testSelectQuery(t *testing.T, queryString string, expectedSchema schema.Schema, expectedRows []row.Row, expectedErr string) {
+	dEnv := dtestutils.CreateTestEnv()
+	CreateTestDatabase(dEnv, t)
+	root, _ := dEnv.WorkingRoot(context.Background())
+
+	if (expectedRows == nil) != (expectedSchema == nil) {
+		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
+	expectedRows, sch, err := ExecuteSelect(context.Background(), expectedSchema, root, queryString)
+	if len(expectedErr) > 0 {
+		require.Error(t, err)
+		require.Contains(t, err.Error(), expectedErr)
+		return
+	} else {
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, expectedRows, expectedRows)
+	assert.Equal(t, expectedSchema, sch)
 }
 
 // Shim to make existing sql select tests work with sql engine
