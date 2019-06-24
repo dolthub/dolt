@@ -146,7 +146,7 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) map[hash.Hash]
 	return ranges
 }
 
-func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) ManifestInfo {
+func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
 	nbs.mm.LockForUpdate()
 	defer nbs.mm.UnlockForUpdate()
 
@@ -154,9 +154,11 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	defer nbs.mu.Unlock()
 
 	var stats Stats
-	ok, contents := nbs.mm.Fetch(ctx, &stats)
+	ok, contents, err := nbs.mm.Fetch(ctx, &stats)
 
-	if !ok {
+	if err != nil {
+		return manifestContents{}, err
+	} else if !ok {
 		contents = manifestContents{vers: constants.NomsVersion}
 	}
 
@@ -176,18 +178,19 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	}
 
 	if addCount == 0 {
-		return contents
+		return contents, nil
 	}
 
 	updatedContents, err := nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
 
-	// TODO: fix panics.
-	d.PanicIfError(err)
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	nbs.upstream = updatedContents
 	nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 
-	return updatedContents
+	return updatedContents, nil
 }
 
 func NewAWSStore(ctx context.Context, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) *NomsBlockStore {
@@ -257,7 +260,12 @@ func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister
 	t1 := time.Now()
 	defer nbs.stats.OpenLatency.SampleTimeSince(t1)
 
-	if exists, contents := nbs.mm.Fetch(ctx, nbs.stats); exists {
+	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	if exists {
 		nbs.upstream = contents
 		nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 	}
@@ -499,7 +507,12 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 func (nbs *NomsBlockStore) Rebase(ctx context.Context) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-	if exists, contents := nbs.mm.Fetch(ctx, nbs.stats); exists {
+	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	if exists {
 		nbs.upstream = contents
 		nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 	}
@@ -511,7 +524,7 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) hash.Hash {
 	return nbs.upstream.root
 }
 
-func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) bool {
+func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
 
@@ -523,7 +536,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 
 	if !anyPossiblyNovelChunks() && current == last {
 		nbs.Rebase(ctx)
-		return true
+		return true, nil
 	}
 
 	func() {
@@ -546,12 +559,11 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 	defer nbs.mm.UnlockForUpdate()
 	for {
 		if err := nbs.updateManifest(ctx, current, last); err == nil {
-			return true
+			return true, nil
 		} else if err == errOptimisticLockFailedRoot || err == errLastRootMismatch {
-			return false
+			return false, nil
 		} else if err != errOptimisticLockFailedTables {
-			// TODO: fix panics
-			d.PanicIfError(err)
+			return false, err
 		}
 
 		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables

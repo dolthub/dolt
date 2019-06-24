@@ -182,7 +182,9 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, fetched = mm.Fetch(context.Background(), nil)
+			var err error
+			_, fetched, err = mm.Fetch(context.Background(), nil)
+			assert.NoError(err)
 		}()
 	}
 

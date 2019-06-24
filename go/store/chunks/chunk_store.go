@@ -51,7 +51,7 @@ type ChunkStore interface {
 	// Commit atomically attempts to persist all novel Chunks and update the
 	// persisted root hash from last to current (or keeps it the same).
 	// If last doesn't match the root in persistent storage, returns false.
-	Commit(ctx context.Context, current, last hash.Hash) bool
+	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore instance. The type is implementation-dependent, and impls

@@ -184,7 +184,7 @@ func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents
 	return
 }
 
-func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents) {
+func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (bool, manifestContents, error) {
 	entryTime := time.Now()
 
 	mm.lockOutFetch()
@@ -194,19 +194,20 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 
 	if hit && t.After(entryTime) {
 		// Cache contains a manifest which is newer than entry time.
-		return true, cached
+		return true, cached, nil
 	}
 
 	t = time.Now()
 
-	var err error
-	exists, contents, err = mm.m.ParseIfExists(ctx, stats, nil)
+	exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return false, manifestContents{}, err
+	}
 
 	mm.cache.Put(mm.Name(), contents, t)
-	return
+
+	return exists, contents, nil
 }
 
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
@@ -230,6 +231,7 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 	}
 
 	mm.cache.Put(mm.Name(), contents, t)
+
 	return contents, nil
 }
 

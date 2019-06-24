@@ -315,8 +315,8 @@ func (lvs *ValueStore) Rebase(ctx context.Context) {
 // opened, or last Rebased(), it will return false and will have internally
 // rebased. Until Commit() succeeds, no work of the ValueStore will be visible
 // to other readers of the underlying ChunkStore.
-func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) bool {
-	return func() bool {
+func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	return func() (bool, error) {
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
 
@@ -358,15 +358,21 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) bool
 			PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
 		}
 
-		if !lvs.cs.Commit(ctx, current, last) {
-			return false
+		success, err := lvs.cs.Commit(ctx, current, last)
+
+		if err != nil {
+			return false, err
+		}
+
+		if !success {
+			return false, nil
 		}
 
 		if lvs.enforceCompleteness {
 			lvs.unresolvedRefs = hash.HashSet{}
 		}
 
-		return true
+		return true, nil
 	}()
 }
 

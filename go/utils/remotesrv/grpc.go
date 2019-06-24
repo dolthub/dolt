@@ -213,13 +213,18 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 		updates[hash.New(cti.Hash)] = cti.ChunkCount
 	}
 
-	cs.UpdateManifest(ctx, updates)
+	_, err := cs.UpdateManifest(ctx, updates)
+
+	if err != nil {
+		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
+		return nil, status.Error(codes.Internal, "manifest update error")
+	}
 
 	currHash := hash.New(req.Current)
 	lastHash := hash.New(req.Last)
 
 	var ok bool
-	err := pantoerr.PanicToError("Commit failed", func() error {
+	err = pantoerr.PanicToError("Commit failed", func() error {
 		ok = cs.Commit(ctx, currHash, lastHash)
 		return nil
 	})

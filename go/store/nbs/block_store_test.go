@@ -322,7 +322,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
-		assert.True(t, smallTableStore.Commit(context.Background(), newChunk.Hash(), root))
+		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
+		assert.NoError(t, err)
+		assert.True(t, success)
 		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
 	})
 
@@ -351,7 +353,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
-		assert.True(t, smallTableStore.Commit(context.Background(), newChunk.Hash(), root))
+		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
+		assert.NoError(t, err)
+		assert.True(t, success)
 		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
 		assertContainAll(t, smallTableStore, srcs...)
 	})
@@ -374,7 +378,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
-		assert.True(t, smallTableStore.Commit(context.Background(), newChunk.Hash(), root))
+		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
+		assert.NoError(t, err)
+		assert.True(t, success)
 		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
 		assertContainAll(t, smallTableStore, srcs...)
 	})
