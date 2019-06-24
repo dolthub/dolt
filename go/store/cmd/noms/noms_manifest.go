@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -83,7 +84,8 @@ func runManifest(ctx context.Context, args []string) int {
 	}
 
 	var manifest nbs.ManifestInfo
-	manifest = nbs.ParseManifest(manifestReader)
+	manifest, err = nbs.ParseManifest(manifestReader)
+	d.PanicIfError(err)
 
 	numSpecs := manifest.NumTableSpecs()
 	nbsFiles := make([]NbsFile, numSpecs)
