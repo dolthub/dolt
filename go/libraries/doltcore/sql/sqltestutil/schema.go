@@ -1,11 +1,110 @@
 package sqltestutil
 
 import (
+	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"strconv"
 )
+
+// Creates a new schema for a result set specified by the given pairs of column names and types. Column names are
+// strings, types are NomsKinds.
+func NewResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
+
+	if len(colNamesAndTypes)%2 != 0 {
+		panic("Non-even number of inputs passed to NewResultSetSchema")
+	}
+
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
+	for i := 0; i < len(colNamesAndTypes); i += 2 {
+		name := colNamesAndTypes[i].(string)
+		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
+		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	return schema.UnkeyedSchemaFromCols(collection)
+}
+
+// Creates a new row for a result set specified by the given values
+func NewResultSetRow(colVals ...types.Value) row.Row {
+
+	taggedVals := make(row.TaggedValues)
+	cols := make([]schema.Column, len(colVals))
+	for i := 0; i < len(colVals); i++ {
+		taggedVals[uint64(i)] = colVals[i]
+		nomsKind := colVals[i].Kind()
+		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
+	}
+
+	collection, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic("unexpected error " + err.Error())
+	}
+	sch := schema.UnkeyedSchemaFromCols(collection)
+
+	return row.New(sch, taggedVals)
+}
+
+// Creates a new row with the values given, using ascending tag numbers starting at 0.
+// Uses the first value as the primary key.
+func NewRow(colVals ...types.Value) row.Row {
+	var cols []schema.Column
+	taggedVals := make(row.TaggedValues)
+	var tag int64
+	for _, val := range colVals {
+		isPk := tag == 0
+		var constraints []schema.ColConstraint
+		if isPk {
+			constraints = append(constraints, schema.NotNullConstraint{})
+		}
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), isPk, constraints...))
+
+		taggedVals[uint64(tag)] = val
+		tag++
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	sch := schema.SchemaFromCols(colColl)
+
+	return row.New(sch, taggedVals)
+}
+
+// Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
+// Uses the first column as the primary key.
+func NewSchema(colNamesAndTypes ...interface{}) schema.Schema {
+	if len(colNamesAndTypes)%2 != 0 {
+		panic("Non-even number of inputs passed to NewSchema")
+	}
+
+	cols := make([]schema.Column, len(colNamesAndTypes)/2)
+	for i := 0; i < len(colNamesAndTypes); i += 2 {
+		name := colNamesAndTypes[i].(string)
+		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
+
+		isPk := i/2 == 0
+		var constraints []schema.ColConstraint
+		if isPk {
+			constraints = append(constraints, schema.NotNullConstraint{})
+		}
+		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, isPk, constraints...)
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return schema.SchemaFromCols(colColl)
+}
 
 // Returns the logical concatenation of the schemas and rows given, rewriting all tag numbers to begin at zero. The row
 // returned will have a new schema identical to the result of compressSchema.
@@ -128,82 +227,3 @@ func CompressSchemas(schs ...schema.Schema) schema.Schema {
 
 	return schema.UnkeyedSchemaFromCols(colCol)
 }
-
-// Creates a new schema for a result set specified by the given pairs of column names and types. Column names are
-// strings, types are NomsKinds.
-func NewResultSetSchema(colNamesAndTypes ...interface{}) schema.Schema {
-
-	if len(colNamesAndTypes)%2 != 0 {
-		panic("Non-even number of inputs passed to newResultSetSchema")
-	}
-
-	cols := make([]schema.Column, len(colNamesAndTypes)/2)
-	for i := 0; i < len(colNamesAndTypes); i += 2 {
-		name := colNamesAndTypes[i].(string)
-		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
-		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, false)
-	}
-
-	collection, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic("unexpected error " + err.Error())
-	}
-	return schema.UnkeyedSchemaFromCols(collection)
-}
-
-// Creates a new row with the values given, using ascending tag numbers starting at 0.
-// Uses the first value as the primary key.
-func NewRow(colVals ...types.Value) row.Row {
-	var cols []schema.Column
-	taggedVals := make(row.TaggedValues)
-	var tag int64
-	for _, val := range colVals {
-		isPk := tag == 0
-		var constraints []schema.ColConstraint
-		if isPk {
-			constraints = append(constraints, schema.NotNullConstraint{})
-		}
-		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), isPk, constraints...))
-
-		taggedVals[uint64(tag)] = val
-		tag++
-	}
-
-	colColl, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	sch := schema.SchemaFromCols(colColl)
-
-	return row.New(sch, taggedVals)
-}
-
-// Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
-// Uses the first column as the primary key.
-func NewSchema(colNamesAndTypes ...interface{}) schema.Schema {
-	if len(colNamesAndTypes)%2 != 0 {
-		panic("Non-even number of inputs passed to NewResultSetSchema")
-	}
-
-	cols := make([]schema.Column, len(colNamesAndTypes)/2)
-	for i := 0; i < len(colNamesAndTypes); i += 2 {
-		name := colNamesAndTypes[i].(string)
-		nomsKind := colNamesAndTypes[i+1].(types.NomsKind)
-
-		isPk := i/2 == 0
-		var constraints []schema.ColConstraint
-		if isPk {
-			constraints = append(constraints, schema.NotNullConstraint{})
-		}
-		cols[i/2] = schema.NewColumn(name, uint64(i/2), nomsKind, isPk, constraints...)
-	}
-
-	colColl, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	return schema.SchemaFromCols(colColl)
-}
-

@@ -251,26 +251,6 @@ func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 	return mutated
 }
 
-// Creates a new row for a result set specified by the given values
-func NewResultSetRow(colVals ...types.Value) row.Row {
-
-	taggedVals := make(row.TaggedValues)
-	cols := make([]schema.Column, len(colVals))
-	for i := 0; i < len(colVals); i++ {
-		taggedVals[uint64(i)] = colVals[i]
-		nomsKind := colVals[i].Kind()
-		cols[i] = schema.NewColumn(fmt.Sprintf("%v", i), uint64(i), nomsKind, false)
-	}
-
-	collection, err := schema.NewColCollection(cols...)
-	if err != nil {
-		panic("unexpected error " + err.Error())
-	}
-	sch := schema.UnkeyedSchemaFromCols(collection)
-
-	return row.New(sch, taggedVals)
-}
-
 // Creates a test database with the test data set in it
 func CreateTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
