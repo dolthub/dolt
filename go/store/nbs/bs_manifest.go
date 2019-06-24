@@ -3,8 +3,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-
 	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
 )
 
@@ -60,14 +58,16 @@ func (bsm blobstoreManifest) ParseIfExists(ctx context.Context, stats *Stats, re
 }
 
 // Update updates the contents of the manifest in the blobstore
-func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if writeHook != nil {
 		panic("Write hooks not supported")
 	}
 
 	ver, contents, err := manifestVersionAndContents(ctx, bsm.bs)
 
-	d.PanicIfError(err)
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	if contents.lock == lastLock {
 		buffer := bytes.NewBuffer(make([]byte, 64*1024)[:0])
@@ -76,13 +76,12 @@ func (bsm blobstoreManifest) Update(ctx context.Context, lastLock addr, newConte
 
 		if err != nil {
 			if !blobstore.IsCheckAndPutError(err) {
-				// io error.  Noms convention is to panic
-				panic("Unable to update manifest due to error " + err.Error())
+				return manifestContents{}, err
 			}
 		} else {
-			return newContents
+			return newContents, nil
 		}
 	}
 
-	return contents
+	return contents, nil
 }

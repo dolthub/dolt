@@ -298,7 +298,7 @@ func (fm *fakeManifest) ParseIfExists(ctx context.Context, stats *Stats, readHoo
 // to |newLock|, |fm.root| is set to |newRoot|, and the contents of |specs|
 // replace |fm.tableSpecs|. If |lastLock| != |fm.lock|, then the update
 // fails. Regardless of success or failure, the current state is returned.
-func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	fm.mu.Lock()
 	defer fm.mu.Unlock()
 	if fm.contents.lock == lastLock {
@@ -306,7 +306,7 @@ func (fm *fakeManifest) Update(ctx context.Context, lastLock addr, newContents m
 		fm.contents.specs = make([]tableSpec, len(newContents.specs))
 		copy(fm.contents.specs, newContents.specs)
 	}
-	return fm.contents
+	return fm.contents, nil
 }
 
 func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs []tableSpec) {
