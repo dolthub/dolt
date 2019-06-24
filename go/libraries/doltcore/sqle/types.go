@@ -2,8 +2,8 @@ package sqle
 
 import (
 	"fmt"
-	"github.com/attic-labs/noms/go/types"
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/src-d/go-mysql-server/sql"
 )
 

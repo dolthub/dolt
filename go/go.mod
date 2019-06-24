@@ -31,9 +31,9 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.3.0
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
+	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
 	github.com/src-d/go-mysql-server v0.4.1-0.20190619104848-eaab1795353a
-	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/tealeg/xlsx v1.0.3
@@ -50,6 +50,7 @@ require (
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4
 
 replace github.com/xwb1989/sqlparser => ../../../../liquidata-inc/sqlparser
+
 //replace github.com/xwb1989/sqlparser => github.com/liquidata-inc/sqlparser v0.9.8
 
 // The latest release of go-mysql-server has gopkg.in instead of github
