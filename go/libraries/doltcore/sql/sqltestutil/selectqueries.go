@@ -36,7 +36,6 @@ type SelectTest struct {
 // Collection of query tests for conformance testing, grouped by categories.
 //
 
-
 // BasicSelectTests cover basic select statement features and error handling
 var BasicSelectTests = []SelectTest{
 	{
