@@ -7,13 +7,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"io"
 	"os"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/progressreader"
@@ -24,11 +24,11 @@ func nomsBlobGet(ctx context.Context, ds string, filePath string) int {
 	cfg := config.NewResolver()
 	var blob types.Blob
 	if db, val, err := cfg.GetPath(ctx, ds); err != nil {
-		d.CheckErrorNoUsage(err)
+		util.CheckErrorNoUsage(err)
 	} else if val == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("No value at %s", ds))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at %s", ds))
 	} else if b, ok := val.(types.Blob); !ok {
-		d.CheckErrorNoUsage(fmt.Errorf("Value at %s is not a blob", ds))
+		util.CheckErrorNoUsage(fmt.Errorf("Value at %s is not a blob", ds))
 	} else {
 		defer db.Close()
 		blob = b
@@ -43,7 +43,7 @@ func nomsBlobGet(ctx context.Context, ds string, filePath string) int {
 
 	// Note: overwrites any existing file.
 	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, 0644)
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 	defer file.Close()
 
 	start := time.Now()

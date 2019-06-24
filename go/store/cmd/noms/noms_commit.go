@@ -14,7 +14,6 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
@@ -42,7 +41,7 @@ func setupCommitFlags() *flag.FlagSet {
 func runCommit(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	db, ds, err := cfg.GetDataset(ctx, args[len(args)-1])
-	d.CheckError(err)
+	util.CheckError(err)
 	defer db.Close()
 
 	var path string
@@ -50,15 +49,15 @@ func runCommit(ctx context.Context, args []string) int {
 		path = args[0]
 	} else {
 		readPath, _, err := bufio.NewReader(os.Stdin).ReadLine()
-		d.CheckError(err)
+		util.CheckError(err)
 		path = string(readPath)
 	}
 	absPath, err := spec.NewAbsolutePath(path)
-	d.CheckError(err)
+	util.CheckError(err)
 
 	value := absPath.Resolve(ctx, db)
 	if value == nil {
-		d.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
+		util.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}
 
 	oldCommitRef, oldCommitExists := ds.MaybeHeadRef()
@@ -71,10 +70,10 @@ func runCommit(ctx context.Context, args []string) int {
 	}
 
 	meta, err := spec.CreateCommitMetaStruct(ctx, db, "", "", nil, nil)
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 
 	if oldCommitExists {
 		fmt.Fprintf(os.Stdout, "New head #%v (was #%v)\n", ds.HeadRef().TargetHash().String(), oldCommitRef.TargetHash().String())

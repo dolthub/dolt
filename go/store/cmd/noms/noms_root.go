@@ -14,7 +14,6 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -45,7 +44,7 @@ func runRoot(ctx context.Context, args []string) int {
 
 	cfg := config.NewResolver()
 	cs, err := cfg.GetChunkStore(ctx, args[0])
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 
 	currRoot := cs.Root(ctx)
 
@@ -65,7 +64,7 @@ func runRoot(ctx context.Context, args []string) int {
 
 	// If BUG 3407 is correct, we might be able to just take cs and make a Database directly from that.
 	db, err := cfg.GetDatabase(ctx, args[0])
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 	defer db.Close()
 	if !validate(ctx, db.ReadValue(ctx, h)) {
 		return 1
@@ -82,7 +81,7 @@ Continue?`)
 
 	var input string
 	n, err := fmt.Scanln(&input)
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 	if n != 1 || strings.ToLower(input) != "y" {
 		return 0
 	}

@@ -46,15 +46,15 @@ func setupSyncFlags() *flag.FlagSet {
 func runSync(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	sourceStore, sourceObj, err := cfg.GetPath(ctx, args[0])
-	d.CheckError(err)
+	util.CheckError(err)
 	defer sourceStore.Close()
 
 	if sourceObj == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
+		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
 	sinkDB, sinkDataset, err := cfg.GetDataset(ctx, args[1])
-	d.CheckError(err)
+	util.CheckError(err)
 	defer sinkDB.Close()
 
 	start := time.Now()

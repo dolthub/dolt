@@ -68,7 +68,7 @@ func nomsListAppend(ctx context.Context, specStr string, args []string) int {
 	if list, ok := rootVal.(types.List); ok {
 		applyListInserts(ctx, sp, rootVal, basePath, list.Len(), args)
 	} else {
-		d.CheckErrorNoUsage(fmt.Errorf("%s is not a list", specStr))
+		util.CheckErrorNoUsage(fmt.Errorf("%s is not a list", specStr))
 	}
 	return 0
 }
@@ -101,7 +101,7 @@ func nomsListDel(ctx context.Context, specStr string, pos uint64, len uint64) in
 
 func applyListInserts(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, pos uint64, args []string) {
 	if rootVal == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
 	db := sp.GetDatabase(ctx)
@@ -109,7 +109,7 @@ func applyListInserts(ctx context.Context, sp spec.Spec, rootVal types.Value, ba
 	for i := 0; i < len(args); i++ {
 		vv, err := argumentToValue(ctx, args[i], db)
 		if err != nil {
-			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i], i, err))
+			util.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i], i, err))
 		}
 		patch = append(patch, diff.Difference{
 			Path:       append(basePath, types.NewIndexPath(types.Float(pos+uint64(i)))),

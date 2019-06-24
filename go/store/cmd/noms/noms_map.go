@@ -81,10 +81,10 @@ func nomsMapDel(ctx context.Context, specStr string, args []string) int {
 
 func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
 	if len(args)%2 != 0 {
-		d.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
+		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
 	if rootVal == nil {
-		d.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
 	db := sp.GetDatabase(ctx)
@@ -93,7 +93,7 @@ func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		kp := parseKeyPart(args, i)
 		vv, err := argumentToValue(ctx, args[i+1], db)
 		if err != nil {
-			d.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i+1], i+1, err))
+			util.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i+1], i+1, err))
 		}
 		patch = append(patch, diff.Difference{
 			Path:       append(basePath, kp),
@@ -107,10 +107,10 @@ func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 func parseKeyPart(args []string, i int) (res types.PathPart) {
 	idx, h, rem, err := types.ParsePathIndex(args[i])
 	if rem != "" {
-		d.CheckError(fmt.Errorf("Invalid key: %s at position %d", args[i], i))
+		util.CheckError(fmt.Errorf("Invalid key: %s at position %d", args[i], i))
 	}
 	if err != nil {
-		d.CheckError(fmt.Errorf("Invalid key: %s at position %d: %s", args[i], i, err))
+		util.CheckError(fmt.Errorf("Invalid key: %s at position %d: %s", args[i], i, err))
 	}
 	if idx != nil {
 		res = types.NewIndexPath(idx)

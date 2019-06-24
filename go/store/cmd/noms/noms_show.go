@@ -14,7 +14,6 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/datetime"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/outputpager"
@@ -51,7 +50,7 @@ func setupShowFlags() *flag.FlagSet {
 func runShow(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	database, value, err := cfg.GetPath(ctx, args[0])
-	d.CheckErrorNoUsage(err)
+	util.CheckErrorNoUsage(err)
 	defer database.Close()
 
 	if value == nil {
@@ -68,7 +67,7 @@ func runShow(ctx context.Context, args []string) int {
 		ch := types.EncodeValue(value)
 		buf := bytes.NewBuffer(ch.Data())
 		_, err = io.Copy(os.Stdout, buf)
-		d.CheckError(err)
+		util.CheckError(err)
 		return 0
 	}
 
