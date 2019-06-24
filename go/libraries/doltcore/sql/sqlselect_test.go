@@ -16,34 +16,9 @@ import (
 )
 
 func TestExecuteSelect(t *testing.T) {
-	for _, tt := range BasicSelectTests {
-		t.Run(tt.Name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
-			root, _ := dEnv.WorkingRoot(context.Background())
-
-			sqlStatement, err := sqlparser.Parse(tt.Query)
-			if err != nil {
-				assert.FailNow(t, "Couldn't parse query "+tt.Query, "%v", err.Error())
-			}
-
-			s := sqlStatement.(*sqlparser.Select)
-
-			if tt.ExpectedRows != nil && tt.ExpectedSchema == nil {
-				require.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
-			}
-
-			rows, sch, err := ExecuteSelect(context.Background(), root, s)
-
-			if len(tt.ExpectedErr) > 0 {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.ExpectedErr)
-			} else {
-				require.NoError(t, err)
-			}
-
-			assert.Equal(t, tt.ExpectedRows, rows)
-			assert.Equal(t, tt.ExpectedSchema, sch)
+	for _, test := range BasicSelectTests {
+		t.Run(test.Name, func(t *testing.T) {
+			runSelectTest(t, test)
 		})
 	}
 }
@@ -309,35 +284,9 @@ func TestJoins(t *testing.T) {
 
 // Tests of case sensitivity handling
 func TestCaseSensitivity(t *testing.T) {
-	for _, tt := range CaseSensitivityTests {
-		t.Run(tt.Name, func(t *testing.T) {
-			dEnv := dtestutils.CreateTestEnv()
-			CreateTestDatabase(dEnv, t)
-
-			if tt.AdditionalSetup != nil {
-				tt.AdditionalSetup(t, dEnv)
-			}
-
-			root, _ := dEnv.WorkingRoot(context.Background())
-
-			sqlStatement, _ := sqlparser.Parse(tt.Query)
-			s := sqlStatement.(*sqlparser.Select)
-
-			if tt.ExpectedRows != nil && tt.ExpectedSchema == nil {
-				require.Fail(t, "Incorrect test setup: schema must both be provided when rows are")
-			}
-
-			rows, sch, err := ExecuteSelect(context.Background(), root, s)
-			if len(tt.ExpectedErr) > 0 {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tt.ExpectedErr)
-				return
-			} else {
-				require.NoError(t, err)
-			}
-
-			assert.Equal(t, tt.ExpectedRows, rows)
-			assert.Equal(t, tt.ExpectedSchema, sch)
+	for _, test := range CaseSensitivityTests {
+		t.Run(test.Name, func(t *testing.T) {
+			runSelectTest(t, test)
 		})
 	}
 }
@@ -388,4 +337,35 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			assert.Equal(t, tt.expectedSchema, statement.ResultSetSchema)
 		})
 	}
+}
+
+// Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
+// expectedErr is set, asserts instead that the execution returns an error that matches.
+func runSelectTest(t *testing.T, test SelectTest) {
+	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
+		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
+	dEnv := dtestutils.CreateTestEnv()
+	CreateTestDatabase(dEnv, t)
+
+	if test.AdditionalSetup != nil {
+		test.AdditionalSetup(t, dEnv)
+	}
+
+	root, _ := dEnv.WorkingRoot(context.Background())
+	sqlStatement, _ := sqlparser.Parse(test.Query)
+	s := sqlStatement.(*sqlparser.Select)
+
+	actualRows, sch, err := ExecuteSelect(context.Background(), root, s)
+	if len(test.ExpectedErr) > 0 {
+		require.Error(t, err)
+		require.Contains(t, err.Error(), test.ExpectedErr)
+		return
+	} else {
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, test.ExpectedRows, actualRows)
+	assert.Equal(t, test.ExpectedSchema, sch)
 }

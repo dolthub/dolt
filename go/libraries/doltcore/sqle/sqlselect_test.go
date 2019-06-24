@@ -18,19 +18,12 @@ import (
 )
 
 func TestExecuteSelect(t *testing.T) {
-
-	for _, tt := range BasicSelectTests {
-		t.Run(tt.Name, func(t *testing.T) {
-			if tt.SkipOnSqlEngine {
+	for _, test := range BasicSelectTests {
+		t.Run(test.Name, func(t *testing.T) {
+			if test.SkipOnSqlEngine {
 				t.Skip("Skipping test broken on Sql Engine")
 			}
-
-			expectedSchema := tt.ExpectedSchema
-			expectedRows := tt.ExpectedRows
-			expectedErr := tt.ExpectedErr
-			queryString := tt.Query
-
-			testSelectQuery(t, queryString, expectedSchema, expectedRows, expectedErr)
+			testSelectQuery(t, test)
 		})
 	}
 }
@@ -268,12 +261,14 @@ func TestJoins(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			expectedSchema := tt.expectedSchema
-			expectedRows := tt.expectedRows
-			expectedErr := tt.expectedErr
-			queryString := tt.query
-
-			testSelectQuery(t, queryString, expectedSchema, expectedRows, expectedErr)
+			testSelectQuery(t, SelectTest{
+				Name:            tt.name,
+				Query:           tt.query,
+				ExpectedSchema:  tt.expectedSchema,
+				ExpectedRows:    tt.expectedRows,
+				ExpectedErr:     tt.expectedErr,
+				AdditionalSetup: nil,
+			})
 		})
 	}
 }
@@ -546,7 +541,7 @@ func TestCaseSensitivity(t *testing.T) {
 
 			root, _ := dEnv.WorkingRoot(context.Background())
 
-			rows, sch, err := ExecuteSelect(context.Background(), tt.expectedSchema, root, tt.query)
+			rows, sch, err := executeSelect(context.Background(), tt.expectedSchema, root, tt.query)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tt.expectedErr)
@@ -561,33 +556,33 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 }
 
-
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
-func testSelectQuery(t *testing.T, queryString string, expectedSchema schema.Schema, expectedRows []row.Row, expectedErr string) {
+func testSelectQuery(t *testing.T, test SelectTest) {
+	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
+		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
 	dEnv := dtestutils.CreateTestEnv()
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(context.Background())
 
-	if (expectedRows == nil) != (expectedSchema == nil) {
-		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
-	}
-
-	expectedRows, sch, err := ExecuteSelect(context.Background(), expectedSchema, root, queryString)
-	if len(expectedErr) > 0 {
+	actualRows, sch, err := executeSelect(context.Background(), test.ExpectedSchema, root, test.Query)
+	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
-		require.Contains(t, err.Error(), expectedErr)
+		require.Contains(t, err.Error(), test.ExpectedErr)
 		return
 	} else {
 		require.NoError(t, err)
 	}
 
-	assert.Equal(t, expectedRows, expectedRows)
-	assert.Equal(t, expectedSchema, sch)
+	assert.Equal(t, test.ExpectedRows, actualRows)
+	assert.Equal(t, test.ExpectedSchema, sch)
 }
 
-// Shim to make existing sql select tests work with sql engine
-func ExecuteSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
+// Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
+// the targetSchema given is used to prepare all rows.
+func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
 	db := NewDatabase("dolt", root)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
@@ -603,7 +598,7 @@ func ExecuteSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 		return nil, nil, nil
 	}
 
-	var doltRows []row.Row
+	doltRows := make([]row.Row, 0)
 	var r sql.Row
 	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
 		doltRows = append(doltRows, SqlRowToDoltRow(r, targetSch))
