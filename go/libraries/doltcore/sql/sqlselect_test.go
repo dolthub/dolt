@@ -29,7 +29,6 @@ func TestJoins(t *testing.T) {
 		})
 	}}
 
-// Tests of case sensitivity handling
 func TestCaseSensitivity(t *testing.T) {
 	for _, test := range CaseSensitivityTests {
 		t.Run(test.Name, func(t *testing.T) {
