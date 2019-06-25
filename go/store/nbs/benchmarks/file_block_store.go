@@ -24,11 +24,11 @@ func newFileBlockStore(w io.WriteCloser) chunks.ChunkStore {
 	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}
 }
 
-func (fb fileBlockStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
+func (fb fileBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
 	panic("not impl")
 }
 

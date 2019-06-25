@@ -103,7 +103,10 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 
 	go func() {
 		defer close(found)
-		srcDB.chunkStore().GetMany(ctx, batch.HashSet(), found)
+		err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), found)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
 	}()
 
 	for c := range found {

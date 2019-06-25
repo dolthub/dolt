@@ -132,8 +132,13 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 		}
 		return chunks.EmptyChunk
 	}()
+
 	if chunk.IsEmpty() {
-		chunk = lvs.cs.Get(ctx, h)
+		var err error
+		chunk, err = lvs.cs.Get(ctx, h)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
 	}
 	if chunk.IsEmpty() {
 		return nil
@@ -189,7 +194,14 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 		foundChunks := make(chan *chunks.Chunk, 16)
 
-		go func() { lvs.cs.GetMany(ctx, remaining, foundChunks); close(foundChunks) }()
+		go func() {
+			err := lvs.cs.GetMany(ctx, remaining, foundChunks)
+
+			// TODO: fix panics
+			d.PanicIfError(err)
+
+			close(foundChunks)
+		}()
 		for c := range foundChunks {
 			h := c.Hash()
 			foundValues[h] = decode(h, c)

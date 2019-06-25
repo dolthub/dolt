@@ -98,22 +98,26 @@ func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 }
 
 // Get the Chunk for the value of the hash in the store. If the hash is absent from the store EmptyChunk is returned.
-func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
+func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	hashes := hash.HashSet{h: struct{}{}}
 	foundChan := make(chan *chunks.Chunk, 1)
-	dcs.GetMany(ctx, hashes, foundChan)
+	err := dcs.GetMany(ctx, hashes, foundChan)
+
+	if err != nil {
+		return chunks.EmptyChunk, err
+	}
 
 	select {
 	case ch := <-foundChan:
-		return *ch
+		return *ch, nil
 	default:
-		return chunks.EmptyChunk
+		return chunks.EmptyChunk, nil
 	}
 }
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
 	hashToChunk := dcs.cache.Get(hashes)
 
 	notCached := make([]hash.Hash, 0, len(hashes))
@@ -131,10 +135,11 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		err := dcs.readChunksAndCache(ctx, hashes, notCached, foundChunks)
 
 		if err != nil {
-			//follow noms convention
-			panic(err)
+			return err
 		}
 	}
+
+	return nil
 }
 
 const (
