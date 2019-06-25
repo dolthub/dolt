@@ -436,7 +436,7 @@ func (nbs *NomsBlockStore) Count() uint32 {
 	return count + tables.count()
 }
 
-func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) bool {
+func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	t1 := time.Now()
 	defer func() {
 		nbs.stats.HasLatency.SampleTimeSince(t1)
@@ -451,10 +451,10 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) bool {
 	}()
 	has = has || tables.has(a)
 
-	return has
+	return has, nil
 }
 
-func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
+func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	t1 := time.Now()
 
 	reqs := toHasRecords(hashes)
@@ -487,7 +487,7 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) has
 			absent.Insert(hash.New(r.a[:]))
 		}
 	}
-	return absent
+	return absent, nil
 }
 
 func toHasRecords(hashes hash.HashSet) []hasRecord {

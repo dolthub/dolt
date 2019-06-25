@@ -25,11 +25,11 @@ func (nb nullBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	panic("not impl")
 }
 
-func (nb nullBlockStore) Has(ctx context.Context, h hash.Hash) bool {
+func (nb nullBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	panic("not impl")
 }
 
-func (nb nullBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (present hash.HashSet) {
+func (nb nullBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (present hash.HashSet, err error) {
 	panic("not impl")
 }
 

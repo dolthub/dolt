@@ -59,7 +59,11 @@ type ValueStore struct {
 }
 
 func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) {
-	absent := cs.HasMany(ctx, unresolved)
+	absent, err := cs.HasMany(ctx, unresolved)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
 	if len(absent) != 0 {
 		d.Panic("Found dangling references to %v", absent)
 	}

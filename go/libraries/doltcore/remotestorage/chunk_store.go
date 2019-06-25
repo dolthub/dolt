@@ -277,30 +277,36 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 
 // Returns true iff the value at the address |h| is contained in the
 // store
-func (dcs *DoltChunkStore) Has(ctx context.Context, h hash.Hash) bool {
+func (dcs *DoltChunkStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	hashes := hash.HashSet{h: struct{}{}}
-	absent := dcs.HasMany(ctx, hashes)
+	absent, err := dcs.HasMany(ctx, hashes)
 
-	return len(absent) == 0
+	if err != nil {
+		return false, err
+	}
+
+	return len(absent) == 0, nil
 }
 
 const maxHasManyBatchSize = 16 * 1024
 
 // Returns a new HashSet containing any members of |hashes| that are
 // absent from the store.
-func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet) {
+func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	// get the set of hashes that isn't already in the cache
 	notCached := dcs.cache.Has(hashes)
 
 	if len(notCached) == 0 {
-		return notCached
+		return notCached, nil
 	}
 
 	// convert the set to a slice of hashes and a corresponding slice of the byte encoding for those hashes
 	hashSl, byteSl := HashSetToSlices(notCached)
 
-	absent = make(hash.HashSet)
+	absent := make(hash.HashSet)
 	var found []chunks.Chunk
+	var err error
+
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
 		// slice the slices into a batch of hashes
 		currHashSl := hashSl[st:end]
@@ -311,9 +317,8 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 		resp, err := dcs.csClient.HasChunks(ctx, &req)
 
 		if err != nil {
-			rpcErr := NewRpcError(err, "HasMany", dcs.host, req)
-			//follow noms convention
-			panic(rpcErr)
+			err = NewRpcError(err, "HasMany", dcs.host, req)
+			return true
 		}
 
 		numAbsent := len(resp.Absent)
@@ -343,6 +348,10 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 		return false
 	})
 
+	if err != nil {
+		return nil, err
+	}
+
 	if len(found)+len(absent) != len(notCached) {
 		panic("not all chunks were accounted for")
 	}
@@ -351,7 +360,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 		dcs.cache.Put(found)
 	}
 
-	return absent
+	return absent, nil
 }
 
 // Put caches c. Upon return, c must be visible to
