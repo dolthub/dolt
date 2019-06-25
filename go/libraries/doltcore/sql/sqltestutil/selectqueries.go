@@ -13,6 +13,9 @@ import (
 // This file defines test queries and expected results. The purpose of defining them here is to make them portable --
 // usable in multiple contexts as we implement SQL support.
 
+// SetupFunc can be run to perform additional setup work before a test case
+type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
+
 // Structure for a test of a select query
 type SelectTest struct {
 	// The name of this test. Names should be unique and descriptive.
@@ -33,7 +36,7 @@ type SelectTest struct {
 }
 
 //
-// Collection of query tests for conformance testing, grouped by categories.
+// Collection of query tests for conformance and performance testing, grouped by categories.
 //
 
 // BasicSelectTests cover basic select statement features and error handling
@@ -693,7 +696,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "table name has mixed case, select lower case",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select test from mixedcase",
 		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -702,7 +705,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "table name has mixed case, select upper case",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select test from MIXEDCASE",
 		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -711,7 +714,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "qualified select *",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select mixedcAse.* from MIXEDCASE",
 		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -720,7 +723,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "qualified select column",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select mixedcAse.TeSt from MIXEDCASE",
 		ExpectedSchema: NewResultSetSchema("TeSt", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -729,7 +732,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "table alias select *",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select Mc.* from MIXEDCASE as mc",
 		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -738,7 +741,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "table alias select column",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select mC.TeSt from MIXEDCASE as MC",
 		ExpectedSchema: NewResultSetSchema("TeSt", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -746,7 +749,7 @@ var CaseSensitivityTests = []SelectTest {
 	{
 		Name:        "multiple tables with the same case-insensitive name, exact match",
 		AdditionalSetup: Compose(
-			CreateTableFn("tableName", NewSchema("test", types.StringKind), Rs(NewRow(types.String("1")))...),
+			CreateTableFn("tableName", NewSchema("test", types.StringKind), NewRow(types.String("1"))),
 			CreateTableFn("TABLENAME", NewSchema("test", types.StringKind)),
 			CreateTableFn("tablename", NewSchema("test", types.StringKind)),
 		),
@@ -785,7 +788,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "column name has mixed case, select lower case",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select mixedcase from test",
 		ExpectedSchema: NewResultSetSchema("mixedcase", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -794,7 +797,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "column name has mixed case, select upper case",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select MIXEDCASE from test",
 		ExpectedSchema: NewResultSetSchema("MIXEDCASE", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -803,7 +806,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "select with multiple matching columns, exact match",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("2")))...),
+			NewRow(types.String("1"), types.String("2"))),
 		Query:          "select mixedcase from test",
 		ExpectedSchema: NewResultSetSchema("mixedcase", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("2"))),
@@ -812,7 +815,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:           "select with multiple matching columns, exact match #2",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("2")))...),
+			NewRow(types.String("1"), types.String("2"))),
 		Query:          "select MiXeDcAsE from test",
 		ExpectedSchema: NewResultSetSchema("MiXeDcAsE", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -821,7 +824,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:        "select with multiple matching columns, no exact match",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("2")))...),
+			NewRow(types.String("1"), types.String("2"))),
 		Query:       "select MIXEDCASE from test",
 		ExpectedErr: "Ambiguous column: 'MIXEDCASE'",
 	},
@@ -829,7 +832,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:        "select with multiple matching columns, no exact match, table alias",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("2")))...),
+			NewRow(types.String("1"), types.String("2"))),
 		Query:       "select t.MIXEDCASE from test t",
 		ExpectedErr: "Ambiguous column: 'MIXEDCASE'",
 	},
@@ -843,7 +846,7 @@ var CaseSensitivityTests = []SelectTest {
 				"and", types.StringKind,
 				"or", types.StringKind,
 				"select", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")))...),
+			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
 		Query:          "select Timestamp from test",
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		ExpectedSchema: NewResultSetSchema("timestamp", types.StringKind),
@@ -856,7 +859,7 @@ var CaseSensitivityTests = []SelectTest {
 				"and", types.StringKind,
 				"or", types.StringKind,
 				"select", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")))...),
+			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
 		Query:          "select t.Timestamp from test as t",
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		ExpectedSchema: NewResultSetSchema("timestamp", types.StringKind),
@@ -865,7 +868,7 @@ var CaseSensitivityTests = []SelectTest {
 		Name:      "column is reserved word, select not backticked #2",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("YeAr", types.StringKind),
-			Rs(NewRow(types.String("1")))...),
+			NewRow(types.String("1"))),
 		Query:          "select Year from test",
 		ExpectedSchema: NewResultSetSchema("year", types.StringKind),
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
@@ -878,7 +881,7 @@ var CaseSensitivityTests = []SelectTest {
 				"and", types.StringKind,
 				"or", types.StringKind,
 				"select", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")))...),
+			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
 		Query:          "select `Timestamp` from test",
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
@@ -891,7 +894,7 @@ var CaseSensitivityTests = []SelectTest {
 				"and", types.StringKind,
 				"or", types.StringKind,
 				"select", types.StringKind),
-			Rs(NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create")))...),
+			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
 		Query:       "select `Year`, `OR`, `SELect`, `anD` from test",
 		ExpectedSchema: NewResultSetSchema(
 			"Year", types.StringKind,
@@ -901,9 +904,6 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows: Rs(NewResultSetRow(types.String("1"), types.String("aaa"), types.String("create"), types.String("1.1"))),
 	},
 }
-
-// SetupFunc can be run to perform additional setup work before a test case
-type SetupFn func(t *testing.T, dEnv *env.DoltEnv)
 
 // CreateTableFn returns a SetupFunc that creates a table with the rows given
 func CreateTableFn(tableName string, tableSchema schema.Schema, initialRows ...row.Row) SetupFn {
