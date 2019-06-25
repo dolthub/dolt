@@ -514,18 +514,21 @@ func toHasRecords(hashes hash.HashSet) []hasRecord {
 	return reqs
 }
 
-func (nbs *NomsBlockStore) Rebase(ctx context.Context) {
+func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return err
+	}
 
 	if exists {
 		nbs.upstream = contents
 		nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 	}
+
+	return nil
 }
 
 func (nbs *NomsBlockStore) Root(ctx context.Context) hash.Hash {
@@ -545,7 +548,12 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 	}
 
 	if !anyPossiblyNovelChunks() && current == last {
-		nbs.Rebase(ctx)
+		err := nbs.Rebase(ctx)
+
+		if err != nil {
+			return false, err
+		}
+
 		return true, nil
 	}
 

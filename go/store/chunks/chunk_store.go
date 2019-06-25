@@ -42,7 +42,7 @@ type ChunkStore interface {
 
 	// Rebase brings this ChunkStore into sync with the persistent storage's
 	// current root.
-	Rebase(ctx context.Context)
+	Rebase(ctx context.Context) error
 
 	// Root returns the root of the database as of the time the ChunkStore
 	// was opened or the most recent call to Rebase.

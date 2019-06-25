@@ -104,7 +104,9 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	_, err = store1.Commit(context.Background(), store1.Root(context.Background()), store1.Root(context.Background()))
 	suite.NoError(err)
 
-	store2.Rebase(context.Background())
+	err = store2.Rebase(context.Background())
+	suite.NoError(err)
+
 	// Now, reading c from store2 via the API should work...
 	assertInputInStore(input, h, store2, suite.Assert())
 }

@@ -271,7 +271,8 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	// Shouldn't have c1 yet.
 	suite.False(suite.store.Has(context.Background(), c1.Hash()))
 
-	suite.store.Rebase(context.Background())
+	err := suite.store.Rebase(context.Background())
+	suite.NoError(err)
 
 	// Reading c2 via the API should work post-rebase
 	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
@@ -283,14 +284,16 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 
 	// suite.store should still have its initial root
 	suite.EqualValues(root, suite.store.Root(context.Background()))
-	suite.store.Rebase(context.Background())
+	err = suite.store.Rebase(context.Background())
+	suite.NoError(err)
 
 	// Rebase grabbed the new root, so updating should now succeed!
 	suite.True(suite.store.Commit(context.Background(), c2.Hash(), suite.store.Root(context.Background())))
 
 	// Interloper shouldn't see c2 yet....
 	suite.False(interloper.Has(context.Background(), c2.Hash()))
-	interloper.Rebase(context.Background())
+	err = interloper.Rebase(context.Background())
+	suite.NoError(err)
 	// ...but post-rebase it must
 	assertInputInStore(input2, c2.Hash(), interloper, suite.Assert())
 }

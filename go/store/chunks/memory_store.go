@@ -164,10 +164,12 @@ func (ms *MemoryStoreView) Len() int {
 	return len(ms.pending) + ms.storage.Len()
 }
 
-func (ms *MemoryStoreView) Rebase(ctx context.Context) {
+func (ms *MemoryStoreView) Rebase(ctx context.Context) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	ms.rootHash = ms.storage.Root(ctx)
+
+	return nil
 }
 
 func (ms *MemoryStoreView) Root(ctx context.Context) hash.Hash {
