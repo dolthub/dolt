@@ -11,9 +11,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/xwb1989/sqlparser"
 	"strconv"
 	"time"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // No limit marker for limit statements in select

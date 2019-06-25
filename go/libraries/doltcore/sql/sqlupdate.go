@@ -9,8 +9,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
-	"github.com/xwb1989/sqlparser"
 	"io"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type UpdateResult struct {
