@@ -565,8 +565,12 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 
 	dEnv := dtestutils.CreateTestEnv()
 	CreateTestDatabase(dEnv, t)
-	root, _ := dEnv.WorkingRoot(context.Background())
 
+	if test.AdditionalSetup != nil {
+		test.AdditionalSetup(t, dEnv)
+	}
+
+	root, _ := dEnv.WorkingRoot(context.Background())
 	actualRows, sch, err := executeSelect(context.Background(), test.ExpectedSchema, root, test.Query)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
