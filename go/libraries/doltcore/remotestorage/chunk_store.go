@@ -379,16 +379,15 @@ func (dcs *DoltChunkStore) Version() string {
 
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
-func (dcs *DoltChunkStore) Rebase(ctx context.Context) {
+func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 	req := &remotesapi.RebaseRequest{RepoId: dcs.getRepoId()}
 	_, err := dcs.csClient.Rebase(ctx, req)
 
 	if err != nil {
-		rpcErr := NewRpcError(err, "Rebase", dcs.host, req)
-
-		// follow noms convention
-		panic(rpcErr)
+		return NewRpcError(err, "Rebase", dcs.host, req)
 	}
+
+	return nil
 }
 
 // Root returns the root of the database as of the time the ChunkStore

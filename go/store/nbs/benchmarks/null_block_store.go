@@ -45,7 +45,9 @@ func (nb nullBlockStore) Close() error {
 	return nil
 }
 
-func (nb nullBlockStore) Rebase(ctx context.Context) {}
+func (nb nullBlockStore) Rebase(ctx context.Context) error {
+	return nil
+}
 
 func (nb nullBlockStore) Stats() interface{} {
 	return nil

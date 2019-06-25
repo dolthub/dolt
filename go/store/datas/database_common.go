@@ -27,6 +27,7 @@ var (
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 )
 
+// TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
 type rootTracker interface {
 	Rebase(ctx context.Context)

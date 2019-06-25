@@ -165,14 +165,10 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 
 	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
-	err := pantoerr.PanicToError("Rebase failed", func() error {
-		cs.Rebase(ctx)
-		return nil
-	})
+	err := cs.Rebase(ctx)
 
 	if err != nil {
-		cause := pantoerr.GetRecoveredPanicCause(err).(error)
-		logger(fmt.Sprintf("panic occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, cause))
+		logger(fmt.Sprintf("error occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err))
 		return nil, status.Error(codes.Internal, "Failed to rebase")
 	}
 

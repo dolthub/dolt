@@ -54,7 +54,9 @@ func (fb fileBlockStore) Close() error {
 	return nil
 }
 
-func (fb fileBlockStore) Rebase(ctx context.Context) {}
+func (fb fileBlockStore) Rebase(ctx context.Context) error {
+	return nil
+}
 
 func (fb fileBlockStore) Stats() interface{} {
 	return nil
@@ -69,6 +71,6 @@ func (fb fileBlockStore) Root(ctx context.Context) hash.Hash {
 }
 
 func (fb fileBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	fb.bw.Flush()
-	return true, nil
+	err := fb.bw.Flush()
+	return true, err
 }

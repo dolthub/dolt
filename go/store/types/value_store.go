@@ -361,7 +361,10 @@ func (lvs *ValueStore) Root(ctx context.Context) hash.Hash {
 }
 
 func (lvs *ValueStore) Rebase(ctx context.Context) {
-	lvs.cs.Rebase(ctx)
+	err := lvs.cs.Rebase(ctx)
+
+	//TODO: fix panics
+	d.PanicIfError(err)
 }
 
 // Commit() flushes all bufferedChunks into the ChunkStore, with best-effort

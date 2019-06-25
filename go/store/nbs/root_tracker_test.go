@@ -53,7 +53,8 @@ func TestChunkStoreRebase(t *testing.T) {
 	assert.Equal(hash.Hash{}, store.Root(context.Background()))
 	assert.Equal(constants.NomsVersion, store.Version())
 
-	store.Rebase(context.Background())
+	err := store.Rebase(context.Background())
+	assert.NoError(err)
 
 	// NOW it should
 	assert.Equal(newRoot, store.Root(context.Background()))
