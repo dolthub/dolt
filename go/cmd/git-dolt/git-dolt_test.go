@@ -66,8 +66,8 @@ func TestParseConfig(t *testing.T) {
 		args args
 		want error
 	}{
-		{"returns an error if missing remote", args{noRemoteConfig}, errors.New("No remote specified")},
-		{"returns an error if missing revision", args{noRevisionConfig}, errors.New("No revision specified")},
+		{"returns an error if missing remote", args{noRemoteConfig}, errors.New("no remote specified")},
+		{"returns an error if missing revision", args{noRevisionConfig}, errors.New("no revision specified")},
 	}
 	for _, tt := range errorTests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -48,10 +48,13 @@ func main() {
 func link(remote string) error {
 	dirname := lastSegment(remote)
 	if _, err := exec.Command("dolt", "clone", remote).Output(); err != nil {
-		return fmt.Errorf("Error cloning remote repository at %s: %v", remote, err)
+		return fmt.Errorf("error cloning remote repository at %s: %v", remote, err)
 	}
 
-	revision := currentRevision(dirname)
+	revision, err := currentRevision(dirname)
+	if err != nil {
+		return err
+	}
 
 	ptrContents := fmt.Sprintf("version %d\nremote %s\nrevision %s\n", gitDoltVersion, remote, revision)
 	if err := writeConfig(dirname, ptrContents); err != nil {
@@ -60,12 +63,12 @@ func link(remote string) error {
 
 	giFile, err := os.OpenFile(".gitignore", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
-		return fmt.Errorf("Error opening .gitignore: %v", err)
+		return fmt.Errorf("error opening .gitignore: %v", err)
 	}
 	defer giFile.Close()
 
 	if _, err = giFile.WriteString(fmt.Sprintf("%s\n", dirname)); err != nil {
-		return fmt.Errorf("Error writing to .gitignore at %v", err)
+		return fmt.Errorf("error writing to .gitignore at %v", err)
 	}
 
 	fmt.Printf("\nDolt repository successfully linked!\n\n")
@@ -83,14 +86,14 @@ func fetch(ptrFname string) error {
 	}
 
 	if _, err := exec.Command("dolt", "clone", config.Remote).Output(); err != nil {
-		return fmt.Errorf("Error cloning remote repository at %s: %v", config.Remote, err)
+		return fmt.Errorf("error cloning remote repository at %s: %v", config.Remote, err)
 	}
 
 	dirname := lastSegment(config.Remote)
 	checkoutCmd := exec.Command("dolt", "checkout", "-b", "git-dolt-pinned", config.Revision)
 	checkoutCmd.Dir = dirname
 	if _, err := checkoutCmd.Output(); err != nil {
-		return fmt.Errorf("Error checking out revision %s in directory %s: %v", config.Revision, dirname, err)
+		return fmt.Errorf("error checking out revision %s in directory %s: %v", config.Revision, dirname, err)
 	}
 
 	fmt.Printf("Dolt repository cloned from remote %s to directory %s at revision %s\n", config.Remote, dirname, config.Revision)
@@ -117,12 +120,12 @@ func loadConfig(ptrFname string) (GitDoltConfig, error) {
 	ptrFname = EnsureSuffix(ptrFname, ".git-dolt")
 	ptrData, err := ioutil.ReadFile(ptrFname)
 	if err != nil {
-		return GitDoltConfig{}, fmt.Errorf("Can't find pointer file %s", ptrFname)
+		return GitDoltConfig{}, fmt.Errorf("can't find pointer file %s", ptrFname)
 	}
 
 	config, err := ParseConfig(string(ptrData))
 	if err != nil {
-		return GitDoltConfig{}, fmt.Errorf("Error parsing config file: %v", err)
+		return GitDoltConfig{}, fmt.Errorf("error parsing config file: %v", err)
 	}
 
 	return config, nil
@@ -131,7 +134,7 @@ func loadConfig(ptrFname string) (GitDoltConfig, error) {
 func writeConfig(ptrFname string, ptrContents string) error {
 	ptrFname = EnsureSuffix(ptrFname, ".git-dolt")
 	if err := ioutil.WriteFile(ptrFname, []byte(ptrContents), 0644); err != nil {
-		return fmt.Errorf("Error writing git-dolt pointer file at %s: %v", ptrFname, err)
+		return fmt.Errorf("error writing git-dolt pointer file at %s: %v", ptrFname, err)
 	}
 
 	return nil
@@ -178,7 +181,7 @@ func ParseConfig(c string) (GitDoltConfig, error) {
 
 	for _, prop := range requiredProps {
 		if _, ok := config[prop]; !ok {
-			return GitDoltConfig{}, fmt.Errorf("No %s specified", prop)
+			return GitDoltConfig{}, fmt.Errorf("no %s specified", prop)
 		}
 	}
 
@@ -195,14 +198,14 @@ func (c GitDoltConfig) String() string {
 
 var hashRegex = regexp.MustCompile(`[0-9a-v]{32}`)
 
-func currentRevision(dirname string) string {
+func currentRevision(dirname string) (string, error) {
 	cmd := exec.Command("dolt", "log", "-n", "1")
 	cmd.Dir = dirname
 	out, err := cmd.Output()
 	if err != nil {
-		die("Error running dolt log to find current revision: " + err.Error())
+		return "", fmt.Errorf("error running dolt log to find current revision: %v", err)
 	}
-	return hashRegex.FindString(string(out))
+	return hashRegex.FindString(string(out)), nil
 }
 
 func lastSegment(s string) string {
@@ -211,6 +214,6 @@ func lastSegment(s string) string {
 }
 
 func die(reason interface{}) {
-	fmt.Println(reason)
+	fmt.Printf("Fatal: %v\n", reason)
 	os.Exit(1)
 }
