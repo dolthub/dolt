@@ -20,255 +20,15 @@ import (
 func TestExecuteSelect(t *testing.T) {
 	for _, test := range BasicSelectTests {
 		t.Run(test.Name, func(t *testing.T) {
-			if test.SkipOnSqlEngine {
-				t.Skip("Skipping test broken on Sql Engine")
-			}
 			testSelectQuery(t, test)
 		})
 	}
 }
 
 func TestJoins(t *testing.T) {
-	tests := []struct {
-		name           string
-		query          string
-		expectedRows   []row.Row
-		expectedSchema schema.Schema
-		expectedErr    string
-	}{
-		{
-			name:  "Full cross product",
-			query: `select * from people, episodes`,
-			expectedRows: Rs(
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep4),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep4),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep4),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep4),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep4),
-				ConcatRows(PeopleTestSchema, Barney, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Barney, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Barney, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Barney, EpisodesTestSchema, Ep4),
-			),
-			expectedSchema: CompressSchemas(PeopleTestSchema, EpisodesTestSchema),
-		},
-		{
-			name:  "Natural join with where clause",
-			query: `select * from people p, episodes e where e.id = p.id`,
-			expectedRows: Rs(
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep4),
-			),
-			expectedSchema: CompressSchemas(PeopleTestSchema, EpisodesTestSchema),
-		},
-		{
-			name:  "Three table natural join with where clause",
-			query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
-			expectedRows: Rs(
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Barney, EpisodesTestSchema, Ep3),
-			),
-			expectedSchema: CompressSchemas(PeopleTestSchema, EpisodesTestSchema),
-		},
-		// TODO: fix me
-		// {
-		// 	name:  "ambiguous column in select",
-		// 	query: `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
-		// 	expectedErr: "Ambiguous column: 'id'",
-		// },
-		// {
-		// 	name:  "ambiguous column in where",
-		// 	query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
-		// 	expectedErr: "Ambiguous column: 'id'",
-		// },
-		{
-			name:  "Natural join with where clause, select subset of columns",
-			query: `select e.id, p.id, e.name, p.first, p.last from people p, episodes e where e.id = p.id`,
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with where clause and column aliases",
-			query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
-				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with where clause and quoted column alias",
-			query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("eid", types.IntKind, "p.id", types.IntKind,
-				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with join clause",
-			query: `select * from people p join episodes e on e.id = p.id`,
-			expectedRows: Rs(
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep4),
-			),
-			expectedSchema: CompressSchemas(PeopleTestSchema, EpisodesTestSchema),
-		},
-		{
-			name:  "Three table natural join with join clause",
-			query: `select p.*, e.* from people p join appearances a on a.character_id = p.id join episodes e on a.episode_id = e.id`,
-			expectedRows: Rs(
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Homer, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep1),
-				ConcatRows(PeopleTestSchema, Marge, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Bart, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Lisa, EpisodesTestSchema, Ep3),
-				ConcatRows(PeopleTestSchema, Moe, EpisodesTestSchema, Ep2),
-				ConcatRows(PeopleTestSchema, Barney, EpisodesTestSchema, Ep3),
-			),
-			expectedSchema: CompressSchemas(PeopleTestSchema, EpisodesTestSchema),
-		},
-		{
-			name:  "Natural join with join clause, select subset of columns",
-			query: `select e.id, p.id, e.name, p.first, p.last from people p join episodes e on e.id = p.id`,
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with join clause, select subset of columns, join columns not selected",
-			query: `select e.name, p.first, p.last from people p join episodes e on e.id = p.id`,
-			expectedRows: Rs(
-				NewResultSetRow(types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with join clause, select subset of columns, order by clause",
-			query: `select e.id, p.id, e.name, p.first, p.last from people p 
-							join episodes e on e.id = p.id
-							order by e.name`,
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with join clause, select subset of columns, order by clause on non-selected column",
-			query: `select e.id, p.id, e.name, p.first, p.last from people p 
-							join episodes e on e.id = p.id
-							order by age`,
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-				"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with join clause and column aliases",
-			query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p join episodes e on e.id = p.id",
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
-				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with join clause and column aliases, order by",
-			query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p join episodes e on e.id = p.id order by ename",
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
-				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
-		},
-		{
-			name:  "Natural join with join clause and quoted column alias",
-			query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first as pfirst, p.last last from people p join episodes e on e.id = p.id",
-			expectedRows: Rs(
-				NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
-				NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
-				NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
-				NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
-			),
-			expectedSchema: NewResultSetSchema("eid", types.IntKind, "p.id", types.IntKind,
-				"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testSelectQuery(t, SelectTest{
-				Name:            tt.name,
-				Query:           tt.query,
-				ExpectedSchema:  tt.expectedSchema,
-				ExpectedRows:    tt.expectedRows,
-				ExpectedErr:     tt.expectedErr,
-				AdditionalSetup: nil,
-			})
+	for _, tt := range JoinTests {
+		t.Run(tt.Name, func(t *testing.T) {
+			testSelectQuery(t, tt)
 		})
 	}
 }
@@ -561,6 +321,10 @@ func TestCaseSensitivity(t *testing.T) {
 func testSelectQuery(t *testing.T, test SelectTest) {
 	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
 		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
+	if test.SkipOnSqlEngine {
+		t.Skip("Skipping test broken on SQL engine")
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
