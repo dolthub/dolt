@@ -290,16 +290,23 @@ func newNomsBlockStoreWithContents(ctx context.Context, mm manifestManager, mc m
 	}
 }
 
-func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) {
+func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 	t1 := time.Now()
 	a := addr(c.Hash())
-	d.PanicIfFalse(nbs.addChunk(ctx, a, c.Data()))
+	success := nbs.addChunk(ctx, a, c.Data())
+
+	if !success {
+		// TODO: fix panics - should thread the error from memTable::addChunk
+		return errors.New("failed to add chunk")
+	}
+
 	nbs.putCount++
 
 	nbs.stats.PutLatency.SampleTimeSince(t1)
+
+	return nil
 }
 
-// TODO: figure out if there's a non-error reason for this to return false. If not, get rid of return value.
 func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bool {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()

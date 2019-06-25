@@ -40,8 +40,9 @@ func (fb fileBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (pres
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk) {
-	io.Copy(fb.bw, bytes.NewReader(c.Data()))
+func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
+	_, err := io.Copy(fb.bw, bytes.NewReader(c.Data()))
+	return err
 }
 
 func (fb fileBlockStore) Version() string {

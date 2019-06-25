@@ -30,10 +30,12 @@ func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.Testin
 
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.Put(context.Background(), *c)
+		err := store.Put(context.Background(), *c)
+		assert.NoError(t, err)
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
-	store.Put(context.Background(), newRoot)
+	err := store.Put(context.Background(), newRoot)
+	assert.NoError(t, err)
 	success, err := store.Commit(context.Background(), newRoot.Hash(), root)
 	assert.NoError(t, err)
 	assert.True(t, success)
@@ -52,7 +54,8 @@ func benchmarkNoRefreshWrite(openStore storeOpenFn, src *dataSource, t assert.Te
 	store := openStore()
 	chunx := goReadChunks(src)
 	for c := range chunx {
-		store.Put(context.Background(), *c)
+		err := store.Put(context.Background(), *c)
+		assert.NoError(t, err)
 	}
 	assert.NoError(t, store.Close())
 }

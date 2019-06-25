@@ -147,13 +147,15 @@ func (ms *MemoryStoreView) Version() string {
 	return constants.NomsVersion
 }
 
-func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk) {
+func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk) error {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if ms.pending == nil {
 		ms.pending = map[hash.Hash]Chunk{}
 	}
 	ms.pending[c.Hash()] = c
+
+	return nil
 }
 
 func (ms *MemoryStoreView) Len() int {

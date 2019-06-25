@@ -479,8 +479,10 @@ func TestExternalProtocol(t *testing.T) {
 	cs := sp.NewChunkStore(context.Background())
 	assert.Equal("foo", tp.name)
 	c := chunks.NewChunk([]byte("hi!"))
-	cs.Put(context.Background(), c)
+	err = cs.Put(context.Background(), c)
+	assert.NoError(err)
 	ok, err := cs.Has(context.Background(), c.Hash())
+	assert.NoError(err)
 	assert.True(ok)
 
 	tp.name = ""
