@@ -270,7 +270,9 @@ func createMemTable(chunks [][]byte) *memTable {
 
 func assertDataInStore(slices [][]byte, store chunks.ChunkStore, assert *assert.Assertions) {
 	for _, data := range slices {
-		assert.True(store.Has(context.Background(), chunks.NewChunk(data).Hash()))
+		ok, err := store.Has(context.Background(), chunks.NewChunk(data).Hash())
+		assert.NoError(err)
+		assert.True(ok)
 	}
 }
 

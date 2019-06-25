@@ -38,13 +38,13 @@ func (nbc *NomsBlockCache) Insert(ctx context.Context, c chunks.Chunk) {
 }
 
 // Has checks if the chunk referenced by hash is in the cache.
-func (nbc *NomsBlockCache) Has(ctx context.Context, hash hash.Hash) bool {
+func (nbc *NomsBlockCache) Has(ctx context.Context, hash hash.Hash) (bool, error) {
 	return nbc.chunks.Has(ctx, hash)
 }
 
 // HasMany returns a set containing the members of hashes present in the
 // cache.
-func (nbc *NomsBlockCache) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
+func (nbc *NomsBlockCache) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	return nbc.chunks.HasMany(ctx, hashes)
 }
 

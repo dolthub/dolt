@@ -42,7 +42,12 @@ func (rs RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChu
 
 	hashes, hashToIndex := remotestorage.ParseByteSlices(req.Hashes)
 
-	absent := cs.HasMany(ctx, hashes)
+	absent, err := cs.HasMany(ctx, hashes)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, "HasMany failure:"+err.Error())
+	}
+
 	indices := make([]int32, len(absent))
 
 	logger(fmt.Sprintf("missing chunks: %v", indices))
@@ -117,7 +122,11 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
 	hashes, _ := remotestorage.ParseByteSlices(req.Hashes)
-	absent := cs.HasMany(ctx, hashes)
+	absent, err := cs.HasMany(ctx, hashes)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, "HasMany failure:"+err.Error())
+	}
 
 	var locs []*remotesapi.UploadLoc
 	for h := range hashes {

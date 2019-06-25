@@ -43,11 +43,11 @@ func (ms *MemoryStorage) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 
 // Has returns true if the Chunk with the Hash h is present in ms.data, false
 // if not.
-func (ms *MemoryStorage) Has(ctx context.Context, r hash.Hash) bool {
+func (ms *MemoryStorage) Has(ctx context.Context, r hash.Hash) (bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	_, ok := ms.data[r]
-	return ok
+	return ok, nil
 }
 
 // Len returns the number of Chunks in ms.data.
@@ -121,23 +121,26 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	return nil
 }
 
-func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) bool {
+func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if _, ok := ms.pending[h]; ok {
-		return true
+		return true, nil
 	}
 	return ms.storage.Has(ctx, h)
 }
 
-func (ms *MemoryStoreView) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
+func (ms *MemoryStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	absent := hash.HashSet{}
 	for h := range hashes {
-		if !ms.Has(ctx, h) {
+		exists, err := ms.Has(ctx, h)
+		if err != nil {
+			return nil, err
+		} else if !exists {
 			absent.Insert(h)
 		}
 	}
-	return absent
+	return absent, nil
 }
 
 func (ms *MemoryStoreView) Version() string {

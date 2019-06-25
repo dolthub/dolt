@@ -25,11 +25,11 @@ type ChunkStore interface {
 
 	// Returns true iff the value at the address |h| is contained in the
 	// store
-	Has(ctx context.Context, h hash.Hash) bool
+	Has(ctx context.Context, h hash.Hash) (bool, error)
 
 	// Returns a new HashSet containing any members of |hashes| that are
 	// absent from the store.
-	HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet)
+	HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
 
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call

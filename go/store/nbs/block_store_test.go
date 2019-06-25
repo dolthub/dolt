@@ -183,7 +183,8 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
-	absent := suite.store.HasMany(context.Background(), hashes)
+	absent, err := suite.store.HasMany(context.Background(), hashes)
+	suite.NoError(err)
 
 	suite.Len(absent, 1)
 	for _, c := range chnx {
@@ -306,7 +307,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		close(chunkChan)
 
 		for rec := range chunkChan {
-			assert.True(t, store.Has(context.Background(), hash.Hash(rec.a)))
+			ok, err := store.Has(context.Background(), hash.Hash(rec.a))
+			assert.NoError(t, err)
+			assert.True(t, ok)
 		}
 	}
 
@@ -328,7 +331,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		assert.NoError(t, err)
 		assert.True(t, success)
-		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
+
+		ok, err := smallTableStore.Has(context.Background(), newChunk.Hash())
+		assert.NoError(t, err)
+		assert.True(t, ok)
 	})
 
 	makeCanned := func(conjoinees, keepers []tableSpec, p tablePersister) cannedConjoin {
@@ -359,7 +365,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		assert.NoError(t, err)
 		assert.True(t, success)
-		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
+		ok, err := smallTableStore.Has(context.Background(), newChunk.Hash())
+		assert.NoError(t, err)
+		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
 	})
 
@@ -384,7 +392,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		assert.NoError(t, err)
 		assert.True(t, success)
-		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
+		ok, err := smallTableStore.Has(context.Background(), newChunk.Hash())
+		assert.NoError(t, err)
+		assert.True(t, ok)
 		assertContainAll(t, smallTableStore, srcs...)
 	})
 }

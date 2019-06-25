@@ -32,11 +32,11 @@ func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Has(ctx context.Context, h hash.Hash) bool {
+func (fb fileBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (present hash.HashSet) {
+func (fb fileBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (present hash.HashSet, err error) {
 	panic("not impl")
 }
 

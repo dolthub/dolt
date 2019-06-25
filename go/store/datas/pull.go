@@ -42,9 +42,18 @@ func Pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 
 func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress, batchSize int) {
 	// Sanity Check
-	d.PanicIfFalse(srcDB.chunkStore().Has(ctx, sourceRef.TargetHash()))
+	exists, err := srcDB.chunkStore().Has(ctx, sourceRef.TargetHash())
 
-	if sinkDB.chunkStore().Has(ctx, sourceRef.TargetHash()) {
+	// TODO: fix panics
+	d.PanicIfError(err)
+	d.PanicIfFalse(exists)
+
+	exists, err = sinkDB.chunkStore().Has(ctx, sourceRef.TargetHash())
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	if exists {
 		return // already up to date
 	}
 
@@ -142,7 +151,11 @@ func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, need
 // ask sinkDB which of the next level's hashes it doesn't have, and add those chunks to the absent list which will need
 // to be retrieved.
 func nextLevelMissingChunks(ctx context.Context, sinkDB Database, nextLevel hash.HashSet, absent hash.HashSlice, uniqueOrdered hash.HashSlice) hash.HashSlice {
-	missingFromSink := sinkDB.chunkStore().HasMany(ctx, nextLevel)
+	missingFromSink, err := sinkDB.chunkStore().HasMany(ctx, nextLevel)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
 	absent = absent[:0]
 	for _, h := range uniqueOrdered {
 		if missingFromSink.Has(h) {
