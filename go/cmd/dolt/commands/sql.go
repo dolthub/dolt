@@ -23,9 +23,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/xwb1989/sqlparser"
 	"path/filepath"
 	"strings"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var sqlShortDesc = "Runs a SQL query"

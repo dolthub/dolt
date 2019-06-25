@@ -5,8 +5,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/stretchr/testify/assert"
-	"github.com/xwb1989/sqlparser"
 	"testing"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestWhereClauseErrorHandling(t *testing.T) {

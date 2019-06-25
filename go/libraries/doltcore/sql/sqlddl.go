@@ -9,7 +9,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/xwb1989/sqlparser"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"strconv"
 	"strings"
 )

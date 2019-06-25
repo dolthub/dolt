@@ -3,7 +3,7 @@ package sql
 import (
 	"errors"
 	"fmt"
-	"github.com/xwb1989/sqlparser"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const UnknownTableErrFmt = "Unknown table: '%v'"

@@ -7,11 +7,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/xwb1989/sqlparser"
 )
 
 func TestExecuteSelect(t *testing.T) {

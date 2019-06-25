@@ -3,6 +3,7 @@ package sql
 import (
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
@@ -13,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/xwb1989/sqlparser"
 )
 
 func TestExecuteCreate(t *testing.T) {

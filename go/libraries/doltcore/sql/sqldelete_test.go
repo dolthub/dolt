@@ -5,11 +5,11 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xwb1989/sqlparser"
 	"testing"
 )
 

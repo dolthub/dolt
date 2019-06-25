@@ -8,12 +8,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 
-	"github.com/xwb1989/sqlparser"
 )
 
 func TestExecuteUpdate(t *testing.T) {

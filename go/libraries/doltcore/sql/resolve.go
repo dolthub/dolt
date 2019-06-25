@@ -2,8 +2,8 @@ package sql
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/xwb1989/sqlparser"
 	"strings"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // A qualified column names its table and its column.
