@@ -314,7 +314,7 @@ func (nbs *NomsBlockStore) addChunk(ctx context.Context, h addr, data []byte) bo
 	return true
 }
 
-func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
+func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	t1 := time.Now()
 	defer func() {
 		nbs.stats.GetLatency.SampleTimeSince(t1)
@@ -330,17 +330,19 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
 		}
 		return data, nbs.tables
 	}()
+
 	if data != nil {
-		return chunks.NewChunkWithHash(h, data)
-	}
-	if data := tables.get(ctx, a, nbs.stats); data != nil {
-		return chunks.NewChunkWithHash(h, data)
+		return chunks.NewChunkWithHash(h, data), nil
 	}
 
-	return chunks.EmptyChunk
+	if data := tables.get(ctx, a, nbs.stats); data != nil {
+		return chunks.NewChunkWithHash(h, data), nil
+	}
+
+	return chunks.EmptyChunk, nil
 }
 
-func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
 	t1 := time.Now()
 	reqs := toGetRecords(hashes)
 
@@ -370,6 +372,7 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		wg.Wait()
 	}
 
+	return nil
 }
 
 func toGetRecords(hashes hash.HashSet) []getRecord {

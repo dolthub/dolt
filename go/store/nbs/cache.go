@@ -50,15 +50,15 @@ func (nbc *NomsBlockCache) HasMany(ctx context.Context, hashes hash.HashSet) has
 
 // Get retrieves the chunk referenced by hash. If the chunk is not present,
 // Get returns the empty Chunk.
-func (nbc *NomsBlockCache) Get(ctx context.Context, hash hash.Hash) chunks.Chunk {
+func (nbc *NomsBlockCache) Get(ctx context.Context, hash hash.Hash) (chunks.Chunk, error) {
 	return nbc.chunks.Get(ctx, hash)
 }
 
 // GetMany gets the Chunks with |hashes| from the store. On return,
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
-func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
-	nbc.chunks.GetMany(ctx, hashes, foundChunks)
+func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
+	return nbc.chunks.GetMany(ctx, hashes, foundChunks)
 }
 
 // ExtractChunks writes the entire contents of the cache to chunkChan. The

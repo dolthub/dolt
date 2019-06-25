@@ -69,7 +69,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 func (suite *ChunkStoreTestSuite) TestChunkStoreGetNonExisting() {
 	store := suite.Factory.CreateStore(context.Background(), "ns")
 	h := hash.Parse("11111111111111111111111111111111")
-	c := store.Get(context.Background(), h)
+	c, err := store.Get(context.Background(), h)
+	suite.NoError(err)
 	suite.True(c.IsEmpty())
 }
 

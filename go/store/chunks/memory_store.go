@@ -32,13 +32,13 @@ func (ms *MemoryStorage) NewView() ChunkStore {
 
 // Get retrieves the Chunk with the Hash h, returning EmptyChunk if it's not
 // present.
-func (ms *MemoryStorage) Get(ctx context.Context, h hash.Hash) Chunk {
+func (ms *MemoryStorage) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.data[h]; ok {
-		return c
+		return c, nil
 	}
-	return EmptyChunk
+	return EmptyChunk, nil
 }
 
 // Has returns true if the Chunk with the Hash h is present in ms.data, false
@@ -96,22 +96,29 @@ type MemoryStoreView struct {
 	storage *MemoryStorage
 }
 
-func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) Chunk {
+func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.pending[h]; ok {
-		return c
+		return c, nil
 	}
 	return ms.storage.Get(ctx, h)
 }
 
-func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) {
+func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error {
 	for h := range hashes {
-		c := ms.Get(ctx, h)
+		c, err := ms.Get(ctx, h)
+
+		if err != nil {
+			return err
+		}
+
 		if !c.IsEmpty() {
 			foundChunks <- &c
 		}
 	}
+
+	return nil
 }
 
 func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) bool {

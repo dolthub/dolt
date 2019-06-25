@@ -17,11 +17,11 @@ func newNullBlockStore() chunks.ChunkStore {
 	return nullBlockStore{}
 }
 
-func (nb nullBlockStore) Get(ctx context.Context, h hash.Hash) chunks.Chunk {
+func (nb nullBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
 	panic("not impl")
 }
 
-func (nb nullBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) {
+func (nb nullBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
 	panic("not impl")
 }
 
