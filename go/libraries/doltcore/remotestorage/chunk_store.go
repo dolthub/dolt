@@ -367,8 +367,9 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) {
+func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 	dcs.cache.Put([]chunks.Chunk{c})
+	return nil
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.

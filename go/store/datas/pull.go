@@ -136,7 +136,11 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, neededChunks map[hash.Hash]*chunks.Chunk, nextLevel hash.HashSet, uniqueOrdered hash.HashSlice) hash.HashSlice {
 	for _, h := range hashes {
 		c := neededChunks[h]
-		sinkDB.chunkStore().Put(ctx, *c)
+		err := sinkDB.chunkStore().Put(ctx, *c)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		types.WalkRefs(*c, func(r types.Ref) {
 			if !nextLevel.Has(r.TargetHash()) {
 				uniqueOrdered = append(uniqueOrdered, r.TargetHash())

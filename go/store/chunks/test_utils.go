@@ -59,9 +59,9 @@ func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.
 	return s.ChunkStore.HasMany(ctx, hashes)
 }
 
-func (s *TestStoreView) Put(ctx context.Context, c Chunk) {
+func (s *TestStoreView) Put(ctx context.Context, c Chunk) error {
 	s.Writes++
-	s.ChunkStore.Put(ctx, c)
+	return s.ChunkStore.Put(ctx, c)
 }
 
 type TestStoreFactory struct {

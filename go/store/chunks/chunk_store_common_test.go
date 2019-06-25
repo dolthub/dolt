@@ -21,7 +21,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStorePut() {
 	store := suite.Factory.CreateStore(context.Background(), "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
-	store.Put(context.Background(), c)
+	err := store.Put(context.Background(), c)
+	suite.NoError(err)
 	h := c.Hash()
 
 	// Reading it via the API should work.
@@ -52,7 +53,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	store := suite.Factory.CreateStore(context.Background(), name)
 	input := "abc"
 	c := NewChunk([]byte(input))
-	store.Put(context.Background(), c)
+	err := store.Put(context.Background(), c)
+	suite.NoError(err)
 	h := c.Hash()
 
 	// Reading it via the API should work...
@@ -60,7 +62,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitPut() {
 	// ...but it shouldn't be persisted yet
 	assertInputNotInStore(input, h, suite.Factory.CreateStore(context.Background(), name), suite.Assert())
 
-	_, err := store.Commit(context.Background(), h, store.Root(context.Background())) // Commit persists Chunks
+	_, err = store.Commit(context.Background(), h, store.Root(context.Background())) // Commit persists Chunks
 	suite.NoError(err)
 	assertInputInStore(input, h, store, suite.Assert())
 	assertInputInStore(input, h, suite.Factory.CreateStore(context.Background(), name), suite.Assert())
@@ -90,7 +92,8 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	store1, store2 := suite.Factory.CreateStore(context.Background(), "ns"), suite.Factory.CreateStore(context.Background(), "ns")
 	input := "abc"
 	c := NewChunk([]byte(input))
-	store1.Put(context.Background(), c)
+	err := store1.Put(context.Background(), c)
+	suite.NoError(err)
 	h := c.Hash()
 
 	// Reading c from store1 via the API should work...
@@ -98,7 +101,7 @@ func (suite *ChunkStoreTestSuite) TestChunkStoreCommitUnchangedRoot() {
 	// ...but not store2.
 	assertInputNotInStore(input, h, store2, suite.Assert())
 
-	_, err := store1.Commit(context.Background(), store1.Root(context.Background()), store1.Root(context.Background()))
+	_, err = store1.Commit(context.Background(), store1.Root(context.Background()), store1.Root(context.Background()))
 	suite.NoError(err)
 
 	store2.Rebase(context.Background())
