@@ -66,8 +66,8 @@ func (fb fileBlockStore) StatsSummary() string {
 	return "Unsupported"
 }
 
-func (fb fileBlockStore) Root(ctx context.Context) hash.Hash {
-	return hash.Hash{}
+func (fb fileBlockStore) Root(ctx context.Context) (hash.Hash, error) {
+	return hash.Hash{}, nil
 }
 
 func (fb fileBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {

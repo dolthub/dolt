@@ -72,7 +72,14 @@ func main() {
 	var optimal, sum int
 	visited := map[hash.Hash]bool{}
 
-	current := hash.HashSlice{store.Root(context.Background())}
+	root, err := store.Root(context.Background())
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: failed to get root")
+		os.Exit(1)
+	}
+
+	current := hash.HashSlice{root}
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))

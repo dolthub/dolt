@@ -57,8 +57,8 @@ func (nb nullBlockStore) StatsSummary() string {
 	return "Unsupported"
 }
 
-func (nb nullBlockStore) Root(ctx context.Context) hash.Hash {
-	return hash.Hash{}
+func (nb nullBlockStore) Root(ctx context.Context) (hash.Hash, error) {
+	return hash.Hash{}, nil
 }
 
 func (nb nullBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {

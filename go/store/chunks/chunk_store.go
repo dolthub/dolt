@@ -46,7 +46,7 @@ type ChunkStore interface {
 
 	// Root returns the root of the database as of the time the ChunkStore
 	// was opened or the most recent call to Rebase.
-	Root(ctx context.Context) hash.Hash
+	Root(ctx context.Context) (hash.Hash, error)
 
 	// Commit atomically attempts to persist all novel Chunks and update the
 	// persisted root hash from last to current (or keeps it the same).

@@ -172,10 +172,10 @@ func (ms *MemoryStoreView) Rebase(ctx context.Context) error {
 	return nil
 }
 
-func (ms *MemoryStoreView) Root(ctx context.Context) hash.Hash {
+func (ms *MemoryStoreView) Root(ctx context.Context) (hash.Hash, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
-	return ms.rootHash
+	return ms.rootHash, nil
 }
 
 func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
