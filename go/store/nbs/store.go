@@ -531,10 +531,10 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	return nil
 }
 
-func (nbs *NomsBlockStore) Root(ctx context.Context) hash.Hash {
+func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 	nbs.mu.RLock()
 	defer nbs.mu.RUnlock()
-	return nbs.upstream.root
+	return nbs.upstream.root, nil
 }
 
 func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {

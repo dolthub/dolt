@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"google.golang.org/grpc/codes"
@@ -185,15 +184,10 @@ func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootReques
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	var h hash.Hash
-	err := pantoerr.PanicToError("Root failed", func() error {
-		h = cs.Root(ctx)
-		return nil
-	})
+	h, err := cs.Root(ctx)
 
 	if err != nil {
-		cause := pantoerr.GetRecoveredPanicCause(err)
-		logger(fmt.Sprintf("panic occurred during processing of Root rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, cause))
+		logger(fmt.Sprintf("error occurred during processing of Root rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err))
 		return nil, status.Error(codes.Internal, "Failed to get root")
 	}
 

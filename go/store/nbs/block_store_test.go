@@ -46,8 +46,10 @@ func (suite *BlockStoreSuite) SetupTest() {
 }
 
 func (suite *BlockStoreSuite) TearDownTest() {
-	suite.store.Close()
-	os.RemoveAll(suite.dir)
+	err := suite.store.Close()
+	suite.NoError(err)
+	err = os.RemoveAll(suite.dir)
+	suite.NoError(err)
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
@@ -57,20 +59,26 @@ func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 
 func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	existingFile := filepath.Join(suite.dir, "path-exists-but-is-a-file")
-	os.Create(existingFile)
+	_, err := os.Create(existingFile)
+	suite.NoError(err)
 	suite.Panics(func() { NewLocalStore(context.Background(), existingFile, testMemTableSize) })
 }
 
 func (suite *BlockStoreSuite) TestChunkStorePut() {
 	input := []byte("abc")
 	c := chunks.NewChunk(input)
-	suite.store.Put(context.Background(), c)
+	err := suite.store.Put(context.Background(), c)
+	suite.NoError(err)
 	h := c.Hash()
 
 	// See http://www.di-mgt.com.au/sha_testvectors.html
 	suite.Equal("rmnjb8cjc5tblj21ed4qs821649eduie", h.String())
 
-	suite.store.Commit(context.Background(), h, suite.store.Root(context.Background())) // Commit writes
+	rt, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err := suite.store.Commit(context.Background(), h, rt) // Commit writes
+	suite.NoError(err)
+	suite.True(success)
 
 	// And reading it via the API should work...
 	assertInputInStore(input, h, suite.store, suite.Assert())
@@ -80,10 +88,14 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 
 	// Re-writing the same data should cause a second put
 	c = chunks.NewChunk(input)
-	suite.store.Put(context.Background(), c)
+	err = suite.store.Put(context.Background(), c)
+	suite.NoError(err)
 	suite.Equal(h, c.Hash())
 	assertInputInStore(input, h, suite.store, suite.Assert())
-	suite.store.Commit(context.Background(), h, suite.store.Root(context.Background())) // Commit writes
+	rt, err = suite.store.Root(context.Background())
+	suite.NoError(err)
+	_, err = suite.store.Commit(context.Background(), h, rt) // Commit writes
+	suite.NoError(err)
 
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
@@ -93,10 +105,16 @@ func (suite *BlockStoreSuite) TestChunkStorePut() {
 func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	suite.store.Put(context.Background(), c1)
-	suite.store.Put(context.Background(), c2)
+	err := suite.store.Put(context.Background(), c1)
+	suite.NoError(err)
+	err = suite.store.Put(context.Background(), c2)
+	suite.NoError(err)
 
-	suite.store.Commit(context.Background(), c1.Hash(), suite.store.Root(context.Background())) // Commit writes
+	rt, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err := suite.store.Commit(context.Background(), c1.Hash(), rt) // Commit writes
+	suite.NoError(err)
+	suite.True(success)
 
 	// And reading it via the API should work...
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -109,10 +127,16 @@ func (suite *BlockStoreSuite) TestChunkStorePutMany() {
 func (suite *BlockStoreSuite) TestChunkStoreStatsSummary() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	suite.store.Put(context.Background(), c1)
-	suite.store.Put(context.Background(), c2)
+	err := suite.store.Put(context.Background(), c1)
+	suite.NoError(err)
+	err = suite.store.Put(context.Background(), c2)
+	suite.NoError(err)
 
-	suite.store.Commit(context.Background(), c1.Hash(), suite.store.Root(context.Background())) // Commit writes
+	rt, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err := suite.store.Commit(context.Background(), c1.Hash(), rt) // Commit writes
+	suite.True(success)
+	suite.NoError(err)
 
 	summary := suite.store.StatsSummary()
 	suite.Contains(summary, c1.Hash().String())
@@ -121,13 +145,21 @@ func (suite *BlockStoreSuite) TestChunkStoreStatsSummary() {
 
 func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	input1, input2 := make([]byte, testMemTableSize/2+1), make([]byte, testMemTableSize/2+1)
-	rand.Read(input1)
-	rand.Read(input2)
+	_, err := rand.Read(input1)
+	suite.NoError(err)
+	_, err = rand.Read(input2)
+	suite.NoError(err)
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	suite.store.Put(context.Background(), c1)
-	suite.store.Put(context.Background(), c2)
+	err = suite.store.Put(context.Background(), c1)
+	suite.NoError(err)
+	err = suite.store.Put(context.Background(), c2)
+	suite.NoError(err)
 
-	suite.store.Commit(context.Background(), c1.Hash(), suite.store.Root(context.Background())) // Commit writes
+	rt, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err := suite.store.Commit(context.Background(), c1.Hash(), rt) // Commit writes
+	suite.NoError(err)
+	suite.True(success)
 
 	// And reading it via the API should work...
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -147,9 +179,13 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	chnx := make([]chunks.Chunk, len(inputs))
 	for i, data := range inputs {
 		chnx[i] = chunks.NewChunk(data)
-		suite.store.Put(context.Background(), chnx[i])
+		err = suite.store.Put(context.Background(), chnx[i])
+		suite.NoError(err)
 	}
-	_, err = suite.store.Commit(context.Background(), chnx[0].Hash(), suite.store.Root(context.Background())) // Commit writes
+
+	rt, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	_, err = suite.store.Commit(context.Background(), chnx[0].Hash(), rt) // Commit writes
 	suite.NoError(err)
 
 	hashes := make(hash.HashSlice, len(chnx))
@@ -177,9 +213,15 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 		chunks.NewChunk([]byte("def")),
 	}
 	for _, c := range chnx {
-		suite.store.Put(context.Background(), c)
+		err := suite.store.Put(context.Background(), c)
+		suite.NoError(err)
 	}
-	suite.store.Commit(context.Background(), chnx[0].Hash(), suite.store.Root(context.Background())) // Commit writes
+
+	rt, err := suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err := suite.store.Commit(context.Background(), chnx[0].Hash(), rt) // Commit writes
+	suite.NoError(err)
+	suite.True(success)
 	notPresent := chunks.NewChunk([]byte("ghi")).Hash()
 
 	hashes := hash.NewHashSet(chnx[0].Hash(), chnx[1].Hash(), notPresent)
@@ -195,11 +237,14 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 
 func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 	input1, input2 := make([]byte, testMemTableSize/2+1), make([]byte, testMemTableSize/2+1)
-	rand.Read(input1)
-	rand.Read(input2)
+	_, err := rand.Read(input1)
+	suite.NoError(err)
+	_, err = rand.Read(input2)
+	suite.NoError(err)
 	chnx := []chunks.Chunk{chunks.NewChunk(input1), chunks.NewChunk(input2)}
 	for _, c := range chnx {
-		suite.store.Put(context.Background(), c)
+		err := suite.store.Put(context.Background(), c)
+		suite.NoError(err)
 	}
 
 	chunkChan := make(chan *chunks.Chunk)
@@ -215,26 +260,48 @@ func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	root := suite.store.Root(context.Background())
+	root, err := suite.store.Root(context.Background())
+	suite.NoError(err)
 
 	interloper := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
-	interloper.Put(context.Background(), c1)
-	suite.True(interloper.Commit(context.Background(), interloper.Root(context.Background()), interloper.Root(context.Background())))
+	err = interloper.Put(context.Background(), c1)
+	suite.NoError(err)
+	h, err := interloper.Root(context.Background())
+	suite.NoError(err)
+	success, err := interloper.Commit(context.Background(), h, h)
+	suite.NoError(err)
+	suite.True(success)
 
-	suite.store.Put(context.Background(), c2)
-	suite.True(suite.store.Commit(context.Background(), suite.store.Root(context.Background()), suite.store.Root(context.Background())))
+	err = suite.store.Put(context.Background(), c2)
+	suite.NoError(err)
+	h, err = suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err = suite.store.Commit(context.Background(), h, h)
+	suite.NoError(err)
+	suite.True(success)
 
 	// Reading c2 via the API should work...
 	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
 	// And so should reading c1 via the API
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
 
-	suite.True(interloper.Commit(context.Background(), c1.Hash(), interloper.Root(context.Background()))) // Commit root
+	h, err = interloper.Root(context.Background())
+	suite.NoError(err)
+	success, err = interloper.Commit(context.Background(), c1.Hash(), h) // Commit root
+	suite.NoError(err)
+	suite.True(success)
 
 	// Updating from stale root should fail...
-	suite.False(suite.store.Commit(context.Background(), c2.Hash(), root))
+	success, err = suite.store.Commit(context.Background(), c2.Hash(), root)
+	suite.NoError(err)
+	suite.False(success)
+
 	// ...but new root should succeed
-	suite.True(suite.store.Commit(context.Background(), c2.Hash(), suite.store.Root(context.Background())))
+	h, err = suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err = suite.store.Commit(context.Background(), c2.Hash(), h)
+	suite.NoError(err)
+	suite.True(success)
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
@@ -242,13 +309,28 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 	c1 := chunks.NewChunk(input1)
 
 	interloper := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
-	interloper.Put(context.Background(), c1)
-	suite.True(interloper.Commit(context.Background(), c1.Hash(), interloper.Root(context.Background())))
+	err := interloper.Put(context.Background(), c1)
+	suite.NoError(err)
+	root, err := interloper.Root(context.Background())
+	suite.NoError(err)
+	success, err := interloper.Commit(context.Background(), c1.Hash(), root)
+	suite.NoError(err)
+	suite.True(success)
 
-	suite.False(suite.store.Has(context.Background(), c1.Hash()))
-	suite.Equal(hash.Hash{}, suite.store.Root(context.Background()))
+	has, err := suite.store.Has(context.Background(), c1.Hash())
+	suite.NoError(err)
+	suite.False(has)
+
+	root, err = suite.store.Root(context.Background())
+	suite.NoError(err)
+	suite.Equal(hash.Hash{}, root)
+
 	// Should Rebase, even though there's no work to do.
-	suite.True(suite.store.Commit(context.Background(), suite.store.Root(context.Background()), suite.store.Root(context.Background())))
+	root, err = suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err = suite.store.Commit(context.Background(), root, root)
+	suite.NoError(err)
+	suite.True(success)
 
 	// Reading c1 via the API should work
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
@@ -258,20 +340,27 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	input1, input2 := []byte("abc"), []byte("def")
 	c1, c2 := chunks.NewChunk(input1), chunks.NewChunk(input2)
-	root := suite.store.Root(context.Background())
+	root, err := suite.store.Root(context.Background())
+	suite.NoError(err)
 
 	interloper := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
-	interloper.Put(context.Background(), c1)
-	suite.True(interloper.Commit(context.Background(), interloper.Root(context.Background()), interloper.Root(context.Background())))
+	err = interloper.Put(context.Background(), c1)
+	suite.NoError(err)
+	h, err := interloper.Root(context.Background())
+	suite.NoError(err)
+	success, err := interloper.Commit(context.Background(), h, h)
+	suite.NoError(err)
+	suite.True(success)
 
-	suite.store.Put(context.Background(), c2)
+	err = suite.store.Put(context.Background(), c2)
+	suite.NoError(err)
 
 	// Reading c2 via the API should work pre-rebase
 	assertInputInStore(input2, c2.Hash(), suite.store, suite.Assert())
 	// Shouldn't have c1 yet.
 	suite.False(suite.store.Has(context.Background(), c1.Hash()))
 
-	err := suite.store.Rebase(context.Background())
+	err = suite.store.Rebase(context.Background())
 	suite.NoError(err)
 
 	// Reading c2 via the API should work post-rebase
@@ -280,15 +369,25 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	assertInputInStore(input1, c1.Hash(), suite.store, suite.Assert())
 
 	// Commit interloper root
-	suite.True(interloper.Commit(context.Background(), c1.Hash(), interloper.Root(context.Background())))
+	h, err = interloper.Root(context.Background())
+	suite.NoError(err)
+	success, err = interloper.Commit(context.Background(), c1.Hash(), h)
+	suite.NoError(err)
+	suite.True(success)
 
 	// suite.store should still have its initial root
-	suite.EqualValues(root, suite.store.Root(context.Background()))
+	h, err = suite.store.Root(context.Background())
+	suite.NoError(err)
+	suite.EqualValues(root, h)
 	err = suite.store.Rebase(context.Background())
 	suite.NoError(err)
 
 	// Rebase grabbed the new root, so updating should now succeed!
-	suite.True(suite.store.Commit(context.Background(), c2.Hash(), suite.store.Root(context.Background())))
+	h, err = suite.store.Root(context.Background())
+	suite.NoError(err)
+	success, err = suite.store.Commit(context.Background(), c2.Hash(), h)
+	suite.NoError(err)
+	suite.True(success)
 
 	// Interloper shouldn't see c2 yet....
 	suite.False(interloper.Has(context.Background(), c2.Hash()))
@@ -329,8 +428,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		smallTableStore := newNomsBlockStore(context.Background(), mm, p, c, testMemTableSize)
 
-		root := smallTableStore.Root(context.Background())
-		smallTableStore.Put(context.Background(), newChunk)
+		root, err := smallTableStore.Root(context.Background())
+		assert.NoError(t, err)
+		err = smallTableStore.Put(context.Background(), newChunk)
+		assert.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		assert.NoError(t, err)
 		assert.True(t, success)
@@ -363,8 +464,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		smallTableStore := newNomsBlockStore(context.Background(), makeManifestManager(fm), p, c, testMemTableSize)
 
-		root := smallTableStore.Root(context.Background())
-		smallTableStore.Put(context.Background(), newChunk)
+		root, err := smallTableStore.Root(context.Background())
+		assert.NoError(t, err)
+		err = smallTableStore.Put(context.Background(), newChunk)
+		assert.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		assert.NoError(t, err)
 		assert.True(t, success)
@@ -390,8 +493,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		smallTableStore := newNomsBlockStore(context.Background(), makeManifestManager(fm), p, c, testMemTableSize)
 
-		root := smallTableStore.Root(context.Background())
-		smallTableStore.Put(context.Background(), newChunk)
+		root, err := smallTableStore.Root(context.Background())
+		assert.NoError(t, err)
+		err = smallTableStore.Put(context.Background(), newChunk)
+		assert.NoError(t, err)
 		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
 		assert.NoError(t, err)
 		assert.True(t, success)

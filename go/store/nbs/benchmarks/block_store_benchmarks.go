@@ -25,7 +25,8 @@ func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.Tes
 }
 
 func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.TestingT) {
-	root := store.Root(context.Background())
+	root, err := store.Root(context.Background())
+	assert.NoError(t, err)
 	assert.Equal(t, hash.Hash{}, root)
 
 	chunx := goReadChunks(src)
@@ -34,7 +35,7 @@ func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.Testin
 		assert.NoError(t, err)
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
-	err := store.Put(context.Background(), newRoot)
+	err = store.Put(context.Background(), newRoot)
 	assert.NoError(t, err)
 	success, err := store.Commit(context.Background(), newRoot.Hash(), root)
 	assert.NoError(t, err)

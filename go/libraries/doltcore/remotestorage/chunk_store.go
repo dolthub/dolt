@@ -392,18 +392,15 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 
 // Root returns the root of the database as of the time the ChunkStore
 // was opened or the most recent call to Rebase.
-func (dcs *DoltChunkStore) Root(ctx context.Context) hash.Hash {
+func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
 	req := &remotesapi.RootRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.Root(ctx, req)
 
 	if err != nil {
-		rpcErr := NewRpcError(err, "Root", dcs.host, req)
-
-		// follow noms convention
-		panic(rpcErr)
+		return hash.Hash{}, NewRpcError(err, "Root", dcs.host, req)
 	}
 
-	return hash.New(resp.RootHash)
+	return hash.New(resp.RootHash), nil
 }
 
 // Commit atomically attempts to persist all novel Chunks and update the

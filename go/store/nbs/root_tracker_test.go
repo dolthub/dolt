@@ -22,7 +22,9 @@ func TestChunkStoreZeroValue(t *testing.T) {
 	defer store.Close()
 
 	// No manifest file gets written until the first call to Commit(). Prior to that, Root() will simply return hash.Hash{}.
-	assert.Equal(hash.Hash{}, store.Root(context.Background()))
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -43,21 +45,27 @@ func TestChunkStoreRebase(t *testing.T) {
 	fm, p, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root(context.Background()))
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	// state in store shouldn't change
-	assert.Equal(hash.Hash{}, store.Root(context.Background()))
+	h, err = store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 
-	err := store.Rebase(context.Background())
+	err = store.Rebase(context.Background())
 	assert.NoError(err)
 
 	// NOW it should
-	assert.Equal(newRoot, store.Root(context.Background()))
+	h, err = store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(newRoot, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
@@ -67,23 +75,41 @@ func TestChunkStoreCommit(t *testing.T) {
 	_, _, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root(context.Background()))
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(hash.Hash{}, h)
 
 	newRootChunk := chunks.NewChunk([]byte("new root"))
 	newRoot := newRootChunk.Hash()
-	store.Put(context.Background(), newRootChunk)
-	if assert.True(store.Commit(context.Background(), newRoot, hash.Hash{})) {
-		assert.True(store.Has(context.Background(), newRoot))
-		assert.Equal(newRoot, store.Root(context.Background()))
+	err = store.Put(context.Background(), newRootChunk)
+	assert.NoError(err)
+	success, err := store.Commit(context.Background(), newRoot, hash.Hash{})
+	assert.NoError(err)
+	if assert.True(success) {
+		has, err := store.Has(context.Background(), newRoot)
+		assert.NoError(err)
+		assert.True(has)
+		h, err := store.Root(context.Background())
+		assert.NoError(err)
+		assert.Equal(newRoot, h)
 	}
 
 	secondRootChunk := chunks.NewChunk([]byte("newer root"))
 	secondRoot := secondRootChunk.Hash()
-	store.Put(context.Background(), secondRootChunk)
-	if assert.True(store.Commit(context.Background(), secondRoot, newRoot)) {
-		assert.Equal(secondRoot, store.Root(context.Background()))
-		assert.True(store.Has(context.Background(), newRoot))
-		assert.True(store.Has(context.Background(), secondRoot))
+	err = store.Put(context.Background(), secondRootChunk)
+	assert.NoError(err)
+	success, err = store.Commit(context.Background(), secondRoot, newRoot)
+	assert.NoError(err)
+	if assert.True(success) {
+		h, err := store.Root(context.Background())
+		assert.NoError(err)
+		assert.Equal(secondRoot, h)
+		has, err := store.Has(context.Background(), newRoot)
+		assert.NoError(err)
+		assert.True(has)
+		has, err = store.Has(context.Background(), secondRoot)
+		assert.NoError(err)
+		assert.True(has)
 	}
 }
 
@@ -92,14 +118,18 @@ func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	fm, p, store := makeStoreWithFakes(t)
 	defer store.Close()
 
-	assert.Equal(hash.Hash{}, store.Root(context.Background()))
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
 	interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	// state in store shouldn't change
-	assert.Equal(hash.Hash{}, store.Root(context.Background()))
+	h, err = store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(hash.Hash{}, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -115,7 +145,9 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	store := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	defer store.Close()
 
-	assert.Equal(newRoot, store.Root(context.Background()))
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(newRoot, h)
 	assert.Equal(constants.NomsVersion, store.Version())
 	assertDataInStore(chunks, store, assert)
 }
@@ -129,9 +161,13 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 
 	newRoot2 := hash.Of([]byte("new root 2"))
-	assert.False(store.Commit(context.Background(), newRoot2, hash.Hash{}))
+	success, err := store.Commit(context.Background(), newRoot2, hash.Hash{})
+	assert.NoError(err)
+	assert.False(success)
 	assertDataInStore(chunks, store, assert)
-	assert.True(store.Commit(context.Background(), newRoot2, newRoot))
+	success, err = store.Commit(context.Background(), newRoot2, newRoot)
+	assert.NoError(err)
+	assert.True(success)
 }
 
 func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
@@ -149,19 +185,28 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	defer interloper.Close()
 
 	chunk := chunks.NewChunk([]byte("hello"))
-	interloper.Put(context.Background(), chunk)
+	err := interloper.Put(context.Background(), chunk)
+	assert.NoError(err)
 	assert.True(interloper.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 
 	// Try to land a new chunk in store, which should fail AND not persist the contents of store.mt
 	chunk = chunks.NewChunk([]byte("goodbye"))
-	store.Put(context.Background(), chunk)
+	err = store.Put(context.Background(), chunk)
+	assert.NoError(err)
 	assert.NotNil(store.mt)
 	assert.False(store.Commit(context.Background(), chunk.Hash(), hash.Hash{}))
 	assert.NotNil(store.mt)
 
-	assert.True(store.Commit(context.Background(), chunk.Hash(), store.Root(context.Background())))
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	success, err := store.Commit(context.Background(), chunk.Hash(), h)
+	assert.NoError(err)
+	assert.True(success)
 	assert.Nil(store.mt)
-	assert.Equal(chunk.Hash(), store.Root(context.Background()))
+
+	h, err = store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(chunk.Hash(), h)
 	assert.Equal(constants.NomsVersion, store.Version())
 }
 
@@ -190,11 +235,18 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	}
 
 	rootChunk := chunks.NewChunk([]byte("new root"))
-	store.Put(context.Background(), rootChunk)
-	assert.True(store.Commit(context.Background(), rootChunk.Hash(), store.Root(context.Background())))
+	err := store.Put(context.Background(), rootChunk)
+	assert.NoError(err)
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	success, err := store.Commit(context.Background(), rootChunk.Hash(), h)
+	assert.NoError(err)
+	assert.True(success)
 
 	wg.Wait()
-	assert.Equal(store.Root(context.Background()), fetched.root)
+	h, err = store.Root(context.Background())
+	assert.NoError(err)
+	assert.Equal(h, fetched.root)
 }
 
 func TestChunkStoreSerializeCommits(t *testing.T) {
@@ -228,15 +280,25 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			interloper.Put(context.Background(), interloperChunk)
-			assert.True(interloper.Commit(context.Background(), interloper.Root(context.Background()), interloper.Root(context.Background())))
+			err := interloper.Put(context.Background(), interloperChunk)
+			assert.NoError(err)
+			h, err := interloper.Root(context.Background())
+			assert.NoError(err)
+			success, err := interloper.Commit(context.Background(), h, h)
+			assert.NoError(err)
+			assert.True(success)
 		}()
 
 		updateCount++
 	}
 
-	store.Put(context.Background(), storeChunk)
-	assert.True(store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background())))
+	err := store.Put(context.Background(), storeChunk)
+	assert.NoError(err)
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	success, err := store.Commit(context.Background(), h, h)
+	assert.NoError(err)
+	assert.True(success)
 
 	wg.Wait()
 	assert.Equal(2, updateCount)

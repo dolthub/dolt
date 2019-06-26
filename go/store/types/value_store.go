@@ -357,7 +357,12 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 }
 
 func (lvs *ValueStore) Root(ctx context.Context) hash.Hash {
-	return lvs.cs.Root(ctx)
+	root, err := lvs.cs.Root(ctx)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	return root
 }
 
 func (lvs *ValueStore) Rebase(ctx context.Context) {
