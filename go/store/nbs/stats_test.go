@@ -48,14 +48,21 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(3), stats(store).HasLatency.Samples())
 	assert.Equal(uint64(3), stats(store).AddressesPerHas.Sum())
 
-	assert.False(store.Get(context.Background(), c1.Hash()).IsEmpty())
-	assert.False(store.Get(context.Background(), c2.Hash()).IsEmpty())
-	assert.False(store.Get(context.Background(), c3.Hash()).IsEmpty())
+	c, err := store.Get(context.Background(), c1.Hash())
+	assert.NoError(err)
+	assert.False(c.IsEmpty())
+	c, err = store.Get(context.Background(), c2.Hash())
+	assert.NoError(err)
+	assert.False(c.IsEmpty())
+	c, err = store.Get(context.Background(), c3.Hash())
+	assert.NoError(err)
+	assert.False(c.IsEmpty())
 	assert.Equal(uint64(3), stats(store).GetLatency.Samples())
 	assert.Equal(uint64(0), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(3), stats(store).ChunksPerGet.Sum())
 
-	store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	_, err = store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	assert.NoError(err)
 
 	// Commit will update the manifest
 	assert.EqualValues(1, stats(store).WriteManifestLatency.Samples())
@@ -67,9 +74,12 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(131), stats(store).BytesPerPersist.Sum())
 
 	// Now some gets that will incur read IO
-	store.Get(context.Background(), c1.Hash())
-	store.Get(context.Background(), c2.Hash())
-	store.Get(context.Background(), c3.Hash())
+	_, err = store.Get(context.Background(), c1.Hash())
+	assert.NoError(err)
+	_, err = store.Get(context.Background(), c2.Hash())
+	assert.NoError(err)
+	_, err = store.Get(context.Background(), c3.Hash())
+	assert.NoError(err)
 	assert.Equal(uint64(3), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(27), stats(store).FileBytesPerRead.Sum())
 
@@ -83,16 +93,19 @@ func TestStats(t *testing.T) {
 		hashes[i] = c.Hash()
 	}
 	chunkChan := make(chan *chunks.Chunk, 3)
-	store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
+	err = store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
+	assert.NoError(err)
 	assert.Equal(uint64(4), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(54), stats(store).FileBytesPerRead.Sum())
 
 	// Force a conjoin
 	store.c = inlineConjoiner{2}
 	store.Put(context.Background(), c4)
-	store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	_, err = store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	assert.NoError(err)
 	store.Put(context.Background(), c5)
-	store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	_, err = store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	assert.NoError(err)
 
 	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())
 	// TODO: Once random conjoin hack is out, test other conjoin stats

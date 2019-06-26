@@ -213,20 +213,21 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 		updates[hash.New(cti.Hash)] = cti.ChunkCount
 	}
 
-	cs.UpdateManifest(ctx, updates)
+	_, err := cs.UpdateManifest(ctx, updates)
+
+	if err != nil {
+		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
+		return nil, status.Error(codes.Internal, "manifest update error")
+	}
 
 	currHash := hash.New(req.Current)
 	lastHash := hash.New(req.Last)
 
 	var ok bool
-	err := pantoerr.PanicToError("Commit failed", func() error {
-		ok = cs.Commit(ctx, currHash, lastHash)
-		return nil
-	})
+	ok, err = cs.Commit(ctx, currHash, lastHash)
 
 	if err != nil {
-		cause := pantoerr.GetRecoveredPanicCause(err)
-		logger(fmt.Sprintf("panic occurred during processing of Commit of %s/%s last %s curr: %s details: %v", req.RepoId.Org, req.RepoId.RepoName, lastHash.String(), currHash.String(), cause))
+		logger(fmt.Sprintf("error occurred during processing of Commit of %s/%s last %s curr: %s details: %v", req.RepoId.Org, req.RepoId.RepoName, lastHash.String(), currHash.String(), err))
 		return nil, status.Error(codes.Internal, "Failed to rebase")
 	}
 

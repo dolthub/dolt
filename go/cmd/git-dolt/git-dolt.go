@@ -32,6 +32,10 @@ func main() {
 	case "fetch":
 		ptrFname := os.Args[2]
 		err = fetch(ptrFname)
+	case "update":
+		ptrFname := os.Args[2]
+		revision := os.Args[3]
+		err = update(ptrFname, revision)
 	default:
 		die("Unknown command " + cmd)
 	}
@@ -49,11 +53,9 @@ func link(remote string) error {
 
 	revision := currentRevision(dirname)
 
-	ptrFname := fmt.Sprintf("%s.git-dolt", dirname)
 	ptrContents := fmt.Sprintf("version %d\nremote %s\nrevision %s\n", gitDoltVersion, remote, revision)
-
-	if err := ioutil.WriteFile(ptrFname, []byte(ptrContents), 0644); err != nil {
-		return fmt.Errorf("Error writing git-dolt pointer file at %s: %v", ptrFname, err)
+	if err := writeConfig(dirname, ptrContents); err != nil {
+		return err
 	}
 
 	giFile, err := os.OpenFile(".gitignore", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
@@ -75,15 +77,9 @@ func link(remote string) error {
 }
 
 func fetch(ptrFname string) error {
-	ptrFname = AddSuffix(ptrFname, ".git-dolt")
-	ptrData, err := ioutil.ReadFile(ptrFname)
+	config, err := loadConfig(ptrFname)
 	if err != nil {
-		return fmt.Errorf("Can't find pointer file %s", ptrFname)
-	}
-
-	config, err := ParseConfig(string(ptrData))
-	if err != nil {
-		return fmt.Errorf("Error parsing config file: %v", err)
+		return err
 	}
 
 	if _, err := exec.Command("dolt", "clone", config.Remote).Output(); err != nil {
@@ -101,8 +97,48 @@ func fetch(ptrFname string) error {
 	return nil
 }
 
-// AddSuffix adds a suffix to a string if not already present
-func AddSuffix(s string, suffix string) string {
+func update(ptrFname string, revision string) error {
+	ptrFname = EnsureSuffix(ptrFname, ".git-dolt")
+	config, err := loadConfig(ptrFname)
+	if err != nil {
+		return err
+	}
+
+	config.Revision = revision
+
+	if err := writeConfig(ptrFname, config.String()); err != nil {
+		return err
+	}
+	fmt.Printf("Updated pointer file %s to revision %s\n", ptrFname, revision)
+	return nil
+}
+
+func loadConfig(ptrFname string) (GitDoltConfig, error) {
+	ptrFname = EnsureSuffix(ptrFname, ".git-dolt")
+	ptrData, err := ioutil.ReadFile(ptrFname)
+	if err != nil {
+		return GitDoltConfig{}, fmt.Errorf("Can't find pointer file %s", ptrFname)
+	}
+
+	config, err := ParseConfig(string(ptrData))
+	if err != nil {
+		return GitDoltConfig{}, fmt.Errorf("Error parsing config file: %v", err)
+	}
+
+	return config, nil
+}
+
+func writeConfig(ptrFname string, ptrContents string) error {
+	ptrFname = EnsureSuffix(ptrFname, ".git-dolt")
+	if err := ioutil.WriteFile(ptrFname, []byte(ptrContents), 0644); err != nil {
+		return fmt.Errorf("Error writing git-dolt pointer file at %s: %v", ptrFname, err)
+	}
+
+	return nil
+}
+
+// EnsureSuffix adds a suffix to a string if not already present
+func EnsureSuffix(s string, suffix string) string {
 	if !strings.HasSuffix(s, suffix) {
 		return s + suffix
 	}
@@ -151,6 +187,10 @@ func ParseConfig(c string) (GitDoltConfig, error) {
 		Remote:   config["remote"],
 		Revision: config["revision"],
 	}, nil
+}
+
+func (c GitDoltConfig) String() string {
+	return fmt.Sprintf("version %d\nremote %s\nrevision %s\n", c.Version, c.Remote, c.Revision)
 }
 
 var hashRegex = regexp.MustCompile(`[0-9a-v]{32}`)

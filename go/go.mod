@@ -8,7 +8,8 @@ require (
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
-	github.com/aws/aws-sdk-go v1.20.6
+	github.com/attic-labs/noms v0.0.0-20190508041645-614eb763b982
+	github.com/aws/aws-sdk-go v1.20.8
 	github.com/cenkalti/backoff v2.1.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/dustin/go-humanize v1.0.0
@@ -41,7 +42,7 @@ require (
 	golang.org/x/crypto v0.0.0-20190506204251-e1dfcc566284
 	golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c
 	golang.org/x/sys v0.0.0-20190507160741-ecd444e8653b
-	google.golang.org/api v0.6.0
+	google.golang.org/api v0.7.0
 	google.golang.org/grpc v1.21.1
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1

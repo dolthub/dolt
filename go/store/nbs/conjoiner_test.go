@@ -179,7 +179,7 @@ type updatePreemptManifest struct {
 	preUpdate func()
 }
 
-func (u updatePreemptManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (u updatePreemptManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if u.preUpdate != nil {
 		u.preUpdate()
 	}

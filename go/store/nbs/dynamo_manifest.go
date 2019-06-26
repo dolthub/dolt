@@ -109,7 +109,7 @@ func validateManifest(item map[string]*dynamodb.AttributeValue) (valid, hasSpecs
 	return false, false
 }
 
-func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
@@ -145,19 +145,21 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 		if errIsConditionalCheckFailed(ddberr) {
 			exists, upstream, err := dm.ParseIfExists(ctx, stats, nil)
 
-			// TODO - fix panics. moved this one up the stack
-			d.PanicIfError(err)
+			if err != nil {
+				return manifestContents{}, err
+			}
 
 			d.Chk.True(exists)
 			d.Chk.True(upstream.vers == constants.NomsVersion)
-			return upstream
+			return upstream, nil
 		}
 
-		// TODO - fix panics. handle other aws errors?
-		d.PanicIfError(ddberr)
+		if ddberr != nil {
+			return manifestContents{}, ddberr
+		}
 	}
 
-	return newContents
+	return newContents, nil
 }
 
 func errIsConditionalCheckFailed(err error) bool {
