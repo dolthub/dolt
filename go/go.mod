@@ -35,7 +35,7 @@ require (
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
 	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
-	github.com/src-d/go-mysql-server v0.4.1-0.20190619104848-eaab1795353a
+	github.com/src-d/go-mysql-server v0.4.1-0.20190624170509-8702d43af506
 	github.com/stretchr/testify v1.3.0
 	github.com/tealeg/xlsx v1.0.3
 	golang.org/x/crypto v0.0.0-20190506204251-e1dfcc566284
@@ -50,10 +50,12 @@ require (
 
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4
 
-//replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server
-replace github.com/src-d/go-mysql-server => ../../../../liquidata-inc/go-mysql-server
+replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190625235951-3c7e9c8be527
 
-//replace vitess.io/vitess => github.com/liquidata-inc/vitess
+//replace github.com/src-d/go-mysql-server => ../../../../liquidata-inc/go-mysql-server
+
+replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796
+
 // For local development, clone vitess into $GOPATH/src like so: git clone git@github.com:liquidata-inc/vitess.git vitess.io/vitess
 // Then use this local override:
-replace vitess.io/vitess => ../../../../../vitess.io/vitess
+//replace vitess.io/vitess => ../../../../../vitess.io/vitess
