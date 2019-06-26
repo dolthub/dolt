@@ -23,8 +23,8 @@ func Link(remote string) error {
 		return err
 	}
 
-	ptrContents := fmt.Sprintf("version %s\nremote %s\nrevision %s\n", env.Version, remote, revision)
-	if err := config.Write(dirname, ptrContents); err != nil {
+	c := config.GitDoltConfig{Version: env.Version, Remote: remote, Revision: revision}
+	if err := config.Write(dirname, c.String()); err != nil {
 		return err
 	}
 
