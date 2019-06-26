@@ -59,27 +59,23 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows:   CompressRows(PeopleTestSchema, Homer),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
-	// TODO: offset seems to be broken on Sql engine. Not sure if it's a bug in the engine or our integration.
 	{
 		Name:           "select *, limit 1 offset 1",
-		Query:          "select * from people limit 1,1",
+		Query:          "select * from people limit 1 offset 1;",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Marge),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, limit 1 offset 5",
 		Query:          "select * from people limit 5,1",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, limit 1 offset 6",
 		Query:          "select * from people limit 6,1",
 		ExpectedRows:   Rs(),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, limit 0",
@@ -93,18 +89,15 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows:   Rs(),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
-	// TODO: limit -1 should return an error but does not
 	{
 		Name:        "select *, limit -1",
 		Query:       "select * from people limit -1",
 		ExpectedErr: "Limit must be >= 0 if supplied",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:        "select *, offset -1",
 		Query:       "select * from people limit -1,1",
 		ExpectedErr: "Offset must be >= 0 if supplied",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, limit 100",
