@@ -108,7 +108,8 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	stats := &Stats{}
 
 	l := computeAddr([]byte{0x01})
-	upstream := fm.Update(context.Background(), addr{}, manifestContents{vers: constants.NomsVersion, lock: l}, stats, nil)
+	upstream, err := fm.Update(context.Background(), addr{}, manifestContents{vers: constants.NomsVersion, lock: l}, stats, nil)
+	assert.NoError(err)
 	assert.Equal(l, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
@@ -122,7 +123,8 @@ func TestFileManifestUpdateEmpty(t *testing.T) {
 	assert.Empty(upstream.specs)
 
 	l2 := computeAddr([]byte{0x02})
-	upstream = fm2.Update(context.Background(), l, manifestContents{vers: constants.NomsVersion, lock: l2}, stats, nil)
+	upstream, err = fm2.Update(context.Background(), l, manifestContents{vers: constants.NomsVersion, lock: l2}, stats, nil)
+	assert.NoError(err)
 	assert.Equal(l2, upstream.lock)
 	assert.True(upstream.root.IsEmpty())
 	assert.Empty(upstream.specs)
@@ -141,24 +143,28 @@ func TestFileManifestUpdate(t *testing.T) {
 		root:  hash.Of([]byte("new root")),
 		specs: []tableSpec{{computeAddr([]byte("a")), 3}},
 	}
-	upstream := fm.Update(context.Background(), addr{}, contents, stats, func() {
+	upstream, err := fm.Update(context.Background(), addr{}, contents, stats, func() error {
 		// This should fail to get the lock, and therefore _not_ clobber the manifest. So the Update should succeed.
 		lock := computeAddr([]byte("nolock"))
 		newRoot2 := hash.Of([]byte("noroot"))
 		b, err := tryClobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, lock.String(), newRoot2.String()}, ":"))
 		assert.NoError(err, string(b))
+		return nil
 	})
+	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
 	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2"))}
-	upstream = fm.Update(context.Background(), addr{}, contents2, stats, nil)
+	upstream, err = fm.Update(context.Background(), addr{}, contents2, stats, nil)
+	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
 	assert.Equal(contents.root, upstream.root)
 	assert.Equal(contents.specs, upstream.specs)
-	upstream = fm.Update(context.Background(), upstream.lock, contents2, stats, nil)
+	upstream, err = fm.Update(context.Background(), upstream.lock, contents2, stats, nil)
+	assert.NoError(err)
 	assert.Equal(contents2.lock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
 	assert.Empty(upstream.specs)
@@ -166,11 +172,12 @@ func TestFileManifestUpdate(t *testing.T) {
 	// Now, test the case where the optimistic lock fails because someone else updated only the tables since last we checked
 	jerkLock := computeAddr([]byte("jerk"))
 	tableName := computeAddr([]byte("table1"))
-	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), tableName.String(), "1"}, ":"))
+	err = clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), tableName.String(), "1"}, ":"))
 	assert.NoError(err)
 
 	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3"))}
-	upstream = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
+	upstream, err = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
+	assert.NoError(err)
 	assert.Equal(jerkLock, upstream.lock)
 	assert.Equal(contents2.root, upstream.root)
 	assert.Equal([]tableSpec{{tableName, 1}}, upstream.specs)

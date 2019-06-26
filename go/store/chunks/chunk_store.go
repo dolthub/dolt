@@ -16,12 +16,12 @@ import (
 type ChunkStore interface {
 	// Get the Chunk for the value of the hash in the store. If the hash is
 	// absent from the store EmptyChunk is returned.
-	Get(ctx context.Context, h hash.Hash) Chunk
+	Get(ctx context.Context, h hash.Hash) (Chunk, error)
 
 	// GetMany gets the Chunks with |hashes| from the store. On return,
 	// |foundChunks| will have been fully sent all chunks which have been
 	// found. Any non-present chunks will silently be ignored.
-	GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk)
+	GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error
 
 	// Returns true iff the value at the address |h| is contained in the
 	// store
@@ -51,7 +51,7 @@ type ChunkStore interface {
 	// Commit atomically attempts to persist all novel Chunks and update the
 	// persisted root hash from last to current (or keeps it the same).
 	// If last doesn't match the root in persistent storage, returns false.
-	Commit(ctx context.Context, current, last hash.Hash) bool
+	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore instance. The type is implementation-dependent, and impls
@@ -68,18 +68,4 @@ type ChunkStore interface {
 	// Close() concurrently with any other ChunkStore method; behavior is
 	// undefined and probably crashy.
 	io.Closer
-}
-
-// Factory allows the creation of namespaced ChunkStore instances. The details
-// of how namespaces are separated is left up to the particular implementation
-// of Factory and ChunkStore.
-type Factory interface {
-	CreateStore(ctx context.Context, ns string) ChunkStore
-
-	// CreateStoreFromCache allows caller to signal to the factory that it's
-	// willing to tolerate an out-of-date ChunkStore.
-	CreateStoreFromCache(ctx context.Context, ns string) ChunkStore
-
-	// Shutter shuts down the factory. Subsequent calls to CreateStore() will fail.
-	Shutter()
 }

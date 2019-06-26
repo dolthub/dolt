@@ -77,7 +77,7 @@ func TestParseConfig(t *testing.T) {
 	}
 }
 
-func TestAddSuffix(t *testing.T) {
+func TestEnsureSuffix(t *testing.T) {
 	type args struct {
 		s      string
 		suffix string
@@ -92,7 +92,7 @@ func TestAddSuffix(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := AddSuffix(tt.args.s, tt.args.suffix)
+			got := EnsureSuffix(tt.args.s, tt.args.suffix)
 			assert.Equal(t, tt.want, got)
 		})
 	}

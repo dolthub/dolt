@@ -32,13 +32,13 @@ func (ms *MemoryStorage) NewView() ChunkStore {
 
 // Get retrieves the Chunk with the Hash h, returning EmptyChunk if it's not
 // present.
-func (ms *MemoryStorage) Get(ctx context.Context, h hash.Hash) Chunk {
+func (ms *MemoryStorage) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.data[h]; ok {
-		return c
+		return c, nil
 	}
-	return EmptyChunk
+	return EmptyChunk, nil
 }
 
 // Has returns true if the Chunk with the Hash h is present in ms.data, false
@@ -96,22 +96,29 @@ type MemoryStoreView struct {
 	storage *MemoryStorage
 }
 
-func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) Chunk {
+func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
 	if c, ok := ms.pending[h]; ok {
-		return c
+		return c, nil
 	}
 	return ms.storage.Get(ctx, h)
 }
 
-func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) {
+func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error {
 	for h := range hashes {
-		c := ms.Get(ctx, h)
+		c, err := ms.Get(ctx, h)
+
+		if err != nil {
+			return err
+		}
+
 		if !c.IsEmpty() {
 			foundChunks <- &c
 		}
 	}
+
+	return nil
 }
 
 func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) bool {
@@ -164,11 +171,11 @@ func (ms *MemoryStoreView) Root(ctx context.Context) hash.Hash {
 	return ms.rootHash
 }
 
-func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) bool {
+func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	if last != ms.rootHash {
-		return false
+		return false, nil
 	}
 
 	success := ms.storage.Update(current, last, ms.pending)
@@ -176,7 +183,7 @@ func (ms *MemoryStoreView) Commit(ctx context.Context, current, last hash.Hash) 
 		ms.pending = nil
 	}
 	ms.rootHash = ms.storage.Root(ctx)
-	return success
+	return success, nil
 }
 
 func (ms *MemoryStoreView) Stats() interface{} {
@@ -196,7 +203,7 @@ type memoryStoreFactory struct {
 	mu     *sync.Mutex
 }
 
-func NewMemoryStoreFactory() Factory {
+func NewMemoryStoreFactory() *memoryStoreFactory {
 	return &memoryStoreFactory{map[string]*MemoryStorage{}, &sync.Mutex{}}
 }
 

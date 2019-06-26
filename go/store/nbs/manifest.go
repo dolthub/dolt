@@ -56,7 +56,7 @@ type manifestUpdater interface {
 	// If writeHook is non-nil, it will be invoked while the implementation is
 	// guaranteeing exclusive access to the manifest. This allows for testing
 	// of race conditions.
-	Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents
+	Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error)
 }
 
 // ManifestInfo is an interface for retrieving data from a manifest outside of this package
@@ -184,7 +184,7 @@ func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents
 	return
 }
 
-func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents) {
+func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (bool, manifestContents, error) {
 	entryTime := time.Now()
 
 	mm.lockOutFetch()
@@ -194,28 +194,29 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 
 	if hit && t.After(entryTime) {
 		// Cache contains a manifest which is newer than entry time.
-		return true, cached
+		return true, cached, nil
 	}
 
 	t = time.Now()
 
-	var err error
-	exists, contents, err = mm.m.ParseIfExists(ctx, stats, nil)
+	exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
 
-	// TODO - fix panics. moved this one up the stack
-	d.PanicIfError(err)
+	if err != nil {
+		return false, manifestContents{}, err
+	}
 
 	mm.cache.Put(mm.Name(), contents, t)
-	return
+
+	return exists, contents, nil
 }
 
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
 // intended to be used in a larger critical section along with updateWillFail.
-func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func()) manifestContents {
+func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
 	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
 		if lastLock != upstream.lock {
-			return upstream
+			return upstream, nil
 		}
 	}
 	t := time.Now()
@@ -223,9 +224,15 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 	mm.lockOutFetch()
 	defer mm.allowFetch()
 
-	contents := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
+	contents, err := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
+
+	if err != nil {
+		return contents, err
+	}
+
 	mm.cache.Put(mm.Name(), contents, t)
-	return contents
+
+	return contents, nil
 }
 
 func (mm manifestManager) Name() string {

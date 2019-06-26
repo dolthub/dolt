@@ -86,7 +86,13 @@ Continue?`)
 		return 0
 	}
 
-	ok = cs.Commit(ctx, h, currRoot)
+	ok, err = cs.Commit(ctx, h, currRoot)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "commit error: %s", err.Error())
+		return 1
+	}
+
 	if !ok {
 		fmt.Fprintln(os.Stderr, "Optimistic concurrency failure")
 		return 1

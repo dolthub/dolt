@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sync"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
@@ -33,7 +34,9 @@ func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.Testin
 	}
 	newRoot := chunks.NewChunk([]byte("root"))
 	store.Put(context.Background(), newRoot)
-	assert.True(t, store.Commit(context.Background(), newRoot.Hash(), root))
+	success, err := store.Commit(context.Background(), newRoot.Hash(), root)
+	assert.NoError(t, err)
+	assert.True(t, success)
 }
 
 func goReadChunks(src *dataSource) <-chan *chunks.Chunk {
@@ -63,7 +66,9 @@ func verifyChunk(h hash.Hash, c chunks.Chunk) {
 func benchmarkRead(openStore storeOpenFn, hashes hashSlice, src *dataSource, t assert.TestingT) {
 	store := openStore()
 	for _, h := range hashes {
-		verifyChunk(h, store.Get(context.Background(), h))
+		c, err := store.Get(context.Background(), h)
+		assert.NoError(t, err)
+		verifyChunk(h, c)
 	}
 	assert.NoError(t, store.Close())
 }
@@ -102,7 +107,11 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 			wg.Add(1)
 			go func(hashes hash.HashSlice) {
 				chunkChan := make(chan *chunks.Chunk, len(hashes))
-				store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
+				err := store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
+
+				// TODO: fix panics
+				d.PanicIfError(err)
+
 				close(chunkChan)
 				verifyChunks(hashes, chunkChan)
 				wg.Done()
@@ -115,7 +124,11 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 
 	if len(batch) > 0 {
 		chunkChan := make(chan *chunks.Chunk, len(batch))
-		store.GetMany(context.Background(), batch.HashSet(), chunkChan)
+		err := store.GetMany(context.Background(), batch.HashSet(), chunkChan)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		close(chunkChan)
 
 		verifyChunks(batch, chunkChan)

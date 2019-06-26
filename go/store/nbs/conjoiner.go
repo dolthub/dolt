@@ -60,7 +60,12 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 			lock:  generateLockHash(upstream.root, specs),
 			specs: specs,
 		}
-		upstream = mm.Update(ctx, upstream.lock, newContents, stats, nil)
+
+		var err error
+		upstream, err = mm.Update(ctx, upstream.lock, newContents, stats, nil)
+
+		// TODO: fix panics.
+		d.PanicIfError(err)
 
 		if newContents.lock == upstream.lock {
 			return upstream // Success!

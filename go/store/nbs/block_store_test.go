@@ -140,14 +140,17 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 
 func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	inputs := [][]byte{make([]byte, testMemTableSize/2+1), make([]byte, testMemTableSize/2+1), []byte("abc")}
-	rand.Read(inputs[0])
-	rand.Read(inputs[1])
+	_, err := rand.Read(inputs[0])
+	suite.NoError(err)
+	_, err = rand.Read(inputs[1])
+	suite.NoError(err)
 	chnx := make([]chunks.Chunk, len(inputs))
 	for i, data := range inputs {
 		chnx[i] = chunks.NewChunk(data)
 		suite.store.Put(context.Background(), chnx[i])
 	}
-	suite.store.Commit(context.Background(), chnx[0].Hash(), suite.store.Root(context.Background())) // Commit writes
+	_, err = suite.store.Commit(context.Background(), chnx[0].Hash(), suite.store.Root(context.Background())) // Commit writes
+	suite.NoError(err)
 
 	hashes := make(hash.HashSlice, len(chnx))
 	for i, c := range chnx {
@@ -155,7 +158,7 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 	}
 
 	chunkChan := make(chan *chunks.Chunk, len(hashes))
-	suite.store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
+	err = suite.store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
 	close(chunkChan)
 
 	found := make(hash.HashSlice, 0)
@@ -322,7 +325,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
-		assert.True(t, smallTableStore.Commit(context.Background(), newChunk.Hash(), root))
+		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
+		assert.NoError(t, err)
+		assert.True(t, success)
 		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
 	})
 
@@ -351,7 +356,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
-		assert.True(t, smallTableStore.Commit(context.Background(), newChunk.Hash(), root))
+		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
+		assert.NoError(t, err)
+		assert.True(t, success)
 		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
 		assertContainAll(t, smallTableStore, srcs...)
 	})
@@ -374,7 +381,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 		root := smallTableStore.Root(context.Background())
 		smallTableStore.Put(context.Background(), newChunk)
-		assert.True(t, smallTableStore.Commit(context.Background(), newChunk.Hash(), root))
+		success, err := smallTableStore.Commit(context.Background(), newChunk.Hash(), root)
+		assert.NoError(t, err)
+		assert.True(t, success)
 		assert.True(t, smallTableStore.Has(context.Background(), newChunk.Hash()))
 		assertContainAll(t, smallTableStore, srcs...)
 	})
@@ -407,19 +416,27 @@ func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents,
 		specs: canned.specs,
 		lock:  generateLockHash(upstream.root, canned.specs),
 	}
-	upstream = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
+
+	var err error
+	upstream, err = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
 	d.PanicIfFalse(upstream.lock == newContents.lock)
 	return upstream
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {
-	c := s.Get(context.Background(), h)
+	c, err := s.Get(context.Background(), h)
+	assert.NoError(err)
 	assert.False(c.IsEmpty(), "Shouldn't get empty chunk for %s", h.String())
 	assert.Zero(bytes.Compare(input, c.Data()), "%s != %s", string(input), string(c.Data()))
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreGetNonExisting() {
 	h := hash.Parse("11111111111111111111111111111111")
-	c := suite.store.Get(context.Background(), h)
+	c, err := suite.store.Get(context.Background(), h)
+	suite.NoError(err)
 	suite.True(c.IsEmpty())
 }
