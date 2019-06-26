@@ -52,6 +52,11 @@ func TestExecuteCreate(t *testing.T) {
 			expectedErr: "Invalid table name",
 		},
 		{
+			name:        "Test bad table name begins with number",
+			query:       "create table 1testTable (id int primary key, age int)",
+			expectedErr: "syntax error",
+		},
+		{
 			name:        "Test in use table name",
 			query:       "create table people (id int primary key, age int)",
 			expectedErr: "Table 'people' already exists",
@@ -216,7 +221,16 @@ func TestExecuteCreate(t *testing.T) {
 			root, _ := dEnv.WorkingRoot(context.Background())
 
 			sqlStatement, err := sqlparser.Parse(tt.query)
-			require.NoError(t, err)
+			if err != nil {
+				if len(tt.expectedErr) > 0 {
+					require.Error(t, err)
+					assert.Contains(t, err.Error(), tt.expectedErr)
+					return
+				} else {
+					// fail the test
+					require.NoError(t, err)
+				}
+			}
 
 			s := sqlStatement.(*sqlparser.DDL)
 
@@ -721,7 +735,16 @@ func TestRenameTable(t *testing.T) {
 			root, _ := dEnv.WorkingRoot(ctx)
 
 			sqlStatement, err := sqlparser.Parse(tt.query)
-			require.NoError(t, err)
+			if err != nil {
+				if len(tt.expectedErr) > 0 {
+					require.Error(t, err)
+					assert.Contains(t, err.Error(), tt.expectedErr)
+					return
+				} else {
+					// fail the test
+					require.NoError(t, err)
+				}
+			}
 
 			s := sqlStatement.(*sqlparser.DDL)
 
