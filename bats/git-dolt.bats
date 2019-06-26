@@ -41,7 +41,7 @@ teardown() {
 	[ -d test-repo ]
 
 	run cat test-repo.git-dolt
-	[ "${lines[0]}" = "version 0.0.0" ]
+	[[ "${lines[0]}" =~ ^version\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
 	[ "${lines[1]}" = "remote $REMOTE" ]
 	[ "${lines[2]}" = "revision $DOLT_HEAD_COMMIT" ]
 
@@ -76,7 +76,7 @@ teardown() {
 	[ "${lines[0]}" = "Updated pointer file test-repo.git-dolt to revision $NEW_DOLT_HEAD_COMMIT" ]
 
 	run cat test-repo.git-dolt
-	[ "${lines[0]}" = "version 0.0.0" ]
+	[[ "${lines[0]}" =~ ^version\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
 	[ "${lines[1]}" = "remote $REMOTE" ]
 	[ "${lines[2]}" = "revision $NEW_DOLT_HEAD_COMMIT" ]
 }
