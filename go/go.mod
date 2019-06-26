@@ -61,6 +61,6 @@ replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-se
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796
 
-// For local development, clone vitess into $GOPATH/src like so: git clone git@github.com:liquidata-inc/vitess.git vitess.io/vitess 
+// For local development, clone vitess into $GOPATH/src like so: git clone git@github.com:liquidata-inc/vitess.git vitess.io/vitess
 // Then use this local override:
 //replace vitess.io/vitess => ../../../../../vitess.io/vitess
