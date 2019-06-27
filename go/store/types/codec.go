@@ -16,13 +16,14 @@ import (
 const initialBufferSize = 2048
 
 type valueBytes interface {
-	valueBytes() []byte
+	valueBytes(*format) []byte
 }
 
 func EncodeValue(v Value) chunks.Chunk {
 	switch v := v.(type) {
 	case valueBytes:
-		return chunks.NewChunk(v.valueBytes())
+		// TODO(binformat)
+		return chunks.NewChunk(v.valueBytes(Format_7_18))
 	case *Type:
 		w := newBinaryNomsWriter()
 		// TODO(binformat)

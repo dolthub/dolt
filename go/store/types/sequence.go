@@ -33,7 +33,7 @@ type sequence interface {
 	seqLen() int
 	treeLevel() uint64
 	typeOf() *Type
-	valueBytes() []byte
+	valueBytes(*format) []byte
 	valueReadWriter() ValueReadWriter
 	valuesSlice(from, to uint64) []Value
 	WalkRefs(cb RefCallback)

@@ -56,7 +56,7 @@ func (b Bool) writeTo(w nomsWriter, f *format) {
 	w.writeBool(bool(b))
 }
 
-func (b Bool) valueBytes() []byte {
+func (b Bool) valueBytes(f *format) []byte {
 	if bool(b) {
 		return []byte{byte(BoolKind), 1}
 	}

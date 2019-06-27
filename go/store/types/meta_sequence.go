@@ -425,7 +425,7 @@ func (es emptySequence) Less(other LesserValuable) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) valueBytes() []byte {
+func (es emptySequence) valueBytes(*format) []byte {
 	panic("empty sequence")
 }
 

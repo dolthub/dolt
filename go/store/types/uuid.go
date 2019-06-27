@@ -66,7 +66,7 @@ func (v UUID) writeTo(w nomsWriter, f *format) {
 	w.writeBytes(byteSl)
 }
 
-func (v UUID) valueBytes() []byte {
+func (v UUID) valueBytes(f *format) []byte {
 	return v[:]
 }
 

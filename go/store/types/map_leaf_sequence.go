@@ -85,7 +85,8 @@ func (ml mapLeafSequence) getItem(idx int) sequenceItem {
 }
 
 func (ml mapLeafSequence) WalkRefs(cb RefCallback) {
-	walkRefs(ml.valueBytes(), cb)
+	// TODO(binformat)
+	walkRefs(ml.valueBytes(Format_7_18), cb)
 }
 
 func (ml mapLeafSequence) entries() mapEntrySlice {
