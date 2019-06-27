@@ -6,6 +6,7 @@ package types
 
 import (
 	"encoding/binary"
+	"math"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
@@ -121,12 +122,9 @@ func (b *binaryNomsReader) readFloat(f *format) Float {
 		b.offset += uint32(count2)
 		return Float(fracExpToFloat(i, int(exp)))
 	} else {
-		// b.assertCanRead(binary.MaxVarintLen64 * 2)
-		i, count := binary.Varint(b.buff[b.offset:])
-		b.offset += uint32(count)
-		exp, count2 := binary.Varint(b.buff[b.offset:])
-		b.offset += uint32(count2)
-		return Float(fracExpToFloat(i, int(exp)))
+		floatbits := binary.BigEndian.Uint64(b.buff[b.offset:])
+		b.offset += 8
+		return Float(math.Float64frombits(floatbits))
 	}
 }
 
