@@ -130,7 +130,8 @@ func TestDecode(tt *testing.T) {
 	t(set2, &set, set2)
 
 	var blob types.Blob
-	blob2 := types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello"))
+	// TODO(binformat)
+	blob2 := types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("hello"))
 	t(blob2, &blob, blob2)
 
 	type TestStruct struct {

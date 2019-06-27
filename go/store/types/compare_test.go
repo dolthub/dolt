@@ -300,7 +300,8 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nums := ValueSlice{Float(1), Float(2), Float(3)}
 	words := ValueSlice{String("k1"), String("v1")}
 
-	blob := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{1, 2, 3}))
+	// TODO(binformat)
+	blob := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBuffer([]byte{1, 2, 3}))
 	nList := NewList(context.Background(), vrw, nums...)
 	nMap := NewMap(context.Background(), vrw, words...)
 	nRef := NewRef(blob)

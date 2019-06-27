@@ -147,7 +147,8 @@ func TestFlushOrder(t *testing.T) {
 	ccs.expect(sr, nr)
 	ml := NewList(context.Background(), vs, sr, nr)
 
-	b := NewEmptyBlob(vs)
+	// TODO(binformat)
+	b := NewEmptyBlob(vs, Format_7_18)
 	br, mlr := vs.WriteValue(context.Background(), b), vs.WriteValue(context.Background(), ml)
 	ccs.expect(br, mlr)
 	ml1 := NewList(context.Background(), vs, br, mlr)
@@ -225,7 +226,8 @@ func TestPanicOnBadVersion(t *testing.T) {
 	t.Run("Write", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
 		assert.Panics(t, func() {
-			cvs.WriteValue(context.Background(), NewEmptyBlob(cvs))
+			// TODO(binformat)
+			cvs.WriteValue(context.Background(), NewEmptyBlob(cvs, Format_7_18))
 			cvs.Commit(context.Background(), cvs.Root(context.Background()), cvs.Root(context.Background()))
 		})
 	})

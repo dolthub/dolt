@@ -423,8 +423,9 @@ func TestNomsDiffPrintBlob(t *testing.T) {
 
 	expected := "-   Blob (2.0 kB)\n+   Blob (11 B)\n"
 	expectedPaths1 := []string{``}
-	b1 := types.NewBlob(context.Background(), vs, strings.NewReader(strings.Repeat("x", 2*1024)))
-	b2 := types.NewBlob(context.Background(), vs, strings.NewReader("Hello World"))
+	// TODO(binformat)
+	b1 := types.NewBlob(context.Background(), types.Format_7_18, vs, strings.NewReader(strings.Repeat("x", 2*1024)))
+	b2 := types.NewBlob(context.Background(), types.Format_7_18, vs, strings.NewReader("Hello World"))
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}

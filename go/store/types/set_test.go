@@ -1010,7 +1010,8 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		Bool(true),
 		Float(0),
 		String("hello"),
-		NewBlob(context.Background(), vs, bytes.NewBufferString("buf")),
+		// TODO(binformat)
+		NewBlob(context.Background(), Format_7_18, vs, bytes.NewBufferString("buf")),
 		NewSet(context.Background(), vs, Bool(true)),
 		NewList(context.Background(), vs, Bool(true)),
 		NewMap(context.Background(), vs, Bool(true), Float(0)),
@@ -1019,7 +1020,8 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		NewRef(Bool(true)),
 		NewRef(Float(0)),
 		NewRef(String("hello")),
-		NewRef(NewBlob(context.Background(), vs, bytes.NewBufferString("buf"))),
+		// TODO(binformat)
+		NewRef(NewBlob(context.Background(), Format_7_18, vs, bytes.NewBufferString("buf"))),
 		NewRef(NewSet(context.Background(), vs, Bool(true))),
 		NewRef(NewList(context.Background(), vs, Bool(true))),
 		NewRef(NewMap(context.Background(), vs, Bool(true), Float(0))),
