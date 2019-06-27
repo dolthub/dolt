@@ -203,7 +203,7 @@ func (r *valueDecoder) readValue(f *Format) Value {
 	case ListKind:
 		return newList(r.readListSequence(), f)
 	case MapKind:
-		return newMap(r.readMapSequence())
+		return newMap(r.readMapSequence(), f)
 	case RefKind:
 		return r.readRef()
 	case SetKind:

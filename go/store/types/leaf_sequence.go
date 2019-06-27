@@ -62,7 +62,7 @@ func (seq leafSequence) getCompareFnHelper(f *Format, other leafSequence) compar
 	return func(idx, otherIdx int) bool {
 		dec.offset = uint32(seq.getItemOffset(idx))
 		otherDec.offset = uint32(other.getItemOffset(otherIdx))
-		return dec.readValue(f).Equals(otherDec.readValue(Format_7_18))
+		return dec.readValue(f).Equals(otherDec.readValue(f))
 	}
 }
 
