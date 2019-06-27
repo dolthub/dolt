@@ -174,7 +174,7 @@ func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) ([]uint32, uin
 	return offsets, length
 }
 
-func (r *valueDecoder) readValue(f *format) Value {
+func (r *valueDecoder) readValue(f *Format) Value {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
@@ -222,7 +222,7 @@ func (r *valueDecoder) readValue(f *format) Value {
 	panic("not reachable")
 }
 
-func (r *valueDecoder) skipValue(f *format) {
+func (r *valueDecoder) skipValue(f *Format) {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:

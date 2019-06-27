@@ -19,7 +19,7 @@ type mapEntry struct {
 	value Value
 }
 
-func (entry mapEntry) writeTo(w nomsWriter, f *format) {
+func (entry mapEntry) writeTo(w nomsWriter, f *Format) {
 	entry.key.writeTo(w, f)
 	entry.value.writeTo(w, f)
 }
@@ -35,9 +35,12 @@ func (entry mapEntry) equals(other mapEntry) bool {
 
 type mapEntrySlice []mapEntry
 
-func (mes mapEntrySlice) Len() int           { return len(mes) }
-func (mes mapEntrySlice) Swap(i, j int)      { mes[i], mes[j] = mes[j], mes[i] }
-func (mes mapEntrySlice) Less(i, j int) bool { return mes[i].key.Less(mes[j].key) }
+func (mes mapEntrySlice) Len() int      { return len(mes) }
+func (mes mapEntrySlice) Swap(i, j int) { mes[i], mes[j] = mes[j], mes[i] }
+func (mes mapEntrySlice) Less(i, j int) bool {
+	// TODO(binformat)
+	return mes[i].key.Less(Format_7_18, mes[j].key)
+}
 func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	if mes.Len() != other.Len() {
 		return false
@@ -73,13 +76,13 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
-func (ml mapLeafSequence) writeTo(w nomsWriter, f *format) {
+func (ml mapLeafSequence) writeTo(w nomsWriter, f *Format) {
 	w.writeRaw(ml.buff)
 }
 
 // sequence interface
 
-func (ml mapLeafSequence) getItem(idx int, f *format) sequenceItem {
+func (ml mapLeafSequence) getItem(idx int, f *Format) sequenceItem {
 	dec := ml.decoderSkipToIndex(idx)
 	return readMapEntry(&dec)
 }
@@ -99,7 +102,7 @@ func (ml mapLeafSequence) entries() mapEntrySlice {
 	return entries
 }
 
-func (ml mapLeafSequence) getCompareFn(f *format, other sequence) compareFn {
+func (ml mapLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
 	dec1 := ml.decoder()
 	ml2 := other.(mapLeafSequence)
 	dec2 := ml2.decoder()
@@ -158,7 +161,8 @@ func (ml mapLeafSequence) getKey(idx int) orderedKey {
 
 func (ml mapLeafSequence) search(key orderedKey) int {
 	return sort.Search(int(ml.Len()), func(i int) bool {
-		return !ml.getKey(i).Less(key)
+		// TODO(binformat)
+		return !ml.getKey(i).Less(Format_7_18, key)
 	})
 }
 

@@ -19,7 +19,7 @@ func newLeafSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uin
 	return leafSequence{newSequenceImpl(vrw, buff, offsets, len)}
 }
 
-func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *format, vs ...Value) leafSequence {
+func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *Format, vs ...Value) leafSequence {
 	d.PanicIfTrue(vrw == nil)
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(vs)+sequencePartValues+1)
@@ -38,11 +38,11 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *format, vs
 	return newLeafSequence(vrw, w.data(), offsets, count)
 }
 
-func (seq leafSequence) values(f *format) []Value {
+func (seq leafSequence) values(f *Format) []Value {
 	return seq.valuesSlice(f, 0, math.MaxUint64)
 }
 
-func (seq leafSequence) valuesSlice(f *format, from, to uint64) []Value {
+func (seq leafSequence) valuesSlice(f *Format, from, to uint64) []Value {
 	if len := seq.Len(); to > len {
 		to = len
 	}
@@ -55,7 +55,7 @@ func (seq leafSequence) valuesSlice(f *format, from, to uint64) []Value {
 	return vs
 }
 
-func (seq leafSequence) getCompareFnHelper(f *format, other leafSequence) compareFn {
+func (seq leafSequence) getCompareFnHelper(f *Format, other leafSequence) compareFn {
 	dec := seq.decoder()
 	otherDec := other.decoder()
 
@@ -66,7 +66,7 @@ func (seq leafSequence) getCompareFnHelper(f *format, other leafSequence) compar
 	}
 }
 
-func (seq leafSequence) getCompareFn(f *format, other sequence) compareFn {
+func (seq leafSequence) getCompareFn(f *Format, other sequence) compareFn {
 	panic("unreachable")
 }
 
@@ -117,7 +117,7 @@ func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uin
 	panic("getCompositeChildSequence called on a leaf sequence")
 }
 
-func (seq leafSequence) getItem(idx int, f *format) sequenceItem {
+func (seq leafSequence) getItem(idx int, f *Format) sequenceItem {
 	dec := seq.decoderSkipToIndex(idx)
 	return dec.readValue(f)
 }

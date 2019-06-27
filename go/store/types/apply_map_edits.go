@@ -186,7 +186,8 @@ func prepWorker(ctx context.Context, seq orderedSequence, wc chan mapWork) {
 			key := edit.Key.Value(ctx)
 			ordKey := newOrderedKey(key)
 
-			if cur == nil || !ordKey.Less(curKey) {
+			// TODO(binformat)
+			if cur == nil || !ordKey.Less(Format_7_18, curKey) {
 				cur = newCursorAt(ctx, seq, ordKey, true, false)
 
 				if cur.valid() {
@@ -228,7 +229,8 @@ func buildBatches(rc chan chan mapWorkResult, wc chan mapWork, edits EditProvide
 
 			nextEdit = edits.Next()
 
-			if nextEdit != nil && !edit.Key.Less(nextEdit.Key) {
+			// TODO(binformat)
+			if nextEdit != nil && !edit.Key.Less(Format_7_18, nextEdit.Key) {
 				// keys are sorted, so if this key is not less than the next key then they are equal and the next
 				// value will take precedence
 				continue

@@ -8,12 +8,12 @@ type listLeafSequence struct {
 	leafSequence
 }
 
-func newListLeafSequence(vrw ValueReadWriter, f *format, vs ...Value) sequence {
+func newListLeafSequence(vrw ValueReadWriter, f *Format, vs ...Value) sequence {
 	return listLeafSequence{newLeafSequenceFromValues(ListKind, vrw, f, vs...)}
 }
 
 // sequence interface
 
-func (ll listLeafSequence) getCompareFn(f *format, other sequence) compareFn {
+func (ll listLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
 	return ll.getCompareFnHelper(f, other.(listLeafSequence).leafSequence)
 }

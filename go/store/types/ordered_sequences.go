@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -97,7 +98,8 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 		for i, v := range items {
 			mt := v.(metaTuple)
 			key := mt.key()
-			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(key))
+			// TODO(binformat)
+			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(Format_7_18, key))
 			lastKey = key
 			tuples[i] = mt // chunk is written when the root sequence is written
 			numLeaves += mt.numLeaves()

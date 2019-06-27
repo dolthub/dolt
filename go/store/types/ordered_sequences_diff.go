@@ -167,12 +167,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 			!lastCur.seq.getCompareFn(Format_7_18, currentCur.seq)(lastCur.idx, currentCur.idx) {
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
-			if currentKey.Less(lastKey) {
+			// TODO(binformat)
+			if currentKey.Less(Format_7_18, lastKey) {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v, nil, getMapValue(currentCur)}) {
 					return false
 				}
 				currentCur.advance(ctx)
-			} else if lastKey.Less(currentKey) {
+			} else if lastKey.Less(Format_7_18, currentKey) {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, getMapValue(lastCur), nil}) {
 					return false
 				}

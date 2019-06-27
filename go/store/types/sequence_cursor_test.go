@@ -17,7 +17,7 @@ type testSequence struct {
 }
 
 // sequence interface
-func (ts testSequence) getItem(idx int, f *format) sequenceItem {
+func (ts testSequence) getItem(idx int, f *Format) sequenceItem {
 	return ts.items[idx]
 }
 
@@ -45,7 +45,7 @@ func (ts testSequence) Kind() NomsKind {
 	panic("not reached")
 }
 
-func (ts testSequence) getCompareFn(f *format, other sequence) compareFn {
+func (ts testSequence) getCompareFn(f *Format, other sequence) compareFn {
 	obl := other.(testSequence)
 	return func(idx, otherIdx int) bool {
 		return ts.items[idx] == obl.items[otherIdx]
@@ -56,7 +56,7 @@ func (ts testSequence) valueReadWriter() ValueReadWriter {
 	panic("not reached")
 }
 
-func (ts testSequence) writeTo(nomsWriter, *format) {
+func (ts testSequence) writeTo(nomsWriter, *Format) {
 	panic("not reached")
 }
 
@@ -73,19 +73,19 @@ func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) valueBytes(*format) []byte {
+func (ts testSequence) valueBytes(*Format) []byte {
 	panic("not reached")
 }
 
-func (ts testSequence) valuesSlice(f *format, from, to uint64) []Value {
+func (ts testSequence) valuesSlice(f *Format, from, to uint64) []Value {
 	panic("not reached")
 }
 
-func (ts testSequence) Less(other LesserValuable) bool {
+func (ts testSequence) Less(f *Format, other LesserValuable) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) Hash(*format) hash.Hash {
+func (ts testSequence) Hash(*Format) hash.Hash {
 	panic("not reached")
 }
 

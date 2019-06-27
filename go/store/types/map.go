@@ -70,7 +70,8 @@ func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value, ou
 	for v := range kvs {
 		if nextIsKey {
 			k = v
-			d.PanicIfFalse(lastK == nil || lastK.Less(k))
+			// TODO(binformat)
+			d.PanicIfFalse(lastK == nil || lastK.Less(Format_7_18, k))
 			lastK = k
 			nextIsKey = false
 			continue
@@ -286,7 +287,8 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		var lastKey Value
 		for i, v := range items {
 			entry := v.(mapEntry)
-			d.PanicIfFalse(lastKey == nil || lastKey.Less(entry.key))
+			// TODO(binformat)
+			d.PanicIfFalse(lastKey == nil || lastKey.Less(Format_7_18, entry.key))
 			lastKey = entry.key
 			mapData[i] = entry
 		}

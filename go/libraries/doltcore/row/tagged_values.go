@@ -3,6 +3,7 @@ package row
 import (
 	"context"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
@@ -18,7 +19,7 @@ func (tvs TupleVals) Value(ctx context.Context) types.Value {
 	return types.NewTuple(tvs...)
 }
 
-func (tvs TupleVals) Less(other types.LesserValuable) bool {
+func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
 	if other.Kind() == types.TupleKind {
 		if otherTVs, ok := other.(TupleVals); ok {
 			for i, val := range tvs {
@@ -30,7 +31,7 @@ func (tvs TupleVals) Less(other types.LesserValuable) bool {
 				otherVal := otherTVs[i]
 
 				if !val.Equals(otherVal) {
-					return val.Less(otherVal)
+					return val.Less(f, otherVal)
 				}
 			}
 

@@ -65,7 +65,7 @@ func (mt metaTuple) getChildSequence(ctx context.Context, vr ValueReader) sequen
 	return mt.ref().TargetValue(ctx, vr).(Collection).asSequence()
 }
 
-func (mt metaTuple) writeTo(w nomsWriter, f *format) {
+func (mt metaTuple) writeTo(w nomsWriter, f *Format) {
 	w.writeRaw(mt.buff)
 }
 
@@ -97,10 +97,10 @@ func orderedKeyFromUint64(n uint64) orderedKey {
 	return newOrderedKey(Float(n))
 }
 
-func (key orderedKey) Less(mk2 orderedKey) bool {
+func (key orderedKey) Less(f *Format, mk2 orderedKey) bool {
 	switch {
 	case key.isOrderedByValue && mk2.isOrderedByValue:
-		return key.v.Less(mk2.v)
+		return key.v.Less(f, mk2.v)
 	case key.isOrderedByValue:
 		return true
 	case mk2.isOrderedByValue:
@@ -111,7 +111,7 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 	}
 }
 
-func (key orderedKey) writeTo(w nomsWriter, f *format) {
+func (key orderedKey) writeTo(w nomsWriter, f *Format) {
 	if !key.isOrderedByValue {
 		d.PanicIfTrue(key != emptyKey && key.h.IsEmpty())
 		// TODO(binformat)
@@ -170,7 +170,8 @@ func (ms metaSequence) getKey(idx int) orderedKey {
 
 func (ms metaSequence) search(key orderedKey) int {
 	return sort.Search(ms.seqLen(), func(i int) bool {
-		return !ms.getKey(i).Less(key)
+		// TODO(binformat)
+		return !ms.getKey(i).Less(Format_7_18, key)
 	})
 }
 
@@ -186,7 +187,7 @@ func (ms metaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	return cum
 }
 
-func (ms metaSequence) getCompareFn(f *format, other sequence) compareFn {
+func (ms metaSequence) getCompareFn(f *Format, other sequence) compareFn {
 	dec := ms.decoder()
 	oms := other.(metaSequence)
 	otherDec := oms.decoder()
@@ -222,12 +223,12 @@ func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 }
 
 // sequence interface
-func (ms metaSequence) getItem(idx int, f *format) sequenceItem {
+func (ms metaSequence) getItem(idx int, f *Format) sequenceItem {
 	dec := ms.decoderSkipToIndex(idx)
 	return ms.readTuple(&dec)
 }
 
-func (ms metaSequence) valuesSlice(f *format, from, to uint64) []Value {
+func (ms metaSequence) valuesSlice(f *Format, from, to uint64) []Value {
 	panic("meta sequence")
 }
 
@@ -356,7 +357,7 @@ type emptySequence struct {
 	level uint64
 }
 
-func (es emptySequence) getItem(idx int, f *format) sequenceItem {
+func (es emptySequence) getItem(idx int, f *Format) sequenceItem {
 	panic("empty sequence")
 }
 
@@ -375,7 +376,7 @@ func (es emptySequence) valueReadWriter() ValueReadWriter {
 func (es emptySequence) WalkRefs(cb RefCallback) {
 }
 
-func (es emptySequence) getCompareFn(f *format, other sequence) compareFn {
+func (es emptySequence) getCompareFn(f *Format, other sequence) compareFn {
 	return func(idx, otherIdx int) bool { panic("empty sequence") }
 }
 
@@ -418,7 +419,7 @@ func (es emptySequence) isLeaf() bool {
 	return es.level == 0
 }
 
-func (es emptySequence) Hash(f *format) hash.Hash {
+func (es emptySequence) Hash(f *Format) hash.Hash {
 	panic("empty sequence")
 }
 
@@ -426,19 +427,19 @@ func (es emptySequence) Equals(other Value) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Less(other LesserValuable) bool {
+func (es emptySequence) Less(f *Format, other LesserValuable) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) valueBytes(*format) []byte {
+func (es emptySequence) valueBytes(*Format) []byte {
 	panic("empty sequence")
 }
 
-func (es emptySequence) valuesSlice(f *format, from, to uint64) []Value {
+func (es emptySequence) valuesSlice(f *Format, from, to uint64) []Value {
 	panic("empty sequence")
 }
 
-func (es emptySequence) writeTo(w nomsWriter, f *format) {
+func (es emptySequence) writeTo(w nomsWriter, f *Format) {
 	panic("empty sequence")
 }
 

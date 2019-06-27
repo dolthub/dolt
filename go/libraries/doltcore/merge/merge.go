@@ -3,6 +3,7 @@ package merge
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -149,10 +150,11 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 			break
 		}
 
-		if key != nil && (mergeKey == nil || key.Less(mergeKey)) {
+		// TODO(binformat)
+		if key != nil && (mergeKey == nil || key.Less(types.Format_7_18, mergeKey)) {
 			// change will already be in the map
 			change = types.ValueChanged{}
-		} else if mergeKey != nil && (key == nil || mergeKey.Less(key)) {
+		} else if mergeKey != nil && (key == nil || mergeKey.Less(types.Format_7_18, key)) {
 			applyChange(mapEditor, stats, mergeChange)
 			mergeChange = types.ValueChanged{}
 		} else {

@@ -29,7 +29,7 @@ type LesserValuable interface {
 	// String) then the natural ordering is used. For other Noms values the Hash of the value is
 	// used. When comparing Noms values of different type the following ordering is used:
 	// Bool < Float < String < everything else.
-	Less(other LesserValuable) bool
+	Less(f *Format, other LesserValuable) bool
 }
 
 // Emptyable is an interface for Values which may or may not be empty
@@ -46,7 +46,7 @@ type Value interface {
 
 	// Hash is the hash of the value. All Noms values have a unique hash and if two values have the
 	// same hash they must be equal.
-	Hash(*format) hash.Hash
+	Hash(*Format) hash.Hash
 
 	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	// Type()
@@ -62,14 +62,17 @@ type Value interface {
 	typeOf() *Type
 
 	// writeTo writes the encoded version of the value to a nomsWriter.
-	writeTo(nomsWriter, *format)
+	writeTo(nomsWriter, *Format)
 }
 
 type ValueSlice []Value
 
-func (vs ValueSlice) Len() int           { return len(vs) }
-func (vs ValueSlice) Swap(i, j int)      { vs[i], vs[j] = vs[j], vs[i] }
-func (vs ValueSlice) Less(i, j int) bool { return vs[i].Less(vs[j]) }
+func (vs ValueSlice) Len() int      { return len(vs) }
+func (vs ValueSlice) Swap(i, j int) { vs[i], vs[j] = vs[j], vs[i] }
+func (vs ValueSlice) Less(i, j int) bool {
+	// TODO(binformat)
+	return vs[i].Less(Format_7_18, vs[j])
+}
 func (vs ValueSlice) Equals(other ValueSlice) bool {
 	if vs.Len() != other.Len() {
 		return false
@@ -107,11 +110,11 @@ func (v valueImpl) valueReadWriter() ValueReadWriter {
 	return v.vrw
 }
 
-func (v valueImpl) writeTo(enc nomsWriter, f *format) {
+func (v valueImpl) writeTo(enc nomsWriter, f *Format) {
 	enc.writeRaw(v.buff)
 }
 
-func (v valueImpl) valueBytes(f *format) []byte {
+func (v valueImpl) valueBytes(f *Format) []byte {
 	return v.buff
 }
 
@@ -120,7 +123,7 @@ func (v valueImpl) IsZeroValue() bool {
 	return v.buff == nil
 }
 
-func (v valueImpl) Hash(*format) hash.Hash {
+func (v valueImpl) Hash(*Format) hash.Hash {
 	return hash.Of(v.buff)
 }
 
@@ -143,8 +146,8 @@ func (v valueImpl) Equals(other Value) bool {
 	return false
 }
 
-func (v valueImpl) Less(other LesserValuable) bool {
-	return valueLess(v, other.(Value))
+func (v valueImpl) Less(f *Format, other LesserValuable) bool {
+	return valueLess(f, v, other.(Value))
 }
 
 func (v valueImpl) WalkRefs(cb RefCallback) {

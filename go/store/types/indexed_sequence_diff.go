@@ -15,7 +15,7 @@ func sendSpliceChange(changes chan<- Splice, closeChan <-chan struct{}, splice S
 	return true
 }
 
-func indexedSequenceDiff(ctx context.Context, f *format, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
+func indexedSequenceDiff(ctx context.Context, f *Format, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
 	if last.treeLevel() > current.treeLevel() {
 		lastChild := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
 		return indexedSequenceDiff(ctx, f, lastChild, lastOffset, current, currentOffset, changes, closeChan, maxSpliceMatrixSize)

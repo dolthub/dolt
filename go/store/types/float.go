@@ -25,14 +25,14 @@ func (v Float) Equals(other Value) bool {
 	return v == other
 }
 
-func (v Float) Less(other LesserValuable) bool {
+func (v Float) Less(f *Format, other LesserValuable) bool {
 	if v2, ok := other.(Float); ok {
 		return v < v2
 	}
 	return FloatKind < other.Kind()
 }
 
-func (v Float) Hash(f *format) hash.Hash {
+func (v Float) Hash(f *Format) hash.Hash {
 	return getHash(v, f)
 }
 
@@ -54,7 +54,7 @@ func (v Float) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Float) writeTo(w nomsWriter, f *format) {
+func (v Float) writeTo(w nomsWriter, f *Format) {
 	FloatKind.writeTo(w, f)
 	fl := float64(v)
 	if math.IsNaN(fl) || math.IsInf(fl, 0) {
@@ -63,7 +63,7 @@ func (v Float) writeTo(w nomsWriter, f *format) {
 	w.writeFloat(v, f)
 }
 
-func (v Float) valueBytes(f *format) []byte {
+func (v Float) valueBytes(f *Format) []byte {
 	// We know the size of the buffer here so allocate it once.
 	// FloatKind, int (Varint), exp (Varint)
 	buff := make([]byte, 1+2*binary.MaxVarintLen64)

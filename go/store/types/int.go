@@ -23,14 +23,14 @@ func (v Int) Equals(other Value) bool {
 	return v == other
 }
 
-func (v Int) Less(other LesserValuable) bool {
+func (v Int) Less(f *Format, other LesserValuable) bool {
 	if v2, ok := other.(Int); ok {
 		return v < v2
 	}
 	return IntKind < other.Kind()
 }
 
-func (v Int) Hash(f *format) hash.Hash {
+func (v Int) Hash(f *Format) hash.Hash {
 	return getHash(v, f)
 }
 
@@ -52,12 +52,12 @@ func (v Int) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Int) writeTo(w nomsWriter, f *format) {
+func (v Int) writeTo(w nomsWriter, f *Format) {
 	IntKind.writeTo(w, f)
 	w.writeInt(v)
 }
 
-func (v Int) valueBytes(f *format) []byte {
+func (v Int) valueBytes(f *Format) []byte {
 	// We know the size of the buffer here so allocate it once.
 	// IntKind, int (Varint), exp (Varint)
 	buff := make([]byte, 1+2*binary.MaxVarintLen64)

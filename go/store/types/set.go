@@ -60,7 +60,8 @@ func readSetInput(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value, 
 	var lastV Value
 	for v := range vChan {
 		if lastV != nil {
-			d.PanicIfFalse(lastV.Less(v))
+			// TODO(binformat)
+			d.PanicIfFalse(lastV.Less(Format_7_18, v))
 		}
 		lastV = v
 		ch.Append(ctx, v)
@@ -200,7 +201,8 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		var lastValue Value
 		for i, item := range items {
 			v := item.(Value)
-			d.PanicIfFalse(lastValue == nil || lastValue.Less(v))
+			// TODO(binformat)
+			d.PanicIfFalse(lastValue == nil || lastValue.Less(Format_7_18, v))
 			lastValue = v
 			setData[i] = v
 		}
