@@ -77,7 +77,7 @@ func TestWalkRefs(t *testing.T) {
 			// TODO(binformat)
 			l := NewList(context.Background(), Format_7_18, vrw, newValueSlice(r)...)
 			for l.sequence.isLeaf() {
-				l = l.Concat(context.Background(), Format_7_18, NewList(context.Background(), Format_7_18, vrw, newValueSlice(r)...))
+				l = l.Concat(context.Background(), NewList(context.Background(), Format_7_18, vrw, newValueSlice(r)...))
 			}
 			runTest(l, t)
 		})

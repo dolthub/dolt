@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
@@ -70,7 +71,8 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 
 		var col Collection
 		if kind == ListKind {
-			col = newList(newListMetaSequence(level, tuples, vrw))
+			// TODO(binformat)
+			col = newList(newListMetaSequence(level, tuples, vrw), Format_7_18)
 		} else {
 			d.PanicIfFalse(BlobKind == kind)
 			col = newBlob(newBlobMetaSequence(level, tuples, vrw))

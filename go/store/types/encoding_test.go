@@ -111,13 +111,13 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(NewStruct("", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)}))
 
 	// TODO(binformat)
-	listLeaf := newList(newListLeafSequence(vs, Format_7_18, Float(4), Float(5), Float(6), Float(7)))
+	listLeaf := newList(newListLeafSequence(vs, Format_7_18, Float(4), Float(5), Float(6), Float(7)), Format_7_18)
 	assertRoundTrips(listLeaf)
 
 	assertRoundTrips(newList(newListMetaSequence(1, []metaTuple{
 		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(10), 10),
 		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(20), 20),
-	}, vs)))
+	}, vs), Format_7_18))
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
@@ -439,8 +439,8 @@ func TestWriteCompoundList(t *testing.T) {
 	vrw := newTestValueStore()
 
 	// TODO(binformat)
-	list1 := newList(newListLeafSequence(vrw, Format_7_18, Float(0)))
-	list2 := newList(newListLeafSequence(vrw, Format_7_18, Float(1), Float(2), Float(3)))
+	list1 := newList(newListLeafSequence(vrw, Format_7_18, Float(0)), Format_7_18)
+	list2 := newList(newListLeafSequence(vrw, Format_7_18, Float(1), Float(2), Float(3)), Format_7_18)
 	assertEncoding(t,
 		[]interface{}{
 			ListKind, uint64(1), uint64(2), // len,
@@ -450,7 +450,7 @@ func TestWriteCompoundList(t *testing.T) {
 		newList(newListMetaSequence(1, []metaTuple{
 			newMetaTuple(NewRef(list1), orderedKeyFromInt(1), 1),
 			newMetaTuple(NewRef(list2), orderedKeyFromInt(3), 3),
-		}, nil)),
+		}, nil), Format_7_18),
 	)
 }
 
