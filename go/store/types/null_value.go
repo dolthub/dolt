@@ -11,7 +11,9 @@ import (
 )
 
 var NullValue Null
-var NullHash = getHash(NullValue)
+
+// TODO(binformat)
+var NullHash = getHash(NullValue, Format_7_18)
 
 // IsNull returns true if the value is nil, or if the value is of kind NULLKind
 func IsNull(val Value) bool {
