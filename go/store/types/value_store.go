@@ -276,7 +276,8 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		}
 
 		var err error
-		WalkRefs(pending, func(grandchildRef Ref) {
+		// TODO(binformat)
+		WalkRefs(pending, Format_7_18, func(grandchildRef Ref) {
 			if err != nil {
 				// as soon as an error occurs ignore the rest of the refs
 				return
@@ -398,7 +399,8 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		for parent := range lvs.withBufferedChildren {
 			if pending, present := lvs.bufferedChunks[parent]; present {
 				var err error
-				WalkRefs(pending, func(reachable Ref) {
+				// TODO(binformat)
+				WalkRefs(pending, Format_7_18, func(reachable Ref) {
 					if err != nil {
 						// as soon as an error occurs ignore the rest of the refs
 						return
