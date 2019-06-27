@@ -11,7 +11,8 @@ type setLeafSequence struct {
 }
 
 func newSetLeafSequence(vrw ValueReadWriter, vs ...Value) orderedSequence {
-	return setLeafSequence{newLeafSequenceFromValues(SetKind, vrw, vs...)}
+	// TODO(binformat)
+	return setLeafSequence{newLeafSequenceFromValues(SetKind, vrw, Format_7_18, vs...)}
 }
 
 func (sl setLeafSequence) getCompareFn(other sequence) compareFn {

@@ -1032,7 +1032,8 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 	vrw := newTestValueStore()
 
 	newSequenceMetaTuple := func(vs ...Value) metaTuple {
-		seq := newListLeafSequence(vrw, vs...)
+		// TODO(binformat)
+		seq := newListLeafSequence(vrw, Format_7_18, vs...)
 		list := newList(seq)
 		return newMetaTuple(vrw.WriteValue(context.Background(), list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
 	}
