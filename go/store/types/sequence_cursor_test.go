@@ -77,7 +77,7 @@ func (ts testSequence) valueBytes(*format) []byte {
 	panic("not reached")
 }
 
-func (ts testSequence) valuesSlice(from, to uint64) []Value {
+func (ts testSequence) valuesSlice(f *format, from, to uint64) []Value {
 	panic("not reached")
 }
 
