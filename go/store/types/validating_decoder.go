@@ -32,7 +32,8 @@ func (vbs *ValidatingDecoder) Decode(c *chunks.Chunk) DecodedChunk {
 	// TODO(binformat)
 	v := decodeFromBytesWithValidation(c.Data(), vbs.vs, Format_7_18)
 
-	if getHash(v) != h {
+	// TODO(binformat)
+	if getHash(v, Format_7_18) != h {
 		d.Panic("Invalid hash found")
 	}
 	return DecodedChunk{c, &v}

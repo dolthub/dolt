@@ -38,7 +38,8 @@ func (v UUID) Less(other LesserValuable) bool {
 }
 
 func (v UUID) Hash() hash.Hash {
-	return getHash(v)
+	// TODO(binformat)
+	return getHash(v, Format_7_18)
 }
 
 func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) {

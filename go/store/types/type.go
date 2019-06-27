@@ -60,7 +60,8 @@ func (t *Type) Less(other LesserValuable) (res bool) {
 }
 
 func (t *Type) Hash() hash.Hash {
-	return getHash(t)
+	// TODO(binformat)
+	return getHash(t, Format_7_18)
 }
 
 func (t *Type) writeTo(w nomsWriter, f *format) {

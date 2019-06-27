@@ -30,7 +30,8 @@ func (b Bool) Less(other LesserValuable) bool {
 }
 
 func (b Bool) Hash() hash.Hash {
-	return getHash(b)
+	// TODO(binformat)
+	return getHash(b, Format_7_18)
 }
 
 func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) {
