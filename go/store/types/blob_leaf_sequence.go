@@ -37,7 +37,7 @@ func (bl blobLeafSequence) data() []byte {
 	return bl.buff[offset:]
 }
 
-func (bl blobLeafSequence) getCompareFn(other sequence) compareFn {
+func (bl blobLeafSequence) getCompareFn(f *format, other sequence) compareFn {
 	offsetStart := int(bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind])
 	obl := other.(blobLeafSequence)
 	otherOffsetStart := int(obl.offsets[sequencePartValues] - obl.offsets[sequencePartKind])
