@@ -250,7 +250,8 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 		return
 	}
 
-	indexedSequenceDiff(ctx, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
+	// TODO(binformat)
+	indexedSequenceDiff(ctx, Format_7_18, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
 func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
