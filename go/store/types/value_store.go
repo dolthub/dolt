@@ -226,7 +226,8 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) Ref {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 
-	c := EncodeValue(v)
+	// TODO(binformat)
+	c := EncodeValue(v, Format_7_18)
 	d.PanicIfTrue(c.IsEmpty())
 	h := c.Hash()
 	height := maxChunkHeight(v) + 1

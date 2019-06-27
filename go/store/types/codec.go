@@ -19,15 +19,13 @@ type valueBytes interface {
 	valueBytes(*format) []byte
 }
 
-func EncodeValue(v Value) chunks.Chunk {
+func EncodeValue(v Value, f *format) chunks.Chunk {
 	switch v := v.(type) {
 	case valueBytes:
-		// TODO(binformat)
-		return chunks.NewChunk(v.valueBytes(Format_7_18))
+		return chunks.NewChunk(v.valueBytes(f))
 	case *Type:
 		w := newBinaryNomsWriter()
-		// TODO(binformat)
-		v.writeTo(&w, Format_7_18)
+		v.writeTo(&w, f)
 		return chunks.NewChunk(w.data())
 	}
 
