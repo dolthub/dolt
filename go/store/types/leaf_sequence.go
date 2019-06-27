@@ -39,10 +39,11 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *format, vs
 }
 
 func (seq leafSequence) values() []Value {
-	return seq.valuesSlice(0, math.MaxUint64)
+	// TODO(binformat)
+	return seq.valuesSlice(Format_7_18, 0, math.MaxUint64)
 }
 
-func (seq leafSequence) valuesSlice(from, to uint64) []Value {
+func (seq leafSequence) valuesSlice(f *format, from, to uint64) []Value {
 	if len := seq.Len(); to > len {
 		to = len
 	}
@@ -50,8 +51,7 @@ func (seq leafSequence) valuesSlice(from, to uint64) []Value {
 	dec := seq.decoderSkipToIndex(int(from))
 	vs := make([]Value, (to-from)*uint64(getValuesPerIdx(seq.Kind())))
 	for i := range vs {
-		// TODO(binformat)
-		vs[i] = dec.readValue(Format_7_18)
+		vs[i] = dec.readValue(f)
 	}
 	return vs
 }

@@ -198,7 +198,7 @@ func iterRange(ctx context.Context, f *format, col Collection, startIdx, endIdx 
 
 	for _, leaf := range leaves {
 		seq := leaf.asSequence()
-		values := seq.valuesSlice(startIdx, endIdx)
+		values := seq.valuesSlice(f, startIdx, endIdx)
 		numValues += len(values)
 
 		for _, v := range values {

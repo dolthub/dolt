@@ -227,7 +227,7 @@ func (ms metaSequence) getItem(idx int) sequenceItem {
 	return ms.readTuple(&dec)
 }
 
-func (ms metaSequence) valuesSlice(from, to uint64) []Value {
+func (ms metaSequence) valuesSlice(f *format, from, to uint64) []Value {
 	panic("meta sequence")
 }
 
@@ -431,7 +431,7 @@ func (es emptySequence) valueBytes(*format) []byte {
 	panic("empty sequence")
 }
 
-func (es emptySequence) valuesSlice(from, to uint64) []Value {
+func (es emptySequence) valuesSlice(f *format, from, to uint64) []Value {
 	panic("empty sequence")
 }
 
