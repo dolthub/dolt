@@ -241,7 +241,8 @@ func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
 	} else {
 		// if we're encoding hash values, we know the length, so we can leave that out
 		bs = append(bs, uint8(v.Kind()))
-		h := v.Hash()
+		// TODO(binformat)
+		h := v.Hash(Format_7_18)
 		bs = append(bs, h[:]...)
 	}
 	return bs

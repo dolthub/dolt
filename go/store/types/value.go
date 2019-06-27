@@ -46,7 +46,7 @@ type Value interface {
 
 	// Hash is the hash of the value. All Noms values have a unique hash and if two values have the
 	// same hash they must be equal.
-	Hash() hash.Hash
+	Hash(*format) hash.Hash
 
 	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	// Type()
@@ -120,7 +120,7 @@ func (v valueImpl) IsZeroValue() bool {
 	return v.buff == nil
 }
 
-func (v valueImpl) Hash() hash.Hash {
+func (v valueImpl) Hash(*format) hash.Hash {
 	return hash.Of(v.buff)
 }
 

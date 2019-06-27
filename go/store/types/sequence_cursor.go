@@ -119,11 +119,12 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, all
 type cursorIterCallback func(item interface{}) bool
 
 func (cur *sequenceCursor) String() string {
+	// TODO(binformat)
 	if cur.parent == nil {
-		return fmt.Sprintf("%s (%d): %d", newMap(cur.seq.(orderedSequence)).Hash().String(), cur.seq.seqLen(), cur.idx)
+		return fmt.Sprintf("%s (%d): %d", newMap(cur.seq.(orderedSequence)).Hash(Format_7_18).String(), cur.seq.seqLen(), cur.idx)
 	}
 
-	return fmt.Sprintf("%s (%d): %d -- %s", newMap(cur.seq.(orderedSequence)).Hash().String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
+	return fmt.Sprintf("%s (%d): %d -- %s", newMap(cur.seq.(orderedSequence)).Hash(Format_7_18).String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
 }
 
 func (cur *sequenceCursor) compare(other *sequenceCursor) int {

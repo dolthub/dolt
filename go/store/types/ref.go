@@ -26,7 +26,8 @@ const (
 )
 
 func NewRef(v Value) Ref {
-	return constructRef(v.Hash(), TypeOf(v), maxChunkHeight(v)+1)
+	// TODO(binformat)
+	return constructRef(v.Hash(Format_7_18), TypeOf(v), maxChunkHeight(v)+1)
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but

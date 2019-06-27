@@ -203,11 +203,13 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 				l2.Iter(context.Background(), func(key, value Value) (stop bool) {
 					entry := elems.entries[idx]
 					if !key.Equals(entry.key) {
-						fmt.Printf("%d: %s (%s)\n!=\n%s (%s)\n", idx, EncodedValue(context.Background(), key), key.Hash(), EncodedValue(context.Background(), entry.key), entry.key.Hash())
+						// TODO(binformat)
+						fmt.Printf("%d: %s (%s)\n!=\n%s (%s)\n", idx, EncodedValue(context.Background(), key), key.Hash(Format_7_18), EncodedValue(context.Background(), entry.key), entry.key.Hash(Format_7_18))
 						stop = true
 					}
 					if !value.Equals(entry.value) {
-						fmt.Printf("%s (%s) !=\n%s (%s)\n", EncodedValue(context.Background(), value), value.Hash(), EncodedValue(context.Background(), entry.value), entry.value.Hash())
+						// TODO(binformat)
+						fmt.Printf("%s (%s) !=\n%s (%s)\n", EncodedValue(context.Background(), value), value.Hash(Format_7_18), EncodedValue(context.Background(), entry.value), entry.value.Hash(Format_7_18))
 						stop = true
 					}
 					idx++
@@ -1179,7 +1181,8 @@ func testMapOrder(assert *assert.Assertions, vrw ValueReadWriter, keyType, value
 	m := NewMap(context.Background(), vrw, tuples...)
 	i := 0
 	m.IterAll(context.Background(), func(key, value Value) {
-		assert.Equal(expectOrdering[i].Hash().String(), key.Hash().String())
+		// TODO(binformat)
+		assert.Equal(expectOrdering[i].Hash(Format_7_18).String(), key.Hash(Format_7_18).String())
 		i++
 	})
 }

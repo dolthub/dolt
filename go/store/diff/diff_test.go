@@ -174,8 +174,9 @@ func TestNomsDiffPrintSet(t *testing.T) {
   }
 `
 	expectedPaths2 := []string{
-		fmt.Sprintf("[#%s]", mm3.Hash()),
-		fmt.Sprintf("[#%s]", mm3x.Hash()),
+		// TODO(binformat)
+		fmt.Sprintf("[#%s]", mm3.Hash(types.Format_7_18)),
+		fmt.Sprintf("[#%s]", mm3x.Hash(types.Format_7_18)),
 	}
 
 	s1 := createSet("one", "three", "five", "seven", "nine")

@@ -88,7 +88,8 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		if types.ValueCanBePathIndex(vv) {
 			pp = types.NewIndexPath(vv)
 		} else {
-			pp = types.NewHashIndexPath(vv.Hash())
+			// TODO(binformat)
+			pp = types.NewHashIndexPath(vv.Hash(types.Format_7_18))
 		}
 		d := diff.Difference{
 			Path: append(basePath, pp),

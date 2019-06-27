@@ -183,7 +183,8 @@ func (t *Table) HasTheSameSchema(t2 *Table) bool {
 
 // HashOf returns the hash of the underlying table struct
 func (t *Table) HashOf() hash.Hash {
-	return t.tableStruct.Hash()
+	// TODO(binformat)
+	return t.tableStruct.Hash(types.Format_7_18)
 }
 
 func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {

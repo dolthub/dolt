@@ -85,7 +85,7 @@ func (ts testSequence) Less(other LesserValuable) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) Hash() hash.Hash {
+func (ts testSequence) Hash(*format) hash.Hash {
 	panic("not reached")
 }
 

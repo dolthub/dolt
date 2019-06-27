@@ -10,7 +10,7 @@ import (
 
 type kindAndHash interface {
 	Kind() NomsKind
-	Hash() hash.Hash
+	Hash(*format) hash.Hash
 }
 
 func valueLess(v1, v2 kindAndHash) bool {
@@ -18,6 +18,7 @@ func valueLess(v1, v2 kindAndHash) bool {
 	case BoolKind, FloatKind, StringKind:
 		return false
 	default:
-		return v1.Hash().Less(v2.Hash())
+		// TODO(binformat)
+		return v1.Hash(Format_7_18).Less(v2.Hash(Format_7_18))
 	}
 }

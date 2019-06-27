@@ -154,7 +154,8 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 		return maxLen
 	}
 
-	hashStr := node.commit.Hash().String()
+	// TODO(binformat)
+	hashStr := node.commit.Hash(types.Format_7_18).String()
 	if useColor {
 		hashStr = ansi.Color("commit "+hashStr, "red+h")
 	}
@@ -353,11 +354,12 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization
 	// of some of the code in PrintDiff() because it cannot tolerate nil parameters.
+	// TODO(binformat)
 	if neu == nil {
-		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash().String(), path.String())
+		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash(types.Format_7_18).String(), path.String())
 	}
 	if old == nil {
-		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash().String(), path.String())
+		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash(types.Format_7_18).String(), path.String())
 	}
 
 	if old != nil && neu != nil {

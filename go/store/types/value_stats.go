@@ -62,7 +62,8 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 			s := n.(Collection).asSequence()
 			valueCount += uint64(s.seqLen())
 
-			h := n.Hash()
+			// TODO(binformat)
+			h := n.Hash(Format_7_18)
 			if !visited.Has(h) {
 				// Indexed Ptrees can share nodes within the same tree level. Only count each unique value once
 				byteSize += compressedSize(n)

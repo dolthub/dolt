@@ -18,7 +18,8 @@ func TestValueReadWriteRead(t *testing.T) {
 
 	s := String("hello")
 	vs := newTestValueStore()
-	assert.Nil(vs.ReadValue(context.Background(), s.Hash())) // nil
+	// TODO(binformat)
+	assert.Nil(vs.ReadValue(context.Background(), s.Hash(Format_7_18))) // nil
 	h := vs.WriteValue(context.Background(), s).TargetHash()
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 	v := vs.ReadValue(context.Background(), h) // non-nil
@@ -61,16 +62,19 @@ func TestValueReadMany(t *testing.T) {
 	}
 
 	// Get one Value into vs's Value cache
-	vs.ReadValue(context.Background(), vals[0].Hash())
+	// TODO(binformat)
+	vs.ReadValue(context.Background(), vals[0].Hash(Format_7_18))
 
 	// Get one Value into vs's pendingPuts
 	three := Float(3)
 	vals = append(vals, three)
 	vs.WriteValue(context.Background(), three)
-	hashes = append(hashes, three.Hash())
+	// TODO(binformat)
+	hashes = append(hashes, three.Hash(Format_7_18))
 
 	// Add one Value to request that's not in vs
-	hashes = append(hashes, Bool(false).Hash())
+	// TODO(binformat)
+	hashes = append(hashes, Bool(false).Hash(Format_7_18))
 
 	found := map[hash.Hash]Value{}
 	readValues := vs.ReadManyValues(context.Background(), hashes)
@@ -83,7 +87,8 @@ func TestValueReadMany(t *testing.T) {
 
 	assert.Len(found, len(vals))
 	for _, v := range vals {
-		assert.True(v.Equals(found[v.Hash()]))
+		// TODO(binformat)
+		assert.True(v.Equals(found[v.Hash(Format_7_18)]))
 	}
 }
 

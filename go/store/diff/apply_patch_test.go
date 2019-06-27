@@ -213,7 +213,8 @@ func TestUpdateNode(t *testing.T) {
 	k1 := types.NewStruct("Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
 	vs.WriteValue(context.Background(), k1)
 	m1 = types.NewMap(context.Background(), vs, k1, oldVal)
-	pp = types.HashIndexPath{Hash: k1.Hash()}
+	// TODO(binformat)
+	pp = types.HashIndexPath{Hash: k1.Hash(types.Format_7_18)}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.Map).Get(context.Background(), k1)
 	})
@@ -227,7 +228,8 @@ func TestUpdateNode(t *testing.T) {
 
 	k2 := types.NewStruct("Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
 	set1 = types.NewSet(context.Background(), vs, oldVal, k1)
-	pp = types.HashIndexPath{Hash: k1.Hash()}
+	// TODO(binformat)
+	pp = types.HashIndexPath{Hash: k1.Hash(types.Format_7_18)}
 	exp = types.NewSet(context.Background(), vs, oldVal, k2)
 	doTest(pp, set1, k1, k2, exp, func(parent types.Value) types.Value {
 		return parent
