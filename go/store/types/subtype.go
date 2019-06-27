@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -303,7 +304,8 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 		case Set:
 			et := desc.ElemTypes[0]
 			if seq, ok := v.orderedSequence.(setLeafSequence); ok {
-				for _, v := range seq.values() {
+				// TODO(binformat)
+				for _, v := range seq.values(Format_7_18) {
 					isSub, hasMore := isValueSubtypeOfDetails(v, et, hasExtra)
 					if !isSub {
 						return false, hasExtra
@@ -316,7 +318,8 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 		case List:
 			et := desc.ElemTypes[0]
 			if seq, ok := v.sequence.(listLeafSequence); ok {
-				for _, v := range seq.values() {
+				// TODO(binformat)
+				for _, v := range seq.values(Format_7_18) {
 					isSub, hasMore := isValueSubtypeOfDetails(v, et, hasExtra)
 					if !isSub {
 						return false, hasExtra

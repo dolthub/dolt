@@ -297,7 +297,8 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 	case ListKind:
 		var valueItems []Value
 		for _, seq := range output {
-			valueItems = append(valueItems, seq.(listLeafSequence).values()...)
+			// TODO(binformat)
+			valueItems = append(valueItems, seq.(listLeafSequence).values(Format_7_18)...)
 		}
 		// TODO(binformat)
 		return newListLeafSequence(ms.vrw, Format_7_18, valueItems...)
@@ -310,7 +311,8 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 	case SetKind:
 		var valueItems []Value
 		for _, seq := range output {
-			valueItems = append(valueItems, seq.(setLeafSequence).values()...)
+			// TODO(binformat)
+			valueItems = append(valueItems, seq.(setLeafSequence).values(Format_7_18)...)
 		}
 		return newSetLeafSequence(ms.vrw, valueItems...)
 	}

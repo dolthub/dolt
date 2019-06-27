@@ -38,9 +38,8 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *format, vs
 	return newLeafSequence(vrw, w.data(), offsets, count)
 }
 
-func (seq leafSequence) values() []Value {
-	// TODO(binformat)
-	return seq.valuesSlice(Format_7_18, 0, math.MaxUint64)
+func (seq leafSequence) values(f *format) []Value {
+	return seq.valuesSlice(f, 0, math.MaxUint64)
 }
 
 func (seq leafSequence) valuesSlice(f *format, from, to uint64) []Value {
