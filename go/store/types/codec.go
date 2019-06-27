@@ -32,27 +32,25 @@ func EncodeValue(v Value, f *format) chunks.Chunk {
 	panic("unreachable")
 }
 
-func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
+func decodeFromBytes(data []byte, vrw ValueReadWriter, f *format) Value {
 	dec := newValueDecoder(data, vrw)
-	// TODO(binformat)
-	v := dec.readValue(Format_7_18)
+	v := dec.readValue(f)
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
 
-func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) Value {
+func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter, f *format) Value {
 	r := binaryNomsReader{data, 0}
 	dec := newValueDecoderWithValidation(r, vrw)
-	// TODO(binformat)
-	v := dec.readValue(Format_7_18)
+	v := dec.readValue(f)
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
 
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
-func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) Value {
+func DecodeValue(c chunks.Chunk, vrw ValueReadWriter, f *format) Value {
 	d.PanicIfTrue(c.IsEmpty())
-	return decodeFromBytes(c.Data(), vrw)
+	return decodeFromBytes(c.Data(), vrw, f)
 }
 
 type nomsWriter interface {

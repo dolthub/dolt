@@ -146,7 +146,8 @@ func runCat(ctx context.Context, args []string) int {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
 		db := sp.GetDatabase(ctx)
-		value := types.DecodeValue(chunk, db)
+		// TODO(binformat)
+		value := types.DecodeValue(chunk, db, types.Format_7_18)
 
 		fmt.Printf("        chunk[%d].raw.len:     %d\n", cidx, len(currCD.compressed))
 

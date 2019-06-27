@@ -104,7 +104,8 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))
-		out := types.DecodeValue(ch, db)
+		// TODO(binformat)
+		out := types.DecodeValue(ch, db, types.Format_7_18)
 		s.True(out.Equals(in))
 	}
 
