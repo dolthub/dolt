@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -46,7 +47,8 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		var totalStats types.AppliedEditStats
 		for edits := range mapChan {
 			var stats types.AppliedEditStats
-			m, stats = types.ApplyEdits(ctx, edits, m)
+			// TODO(binformat)
+			m, stats = types.ApplyEdits(ctx, types.Format_7_18, edits, m)
 			totalStats = totalStats.Add(stats)
 
 			if statsCB != nil {

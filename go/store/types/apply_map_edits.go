@@ -85,7 +85,7 @@ func (stats AppliedEditStats) Add(other AppliedEditStats) AppliedEditStats {
 
 // ApplyEdits applies all the edits to a given Map and returns the resulting map, and some statistics about the edits
 // that were applied.
-func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats) {
+func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map, AppliedEditStats) {
 	var stats AppliedEditStats
 
 	if edits.NumEdits() == 0 {
@@ -106,11 +106,11 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 
 	// start worker threads
 	for i := 0; i < numWorkers; i++ {
-		go prepWorker(ctx, seq, wc)
+		go prepWorker(ctx, f, seq, wc)
 	}
 
 	// asynchronously add mapWork to be done by the workers
-	go buildBatches(rc, wc, edits)
+	go buildBatches(f, rc, wc, edits)
 
 	// wait for workers to return results and then process them
 	var ch *sequenceChunker
@@ -173,7 +173,7 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 // prepWorker will wait for work to be read from a channel, then iterate over all of the edits finding the appropriate
 // cursor where the insertion should happen.  It attempts to reuse cursors when consecutive keys share the same
 // insertion point
-func prepWorker(ctx context.Context, seq orderedSequence, wc chan mapWork) {
+func prepWorker(ctx context.Context, f *Format, seq orderedSequence, wc chan mapWork) {
 	for work := range wc {
 		wRes := mapWorkResult{}
 
@@ -186,8 +186,7 @@ func prepWorker(ctx context.Context, seq orderedSequence, wc chan mapWork) {
 			key := edit.Key.Value(ctx)
 			ordKey := newOrderedKey(key)
 
-			// TODO(binformat)
-			if cur == nil || !ordKey.Less(Format_7_18, curKey) {
+			if cur == nil || !ordKey.Less(f, curKey) {
 				cur = newCursorAt(ctx, seq, ordKey, true, false)
 
 				if cur.valid() {
@@ -212,7 +211,7 @@ func prepWorker(ctx context.Context, seq orderedSequence, wc chan mapWork) {
 }
 
 // buildBatches iterates over the sorted edits building batches of work to be completed by the worker threads.
-func buildBatches(rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
+func buildBatches(f *Format, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
 
 	batchSize := batchSizeStart
 	nextEdit := edits.Next()
@@ -229,8 +228,7 @@ func buildBatches(rc chan chan mapWorkResult, wc chan mapWork, edits EditProvide
 
 			nextEdit = edits.Next()
 
-			// TODO(binformat)
-			if nextEdit != nil && !edit.Key.Less(Format_7_18, nextEdit.Key) {
+			if nextEdit != nil && !edit.Key.Less(f, nextEdit.Key) {
 				// keys are sorted, so if this key is not less than the next key then they are equal and the next
 				// value will take precedence
 				continue
