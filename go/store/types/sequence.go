@@ -23,7 +23,7 @@ type sequence interface {
 	getChildSequence(ctx context.Context, idx int) sequence
 	getCompareFn(f *format, other sequence) compareFn
 	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
-	getItem(idx int) sequenceItem
+	getItem(idx int, f *format) sequenceItem
 	Hash(*format) hash.Hash
 	isLeaf() bool
 	Kind() NomsKind

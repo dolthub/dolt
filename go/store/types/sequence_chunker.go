@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -272,7 +273,8 @@ func (sc *sequenceChunker) Done(ctx context.Context) sequence {
 			return child
 		}
 
-		mt = child.getItem(0).(metaTuple)
+		// TODO(binformat)
+		mt = child.getItem(0, Format_7_18).(metaTuple)
 	}
 }
 

@@ -222,7 +222,7 @@ func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 }
 
 // sequence interface
-func (ms metaSequence) getItem(idx int) sequenceItem {
+func (ms metaSequence) getItem(idx int, f *format) sequenceItem {
 	dec := ms.decoderSkipToIndex(idx)
 	return ms.readTuple(&dec)
 }
@@ -266,7 +266,8 @@ func (ms metaSequence) isLeaf() bool {
 
 // metaSequence interface
 func (ms metaSequence) getChildSequence(ctx context.Context, idx int) sequence {
-	mt := ms.getItem(idx).(metaTuple)
+	// TODO(binformat)
+	mt := ms.getItem(idx, Format_7_18).(metaTuple)
 	// TODO: IsZeroValue?
 	if mt.buff == nil {
 		return nil
@@ -355,7 +356,7 @@ type emptySequence struct {
 	level uint64
 }
 
-func (es emptySequence) getItem(idx int) sequenceItem {
+func (es emptySequence) getItem(idx int, f *format) sequenceItem {
 	panic("empty sequence")
 }
 

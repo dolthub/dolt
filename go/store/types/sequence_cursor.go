@@ -33,8 +33,8 @@ func (cur *sequenceCursor) length() int {
 	return cur.seqLen
 }
 
-func (cur *sequenceCursor) getItem(idx int) sequenceItem {
-	return cur.seq.getItem(idx)
+func (cur *sequenceCursor) getItem(idx int, f *format) sequenceItem {
+	return cur.seq.getItem(idx, f)
 }
 
 // sync loads the sequence that the cursor index points to.
@@ -53,7 +53,8 @@ func (cur *sequenceCursor) getChildSequence(ctx context.Context) sequence {
 // current returns the value at the current cursor position
 func (cur *sequenceCursor) current() sequenceItem {
 	d.PanicIfFalse(cur.valid())
-	return cur.getItem(cur.idx)
+	// TODO(binformat)
+	return cur.getItem(cur.idx, Format_7_18)
 }
 
 func (cur *sequenceCursor) valid() bool {
@@ -146,7 +147,8 @@ func (cur *sequenceCursor) compare(other *sequenceCursor) int {
 
 // iter iterates forward from the current position
 func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) {
-	for cur.valid() && !cb(cur.getItem(cur.idx)) {
+	// TODO(binformat)
+	for cur.valid() && !cb(cur.getItem(cur.idx, Format_7_18)) {
 		cur.advance(ctx)
 	}
 }

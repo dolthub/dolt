@@ -79,7 +79,7 @@ func (ml mapLeafSequence) writeTo(w nomsWriter, f *format) {
 
 // sequence interface
 
-func (ml mapLeafSequence) getItem(idx int) sequenceItem {
+func (ml mapLeafSequence) getItem(idx int, f *format) sequenceItem {
 	dec := ml.decoderSkipToIndex(idx)
 	return readMapEntry(&dec)
 }

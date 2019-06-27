@@ -17,7 +17,7 @@ type testSequence struct {
 }
 
 // sequence interface
-func (ts testSequence) getItem(idx int) sequenceItem {
+func (ts testSequence) getItem(idx int, f *format) sequenceItem {
 	return ts.items[idx]
 }
 
