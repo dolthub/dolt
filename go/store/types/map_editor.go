@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -47,7 +48,8 @@ func NewMapEditor(m Map) *MapEditor {
 // Map applies all edits and returns a newly updated Map
 func (me *MapEditor) Map(ctx context.Context) Map {
 	edits := me.acc.FinishedEditing()
-	m, _ := ApplyEdits(ctx, edits, me.m)
+	// TODO(binformat)
+	m, _ := ApplyEdits(ctx, Format_7_18, edits, me.m)
 
 	return m
 }
