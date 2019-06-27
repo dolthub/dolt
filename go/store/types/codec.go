@@ -58,7 +58,7 @@ type nomsWriter interface {
 	writeBytes(v []byte)
 	writeCount(count uint64)
 	writeHash(h hash.Hash)
-	writeFloat(v Float)
+	writeFloat(v Float, f *format)
 	writeInt(v Int)
 	writeUint(v Uint)
 	writeString(v string)
@@ -269,13 +269,19 @@ func (b *binaryNomsWriter) writeUint(v Uint) {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsWriter) writeFloat(v Float) {
-	b.ensureCapacity(binary.MaxVarintLen64 * 2)
-	i, exp := float64ToIntExp(float64(v))
-	count := binary.PutVarint(b.buff[b.offset:], i)
-	b.offset += uint32(count)
-	count = binary.PutVarint(b.buff[b.offset:], int64(exp))
-	b.offset += uint32(count)
+func (b *binaryNomsWriter) writeFloat(v Float, f *format) {
+	if f == Format_7_18 {
+		b.ensureCapacity(binary.MaxVarintLen64 * 2)
+		i, exp := float64ToIntExp(float64(v))
+		count := binary.PutVarint(b.buff[b.offset:], i)
+		b.offset += uint32(count)
+		count = binary.PutVarint(b.buff[b.offset:], int64(exp))
+		b.offset += uint32(count)
+	} else {
+		b.ensureCapacity(8)
+		binary.BigEndian.PutUint64(b.buff[b.offset:], math.Float64bits(float64(v)))
+		b.offset += 8
+	}
 }
 
 func (b *binaryNomsWriter) writeBool(v bool) {

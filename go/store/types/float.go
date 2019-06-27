@@ -60,7 +60,8 @@ func (v Float) writeTo(w nomsWriter) {
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		d.Panic("%f is not a supported number", f)
 	}
-	w.writeFloat(v)
+	// TODO(binformat)
+	w.writeFloat(v, Format_7_18)
 }
 
 func (v Float) valueBytes() []byte {
