@@ -16,10 +16,11 @@ var EmptyMap Map
 
 type Map struct {
 	orderedSequence
+	format *Format
 }
 
-func newMap(seq orderedSequence) Map {
-	return Map{seq}
+func newMap(seq orderedSequence, f *Format) Map {
+	return Map{seq, f}
 }
 
 func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
@@ -30,13 +31,13 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 
 func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) Map {
 	entries := buildMapData(kv)
-	ch := newEmptyMapSequenceChunker(ctx, vrw)
+	ch := newEmptyMapSequenceChunker(ctx, Format_7_18, vrw)
 
 	for _, entry := range entries {
 		ch.Append(ctx, entry)
 	}
 
-	return newMap(ch.Done(ctx).(orderedSequence))
+	return newMap(ch.Done(ctx).(orderedSequence), Format_7_18)
 }
 
 // NewStreamingMap takes an input channel of values and returns a output
@@ -49,7 +50,7 @@ func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) Map {
 func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 	d.PanicIfTrue(vrw == nil)
 	return newStreamingMap(vrw, kvs, func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
-		go readMapInput(ctx, vrw, kvs, outChan)
+		go readMapInput(ctx, Format_7_18, vrw, kvs, outChan)
 	})
 }
 
@@ -61,17 +62,16 @@ func newStreamingMap(vrw ValueReadWriter, kvs <-chan Value, readFunc streamingMa
 	return outChan
 }
 
-func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
+func readMapInput(ctx context.Context, f *Format, vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
 	defer close(outChan)
-	ch := newEmptyMapSequenceChunker(ctx, vrw)
+	ch := newEmptyMapSequenceChunker(ctx, f, vrw)
 	var lastK Value
 	nextIsKey := true
 	var k Value
 	for v := range kvs {
 		if nextIsKey {
 			k = v
-			// TODO(binformat)
-			d.PanicIfFalse(lastK == nil || lastK.Less(Format_7_18, k))
+			d.PanicIfFalse(lastK == nil || lastK.Less(f, k))
 			lastK = k
 			nextIsKey = false
 			continue
@@ -79,7 +79,7 @@ func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value, ou
 		ch.Append(ctx, mapEntry{key: k, value: v})
 		nextIsKey = true
 	}
-	outChan <- newMap(ch.Done(ctx).(orderedSequence))
+	outChan <- newMap(ch.Done(ctx).(orderedSequence), f)
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
@@ -123,8 +123,7 @@ func (m Map) Value(ctx context.Context) Value {
 }
 
 func (m Map) WalkValues(ctx context.Context, cb ValueCallback) {
-	// TODO(binformat)
-	iterAll(ctx, Format_7_18, m, func(v Value, idx uint64) {
+	iterAll(ctx, m.format, m, func(v Value, idx uint64) {
 		cb(v)
 	})
 }
@@ -225,8 +224,7 @@ type mapIterAllCallback func(key, value Value)
 
 func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) {
 	var k Value
-	// TODO(binformat)
-	iterAll(ctx, Format_7_18, m, func(v Value, idx uint64) {
+	iterAll(ctx, m.format, m, func(v Value, idx uint64) {
 		if k != nil {
 			cb(k, v)
 			k = nil
@@ -281,7 +279,7 @@ func buildMapData(values []Value) mapEntrySlice {
 	return append(uniqueSorted, last)
 }
 
-func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
+func makeMapLeafChunkFn(f *Format, vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
 		mapData := make([]mapEntry, len(items))
@@ -289,13 +287,12 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		var lastKey Value
 		for i, v := range items {
 			entry := v.(mapEntry)
-			// TODO(binformat)
-			d.PanicIfFalse(lastKey == nil || lastKey.Less(Format_7_18, entry.key))
+			d.PanicIfFalse(lastKey == nil || lastKey.Less(f, entry.key))
 			lastKey = entry.key
 			mapData[i] = entry
 		}
 
-		m := newMap(newMapLeafSequence(vrw, mapData...))
+		m := newMap(newMapLeafSequence(vrw, mapData...), f)
 		var key orderedKey
 		if len(mapData) > 0 {
 			key = newOrderedKey(mapData[len(mapData)-1].key)
@@ -304,6 +301,6 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	}
 }
 
-func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+func newEmptyMapSequenceChunker(ctx context.Context, f *Format, vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(f, vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 }

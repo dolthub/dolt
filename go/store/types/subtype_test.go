@@ -662,7 +662,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		newChunkedMap := func(vals ...Value) Map {
 			newSequenceMetaTuple := func(e mapEntry) metaTuple {
 				seq := newMapLeafSequence(vs, e)
-				m := newMap(seq)
+				m := newMap(seq, Format_7_18)
 				return newMetaTuple(vs.WriteValue(context.Background(), m), newOrderedKey(e.key), 1)
 			}
 
@@ -670,7 +670,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			for i := 0; i < len(vals); i += 2 {
 				tuples[i/2] = newSequenceMetaTuple(mapEntry{vals[i], vals[i+1]})
 			}
-			return newMap(newMapMetaSequence(1, tuples, vs))
+			return newMap(newMapMetaSequence(1, tuples, vs), Format_7_18)
 		}
 
 		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, StringType))

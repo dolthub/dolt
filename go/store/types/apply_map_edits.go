@@ -141,7 +141,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 					}
 
 					if ch == nil {
-						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(f, vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 					} else {
 						ch.advanceTo(ctx, cur)
 					}
@@ -167,7 +167,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 		return m, stats // no edits required application
 	}
 
-	return newMap(ch.Done(ctx).(orderedSequence)), stats
+	return newMap(ch.Done(ctx).(orderedSequence), f), stats
 }
 
 // prepWorker will wait for work to be read from a channel, then iterate over all of the edits finding the appropriate

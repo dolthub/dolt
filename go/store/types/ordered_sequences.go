@@ -110,7 +110,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 			col = newSet(newSetMetaSequence(level, tuples, vrw))
 		} else {
 			d.PanicIfFalse(MapKind == kind)
-			col = newMap(newMapMetaSequence(level, tuples, vrw))
+			col = newMap(newMapMetaSequence(level, tuples, vrw), Format_7_18)
 		}
 
 		return col, tuples[len(tuples)-1].key(), numLeaves
