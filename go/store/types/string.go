@@ -57,12 +57,11 @@ func (s String) writeTo(w nomsWriter, f *format) {
 	w.writeString(string(s))
 }
 
-func (s String) valueBytes() []byte {
+func (s String) valueBytes(f *format) []byte {
 	// We know the size of the buffer here so allocate it once.
 	// StringKind, Length (UVarint), UTF-8 encoded string
 	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))
 	w := binaryNomsWriter{buff, 0}
-	// TODO(binformat)
-	s.writeTo(&w, Format_7_18)
+	s.writeTo(&w, f)
 	return buff[:w.offset]
 }

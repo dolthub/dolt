@@ -73,7 +73,7 @@ func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) valueBytes() []byte {
+func (ts testSequence) valueBytes(*format) []byte {
 	panic("not reached")
 }
 

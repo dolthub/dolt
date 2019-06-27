@@ -57,12 +57,11 @@ func (v Int) writeTo(w nomsWriter, f *format) {
 	w.writeInt(v)
 }
 
-func (v Int) valueBytes() []byte {
+func (v Int) valueBytes(f *format) []byte {
 	// We know the size of the buffer here so allocate it once.
 	// IntKind, int (Varint), exp (Varint)
 	buff := make([]byte, 1+2*binary.MaxVarintLen64)
 	w := binaryNomsWriter{buff, 0}
-	// TODO(binformat)
-	v.writeTo(&w, Format_7_18)
+	v.writeTo(&w, f)
 	return buff[:w.offset]
 }

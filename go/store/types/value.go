@@ -111,7 +111,7 @@ func (v valueImpl) writeTo(enc nomsWriter, f *format) {
 	enc.writeRaw(v.buff)
 }
 
-func (v valueImpl) valueBytes() []byte {
+func (v valueImpl) valueBytes(f *format) []byte {
 	return v.buff
 }
 
@@ -148,7 +148,8 @@ func (v valueImpl) Less(other LesserValuable) bool {
 }
 
 func (v valueImpl) WalkRefs(cb RefCallback) {
-	walkRefs(v.valueBytes(), cb)
+	// TODO(binformat)
+	walkRefs(v.valueBytes(Format_7_18), cb)
 }
 
 type asValueImpl interface {

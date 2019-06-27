@@ -60,10 +60,9 @@ func (v Null) writeTo(w nomsWriter, f *format) {
 	NullKind.writeTo(w, f)
 }
 
-func (v Null) valueBytes() []byte {
+func (v Null) valueBytes(f *format) []byte {
 	buff := make([]byte, 1)
 	w := binaryNomsWriter{buff, 0}
-	// TODO(binformat)
-	v.writeTo(&w, Format_7_18)
+	v.writeTo(&w, f)
 	return buff
 }

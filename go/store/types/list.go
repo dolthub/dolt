@@ -205,7 +205,8 @@ func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb 
 
 		endIdx = endIdx - uint64(len(values))/valuesPerIdx - startIdx
 		startIdx = 0
-		numBytes += uint64(len(seq.valueBytes())) // note: should really only include |values|
+		// TODO(binformat)
+		numBytes += uint64(len(seq.valueBytes(Format_7_18))) // note: should really only include |values|
 	}
 	return
 }
