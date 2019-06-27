@@ -49,7 +49,7 @@ func runRoot(ctx context.Context, args []string) int {
 	currRoot, err := cs.Root(ctx)
 
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error hgetting root.", err)
+		fmt.Fprintln(os.Stderr, "error getting root.", err)
 		return 1
 	}
 
