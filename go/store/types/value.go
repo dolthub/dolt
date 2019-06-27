@@ -62,7 +62,7 @@ type Value interface {
 	typeOf() *Type
 
 	// writeTo writes the encoded version of the value to a nomsWriter.
-	writeTo(nomsWriter)
+	writeTo(nomsWriter, *format)
 }
 
 type ValueSlice []Value
@@ -107,7 +107,7 @@ func (v valueImpl) valueReadWriter() ValueReadWriter {
 	return v.vrw
 }
 
-func (v valueImpl) writeTo(enc nomsWriter) {
+func (v valueImpl) writeTo(enc nomsWriter, f *format) {
 	enc.writeRaw(v.buff)
 }
 

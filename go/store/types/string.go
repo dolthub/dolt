@@ -52,8 +52,8 @@ func (s String) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (s String) writeTo(w nomsWriter) {
-	StringKind.writeTo(w)
+func (s String) writeTo(w nomsWriter, f *format) {
+	StringKind.writeTo(w, f)
 	w.writeString(string(s))
 }
 
@@ -62,6 +62,7 @@ func (s String) valueBytes() []byte {
 	// StringKind, Length (UVarint), UTF-8 encoded string
 	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))
 	w := binaryNomsWriter{buff, 0}
-	s.writeTo(&w)
+	// TODO(binformat)
+	s.writeTo(&w, Format_7_18)
 	return buff[:w.offset]
 }

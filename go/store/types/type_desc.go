@@ -40,7 +40,8 @@ func (p PrimitiveDesc) walkValues(cb ValueCallback) {
 }
 
 func (p PrimitiveDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type) {
-	NomsKind(p).writeTo(w)
+	// TODO(binformat)
+	NomsKind(p).writeTo(w, Format_7_18)
 }
 
 func (p PrimitiveDesc) isSimplifiedForSure() bool {
@@ -69,7 +70,8 @@ func (c CompoundDesc) walkValues(cb ValueCallback) {
 }
 
 func (c CompoundDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type) {
-	c.kind.writeTo(w)
+	// TODO(binformat)
+	c.kind.writeTo(w, Format_7_18)
 	if c.kind == UnionKind {
 		w.writeCount(uint64(len(c.ElemTypes)))
 	}
@@ -116,14 +118,16 @@ func (s StructDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type)
 
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
-			CycleKind.writeTo(w)
+			// TODO(binformat)
+			CycleKind.writeTo(w, Format_7_18)
 			w.writeString(name)
 			return
 		}
 		seenStructs[name] = t
 	}
 
-	StructKind.writeTo(w)
+	// TODO(binformat)
+	StructKind.writeTo(w, Format_7_18)
 	w.writeString(name)
 	w.writeCount(uint64(s.Len()))
 

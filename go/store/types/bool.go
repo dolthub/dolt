@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -50,8 +51,8 @@ func (b Bool) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (b Bool) writeTo(w nomsWriter) {
-	BoolKind.writeTo(w)
+func (b Bool) writeTo(w nomsWriter, f *format) {
+	BoolKind.writeTo(w, f)
 	w.writeBool(bool(b))
 }
 

@@ -97,7 +97,8 @@ func (rv *rollingValueHasher) Reset() {
 }
 
 func (rv *rollingValueHasher) HashValue(v Value) {
-	v.writeTo(&rv.bw)
+	// TODO(binformat)
+	v.writeTo(&rv.bw, Format_7_18)
 	rv.sl.Update(rv.bw.data())
 }
 

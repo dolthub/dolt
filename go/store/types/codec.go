@@ -25,7 +25,8 @@ func EncodeValue(v Value) chunks.Chunk {
 		return chunks.NewChunk(v.valueBytes())
 	case *Type:
 		w := newBinaryNomsWriter()
-		v.writeTo(&w)
+		// TODO(binformat)
+		v.writeTo(&w, Format_7_18)
 		return chunks.NewChunk(w.data())
 	}
 

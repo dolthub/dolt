@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
@@ -36,7 +37,7 @@ type sequence interface {
 	valueReadWriter() ValueReadWriter
 	valuesSlice(from, to uint64) []Value
 	WalkRefs(cb RefCallback)
-	writeTo(nomsWriter)
+	writeTo(nomsWriter, *format)
 }
 
 const (

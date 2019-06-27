@@ -76,14 +76,16 @@ func walkTuple(r *refWalker, cb RefCallback) {
 func NewTuple(values ...Value) Tuple {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	TupleKind.writeTo(&w)
+	// TODO(binformat)
+	TupleKind.writeTo(&w, Format_7_18)
 	numVals := len(values)
 	w.writeCount(uint64(numVals))
 	for i := 0; i < numVals; i++ {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(&w)
+		// TODO(binformat)
+		values[i].writeTo(&w, Format_7_18)
 	}
 	return Tuple{valueImpl{vrw, w.data(), nil}}
 }
@@ -197,7 +199,8 @@ func (t Tuple) Set(n uint64, v Value) Tuple {
 
 	w.writeCount(count)
 	w.writeRaw(head)
-	v.writeTo(&w)
+	// TODO(binformat)
+	v.writeTo(&w, Format_7_18)
 	w.writeRaw(tail)
 
 	return Tuple{valueImpl{t.vrw, w.data(), nil}}
@@ -214,7 +217,8 @@ func (t Tuple) Append(v Value) Tuple {
 	w.writeRaw(prolog)
 	w.writeCount(count + 1)
 	w.writeRaw(dec.buff[fieldsOffset:])
-	v.writeTo(&w)
+	// TODO(binformat)
+	v.writeTo(&w, Format_7_18)
 
 	return Tuple{valueImpl{t.vrw, w.data(), nil}}
 }

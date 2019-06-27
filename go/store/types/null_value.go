@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -55,13 +56,14 @@ func (v Null) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Null) writeTo(w nomsWriter) {
-	NullKind.writeTo(w)
+func (v Null) writeTo(w nomsWriter, f *format) {
+	NullKind.writeTo(w, f)
 }
 
 func (v Null) valueBytes() []byte {
 	buff := make([]byte, 1)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w)
+	// TODO(binformat)
+	v.writeTo(&w, Format_7_18)
 	return buff
 }

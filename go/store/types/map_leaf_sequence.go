@@ -19,9 +19,9 @@ type mapEntry struct {
 	value Value
 }
 
-func (entry mapEntry) writeTo(w nomsWriter) {
-	entry.key.writeTo(w)
-	entry.value.writeTo(w)
+func (entry mapEntry) writeTo(w nomsWriter, f *format) {
+	entry.key.writeTo(w, f)
+	entry.value.writeTo(w, f)
 }
 
 func readMapEntry(r *valueDecoder) mapEntry {
@@ -57,7 +57,8 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	offsets := make([]uint32, len(data)+sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	MapKind.writeTo(&w)
+	// TODO(binformat)
+	MapKind.writeTo(&w, Format_7_18)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -65,13 +66,14 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, me := range data {
-		me.writeTo(&w)
+		// TODO(binformat)
+		me.writeTo(&w, Format_7_18)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
-func (ml mapLeafSequence) writeTo(w nomsWriter) {
+func (ml mapLeafSequence) writeTo(w nomsWriter, f *format) {
 	w.writeRaw(ml.buff)
 }
 

@@ -40,7 +40,8 @@ func constructRef(targetHash hash.Hash, targetType *Type, height uint64) Ref {
 
 	offsets := make([]uint32, refPartEnd)
 	offsets[refPartKind] = w.offset
-	RefKind.writeTo(&w)
+	// TODO(binformat)
+	RefKind.writeTo(&w, Format_7_18)
 	offsets[refPartTargetHash] = w.offset
 	w.writeHash(targetHash)
 	offsets[refPartTargetType] = w.offset

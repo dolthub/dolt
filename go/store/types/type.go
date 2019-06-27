@@ -7,6 +7,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -62,8 +63,8 @@ func (t *Type) Hash() hash.Hash {
 	return getHash(t)
 }
 
-func (t *Type) writeTo(w nomsWriter) {
-	TypeKind.writeTo(w)
+func (t *Type) writeTo(w nomsWriter, f *format) {
+	TypeKind.writeTo(w, f)
 	t.writeToAsType(w, map[string]*Type{})
 }
 

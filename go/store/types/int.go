@@ -7,6 +7,7 @@ package types
 import (
 	"context"
 	"encoding/binary"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -51,8 +52,8 @@ func (v Int) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Int) writeTo(w nomsWriter) {
-	IntKind.writeTo(w)
+func (v Int) writeTo(w nomsWriter, f *format) {
+	IntKind.writeTo(w, f)
 	w.writeInt(v)
 }
 
@@ -61,6 +62,7 @@ func (v Int) valueBytes() []byte {
 	// IntKind, int (Varint), exp (Varint)
 	buff := make([]byte, 1+2*binary.MaxVarintLen64)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w)
+	// TODO(binformat)
+	v.writeTo(&w, Format_7_18)
 	return buff[:w.offset]
 }

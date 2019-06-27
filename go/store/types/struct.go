@@ -81,7 +81,8 @@ func walkStruct(r *refWalker, cb RefCallback) {
 func newStruct(name string, fieldNames []string, values []Value) Struct {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	StructKind.writeTo(&w)
+	// TODO(binformat)
+	StructKind.writeTo(&w, Format_7_18)
 	w.writeString(name)
 	w.writeCount(uint64(len(fieldNames)))
 	for i := 0; i < len(fieldNames); i++ {
@@ -89,7 +90,8 @@ func newStruct(name string, fieldNames []string, values []Value) Struct {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(&w)
+		// TODO(binformat)
+		values[i].writeTo(&w, Format_7_18)
 	}
 	return Struct{valueImpl{vrw, w.data(), nil}}
 }
@@ -286,7 +288,8 @@ func (s Struct) Set(n string, v Value) Struct {
 	w.writeCount(count)
 	w.writeRaw(head)
 	w.writeString(n)
-	v.writeTo(&w)
+	// TODO(binformat)
+	v.writeTo(&w, Format_7_18)
 	w.writeRaw(tail)
 
 	return Struct{valueImpl{s.vrw, w.data(), nil}}

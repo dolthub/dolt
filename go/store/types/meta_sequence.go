@@ -19,9 +19,11 @@ func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) metaTuple {
 	w := newBinaryNomsWriter()
 	var offsets [metaTuplePartNumLeaves + 1]uint32
 	offsets[metaTuplePartRef] = w.offset
-	ref.writeTo(&w)
+	// TODO(binformat)
+	ref.writeTo(&w, Format_7_18)
 	offsets[metaTuplePartKey] = w.offset
-	key.writeTo(&w)
+	// TODO(binformat)
+	key.writeTo(&w, Format_7_18)
 	offsets[metaTuplePartNumLeaves] = w.offset
 	w.writeCount(numLeaves)
 	return metaTuple{w.data(), offsets}
@@ -63,7 +65,7 @@ func (mt metaTuple) getChildSequence(ctx context.Context, vr ValueReader) sequen
 	return mt.ref().TargetValue(ctx, vr).(Collection).asSequence()
 }
 
-func (mt metaTuple) writeTo(w nomsWriter) {
+func (mt metaTuple) writeTo(w nomsWriter, f *format) {
 	w.writeRaw(mt.buff)
 }
 
@@ -108,13 +110,14 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 	}
 }
 
-func (key orderedKey) writeTo(w nomsWriter) {
+func (key orderedKey) writeTo(w nomsWriter, f *format) {
 	if !key.isOrderedByValue {
 		d.PanicIfTrue(key != emptyKey && key.h.IsEmpty())
-		hashKind.writeTo(w)
+		// TODO(binformat)
+		hashKind.writeTo(w, Format_7_18)
 		w.writeHash(key.h)
 	} else {
-		key.v.writeTo(w)
+		key.v.writeTo(w, f)
 	}
 }
 
@@ -131,7 +134,8 @@ func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, 
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(tuples)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	kind.writeTo(&w)
+	// TODO(binformat)
+	kind.writeTo(&w, Format_7_18)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(level)
 	offsets[sequencePartCount] = w.offset
@@ -140,7 +144,8 @@ func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, 
 	length := uint64(0)
 	for i, mt := range tuples {
 		length += mt.numLeaves()
-		mt.writeTo(&w)
+		// TODO(binformat)
+		mt.writeTo(&w, Format_7_18)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return newMetaSequence(vrw, w.data(), offsets, length)
@@ -428,7 +433,7 @@ func (es emptySequence) valuesSlice(from, to uint64) []Value {
 	panic("empty sequence")
 }
 
-func (es emptySequence) writeTo(nomsWriter) {
+func (es emptySequence) writeTo(w nomsWriter, f *format) {
 	panic("empty sequence")
 }
 
