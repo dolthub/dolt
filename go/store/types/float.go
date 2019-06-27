@@ -54,14 +54,13 @@ func (v Float) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Float) writeTo(w nomsWriter) {
-	FloatKind.writeTo(w)
-	f := float64(v)
-	if math.IsNaN(f) || math.IsInf(f, 0) {
-		d.Panic("%f is not a supported number", f)
+func (v Float) writeTo(w nomsWriter, f *format) {
+	FloatKind.writeTo(w, f)
+	fl := float64(v)
+	if math.IsNaN(fl) || math.IsInf(fl, 0) {
+		d.Panic("%f is not a supported number", fl)
 	}
-	// TODO(binformat)
-	w.writeFloat(v, Format_7_18)
+	w.writeFloat(v, f)
 }
 
 func (v Float) valueBytes() []byte {
@@ -69,6 +68,7 @@ func (v Float) valueBytes() []byte {
 	// FloatKind, int (Varint), exp (Varint)
 	buff := make([]byte, 1+2*binary.MaxVarintLen64)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w)
+	// TODO(binformat)
+	v.writeTo(&w, Format_7_18)
 	return buff[:w.offset]
 }

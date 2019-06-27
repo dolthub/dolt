@@ -251,7 +251,8 @@ func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
 func encToSlice(v Value, initBuf []byte) []byte {
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter?
 	w := &binaryNomsWriter{initBuf, 0}
-	v.writeTo(w)
+	// TODO(binformat)
+	v.writeTo(w, Format_7_18)
 	return w.data()
 }
 
@@ -367,7 +368,8 @@ func TestCompareEncodedKeys(t *testing.T) {
 
 func encode(v Value) []byte {
 	w := &binaryNomsWriter{make([]byte, 128), 0}
-	v.writeTo(w)
+	// TODO(binformat)
+	v.writeTo(w, Format_7_18)
 	return w.data()
 }
 

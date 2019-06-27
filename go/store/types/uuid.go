@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
@@ -58,10 +59,10 @@ func (v UUID) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v UUID) writeTo(w nomsWriter) {
+func (v UUID) writeTo(w nomsWriter, f *format) {
 	id := UUID(v)
 	byteSl := id[:]
-	UUIDKind.writeTo(w)
+	UUIDKind.writeTo(w, f)
 	w.writeBytes(byteSl)
 }
 

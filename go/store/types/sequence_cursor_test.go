@@ -56,7 +56,7 @@ func (ts testSequence) valueReadWriter() ValueReadWriter {
 	panic("not reached")
 }
 
-func (ts testSequence) writeTo(nomsWriter) {
+func (ts testSequence) writeTo(nomsWriter, *format) {
 	panic("not reached")
 }
 
