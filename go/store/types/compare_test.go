@@ -146,9 +146,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case FloatKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := reader.readFloat()
+		aNum := reader.readFloat(Format_7_18)
 		reader.buff, reader.offset = b[1:], 0
-		bNum := reader.readFloat()
+		bNum := reader.readFloat(Format_7_18)
 		if aNum == bNum {
 			return 0
 		}

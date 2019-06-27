@@ -182,7 +182,8 @@ func (r *valueDecoder) readValue() Value {
 		return Bool(r.readBool())
 	case FloatKind:
 		r.skipKind()
-		return r.readFloat()
+		// TODO(binformat)
+		return r.readFloat(Format_7_18)
 	case UUIDKind:
 		r.skipKind()
 		return r.readUUID()

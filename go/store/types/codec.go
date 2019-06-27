@@ -6,6 +6,7 @@ package types
 
 import (
 	"encoding/binary"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
@@ -111,13 +112,22 @@ func (b *binaryNomsReader) skipCount() {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsReader) readFloat() Float {
-	// b.assertCanRead(binary.MaxVarintLen64 * 2)
-	i, count := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count)
-	exp, count2 := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count2)
-	return Float(fracExpToFloat(i, int(exp)))
+func (b *binaryNomsReader) readFloat(f *format) Float {
+	if f == Format_7_18 {
+		// b.assertCanRead(binary.MaxVarintLen64 * 2)
+		i, count := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count)
+		exp, count2 := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count2)
+		return Float(fracExpToFloat(i, int(exp)))
+	} else {
+		// b.assertCanRead(binary.MaxVarintLen64 * 2)
+		i, count := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count)
+		exp, count2 := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count2)
+		return Float(fracExpToFloat(i, int(exp)))
+	}
 }
 
 func (b *binaryNomsReader) skipFloat() {
