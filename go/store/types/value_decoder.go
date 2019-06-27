@@ -47,7 +47,8 @@ func (r *valueDecoder) skipValueSequence(elementsPerIndex int) ([]uint32, uint64
 	offsets[0] = r.pos()
 	for i := uint64(0); i < count; i++ {
 		for j := 0; j < elementsPerIndex; j++ {
-			r.skipValue()
+			// TODO(binformat)
+			r.skipValue(Format_7_18)
 		}
 		offsets[i+1] = r.pos()
 	}
@@ -154,7 +155,8 @@ func (r *valueDecoder) skipOrderedKey() {
 		r.skipKind()
 		r.skipHash()
 	default:
-		r.skipValue()
+		// TODO(binformat)
+		r.skipValue(Format_7_18)
 	}
 }
 
@@ -221,7 +223,7 @@ func (r *valueDecoder) readValue() Value {
 	panic("not reachable")
 }
 
-func (r *valueDecoder) skipValue() {
+func (r *valueDecoder) skipValue(f *format) {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
@@ -231,8 +233,7 @@ func (r *valueDecoder) skipValue() {
 		r.skipBool()
 	case FloatKind:
 		r.skipKind()
-		// TODO(binformat)
-		r.skipFloat(Format_7_18)
+		r.skipFloat(f)
 	case UUIDKind:
 		r.skipKind()
 		r.skipUUID()
@@ -336,7 +337,8 @@ func (r *valueDecoder) isValueSameTypeForSure(t *Type) bool {
 
 	switch k {
 	case BlobKind, BoolKind, FloatKind, StringKind, UUIDKind, IntKind, UintKind, NullKind:
-		r.skipValue()
+		// TODO(binformat)
+		r.skipValue(Format_7_18)
 		return true
 	case ListKind, MapKind, RefKind, SetKind, TupleKind:
 		// TODO: Maybe do some simple cases here too. Performance metrics should determine

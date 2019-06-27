@@ -157,7 +157,8 @@ func (ms metaSequence) tuples() []metaTuple {
 
 func (ms metaSequence) getKey(idx int) orderedKey {
 	dec := ms.decoderSkipToIndex(idx)
-	dec.skipValue() // ref
+	// TODO(binformat)
+	dec.skipValue(Format_7_18) // ref
 	return dec.readOrderedKey()
 }
 
@@ -171,8 +172,9 @@ func (ms metaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	cum := uint64(0)
 	dec, _ := ms.decoderSkipToValues()
 	for i := 0; i <= idx; i++ {
-		dec.skipValue() // ref
-		dec.skipValue() // v
+		// TODO(binformat)
+		dec.skipValue(Format_7_18) // ref
+		dec.skipValue(Format_7_18) // v
 		cum += dec.readCount()
 	}
 	return cum
@@ -207,7 +209,8 @@ func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
 
 func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 	dec := ms.decoderSkipToIndex(idx)
-	dec.skipValue()
+	// TODO(binformat)
+	dec.skipValue(Format_7_18)
 	dec.skipOrderedKey()
 	return dec.readCount()
 }
