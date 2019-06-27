@@ -10,13 +10,12 @@ type blobLeafSequence struct {
 	leafSequence
 }
 
-func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
+func newBlobLeafSequence(vrw ValueReadWriter, f *format, data []byte) sequence {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	// TODO(binformat)
-	BlobKind.writeTo(&w, Format_7_18)
+	BlobKind.writeTo(&w, f)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
