@@ -376,7 +376,8 @@ func TestValueBlob(t *testing.T) {
 	vs := newTestValueStore()
 
 	test := func(code string, bs ...byte) {
-		assertParse(t, vs, code, types.NewBlob(context.Background(), vs, bytes.NewBuffer(bs)))
+		// TODO(binformat)
+		assertParse(t, vs, code, types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBuffer(bs)))
 	}
 
 	test("blob {}")
@@ -433,8 +434,9 @@ func TestRoundTrips(t *testing.T) {
 	test(types.String("'"))
 	test(types.String("`"))
 
-	test(types.NewEmptyBlob(vs))
-	test(types.NewBlob(context.Background(), vs, bytes.NewBufferString("abc")))
+	// TODO(binformat)
+	test(types.NewEmptyBlob(vs, types.Format_7_18))
+	test(types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("abc")))
 
 	test(types.NewList(context.Background(), vs))
 	test(types.NewList(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc")))

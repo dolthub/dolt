@@ -151,7 +151,8 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 		}
 	})
 
-	b := types.NewBlob(context.Background(), s.Database, readers...)
+	// TODO(binformat)
+	b := types.NewBlob(context.Background(), types.Format_7_18, s.Database, readers...)
 	assert.Equal(uint64(size), b.Len())
 }
 

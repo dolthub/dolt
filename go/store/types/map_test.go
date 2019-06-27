@@ -1150,8 +1150,9 @@ func TestMapNotStringKeys(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	b1 := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob1"))
-	b2 := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob2"))
+	// TODO(binformat)
+	b1 := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("blob1"))
+	b2 := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("blob2"))
 	l := []Value{
 		Bool(true), String("true"),
 		Bool(false), String("false"),
@@ -1568,7 +1569,8 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		Bool(true), v,
 		Float(0), v,
 		String("hello"), v,
-		NewBlob(context.Background(), vrw, bytes.NewBufferString("buf")), v,
+		// TODO(binformat)
+		NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf")), v,
 		NewSet(context.Background(), vrw, Bool(true)), v,
 		NewList(context.Background(), vrw, Bool(true)), v,
 		NewMap(context.Background(), vrw, Bool(true), Float(0)), v,
@@ -1577,7 +1579,8 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewRef(Bool(true)), v,
 		NewRef(Float(0)), v,
 		NewRef(String("hello")), v,
-		NewRef(NewBlob(context.Background(), vrw, bytes.NewBufferString("buf"))), v,
+		// TODO(binformat)
+		NewRef(NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf"))), v,
 		NewRef(NewSet(context.Background(), vrw, Bool(true))), v,
 		NewRef(NewList(context.Background(), vrw, Bool(true))), v,
 		NewRef(NewMap(context.Background(), vrw, Bool(true), Float(0))), v,

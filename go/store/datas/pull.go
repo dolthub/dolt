@@ -6,13 +6,14 @@ package datas
 
 import (
 	"context"
+	"math"
+	"math/rand"
+
 	"github.com/golang/snappy"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"math"
-	"math/rand"
 )
 
 type PullProgress struct {
@@ -145,7 +146,8 @@ func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, need
 		// TODO: fix panics
 		d.PanicIfError(err)
 
-		types.WalkRefs(*c, func(r types.Ref) {
+		// TODO(binformat)
+		types.WalkRefs(*c, types.Format_7_18, func(r types.Ref) {
 			if !nextLevel.Has(r.TargetHash()) {
 				uniqueOrdered = append(uniqueOrdered, r.TargetHash())
 				nextLevel.Insert(r.TargetHash())

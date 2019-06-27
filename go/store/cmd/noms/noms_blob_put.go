@@ -53,7 +53,8 @@ func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrenc
 	}
 	defer db.Close()
 
-	blob := types.NewBlob(ctx, db, readers...)
+	// TODO(binformat)
+	blob := types.NewBlob(ctx, types.Format_7_18, db, readers...)
 
 	_, err = db.CommitValue(ctx, ds, blob)
 	if err != nil {

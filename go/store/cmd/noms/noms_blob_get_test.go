@@ -33,7 +33,8 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	db := sp.GetDatabase(context.Background())
 
 	blobBytes := []byte("hello")
-	blob := types.NewBlob(context.Background(), db, bytes.NewBuffer(blobBytes))
+	// TODO(binformat)
+	blob := types.NewBlob(context.Background(), types.Format_7_18, db, bytes.NewBuffer(blobBytes))
 
 	ref := db.WriteValue(context.Background(), blob)
 	_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), ref)

@@ -462,7 +462,8 @@ func (p *Parser) parseBlob(ctx context.Context) types.Blob {
 
 	}
 	p.lex.eat('}')
-	return types.NewBlob(ctx, p.vrw, bytes.NewReader(buff.Bytes()))
+	// TODO(binformat)
+	return types.NewBlob(ctx, types.Format_7_18, p.vrw, bytes.NewReader(buff.Bytes()))
 }
 
 func (p *Parser) parseStruct(ctx context.Context) types.Struct {
