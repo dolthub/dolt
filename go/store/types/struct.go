@@ -74,7 +74,8 @@ func walkStruct(r *refWalker, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
 		r.skipString()
-		r.walkValue(cb)
+		// TODO(binformat)
+		r.walkValue(Format_7_18, cb)
 	}
 }
 
