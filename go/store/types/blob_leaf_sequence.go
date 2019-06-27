@@ -46,7 +46,7 @@ func (bl blobLeafSequence) getCompareFn(f *format, other sequence) compareFn {
 	}
 }
 
-func (bl blobLeafSequence) getItem(idx int) sequenceItem {
+func (bl blobLeafSequence) getItem(idx int, f *format) sequenceItem {
 	offset := bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind] + uint32(idx)
 	return bl.buff[offset]
 }

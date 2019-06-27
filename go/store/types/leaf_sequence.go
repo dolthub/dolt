@@ -117,10 +117,9 @@ func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uin
 	panic("getCompositeChildSequence called on a leaf sequence")
 }
 
-func (seq leafSequence) getItem(idx int) sequenceItem {
+func (seq leafSequence) getItem(idx int, f *format) sequenceItem {
 	dec := seq.decoderSkipToIndex(idx)
-	// TODO(binformat)
-	return dec.readValue(Format_7_18)
+	return dec.readValue(f)
 }
 
 func getValuesPerIdx(kind NomsKind) int {
