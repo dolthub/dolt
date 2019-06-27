@@ -63,7 +63,7 @@ func TestRoundTrips(t *testing.T) {
 
 	assertRoundTrips := func(v Value) {
 		// TODO(binformat)
-		out := DecodeValue(EncodeValue(v, Format_7_18), vs)
+		out := DecodeValue(EncodeValue(v, Format_7_18), vs, Format_7_18)
 		assert.True(t, v.Equals(out))
 	}
 
@@ -350,7 +350,8 @@ func TestWriteStructTooMuchData(t *testing.T) {
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
-		decodeFromBytes(buff, nil)
+		// TODO(binformat)
+		decodeFromBytes(buff, nil, Format_7_18)
 	})
 }
 
