@@ -115,7 +115,8 @@ func (l List) IterRange(ctx context.Context, startIdx, endIdx uint64, f func(v V
 		f(v, idx)
 		idx++
 	}
-	iterRange(ctx, l, startIdx, endIdx, cb)
+	// TODO(binformat)
+	iterRange(ctx, Format_7_18, l, startIdx, endIdx, cb)
 }
 
 // IterAll iterates over the list and calls f for every element in the list. Unlike Iter there is no
@@ -148,7 +149,8 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64))
 			vcChan <- vc
 
 			go func() {
-				numBytes := iterRange(ctx, col, start, start+blockLength, func(v Value) {
+				// TODO(binformat)
+				numBytes := iterRange(ctx, Format_7_18, col, start, start+blockLength, func(v Value) {
 					vc <- v
 				})
 				close(vc)
@@ -181,7 +183,7 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64))
 	}
 }
 
-func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
+func iterRange(ctx context.Context, f *format, col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
 	l := col.Len()
 	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
 	if startIdx == endIdx {
@@ -206,7 +208,7 @@ func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb 
 		endIdx = endIdx - uint64(len(values))/valuesPerIdx - startIdx
 		startIdx = 0
 		// TODO(binformat)
-		numBytes += uint64(len(seq.valueBytes(Format_7_18))) // note: should really only include |values|
+		numBytes += uint64(len(seq.valueBytes(f))) // note: should really only include |values|
 	}
 	return
 }
