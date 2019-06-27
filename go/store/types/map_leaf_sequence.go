@@ -25,7 +25,8 @@ func (entry mapEntry) writeTo(w nomsWriter) {
 }
 
 func readMapEntry(r *valueDecoder) mapEntry {
-	return mapEntry{r.readValue(), r.readValue()}
+	// TODO(binformat)
+	return mapEntry{r.readValue(Format_7_18), r.readValue(Format_7_18)}
 }
 
 func (entry mapEntry) equals(other mapEntry) bool {
@@ -89,7 +90,8 @@ func (ml mapLeafSequence) entries() mapEntrySlice {
 	dec, count := ml.decoderSkipToValues()
 	entries := make(mapEntrySlice, count)
 	for i := uint64(0); i < count; i++ {
-		entries[i] = mapEntry{dec.readValue(), dec.readValue()}
+		// TODO(binformat)
+		entries[i] = mapEntry{dec.readValue(Format_7_18), dec.readValue(Format_7_18)}
 	}
 	return entries
 }
@@ -101,13 +103,15 @@ func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
 	return func(idx, otherIdx int) bool {
 		dec1.offset = uint32(ml.getItemOffset(idx))
 		dec2.offset = uint32(ml2.getItemOffset(otherIdx))
-		k1 := dec1.readValue()
-		k2 := dec2.readValue()
+		// TODO(binformat)
+		k1 := dec1.readValue(Format_7_18)
+		k2 := dec2.readValue(Format_7_18)
 		if !k1.Equals(k2) {
 			return false
 		}
-		v1 := dec1.readValue()
-		v2 := dec2.readValue()
+		// TODO(binformat)
+		v1 := dec1.readValue(Format_7_18)
+		v2 := dec2.readValue(Format_7_18)
 		return v1.Equals(v2)
 	}
 }
@@ -145,7 +149,8 @@ func (ml mapLeafSequence) decoderSkipToIndex(idx int) valueDecoder {
 
 func (ml mapLeafSequence) getKey(idx int) orderedKey {
 	dec := ml.decoderSkipToIndex(idx)
-	return newOrderedKey(dec.readValue())
+	// TODO(binformat)
+	return newOrderedKey(dec.readValue(Format_7_18))
 }
 
 func (ml mapLeafSequence) search(key orderedKey) int {
@@ -158,5 +163,6 @@ func (ml mapLeafSequence) getValue(idx int) Value {
 	dec := ml.decoderSkipToIndex(idx)
 	// TODO(binformat)
 	dec.skipValue(Format_7_18)
-	return dec.readValue()
+	// TODO(binformat)
+	return dec.readValue(Format_7_18)
 }

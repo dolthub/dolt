@@ -52,7 +52,8 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	assert.EqualValues(t, expectedAsByteSlice, w.data())
 
 	dec := newValueDecoder(expectedAsByteSlice, vs)
-	v2 := dec.readValue()
+	// TODO(binformat)
+	v2 := dec.readValue(Format_7_18)
 	assert.True(t, v.Equals(v2))
 }
 

@@ -34,7 +34,8 @@ func EncodeValue(v Value) chunks.Chunk {
 
 func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
 	dec := newValueDecoder(data, vrw)
-	v := dec.readValue()
+	// TODO(binformat)
+	v := dec.readValue(Format_7_18)
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
@@ -42,7 +43,8 @@ func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
 func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) Value {
 	r := binaryNomsReader{data, 0}
 	dec := newValueDecoderWithValidation(r, vrw)
-	v := dec.readValue()
+	// TODO(binformat)
+	v := dec.readValue(Format_7_18)
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
