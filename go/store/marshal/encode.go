@@ -541,7 +541,8 @@ func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFun
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(ctx, v.Index(i), vrw)
 		}
-		return types.NewList(ctx, vrw, values...)
+		// TODO(binformat)
+		return types.NewList(ctx, types.Format_7_18, vrw, values...)
 	}
 
 	encoderCache.set(t, e)

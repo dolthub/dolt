@@ -17,11 +17,13 @@ func listOfInts(vrw ValueReadWriter, vals ...int) List {
 	for _, v := range vals {
 		vs = append(vs, Float(v))
 	}
-	return NewList(context.Background(), vrw, vs...)
+	// TODO(binformat)
+	return NewList(context.Background(), Format_7_18, vrw, vs...)
 }
 
 func testEditor(vrw ValueReadWriter, vals ...int) *ListEditor {
-	return NewListEditor(listOfInts(vrw, vals...))
+	// TODO(binformat)
+	return NewListEditor(listOfInts(vrw, vals...), Format_7_18)
 }
 
 func edit(le *ListEditor, idx, remove int, insert ...int) {
@@ -220,7 +222,8 @@ func TestListSpliceFuzzer(t *testing.T) {
 
 	for i := 0; i < rounds; i++ {
 		tl := newTestList(startCount)
-		le := tl.toList(vrw).Edit()
+		// TODO(binformat)
+		le := tl.toList(vrw).Edit(Format_7_18)
 
 		for j := 0; j < splices; j++ {
 			idx, removed, insert := nextRandomSplice(len(tl))

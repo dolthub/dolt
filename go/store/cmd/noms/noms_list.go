@@ -57,7 +57,7 @@ func nomsList(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClaus
 func nomsListNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyListInserts(ctx, sp, types.NewList(ctx, sp.GetDatabase(ctx)), nil, 0, args)
+	applyListInserts(ctx, sp, types.NewList(ctx, types.Format_7_18, sp.GetDatabase(ctx)), nil, 0, args)
 	return 0
 }
 

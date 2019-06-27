@@ -548,22 +548,22 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	v3 := types.String("foo")
 	v4 := types.String("bar")
 	s3 := types.NewSet(context.Background(), suite.db, v3, v4)
-	l1 := types.NewList(context.Background(), suite.db, s1, s3)
+	l1 := types.NewList(context.Background(), types.Format_7_18, suite.db, s1, s3)
 	suite.Equal(uint64(1), suite.db.WriteValue(context.Background(), l1).Height())
 
 	// List<Ref<Set<String>>
-	l2 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s1), suite.db.WriteValue(context.Background(), s3))
+	l2 := types.NewList(context.Background(), types.Format_7_18, suite.db, suite.db.WriteValue(context.Background(), s1), suite.db.WriteValue(context.Background(), s3))
 	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l2).Height())
 
 	// List<Ref<Set<Ref<String>>>
 	s4 := types.NewSet(context.Background(), suite.db, suite.db.WriteValue(context.Background(), v3), suite.db.WriteValue(context.Background(), v4))
-	l3 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s4))
+	l3 := types.NewList(context.Background(), types.Format_7_18, suite.db, suite.db.WriteValue(context.Background(), s4))
 	suite.Equal(uint64(3), suite.db.WriteValue(context.Background(), l3).Height())
 
 	// List<Set<String> | RefValue<Set<String>>>
-	l4 := types.NewList(context.Background(), suite.db, s1, suite.db.WriteValue(context.Background(), s3))
+	l4 := types.NewList(context.Background(), types.Format_7_18, suite.db, s1, suite.db.WriteValue(context.Background(), s3))
 	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l4).Height())
-	l5 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s1), s3)
+	l5 := types.NewList(context.Background(), types.Format_7_18, suite.db, suite.db.WriteValue(context.Background(), s1), s3)
 	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l5).Height())
 
 	// Familiar with the "New Jersey Turnpike" drink? Here's the noms version of that...
@@ -574,7 +574,7 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 	}
 	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
 
-	suite.db.WriteValue(context.Background(), types.NewList(context.Background(), suite.db, andMore...))
+	suite.db.WriteValue(context.Background(), types.NewList(context.Background(), types.Format_7_18, suite.db, andMore...))
 }
 
 func (suite *DatabaseSuite) TestMetaOption() {
