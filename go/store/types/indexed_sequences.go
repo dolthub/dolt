@@ -58,7 +58,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	return uint64(cur.idx)
 }
 
-func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunkFn {
+func newIndexedMetaSequenceChunkFn(f *Format, kind NomsKind, vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
@@ -71,11 +71,10 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 
 		var col Collection
 		if kind == ListKind {
-			// TODO(binformat)
-			col = newList(newListMetaSequence(level, tuples, vrw), Format_7_18)
+			col = newList(newListMetaSequence(level, tuples, vrw), f)
 		} else {
 			d.PanicIfFalse(BlobKind == kind)
-			col = newBlob(newBlobMetaSequence(level, tuples, vrw), Format_7_18)
+			col = newBlob(newBlobMetaSequence(level, tuples, vrw), f)
 		}
 		return col, orderedKeyFromSum(tuples), numLeaves
 	}
