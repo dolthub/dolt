@@ -13,7 +13,7 @@ import (
 func TestCodecWriteFloat(t *testing.T) {
 	test := func(f float64, exp []byte) {
 		w := newBinaryNomsWriter()
-		w.writeFloat(Float(f))
+		w.writeFloat(Float(f), Format_7_18)
 		assert.Equal(t, exp, w.data())
 	}
 

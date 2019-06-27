@@ -25,7 +25,7 @@ func toBinaryNomsReaderData(data []interface{}) []byte {
 		case string:
 			w.writeString(v)
 		case Float:
-			w.writeFloat(v)
+			w.writeFloat(v, Format_7_18)
 		case uint64:
 			w.writeCount(v)
 		case bool:
