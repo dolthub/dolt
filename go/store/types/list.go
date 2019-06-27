@@ -32,8 +32,8 @@ func newList(seq sequence) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated
 // with values, chunking if and when needed.
-func NewList(ctx context.Context, vrw ValueReadWriter, values ...Value) List {
-	ch := newEmptyListSequenceChunker(ctx, vrw)
+func NewList(ctx context.Context, f *Format, vrw ValueReadWriter, values ...Value) List {
+	ch := newEmptyListSequenceChunker(ctx, f, vrw)
 	for _, v := range values {
 		ch.Append(ctx, v)
 	}
@@ -43,11 +43,11 @@ func NewList(ctx context.Context, vrw ValueReadWriter, values ...Value) List {
 // NewStreamingList creates a new List, populated with values, chunking if and when needed. As
 // chunks are created, they're written to vrw -- including the root chunk of the list. Once the
 // caller has closed values, the caller can read the completed List from the returned channel.
-func NewStreamingList(ctx context.Context, vrw ValueReadWriter, values <-chan Value) <-chan List {
+func NewStreamingList(ctx context.Context, f *Format, vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List, 1)
 	go func() {
 		defer close(out)
-		ch := newEmptyListSequenceChunker(ctx, vrw)
+		ch := newEmptyListSequenceChunker(ctx, f, vrw)
 		for v := range values {
 			ch.Append(ctx, v)
 		}
@@ -56,8 +56,8 @@ func NewStreamingList(ctx context.Context, vrw ValueReadWriter, values <-chan Va
 	return out
 }
 
-func (l List) Edit() *ListEditor {
-	return NewListEditor(l)
+func (l List) Edit(f *Format) *ListEditor {
+	return NewListEditor(l, f)
 }
 
 // Collection interface
@@ -72,7 +72,8 @@ func (l List) Value(ctx context.Context) Value {
 }
 
 func (l List) WalkValues(ctx context.Context, cb ValueCallback) {
-	iterAll(ctx, l, func(v Value, idx uint64) {
+	// TODO(binformat)
+	iterAll(ctx, Format_7_18, l, func(v Value, idx uint64) {
 		cb(v)
 	})
 }
@@ -88,9 +89,9 @@ func (l List) Get(ctx context.Context, idx uint64) Value {
 // Concat returns a new List comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
-func (l List) Concat(ctx context.Context, other List) List {
+func (l List) Concat(ctx context.Context, f *Format, other List) List {
 	seq := concat(ctx, l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-		return l.newChunker(ctx, cur, vrw)
+		return l.newChunker(ctx, f, cur, vrw)
 	})
 	return newList(seq)
 }
@@ -109,23 +110,23 @@ func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool
 	})
 }
 
-func (l List) IterRange(ctx context.Context, startIdx, endIdx uint64, f func(v Value, idx uint64)) {
+func (l List) IterRange(ctx context.Context, format *Format, startIdx, endIdx uint64, f func(v Value, idx uint64)) {
 	idx := uint64(startIdx)
 	cb := func(v Value) {
 		f(v, idx)
 		idx++
 	}
-	// TODO(binformat)
-	iterRange(ctx, Format_7_18, l, startIdx, endIdx, cb)
+	iterRange(ctx, format, l, startIdx, endIdx, cb)
 }
 
 // IterAll iterates over the list and calls f for every element in the list. Unlike Iter there is no
 // way to stop the iteration and all elements are visited.
 func (l List) IterAll(ctx context.Context, f func(v Value, index uint64)) {
-	iterAll(ctx, l, f)
+	// TODO(binformat)
+	iterAll(ctx, Format_7_18, l, f)
 }
 
-func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64)) {
+func iterAll(ctx context.Context, format *Format, col Collection, f func(v Value, index uint64)) {
 	concurrency := 6
 	vcChan := make(chan chan Value, concurrency)
 
@@ -149,8 +150,7 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64))
 			vcChan <- vc
 
 			go func() {
-				// TODO(binformat)
-				numBytes := iterRange(ctx, Format_7_18, col, start, start+blockLength, func(v Value) {
+				numBytes := iterRange(ctx, format, col, start, start+blockLength, func(v Value) {
 					vc <- v
 				})
 				close(vc)
@@ -207,7 +207,6 @@ func iterRange(ctx context.Context, f *Format, col Collection, startIdx, endIdx 
 
 		endIdx = endIdx - uint64(len(values))/valuesPerIdx - startIdx
 		startIdx = 0
-		// TODO(binformat)
 		numBytes += uint64(len(seq.valueBytes(f))) // note: should really only include |values|
 	}
 	return
@@ -254,11 +253,11 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 	indexedSequenceDiff(ctx, Format_7_18, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
-func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-	return newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+func (l List) newChunker(ctx context.Context, f *Format, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	return newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }
 
-func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
+func makeListLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
 		values := make([]Value, len(items))
@@ -267,12 +266,11 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 			values[i] = v.(Value)
 		}
 
-		// TODO(binformat)
-		list := newList(newListLeafSequence(vrw, Format_7_18, values...))
+		list := newList(newListLeafSequence(vrw, f, values...))
 		return list, orderedKeyFromInt(len(values)), uint64(len(values))
 	}
 }
 
-func newEmptyListSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+func newEmptyListSequenceChunker(ctx context.Context, f *Format, vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 }

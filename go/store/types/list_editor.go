@@ -13,11 +13,12 @@ import (
 
 type ListEditor struct {
 	l     List
+	f     *Format
 	edits *listEdit
 }
 
-func NewListEditor(l List) *ListEditor {
-	return &ListEditor{l, nil}
+func NewListEditor(l List, f *Format) *ListEditor {
+	return &ListEditor{l, f, nil}
 }
 
 func (le *ListEditor) Kind() NomsKind {
@@ -90,7 +91,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 		sp := <-<-spliceChan
 
 		if ch == nil {
-			ch = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw, le.f), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(ctx, cur)
 		}

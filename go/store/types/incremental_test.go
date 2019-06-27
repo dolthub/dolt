@@ -22,7 +22,8 @@ func getTestVals(vrw ValueReadWriter) []Value {
 		NewBlob(context.Background(), Format_7_18, vrw, bytes.NewReader([]byte("hi"))),
 		// compoundBlob
 		NewSet(context.Background(), vrw, String("hi")),
-		NewList(context.Background(), vrw, String("hi")),
+		// TODO(binformat)
+		NewList(context.Background(), Format_7_18, vrw, String("hi")),
 		NewMap(context.Background(), vrw, String("hi"), String("hi")),
 	}
 }
@@ -41,7 +42,8 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewList(context.Background(), vs, getTestVals(vs)...)
+	// TODO(binformat)
+	expected := NewList(context.Background(), Format_7_18, vs, getTestVals(vs)...)
 	hash := vs.WriteValue(context.Background(), expected).TargetHash()
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
@@ -117,7 +119,8 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	expectedItem := Float(42)
 	ref := vs.WriteValue(context.Background(), expectedItem)
 
-	expected := NewList(context.Background(), vs, ref)
+	// TODO(binformat)
+	expected := NewList(context.Background(), Format_7_18, vs, ref)
 	ref = vs.WriteValue(context.Background(), expected)
 	actualVar := vs.ReadValue(context.Background(), ref.TargetHash())
 

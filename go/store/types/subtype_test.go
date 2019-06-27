@@ -68,7 +68,8 @@ func TestAssertTypeValue(t *testing.T) {
 	assertSubtype(context.Background(), ValueType, Bool(true))
 	assertSubtype(context.Background(), ValueType, Float(1))
 	assertSubtype(context.Background(), ValueType, String("abc"))
-	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
+	// TODO(binformat)
+	l := NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(context.Background(), ValueType, l)
 }
 
@@ -84,7 +85,8 @@ func TestAssertTypeList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	listOfNumberType := MakeListType(FloaTType)
-	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
+	// TODO(binformat)
+	l := NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(context.Background(), listOfNumberType, l)
 	assertAll(tt, listOfNumberType, l)
 	assertSubtype(context.Background(), MakeListType(ValueType), l)
@@ -137,7 +139,8 @@ func TestAssertTypeUnion(tt *testing.T) {
 	assertSubtype(context.Background(), MakeUnionType(FloaTType, StringType, BoolType), Bool(true))
 
 	lt := MakeListType(MakeUnionType(FloaTType, StringType))
-	assertSubtype(context.Background(), lt, NewList(context.Background(), vs, Float(1), String("hi"), Float(2), String("bye")))
+	// TODO(binformat)
+	assertSubtype(context.Background(), lt, NewList(context.Background(), Format_7_18, vs, Float(1), String("hi"), Float(2), String("bye")))
 
 	st := MakeSetType(StringType)
 	assertSubtype(context.Background(), MakeUnionType(st, FloaTType), Float(42))
@@ -183,17 +186,20 @@ func TestAssertTypeEmptyListUnion(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(MakeUnionType())
-	assertSubtype(context.Background(), lt, NewList(context.Background(), vs))
+	// TODO(binformat)
+	assertSubtype(context.Background(), lt, NewList(context.Background(), Format_7_18, vs))
 }
 
 func TestAssertTypeEmptyList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(FloaTType)
-	assertSubtype(context.Background(), lt, NewList(context.Background(), vs))
+	// TODO(binformat)
+	assertSubtype(context.Background(), lt, NewList(context.Background(), Format_7_18, vs))
 
 	// List<> not a subtype of List<Float>
-	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(context.Background(), vs, Float(1)))
+	// TODO(binformat)
+	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(context.Background(), Format_7_18, vs, Float(1)))
 }
 
 func TestAssertTypeEmptySet(tt *testing.T) {
@@ -552,7 +558,8 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		{String("s"), StringType},
 		{NewEmptyBlob(vs, Format_7_18), BlobType},
 		{BoolType, TypeType},
-		{NewList(context.Background(), vs, Float(42)), MakeListType(FloaTType)},
+		// TODO(binformat)
+		{NewList(context.Background(), Format_7_18, vs, Float(42)), MakeListType(FloaTType)},
 		{NewSet(context.Background(), vs, Float(42)), MakeSetType(FloaTType)},
 		{NewRef(Float(42)), MakeRefType(FloaTType)},
 		{NewMap(context.Background(), vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
@@ -579,13 +586,14 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse(String("abc"), MakeUnionType(BoolType, FloaTType))
 	assertFalse(String("abc"), MakeUnionType())
 
-	assertTrue(NewList(context.Background(), vs), MakeListType(FloaTType))
-	assertTrue(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
-	assertFalse(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(BoolType))
-	assertTrue(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(MakeUnionType(FloaTType, BoolType)))
-	assertTrue(NewList(context.Background(), vs, Float(0), Bool(true)), MakeListType(MakeUnionType(FloaTType, BoolType)))
-	assertFalse(NewList(context.Background(), vs, Float(0)), MakeListType(MakeUnionType()))
-	assertTrue(NewList(context.Background(), vs), MakeListType(MakeUnionType()))
+	// TODO(binformat)
+	assertTrue(NewList(context.Background(), Format_7_18, vs), MakeListType(FloaTType))
+	assertTrue(NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
+	assertFalse(NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(BoolType))
+	assertTrue(NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(MakeUnionType(FloaTType, BoolType)))
+	assertTrue(NewList(context.Background(), Format_7_18, vs, Float(0), Bool(true)), MakeListType(MakeUnionType(FloaTType, BoolType)))
+	assertFalse(NewList(context.Background(), Format_7_18, vs, Float(0)), MakeListType(MakeUnionType()))
+	assertTrue(NewList(context.Background(), Format_7_18, vs), MakeListType(MakeUnionType()))
 
 	{
 		newChunkedList := func(vals ...Value) List {
@@ -722,10 +730,11 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertTrue(
 		NewStruct("Node", StructData{
 			"value": Float(1),
-			"children": NewList(context.Background(), vs,
+			// TODO(binformat)
+			"children": NewList(context.Background(), Format_7_18, vs,
 				NewStruct("Node", StructData{
 					"value":    Float(2),
-					"children": NewList(context.Background(), vs),
+					"children": NewList(context.Background(), Format_7_18, vs),
 				}),
 			),
 		}),
@@ -738,10 +747,11 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse( // inner Node has wrong type.
 		NewStruct("Node", StructData{
 			"value": Float(1),
-			"children": NewList(context.Background(), vs,
+			// TODO(binformat)
+			"children": NewList(context.Background(), Format_7_18, vs,
 				NewStruct("Node", StructData{
 					"value":    Bool(true),
-					"children": NewList(context.Background(), vs),
+					"children": NewList(context.Background(), Format_7_18, vs),
 				}),
 			),
 		}),
@@ -759,7 +769,8 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			}
 			rv := NewStruct("Node", StructData{
 				"value":    value,
-				"children": NewList(context.Background(), vs, childrenAsRefs...),
+				// TODO(binformat)
+				"children": NewList(context.Background(), Format_7_18, vs, childrenAsRefs...),
 			})
 			return rv
 		}

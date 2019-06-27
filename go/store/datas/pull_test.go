@@ -233,9 +233,9 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	srcL := buildListOfHeight(3, suite.source)
 	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
 
-	sinkL = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
+	sinkL = sinkL.Edit(types.Format_7_18).Append(types.String("oy!")).List(context.Background())
 	sinkRef = suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink, sinkRef))
-	srcL = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
+	srcL = srcL.Edit(types.Format_7_18).Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
 	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
 	preReads := suite.sinkCS.Reads
 
@@ -276,9 +276,9 @@ func (suite *PullSuite) TestPullUpdates() {
 	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
 	L3 := srcL.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
 	L2 := L3.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
-	L2 = L2.Edit().Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List(context.Background())
-	L3 = L3.Edit().Set(1, suite.source.WriteValue(context.Background(), L2)).List(context.Background())
-	srcL = srcL.Edit().Set(1, suite.source.WriteValue(context.Background(), L3)).List(context.Background())
+	L2 = L2.Edit(types.Format_7_18).Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List(context.Background())
+	L3 = L3.Edit(types.Format_7_18).Set(1, suite.source.WriteValue(context.Background(), L2)).List(context.Background())
+	srcL = srcL.Edit(types.Format_7_18).Set(1, suite.source.WriteValue(context.Background(), L3)).List(context.Background())
 	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
 
 	pt := startProgressTracker()
@@ -309,13 +309,13 @@ func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
 
 func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
 	unique := 0
-	l := types.NewList(context.Background(), vrw, types.Float(unique), types.Float(unique+1))
+	l := types.NewList(context.Background(), types.Format_7_18, vrw, types.Float(unique), types.Float(unique+1))
 	unique += 2
 
 	for i := 0; i < height; i++ {
 		r1, r2 := vrw.WriteValue(context.Background(), types.Float(unique)), vrw.WriteValue(context.Background(), l)
 		unique++
-		l = types.NewList(context.Background(), vrw, r1, r2)
+		l = types.NewList(context.Background(), types.Format_7_18, vrw, r1, r2)
 	}
 	return l
 }
