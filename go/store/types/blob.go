@@ -25,7 +25,8 @@ func newBlob(seq sequence) Blob {
 }
 
 func NewEmptyBlob(vrw ValueReadWriter) Blob {
-	return Blob{newBlobLeafSequence(vrw, []byte{})}
+	// TODO(binformat)
+	return Blob{newBlobLeafSequence(vrw, Format_7_18, []byte{})}
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
@@ -200,7 +201,8 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func chunkBlobLeaf(vrw ValueReadWriter, buff []byte) (Collection, orderedKey, uint64) {
-	blob := newBlob(newBlobLeafSequence(vrw, buff))
+	// TODO(binformat)
+	blob := newBlob(newBlobLeafSequence(vrw, Format_7_18, buff))
 	return blob, orderedKeyFromInt(len(buff)), uint64(len(buff))
 }
 
