@@ -19,7 +19,7 @@ func TestRefInList(t *testing.T) {
 	// TODO(binformat)
 	l := NewList(context.Background(), Format_7_18, vs)
 	r := NewRef(l)
-	l = l.Edit(Format_7_18).Append(r).List(context.Background())
+	l = l.Edit().Append(r).List(context.Background())
 	r2 := l.Get(context.Background(), 0)
 	assert.True(r.Equals(r2))
 }

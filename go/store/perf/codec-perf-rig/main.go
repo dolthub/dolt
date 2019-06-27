@@ -158,7 +158,7 @@ func buildList(vrw types.ValueReadWriter, count uint64, createFn createValueFn) 
 }
 
 func buildListIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	l := types.NewList(context.Background(), types.Format_7_18, vrw).Edit(types.Format_7_18)
+	l := types.NewList(context.Background(), types.Format_7_18, vrw).Edit()
 	for i := uint64(0); i < count; i++ {
 		l.Append(createFn(i))
 	}

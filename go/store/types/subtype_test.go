@@ -598,9 +598,8 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	{
 		newChunkedList := func(vals ...Value) List {
 			newSequenceMetaTuple := func(v Value) metaTuple {
-				// TODO(binformat)
 				seq := newListLeafSequence(vs, Format_7_18, v)
-				list := newList(seq)
+				list := newList(seq, Format_7_18)
 				return newMetaTuple(vs.WriteValue(context.Background(), list), newOrderedKey(v), 1)
 			}
 
@@ -608,7 +607,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			for i, v := range vals {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newList(newListMetaSequence(1, tuples, vs))
+			return newList(newListMetaSequence(1, tuples, vs), Format_7_18)
 		}
 
 		assertTrue(newChunkedList(Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))

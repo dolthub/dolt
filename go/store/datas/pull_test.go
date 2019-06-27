@@ -233,9 +233,9 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	srcL := buildListOfHeight(3, suite.source)
 	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
 
-	sinkL = sinkL.Edit(types.Format_7_18).Append(types.String("oy!")).List(context.Background())
+	sinkL = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
 	sinkRef = suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink, sinkRef))
-	srcL = srcL.Edit(types.Format_7_18).Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
+	srcL = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
 	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
 	preReads := suite.sinkCS.Reads
 
@@ -276,9 +276,9 @@ func (suite *PullSuite) TestPullUpdates() {
 	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
 	L3 := srcL.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
 	L2 := L3.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
-	L2 = L2.Edit(types.Format_7_18).Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List(context.Background())
-	L3 = L3.Edit(types.Format_7_18).Set(1, suite.source.WriteValue(context.Background(), L2)).List(context.Background())
-	srcL = srcL.Edit(types.Format_7_18).Set(1, suite.source.WriteValue(context.Background(), L3)).List(context.Background())
+	L2 = L2.Edit().Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List(context.Background())
+	L3 = L3.Edit().Set(1, suite.source.WriteValue(context.Background(), L2)).List(context.Background())
+	srcL = srcL.Edit().Set(1, suite.source.WriteValue(context.Background(), L3)).List(context.Background())
 	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
 
 	pt := startProgressTracker()

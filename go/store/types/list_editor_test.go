@@ -222,8 +222,7 @@ func TestListSpliceFuzzer(t *testing.T) {
 
 	for i := 0; i < rounds; i++ {
 		tl := newTestList(startCount)
-		// TODO(binformat)
-		le := tl.toList(vrw).Edit(Format_7_18)
+		le := tl.toList(vrw).Edit()
 
 		for j := 0; j < splices; j++ {
 			idx, removed, insert := nextRandomSplice(len(tl))

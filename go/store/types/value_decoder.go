@@ -201,7 +201,7 @@ func (r *valueDecoder) readValue(f *Format) Value {
 		r.skipKind()
 		return String(r.readString())
 	case ListKind:
-		return newList(r.readListSequence())
+		return newList(r.readListSequence(), f)
 	case MapKind:
 		return newMap(r.readMapSequence())
 	case RefKind:

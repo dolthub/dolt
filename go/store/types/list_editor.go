@@ -111,7 +111,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 		}
 	}
 
-	return newList(ch.Done(ctx))
+	return newList(ch.Done(ctx), le.f)
 }
 
 func collapseListEdit(newEdit, edit *listEdit) bool {
