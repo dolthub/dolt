@@ -139,7 +139,7 @@ func (b Blob) Concat(ctx context.Context, other Blob) Blob {
 }
 
 func (b Blob) newChunker(ctx context.Context, f *Format, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(f, BlobKind, vrw), hashValueByte)
 }
 
 func (b Blob) asSequence() sequence {
@@ -243,7 +243,7 @@ func readBlobsP(ctx context.Context, f *Format, vrw ValueReadWriter, rs ...io.Re
 }
 
 func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
+	sc := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(f, BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
 		rv.HashByte(item.(byte))
 	})
 
