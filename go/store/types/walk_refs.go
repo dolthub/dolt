@@ -18,7 +18,8 @@ func WalkRefs(c chunks.Chunk, cb RefCallback) {
 
 func walkRefs(data []byte, cb RefCallback) {
 	rw := newRefWalker(data)
-	rw.walkValue(cb)
+	// TODO(binformat)
+	rw.walkValue(Format_7_18, cb)
 }
 
 type refWalker struct {
@@ -42,7 +43,8 @@ func (r *refWalker) walkBlobLeafSequence() {
 func (r *refWalker) walkValueSequence(cb RefCallback) {
 	count := int(r.readCount())
 	for i := 0; i < count; i++ {
-		r.walkValue(cb)
+		// TODO(binformat)
+		r.walkValue(Format_7_18, cb)
 	}
 }
 
@@ -87,8 +89,9 @@ func (r *refWalker) walkBlob(cb RefCallback) {
 func (r *refWalker) walkMapLeafSequence(cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkValue(cb) // k
-		r.walkValue(cb) // v
+		// TODO(binformat)
+		r.walkValue(Format_7_18, cb) // k
+		r.walkValue(Format_7_18, cb) // v
 	}
 }
 
@@ -107,11 +110,12 @@ func (r *refWalker) skipOrderedKey() {
 		r.skipKind()
 		r.skipHash()
 	default:
-		r.walkValue(func(r Ref) {}) // max Value in subtree reachable from here
+		// TODO(binformat)
+		r.walkValue(Format_7_18, func(r Ref) {}) // max Value in subtree reachable from here
 	}
 }
 
-func (r *refWalker) walkValue(cb RefCallback) {
+func (r *refWalker) walkValue(f *format, cb RefCallback) {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
@@ -121,8 +125,7 @@ func (r *refWalker) walkValue(cb RefCallback) {
 		r.skipBool()
 	case FloatKind:
 		r.skipKind()
-		// TODO(binformat)
-		r.skipFloat(Format_7_18)
+		r.skipFloat(f)
 	case IntKind:
 		r.skipKind()
 		r.skipInt()

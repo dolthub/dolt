@@ -69,7 +69,8 @@ func walkTuple(r *refWalker, cb RefCallback) {
 	r.skipKind()
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkValue(cb)
+		// TODO(binformat)
+		r.walkValue(Format_7_18, cb)
 	}
 }
 
