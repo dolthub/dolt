@@ -16,5 +16,6 @@ func getHash(v Value) hash.Hash {
 }
 
 func getHashNoOverride(v Value) hash.Hash {
-	return EncodeValue(v).Hash()
+	// TODO(binformat)
+	return EncodeValue(v, Format_7_18).Hash()
 }

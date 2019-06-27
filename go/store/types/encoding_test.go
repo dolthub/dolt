@@ -62,7 +62,8 @@ func TestRoundTrips(t *testing.T) {
 	vs := newTestValueStore()
 
 	assertRoundTrips := func(v Value) {
-		out := DecodeValue(EncodeValue(v), vs)
+		// TODO(binformat)
+		out := DecodeValue(EncodeValue(v, Format_7_18), vs)
 		assert.True(t, v.Equals(out))
 	}
 
@@ -128,9 +129,12 @@ func TestNonFiniteNumbers(tt *testing.T) {
 		}()
 
 		v := Float(f)
-
-		EncodeValue(v)
-		return
+		err := d.Try(func() {
+			// TODO(binformat)
+			EncodeValue(v, Format_7_18)
+		})
+		assert.Error(tt, err)
+		assert.Contains(tt, err.Error(), s)
 	}
 
 	err := t(math.NaN())
@@ -339,7 +343,8 @@ func TestWriteStruct(t *testing.T) {
 
 func TestWriteStructTooMuchData(t *testing.T) {
 	s := NewStruct("S", StructData{"x": Float(42), "b": Bool(true)})
-	c := EncodeValue(s)
+	// TODO(binformat)
+	c := EncodeValue(s, Format_7_18)
 	data := c.Data()
 	buff := make([]byte, len(data)+1)
 	copy(buff, data)
@@ -609,6 +614,7 @@ func (bg bogusType) writeTo(w nomsWriter, f *format) {
 func TestBogusValueWithUnresolvedCycle(t *testing.T) {
 	g := bogusType(1)
 	assert.Panics(t, func() {
-		EncodeValue(g)
+		// TODO(binformat)
+		EncodeValue(g, Format_7_18)
 	})
 }

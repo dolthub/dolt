@@ -23,7 +23,7 @@ func TestWalkRefs(t *testing.T) {
 			expected = append(expected, r.TargetHash())
 		})
 		// TODO(binformat)
-		WalkRefs(EncodeValue(v), Format_7_18, func(r Ref) {
+		WalkRefs(EncodeValue(v, Format_7_18), Format_7_18, func(r Ref) {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
 				expected = expected[1:]
