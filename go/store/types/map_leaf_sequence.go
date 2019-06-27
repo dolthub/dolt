@@ -156,6 +156,7 @@ func (ml mapLeafSequence) search(key orderedKey) int {
 
 func (ml mapLeafSequence) getValue(idx int) Value {
 	dec := ml.decoderSkipToIndex(idx)
-	dec.skipValue()
+	// TODO(binformat)
+	dec.skipValue(Format_7_18)
 	return dec.readValue()
 }

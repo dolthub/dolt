@@ -7,6 +7,7 @@ package types
 import (
 	"context"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -58,7 +59,8 @@ func skipTuple(dec *valueDecoder) {
 	dec.skipKind()
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 	}
 }
 
@@ -142,7 +144,8 @@ func (t Tuple) IteratorAt(pos uint64) *TupleIterator {
 	dec, count := t.decoderSkipToFields()
 
 	for i := uint64(0); i < pos; i++ {
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 	}
 
 	return &TupleIterator{dec, count, pos}
@@ -170,7 +173,8 @@ func (t Tuple) Get(n uint64) Value {
 	}
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 	}
 
 	v := dec.readValue()
@@ -228,13 +232,15 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	fieldsOffset := dec.offset
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 	}
 
 	head = dec.buff[fieldsOffset:dec.offset]
 
 	if n != count-1 {
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 		tail = dec.buff[dec.offset:len(dec.buff)]
 	}
 

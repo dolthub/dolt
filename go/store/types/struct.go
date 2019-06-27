@@ -38,7 +38,8 @@ func skipStruct(dec *valueDecoder) {
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 	}
 }
 
@@ -247,7 +248,8 @@ func (s Struct) MaybeGet(n string) (v Value, found bool) {
 		if name > n {
 			return
 		}
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 	}
 
 	return
@@ -299,7 +301,8 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 	for i := uint64(0); i < count; i++ {
 		beforeCurrent := dec.offset
 		fn := dec.readString()
-		dec.skipValue()
+		// TODO(binformat)
+		dec.skipValue(Format_7_18)
 
 		if fn == name {
 			found = true
