@@ -178,7 +178,7 @@ func (r *valueDecoder) readValue(f *Format) Value {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
-		return newBlob(r.readBlobSequence())
+		return newBlob(r.readBlobSequence(), f)
 	case BoolKind:
 		r.skipKind()
 		return Bool(r.readBool())
