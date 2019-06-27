@@ -231,7 +231,8 @@ func (r *valueDecoder) skipValue() {
 		r.skipBool()
 	case FloatKind:
 		r.skipKind()
-		r.skipFloat()
+		// TODO(binformat)
+		r.skipFloat(Format_7_18)
 	case UUIDKind:
 		r.skipKind()
 		r.skipUUID()
@@ -282,7 +283,8 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 		return BoolType
 	case FloatKind:
 		r.skipKind()
-		r.skipFloat()
+		// TODO(binformat)
+		r.skipFloat(Format_7_18)
 		return FloaTType
 	case UUIDKind:
 		r.skipKind()
