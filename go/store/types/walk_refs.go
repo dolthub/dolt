@@ -121,7 +121,8 @@ func (r *refWalker) walkValue(cb RefCallback) {
 		r.skipBool()
 	case FloatKind:
 		r.skipKind()
-		r.skipFloat()
+		// TODO(binformat)
+		r.skipFloat(Format_7_18)
 	case IntKind:
 		r.skipKind()
 		r.skipInt()

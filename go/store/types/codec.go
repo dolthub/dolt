@@ -128,11 +128,15 @@ func (b *binaryNomsReader) readFloat(f *format) Float {
 	}
 }
 
-func (b *binaryNomsReader) skipFloat() {
-	_, count := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count)
-	_, count2 := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count2)
+func (b *binaryNomsReader) skipFloat(f *format) {
+	if f == Format_7_18 {
+		_, count := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count)
+		_, count2 := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count2)
+	} else {
+		b.offset += 8
+	}
 }
 
 func (b *binaryNomsReader) skipInt() {
