@@ -33,7 +33,7 @@ func (cur *sequenceCursor) length() int {
 	return cur.seqLen
 }
 
-func (cur *sequenceCursor) getItem(idx int, f *format) sequenceItem {
+func (cur *sequenceCursor) getItem(idx int, f *Format) sequenceItem {
 	return cur.seq.getItem(idx, f)
 }
 

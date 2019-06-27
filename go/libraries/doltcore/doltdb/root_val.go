@@ -190,7 +190,8 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 
 	for pk1 != nil || pk2 != nil {
 		if pk1 == nil || pk2 == nil || !pk1.Equals(pk2) {
-			if pk2 == nil || (pk1 != nil && pk1.Less(pk2)) {
+			// TODO(binformat)
+			if pk2 == nil || (pk1 != nil && pk1.Less(types.Format_7_18, pk2)) {
 				added = append(added, string(pk1.(types.String)))
 				pk1, val1 = itr1.Next(ctx)
 			} else {

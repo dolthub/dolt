@@ -21,23 +21,23 @@ type sequence interface {
 	Empty() bool
 	Equals(other Value) bool
 	getChildSequence(ctx context.Context, idx int) sequence
-	getCompareFn(f *format, other sequence) compareFn
+	getCompareFn(f *Format, other sequence) compareFn
 	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
-	getItem(idx int, f *format) sequenceItem
-	Hash(*format) hash.Hash
+	getItem(idx int, f *Format) sequenceItem
+	Hash(*Format) hash.Hash
 	isLeaf() bool
 	Kind() NomsKind
 	Len() uint64
-	Less(other LesserValuable) bool
+	Less(f *Format, other LesserValuable) bool
 	numLeaves() uint64
 	seqLen() int
 	treeLevel() uint64
 	typeOf() *Type
-	valueBytes(*format) []byte
+	valueBytes(*Format) []byte
 	valueReadWriter() ValueReadWriter
-	valuesSlice(f *format, from, to uint64) []Value
+	valuesSlice(f *Format, from, to uint64) []Value
 	WalkRefs(cb RefCallback)
-	writeTo(nomsWriter, *format)
+	writeTo(nomsWriter, *Format)
 }
 
 const (

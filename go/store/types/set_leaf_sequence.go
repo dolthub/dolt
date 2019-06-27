@@ -15,7 +15,7 @@ func newSetLeafSequence(vrw ValueReadWriter, vs ...Value) orderedSequence {
 	return setLeafSequence{newLeafSequenceFromValues(SetKind, vrw, Format_7_18, vs...)}
 }
 
-func (sl setLeafSequence) getCompareFn(f *format, other sequence) compareFn {
+func (sl setLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
 	return sl.getCompareFnHelper(f, other.(setLeafSequence).leafSequence)
 }
 
@@ -28,6 +28,7 @@ func (sl setLeafSequence) getKey(idx int) orderedKey {
 
 func (sl setLeafSequence) search(key orderedKey) int {
 	return sort.Search(int(sl.Len()), func(i int) bool {
-		return !sl.getKey(i).Less(key)
+		// TODO(binformat)
+		return !sl.getKey(i).Less(Format_7_18, key)
 	})
 }

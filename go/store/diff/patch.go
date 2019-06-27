@@ -82,7 +82,8 @@ func indexPathCompare(pp types.IndexPath, o types.PathPart) int {
 			}
 			return 1
 		}
-		if pp.Index.Less(opp.Index) {
+		// TODO(binformat)
+		if pp.Index.Less(types.Format_7_18, opp.Index) {
 			return -1
 		}
 		return 1

@@ -43,9 +43,10 @@ func (rs *RowSorter) Less(rLeft, rRight row.Row) bool {
 			return ob.direction.lessVal(false)
 		}
 
-		if leftVal.Less(rightVal) {
+		// TODO(binformat)
+		if leftVal.Less(types.Format_7_18, rightVal) {
 			return ob.direction.lessVal(true)
-		} else if rightVal.Less(leftVal) {
+		} else if rightVal.Less(types.Format_7_18, leftVal) {
 			return ob.direction.lessVal(false)
 		}
 	}

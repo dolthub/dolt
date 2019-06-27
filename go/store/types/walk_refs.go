@@ -12,11 +12,11 @@ import (
 // WalkRefs calls cb() on each Ref that can be decoded from |c|. The results
 // are precisely equal to DecodeValue(c).WalkRefs(cb), but this should be much
 // faster.
-func WalkRefs(c chunks.Chunk, f *format, cb RefCallback) {
+func WalkRefs(c chunks.Chunk, f *Format, cb RefCallback) {
 	walkRefs(c.Data(), f, cb)
 }
 
-func walkRefs(data []byte, f *format, cb RefCallback) {
+func walkRefs(data []byte, f *Format, cb RefCallback) {
 	rw := newRefWalker(data)
 	rw.walkValue(f, cb)
 }
@@ -39,22 +39,22 @@ func (r *refWalker) walkBlobLeafSequence() {
 	r.offset += uint32(size)
 }
 
-func (r *refWalker) walkValueSequence(f *format, cb RefCallback) {
+func (r *refWalker) walkValueSequence(f *Format, cb RefCallback) {
 	count := int(r.readCount())
 	for i := 0; i < count; i++ {
 		r.walkValue(f, cb)
 	}
 }
 
-func (r *refWalker) walkList(f *format, cb RefCallback) {
+func (r *refWalker) walkList(f *Format, cb RefCallback) {
 	r.walkListOrSet(f, ListKind, cb)
 }
 
-func (r *refWalker) walkSet(f *format, cb RefCallback) {
+func (r *refWalker) walkSet(f *Format, cb RefCallback) {
 	r.walkListOrSet(f, SetKind, cb)
 }
 
-func (r *refWalker) walkListOrSet(f *format, kind NomsKind, cb RefCallback) {
+func (r *refWalker) walkListOrSet(f *Format, kind NomsKind, cb RefCallback) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
@@ -64,7 +64,7 @@ func (r *refWalker) walkListOrSet(f *format, kind NomsKind, cb RefCallback) {
 	}
 }
 
-func (r *refWalker) walkMap(f *format, cb RefCallback) {
+func (r *refWalker) walkMap(f *Format, cb RefCallback) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
@@ -74,7 +74,7 @@ func (r *refWalker) walkMap(f *format, cb RefCallback) {
 	}
 }
 
-func (r *refWalker) walkBlob(f *format, cb RefCallback) {
+func (r *refWalker) walkBlob(f *Format, cb RefCallback) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
@@ -84,7 +84,7 @@ func (r *refWalker) walkBlob(f *format, cb RefCallback) {
 	}
 }
 
-func (r *refWalker) walkMapLeafSequence(f *format, cb RefCallback) {
+func (r *refWalker) walkMapLeafSequence(f *Format, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
 		r.walkValue(f, cb) // k
@@ -92,7 +92,7 @@ func (r *refWalker) walkMapLeafSequence(f *format, cb RefCallback) {
 	}
 }
 
-func (r *refWalker) walkMetaSequence(f *format, k NomsKind, level uint64, cb RefCallback) {
+func (r *refWalker) walkMetaSequence(f *Format, k NomsKind, level uint64, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
 		r.walkRef(cb) // ref to child sequence
@@ -101,7 +101,7 @@ func (r *refWalker) walkMetaSequence(f *format, k NomsKind, level uint64, cb Ref
 	}
 }
 
-func (r *refWalker) skipOrderedKey(f *format) {
+func (r *refWalker) skipOrderedKey(f *Format) {
 	switch r.peekKind() {
 	case hashKind:
 		r.skipKind()
@@ -111,7 +111,7 @@ func (r *refWalker) skipOrderedKey(f *format) {
 	}
 }
 
-func (r *refWalker) walkValue(f *format, cb RefCallback) {
+func (r *refWalker) walkValue(f *Format, cb RefCallback) {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:

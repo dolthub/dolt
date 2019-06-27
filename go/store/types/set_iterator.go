@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -197,10 +198,11 @@ func compareValue(v1, v2 Value) int {
 	if v1 == nil && v2 == nil {
 		return 0
 	}
-	if v2 == nil || (v1 != nil && v1.Less(v2)) {
+	// TODO(binformat)
+	if v2 == nil || (v1 != nil && v1.Less(Format_7_18, v2)) {
 		return -1
 	}
-	if v1 == nil || (v2 != nil && v2.Less(v1)) {
+	if v1 == nil || (v2 != nil && v2.Less(Format_7_18, v1)) {
 		return 1
 	}
 	return 0

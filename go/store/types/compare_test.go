@@ -283,10 +283,12 @@ func TestCompareTotalOrdering(t *testing.T) {
 			if i == j {
 				assert.True(vi.Equals(vj))
 			} else if i < j {
-				x := vi.Less(vj)
+				// TODO(binformat)
+				x := vi.Less(Format_7_18, vj)
 				assert.True(x)
 			} else {
-				x := vi.Less(vj)
+				// TODO(binformat)
+				x := vi.Less(Format_7_18, vj)
 				assert.False(x)
 			}
 		}

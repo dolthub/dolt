@@ -602,8 +602,8 @@ type bogusType int
 
 func (bg bogusType) Value(ctx context.Context) Value                  { return bg }
 func (bg bogusType) Equals(other Value) bool                          { return false }
-func (bg bogusType) Less(other LesserValuable) bool                   { return false }
-func (bg bogusType) Hash(*format) hash.Hash                           { return hash.Hash{} }
+func (bg bogusType) Less(f *Format, other LesserValuable) bool        { return false }
+func (bg bogusType) Hash(*Format) hash.Hash                           { return hash.Hash{} }
 func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) {}
 func (bg bogusType) WalkRefs(cb RefCallback)                          {}
 func (bg bogusType) Kind() NomsKind {
@@ -612,7 +612,7 @@ func (bg bogusType) Kind() NomsKind {
 func (bg bogusType) typeOf() *Type {
 	return MakeCycleType("ABC")
 }
-func (bg bogusType) writeTo(w nomsWriter, f *format) {
+func (bg bogusType) writeTo(w nomsWriter, f *Format) {
 	panic("abc")
 }
 

@@ -130,7 +130,8 @@ func TestTupleLess(t *testing.T) {
 	for _, test := range tests {
 		tpl1 := NewTuple(test.vals1...)
 		tpl2 := NewTuple(test.vals2...)
-		actual := tpl1.Less(tpl2)
+		// TODO(binformat)
+		actual := tpl1.Less(Format_7_18, tpl2)
 
 		if actual != test.expected {
 			t.Error("tpl1:", EncodedValue(context.Background(), tpl1), "tpl2:", EncodedValue(context.Background(), tpl2), "expected", test.expected, "actual:", actual)

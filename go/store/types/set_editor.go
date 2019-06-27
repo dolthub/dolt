@@ -151,7 +151,8 @@ func (se *SetEditor) edit(v Value, insert bool) {
 
 	se.edits = append(se.edits, setEdit{v, insert})
 
-	if se.normalized && final.value.Less(v) {
+	// TODO(binformat)
+	if se.normalized && final.value.Less(Format_7_18, v) {
 		// fast-path: edits take place in key-order
 		return
 	}
@@ -165,7 +166,8 @@ func (se *SetEditor) findEdit(v Value) (idx int, found bool) {
 	se.normalize()
 
 	idx = sort.Search(len(se.edits), func(i int) bool {
-		return !se.edits[i].value.Less(v)
+		// TODO(binformat)
+		return !se.edits[i].value.Less(Format_7_18, v)
 	})
 
 	if idx == len(se.edits) {
@@ -203,6 +205,9 @@ type setEdit struct {
 
 type setEditSlice []setEdit
 
-func (ses setEditSlice) Len() int           { return len(ses) }
-func (ses setEditSlice) Swap(i, j int)      { ses[i], ses[j] = ses[j], ses[i] }
-func (ses setEditSlice) Less(i, j int) bool { return ses[i].value.Less(ses[j].value) }
+func (ses setEditSlice) Len() int      { return len(ses) }
+func (ses setEditSlice) Swap(i, j int) { ses[i], ses[j] = ses[j], ses[i] }
+func (ses setEditSlice) Less(i, j int) bool {
+	// TODO(binformat)
+	return ses[i].value.Less(Format_7_18, ses[j].value)
+}

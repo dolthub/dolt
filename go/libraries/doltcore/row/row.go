@@ -2,6 +2,7 @@ package row
 
 import (
 	"errors"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"

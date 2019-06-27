@@ -183,7 +183,7 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64))
 	}
 }
 
-func iterRange(ctx context.Context, f *format, col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
+func iterRange(ctx context.Context, f *Format, col Collection, startIdx, endIdx uint64, cb func(v Value)) (numBytes uint64) {
 	l := col.Len()
 	d.PanicIfTrue(startIdx > endIdx || endIdx > l)
 	if startIdx == endIdx {

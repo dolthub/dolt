@@ -279,7 +279,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return false
 }*/
 
-func (t Tuple) Less(other LesserValuable) bool {
+func (t Tuple) Less(f *Format, other LesserValuable) bool {
 	if otherTuple, ok := other.(Tuple); ok {
 		itr := t.Iterator()
 		otherItr := otherTuple.Iterator()
@@ -293,7 +293,7 @@ func (t Tuple) Less(other LesserValuable) bool {
 			_, currOthVal := otherItr.Next()
 
 			if !currVal.Equals(currOthVal) {
-				return currVal.Less(currOthVal)
+				return currVal.Less(f, currOthVal)
 			}
 		}
 

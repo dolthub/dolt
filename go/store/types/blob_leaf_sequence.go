@@ -10,7 +10,7 @@ type blobLeafSequence struct {
 	leafSequence
 }
 
-func newBlobLeafSequence(vrw ValueReadWriter, f *format, data []byte) sequence {
+func newBlobLeafSequence(vrw ValueReadWriter, f *Format, data []byte) sequence {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, sequencePartValues+1)
 	w := newBinaryNomsWriter()
@@ -26,7 +26,7 @@ func newBlobLeafSequence(vrw ValueReadWriter, f *format, data []byte) sequence {
 	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
-func (bl blobLeafSequence) writeTo(w nomsWriter, f *format) {
+func (bl blobLeafSequence) writeTo(w nomsWriter, f *Format) {
 	w.writeRaw(bl.buff)
 }
 
@@ -37,7 +37,7 @@ func (bl blobLeafSequence) data() []byte {
 	return bl.buff[offset:]
 }
 
-func (bl blobLeafSequence) getCompareFn(f *format, other sequence) compareFn {
+func (bl blobLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
 	offsetStart := int(bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind])
 	obl := other.(blobLeafSequence)
 	otherOffsetStart := int(obl.offsets[sequencePartValues] - obl.offsets[sequencePartKind])
@@ -46,7 +46,7 @@ func (bl blobLeafSequence) getCompareFn(f *format, other sequence) compareFn {
 	}
 }
 
-func (bl blobLeafSequence) getItem(idx int, f *format) sequenceItem {
+func (bl blobLeafSequence) getItem(idx int, f *Format) sequenceItem {
 	offset := bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind] + uint32(idx)
 	return bl.buff[offset]
 }

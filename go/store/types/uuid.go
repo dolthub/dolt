@@ -21,7 +21,7 @@ func (v UUID) Equals(other Value) bool {
 	return v == other
 }
 
-func (v UUID) Less(other LesserValuable) bool {
+func (v UUID) Less(f *Format, other LesserValuable) bool {
 	if v2, ok := other.(UUID); ok {
 		for i := 0; i < uuidNumBytes; i++ {
 			b1 := v[i]
@@ -37,7 +37,7 @@ func (v UUID) Less(other LesserValuable) bool {
 	return UUIDKind < other.Kind()
 }
 
-func (v UUID) Hash(f *format) hash.Hash {
+func (v UUID) Hash(f *Format) hash.Hash {
 	return getHash(v, f)
 }
 
@@ -59,14 +59,14 @@ func (v UUID) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v UUID) writeTo(w nomsWriter, f *format) {
+func (v UUID) writeTo(w nomsWriter, f *Format) {
 	id := UUID(v)
 	byteSl := id[:]
 	UUIDKind.writeTo(w, f)
 	w.writeBytes(byteSl)
 }
 
-func (v UUID) valueBytes(f *format) []byte {
+func (v UUID) valueBytes(f *Format) []byte {
 	return v[:]
 }
 

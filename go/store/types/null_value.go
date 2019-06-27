@@ -29,11 +29,11 @@ func (v Null) Equals(other Value) bool {
 	return other.Kind() == NullKind
 }
 
-func (v Null) Less(other LesserValuable) bool {
+func (v Null) Less(f *Format, other LesserValuable) bool {
 	return NullKind < other.Kind()
 }
 
-func (v Null) Hash(f *format) hash.Hash {
+func (v Null) Hash(f *Format) hash.Hash {
 	return getHash(NullValue, f)
 }
 
@@ -55,11 +55,11 @@ func (v Null) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Null) writeTo(w nomsWriter, f *format) {
+func (v Null) writeTo(w nomsWriter, f *Format) {
 	NullKind.writeTo(w, f)
 }
 
-func (v Null) valueBytes(f *format) []byte {
+func (v Null) valueBytes(f *Format) []byte {
 	buff := make([]byte, 1)
 	w := binaryNomsWriter{buff, 0}
 	v.writeTo(&w, f)

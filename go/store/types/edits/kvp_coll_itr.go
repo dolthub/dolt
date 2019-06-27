@@ -24,7 +24,8 @@ func NewItr(coll *KVPCollection) *KVPCollItr {
 
 // Less returns whether the current key this iterator is less than the current key for another iterator
 func (itr *KVPCollItr) Less(other *KVPCollItr) bool {
-	return other.currKey == nil || itr.currKey != nil && itr.currKey.Less(other.currKey)
+	// TODO(binformat)
+	return other.currKey == nil || itr.currKey != nil && itr.currKey.Less(types.Format_7_18, other.currKey)
 }
 
 // returns the next kvp, the slice it was read from when that slice is empty, and whether or not iteration is complete.

@@ -23,14 +23,14 @@ func (s String) Equals(other Value) bool {
 	return s == other
 }
 
-func (s String) Less(other LesserValuable) bool {
+func (s String) Less(f *Format, other LesserValuable) bool {
 	if s2, ok := other.(String); ok {
 		return s < s2
 	}
 	return StringKind < other.Kind()
 }
 
-func (s String) Hash(f *format) hash.Hash {
+func (s String) Hash(f *Format) hash.Hash {
 	return getHash(s, f)
 }
 
@@ -52,12 +52,12 @@ func (s String) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (s String) writeTo(w nomsWriter, f *format) {
+func (s String) writeTo(w nomsWriter, f *Format) {
 	StringKind.writeTo(w, f)
 	w.writeString(string(s))
 }
 
-func (s String) valueBytes(f *format) []byte {
+func (s String) valueBytes(f *Format) []byte {
 	// We know the size of the buffer here so allocate it once.
 	// StringKind, Length (UVarint), UTF-8 encoded string
 	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))

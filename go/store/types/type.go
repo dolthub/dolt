@@ -56,15 +56,15 @@ func (t *Type) Equals(other Value) (res bool) {
 	return false
 }
 
-func (t *Type) Less(other LesserValuable) (res bool) {
-	return valueLess(t, other.(Value))
+func (t *Type) Less(f *Format, other LesserValuable) (res bool) {
+	return valueLess(f, t, other.(Value))
 }
 
-func (t *Type) Hash(f *format) hash.Hash {
+func (t *Type) Hash(f *Format) hash.Hash {
 	return getHash(t, f)
 }
 
-func (t *Type) writeTo(w nomsWriter, f *format) {
+func (t *Type) writeTo(w nomsWriter, f *Format) {
 	TypeKind.writeTo(w, f)
 	t.writeToAsType(w, map[string]*Type{})
 }

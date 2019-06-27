@@ -1652,7 +1652,8 @@ func TestMapIterFrom(t *testing.T) {
 	test := func(m Map, start, end Value) ValueSlice {
 		res := ValueSlice{}
 		m.IterFrom(context.Background(), start, func(k, v Value) bool {
-			if end.Less(k) {
+			// TODO(binformat)
+			if end.Less(Format_7_18, k) {
 				return true
 			}
 			res = append(res, k, v)

@@ -2,11 +2,12 @@ package table
 
 import (
 	"context"
+	"io"
+	"sort"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"sort"
 )
 
 // InMemTable holds a simple list of rows that can be retrieved, or appended to.  It is meant primarily for testing.
@@ -48,7 +49,8 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 	sort.Slice(imt.rows, func(i, j int) bool {
 		iRow := imt.rows[i]
 		jRow := imt.rows[j]
-		return iRow.NomsMapKey(imt.sch).Less(jRow.NomsMapKey(imt.sch))
+		// TODO(binformat)
+		return iRow.NomsMapKey(imt.sch).Less(types.Format_7_18, jRow.NomsMapKey(imt.sch))
 	})
 
 	return nil

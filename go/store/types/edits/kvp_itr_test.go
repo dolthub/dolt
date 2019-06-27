@@ -20,9 +20,10 @@ func IsInOrder(itr types.EditProvider) (bool, int) {
 	for {
 		curr := itr.Next()
 
+		// TODO(binformat)
 		if curr == nil {
 			break
-		} else if curr.Key.Less(prev.Key) {
+		} else if curr.Key.Less(types.Format_7_18, prev.Key) {
 			return false, count
 		}
 

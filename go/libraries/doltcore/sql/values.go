@@ -2,12 +2,13 @@ package sql
 
 import (
 	"context"
+	"strconv"
+
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"strconv"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -261,19 +262,23 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			}
 		case sqlparser.LessThanStr:
 			predicate = func(left, right types.Value) bool {
-				return left.Less(right)
+				// TODO(binformat)
+				return left.Less(types.Format_7_18, right)
 			}
 		case sqlparser.GreaterThanStr:
 			predicate = func(left, right types.Value) bool {
-				return right.Less(left)
+				// TODO(binformat)
+				return right.Less(types.Format_7_18, left)
 			}
 		case sqlparser.LessEqualStr:
 			predicate = func(left, right types.Value) bool {
-				return left.Less(right) || left.Equals(right)
+				// TODO(binformat)
+				return left.Less(types.Format_7_18, right) || left.Equals(right)
 			}
 		case sqlparser.GreaterEqualStr:
 			predicate = func(left, right types.Value) bool {
-				return right.Less(left) || right.Equals(left)
+				// TODO(binformat)
+				return right.Less(types.Format_7_18, left) || right.Equals(left)
 			}
 		case sqlparser.NotEqualStr:
 			predicate = func(left, right types.Value) bool {

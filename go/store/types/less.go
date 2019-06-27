@@ -10,15 +10,14 @@ import (
 
 type kindAndHash interface {
 	Kind() NomsKind
-	Hash(*format) hash.Hash
+	Hash(*Format) hash.Hash
 }
 
-func valueLess(v1, v2 kindAndHash) bool {
+func valueLess(f *Format, v1, v2 kindAndHash) bool {
 	switch v2.Kind() {
 	case BoolKind, FloatKind, StringKind:
 		return false
 	default:
-		// TODO(binformat)
-		return v1.Hash(Format_7_18).Less(v2.Hash(Format_7_18))
+		return v1.Hash(f).Less(v2.Hash(f))
 	}
 }

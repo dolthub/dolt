@@ -24,7 +24,7 @@ func newBlob(seq sequence) Blob {
 	return Blob{seq}
 }
 
-func NewEmptyBlob(vrw ValueReadWriter, f *format) Blob {
+func NewEmptyBlob(vrw ValueReadWriter, f *Format) Blob {
 	return Blob{newBlobLeafSequence(vrw, f, []byte{})}
 }
 
@@ -129,14 +129,14 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 // Concat returns a new Blob comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this Blob, and the leftmost
 // prolly tree chunks of other, so it's efficient.
-func (b Blob) Concat(ctx context.Context, f *format, other Blob) Blob {
+func (b Blob) Concat(ctx context.Context, f *Format, other Blob) Blob {
 	seq := concat(ctx, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return b.newChunker(ctx, f, cur, vrw)
 	})
 	return newBlob(seq)
 }
 
-func (b Blob) newChunker(ctx context.Context, f *format, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+func (b Blob) newChunker(ctx context.Context, f *Format, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 }
 
@@ -186,7 +186,7 @@ func (cbr *BlobReader) Seek(offset int64, whence int) (int64, error) {
 	return abs, nil
 }
 
-func makeBlobLeafChunkFn(vrw ValueReadWriter, f *format) makeChunkFn {
+func makeBlobLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		d.PanicIfFalse(level == 0)
 		buff := make([]byte, len(items))
@@ -199,18 +199,18 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter, f *format) makeChunkFn {
 	}
 }
 
-func chunkBlobLeaf(vrw ValueReadWriter, f *format, buff []byte) (Collection, orderedKey, uint64) {
+func chunkBlobLeaf(vrw ValueReadWriter, f *Format, buff []byte) (Collection, orderedKey, uint64) {
 	blob := newBlob(newBlobLeafSequence(vrw, f, buff))
 	return blob, orderedKeyFromInt(len(buff)), uint64(len(buff))
 }
 
 // NewBlob creates a Blob by reading from every Reader in rs and
 // concatenating the result. NewBlob uses one goroutine per Reader.
-func NewBlob(ctx context.Context, f *format, vrw ValueReadWriter, rs ...io.Reader) Blob {
+func NewBlob(ctx context.Context, f *Format, vrw ValueReadWriter, rs ...io.Reader) Blob {
 	return readBlobsP(ctx, f, vrw, rs...)
 }
 
-func readBlobsP(ctx context.Context, f *format, vrw ValueReadWriter, rs ...io.Reader) Blob {
+func readBlobsP(ctx context.Context, f *Format, vrw ValueReadWriter, rs ...io.Reader) Blob {
 	switch len(rs) {
 	case 0:
 		return NewEmptyBlob(vrw, f)
@@ -240,7 +240,7 @@ func readBlobsP(ctx context.Context, f *format, vrw ValueReadWriter, rs ...io.Re
 	return b
 }
 
-func readBlob(ctx context.Context, f *format, r io.Reader, vrw ValueReadWriter) Blob {
+func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) Blob {
 	sc := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
 		rv.HashByte(item.(byte))
 	})
