@@ -186,7 +186,7 @@ func (ms metaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	return cum
 }
 
-func (ms metaSequence) getCompareFn(other sequence) compareFn {
+func (ms metaSequence) getCompareFn(f *format, other sequence) compareFn {
 	dec := ms.decoder()
 	oms := other.(metaSequence)
 	otherDec := oms.decoder()
@@ -374,7 +374,7 @@ func (es emptySequence) valueReadWriter() ValueReadWriter {
 func (es emptySequence) WalkRefs(cb RefCallback) {
 }
 
-func (es emptySequence) getCompareFn(other sequence) compareFn {
+func (es emptySequence) getCompareFn(f *format, other sequence) compareFn {
 	return func(idx, otherIdx int) bool { panic("empty sequence") }
 }
 

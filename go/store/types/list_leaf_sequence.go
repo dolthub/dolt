@@ -14,6 +14,6 @@ func newListLeafSequence(vrw ValueReadWriter, f *format, vs ...Value) sequence {
 
 // sequence interface
 
-func (ll listLeafSequence) getCompareFn(other sequence) compareFn {
-	return ll.getCompareFnHelper(other.(listLeafSequence).leafSequence)
+func (ll listLeafSequence) getCompareFn(f *format, other sequence) compareFn {
+	return ll.getCompareFnHelper(f, other.(listLeafSequence).leafSequence)
 }

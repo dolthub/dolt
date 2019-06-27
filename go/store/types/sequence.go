@@ -21,7 +21,7 @@ type sequence interface {
 	Empty() bool
 	Equals(other Value) bool
 	getChildSequence(ctx context.Context, idx int) sequence
-	getCompareFn(other sequence) compareFn
+	getCompareFn(f *format, other sequence) compareFn
 	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
 	getItem(idx int) sequenceItem
 	Hash(*format) hash.Hash

@@ -15,8 +15,8 @@ func newSetLeafSequence(vrw ValueReadWriter, vs ...Value) orderedSequence {
 	return setLeafSequence{newLeafSequenceFromValues(SetKind, vrw, Format_7_18, vs...)}
 }
 
-func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
-	return sl.getCompareFnHelper(other.(setLeafSequence).leafSequence)
+func (sl setLeafSequence) getCompareFn(f *format, other sequence) compareFn {
+	return sl.getCompareFnHelper(f, other.(setLeafSequence).leafSequence)
 }
 
 // orderedSequence interface
