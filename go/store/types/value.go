@@ -149,7 +149,7 @@ func (v valueImpl) Less(other LesserValuable) bool {
 
 func (v valueImpl) WalkRefs(cb RefCallback) {
 	// TODO(binformat)
-	walkRefs(v.valueBytes(Format_7_18), cb)
+	walkRefs(v.valueBytes(Format_7_18), Format_7_18, cb)
 }
 
 type asValueImpl interface {
