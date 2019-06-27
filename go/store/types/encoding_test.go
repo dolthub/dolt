@@ -314,7 +314,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 			newMetaTuple(constructRef(r1, BlobType, 11), orderedKeyFromInt(20), 20),
 			newMetaTuple(constructRef(r2, BlobType, 22), orderedKeyFromInt(40), 40),
 			newMetaTuple(constructRef(r3, BlobType, 33), orderedKeyFromInt(60), 60),
-		}, newTestValueStore())),
+		}, newTestValueStore()), Format_7_18),
 	)
 }
 

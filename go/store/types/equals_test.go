@@ -44,7 +44,7 @@ func TestValueEquals(t *testing.T) {
 			return newBlob(newBlobMetaSequence(1, []metaTuple{
 				newMetaTuple(NewRef(b1), orderedKeyFromInt(2), 2),
 				newMetaTuple(NewRef(b2), orderedKeyFromInt(5), 5),
-			}, nil))
+			}, nil), Format_7_18)
 		},
 		// TODO(binformat)
 		func() Value { return NewList(context.Background(), Format_7_18, vrw) },

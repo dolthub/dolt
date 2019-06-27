@@ -18,14 +18,15 @@ import (
 // Blob represents a list of Blobs.
 type Blob struct {
 	sequence
+	format *Format
 }
 
-func newBlob(seq sequence) Blob {
-	return Blob{seq}
+func newBlob(seq sequence, f *Format) Blob {
+	return Blob{seq, f}
 }
 
 func NewEmptyBlob(vrw ValueReadWriter, f *Format) Blob {
-	return Blob{newBlobLeafSequence(vrw, f, []byte{})}
+	return Blob{newBlobLeafSequence(vrw, f, []byte{}), f}
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
@@ -133,7 +134,7 @@ func (b Blob) Concat(ctx context.Context, f *Format, other Blob) Blob {
 	seq := concat(ctx, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return b.newChunker(ctx, f, cur, vrw)
 	})
-	return newBlob(seq)
+	return newBlob(seq, f)
 }
 
 func (b Blob) newChunker(ctx context.Context, f *Format, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
@@ -200,7 +201,7 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
 }
 
 func chunkBlobLeaf(vrw ValueReadWriter, f *Format, buff []byte) (Collection, orderedKey, uint64) {
-	blob := newBlob(newBlobLeafSequence(vrw, f, buff))
+	blob := newBlob(newBlobLeafSequence(vrw, f, buff), f)
 	return blob, orderedKeyFromInt(len(buff)), uint64(len(buff))
 }
 
@@ -310,5 +311,5 @@ func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) 
 		sc.parent.Append(ctx, mt)
 	}
 
-	return newBlob(sc.Done(ctx))
+	return newBlob(sc.Done(ctx), f)
 }
