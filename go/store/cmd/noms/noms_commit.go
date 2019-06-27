@@ -16,6 +16,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
 
@@ -63,7 +64,8 @@ func runCommit(ctx context.Context, args []string) int {
 	oldCommitRef, oldCommitExists := ds.MaybeHeadRef()
 	if oldCommitExists {
 		head := ds.HeadValue()
-		if head.Hash() == value.Hash() && !allowDupe {
+		// TODO(binformat)
+		if head.Hash(types.Format_7_18) == value.Hash(types.Format_7_18) && !allowDupe {
 			fmt.Fprintf(os.Stdout, "Commit aborted - allow-dupe is set to off and this commit would create a duplicate\n")
 			return 0
 		}

@@ -182,7 +182,8 @@ func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) bo
 			if types.ValueCanBePathIndex(v) {
 				return types.NewIndexPath(v)
 			} else {
-				return types.NewHashIndexPath(v.Hash())
+				// TODO(binformat)
+				return types.NewHashIndexPath(v.Hash(types.Format_7_18))
 			}
 		},
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
@@ -219,7 +220,8 @@ func (d differ) diffSets(ctx context.Context, p types.Path, v1, v2 types.Set) bo
 			if types.ValueCanBePathIndex(v) {
 				return types.NewIndexPath(v)
 			}
-			return types.NewHashIndexPath(v.Hash())
+			// TODO(binformat)
+			return types.NewHashIndexPath(v.Hash(types.Format_7_18))
 		},
 		func(cc chan<- types.ValueChanged, sc <-chan struct{}) {
 			if d.leftRight {

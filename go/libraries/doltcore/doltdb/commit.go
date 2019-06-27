@@ -24,7 +24,8 @@ type Commit struct {
 
 // HashOf returns the hash of the commit
 func (c *Commit) HashOf() hash.Hash {
-	return c.commitSt.Hash()
+	// TODO(binformat)
+	return c.commitSt.Hash(types.Format_7_18)
 }
 
 // GetCommitMeta gets the metadata associated with the commit

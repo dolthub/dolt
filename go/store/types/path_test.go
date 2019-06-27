@@ -15,7 +15,8 @@ import (
 )
 
 func hashIdx(v Value) string {
-	return fmt.Sprintf("[#%s]", v.Hash().String())
+	// TODO(binformat)
+	return fmt.Sprintf("[#%s]", v.Hash(Format_7_18).String())
 }
 
 func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) {
@@ -294,7 +295,8 @@ func TestPathParseSuccess(t *testing.T) {
 		assert.Equal(expectStr, p.String())
 	}
 
-	h := Float(42).Hash() // arbitrary hash
+	// TODO(binformat)
+	h := Float(42).Hash(Format_7_18) // arbitrary hash
 
 	test(".foo")
 	test(".foo@type")

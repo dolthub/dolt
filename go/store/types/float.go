@@ -32,9 +32,8 @@ func (v Float) Less(other LesserValuable) bool {
 	return FloatKind < other.Kind()
 }
 
-func (v Float) Hash() hash.Hash {
-	// TODO(binformat)
-	return getHash(v, Format_7_18)
+func (v Float) Hash(f *format) hash.Hash {
+	return getHash(v, f)
 }
 
 func (v Float) WalkValues(ctx context.Context, cb ValueCallback) {

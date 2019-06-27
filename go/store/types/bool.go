@@ -29,9 +29,8 @@ func (b Bool) Less(other LesserValuable) bool {
 	return true
 }
 
-func (b Bool) Hash() hash.Hash {
-	// TODO(binformat)
-	return getHash(b, Format_7_18)
+func (b Bool) Hash(f *format) hash.Hash {
+	return getHash(b, f)
 }
 
 func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) {

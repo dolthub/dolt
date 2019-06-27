@@ -12,9 +12,6 @@ import (
 
 var NullValue Null
 
-// TODO(binformat)
-var NullHash = getHash(NullValue, Format_7_18)
-
 // IsNull returns true if the value is nil, or if the value is of kind NULLKind
 func IsNull(val Value) bool {
 	return val == nil || val.Kind() == NullKind
@@ -36,8 +33,8 @@ func (v Null) Less(other LesserValuable) bool {
 	return NullKind < other.Kind()
 }
 
-func (v Null) Hash() hash.Hash {
-	return NullHash
+func (v Null) Hash(f *format) hash.Hash {
+	return getHash(NullValue, f)
 }
 
 func (v Null) WalkValues(ctx context.Context, cb ValueCallback) {

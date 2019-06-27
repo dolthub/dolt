@@ -2,6 +2,7 @@ package doltdb
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -166,7 +167,8 @@ func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, 
 
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() hash.Hash {
-	return root.valueSt.Hash()
+	// TODO(binformat)
+	return root.valueSt.Hash(types.Format_7_18)
 }
 
 // TableDiff returns the slices of tables added, modified, and removed when compared with another root value.  Tables

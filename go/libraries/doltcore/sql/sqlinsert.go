@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"strings"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -97,7 +98,8 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		key := r.NomsMapKey(tableSch).Value(ctx)
 
 		rowExists := rowData.Get(ctx, key) != nil
-		_, rowInserted := insertedPKHashes[key.Hash()]
+		// TODO(binformat)
+		_, rowInserted := insertedPKHashes[key.Hash(types.Format_7_18)]
 
 		if rowExists || rowInserted {
 			if replace {
@@ -111,7 +113,8 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		}
 		me.Set(key, r.NomsMapValue(tableSch))
 
-		insertedPKHashes[key.Hash()] = struct{}{}
+		// TODO(binformat)
+		insertedPKHashes[key.Hash(types.Format_7_18)] = struct{}{}
 	}
 	newMap := me.Map(ctx)
 	table = table.UpdateRows(ctx, newMap)

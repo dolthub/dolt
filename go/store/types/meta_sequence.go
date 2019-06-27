@@ -81,7 +81,8 @@ func newOrderedKey(v Value) orderedKey {
 	if isKindOrderedByValue(v.Kind()) {
 		return orderedKey{true, v, hash.Hash{}}
 	}
-	return orderedKey{false, v, v.Hash()}
+	// TODO(binformat)
+	return orderedKey{false, v, v.Hash(Format_7_18)}
 }
 
 func orderedKeyFromHash(h hash.Hash) orderedKey {
@@ -413,7 +414,7 @@ func (es emptySequence) isLeaf() bool {
 	return es.level == 0
 }
 
-func (es emptySequence) Hash() hash.Hash {
+func (es emptySequence) Hash(f *format) hash.Hash {
 	panic("empty sequence")
 }
 

@@ -1207,11 +1207,13 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	l2 := NewList(context.Background(), vrw, String("c"), String("d"))
 	l3 := NewList(context.Background(), vrw, l1, l2)
 
-	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash()))
-	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash()))
-	assert.Nil(vrw.ReadValue(context.Background(), l3.Hash()))
+	// TODO(binformat)
+	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash(Format_7_18)))
+	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash(Format_7_18)))
+	assert.Nil(vrw.ReadValue(context.Background(), l3.Hash(Format_7_18)))
 
 	vrw.WriteValue(context.Background(), l3)
-	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash()))
-	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash()))
+	// TODO(binformat)
+	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash(Format_7_18)))
+	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash(Format_7_18)))
 }

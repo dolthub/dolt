@@ -433,11 +433,12 @@ func TestWriteCompoundList(t *testing.T) {
 
 	list1 := newList(newListLeafSequence(vrw, Float(0)))
 	list2 := newList(newListLeafSequence(vrw, Float(1), Float(2), Float(3)))
+	// TODO(binformat)
 	assertEncoding(t,
 		[]interface{}{
 			ListKind, uint64(1), uint64(2), // len,
-			RefKind, list1.Hash(), ListKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(1),
-			RefKind, list2.Hash(), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
+			RefKind, list1.Hash(Format_7_18), ListKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(1),
+			RefKind, list2.Hash(Format_7_18), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
 		},
 		newList(newListMetaSequence(1, []metaTuple{
 			newMetaTuple(NewRef(list1), orderedKeyFromInt(1), 1),
@@ -455,8 +456,9 @@ func TestWriteCompoundSet(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			RefKind, set1.Hash(), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
-			RefKind, set2.Hash(), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
+			// TODO(binformat)
+			RefKind, set1.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
+			RefKind, set2.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
 		},
 		newSet(newSetMetaSequence(1, []metaTuple{
 			newMetaTuple(NewRef(set1), orderedKeyFromInt(1), 2),
@@ -486,8 +488,9 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			RefKind, set1.Hash(), SetKind, BlobKind, uint64(1), hashKind, blob1.Hash(), uint64(2),
-			RefKind, set2.Hash(), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(), uint64(3),
+			// TODO(binformat)
+			RefKind, set1.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob1.Hash(Format_7_18), uint64(2),
+			RefKind, set2.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(Format_7_18), uint64(3),
 		},
 		newSet(newSetMetaSequence(1, []metaTuple{
 			newMetaTuple(NewRef(set1), newOrderedKey(blob1), 2),
@@ -599,7 +602,7 @@ type bogusType int
 func (bg bogusType) Value(ctx context.Context) Value                  { return bg }
 func (bg bogusType) Equals(other Value) bool                          { return false }
 func (bg bogusType) Less(other LesserValuable) bool                   { return false }
-func (bg bogusType) Hash() hash.Hash                                  { return hash.Hash{} }
+func (bg bogusType) Hash(*format) hash.Hash                           { return hash.Hash{} }
 func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) {}
 func (bg bogusType) WalkRefs(cb RefCallback)                          {}
 func (bg bogusType) Kind() NomsKind {

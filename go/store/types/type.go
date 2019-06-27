@@ -49,7 +49,8 @@ func (t *Type) Equals(other Value) (res bool) {
 	}
 
 	if otherType, ok := other.(*Type); ok {
-		return t.TargetKind() == otherType.TargetKind() && t.Hash() == other.Hash()
+		// TODO(binformat)
+		return t.TargetKind() == otherType.TargetKind() && t.Hash(Format_7_18) == other.Hash(Format_7_18)
 	}
 
 	return false
@@ -59,9 +60,8 @@ func (t *Type) Less(other LesserValuable) (res bool) {
 	return valueLess(t, other.(Value))
 }
 
-func (t *Type) Hash() hash.Hash {
-	// TODO(binformat)
-	return getHash(t, Format_7_18)
+func (t *Type) Hash(f *format) hash.Hash {
+	return getHash(t, f)
 }
 
 func (t *Type) writeTo(w nomsWriter, f *format) {
