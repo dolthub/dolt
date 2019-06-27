@@ -110,7 +110,8 @@ func TestRoundTrips(t *testing.T) {
 
 	assertRoundTrips(NewStruct("", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)}))
 
-	listLeaf := newList(newListLeafSequence(vs, Float(4), Float(5), Float(6), Float(7)))
+	// TODO(binformat)
+	listLeaf := newList(newListLeafSequence(vs, Format_7_18, Float(4), Float(5), Float(6), Float(7)))
 	assertRoundTrips(listLeaf)
 
 	assertRoundTrips(newList(newListMetaSequence(1, []metaTuple{
@@ -431,9 +432,9 @@ func TestWriteStructWithBlob(t *testing.T) {
 func TestWriteCompoundList(t *testing.T) {
 	vrw := newTestValueStore()
 
-	list1 := newList(newListLeafSequence(vrw, Float(0)))
-	list2 := newList(newListLeafSequence(vrw, Float(1), Float(2), Float(3)))
 	// TODO(binformat)
+	list1 := newList(newListLeafSequence(vrw, Format_7_18, Float(0)))
+	list2 := newList(newListLeafSequence(vrw, Format_7_18, Float(1), Float(2), Float(3)))
 	assertEncoding(t,
 		[]interface{}{
 			ListKind, uint64(1), uint64(2), // len,

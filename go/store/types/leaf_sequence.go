@@ -19,13 +19,12 @@ func newLeafSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uin
 	return leafSequence{newSequenceImpl(vrw, buff, offsets, len)}
 }
 
-func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) leafSequence {
+func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *format, vs ...Value) leafSequence {
 	d.PanicIfTrue(vrw == nil)
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(vs)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	// TODO(binformat)
-	kind.writeTo(&w, Format_7_18)
+	kind.writeTo(&w, f)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -33,8 +32,7 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) 
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, v := range vs {
-		// TODO(binformat)
-		v.writeTo(&w, Format_7_18)
+		v.writeTo(&w, f)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return newLeafSequence(vrw, w.data(), offsets, count)
