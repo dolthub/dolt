@@ -26,7 +26,8 @@ func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 	vs := NewValueStore(storage.NewView())
 	dataAsByteSlice := toBinaryNomsReaderData(data)
 	dec := newValueDecoder(dataAsByteSlice, vs)
-	v := dec.readValue()
+	// TODO(binformat)
+	v := dec.readValue(Format_7_18)
 
 	c := EncodeValue(v)
 	vdc := NewValidatingDecoder(storage.NewView())

@@ -50,7 +50,8 @@ func (seq leafSequence) valuesSlice(from, to uint64) []Value {
 	dec := seq.decoderSkipToIndex(int(from))
 	vs := make([]Value, (to-from)*uint64(getValuesPerIdx(seq.Kind())))
 	for i := range vs {
-		vs[i] = dec.readValue()
+		// TODO(binformat)
+		vs[i] = dec.readValue(Format_7_18)
 	}
 	return vs
 }
@@ -62,7 +63,8 @@ func (seq leafSequence) getCompareFnHelper(other leafSequence) compareFn {
 	return func(idx, otherIdx int) bool {
 		dec.offset = uint32(seq.getItemOffset(idx))
 		otherDec.offset = uint32(other.getItemOffset(otherIdx))
-		return dec.readValue().Equals(otherDec.readValue())
+		// TODO(binformat)
+		return dec.readValue(Format_7_18).Equals(otherDec.readValue(Format_7_18))
 	}
 }
 
@@ -119,7 +121,8 @@ func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uin
 
 func (seq leafSequence) getItem(idx int) sequenceItem {
 	dec := seq.decoderSkipToIndex(idx)
-	return dec.readValue()
+	// TODO(binformat)
+	return dec.readValue(Format_7_18)
 }
 
 func getValuesPerIdx(kind NomsKind) int {

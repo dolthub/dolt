@@ -22,7 +22,8 @@ type TupleIterator struct {
 func (itr *TupleIterator) Next() (uint64, Value) {
 	if itr.pos < itr.count {
 		valPos := itr.pos
-		val := itr.dec.readValue()
+		// TODO(binformat)
+		val := itr.dec.readValue(Format_7_18)
 
 		itr.pos++
 		return valPos, val
@@ -99,7 +100,8 @@ func (t Tuple) Value(ctx context.Context) Value {
 func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := t.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		cb(dec.readValue())
+		// TODO(binformat)
+		cb(dec.readValue(Format_7_18))
 	}
 }
 
@@ -177,7 +179,8 @@ func (t Tuple) Get(n uint64) Value {
 		dec.skipValue(Format_7_18)
 	}
 
-	v := dec.readValue()
+	// TODO(binformat)
+	v := dec.readValue(Format_7_18)
 	return v
 }
 

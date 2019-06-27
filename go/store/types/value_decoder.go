@@ -174,7 +174,7 @@ func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) ([]uint32, uin
 	return offsets, length
 }
 
-func (r *valueDecoder) readValue() Value {
+func (r *valueDecoder) readValue(f *format) Value {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
@@ -184,8 +184,7 @@ func (r *valueDecoder) readValue() Value {
 		return Bool(r.readBool())
 	case FloatKind:
 		r.skipKind()
-		// TODO(binformat)
-		return r.readFloat(Format_7_18)
+		return r.readFloat(f)
 	case UUIDKind:
 		r.skipKind()
 		return r.readUUID()
@@ -308,11 +307,13 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 		return StringType
 	case ListKind, MapKind, RefKind, SetKind:
 		// These do not decode the actual values anyway.
-		return r.readValue().typeOf()
+		// TODO(binformat)
+		return r.readValue(Format_7_18).typeOf()
 	case StructKind:
 		return readStructTypeOfValue(r)
 	case TupleKind:
-		return r.readValue().typeOf()
+		// TODO(binformat)
+		return r.readValue(Format_7_18).typeOf()
 	case TypeKind:
 		r.skipKind()
 		r.skipType()
@@ -397,7 +398,8 @@ func (r *valueDecoder) readOrderedKey() orderedKey {
 		h := r.readHash()
 		return orderedKeyFromHash(h)
 	default:
-		v := r.readValue()
+		// TODO(binformat)
+		v := r.readValue(Format_7_18)
 		return newOrderedKey(v)
 	}
 }

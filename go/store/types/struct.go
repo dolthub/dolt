@@ -159,7 +159,8 @@ func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		cb(dec.readValue())
+		// TODO(binformat)
+		cb(dec.readValue(Format_7_18))
 	}
 }
 
@@ -209,7 +210,8 @@ func (s Struct) Name() string {
 func (s Struct) IterFields(cb func(name string, value Value)) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		cb(dec.readString(), dec.readValue())
+		// TODO(binformat)
+		cb(dec.readString(), dec.readValue(Format_7_18))
 	}
 }
 
@@ -229,7 +231,8 @@ func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) {
 	cbs.count(count)
 	for i := uint64(0); i < count; i++ {
 		cbs.fieldName(dec.readString())
-		cbs.fieldValue(ctx, dec.readValue())
+		// TODO(binformat)
+		cbs.fieldValue(ctx, dec.readValue(Format_7_18))
 	}
 	cbs.end()
 }
@@ -242,7 +245,8 @@ func (s Struct) MaybeGet(n string) (v Value, found bool) {
 		name := dec.readString()
 		if name == n {
 			found = true
-			v = dec.readValue()
+			// TODO(binformat)
+			v = dec.readValue(Format_7_18)
 			return
 		}
 		if name > n {
@@ -364,7 +368,8 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		}
 		var change ValueChanged
 		if fn1 == fn2 {
-			v1, v2 := dec1.readValue(), dec2.readValue()
+			// TODO(binformat)
+			v1, v2 := dec1.readValue(Format_7_18), dec2.readValue(Format_7_18)
 			if !v1.Equals(v2) {
 				change = ValueChanged{DiffChangeModified, String(fn1), v2, v1}
 			}
@@ -372,12 +377,14 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			i2++
 			fn1, fn2 = "", ""
 		} else if fn1 < fn2 {
-			v1 := dec1.readValue()
+			// TODO(binformat)
+			v1 := dec1.readValue(Format_7_18)
 			change = ValueChanged{DiffChangeAdded, String(fn1), nil, v1}
 			i1++
 			fn1 = ""
 		} else {
-			v2 := dec2.readValue()
+			// TODO(binformat)
+			v2 := dec2.readValue(Format_7_18)
 			change = ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}
 			i2++
 			fn2 = ""
@@ -393,7 +400,8 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			fn1 = dec1.readString()
 			fmt.Println(fn1)
 		}
-		v1 := dec1.readValue()
+		// TODO(binformat)
+		v1 := dec1.readValue(Format_7_18)
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}) {
 			return
 		}
@@ -403,7 +411,8 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		if fn2 == "" {
 			fn2 = dec2.readString()
 		}
-		v2 := dec2.readValue()
+		// TODO(binformat)
+		v2 := dec2.readValue(Format_7_18)
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}) {
 			return
 		}
