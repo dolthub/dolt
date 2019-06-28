@@ -189,7 +189,7 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	vrw := newTestValueStore()
 
 	newSetSequenceMt := func(v ...Value) metaTuple {
-		seq := newSetLeafSequence(vrw, v...)
+		seq := newSetLeafSequence(Format_7_18, vrw, v...)
 		set := newSet(Format_7_18, seq)
 		return newMetaTuple(Format_7_18, vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1], Format_7_18), uint64(len(v)))
 	}

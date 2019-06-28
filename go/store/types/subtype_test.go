@@ -628,7 +628,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	{
 		newChunkedSet := func(vals ...Value) Set {
 			newSequenceMetaTuple := func(v Value) metaTuple {
-				seq := newSetLeafSequence(vs, v)
+				seq := newSetLeafSequence(Format_7_18, vs, v)
 				set := newSet(Format_7_18, seq)
 				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), set), newOrderedKey(v, Format_7_18), 1)
 			}
