@@ -29,21 +29,21 @@ type testMap struct {
 }
 
 func (tm testMap) SetValue(i int, v Value) testMap {
-	entries := make([]mapEntry, 0, len(tm.entries))
-	entries = append(entries, tm.entries...)
+	entries := make([]mapEntry, 0, len(tm.entries.entries))
+	entries = append(entries, tm.entries.entries...)
 	entries[i].value = v
-	return testMap{entries, tm.knownBadKey}
+	return testMap{mapEntrySlice{entries, tm.entries.f}, tm.knownBadKey}
 }
 
 func (tm testMap) Remove(from, to int) testMap {
-	entries := make([]mapEntry, 0, len(tm.entries)-(to-from))
-	entries = append(entries, tm.entries[:from]...)
-	entries = append(entries, tm.entries[to:]...)
-	return testMap{entries, tm.knownBadKey}
+	entries := make([]mapEntry, 0, len(tm.entries.entries)-(to-from))
+	entries = append(entries, tm.entries.entries[:from]...)
+	entries = append(entries, tm.entries.entries[to:]...)
+	return testMap{mapEntrySlice{entries, tm.entries.f}, tm.knownBadKey}
 }
 
 func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {
-	for _, entry := range tm.entries {
+	for _, entry := range tm.entries.entries {
 		if entry.key.Equals(key) {
 			return entry.value, true
 		}
@@ -54,25 +54,25 @@ func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {
 func (tm testMap) Diff(last testMap) (added []Value, removed []Value, modified []Value) {
 	// Note: this could be use tm.toMap/last.toMap and then tmMap.Diff(lastMap) but the
 	// purpose of this method is to be redundant.
-	if len(tm.entries) == 0 && len(last.entries) == 0 {
+	if len(tm.entries.entries) == 0 && len(last.entries.entries) == 0 {
 		return // nothing changed
 	}
-	if len(tm.entries) == 0 {
+	if len(tm.entries.entries) == 0 {
 		// everything removed
-		for _, entry := range last.entries {
+		for _, entry := range last.entries.entries {
 			removed = append(removed, entry.key)
 		}
 		return
 	}
-	if len(last.entries) == 0 {
+	if len(last.entries.entries) == 0 {
 		// everything added
-		for _, entry := range tm.entries {
+		for _, entry := range tm.entries.entries {
 			added = append(added, entry.key)
 		}
 		return
 	}
 
-	for _, entry := range tm.entries {
+	for _, entry := range tm.entries.entries {
 		otherValue, exists := last.MaybeGet(entry.key)
 		if !exists {
 			added = append(added, entry.key)
@@ -80,7 +80,7 @@ func (tm testMap) Diff(last testMap) (added []Value, removed []Value, modified [
 			modified = append(modified, entry.key)
 		}
 	}
-	for _, entry := range last.entries {
+	for _, entry := range last.entries.entries {
 		_, exists := tm.MaybeGet(entry.key)
 		if !exists {
 			removed = append(removed, entry.key)
@@ -91,10 +91,10 @@ func (tm testMap) Diff(last testMap) (added []Value, removed []Value, modified [
 
 func (tm testMap) toMap(vrw ValueReadWriter) Map {
 	keyvals := []Value{}
-	for _, entry := range tm.entries {
+	for _, entry := range tm.entries.entries {
 		keyvals = append(keyvals, entry.key, entry.value)
 	}
-	return NewMap(context.Background(), Format_7_18, vrw, keyvals...)
+	return NewMap(context.Background(), tm.entries.f, vrw, keyvals...)
 }
 
 func toValuable(vs ValueSlice) []Valuable {
@@ -106,8 +106,8 @@ func toValuable(vs ValueSlice) []Valuable {
 }
 
 func (tm testMap) Flatten(from, to int) []Value {
-	flat := make([]Value, 0, len(tm.entries)*2)
-	for _, entry := range tm.entries[from:to] {
+	flat := make([]Value, 0, len(tm.entries.entries)*2)
+	for _, entry := range tm.entries.entries[from:to] {
 		flat = append(flat, entry.key)
 		flat = append(flat, entry.value)
 	}
@@ -115,7 +115,7 @@ func (tm testMap) Flatten(from, to int) []Value {
 }
 
 func (tm testMap) FlattenAll() []Value {
-	return tm.Flatten(0, len(tm.entries))
+	return tm.Flatten(0, len(tm.entries.entries))
 }
 
 func newSortedTestMap(length int, gen genValueFn) testMap {
@@ -131,7 +131,7 @@ func newSortedTestMap(length int, gen genValueFn) testMap {
 		entries = append(entries, mapEntry{k, Float(i * 2)})
 	}
 
-	return testMap{entries, Float(length + 2)}
+	return testMap{mapEntrySlice{entries, Format_7_18}, Float(length + 2)}
 }
 
 func newTestMapFromMap(m Map) testMap {
@@ -139,7 +139,7 @@ func newTestMapFromMap(m Map) testMap {
 	m.IterAll(context.Background(), func(key, value Value) {
 		entries = append(entries, mapEntry{key, value})
 	})
-	return testMap{entries, Float(-0)}
+	return testMap{mapEntrySlice{entries, Format_7_18}, Float(-0)}
 }
 
 func newRandomTestMap(length int, gen genValueFn) testMap {
@@ -157,7 +157,7 @@ func newRandomTestMap(length int, gen genValueFn) testMap {
 		}
 	}
 
-	return testMap{entries, gen(mask + 1)}
+	return testMap{mapEntrySlice{entries, Format_7_18}, gen(mask + 1)}
 }
 
 func validateMap(t *testing.T, vrw ValueReadWriter, m Map, entries mapEntrySlice) {
@@ -166,7 +166,7 @@ func validateMap(t *testing.T, vrw ValueReadWriter, m Map, entries mapEntrySlice
 
 	out := mapEntrySlice{}
 	m.IterAll(context.Background(), func(k Value, v Value) {
-		out = append(out, mapEntry{k, v})
+		out.entries = append(out.entries, mapEntry{k, v})
 	})
 
 	assert.True(t, out.Equals(entries))
@@ -201,7 +201,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 				l2 := v2.(Map)
 				idx := uint64(0)
 				l2.Iter(context.Background(), func(key, value Value) (stop bool) {
-					entry := elems.entries[idx]
+					entry := elems.entries.entries[idx]
 					if !key.Equals(entry.key) {
 						// TODO(binformat)
 						fmt.Printf("%d: %s (%s)\n!=\n%s (%s)\n", idx, EncodedValue(context.Background(), key), key.Hash(Format_7_18), EncodedValue(context.Background(), entry.key), entry.key.Hash(Format_7_18))
@@ -220,7 +220,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 			prependOne: func() Collection {
 				dup := make([]mapEntry, length+1)
 				dup[0] = mapEntry{Float(-1), Float(-2)}
-				copy(dup[1:], elems.entries)
+				copy(dup[1:], elems.entries.entries)
 				flat := []Value{}
 				for _, entry := range dup {
 					flat = append(flat, entry.key, entry.value)
@@ -229,7 +229,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 			},
 			appendOne: func() Collection {
 				dup := make([]mapEntry, length+1)
-				copy(dup, elems.entries)
+				copy(dup, elems.entries.entries)
 				dup[len(dup)-1] = mapEntry{Float(length*2 + 1), Float((length*2 + 1) * 2)}
 				flat := []Value{}
 				for _, entry := range dup {
@@ -245,7 +245,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 func (suite *mapTestSuite) createStreamingMap(vs *ValueStore) Map {
 	kvChan := make(chan Value)
 	mapChan := NewStreamingMap(context.Background(), Format_7_18, vs, kvChan)
-	for _, entry := range suite.elems.entries {
+	for _, entry := range suite.elems.entries.entries {
 		kvChan <- entry.key
 		kvChan <- entry.value
 	}
@@ -264,12 +264,12 @@ func (suite *mapTestSuite) TestStreamingMapOrder() {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	entries := make(mapEntrySlice, len(suite.elems.entries))
-	copy(entries, suite.elems.entries)
-	entries[0], entries[1] = entries[1], entries[0]
+	entries := mapEntrySlice{make([]mapEntry, len(suite.elems.entries.entries)), Format_7_18}
+	copy(entries.entries, suite.elems.entries.entries)
+	entries.entries[0], entries.entries[1] = entries.entries[1], entries.entries[0]
 
-	kvChan := make(chan Value, len(entries)*2)
-	for _, e := range entries {
+	kvChan := make(chan Value, len(entries.entries)*2)
+	for _, e := range entries.entries {
 		kvChan <- e.key
 		kvChan <- e.value
 	}
@@ -539,7 +539,7 @@ func TestMapHas(t *testing.T) {
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
 		m2 := vrw.ReadValue(context.Background(), vrw.WriteValue(context.Background(), m).TargetHash()).(Map)
-		for _, entry := range tm.entries {
+		for _, entry := range tm.entries.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(context.Background(), k))
 			assert.True(m.Get(context.Background(), k).Equals(v))
@@ -646,15 +646,15 @@ func TestMapRemove(t *testing.T) {
 		whole := tm.toMap(vs)
 		run := func(i int) {
 			expected := tm.Remove(i, i+1).toMap(vs)
-			actual := whole.Edit().Remove(tm.entries[i].key).Map(context.Background())
+			actual := whole.Edit().Remove(tm.entries.entries[i].key).Map(context.Background())
 			assert.Equal(expected.Len(), actual.Len())
 			assert.True(expected.Equals(actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
 		}
-		for i := 0; i < len(tm.entries); i += incr {
+		for i := 0; i < len(tm.entries.entries); i += incr {
 			run(i)
 		}
-		run(len(tm.entries) - 1)
+		run(len(tm.entries.entries) - 1)
 	}
 
 	doTest(128, getTestNativeOrderMap, 32)
@@ -720,8 +720,8 @@ func TestMapFirst2(t *testing.T) {
 		m := tm.toMap(vrw)
 		sort.Stable(tm.entries)
 		actualKey, actualValue := m.First(context.Background())
-		assert.True(tm.entries[0].key.Equals(actualKey))
-		assert.True(tm.entries[0].value.Equals(actualValue))
+		assert.True(tm.entries.entries[0].key.Equals(actualKey))
+		assert.True(tm.entries.entries[0].value.Equals(actualValue))
 	}
 
 	doTest(getTestNativeOrderMap, 16)
@@ -771,8 +771,8 @@ func TestMapLast2(t *testing.T) {
 		m := tm.toMap(vrw)
 		sort.Stable(tm.entries)
 		actualKey, actualValue := m.Last(context.Background())
-		assert.True(tm.entries[len(tm.entries)-1].key.Equals(actualKey))
-		assert.True(tm.entries[len(tm.entries)-1].value.Equals(actualValue))
+		assert.True(tm.entries.entries[len(tm.entries.entries)-1].key.Equals(actualKey))
+		assert.True(tm.entries.entries[len(tm.entries.entries)-1].value.Equals(actualValue))
 	}
 
 	doTest(getTestNativeOrderMap, 16)
@@ -848,7 +848,7 @@ func validateMapInsertion(t *testing.T, tm testMap) {
 	allMe := NewMap(context.Background(), Format_7_18, vrw).Edit()
 	incrMe := NewMap(context.Background(), Format_7_18, vrw).Edit()
 
-	for _, entry := range tm.entries {
+	for _, entry := range tm.entries.entries {
 		allMe.Set(entry.key, entry.value)
 		incrMe.Set(entry.key, entry.value)
 
@@ -893,10 +893,10 @@ func TestMapSet(t *testing.T) {
 			assert.True(expected.Equals(actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
 		}
-		for i := 0; i < len(tm.entries)-offset; i += incr {
+		for i := 0; i < len(tm.entries.entries)-offset; i += incr {
 			run(i, i+offset)
 		}
-		run(len(tm.entries)-offset, len(tm.entries))
+		run(len(tm.entries.entries)-offset, len(tm.entries.entries))
 	}
 
 	doTest(18, 3, getTestNativeOrderMap, 9)
@@ -939,7 +939,7 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 
 	expectedWorking := tm
 	actual := original
-	for i, entry := range tm.entries {
+	for i, entry := range tm.entries.entries {
 		newValue := Float(int64(entry.value.(Float)) + 1)
 		expectedWorking = expectedWorking.SetValue(i, newValue)
 		actual = actual.Edit().Set(entry.key, newValue).Map(context.Background())
@@ -975,7 +975,7 @@ func TestMapMaybeGet(t *testing.T) {
 		vrw := newTestValueStore()
 		tm := toTestMap(scale, vrw)
 		m := tm.toMap(vrw)
-		for _, entry := range tm.entries {
+		for _, entry := range tm.entries.entries {
 			v, ok := m.MaybeGet(context.Background(), entry.key)
 			if assert.True(ok, "%v should have been in the map!", entry.key) {
 				assert.True(v.Equals(entry.value), "%v != %v", v, entry.value)
@@ -1051,8 +1051,8 @@ func TestMapIter2(t *testing.T) {
 		endAt := uint64(64)
 
 		m.Iter(context.Background(), func(k, v Value) (done bool) {
-			assert.True(tm.entries[idx].key.Equals(k))
-			assert.True(tm.entries[idx].value.Equals(v))
+			assert.True(tm.entries.entries[idx].key.Equals(k))
+			assert.True(tm.entries.entries[idx].value.Equals(v))
 			if idx == endAt {
 				done = true
 			}
@@ -1101,8 +1101,8 @@ func TestMapIterAll(t *testing.T) {
 		idx := uint64(0)
 
 		m.IterAll(context.Background(), func(k, v Value) {
-			assert.True(tm.entries[idx].key.Equals(k))
-			assert.True(tm.entries[idx].value.Equals(v))
+			assert.True(tm.entries.entries[idx].key.Equals(k))
+			assert.True(tm.entries.entries[idx].value.Equals(v))
 			idx++
 		})
 	}
@@ -1636,11 +1636,11 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 	tm := getTestNativeOrderMap(4, vs)
 	nm := tm.toMap(vs)
 
-	for len(tm.entries) > 0 {
-		entr := tm.entries
+	for len(tm.entries.entries) > 0 {
+		entr := tm.entries.entries
 		last := entr[len(entr)-1]
 		entr = entr[:len(entr)-1]
-		tm.entries = entr
+		tm.entries.entries = entr
 		nm = reload(nm.Edit().Remove(last.key).Map(context.Background()))
 		assert.True(tm.toMap(vs).Equals(nm))
 	}

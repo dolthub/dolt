@@ -297,7 +297,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 	case MapKind:
 		var valueItems []mapEntry
 		for _, seq := range output {
-			valueItems = append(valueItems, seq.(mapLeafSequence).entries()...)
+			valueItems = append(valueItems, seq.(mapLeafSequence).entries().entries...)
 		}
 		return newMapLeafSequence(ms.format, ms.vrw, valueItems...)
 	case SetKind:

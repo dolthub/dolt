@@ -286,7 +286,7 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 			kt := desc.ElemTypes[0]
 			vt := desc.ElemTypes[1]
 			if seq, ok := v.orderedSequence.(mapLeafSequence); ok {
-				for _, entry := range seq.entries() {
+				for _, entry := range seq.entries().entries {
 					isSub, hasMore := isValueSubtypeOfDetails(entry.key, kt, hasExtra)
 					if !isSub {
 						return false, hasExtra

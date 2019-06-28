@@ -33,21 +33,25 @@ func (entry mapEntry) equals(other mapEntry) bool {
 	return entry.key.Equals(other.key) && entry.value.Equals(other.value)
 }
 
-type mapEntrySlice []mapEntry
+type mapEntrySlice struct {
+	entries []mapEntry
+	f       *Format
+}
 
-func (mes mapEntrySlice) Len() int      { return len(mes) }
-func (mes mapEntrySlice) Swap(i, j int) { mes[i], mes[j] = mes[j], mes[i] }
+func (mes mapEntrySlice) Len() int { return len(mes.entries) }
+func (mes mapEntrySlice) Swap(i, j int) {
+	mes.entries[i], mes.entries[j] = mes.entries[j], mes.entries[i]
+}
 func (mes mapEntrySlice) Less(i, j int) bool {
-	// TODO(binformat)
-	return mes[i].key.Less(Format_7_18, mes[j].key)
+	return mes.entries[i].key.Less(mes.f, mes.entries[j].key)
 }
 func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	if mes.Len() != other.Len() {
 		return false
 	}
 
-	for i, v := range mes {
-		if !v.equals(other[i]) {
+	for i, v := range mes.entries {
+		if !v.equals(other.entries[i]) {
 			return false
 		}
 	}
@@ -91,9 +95,12 @@ func (ml mapLeafSequence) WalkRefs(cb RefCallback) {
 
 func (ml mapLeafSequence) entries() mapEntrySlice {
 	dec, count := ml.decoderSkipToValues()
-	entries := make(mapEntrySlice, count)
+	entries := mapEntrySlice{
+		make([]mapEntry, count),
+		ml.f,
+	}
 	for i := uint64(0); i < count; i++ {
-		entries[i] = mapEntry{dec.readValue(ml.f), dec.readValue(ml.f)}
+		entries.entries[i] = mapEntry{dec.readValue(ml.f), dec.readValue(ml.f)}
 	}
 	return entries
 }

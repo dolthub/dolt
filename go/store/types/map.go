@@ -33,7 +33,7 @@ func NewMap(ctx context.Context, f *Format, vrw ValueReadWriter, kv ...Value) Ma
 	entries := buildMapData(kv)
 	ch := newEmptyMapSequenceChunker(ctx, f, vrw)
 
-	for _, entry := range entries {
+	for _, entry := range entries.entries {
 		ch.Append(ctx, entry)
 	}
 
@@ -255,28 +255,38 @@ func buildMapData(values []Value) mapEntrySlice {
 	if len(values)%2 != 0 {
 		d.Panic("Must specify even number of key/value pairs")
 	}
-	kvs := make(mapEntrySlice, len(values)/2)
+	kvs := mapEntrySlice{
+		make([]mapEntry, len(values)/2),
+		Format_7_18,
+	}
 
 	for i := 0; i < len(values); i += 2 {
 		d.PanicIfTrue(values[i] == nil)
 		d.PanicIfTrue(values[i+1] == nil)
 		entry := mapEntry{values[i], values[i+1]}
-		kvs[i/2] = entry
+		kvs.entries[i/2] = entry
 	}
 
-	uniqueSorted := make(mapEntrySlice, 0, len(kvs))
+	uniqueSorted := mapEntrySlice{
+		make([]mapEntry, 0, len(kvs.entries)),
+		Format_7_18,
+	}
+
 	sort.Stable(kvs)
-	last := kvs[0]
-	for i := 1; i < len(kvs); i++ {
-		kv := kvs[i]
+	last := kvs.entries[0]
+	for i := 1; i < kvs.Len(); i++ {
+		kv := kvs.entries[i]
 		if !kv.key.Equals(last.key) {
-			uniqueSorted = append(uniqueSorted, last)
+			uniqueSorted.entries = append(uniqueSorted.entries, last)
 		}
 
 		last = kv
 	}
 
-	return append(uniqueSorted, last)
+	return mapEntrySlice{
+		append(uniqueSorted.entries, last),
+		uniqueSorted.f,
+	}
 }
 
 func makeMapLeafChunkFn(f *Format, vrw ValueReadWriter) makeChunkFn {
