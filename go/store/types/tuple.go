@@ -11,19 +11,21 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
-var EmptyTuple = NewTuple()
+func EmptyTuple(f *Format) Tuple {
+	return NewTuple(f)
+}
 
 type TupleIterator struct {
-	dec   valueDecoder
-	count uint64
-	pos   uint64
+	dec    valueDecoder
+	count  uint64
+	pos    uint64
+	format *Format
 }
 
 func (itr *TupleIterator) Next() (uint64, Value) {
 	if itr.pos < itr.count {
 		valPos := itr.pos
-		// TODO(binformat)
-		val := itr.dec.readValue(Format_7_18)
+		val := itr.dec.readValue(itr.format)
 
 		itr.pos++
 		return valPos, val
@@ -46,49 +48,46 @@ func (itr *TupleIterator) Pos() uint64 {
 
 type Tuple struct {
 	valueImpl
+	format *Format
 }
 
 // readTuple reads the data provided by a decoder and moves the decoder forward.
-func readTuple(dec *valueDecoder) Tuple {
+func readTuple(f *Format, dec *valueDecoder) Tuple {
 	start := dec.pos()
-	skipTuple(dec)
+	skipTuple(f, dec)
 	end := dec.pos()
-	return Tuple{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}}
+	return Tuple{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}, f}
 }
 
-func skipTuple(dec *valueDecoder) {
+func skipTuple(f *Format, dec *valueDecoder) {
 	dec.skipKind()
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(f)
 	}
 }
 
-func walkTuple(r *refWalker, cb RefCallback) {
+func walkTuple(f *Format, r *refWalker, cb RefCallback) {
 	r.skipKind()
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		// TODO(binformat)
-		r.walkValue(Format_7_18, cb)
+		r.walkValue(f, cb)
 	}
 }
 
-func NewTuple(values ...Value) Tuple {
+func NewTuple(f *Format, values ...Value) Tuple {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	// TODO(binformat)
-	TupleKind.writeTo(&w, Format_7_18)
+	TupleKind.writeTo(&w, f)
 	numVals := len(values)
 	w.writeCount(uint64(numVals))
 	for i := 0; i < numVals; i++ {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		// TODO(binformat)
-		values[i].writeTo(&w, Format_7_18)
+		values[i].writeTo(&w, f)
 	}
-	return Tuple{valueImpl{vrw, w.data(), nil}}
+	return Tuple{valueImpl{vrw, w.data(), nil}, f}
 }
 
 func (t Tuple) Empty() bool {
@@ -103,8 +102,7 @@ func (t Tuple) Value(ctx context.Context) Value {
 func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := t.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		// TODO(binformat)
-		cb(dec.readValue(Format_7_18))
+		cb(dec.readValue(t.format))
 	}
 }
 
@@ -149,11 +147,10 @@ func (t Tuple) IteratorAt(pos uint64) *TupleIterator {
 	dec, count := t.decoderSkipToFields()
 
 	for i := uint64(0); i < pos; i++ {
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(t.format)
 	}
 
-	return &TupleIterator{dec, count, pos}
+	return &TupleIterator{dec, count, pos, t.format}
 }
 
 // IterFields iterates over the fields, calling cb for every field in the tuple until cb returns false
@@ -178,12 +175,10 @@ func (t Tuple) Get(n uint64) Value {
 	}
 
 	for i := uint64(0); i < n; i++ {
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(t.format)
 	}
 
-	// TODO(binformat)
-	v := dec.readValue(Format_7_18)
+	v := dec.readValue(t.format)
 	return v
 }
 
@@ -200,11 +195,10 @@ func (t Tuple) Set(n uint64, v Value) Tuple {
 
 	w.writeCount(count)
 	w.writeRaw(head)
-	// TODO(binformat)
-	v.writeTo(&w, Format_7_18)
+	v.writeTo(&w, t.format)
 	w.writeRaw(tail)
 
-	return Tuple{valueImpl{t.vrw, w.data(), nil}}
+	return Tuple{valueImpl{t.vrw, w.data(), nil}, t.format}
 }
 
 func (t Tuple) Append(v Value) Tuple {
@@ -218,10 +212,9 @@ func (t Tuple) Append(v Value) Tuple {
 	w.writeRaw(prolog)
 	w.writeCount(count + 1)
 	w.writeRaw(dec.buff[fieldsOffset:])
-	// TODO(binformat)
-	v.writeTo(&w, Format_7_18)
+	v.writeTo(&w, t.format)
 
-	return Tuple{valueImpl{t.vrw, w.data(), nil}}
+	return Tuple{valueImpl{t.vrw, w.data(), nil}, t.format}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
@@ -240,15 +233,13 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	fieldsOffset := dec.offset
 
 	for i := uint64(0); i < n; i++ {
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(t.format)
 	}
 
 	head = dec.buff[fieldsOffset:dec.offset]
 
 	if n != count-1 {
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(t.format)
 		tail = dec.buff[dec.offset:len(dec.buff)]
 	}
 

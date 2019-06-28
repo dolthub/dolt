@@ -86,11 +86,11 @@ func TestFromNoms(t *testing.T) {
 	})
 
 	t.Run("all values specified", func(t *testing.T) {
-		keys := types.NewTuple(
+		keys := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(
+		vals := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), ageVal,
 			types.Uint(titleColTag), titleVal,
@@ -101,11 +101,11 @@ func TestFromNoms(t *testing.T) {
 	})
 
 	t.Run("only key", func(t *testing.T) {
-		keys := types.NewTuple(
+		keys := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple()
+		vals := types.NewTuple(types.Format_7_18)
 
 		expectedRow := New(sch, TaggedValues{
 			fnColTag: fnVal,
@@ -116,11 +116,11 @@ func TestFromNoms(t *testing.T) {
 	})
 
 	t.Run("additional tag not in schema is silently dropped", func(t *testing.T) {
-		keys := types.NewTuple(
+		keys := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(
+		vals := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), ageVal,
 			types.Uint(titleColTag), titleVal,
@@ -132,11 +132,11 @@ func TestFromNoms(t *testing.T) {
 	})
 
 	t.Run("bad type", func(t *testing.T) {
-		keys := types.NewTuple(
+		keys := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(
+		vals := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), fnVal,
 		)
@@ -147,11 +147,11 @@ func TestFromNoms(t *testing.T) {
 	})
 
 	t.Run("key col set in vals", func(t *testing.T) {
-		keys := types.NewTuple(
+		keys := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(
+		vals := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(fnColTag), fnVal,
 		)
@@ -162,12 +162,12 @@ func TestFromNoms(t *testing.T) {
 	})
 
 	t.Run("unknown tag in key", func(t *testing.T) {
-		keys := types.NewTuple(
+		keys := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 			types.Uint(unusedTag), fnVal,
 		)
-		vals := types.NewTuple(
+		vals := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), ageVal,
 			types.Uint(titleColTag), titleVal,
@@ -179,12 +179,12 @@ func TestFromNoms(t *testing.T) {
 	})
 
 	t.Run("value tag in key", func(t *testing.T) {
-		keys := types.NewTuple(
+		keys := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 			types.Uint(ageColTag), ageVal,
 		)
-		vals := types.NewTuple(
+		vals := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(titleColTag), titleVal,
 		)

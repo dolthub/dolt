@@ -380,7 +380,7 @@ func (r *valueDecoder) readStruct() Value {
 }
 
 func (r *valueDecoder) readTuple() Value {
-	return readTuple(r)
+	return readTuple(Format_7_18, r)
 }
 
 func (r *valueDecoder) skipStruct() {
@@ -388,7 +388,7 @@ func (r *valueDecoder) skipStruct() {
 }
 
 func (r *valueDecoder) skipTuple() {
-	skipTuple(r)
+	skipTuple(Format_7_18, r)
 }
 
 func (r *valueDecoder) readOrderedKey() orderedKey {

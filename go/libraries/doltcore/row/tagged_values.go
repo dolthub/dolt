@@ -16,7 +16,7 @@ func (tvs TupleVals) Kind() types.NomsKind {
 }
 
 func (tvs TupleVals) Value(ctx context.Context) types.Value {
-	return types.NewTuple(tvs...)
+	return types.NewTuple(types.Format_7_18, tvs...)
 }
 
 func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
