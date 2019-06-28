@@ -12,6 +12,7 @@ import (
 
 type mapLeafSequence struct {
 	leafSequence
+	f *Format
 }
 
 type mapEntry struct {
@@ -24,9 +25,8 @@ func (entry mapEntry) writeTo(w nomsWriter, f *Format) {
 	entry.value.writeTo(w, f)
 }
 
-func readMapEntry(r *valueDecoder) mapEntry {
-	// TODO(binformat)
-	return mapEntry{r.readValue(Format_7_18), r.readValue(Format_7_18)}
+func readMapEntry(r *valueDecoder, f *Format) mapEntry {
+	return mapEntry{r.readValue(f), r.readValue(f)}
 }
 
 func (entry mapEntry) equals(other mapEntry) bool {
@@ -55,13 +55,12 @@ func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	return true
 }
 
-func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
+func newMapLeafSequence(f *Format, vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, len(data)+sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	// TODO(binformat)
-	MapKind.writeTo(&w, Format_7_18)
+	MapKind.writeTo(&w, f)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -69,11 +68,10 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, me := range data {
-		// TODO(binformat)
-		me.writeTo(&w, Format_7_18)
+		me.writeTo(&w, f)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
+	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count), f}
 }
 
 func (ml mapLeafSequence) writeTo(w nomsWriter, f *Format) {
@@ -84,20 +82,18 @@ func (ml mapLeafSequence) writeTo(w nomsWriter, f *Format) {
 
 func (ml mapLeafSequence) getItem(idx int, f *Format) sequenceItem {
 	dec := ml.decoderSkipToIndex(idx)
-	return readMapEntry(&dec)
+	return readMapEntry(&dec, f)
 }
 
 func (ml mapLeafSequence) WalkRefs(cb RefCallback) {
-	// TODO(binformat)
-	walkRefs(ml.valueBytes(Format_7_18), Format_7_18, cb)
+	walkRefs(ml.valueBytes(ml.f), ml.f, cb)
 }
 
 func (ml mapLeafSequence) entries() mapEntrySlice {
 	dec, count := ml.decoderSkipToValues()
 	entries := make(mapEntrySlice, count)
 	for i := uint64(0); i < count; i++ {
-		// TODO(binformat)
-		entries[i] = mapEntry{dec.readValue(Format_7_18), dec.readValue(Format_7_18)}
+		entries[i] = mapEntry{dec.readValue(ml.f), dec.readValue(ml.f)}
 	}
 	return entries
 }
@@ -109,15 +105,13 @@ func (ml mapLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
 	return func(idx, otherIdx int) bool {
 		dec1.offset = uint32(ml.getItemOffset(idx))
 		dec2.offset = uint32(ml2.getItemOffset(otherIdx))
-		// TODO(binformat)
-		k1 := dec1.readValue(Format_7_18)
-		k2 := dec2.readValue(Format_7_18)
+		k1 := dec1.readValue(ml.f)
+		k2 := dec2.readValue(ml2.f)
 		if !k1.Equals(k2) {
 			return false
 		}
-		// TODO(binformat)
-		v1 := dec1.readValue(Format_7_18)
-		v2 := dec2.readValue(Format_7_18)
+		v1 := dec1.readValue(ml.f)
+		v2 := dec2.readValue(ml2.f)
 		return v1.Equals(v2)
 	}
 }
@@ -155,21 +149,17 @@ func (ml mapLeafSequence) decoderSkipToIndex(idx int) valueDecoder {
 
 func (ml mapLeafSequence) getKey(idx int) orderedKey {
 	dec := ml.decoderSkipToIndex(idx)
-	// TODO(binformat)
-	return newOrderedKey(dec.readValue(Format_7_18))
+	return newOrderedKey(dec.readValue(ml.f))
 }
 
 func (ml mapLeafSequence) search(key orderedKey) int {
 	return sort.Search(int(ml.Len()), func(i int) bool {
-		// TODO(binformat)
-		return !ml.getKey(i).Less(Format_7_18, key)
+		return !ml.getKey(i).Less(ml.f, key)
 	})
 }
 
 func (ml mapLeafSequence) getValue(idx int) Value {
 	dec := ml.decoderSkipToIndex(idx)
-	// TODO(binformat)
-	dec.skipValue(Format_7_18)
-	// TODO(binformat)
-	return dec.readValue(Format_7_18)
+	dec.skipValue(ml.f)
+	return dec.readValue(ml.f)
 }

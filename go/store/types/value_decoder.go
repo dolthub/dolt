@@ -118,7 +118,7 @@ func (r *valueDecoder) readSetSequence() orderedSequence {
 func (r *valueDecoder) readMapSequence() orderedSequence {
 	seq := r.readSequence(MapKind, r.skipMapLeafSequence)
 	if seq.isLeaf() {
-		return mapLeafSequence{seq.(leafSequence)}
+		return mapLeafSequence{seq.(leafSequence), Format_7_18}
 	}
 	return seq.(orderedSequence)
 }

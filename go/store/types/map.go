@@ -292,7 +292,7 @@ func makeMapLeafChunkFn(f *Format, vrw ValueReadWriter) makeChunkFn {
 			mapData[i] = entry
 		}
 
-		m := newMap(newMapLeafSequence(vrw, mapData...), f)
+		m := newMap(newMapLeafSequence(f, vrw, mapData...), f)
 		var key orderedKey
 		if len(mapData) > 0 {
 			key = newOrderedKey(mapData[len(mapData)-1].key)
