@@ -309,7 +309,8 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 		for _, seq := range output {
 			valueItems = append(valueItems, seq.(mapLeafSequence).entries()...)
 		}
-		return newMapLeafSequence(ms.vrw, valueItems...)
+		// TODO(binformat)
+		return newMapLeafSequence(Format_7_18, ms.vrw, valueItems...)
 	case SetKind:
 		var valueItems []Value
 		for _, seq := range output {
