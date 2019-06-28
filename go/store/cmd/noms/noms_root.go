@@ -109,7 +109,7 @@ Continue?`)
 
 func validate(ctx context.Context, r types.Value) bool {
 	rootType := types.MakeMapType(types.StringType, types.MakeRefType(types.ValueType))
-	if !types.IsValueSubtypeOf(r, rootType) {
+	if !types.IsValueSubtypeOf(types.Format_7_18, r, rootType) {
 		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(ctx), types.TypeOf(r).Describe(ctx))
 		return false
 	}
