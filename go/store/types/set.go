@@ -214,7 +214,8 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		set := newSet(newSetLeafSequence(vrw, setData...))
 		var key orderedKey
 		if len(setData) > 0 {
-			key = newOrderedKey(setData[len(setData)-1])
+			// TODO(binformat)
+			key = newOrderedKey(setData[len(setData)-1], Format_7_18)
 		}
 
 		return set, key, uint64(len(items))

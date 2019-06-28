@@ -76,16 +76,16 @@ func newIndexedMetaSequenceChunkFn(f *Format, kind NomsKind, vrw ValueReadWriter
 			d.PanicIfFalse(BlobKind == kind)
 			col = newBlob(newBlobMetaSequence(level, tuples, f, vrw), f)
 		}
-		return col, orderedKeyFromSum(tuples), numLeaves
+		return col, orderedKeyFromSum(tuples, f), numLeaves
 	}
 }
 
-func orderedKeyFromSum(msd []metaTuple) orderedKey {
+func orderedKeyFromSum(msd []metaTuple, f *Format) orderedKey {
 	sum := uint64(0)
 	for _, mt := range msd {
 		sum += mt.numLeaves()
 	}
-	return orderedKeyFromUint64(sum)
+	return orderedKeyFromUint64(sum, f)
 }
 
 // LoadLeafNodes loads the set of leaf nodes which contain the items

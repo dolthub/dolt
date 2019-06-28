@@ -600,7 +600,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(v Value) metaTuple {
 				seq := newListLeafSequence(vs, Format_7_18, v)
 				list := newList(seq, Format_7_18)
-				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), list), newOrderedKey(v), 1)
+				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), list), newOrderedKey(v, Format_7_18), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals))
@@ -630,7 +630,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(v Value) metaTuple {
 				seq := newSetLeafSequence(vs, v)
 				set := newSet(seq)
-				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), set), newOrderedKey(v), 1)
+				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), set), newOrderedKey(v, Format_7_18), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals))
@@ -663,7 +663,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(e mapEntry) metaTuple {
 				seq := newMapLeafSequence(Format_7_18, vs, e)
 				m := newMap(seq, Format_7_18)
-				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), m), newOrderedKey(e.key), 1)
+				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), m), newOrderedKey(e.key, Format_7_18), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals)/2)

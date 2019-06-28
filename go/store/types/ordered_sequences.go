@@ -27,7 +27,8 @@ func newMapMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueRe
 func newCursorAtValue(ctx context.Context, seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
 	var key orderedKey
 	if val != nil {
-		key = newOrderedKey(val)
+		// TODO(binformat)
+		key = newOrderedKey(val, Format_7_18)
 	}
 	return newCursorAt(ctx, seq, key, forInsertion, last)
 }
