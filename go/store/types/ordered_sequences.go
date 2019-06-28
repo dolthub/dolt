@@ -24,11 +24,10 @@ func newMapMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueRe
 	return newMetaSequenceFromTuples(f, MapKind, level, tuples, vrw)
 }
 
-func newCursorAtValue(ctx context.Context, seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
+func newCursorAtValue(ctx context.Context, f *Format, seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
 	var key orderedKey
 	if val != nil {
-		// TODO(binformat)
-		key = newOrderedKey(val, Format_7_18)
+		key = newOrderedKey(val, f)
 	}
 	return newCursorAt(ctx, seq, key, forInsertion, last)
 }
@@ -100,7 +99,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, f *Format, vrw ValueReadWriter
 			mt := v.(metaTuple)
 			key := mt.key()
 			// TODO(binformat)
-			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(Format_7_18, key))
+			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(f, key))
 			lastKey = key
 			tuples[i] = mt // chunk is written when the root sequence is written
 			numLeaves += mt.numLeaves()
@@ -111,7 +110,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, f *Format, vrw ValueReadWriter
 			col = newSet(newSetMetaSequence(level, tuples, f, vrw))
 		} else {
 			d.PanicIfFalse(MapKind == kind)
-			col = newMap(newMapMetaSequence(level, tuples, f, vrw), Format_7_18)
+			col = newMap(newMapMetaSequence(level, tuples, f, vrw), f)
 		}
 
 		return col, tuples[len(tuples)-1].key(), numLeaves

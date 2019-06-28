@@ -16,7 +16,7 @@ const (
 	lengthOfNumbersTest = 1000
 )
 
-type diffFn func(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool
+type diffFn func(ctx context.Context, f *Format, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool
 
 type diffTestSuite struct {
 	suite.Suite
@@ -44,7 +44,7 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 	changes := make(chan ValueChanged)
 	closeChan := make(chan struct{})
 	go func() {
-		df(context.Background(), o1, o2, changes, closeChan)
+		df(context.Background(), Format_7_18, o1, o2, changes, closeChan)
 		close(changes)
 	}()
 	for change := range changes {
@@ -170,7 +170,7 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 		stopChan := make(chan struct{})
 
 		go func() {
-			df(context.Background(), s1, s2, changeChan, closeChan)
+			df(context.Background(), Format_7_18, s1, s2, changeChan, closeChan)
 			stopChan <- struct{}{}
 		}()
 
@@ -203,9 +203,9 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	runTest := func(df diffFn) {
 		changes := make(chan ValueChanged)
 		go func() {
-			df(context.Background(), s1, s2, changes, nil)
+			df(context.Background(), Format_7_18, s1, s2, changes, nil)
 			changes <- ValueChanged{}
-			df(context.Background(), s2, s1, changes, nil)
+			df(context.Background(), Format_7_18, s2, s1, changes, nil)
 			close(changes)
 		}()
 

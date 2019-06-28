@@ -284,7 +284,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 		for _, seq := range output {
 			metaItems = append(metaItems, seq.(metaSequence).tuples()...)
 		}
-		return newMetaSequenceFromTuples(Format_7_18, ms.Kind(), level-1, metaItems, ms.vrw)
+		return newMetaSequenceFromTuples(ms.format, ms.Kind(), level-1, metaItems, ms.vrw)
 	}
 
 	switch ms.Kind() {
