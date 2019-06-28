@@ -50,7 +50,7 @@ func nomsStruct(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdCla
 func nomsStructNew(ctx context.Context, dbStr string, name string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyStructEdits(ctx, sp, types.NewStruct(name, nil), nil, args)
+	applyStructEdits(ctx, sp, types.NewStruct(types.Format_7_18, name, nil), nil, args)
 	return 0
 }
 

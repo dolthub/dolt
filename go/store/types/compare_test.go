@@ -309,7 +309,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nMap := NewMap(context.Background(), Format_7_18, vrw, words...)
 	nRef := NewRef(blob, Format_7_18)
 	nSet := NewSet(context.Background(), Format_7_18, vrw, nums...)
-	nStruct := NewStruct("teststruct", map[string]Value{"f1": Float(1)})
+	nStruct := NewStruct(Format_7_18, "teststruct", map[string]Value{"f1": Float(1)})
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
 	sort.Sort(vals)

@@ -61,7 +61,7 @@ func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {
 		tablesKey: tblMap,
 	}
 
-	st := types.NewStruct(ddbRootStructName, sd)
+	st := types.NewStruct(types.Format_7_18, ddbRootStructName, sd)
 
 	return newRootValue(vrw, st)
 }

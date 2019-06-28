@@ -641,7 +641,7 @@ func TestSetOfStruct(t *testing.T) {
 
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
-		elems = append(elems, NewStruct("S1", StructData{"o": Float(i)}))
+		elems = append(elems, NewStruct(Format_7_18, "S1", StructData{"o": Float(i)}))
 	}
 
 	s := NewSet(context.Background(), Format_7_18, vs, elems...)
@@ -1016,7 +1016,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		NewSet(context.Background(), Format_7_18, vs, Bool(true)),
 		NewList(context.Background(), Format_7_18, vs, Bool(true)),
 		NewMap(context.Background(), Format_7_18, vs, Bool(true), Float(0)),
-		NewStruct("", StructData{"field": Bool(true)}),
+		NewStruct(Format_7_18, "", StructData{"field": Bool(true)}),
 		// Refs of values
 		NewRef(Bool(true), Format_7_18),
 		NewRef(Float(0), Format_7_18),
@@ -1026,7 +1026,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		NewRef(NewSet(context.Background(), Format_7_18, vs, Bool(true)), Format_7_18),
 		NewRef(NewList(context.Background(), Format_7_18, vs, Bool(true)), Format_7_18),
 		NewRef(NewMap(context.Background(), Format_7_18, vs, Bool(true), Float(0)), Format_7_18),
-		NewRef(NewStruct("", StructData{"field": Bool(true)}), Format_7_18),
+		NewRef(NewStruct(Format_7_18, "", StructData{"field": Bool(true)}), Format_7_18),
 	}
 
 	s := NewSet(context.Background(), Format_7_18, vs, vals...)
@@ -1095,10 +1095,10 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 	vs := newTestValueStore()
 
 	list := NewSet(context.Background(), Format_7_18, vs,
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(1),
 		}),
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		}),

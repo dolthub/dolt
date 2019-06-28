@@ -59,7 +59,7 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 	db := sp.GetDatabase(context.Background())
 	ds := sp.GetDataset(context.Background())
 	for i := 0; i < 3; i++ {
-		data := types.NewStruct("", types.StructData{
+		data := types.NewStruct(types.Format_7_18, "", types.StructData{
 			"bar": types.Float(i),
 		})
 		ds, err = db.CommitValue(context.Background(), ds, data)
@@ -138,7 +138,7 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 	db := sp.GetDatabase(context.Background())
 	ds := db.GetDataset(context.Background(), "ds1")
 
-	meta := types.NewStruct("Meta", map[string]types.Value{
+	meta := types.NewStruct(types.Format_7_18, "Meta", map[string]types.Value{
 		"longNameForTest": types.String("Yoo"),
 		"test2":           types.String("Hoo"),
 	})

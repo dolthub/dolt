@@ -108,7 +108,7 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(String("AINT NO THANG"))
 	assertRoundTrips(String("💩"))
 
-	assertRoundTrips(NewStruct("", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)}))
+	assertRoundTrips(NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)}))
 
 	// TODO(binformat)
 	listLeaf := newList(newListLeafSequence(vs, Format_7_18, Float(4), Float(5), Float(6), Float(7)), Format_7_18)
@@ -327,7 +327,7 @@ func TestWriteEmptyStruct(t *testing.T) {
 		[]interface{}{
 			StructKind, "S", uint64(0), /* len */
 		},
-		NewStruct("S", nil),
+		NewStruct(Format_7_18, "S", nil),
 	)
 }
 
@@ -346,13 +346,12 @@ func TestWriteStruct(t *testing.T) {
 			StructKind, "S", uint64(2), /* len */
 			"b", BoolKind, true, "x", FloatKind, Float(42),
 		},
-		NewStruct("S", StructData{"x": Float(42), "b": Bool(true)}),
+		NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)}),
 	)
 }
 
 func TestWriteStructTooMuchData(t *testing.T) {
-	s := NewStruct("S", StructData{"x": Float(42), "b": Bool(true)})
-	// TODO(binformat)
+	s := NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)})
 	c := EncodeValue(s, Format_7_18)
 	data := c.Data()
 	buff := make([]byte, len(data)+1)
@@ -374,7 +373,7 @@ func TestWriteStructWithList(t *testing.T) {
 			"l", ListKind, uint64(0), uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
 		// TODO(binformat)
-		NewStruct("S", StructData{"l": NewList(context.Background(), Format_7_18, vrw, String("a"), String("b"))}),
+		NewStruct(Format_7_18, "S", StructData{"l": NewList(context.Background(), Format_7_18, vrw, String("a"), String("b"))}),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -384,7 +383,7 @@ func TestWriteStructWithList(t *testing.T) {
 			"l", ListKind, uint64(0), uint64(0), /* len */
 		},
 		// TODO(binformat)
-		NewStruct("S", StructData{"l": NewList(context.Background(), Format_7_18, vrw)}),
+		NewStruct(Format_7_18, "S", StructData{"l": NewList(context.Background(), Format_7_18, vrw)}),
 	)
 }
 
@@ -395,7 +394,7 @@ func TestWriteStructWithTuple(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		NewStruct("S", StructData{"t": NewTuple(String("a"), String("b"))}),
+		NewStruct(Format_7_18, "S", StructData{"t": NewTuple(String("a"), String("b"))}),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -404,7 +403,7 @@ func TestWriteStructWithTuple(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(0), /* len */
 		},
-		NewStruct("S", StructData{"t": NewTuple()}),
+		NewStruct(Format_7_18, "S", StructData{"t": NewTuple()}),
 	)
 }
 
@@ -422,7 +421,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 			"x", FloatKind, Float(42),
 		},
 		// {s: {x: 42}}
-		NewStruct("S", StructData{"s": NewStruct("S2", StructData{"x": Float(42)})}),
+		NewStruct(Format_7_18, "S", StructData{"s": NewStruct(Format_7_18, "S2", StructData{"x": Float(42)})}),
 	)
 }
 
@@ -435,7 +434,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 			"b", BlobKind, uint64(0), []byte{0x00, 0x01},
 		},
 		// TODO(binformat)
-		NewStruct("S", StructData{"b": NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBuffer([]byte{0x00, 0x01}))}),
+		NewStruct(Format_7_18, "S", StructData{"b": NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBuffer([]byte{0x00, 0x01}))}),
 	)
 }
 
@@ -538,7 +537,7 @@ func TestWriteListOfStruct(t *testing.T) {
 			StructKind, "S", uint64(1) /* len */, "x", FloatKind, Float(42),
 		},
 		// TODO(binformat)
-		NewList(context.Background(), Format_7_18, vrw, NewStruct("S", StructData{"x": Float(42)})),
+		NewList(context.Background(), Format_7_18, vrw, NewStruct(Format_7_18, "S", StructData{"x": Float(42)})),
 	)
 }
 

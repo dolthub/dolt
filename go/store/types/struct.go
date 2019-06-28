@@ -16,30 +16,30 @@ import (
 )
 
 var EmptyStructType = MakeStructType("")
-var EmptyStruct = newStruct("", nil, nil)
+var EmptyStruct = newStruct(Format_7_18, "", nil, nil)
 
 type StructData map[string]Value
 
 type Struct struct {
 	valueImpl
+	format *Format
 }
 
 // readStruct reads the data provided by a decoder and moves the decoder forward.
-func readStruct(dec *valueDecoder) Struct {
+func readStruct(f *Format, dec *valueDecoder) Struct {
 	start := dec.pos()
-	skipStruct(dec)
+	skipStruct(f, dec)
 	end := dec.pos()
-	return Struct{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}}
+	return Struct{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}, f}
 }
 
-func skipStruct(dec *valueDecoder) {
+func skipStruct(f *Format, dec *valueDecoder) {
 	dec.skipKind()
 	dec.skipString() // name
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(f)
 	}
 }
 
@@ -68,22 +68,20 @@ func isStructSameTypeForSure(dec *valueDecoder, t *Type) bool {
 	return true
 }
 
-func walkStruct(r *refWalker, cb RefCallback) {
+func walkStruct(f *Format, r *refWalker, cb RefCallback) {
 	r.skipKind()
 	r.skipString() // name
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
 		r.skipString()
-		// TODO(binformat)
-		r.walkValue(Format_7_18, cb)
+		r.walkValue(f, cb)
 	}
 }
 
-func newStruct(name string, fieldNames []string, values []Value) Struct {
+func newStruct(f *Format, name string, fieldNames []string, values []Value) Struct {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	// TODO(binformat)
-	StructKind.writeTo(&w, Format_7_18)
+	StructKind.writeTo(&w, f)
 	w.writeString(name)
 	w.writeCount(uint64(len(fieldNames)))
 	for i := 0; i < len(fieldNames); i++ {
@@ -91,13 +89,12 @@ func newStruct(name string, fieldNames []string, values []Value) Struct {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		// TODO(binformat)
-		values[i].writeTo(&w, Format_7_18)
+		values[i].writeTo(&w, f)
 	}
-	return Struct{valueImpl{vrw, w.data(), nil}}
+	return Struct{valueImpl{vrw, w.data(), nil}, f}
 }
 
-func NewStruct(name string, data StructData) Struct {
+func NewStruct(format *Format, name string, data StructData) Struct {
 	verifyStructName(name)
 	fieldNames := make([]string, len(data))
 	values := make([]Value, len(data))
@@ -114,7 +111,7 @@ func NewStruct(name string, data StructData) Struct {
 		values[i] = data[fieldNames[i]]
 	}
 
-	return newStruct(name, fieldNames, values)
+	return newStruct(format, name, fieldNames, values)
 }
 
 // StructTemplate allows creating a template for structs with a known shape
@@ -144,9 +141,9 @@ func MakeStructTemplate(name string, fieldNames []string) (t StructTemplate) {
 
 // NewStruct creates a new Struct from the StructTemplate. The order of the
 // values must match the order of the field names of the StructTemplate.
-func (st StructTemplate) NewStruct(values []Value) Struct {
+func (st StructTemplate) NewStruct(format *Format, values []Value) Struct {
 	d.PanicIfFalse(len(st.fieldNames) == len(values))
-	return newStruct(st.name, st.fieldNames, values)
+	return newStruct(format, st.name, st.fieldNames, values)
 }
 
 func (s Struct) Empty() bool {
@@ -162,8 +159,7 @@ func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		// TODO(binformat)
-		cb(dec.readValue(Format_7_18))
+		cb(dec.readValue(s.format))
 	}
 }
 
@@ -213,8 +209,7 @@ func (s Struct) Name() string {
 func (s Struct) IterFields(cb func(name string, value Value)) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		// TODO(binformat)
-		cb(dec.readString(), dec.readValue(Format_7_18))
+		cb(dec.readString(), dec.readValue(s.format))
 	}
 }
 
@@ -234,8 +229,7 @@ func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) {
 	cbs.count(count)
 	for i := uint64(0); i < count; i++ {
 		cbs.fieldName(dec.readString())
-		// TODO(binformat)
-		cbs.fieldValue(ctx, dec.readValue(Format_7_18))
+		cbs.fieldValue(ctx, dec.readValue(s.format))
 	}
 	cbs.end()
 }
@@ -248,15 +242,13 @@ func (s Struct) MaybeGet(n string) (v Value, found bool) {
 		name := dec.readString()
 		if name == n {
 			found = true
-			// TODO(binformat)
-			v = dec.readValue(Format_7_18)
+			v = dec.readValue(s.format)
 			return
 		}
 		if name > n {
 			return
 		}
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(s.format)
 	}
 
 	return
@@ -289,11 +281,10 @@ func (s Struct) Set(n string, v Value) Struct {
 	w.writeCount(count)
 	w.writeRaw(head)
 	w.writeString(n)
-	// TODO(binformat)
-	v.writeTo(&w, Format_7_18)
+	v.writeTo(&w, s.format)
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, w.data(), nil}}
+	return Struct{valueImpl{s.vrw, w.data(), nil}, s.format}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
@@ -309,8 +300,7 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 	for i := uint64(0); i < count; i++ {
 		beforeCurrent := dec.offset
 		fn := dec.readString()
-		// TODO(binformat)
-		dec.skipValue(Format_7_18)
+		dec.skipValue(s.format)
 
 		if fn == name {
 			found = true
@@ -347,7 +337,7 @@ func (s Struct) Delete(n string) Struct {
 	w.writeRaw(head)
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, w.data(), nil}}
+	return Struct{valueImpl{s.vrw, w.data(), nil}, s.format}
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
@@ -372,8 +362,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		}
 		var change ValueChanged
 		if fn1 == fn2 {
-			// TODO(binformat)
-			v1, v2 := dec1.readValue(Format_7_18), dec2.readValue(Format_7_18)
+			v1, v2 := dec1.readValue(s.format), dec2.readValue(s.format)
 			if !v1.Equals(v2) {
 				change = ValueChanged{DiffChangeModified, String(fn1), v2, v1}
 			}
@@ -381,14 +370,12 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			i2++
 			fn1, fn2 = "", ""
 		} else if fn1 < fn2 {
-			// TODO(binformat)
-			v1 := dec1.readValue(Format_7_18)
+			v1 := dec1.readValue(s.format)
 			change = ValueChanged{DiffChangeAdded, String(fn1), nil, v1}
 			i1++
 			fn1 = ""
 		} else {
-			// TODO(binformat)
-			v2 := dec2.readValue(Format_7_18)
+			v2 := dec2.readValue(s.format)
 			change = ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}
 			i2++
 			fn2 = ""
@@ -404,8 +391,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			fn1 = dec1.readString()
 			fmt.Println(fn1)
 		}
-		// TODO(binformat)
-		v1 := dec1.readValue(Format_7_18)
+		v1 := dec1.readValue(s.format)
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}) {
 			return
 		}
@@ -415,8 +401,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		if fn2 == "" {
 			fn2 = dec2.readString()
 		}
-		// TODO(binformat)
-		v2 := dec2.readValue(Format_7_18)
+		v2 := dec2.readValue(s.format)
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}) {
 			return
 		}

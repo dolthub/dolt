@@ -267,7 +267,7 @@ func (m *merger) threeWayStructMerge(ctx context.Context, a, b, parent types.Str
 			if change.ChangeType == types.DiffChangeAdded || change.ChangeType == types.DiffChangeModified {
 				data[field] = newVal
 			}
-			return structCandidate{types.NewStruct(targetVal.Name(), data)}
+			return structCandidate{types.NewStruct(types.Format_7_18, targetVal.Name(), data)}
 		}
 		panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(change.Key).Describe(ctx)))
 	}
@@ -340,7 +340,7 @@ func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Str
 			if parent != nil {
 				pStruct, pOk = parent.(types.Struct)
 			} else {
-				pStruct, pOk = types.NewStruct(aStruct.Name(), nil), true
+				pStruct, pOk = types.NewStruct(types.Format_7_18, aStruct.Name(), nil), true
 			}
 			return aStruct, bStruct, pStruct, pOk
 		}

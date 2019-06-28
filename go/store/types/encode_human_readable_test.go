@@ -120,7 +120,7 @@ func TestWriteHumanReadableNested(t *testing.T) {
 }
 
 func TestWriteHumanReadableStruct(t *testing.T) {
-	str := NewStruct("S1", StructData{
+	str := NewStruct(Format_7_18, "S1", StructData{
 		"x": Float(1),
 		"y": Float(2),
 	})
@@ -130,16 +130,15 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	vrw := newTestValueStore()
 
-	str1 := NewStruct("S3", StructData{
+	str1 := NewStruct(Format_7_18, "S3", StructData{
 		"x": Float(1),
 	})
-	str2 := NewStruct("S3", StructData{
+	str2 := NewStruct(Format_7_18, "S3", StructData{
 		"x": Float(2),
 	})
-	str3 := NewStruct("S3", StructData{
+	str3 := NewStruct(Format_7_18, "S3", StructData{
 		"x": Float(3),
 	})
-	// TODO(binformat)
 	l := NewList(context.Background(), Format_7_18, vrw, str1, str2, str3)
 	assertWriteHRSEqual(t, `[
   struct S3 {
@@ -313,7 +312,7 @@ func TestEmptyCollections(t *testing.T) {
 
 	a := MakeStructType("Nothing")
 	assertWriteHRSEqual(t, "Struct Nothing {}", a)
-	b := NewStruct("Rien", StructData{})
+	b := NewStruct(Format_7_18, "Rien", StructData{})
 	assertWriteHRSEqual(t, "struct Rien {}", b)
 	c := MakeMapType(BlobType, FloaTType)
 	assertWriteHRSEqual(t, "Map<Blob, Float>", c)
@@ -361,8 +360,8 @@ func (c TestCommenter) Comment(ctx context.Context, v Value) string {
 func TestRegisterCommenter(t *testing.T) {
 	a := assert.New(t)
 
-	tt := NewStruct("TestType1", StructData{"Name": String("abc-123")})
-	nt := NewStruct("TestType2", StructData{"Name": String("abc-123")})
+	tt := NewStruct(Format_7_18, "TestType1", StructData{"Name": String("abc-123")})
+	nt := NewStruct(Format_7_18, "TestType2", StructData{"Name": String("abc-123")})
 
 	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest: ", testType: tt.typeOf()})
 

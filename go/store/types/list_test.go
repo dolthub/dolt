@@ -1203,10 +1203,10 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 
 	// TODO(binformat)
 	list := NewList(context.Background(), Format_7_18, vrw,
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(1),
 		}),
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		}),

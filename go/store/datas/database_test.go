@@ -579,7 +579,7 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 
 func (suite *DatabaseSuite) TestMetaOption() {
 	ds := suite.db.GetDataset(context.Background(), "ds1")
-	m := types.NewStruct("M", types.StructData{
+	m := types.NewStruct(types.Format_7_18, "M", types.StructData{
 		"author": types.String("arv"),
 	})
 

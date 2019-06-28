@@ -494,5 +494,5 @@ func (p *Parser) parseStruct(ctx context.Context) types.Struct {
 		break
 	}
 	p.lex.eat('}')
-	return types.NewStruct(name, data)
+	return types.NewStruct(types.Format_7_18, name, data)
 }

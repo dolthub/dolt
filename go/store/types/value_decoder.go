@@ -376,7 +376,7 @@ func (r *valueDecoder) isStringSame(s string) bool {
 }
 
 func (r *valueDecoder) readStruct() Value {
-	return readStruct(r)
+	return readStruct(Format_7_18, r)
 }
 
 func (r *valueDecoder) readTuple() Value {
@@ -384,7 +384,7 @@ func (r *valueDecoder) readTuple() Value {
 }
 
 func (r *valueDecoder) skipStruct() {
-	skipStruct(r)
+	skipStruct(Format_7_18, r)
 }
 
 func (r *valueDecoder) skipTuple() {

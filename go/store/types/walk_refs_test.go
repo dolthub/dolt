@@ -36,7 +36,7 @@ func TestWalkRefs(t *testing.T) {
 		t.Parallel()
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
-			s := NewStruct("", StructData{"n": Float(1)})
+			s := NewStruct(Format_7_18, "", StructData{"n": Float(1)})
 			runTest(NewRef(NewMap(context.Background(), Format_7_18, vrw, s, Float(2)), Format_7_18), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
@@ -50,14 +50,14 @@ func TestWalkRefs(t *testing.T) {
 			"ref": NewRef(Bool(false), Format_7_18),
 			"num": Float(42),
 		}
-		runTest(NewStruct("nom", data), t)
+		runTest(NewStruct(Format_7_18, "nom", data), t)
 	})
 
 	// must return a slice with an even number of elements
 	newValueSlice := func(r *rand.Rand) ValueSlice {
 		vs := make(ValueSlice, 256)
 		for i := range vs {
-			vs[i] = NewStruct("", StructData{"n": Float(r.Uint64())})
+			vs[i] = NewStruct(Format_7_18, "", StructData{"n": Float(r.Uint64())})
 		}
 		return vs
 	}

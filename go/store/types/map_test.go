@@ -320,7 +320,7 @@ func newNumber(i int) Value {
 }
 
 func newNumberStruct(i int) Value {
-	return NewStruct("", StructData{"n": Float(i)})
+	return NewStruct(Format_7_18, "", StructData{"n": Float(i)})
 }
 
 func getTestNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
@@ -405,7 +405,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	temp := MakeStructTemplate("Foo", []string{"Bool", "Number", "String1", "String2"})
 
 	newLargeStruct := func(i int) Value {
-		return temp.NewStruct([]Value{
+		return temp.NewStruct(Format_7_18, []Value{
 			Bool(i%2 == 0),
 			Float(i),
 			String(fmt.Sprintf("I AM A REALLY REALY REALL SUPER CALIFRAGILISTICLY CRAZY-ASSED LONGTASTIC String %d", i)),
@@ -1497,8 +1497,8 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
-		k := vs.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i)}))
-		v := vs.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i + 1)}))
+		k := vs.WriteValue(context.Background(), NewStruct(Format_7_18, "num", StructData{"n": Float(i)}))
+		v := vs.WriteValue(context.Background(), NewStruct(Format_7_18, "num", StructData{"n": Float(i + 1)}))
 		assert.NotNil(k)
 		assert.NotNil(v)
 		kvs = append(kvs, k, v)
@@ -1579,7 +1579,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewSet(context.Background(), Format_7_18, vrw, Bool(true)), v,
 		NewList(context.Background(), Format_7_18, vrw, Bool(true)), v,
 		NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), v,
-		NewStruct("", StructData{"field": Bool(true)}), v,
+		NewStruct(Format_7_18, "", StructData{"field": Bool(true)}), v,
 		// Refs of values
 		NewRef(Bool(true), Format_7_18), v,
 		NewRef(Float(0), Format_7_18), v,
@@ -1589,7 +1589,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewRef(NewSet(context.Background(), Format_7_18, vrw, Bool(true)), Format_7_18), v,
 		NewRef(NewList(context.Background(), Format_7_18, vrw, Bool(true)), Format_7_18), v,
 		NewRef(NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), Format_7_18), v,
-		NewRef(NewStruct("", StructData{"field": Bool(true)}), Format_7_18), v,
+		NewRef(NewStruct(Format_7_18, "", StructData{"field": Bool(true)}), Format_7_18), v,
 	}
 
 	m := NewMap(context.Background(), Format_7_18, vrw, kvs...)
@@ -1702,11 +1702,11 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 
 	list := NewMap(context.Background(), Format_7_18, vrw,
 		String("one"),
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(1),
 		}),
 		String("two"),
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		}),
@@ -1721,11 +1721,11 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 
 	// transpose
 	list = NewMap(context.Background(), Format_7_18, vrw,
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(1),
 		}),
 		String("one"),
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		}),

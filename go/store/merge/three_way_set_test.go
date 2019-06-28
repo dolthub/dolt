@@ -69,7 +69,7 @@ func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_HandleNil() {
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
-	strRef := s.vs.WriteValue(context.Background(), types.NewStruct("Foo", types.StructData{"life": types.Float(42)}))
+	strRef := s.vs.WriteValue(context.Background(), types.NewStruct(types.Format_7_18, "Foo", types.StructData{"life": types.Float(42)}))
 
 	m := items{s.vs.WriteValue(context.Background(), s.create(flatA)), s.vs.WriteValue(context.Background(), s.create(flatB))}
 	ma := items{"r1", s.vs.WriteValue(context.Background(), s.create(flatA))}

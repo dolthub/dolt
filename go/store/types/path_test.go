@@ -41,7 +41,7 @@ func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str st
 func TestPathStruct(t *testing.T) {
 	assert := assert.New(t)
 
-	v := NewStruct("", StructData{
+	v := NewStruct(Format_7_18, "", StructData{
 		"foo": String("foo"),
 		"bar": Bool(false),
 		"baz": Float(203),
@@ -52,7 +52,7 @@ func TestPathStruct(t *testing.T) {
 	assertResolvesTo(assert, Float(203), v, `.baz`)
 	assertResolvesTo(assert, nil, v, `.notHere`)
 
-	v2 := NewStruct("", StructData{
+	v2 := NewStruct(Format_7_18, "", StructData{
 		"v1": v,
 	})
 
@@ -250,7 +250,7 @@ func TestPathMulti(t *testing.T) {
 	// TODO(binformat)
 	l := NewList(context.Background(), Format_7_18, vs, m1, m2)
 
-	s := NewStruct("", StructData{
+	s := NewStruct(Format_7_18, "", StructData{
 		"foo": l,
 	})
 
@@ -501,7 +501,7 @@ func TestPathType(t *testing.T) {
 
 	assertResolvesTo(assert, StringType, m, `["string"]@key@type`)
 	assertResolvesTo(assert, TypeOf(m), m, `@type`)
-	s := NewStruct("", StructData{
+	s := NewStruct(Format_7_18, "", StructData{
 		"str": String("foo"),
 		"num": Float(42),
 	})
@@ -512,12 +512,12 @@ func TestPathType(t *testing.T) {
 func TestPathTarget(t *testing.T) {
 	assert := assert.New(t)
 
-	s := NewStruct("", StructData{
+	s := NewStruct(Format_7_18, "", StructData{
 		"foo": String("bar"),
 	})
 	vs := newTestValueStore()
 	r := vs.WriteValue(context.Background(), s)
-	s2 := NewStruct("", StructData{
+	s2 := NewStruct(Format_7_18, "", StructData{
 		"ref": r,
 	})
 
