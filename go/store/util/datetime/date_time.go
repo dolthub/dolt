@@ -81,7 +81,7 @@ type DateTimeCommenter struct {
 }
 
 func (c DateTimeCommenter) Comment(ctx context.Context, v types.Value) string {
-	if !types.IsValueSubtypeOf(v, DateTimeType) {
+	if !types.IsValueSubtypeOf(types.Format_7_18, v, DateTimeType) {
 		return ""
 	}
 	var dt DateTime

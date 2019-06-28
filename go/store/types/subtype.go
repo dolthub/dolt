@@ -10,8 +10,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
-func assertSubtype(ctx context.Context, t *Type, v Value) {
-	if !IsValueSubtypeOf(v, t) {
+func assertSubtype(ctx context.Context, f *Format, t *Type, v Value) {
+	if !IsValueSubtypeOf(f, v, t) {
 		d.Panic("Invalid type. %s is not a subtype of %s", TypeOf(v).Describe(ctx), t.Describe(ctx))
 	}
 }
@@ -168,8 +168,8 @@ func compoundSubtype(requiredType, concreteType *Type, hasExtra bool, parentStru
 	return isSubtypeDetails(requiredType, concreteType, hasExtra, parentStructTypes)
 }
 
-func IsValueSubtypeOf(v Value, t *Type) bool {
-	isSub, _ := isValueSubtypeOfDetails(v, t, false)
+func IsValueSubtypeOf(f *Format, v Value, t *Type) bool {
+	isSub, _ := isValueSubtypeOfDetails(f, v, t, false)
 	return isSub
 }
 
@@ -192,11 +192,11 @@ func IsValueSubtypeOf(v Value, t *Type) bool {
 //   }                                     c: "hello again"
 //                                     }
 // IsValueSubtypeOfDetails(v, type1) would return isSub == true, and hasExtra == true
-func IsValueSubtypeOfDetails(v Value, t *Type) (bool, bool) {
-	return isValueSubtypeOfDetails(v, t, false)
+func IsValueSubtypeOfDetails(f *Format, v Value, t *Type) (bool, bool) {
+	return isValueSubtypeOfDetails(f, v, t, false)
 }
 
-func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
+func isValueSubtypeOfDetails(format *Format, v Value, t *Type, hasExtra bool) (bool, bool) {
 	switch t.TargetKind() {
 	case BoolKind, FloatKind, StringKind, BlobKind, TypeKind, UUIDKind, IntKind, UintKind, NullKind:
 		return v.Kind() == t.TargetKind(), hasExtra
@@ -224,7 +224,7 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 				anonStruct = et
 				continue
 			}
-			isSub, hasMore := isValueSubtypeOfDetails(v, et, hasExtra)
+			isSub, hasMore := isValueSubtypeOfDetails(format, v, et, hasExtra)
 			if isSub {
 				hasExtra = hasExtra || hasMore
 				return isSub, hasExtra
@@ -232,7 +232,7 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 		}
 
 		if anonStruct != nil {
-			isSub, hasMore := isValueSubtypeOfDetails(v, anonStruct, hasExtra)
+			isSub, hasMore := isValueSubtypeOfDetails(format, v, anonStruct, hasExtra)
 			if isSub {
 				hasExtra = hasExtra || hasMore
 				return isSub, hasExtra
@@ -265,7 +265,7 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 					return false, hasExtra
 				}
 			} else {
-				isSub, hasMore := isValueSubtypeOfDetails(fv, f.Type, hasExtra)
+				isSub, hasMore := isValueSubtypeOfDetails(format, fv, f.Type, hasExtra)
 				if !isSub {
 					return false, hasExtra
 				}
@@ -287,12 +287,12 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 			vt := desc.ElemTypes[1]
 			if seq, ok := v.orderedSequence.(mapLeafSequence); ok {
 				for _, entry := range seq.entries().entries {
-					isSub, hasMore := isValueSubtypeOfDetails(entry.key, kt, hasExtra)
+					isSub, hasMore := isValueSubtypeOfDetails(format, entry.key, kt, hasExtra)
 					if !isSub {
 						return false, hasExtra
 					}
 					hasExtra = hasExtra || hasMore
-					isSub, hasExtra = isValueSubtypeOfDetails(entry.value, vt, hasExtra)
+					isSub, hasExtra = isValueSubtypeOfDetails(format, entry.value, vt, hasExtra)
 					if !isSub {
 						return false, hasExtra
 					}
@@ -304,9 +304,8 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 		case Set:
 			et := desc.ElemTypes[0]
 			if seq, ok := v.orderedSequence.(setLeafSequence); ok {
-				// TODO(binformat)
-				for _, v := range seq.values(Format_7_18) {
-					isSub, hasMore := isValueSubtypeOfDetails(v, et, hasExtra)
+				for _, v := range seq.values(format) {
+					isSub, hasMore := isValueSubtypeOfDetails(format, v, et, hasExtra)
 					if !isSub {
 						return false, hasExtra
 					}
@@ -318,9 +317,8 @@ func isValueSubtypeOfDetails(v Value, t *Type, hasExtra bool) (bool, bool) {
 		case List:
 			et := desc.ElemTypes[0]
 			if seq, ok := v.sequence.(listLeafSequence); ok {
-				// TODO(binformat)
-				for _, v := range seq.values(Format_7_18) {
-					isSub, hasMore := isValueSubtypeOfDetails(v, et, hasExtra)
+				for _, v := range seq.values(format) {
+					isSub, hasMore := isValueSubtypeOfDetails(format, v, et, hasExtra)
 					if !isSub {
 						return false, hasExtra
 					}
