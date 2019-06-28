@@ -6,12 +6,13 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 type newSequenceChunkerFn func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker
 
-func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence {
+func concat(ctx context.Context, f *Format, fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence {
 	if fst.numLeaves() == 0 {
 		return snd
 	}
@@ -26,9 +27,9 @@ func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequen
 	if vrw != snd.valueReadWriter() {
 		d.Panic("cannot concat sequences from different databases")
 	}
-	chunker := newSequenceChunker(newCursorAtIndex(ctx, fst, fst.numLeaves()), vrw)
+	chunker := newSequenceChunker(newCursorAtIndex(ctx, fst, fst.numLeaves(), f), vrw)
 
-	for cur, ch := newCursorAtIndex(ctx, snd, 0), chunker; ch != nil; ch = ch.parent {
+	for cur, ch := newCursorAtIndex(ctx, snd, 0, f), chunker; ch != nil; ch = ch.parent {
 		// Note that if snd is shallower than fst, then higher chunkers will have
 		// their cursors set to nil. This has the effect of "dropping" the final
 		// item in each of those sequences.

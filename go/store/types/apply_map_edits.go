@@ -187,7 +187,7 @@ func prepWorker(ctx context.Context, f *Format, seq orderedSequence, wc chan map
 			ordKey := newOrderedKey(key, f)
 
 			if cur == nil || !ordKey.Less(f, curKey) {
-				cur = newCursorAt(ctx, seq, ordKey, true, false)
+				cur = newCursorAt(ctx, f, seq, ordKey, true, false)
 
 				if cur.valid() {
 					curKey = getCurrentKey(cur)

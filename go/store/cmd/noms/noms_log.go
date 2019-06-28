@@ -89,7 +89,7 @@ func runLog(ctx context.Context, args []string) int {
 	absPath := pinned.Path
 	path := absPath.Path
 	if len(path) == 0 {
-		path = types.MustParsePath(".value")
+		path = types.MustParsePath(".value", types.Format_7_18)
 	}
 
 	origCommit, ok := database.ReadValue(ctx, absPath.Hash).(types.Struct)
@@ -306,7 +306,7 @@ func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLin
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	v := path.Resolve(ctx, node.commit, db)
+	v := path.Resolve(ctx, types.Format_7_18, node.commit, db)
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
 	} else {
@@ -348,8 +348,8 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	parentCommit := parent.(types.Ref).TargetValue(ctx, db).(types.Struct)
 	var old, neu types.Value
 	functions.All(
-		func() { old = path.Resolve(ctx, parentCommit, db) },
-		func() { neu = path.Resolve(ctx, node.commit, db) },
+		func() { old = path.Resolve(ctx, types.Format_7_18, parentCommit, db) },
+		func() { neu = path.Resolve(ctx, types.Format_7_18, node.commit, db) },
 	)
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization

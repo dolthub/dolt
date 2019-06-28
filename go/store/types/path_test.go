@@ -24,9 +24,9 @@ func assertResolvesTo(assert *assert.Assertions, expect, ref Value, str string) 
 }
 
 func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str string, vr ValueReader) {
-	p, err := ParsePath(str)
+	p, err := ParsePath(str, Format_7_18)
 	assert.NoError(err)
-	actual := p.Resolve(context.Background(), ref, vr)
+	actual := p.Resolve(context.Background(), Format_7_18, ref, vr)
 	if expect == nil {
 		if actual != nil {
 			assert.Fail("", "Expected nil, but got %s", EncodedValue(context.Background(), actual))
@@ -284,7 +284,7 @@ func TestPathParseSuccess(t *testing.T) {
 	assert := assert.New(t)
 
 	test := func(str string) {
-		p, err := ParsePath(str)
+		p, err := ParsePath(str, Format_7_18)
 		assert.NoError(err)
 		expectStr := str
 		switch expectStr { // Human readable serialization special cases.
@@ -336,7 +336,7 @@ func TestPathParseErrors(t *testing.T) {
 	assert := assert.New(t)
 
 	test := func(str, expectError string) {
-		p, err := ParsePath(str)
+		p, err := ParsePath(str, Format_7_18)
 		assert.Equal(Path{}, p)
 		if err != nil {
 			assert.Equal(expectError, err.Error())
@@ -414,19 +414,19 @@ func TestPathEquals(t *testing.T) {
 
 	assert.True(Path{}.Equals(Path{}))
 	for _, s := range equalPaths {
-		p, err := ParsePath(s)
+		p, err := ParsePath(s, Format_7_18)
 		assert.NoError(err)
 		assert.True(p.Equals(p))
 	}
 
-	simple, err := ParsePath(`["one"].two`)
+	simple, err := ParsePath(`["one"].two`, Format_7_18)
 	assert.NoError(err)
 	assert.False(Path{}.Equals(simple))
 	for _, a := range notEqualPaths {
 		s0, s1 := a[0], a[1]
-		p0, err := ParsePath(s0)
+		p0, err := ParsePath(s0, Format_7_18)
 		assert.NoError(err)
-		p1, err := ParsePath(s1)
+		p1, err := ParsePath(s1, Format_7_18)
 		assert.NoError(err)
 		assert.False(p0.Equals(p1))
 	}
@@ -457,11 +457,11 @@ func TestCopyPath(t *testing.T) {
 	}
 
 	for _, s1 := range testCases {
-		expected, err := ParsePath(s1 + `["anIndex"]`)
+		expected, err := ParsePath(s1 + `["anIndex"]`, Format_7_18)
 		assert.NoError(err)
 		var p Path
 		if s1 != "" {
-			p, err = ParsePath(s1)
+			p, err = ParsePath(s1, Format_7_18)
 		}
 		assert.NoError(err)
 		p1 := p.Append(NewIndexPath(String("anIndex")))
@@ -474,10 +474,10 @@ func TestCopyPath(t *testing.T) {
 
 func TestMustParsePath(t *testing.T) {
 	for _, good := range []string{".good", "[\"good\"]"} {
-		assert.NotNil(t, MustParsePath(good))
+		assert.NotNil(t, MustParsePath(good, Format_7_18))
 	}
 	for _, bad := range []string{"", "bad", "[bad]", "!", "💩"} {
-		assert.Panics(t, func() { MustParsePath(bad) })
+		assert.Panics(t, func() { MustParsePath(bad, Format_7_18) })
 	}
 }
 

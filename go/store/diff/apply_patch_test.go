@@ -41,7 +41,7 @@ func TestCommonPrefixCount(t *testing.T) {
 
 	for i, tc := range testCases {
 		path, expected := tc[0].(string), tc[1].(int)
-		p, err := types.ParsePath(path)
+		p, err := types.ParsePath(path, types.Format_7_18)
 		assert.NoError(err)
 		assert.Equal(expected, commonPrefixCount(lastPath, p), "failed for paths[%d]: %s", i, path)
 		lastPath = p

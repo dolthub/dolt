@@ -129,7 +129,7 @@ func (m Map) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value) {
-	cur := newCursorAt(ctx, m.orderedSequence, emptyKey, false, last)
+	cur := newCursorAt(ctx, m.format, m.orderedSequence, emptyKey, false, last)
 	if !cur.valid() {
 		return nil, nil
 	}
@@ -150,7 +150,7 @@ func (m Map) At(ctx context.Context, idx uint64) (key, value Value) {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(ctx, m.orderedSequence, idx)
+	cur := newCursorAtIndex(ctx, m.orderedSequence, idx, m.format)
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
 }
@@ -185,7 +185,7 @@ func (m Map) Get(ctx context.Context, key Value) Value {
 type mapIterCallback func(key, value Value) (stop bool)
 
 func (m Map) Iter(ctx context.Context, cb mapIterCallback) {
-	cur := newCursorAt(ctx, m.orderedSequence, emptyKey, false, false)
+	cur := newCursorAt(ctx, m.format, m.orderedSequence, emptyKey, false, false)
 	cur.iter(ctx, func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -210,7 +210,7 @@ func (m Map) Iterator(ctx context.Context) MapIterator {
 
 func (m Map) IteratorAt(ctx context.Context, pos uint64) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtIndex(ctx, m.orderedSequence, pos),
+		cursor: newCursorAtIndex(ctx, m.orderedSequence, pos, m.format),
 	}
 }
 

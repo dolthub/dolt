@@ -99,7 +99,7 @@ func mustParsePath(assert *assert.Assertions, s string) types.Path {
 	if s == "" {
 		return nil
 	}
-	p, err := types.ParsePath(s)
+	p, err := types.ParsePath(s, types.Format_7_18)
 	assert.NoError(err)
 	return p
 }

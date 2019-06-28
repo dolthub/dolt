@@ -117,7 +117,7 @@ func (s Set) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
 func (s Set) First(ctx context.Context) Value {
-	cur := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
+	cur := newCursorAt(ctx, Format_7_18, s.orderedSequence, emptyKey, false, false)
 	if !cur.valid() {
 		return nil
 	}
@@ -129,7 +129,7 @@ func (s Set) At(ctx context.Context, idx uint64) Value {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur := newCursorAtIndex(ctx, s.orderedSequence, idx)
+	cur := newCursorAtIndex(ctx, s.orderedSequence, idx, Format_7_18)
 	return cur.current().(Value)
 }
 
@@ -142,7 +142,7 @@ func (s Set) Has(ctx context.Context, v Value) bool {
 type setIterCallback func(v Value) bool
 
 func (s Set) Iter(ctx context.Context, cb setIterCallback) {
-	cur := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
+	cur := newCursorAt(ctx, Format_7_18, s.orderedSequence, emptyKey, false, false)
 	cur.iter(ctx, func(v interface{}) bool {
 		return cb(v.(Value))
 	})
@@ -163,7 +163,7 @@ func (s Set) Iterator(ctx context.Context) SetIterator {
 
 func (s Set) IteratorAt(ctx context.Context, idx uint64) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtIndex(ctx, s.orderedSequence, idx),
+		cursor: newCursorAtIndex(ctx, s.orderedSequence, idx, Format_7_18),
 		s:      s,
 	}
 }
