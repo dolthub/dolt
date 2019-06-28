@@ -42,9 +42,9 @@ func TestValueEquals(t *testing.T) {
 			b1 := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("hi"))
 			b2 := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("bye"))
 			return newBlob(newBlobMetaSequence(1, []metaTuple{
-				newMetaTuple(NewRef(b1), orderedKeyFromInt(2), 2),
-				newMetaTuple(NewRef(b2), orderedKeyFromInt(5), 5),
-			}, nil), Format_7_18)
+				newMetaTuple(Format_7_18, NewRef(b1), orderedKeyFromInt(2), 2),
+				newMetaTuple(Format_7_18, NewRef(b2), orderedKeyFromInt(5), 5),
+			}, Format_7_18, nil), Format_7_18)
 		},
 		// TODO(binformat)
 		func() Value { return NewList(context.Background(), Format_7_18, vrw) },

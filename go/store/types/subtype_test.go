@@ -600,14 +600,14 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(v Value) metaTuple {
 				seq := newListLeafSequence(vs, Format_7_18, v)
 				list := newList(seq, Format_7_18)
-				return newMetaTuple(vs.WriteValue(context.Background(), list), newOrderedKey(v), 1)
+				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), list), newOrderedKey(v), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals))
 			for i, v := range vals {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newList(newListMetaSequence(1, tuples, vs), Format_7_18)
+			return newList(newListMetaSequence(1, tuples, Format_7_18, vs), Format_7_18)
 		}
 
 		assertTrue(newChunkedList(Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
@@ -630,14 +630,14 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(v Value) metaTuple {
 				seq := newSetLeafSequence(vs, v)
 				set := newSet(seq)
-				return newMetaTuple(vs.WriteValue(context.Background(), set), newOrderedKey(v), 1)
+				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), set), newOrderedKey(v), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals))
 			for i, v := range vals {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newSet(newSetMetaSequence(1, tuples, vs))
+			return newSet(newSetMetaSequence(1, tuples, Format_7_18, vs))
 		}
 		assertTrue(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), MakeSetType(FloaTType))
 		assertFalse(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), MakeSetType(BoolType))
@@ -663,14 +663,14 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			newSequenceMetaTuple := func(e mapEntry) metaTuple {
 				seq := newMapLeafSequence(Format_7_18, vs, e)
 				m := newMap(seq, Format_7_18)
-				return newMetaTuple(vs.WriteValue(context.Background(), m), newOrderedKey(e.key), 1)
+				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), m), newOrderedKey(e.key), 1)
 			}
 
 			tuples := make([]metaTuple, len(vals)/2)
 			for i := 0; i < len(vals); i += 2 {
 				tuples[i/2] = newSequenceMetaTuple(mapEntry{vals[i], vals[i+1]})
 			}
-			return newMap(newMapMetaSequence(1, tuples, vs), Format_7_18)
+			return newMap(newMapMetaSequence(1, tuples, Format_7_18, vs), Format_7_18)
 		}
 
 		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, StringType))

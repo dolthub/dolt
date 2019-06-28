@@ -191,14 +191,14 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	newSetSequenceMt := func(v ...Value) metaTuple {
 		seq := newSetLeafSequence(vrw, v...)
 		set := newSet(seq)
-		return newMetaTuple(vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1]), uint64(len(v)))
+		return newMetaTuple(Format_7_18, vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1]), uint64(len(v)))
 	}
 
 	m1 := newSetSequenceMt(Float(1), Float(2))
 	m2 := newSetSequenceMt(Float(3), Float(4))
 	m3 := newSetSequenceMt(Float(5), Float(6))
-	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, vrw)
-	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)
+	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, Format_7_18, vrw)
+	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, Format_7_18, vrw)
 
 	runTest := func(df diffFn) {
 		changes := make(chan ValueChanged)

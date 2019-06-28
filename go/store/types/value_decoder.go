@@ -85,7 +85,7 @@ func (r *valueDecoder) readSequence(kind NomsKind, leafSkipper func() ([]uint32,
 	end := r.pos()
 
 	if level > 0 {
-		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets, length)
+		return newMetaSequence(Format_7_18, r.vrw, r.byteSlice(start, end), offsets, length)
 	}
 
 	return newLeafSequence(r.vrw, r.byteSlice(start, end), offsets, length)

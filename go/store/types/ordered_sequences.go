@@ -16,12 +16,12 @@ type orderedSequence interface {
 	search(key orderedKey) int
 }
 
-func newSetMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequenceFromTuples(SetKind, level, tuples, vrw)
+func newSetMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueReadWriter) metaSequence {
+	return newMetaSequenceFromTuples(f, SetKind, level, tuples, vrw)
 }
 
-func newMapMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequenceFromTuples(MapKind, level, tuples, vrw)
+func newMapMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueReadWriter) metaSequence {
+	return newMetaSequenceFromTuples(f, MapKind, level, tuples, vrw)
 }
 
 func newCursorAtValue(ctx context.Context, seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
@@ -89,7 +89,7 @@ func getMapValue(cur *sequenceCursor) Value {
 
 // If |vw| is not nil, chunks will be eagerly written as they're created. Otherwise they are
 // written when the root is written.
-func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunkFn {
+func newOrderedMetaSequenceChunkFn(kind NomsKind, f *Format, vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
@@ -107,10 +107,10 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 
 		var col Collection
 		if kind == SetKind {
-			col = newSet(newSetMetaSequence(level, tuples, vrw))
+			col = newSet(newSetMetaSequence(level, tuples, f, vrw))
 		} else {
 			d.PanicIfFalse(MapKind == kind)
-			col = newMap(newMapMetaSequence(level, tuples, vrw), Format_7_18)
+			col = newMap(newMapMetaSequence(level, tuples, f, vrw), Format_7_18)
 		}
 
 		return col, tuples[len(tuples)-1].key(), numLeaves

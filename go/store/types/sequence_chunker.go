@@ -207,7 +207,7 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 		sc.unwrittenCol = col
 	}
 
-	mt := newMetaTuple(ref, key, numLeaves)
+	mt := newMetaTuple(Format_7_18, ref, key, numLeaves)
 	return col.asSequence(), mt
 }
 

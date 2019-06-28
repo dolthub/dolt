@@ -24,7 +24,8 @@ func newSet(seq orderedSequence) Set {
 
 func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) Set {
 	data := buildSetData(v)
-	ch := newEmptySetSequenceChunker(ctx, vrw)
+	// TODO(binformat)
+	ch := newEmptySetSequenceChunker(ctx, Format_7_18, vrw)
 
 	for _, v := range data {
 		ch.Append(ctx, v)
@@ -41,7 +42,8 @@ func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) Set {
 // graph_builder.go for building collections with values that are not in order.
 func NewStreamingSet(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
 	return newStreamingSet(vrw, vChan, func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
-		go readSetInput(ctx, vrw, vChan, outChan)
+		// TODO(binformat)
+		go readSetInput(ctx, Format_7_18, vrw, vChan, outChan)
 	})
 }
 
@@ -54,9 +56,9 @@ func newStreamingSet(vrw ValueReadWriter, vChan <-chan Value, readFunc streaming
 	return outChan
 }
 
-func readSetInput(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
+func readSetInput(ctx context.Context, f *Format, vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
 	defer close(outChan)
-	ch := newEmptySetSequenceChunker(ctx, vrw)
+	ch := newEmptySetSequenceChunker(ctx, f, vrw)
 	var lastV Value
 	for v := range vChan {
 		if lastV != nil {
@@ -219,6 +221,6 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	}
 }
 
-func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+func newEmptySetSequenceChunker(ctx context.Context, f *Format, vrw ValueReadWriter) *sequenceChunker {
+	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, f, vrw), hashValueBytes)
 }

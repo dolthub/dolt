@@ -92,7 +92,8 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+			// TODO(binformat)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, Format_7_18, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(ctx, cur)
 		}
