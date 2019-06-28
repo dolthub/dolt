@@ -61,7 +61,8 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(ctx, seq, edit.value, true, false)
+				// TODO(binformat)
+				cc <- newCursorAtValue(ctx, Format_7_18, seq, edit.value, true, false)
 			}()
 
 			editChan <- edit

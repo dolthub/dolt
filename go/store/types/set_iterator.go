@@ -56,7 +56,8 @@ func (si *setIterator) SkipTo(ctx context.Context, v Value) Value {
 			return si.Next(ctx)
 		}
 
-		si.cursor = newCursorAtValue(ctx, si.s.orderedSequence, v, true, false)
+		// TODO(binformat)
+		si.cursor = newCursorAtValue(ctx, Format_7_18, si.s.orderedSequence, v, true, false)
 		if si.cursor.valid() {
 			si.currentValue = si.cursor.current().(Value)
 			si.cursor.advance(ctx)

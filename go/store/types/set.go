@@ -78,7 +78,7 @@ func (s Set) Diff(ctx context.Context, last Set, changes chan<- ValueChanged, cl
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffTopDown(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffTopDown(ctx, Format_7_18, last.orderedSequence, s.orderedSequence, changes, closeChan)
 }
 
 // DiffHybrid computes the diff from |last| to |s| using a hybrid algorithm
@@ -87,7 +87,7 @@ func (s Set) DiffHybrid(ctx context.Context, last Set, changes chan<- ValueChang
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffBest(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffBest(ctx, Format_7_18, last.orderedSequence, s.orderedSequence, changes, closeChan)
 }
 
 // DiffLeftRight computes the diff from |last| to |s| using a left-to-right
@@ -97,7 +97,7 @@ func (s Set) DiffLeftRight(ctx context.Context, last Set, changes chan<- ValueCh
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffLeftRight(ctx, Format_7_18, last.orderedSequence, s.orderedSequence, changes, closeChan)
 }
 
 func (s Set) asSequence() sequence {
@@ -134,7 +134,8 @@ func (s Set) At(ctx context.Context, idx uint64) Value {
 }
 
 func (s Set) Has(ctx context.Context, v Value) bool {
-	cur := newCursorAtValue(ctx, s.orderedSequence, v, false, false)
+	// TODO(binformat)
+	cur := newCursorAtValue(ctx, Format_7_18, s.orderedSequence, v, false, false)
 	return cur.valid() && cur.current().(Value).Equals(v)
 }
 
@@ -169,7 +170,8 @@ func (s Set) IteratorAt(ctx context.Context, idx uint64) SetIterator {
 
 func (s Set) IteratorFrom(ctx context.Context, val Value) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtValue(ctx, s.orderedSequence, val, false, false),
+		// TODO(binformat)
+		cursor: newCursorAtValue(ctx, Format_7_18, s.orderedSequence, val, false, false),
 		s:      s,
 	}
 }

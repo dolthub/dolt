@@ -30,7 +30,7 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 }
 
 func NewMap(ctx context.Context, f *Format, vrw ValueReadWriter, kv ...Value) Map {
-	entries := buildMapData(kv)
+	entries := buildMapData(f, kv)
 	ch := newEmptyMapSequenceChunker(ctx, f, vrw)
 
 	for _, entry := range entries.entries {
@@ -89,7 +89,7 @@ func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged, cl
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffTopDown(ctx, last.orderedSequence, m.orderedSequence, changes, closeChan)
+	orderedSequenceDiffTopDown(ctx, m.format, last.orderedSequence, m.orderedSequence, changes, closeChan)
 }
 
 // DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
@@ -98,7 +98,7 @@ func (m Map) DiffHybrid(ctx context.Context, last Map, changes chan<- ValueChang
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffBest(ctx, last.orderedSequence, m.orderedSequence, changes, closeChan)
+	orderedSequenceDiffBest(ctx, m.format, last.orderedSequence, m.orderedSequence, changes, closeChan)
 }
 
 // DiffLeftRight computes the diff from |last| to |m| using a left-to-right
@@ -108,7 +108,7 @@ func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueCh
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, changes, closeChan)
+	orderedSequenceDiffLeftRight(ctx, m.format, last.orderedSequence, m.orderedSequence, changes, closeChan)
 }
 
 // Collection interface
@@ -156,7 +156,7 @@ func (m Map) At(ctx context.Context, idx uint64) (key, value Value) {
 }
 
 func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool) {
-	cur := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+	cur := newCursorAtValue(ctx, m.format, m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return nil, false
 	}
@@ -169,7 +169,7 @@ func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool) {
 }
 
 func (m Map) Has(ctx context.Context, key Value) bool {
-	cur := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+	cur := newCursorAtValue(ctx, m.format, m.orderedSequence, key, false, false)
 	if !cur.valid() {
 		return false
 	}
@@ -216,7 +216,7 @@ func (m Map) IteratorAt(ctx context.Context, pos uint64) MapIterator {
 
 func (m Map) IteratorFrom(ctx context.Context, key Value) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtValue(ctx, m.orderedSequence, key, false, false),
+		cursor: newCursorAtValue(ctx, m.format, m.orderedSequence, key, false, false),
 	}
 }
 
@@ -236,7 +236,7 @@ func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) {
 }
 
 func (m Map) IterFrom(ctx context.Context, start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(ctx, m.orderedSequence, start, false, false)
+	cur := newCursorAtValue(ctx, m.format, m.orderedSequence, start, false, false)
 	cur.iter(ctx, func(v interface{}) bool {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
@@ -247,7 +247,7 @@ func (m Map) Edit() *MapEditor {
 	return NewMapEditor(m)
 }
 
-func buildMapData(values []Value) mapEntrySlice {
+func buildMapData(f *Format, values []Value) mapEntrySlice {
 	if len(values) == 0 {
 		return mapEntrySlice{}
 	}
@@ -257,7 +257,7 @@ func buildMapData(values []Value) mapEntrySlice {
 	}
 	kvs := mapEntrySlice{
 		make([]mapEntry, len(values)/2),
-		Format_7_18,
+		f,
 	}
 
 	for i := 0; i < len(values); i += 2 {
@@ -269,7 +269,7 @@ func buildMapData(values []Value) mapEntrySlice {
 
 	uniqueSorted := mapEntrySlice{
 		make([]mapEntry, 0, len(kvs.entries)),
-		Format_7_18,
+		f,
 	}
 
 	sort.Stable(kvs)
