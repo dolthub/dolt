@@ -183,7 +183,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 					if err != nil {
 						return err
 					}
-					commitRef = db.WriteValue(ctx, NewCommit(merged, types.NewSet(ctx, types.Format_7_18, db, commitRef, currentHeadRef), types.EmptyStruct))
+					commitRef = db.WriteValue(ctx, NewCommit(merged, types.NewSet(ctx, types.Format_7_18, db, commitRef, currentHeadRef), types.EmptyStruct(types.Format_7_18)))
 				}
 			}
 		}
@@ -261,7 +261,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 
 	meta := opts.Meta
 	if meta.IsZeroValue() {
-		meta = types.EmptyStruct
+		meta = types.EmptyStruct(types.Format_7_18)
 	}
 	return NewCommit(v, parents, meta)
 }

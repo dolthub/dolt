@@ -25,7 +25,7 @@ func TestNewCommit(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	commit := NewCommit(types.Float(1), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct)
+	commit := NewCommit(types.Float(1), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct(types.Format_7_18))
 	at := types.TypeOf(commit)
 	et := makeCommitStructType(
 		types.EmptyStructType,
@@ -35,7 +35,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et, at)
 
 	// Committing another Float
-	commit2 := NewCommit(types.Float(2), types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(commit, types.Format_7_18)), types.EmptyStruct)
+	commit2 := NewCommit(types.Float(2), types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(commit, types.Format_7_18)), types.EmptyStruct(types.Format_7_18))
 	at2 := types.TypeOf(commit2)
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
@@ -45,7 +45,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
-	commit3 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(commit2, types.Format_7_18)), types.EmptyStruct)
+	commit3 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(commit2, types.Format_7_18)), types.EmptyStruct(types.Format_7_18))
 	at3 := types.TypeOf(commit3)
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
@@ -79,7 +79,7 @@ func TestNewCommit(t *testing.T) {
 		types.NewSet(context.Background(), types.Format_7_18, db,
 			types.NewRef(commit2, types.Format_7_18),
 			types.NewRef(commit3, types.Format_7_18)),
-		types.EmptyStruct)
+		types.EmptyStruct(types.Format_7_18))
 	at5 := types.TypeOf(commit5)
 	et5 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
@@ -99,7 +99,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	metaCommit := types.NewStruct(types.Format_7_18, "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": types.NewSet(context.Background(), types.Format_7_18, db),
-		"meta":    types.EmptyStruct,
+		"meta":    types.EmptyStruct(types.Format_7_18),
 	})
 	assert.True(IsCommit(metaCommit))
 	assert.True(IsCommitType(types.TypeOf(metaCommit)))
@@ -204,8 +204,8 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	c1 := NewCommit(types.String("one"), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct)
-	cx := NewCommit(types.Bool(true), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct)
+	c1 := NewCommit(types.String("one"), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct(types.Format_7_18))
+	cx := NewCommit(types.Bool(true), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct(types.Format_7_18))
 	value := types.String("two")
 	parents := types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(c1, types.Format_7_18))
 	meta := types.NewStruct(types.Format_7_18, "", types.StructData{

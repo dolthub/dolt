@@ -123,7 +123,7 @@ func getCommitStForRef(ctx context.Context, db datas.Database, dref ref.DoltRef)
 		return ds.Head(), nil
 	}
 
-	return types.EmptyStruct, ErrBranchNotFound
+	return types.EmptyStruct(types.Format_7_18), ErrBranchNotFound
 }
 
 func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types.Struct, error) {
@@ -136,19 +136,19 @@ func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types
 	ap, err := spec.NewAbsolutePath(prefixed)
 
 	if err != nil {
-		return types.EmptyStruct, err
+		return types.EmptyStruct(types.Format_7_18), err
 	}
 
 	val := ap.Resolve(ctx, db)
 
 	if val == nil {
-		return types.EmptyStruct, ErrHashNotFound
+		return types.EmptyStruct(types.Format_7_18), ErrHashNotFound
 	}
 
 	valSt, ok := val.(types.Struct)
 
 	if !ok || valSt.Name() != CommitStructName {
-		return types.EmptyStruct, ErrFoundHashNotACommit
+		return types.EmptyStruct(types.Format_7_18), ErrFoundHashNotACommit
 	}
 
 	return valSt, nil
@@ -167,11 +167,11 @@ func walkAncestorSpec(ctx context.Context, db datas.Database, commitSt types.Str
 			commitStPtr := cm.getParent(ctx, inst)
 
 			if commitStPtr == nil {
-				return types.EmptyStruct, ErrInvalidAnscestorSpec
+				return types.EmptyStruct(types.Format_7_18), ErrInvalidAnscestorSpec
 			}
 			commitSt = *commitStPtr
 		} else {
-			return types.EmptyStruct, ErrInvalidAnscestorSpec
+			return types.EmptyStruct(types.Format_7_18), ErrInvalidAnscestorSpec
 		}
 	}
 

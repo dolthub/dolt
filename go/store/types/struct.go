@@ -16,7 +16,10 @@ import (
 )
 
 var EmptyStructType = MakeStructType("")
-var EmptyStruct = newStruct(Format_7_18, "", nil, nil)
+
+func EmptyStruct(f *Format) Struct {
+	return newStruct(f, "", nil, nil)
+}
 
 type StructData map[string]Value
 
