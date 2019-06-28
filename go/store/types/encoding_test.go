@@ -224,7 +224,7 @@ func TestWriteTuple(t *testing.T) {
 		[]interface{}{
 			TupleKind, uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewTuple(Float(0), Float(1), Float(2), Float(3)),
+		NewTuple(Format_7_18, Float(0), Float(1), Float(2), Float(3)),
 	)
 }
 
@@ -282,7 +282,7 @@ func TestWriteMap(t *testing.T) {
 			StringKind, "b", BoolKind, true,
 			StringKind, "c", TupleKind, uint64(1), FloatKind, Float(1.0),
 		},
-		NewMap(context.Background(), Format_7_18, vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Float(1.0))),
+		NewMap(context.Background(), Format_7_18, vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Format_7_18, Float(1.0))),
 	)
 }
 
@@ -336,7 +336,7 @@ func TestWriteEmptyTuple(t *testing.T) {
 		[]interface{}{
 			TupleKind, uint64(0), /* len */
 		},
-		NewTuple(),
+		NewTuple(Format_7_18),
 	)
 }
 
@@ -394,7 +394,7 @@ func TestWriteStructWithTuple(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		NewStruct(Format_7_18, "S", StructData{"t": NewTuple(String("a"), String("b"))}),
+		NewStruct(Format_7_18, "S", StructData{"t": NewTuple(Format_7_18, String("a"), String("b"))}),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -403,7 +403,7 @@ func TestWriteStructWithTuple(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(0), /* len */
 		},
-		NewStruct(Format_7_18, "S", StructData{"t": NewTuple()}),
+		NewStruct(Format_7_18, "S", StructData{"t": NewTuple(Format_7_18)}),
 	)
 }
 

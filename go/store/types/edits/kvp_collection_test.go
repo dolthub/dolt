@@ -21,7 +21,7 @@ func (coll *KVPCollection) String() string {
 		val = itr.Next()
 	}
 
-	tpl := types.NewTuple(keys...)
+	tpl := types.NewTuple(types.Format_7_18, keys...)
 	return types.EncodedValue(ctx, tpl)
 }
 

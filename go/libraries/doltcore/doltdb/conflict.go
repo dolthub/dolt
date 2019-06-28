@@ -26,5 +26,5 @@ func ConflictFromTuple(tpl types.Tuple) Conflict {
 }
 
 func (c Conflict) ToNomsList(vrw types.ValueReadWriter) types.Tuple {
-	return types.NewTuple(c.Base, c.Value, c.MergeValue)
+	return types.NewTuple(types.Format_7_18, c.Base, c.Value, c.MergeValue)
 }

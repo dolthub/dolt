@@ -2,6 +2,7 @@ package doltdb
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -19,11 +20,11 @@ func SingleColPKItr(pkTag uint64, vals []types.Value) func() (types.Tuple, bool)
 		next++
 
 		if current < size {
-			tpl := types.NewTuple(types.Uint(pkTag), vals[current])
+			tpl := types.NewTuple(types.Format_7_18, types.Uint(pkTag), vals[current])
 			return tpl, true
 		}
 
-		return types.EmptyTuple, false
+		return types.EmptyTuple(types.Format_7_18), false
 	}
 }
 
@@ -40,7 +41,7 @@ func TaggedValueSliceItr(sch schema.Schema, vals []row.TaggedValues) func() (typ
 			return tpl.Value(context.TODO()).(types.Tuple), true
 		}
 
-		return types.EmptyTuple, false
+		return types.EmptyTuple(types.Format_7_18), false
 	}
 }
 
@@ -56,7 +57,7 @@ func TupleSliceItr(vals []types.Tuple) func() (types.Tuple, bool) {
 			return vals[current], true
 		}
 
-		return types.EmptyTuple, false
+		return types.EmptyTuple(types.Format_7_18), false
 	}
 }
 
