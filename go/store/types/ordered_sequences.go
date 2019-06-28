@@ -29,17 +29,17 @@ func newCursorAtValue(ctx context.Context, f *Format, seq orderedSequence, val V
 	if val != nil {
 		key = newOrderedKey(val, f)
 	}
-	return newCursorAt(ctx, seq, key, forInsertion, last)
+	return newCursorAt(ctx, f, seq, key, forInsertion, last)
 }
 
-func newCursorAt(ctx context.Context, seq orderedSequence, key orderedKey, forInsertion bool, last bool) *sequenceCursor {
+func newCursorAt(ctx context.Context, f *Format, seq orderedSequence, key orderedKey, forInsertion bool, last bool) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
 		idx := 0
 		if last {
 			idx = -1
 		}
-		cur = newSequenceCursor(cur, seq, idx)
+		cur = newSequenceCursor(cur, seq, idx, f)
 		if key != emptyKey {
 			if !seekTo(cur, key, forInsertion && !seq.isLeaf()) {
 				return cur

@@ -114,9 +114,9 @@ func (ts testSequence) asValueImpl() valueImpl {
 }
 
 func newTestSequenceCursor(items []interface{}) *sequenceCursor {
-	parent := newSequenceCursor(nil, testSequence{items}, 0)
+	parent := newSequenceCursor(nil, testSequence{items}, 0, Format_7_18)
 	items = items[0].([]interface{})
-	return newSequenceCursor(parent, testSequence{items}, 0)
+	return newSequenceCursor(parent, testSequence{items}, 0, Format_7_18)
 }
 
 func TestTestCursor(t *testing.T) {

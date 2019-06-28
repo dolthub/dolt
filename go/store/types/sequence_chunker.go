@@ -51,7 +51,7 @@ func newSequenceChunker(ctx context.Context, format *Format, cur *sequenceCursor
 		makeChunk, parentMakeChunk,
 		true,
 		hashValueBytes,
-		newRollingValueHasher(byte(level % 256)),
+		newRollingValueHasher(format, byte(level%256)),
 		false,
 		nil,
 		format,
@@ -275,8 +275,7 @@ func (sc *sequenceChunker) Done(ctx context.Context) sequence {
 			return child
 		}
 
-		// TODO(binformat)
-		mt = child.getItem(0, Format_7_18).(metaTuple)
+		mt = child.getItem(0, sc.format).(metaTuple)
 	}
 }
 

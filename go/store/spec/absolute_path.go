@@ -75,7 +75,7 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 		return AbsolutePath{Hash: h, Dataset: dataset}, nil
 	}
 
-	path, err := types.ParsePath(pathStr)
+	path, err := types.ParsePath(pathStr, types.Format_7_18)
 	if err != nil {
 		return AbsolutePath{}, err
 	}
@@ -98,7 +98,7 @@ func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database) (val types
 	}
 
 	if val != nil && p.Path != nil {
-		val = p.Path.Resolve(ctx, val, db)
+		val = p.Path.Resolve(ctx, types.Format_7_18, val, db)
 	}
 	return
 }

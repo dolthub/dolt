@@ -75,7 +75,7 @@ func Apply(ctx context.Context, root types.Value, patch Patch) types.Value {
 		for i, pp := range tail {
 			top := stack.top()
 			parent := top.newestValue()
-			oldValue := pp.Resolve(ctx, parent, nil)
+			oldValue := pp.Resolve(ctx, types.Format_7_18, parent, nil)
 			var newValue types.Value
 			if i == len(tail)-1 { // last pathPart in this path
 				newValue = oldValue
@@ -148,7 +148,7 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 			case types.DiffChangeModified:
 				if part.IntoKey {
 					newPart := types.IndexPath{Index: part.Index}
-					ov := newPart.Resolve(ctx, parent, nil)
+					ov := newPart.Resolve(ctx, types.Format_7_18, parent, nil)
 					return el.Edit().Remove(part.Index).Set(top.newValue, ov).Map(ctx)
 				}
 				return el.Edit().Set(part.Index, top.newValue).Map(ctx)
@@ -175,7 +175,7 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 			}
 		case types.Map:
 			keyPart := types.HashIndexPath{Hash: part.Hash, IntoKey: true}
-			k := keyPart.Resolve(ctx, parent, nil)
+			k := keyPart.Resolve(ctx, types.Format_7_18, parent, nil)
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				k := top.newKeyValue

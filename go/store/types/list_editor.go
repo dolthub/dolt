@@ -49,7 +49,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtIndex(ctx, seq, edit.idx)
+				cc <- newCursorAtIndex(ctx, seq, edit.idx, le.f)
 			}()
 
 			sc := make(chan listEdit, 1)

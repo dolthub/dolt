@@ -132,7 +132,7 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 // prolly tree chunks of other, so it's efficient.
 func (b Blob) Concat(ctx context.Context, other Blob) Blob {
 	d.PanicIfFalse(b.format.tag == other.format.tag)
-	seq := concat(ctx, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	seq := concat(ctx, b.format, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return b.newChunker(ctx, b.format, cur, vrw)
 	})
 	return newBlob(seq, b.format)
@@ -250,7 +250,7 @@ func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) 
 	// TODO: The code below is temporary. It's basically a custom leaf-level chunker for blobs. There are substational perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
 	chunkBuff := [8192]byte{}
 	chunkBytes := chunkBuff[:]
-	rv := newRollingValueHasher(0)
+	rv := newRollingValueHasher(f, 0)
 	offset := 0
 	addByte := func(b byte) bool {
 		if offset >= len(chunkBytes) {
