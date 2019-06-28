@@ -938,9 +938,9 @@ func TestDecodeSet(t *testing.T) {
 	// TODO(binformat)
 	ns := types.NewStruct(types.Format_7_18, "T", types.StructData{
 		"a": types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(0), types.Float(1), types.Float(2)),
-		"b": types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(3), types.EmptyStruct, types.Float(4), types.EmptyStruct, types.Float(5), types.EmptyStruct),
+		"b": types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(3), types.EmptyStruct(types.Format_7_18), types.Float(4), types.EmptyStruct(types.Format_7_18), types.Float(5), types.EmptyStruct(types.Format_7_18)),
 		"c": types.NewSet(context.Background(), types.Format_7_18, vs, types.String("0"), types.String("1"), types.String("2")),
-		"d": types.NewMap(context.Background(), types.Format_7_18, vs, types.String("3"), types.EmptyStruct, types.String("4"), types.EmptyStruct, types.String("5"), types.EmptyStruct),
+		"d": types.NewMap(context.Background(), types.Format_7_18, vs, types.String("3"), types.EmptyStruct(types.Format_7_18), types.String("4"), types.EmptyStruct(types.Format_7_18), types.String("5"), types.EmptyStruct(types.Format_7_18)),
 		"e": types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(6), types.Float(7), types.Float(8)),
 		"f": types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(9), types.Float(10), types.Float(11)),
 		"g": types.NewList(context.Background(), types.Format_7_18, vs, types.Float(12), types.Float(13), types.Float(14)),
@@ -1084,7 +1084,7 @@ func TestDecodeSetWrongMapType(t *testing.T) {
 	}
 
 	err = Unmarshal(context.Background(), types.NewStruct(types.Format_7_18, "T3", types.StructData{
-		"a": types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(0), types.EmptyStruct),
+		"a": types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(0), types.EmptyStruct(types.Format_7_18)),
 	}), &T3{})
 	assert.Error(err)
 	assert.Equal(`Cannot unmarshal Map<Float, Struct {}> into Go value of type map[int]struct {}, field has "set" tag`, err.Error())
@@ -1325,11 +1325,11 @@ func TestUnmarshalerError(t *testing.T) {
 	assert := assert.New(t)
 
 	m1 := returnsMarshalerError{}
-	err := Unmarshal(context.Background(), types.EmptyStruct, &m1)
+	err := Unmarshal(context.Background(), types.EmptyStruct(types.Format_7_18), &m1)
 	assert.Equal(errors.New("foo bar baz"), err)
 
 	m2 := panicsMarshaler{}
-	assert.Panics(func() { Unmarshal(context.Background(), types.EmptyStruct, &m2) })
+	assert.Panics(func() { Unmarshal(context.Background(), types.EmptyStruct(types.Format_7_18), &m2) })
 }
 
 type notPointer struct {
@@ -1345,9 +1345,9 @@ func TestUnmarshalNomsNotPointerDoesNotShareState(t *testing.T) {
 	assert := assert.New(t)
 
 	u := notPointer{0}
-	assert.NoError(Unmarshal(context.Background(), types.EmptyStruct, &u))
-	assert.NoError(Unmarshal(context.Background(), types.EmptyStruct, &u))
-	assert.NoError(Unmarshal(context.Background(), types.EmptyStruct, &u))
+	assert.NoError(Unmarshal(context.Background(), types.EmptyStruct(types.Format_7_18), &u))
+	assert.NoError(Unmarshal(context.Background(), types.EmptyStruct(types.Format_7_18), &u))
+	assert.NoError(Unmarshal(context.Background(), types.EmptyStruct(types.Format_7_18), &u))
 	assert.Equal(notPointer{0}, u)
 }
 
