@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types/edits"
-	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
@@ -254,7 +255,7 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 // FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
 	ds := ddb.db.GetDataset(ctx, branch.String())
-	_, err := ddb.db.FastForward(ctx, ds, types.NewRef(commit.commitSt))
+	_, err := ddb.db.FastForward(ctx, ds, types.NewRef(commit.commitSt, types.Format_7_18))
 
 	return err
 }
@@ -300,7 +301,7 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 				return err
 			}
 
-			parentEditor.Insert(types.NewRef(cs.commitSt))
+			parentEditor.Insert(types.NewRef(cs.commitSt, types.Format_7_18))
 		}
 
 		parents := parentEditor.Set(ctx)
@@ -329,7 +330,7 @@ func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 }
 
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) types.Ref {
-	valRef := types.NewRef(val)
+	valRef := types.NewRef(val, types.Format_7_18)
 
 	targetVal := valRef.TargetValue(ctx, vrw)
 
@@ -403,7 +404,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 	}
 
 	ds := ddb.db.GetDataset(ctx, dref.String())
-	_, err := ddb.db.SetHead(ctx, ds, types.NewRef(commit.commitSt))
+	_, err := ddb.db.SetHead(ctx, ds, types.NewRef(commit.commitSt, types.Format_7_18))
 	return err
 }
 
@@ -422,13 +423,13 @@ func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
 // PushChunks initiates a push into a database from the source database given, at the commit given. Pull progress is
 // communicated over the provided channel.
 func (ddb *DoltDB) PushChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
-	datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
+	datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, types.Format_7_18), progChan)
 	return nil
 }
 
 // PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
 // communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
-	datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
+	datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, types.Format_7_18), progChan)
 	return nil
 }

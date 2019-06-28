@@ -37,17 +37,17 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
 			s := NewStruct("", StructData{"n": Float(1)})
-			runTest(NewRef(NewMap(context.Background(), Format_7_18, vrw, s, Float(2))), t)
+			runTest(NewRef(NewMap(context.Background(), Format_7_18, vrw, s, Float(2)), Format_7_18), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
-			runTest(ToRefOfValue(NewRef(Bool(false))), t)
+			runTest(ToRefOfValue(NewRef(Bool(false), Format_7_18), Format_7_18), t)
 		})
 	})
 
 	t.Run("Struct", func(t *testing.T) {
 		t.Parallel()
 		data := StructData{
-			"ref": NewRef(Bool(false)),
+			"ref": NewRef(Bool(false), Format_7_18),
 			"num": Float(42),
 		}
 		runTest(NewStruct("nom", data), t)

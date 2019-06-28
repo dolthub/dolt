@@ -249,7 +249,7 @@ func TestPanicIfDangling(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	r := NewRef(Bool(true))
+	r := NewRef(Bool(true), Format_7_18)
 	// TODO(binformat)
 	l := NewList(context.Background(), Format_7_18, vs, r)
 	vs.WriteValue(context.Background(), l)
@@ -263,7 +263,7 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	vs := newTestValueStore()
 	vs.SetEnforceCompleteness(false)
 
-	r := NewRef(Bool(true))
+	r := NewRef(Bool(true), Format_7_18)
 	// TODO(binformat)
 	l := NewList(context.Background(), Format_7_18, vs, r)
 	vs.WriteValue(context.Background(), l)

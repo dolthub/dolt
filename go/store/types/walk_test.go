@@ -94,7 +94,7 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	}
 	// TODO(binformat)
 	l := NewList(context.Background(), Format_7_18, suite.vs, nums...)
-	suite.True(NewRef(l).Height() > 1)
+	suite.True(NewRef(l, Format_7_18).Height() > 1)
 	suite.assertCallbackCount(l, count+1)
 
 	r := suite.vs.WriteValue(context.Background(), l)

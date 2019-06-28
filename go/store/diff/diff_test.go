@@ -481,8 +481,8 @@ func TestNomsDiffPrintRef(t *testing.T) {
 	expectedPaths1 := []string{``}
 	l1 := createList(1)
 	l2 := createList(2)
-	r1 := types.NewRef(l1)
-	r2 := types.NewRef(l2)
+	r1 := types.NewRef(l1, types.Format_7_18)
+	r2 := types.NewRef(l2, types.Format_7_18)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}

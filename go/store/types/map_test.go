@@ -450,7 +450,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 
-	assert.Equal(t, uint64(3), NewRef(m).Height())
+	assert.Equal(t, uint64(3), NewRef(m, Format_7_18).Height())
 	assert.Equal(t, 105, cs.Reads)
 	assert.Equal(t, 62, cs.Writes)
 }
@@ -1462,11 +1462,11 @@ func TestMapChunks(t *testing.T) {
 	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
-	l2 := NewMap(context.Background(), Format_7_18, vrw, NewRef(Float(0)), Float(1))
+	l2 := NewMap(context.Background(), Format_7_18, vrw, NewRef(Float(0), Format_7_18), Float(1))
 	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 
-	l3 := NewMap(context.Background(), Format_7_18, vrw, Float(0), NewRef(Float(1)))
+	l3 := NewMap(context.Background(), Format_7_18, vrw, Float(0), NewRef(Float(1), Format_7_18))
 	c3 := getChunks(l3)
 	assert.Len(c3, 1)
 }
@@ -1581,15 +1581,15 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), v,
 		NewStruct("", StructData{"field": Bool(true)}), v,
 		// Refs of values
-		NewRef(Bool(true)), v,
-		NewRef(Float(0)), v,
-		NewRef(String("hello")), v,
+		NewRef(Bool(true), Format_7_18), v,
+		NewRef(Float(0), Format_7_18), v,
+		NewRef(String("hello"), Format_7_18), v,
 		// TODO(binformat)
-		NewRef(NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf"))), v,
-		NewRef(NewSet(context.Background(), vrw, Bool(true))), v,
-		NewRef(NewList(context.Background(), Format_7_18, vrw, Bool(true))), v,
-		NewRef(NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0))), v,
-		NewRef(NewStruct("", StructData{"field": Bool(true)})), v,
+		NewRef(NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf")), Format_7_18), v,
+		NewRef(NewSet(context.Background(), vrw, Bool(true)), Format_7_18), v,
+		NewRef(NewList(context.Background(), Format_7_18, vrw, Bool(true)), Format_7_18), v,
+		NewRef(NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), Format_7_18), v,
+		NewRef(NewStruct("", StructData{"field": Bool(true)}), Format_7_18), v,
 	}
 
 	m := NewMap(context.Background(), Format_7_18, vrw, kvs...)

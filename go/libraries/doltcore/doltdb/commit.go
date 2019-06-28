@@ -103,7 +103,7 @@ func (c *Commit) GetRootValue() *RootValue {
 var ErrNoCommonAnscestor = errors.New("no common anscestor")
 
 func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
-	ref1, ref2 := types.NewRef(cm1.commitSt), types.NewRef(cm2.commitSt)
+	ref1, ref2 := types.NewRef(cm1.commitSt, types.Format_7_18), types.NewRef(cm2.commitSt, types.Format_7_18)
 
 	var ancestorSt types.Struct
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
