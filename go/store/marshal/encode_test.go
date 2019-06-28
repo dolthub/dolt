@@ -107,12 +107,12 @@ func TestEncode(tt *testing.T) {
 		Str string
 		Num float64
 	}
-	t(types.NewStruct("TestStruct", types.StructData{
+	t(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"num": types.Float(42),
 		"str": types.String("Hello"),
 	}), TestStruct{Str: "Hello", Num: 42})
 	// Same again to test caching
-	t(types.NewStruct("TestStruct", types.StructData{
+	t(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"num": types.Float(1),
 		"str": types.String("Bye"),
 	}), TestStruct{Str: "Bye", Num: 1})
@@ -122,7 +122,7 @@ func TestEncode(tt *testing.T) {
 	}{
 		true,
 	}
-	t(types.NewStruct("", types.StructData{
+	t(types.NewStruct(types.Format_7_18, "", types.StructData{
 		"b": types.Bool(true),
 	}), anonStruct)
 
@@ -131,9 +131,9 @@ func TestEncode(tt *testing.T) {
 		B TestStruct
 		C float64
 	}
-	t(types.NewStruct("TestNestedStruct", types.StructData{
+	t(types.NewStruct(types.Format_7_18, "TestNestedStruct", types.StructData{
 		"a": types.NewList(context.Background(), types.Format_7_18, vs, types.String("hi")),
-		"b": types.NewStruct("TestStruct", types.StructData{
+		"b": types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 			"str": types.String("bye"),
 			"num": types.Float(5678),
 		}),
@@ -151,7 +151,7 @@ func TestEncode(tt *testing.T) {
 		Str string
 		Num float64
 	}
-	t(types.NewStruct("TestStruct", types.StructData{
+	t(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"num": types.Float(42),
 		"str": types.String("Hello"),
 	}), testStruct{Str: "Hello", Num: 42})
@@ -188,7 +188,7 @@ func TestEncodeEmbeddedStructSkip(t *testing.T) {
 	s := TestStruct{EmbeddedStruct{1}, 2}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("TestStruct", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"y": types.Float(2),
 	}).Equals(v))
 }
@@ -209,8 +209,8 @@ func TestEncodeEmbeddedStructWithName(t *testing.T) {
 	s := TestStruct{EmbeddedStruct{1}, 2}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("TestStruct", types.StructData{
-		"em": types.NewStruct("EmbeddedStruct", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
+		"em": types.NewStruct(types.Format_7_18, "EmbeddedStruct", types.StructData{
 			"x": types.Float(1),
 		}),
 		"y": types.Float(2),
@@ -232,7 +232,7 @@ func TestEncodeEmbeddedStruct(t *testing.T) {
 	s := TestStruct{EmbeddedStruct{1}}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("TestStruct", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"x": types.Float(1),
 	}).Equals(v))
 
@@ -244,7 +244,7 @@ func TestEncodeEmbeddedStruct(t *testing.T) {
 	s2 := TestOuter{0, TestStruct{EmbeddedStruct{1}}, 2}
 	v2, err := Marshal(context.Background(), vs, s2)
 	assert.NoError(err)
-	assert.True(types.NewStruct("TestOuter", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "TestOuter", types.StructData{
 		"a": types.Float(0),
 		"b": types.Float(2),
 		"x": types.Float(1),
@@ -273,7 +273,7 @@ func TestEncodeEmbeddedStructOriginal(t *testing.T) {
 	}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("TestStruct", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"b": types.Bool(true),
 		"x": types.Float(1),
 	}).Equals(v))
@@ -299,7 +299,7 @@ func TestEncodeTaggingSkip(t *testing.T) {
 	s := S{42, true}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"def": types.Bool(true),
 	}).Equals(v))
 }
@@ -318,7 +318,7 @@ func TestEncodeNamedFields(t *testing.T) {
 	s := S{42, true, "Hi"}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"a":   types.Float(42),
 		"B":   types.Bool(true),
 		"ccc": types.String("Hi"),
@@ -372,7 +372,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"string":  types.String("s"),
 		"bool":    types.Bool(true),
 		"int":     types.Float(1),
@@ -407,7 +407,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v2, err := Marshal(context.Background(), vs, s2)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S", types.StructData{}).Equals(v2))
+	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{}).Equals(v2))
 
 	type S2 struct {
 		Slice []int       `noms:",omitempty"`
@@ -420,7 +420,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v3, err := Marshal(context.Background(), vs, s3)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S2", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S2", types.StructData{
 		"slice": types.NewList(context.Background(), types.Format_7_18, vs, types.Float(0)),
 		"map":   types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(0), types.Float(0)),
 	}).Equals(v3))
@@ -431,7 +431,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v4, err := Marshal(context.Background(), vs, s4)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S2", types.StructData{}).Equals(v4))
+	assert.True(types.NewStruct(types.Format_7_18, "S2", types.StructData{}).Equals(v4))
 
 	s5 := S2{
 		Slice: nil,
@@ -439,7 +439,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v5, err := Marshal(context.Background(), vs, s5)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S2", types.StructData{}).Equals(v5))
+	assert.True(types.NewStruct(types.Format_7_18, "S2", types.StructData{}).Equals(v5))
 
 	type S3 struct {
 		List  types.List  `noms:",omitempty"`
@@ -451,7 +451,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v6, err := Marshal(context.Background(), vs, s6)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S3", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S3", types.StructData{
 		"list":  types.NewList(context.Background(), types.Format_7_18, vs),
 		"value": types.Float(0),
 	}).Equals(v6))
@@ -462,7 +462,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v7, err := Marshal(context.Background(), vs, s7)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S3", types.StructData{}).Equals(v7))
+	assert.True(types.NewStruct(types.Format_7_18, "S3", types.StructData{}).Equals(v7))
 
 	// Both name and omitempty
 	type S4 struct {
@@ -473,7 +473,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v8, err := Marshal(context.Background(), vs, s8)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S4", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S4", types.StructData{
 		"y": types.Float(1),
 	}).Equals(v8))
 
@@ -482,7 +482,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	}
 	v9, err := Marshal(context.Background(), vs, s9)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S4", types.StructData{}).Equals(v9))
+	assert.True(types.NewStruct(types.Format_7_18, "S4", types.StructData{}).Equals(v9))
 }
 
 func ExampleMarshal() {
@@ -536,7 +536,7 @@ func TestEncodeStructWithSlice(t *testing.T) {
 	}
 	v, err := Marshal(context.Background(), vs, S{[]int{1, 2, 3}})
 	assert.NoError(err)
-	assert.True(types.NewStruct("S", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"list": types.NewList(context.Background(), types.Format_7_18, vs, types.Float(1), types.Float(2), types.Float(3)),
 	}).Equals(v))
 }
@@ -552,7 +552,7 @@ func TestEncodeStructWithArrayOfNomsValue(t *testing.T) {
 	}
 	v, err := Marshal(context.Background(), vs, S{[1]types.Set{types.NewSet(context.Background(), types.Format_7_18, vs, types.Bool(true))}})
 	assert.NoError(err)
-	assert.True(types.NewStruct("S", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"list": types.NewList(context.Background(), types.Format_7_18, vs, types.NewSet(context.Background(), types.Format_7_18, vs, types.Bool(true))),
 	}).Equals(v))
 }
@@ -574,7 +574,7 @@ func TestEncodeNomsTypePtr(t *testing.T) {
 	}
 
 	primitive := types.StringType
-	testMarshal(S{primitive}, types.NewStruct("S", types.StructData{"type": primitive}))
+	testMarshal(S{primitive}, types.NewStruct(types.Format_7_18, "S", types.StructData{"type": primitive}))
 
 	complex := types.MakeStructType("Complex",
 		types.StructField{
@@ -582,7 +582,7 @@ func TestEncodeNomsTypePtr(t *testing.T) {
 			Type: types.StringType,
 		},
 	)
-	testMarshal(S{complex}, types.NewStruct("S", types.StructData{"type": complex}))
+	testMarshal(S{complex}, types.NewStruct(types.Format_7_18, "S", types.StructData{"type": complex}))
 }
 
 func TestEncodeRecursive(t *testing.T) {
@@ -615,15 +615,15 @@ func TestEncodeRecursive(t *testing.T) {
 	)
 	assert.True(typ.Equals(types.TypeOf(v)))
 
-	assert.True(types.NewStruct("Node", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "Node", types.StructData{
 		"children": types.NewList(context.Background(),
 			types.Format_7_18,
 			vs,
-			types.NewStruct("Node", types.StructData{
+			types.NewStruct(types.Format_7_18, "Node", types.StructData{
 				"children": types.NewList(context.Background(), types.Format_7_18, vs),
 				"value":    types.Float(2),
 			}),
-			types.NewStruct("Node", types.StructData{
+			types.NewStruct(types.Format_7_18, "Node", types.StructData{
 				"children": types.NewList(context.Background(), types.Format_7_18, vs),
 				"value":    types.Float(3),
 			}),
@@ -655,8 +655,8 @@ func TestEncodeMap(t *testing.T) {
 	assert.True(types.NewMap(context.Background(),
 		types.Format_7_18,
 		vs,
-		types.NewStruct("S", types.StructData{"n": types.String("Yes")}), types.Bool(true),
-		types.NewStruct("S", types.StructData{"n": types.String("No")}), types.Bool(false)).Equals(v))
+		types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("Yes")}), types.Bool(true),
+		types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("No")}), types.Bool(false)).Equals(v))
 
 	v, err = Marshal(context.Background(), vs, map[string]int(nil))
 	assert.NoError(err)
@@ -685,7 +685,7 @@ func TestEncodeInterface(t *testing.T) {
 		types.Format_7_18,
 		vs,
 		types.String("a"), types.Bool(true),
-		types.NewStruct("", types.StructData{"name": types.String("b")}), types.Float(42),
+		types.NewStruct(types.Format_7_18, "", types.StructData{"name": types.String("b")}), types.Float(42),
 	).Equals(v))
 }
 
@@ -785,7 +785,7 @@ func TestEncodeOpt(t *testing.T) {
 		{
 			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
 			Opt{},
-			types.NewMap(context.Background(), types.Format_7_18, vs, types.String("a"), types.NewStruct("", nil), types.String("b"), types.NewStruct("", nil)),
+			types.NewMap(context.Background(), types.Format_7_18, vs, types.String("a"), types.NewStruct(types.Format_7_18, "", nil), types.String("b"), types.NewStruct(types.Format_7_18, "", nil)),
 		},
 		{
 			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
@@ -859,7 +859,7 @@ func TestEncodeCanSkipUnexportedField(t *testing.T) {
 	s := S{42, true}
 	v, err := Marshal(context.Background(), vs, s)
 	assert.NoError(err)
-	assert.True(types.NewStruct("S", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"abc": types.Float(42),
 	}).Equals(v))
 }
@@ -879,7 +879,7 @@ func TestEncodeOriginal(t *testing.T) {
 	var err error
 
 	// New field value clobbers old field value
-	orig := types.NewStruct("S", types.StructData{
+	orig := types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"foo": types.Float(42),
 	})
 	err = Unmarshal(context.Background(), orig, &s)
@@ -888,21 +888,21 @@ func TestEncodeOriginal(t *testing.T) {
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(orig.Set("foo", types.Float(43))))
 
 	// New field extends old struct
-	orig = types.NewStruct("S", types.StructData{})
+	orig = types.NewStruct(types.Format_7_18, "S", types.StructData{})
 	err = Unmarshal(context.Background(), orig, &s)
 	assert.NoError(err)
 	s.Foo = 43
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(orig.Set("foo", types.Float(43))))
 
 	// Old struct name always used
-	orig = types.NewStruct("Q", types.StructData{})
+	orig = types.NewStruct(types.Format_7_18, "Q", types.StructData{})
 	err = Unmarshal(context.Background(), orig, &s)
 	assert.NoError(err)
 	s.Foo = 43
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(orig.Set("foo", types.Float(43))))
 
 	// Field type of base are preserved
-	orig = types.NewStruct("S", types.StructData{
+	orig = types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"foo": types.Float(42),
 	})
 	err = Unmarshal(context.Background(), orig, &s)
@@ -921,7 +921,7 @@ func TestEncodeOriginal(t *testing.T) {
 		Foo: 42,
 	}
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(
-		types.NewStruct("S", types.StructData{"foo": types.Float(float64(42))})))
+		types.NewStruct(types.Format_7_18, "S", types.StructData{"foo": types.Float(float64(42))})))
 }
 
 func TestNomsTypes(t *testing.T) {
@@ -947,7 +947,7 @@ func TestNomsTypes(t *testing.T) {
 	}
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(
 		// TODO(binformat)
-		types.NewStruct("S", types.StructData{
+		types.NewStruct(types.Format_7_18, "S", types.StructData{
 			"blob":   types.NewBlob(context.Background(), types.Format_7_18, vs),
 			"bool":   types.Bool(true),
 			"number": types.Float(42),
@@ -1107,7 +1107,7 @@ func TestMarshalerComplexStructType(t *testing.T) {
 
 	v := MustMarshal(context.Background(), vs, u)
 
-	assert.True(types.NewStruct("TestComplexStructType", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "TestComplexStructType", types.StructData{
 		"p":       types.Float(43),
 		"ps":      types.NewList(context.Background(), types.Format_7_18, vs, types.Float(2), types.Float(3)),
 		"pm":      types.NewMap(context.Background(), types.Format_7_18, vs, types.String("x"), types.Float(101), types.String("y"), types.Float(102)),
@@ -1173,7 +1173,7 @@ func TestMarshalStructName(t *testing.T) {
 		X: 1,
 	}
 	v := MustMarshal(context.Background(), vs, ts)
-	assert.True(types.NewStruct("A", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "A", types.StructData{
 		"x": types.Float(1),
 	}).Equals(v), types.EncodedValue(context.Background(), v))
 }
@@ -1195,7 +1195,7 @@ func TestMarshalStructName2(t *testing.T) {
 		X: 1,
 	}
 	v := MustMarshal(context.Background(), vs, ts)
-	assert.True(types.NewStruct("", types.StructData{
+	assert.True(types.NewStruct(types.Format_7_18, "", types.StructData{
 		"x": types.Float(1),
 	}).Equals(v), types.EncodedValue(context.Background(), v))
 }

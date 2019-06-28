@@ -97,7 +97,7 @@ func (cm *CommitMeta) toNomsStruct() types.Struct {
 		commitMetaVersionKey:   types.String(metaVersion),
 	}
 
-	return types.NewStruct("metadata", metadata)
+	return types.NewStruct(types.Format_7_18, "metadata", metadata)
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format

@@ -55,7 +55,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et3, at3)
 
 	// Now commit a String with MetaInfo
-	meta := types.NewStruct("Meta", types.StructData{"date": types.String("some date"), "number": types.Float(9)})
+	meta := types.NewStruct(types.Format_7_18, "Meta", types.StructData{"date": types.String("some date"), "number": types.Float(9)})
 	metaType := nomdl.MustParseType(`Struct Meta {
                 date: String,
                 number: Float,
@@ -96,7 +96,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	metaCommit := types.NewStruct("Commit", types.StructData{
+	metaCommit := types.NewStruct(types.Format_7_18, "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": types.NewSet(context.Background(), types.Format_7_18, db),
 		"meta":    types.EmptyStruct,
@@ -104,7 +104,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	assert.True(IsCommit(metaCommit))
 	assert.True(IsCommitType(types.TypeOf(metaCommit)))
 
-	noMetaCommit := types.NewStruct("Commit", types.StructData{
+	noMetaCommit := types.NewStruct(types.Format_7_18, "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": types.NewSet(context.Background(), types.Format_7_18, db),
 	})
@@ -208,7 +208,7 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	cx := NewCommit(types.Bool(true), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct)
 	value := types.String("two")
 	parents := types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(c1, types.Format_7_18))
-	meta := types.NewStruct("", types.StructData{
+	meta := types.NewStruct(types.Format_7_18, "", types.StructData{
 		"basis": cx,
 	})
 

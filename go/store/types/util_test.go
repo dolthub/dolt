@@ -57,7 +57,7 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
 	for i := from; i < to; i += by {
-		nums = append(nums, NewStruct("num", StructData{"n": Float(i)}))
+		nums = append(nums, NewStruct(Format_7_18, "num", StructData{"n": Float(i)}))
 	}
 	return nums
 }
@@ -65,7 +65,7 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		r := vrw.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i)}))
+		r := vrw.WriteValue(context.Background(), NewStruct(Format_7_18, "num", StructData{"n": Float(i)}))
 		nums = append(nums, r)
 	}
 	return nums

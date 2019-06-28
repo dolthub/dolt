@@ -76,7 +76,7 @@ func createStruct(name string, kv ...interface{}) types.Struct {
 	for i := 0; i < len(kv); i += 2 {
 		fields[kv[i].(string)] = valToTypesValue(kv[i+1])
 	}
-	return types.NewStruct(name, fields)
+	return types.NewStruct(types.Format_7_18, name, fields)
 }
 
 func pathsFromDiff(v1, v2 types.Value, leftRight bool) []string {

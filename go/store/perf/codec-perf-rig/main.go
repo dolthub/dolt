@@ -141,7 +141,7 @@ func createNumber(i uint64) types.Value {
 var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str"})
 
 func createStruct(i uint64) types.Value {
-	return structTemplate.NewStruct([]types.Value{
+	return structTemplate.NewStruct(types.Format_7_18, []types.Value{
 		types.Bool(i%2 == 0), // "bool"
 		types.Float(i),       // "num"
 		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)), // "str"

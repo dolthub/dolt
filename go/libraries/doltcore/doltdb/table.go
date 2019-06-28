@@ -48,7 +48,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 		tableRowsKey: rowDataRef,
 	}
 
-	tableStruct := types.NewStruct(tableStructName, sd)
+	tableStruct := types.NewStruct(types.Format_7_18, tableStructName, sd)
 	return &Table{vrw, tableStruct}
 }
 

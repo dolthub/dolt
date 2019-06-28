@@ -77,7 +77,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 		},
 		types.NewSet(context.Background(), types.Format_7_18, rightSpec.GetDatabase(context.Background()), p))
 
-	expected := types.NewStruct("", types.StructData{
+	expected := types.NewStruct(types.Format_7_18, "", types.StructData{
 		"num": types.Float(42),
 		"str": types.String("foobaz"),
 		"lst": types.NewList(context.Background(), types.Format_7_18, parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
@@ -103,7 +103,7 @@ func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
 
 func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructData, p types.Set) types.Ref {
 	ds := sp.GetDataset(context.Background())
-	ds, err := sp.GetDatabase(context.Background()).Commit(context.Background(), ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
+	ds, err := sp.GetDatabase(context.Background()).Commit(context.Background(), ds, types.NewStruct(types.Format_7_18, "", data), datas.CommitOptions{Parents: p})
 	s.NoError(err)
 	return ds.HeadRef()
 }
@@ -133,7 +133,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(context.Background(), types.Format_7_18, leftSpec.GetDatabase(context.Background()), p))
 	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(context.Background(), types.Format_7_18, rightSpec.GetDatabase(context.Background()), p))
 
-	expected := types.NewStruct("", types.StructData{"num": types.Float(43)})
+	expected := types.NewStruct(types.Format_7_18, "", types.StructData{"num": types.Float(43)})
 
 	output := "output"
 	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=l", s.DBDir, left, right, output})
@@ -158,7 +158,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
 	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(context.Background(), types.Format_7_18, leftSpec.GetDatabase(context.Background()), p))
 	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(context.Background(), types.Format_7_18, rightSpec.GetDatabase(context.Background()), p))
 
-	expected := types.NewStruct("", types.StructData{"num": types.Float(44)})
+	expected := types.NewStruct(types.Format_7_18, "", types.StructData{"num": types.Float(44)})
 
 	output := "output"
 	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=r", s.DBDir, left, right, output})
