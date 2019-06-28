@@ -177,7 +177,7 @@ func TestStructDiff(t *testing.T) {
 		// TODO(binformat)
 		"a": NewList(context.Background(), Format_7_18, vs, Float(0), Float(1)),
 		"b": NewMap(context.Background(), Format_7_18, vs, String("foo"), Bool(false), String("bar"), Bool(true)),
-		"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
+		"c": NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), String("foo")),
 	})
 
 	assertDiff([]ValueChanged{},
@@ -185,7 +185,7 @@ func TestStructDiff(t *testing.T) {
 			// TODO(binformat)
 			"a": NewList(context.Background(), Format_7_18, vs, Float(0), Float(1)),
 			"b": NewMap(context.Background(), Format_7_18, vs, String("foo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
+			"c": NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
@@ -201,30 +201,30 @@ func TestStructDiff(t *testing.T) {
 			// TODO(binformat)
 			"a": NewList(context.Background(), Format_7_18, vs, Float(1), Float(1)),
 			"b": NewMap(context.Background(), Format_7_18, vs, String("foo"), Bool(true), String("bar"), Bool(true)),
-			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
+			"c": NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
 		// TODO(binformat)
 		vc(DiffChangeModified, "a", NewList(context.Background(), Format_7_18, vs, Float(0)), NewList(context.Background(), Format_7_18, vs, Float(0), Float(1))),
-		vc(DiffChangeModified, "c", NewSet(context.Background(), vs, Float(0), Float(2), String("foo")), NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
+		vc(DiffChangeModified, "c", NewSet(context.Background(), Format_7_18, vs, Float(0), Float(2), String("foo")), NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), String("foo"))),
 	},
 		s2, NewStruct("", StructData{
 			// TODO(binformat)
 			"a": NewList(context.Background(), Format_7_18, vs, Float(0)),
 			"b": NewMap(context.Background(), Format_7_18, vs, String("foo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(context.Background(), vs, Float(0), Float(2), String("foo")),
+			"c": NewSet(context.Background(), Format_7_18, vs, Float(0), Float(2), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
 		vc(DiffChangeModified, "b", NewMap(context.Background(), Format_7_18, vs, String("boo"), Bool(false), String("bar"), Bool(true)), NewMap(context.Background(), Format_7_18, vs, String("foo"), Bool(false), String("bar"), Bool(true))),
-		vc(DiffChangeModified, "c", NewSet(context.Background(), vs, Float(0), Float(1), String("bar")), NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
+		vc(DiffChangeModified, "c", NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), String("bar")), NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), String("foo"))),
 	},
 		s2, NewStruct("", StructData{
 			// TODO(binformat)
 			"a": NewList(context.Background(), Format_7_18, vs, Float(0), Float(1)),
 			"b": NewMap(context.Background(), Format_7_18, vs, String("boo"), Bool(false), String("bar"), Bool(true)),
-			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("bar")),
+			"c": NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), String("bar")),
 		}))
 }
 

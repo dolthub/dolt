@@ -39,7 +39,7 @@ func TestAbsolutePaths(t *testing.T) {
 
 	s0, s1 := types.String("foo"), types.String("bar")
 	list := types.NewList(context.Background(), types.Format_7_18, db, s0, s1)
-	emptySet := types.NewSet(context.Background(), db)
+	emptySet := types.NewSet(context.Background(), types.Format_7_18, db)
 
 	db.WriteValue(context.Background(), s0)
 	db.WriteValue(context.Background(), s1)

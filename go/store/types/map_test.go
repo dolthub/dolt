@@ -339,7 +339,7 @@ func getTestRefToNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
 
 func getTestRefToValueOrderMap(scale int, vrw ValueReadWriter) testMap {
 	return newRandomTestMap(64*scale, func(i int) Value {
-		return vrw.WriteValue(context.Background(), NewSet(context.Background(), vrw, Float(i)))
+		return vrw.WriteValue(context.Background(), NewSet(context.Background(), Format_7_18, vrw, Float(i)))
 	})
 }
 
@@ -1167,8 +1167,8 @@ func TestMapNotStringKeys(t *testing.T) {
 		NewList(context.Background(), Format_7_18, vrw, NewList(context.Background(), Format_7_18, vrw)), String("list of list"),
 		NewMap(context.Background(), Format_7_18, vrw), String("empty map"),
 		NewMap(context.Background(), Format_7_18, vrw, NewMap(context.Background(), Format_7_18, vrw), NewMap(context.Background(), Format_7_18, vrw)), String("map of map/map"),
-		NewSet(context.Background(), vrw), String("empty set"),
-		NewSet(context.Background(), vrw, NewSet(context.Background(), vrw)), String("map of set/set"),
+		NewSet(context.Background(), Format_7_18, vrw), String("empty set"),
+		NewSet(context.Background(), Format_7_18, vrw, NewSet(context.Background(), Format_7_18, vrw)), String("map of set/set"),
 	}
 	m1 := NewMap(context.Background(), Format_7_18, vrw, l...)
 	assert.Equal(uint64(12), m1.Len())
@@ -1576,7 +1576,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		String("hello"), v,
 		// TODO(binformat)
 		NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf")), v,
-		NewSet(context.Background(), vrw, Bool(true)), v,
+		NewSet(context.Background(), Format_7_18, vrw, Bool(true)), v,
 		NewList(context.Background(), Format_7_18, vrw, Bool(true)), v,
 		NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), v,
 		NewStruct("", StructData{"field": Bool(true)}), v,
@@ -1586,7 +1586,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewRef(String("hello"), Format_7_18), v,
 		// TODO(binformat)
 		NewRef(NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf")), Format_7_18), v,
-		NewRef(NewSet(context.Background(), vrw, Bool(true)), Format_7_18), v,
+		NewRef(NewSet(context.Background(), Format_7_18, vrw, Bool(true)), Format_7_18), v,
 		NewRef(NewList(context.Background(), Format_7_18, vrw, Bool(true)), Format_7_18), v,
 		NewRef(NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), Format_7_18), v,
 		NewRef(NewStruct("", StructData{"field": Bool(true)}), Format_7_18), v,
@@ -1749,12 +1749,12 @@ func TestMapWithNil(t *testing.T) {
 		NewMap(context.Background(), Format_7_18, nil, Float(42))
 	})
 	assert.Panics(t, func() {
-		NewSet(context.Background(), vrw, Float(42), nil)
+		NewSet(context.Background(), Format_7_18, vrw, Float(42), nil)
 	})
 	assert.Panics(t, func() {
 		NewMap(context.Background(), Format_7_18, vrw, String("a"), String("b"), nil, Float(42))
 	})
 	assert.Panics(t, func() {
-		NewSet(context.Background(), vrw, String("a"), String("b"), Float(42), nil)
+		NewSet(context.Background(), Format_7_18, vrw, String("a"), String("b"), Float(42), nil)
 	})
 }

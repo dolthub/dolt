@@ -61,7 +61,7 @@ func createSet(kv ...interface{}) types.Set {
 	vs := newTestValueStore()
 	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewSet(context.Background(), vs, keyValues...)
+	return types.NewSet(context.Background(), types.Format_7_18, vs, keyValues...)
 }
 
 func createList(kv ...interface{}) types.List {

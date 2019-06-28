@@ -89,12 +89,12 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			s := NewSet(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
+			s := NewSet(context.Background(), Format_7_18, vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(s, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			s := NewSet(context.Background(), vrw, newValueSlice(r)...)
+			s := NewSet(context.Background(), Format_7_18, vrw, newValueSlice(r)...)
 			for s.isLeaf() {
 				e := s.Edit()
 				e = e.Insert(newValueSlice(r)...)

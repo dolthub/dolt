@@ -150,7 +150,7 @@ func (suite *PullSuite) TestPullEverything() {
 	expectedReads := suite.sinkCS.Reads
 
 	l := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(l, types.NewSet(context.Background(), suite.source))
+	sourceRef := suite.commitToSource(l, types.NewSet(context.Background(), types.Format_7_18, suite.source))
 	pt := startProgressTracker()
 
 	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
@@ -183,15 +183,15 @@ func (suite *PullSuite) TestPullEverything() {
 //                         \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sink)
-	suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink))
+	suite.commitToSink(sinkL, types.NewSet(context.Background(), types.Format_7_18, suite.sink))
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
+	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), types.Format_7_18, suite.source))
 	srcL = buildListOfHeight(4, suite.source)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), types.Format_7_18, suite.source, sourceRef))
 	srcL = buildListOfHeight(5, suite.source)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), types.Format_7_18, suite.source, sourceRef))
 
 	pt := startProgressTracker()
 
@@ -229,14 +229,14 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 //                                     \ -1-> L0
 func (suite *PullSuite) TestPullDivergentHistory() {
 	sinkL := buildListOfHeight(3, suite.sink)
-	sinkRef := suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink))
+	sinkRef := suite.commitToSink(sinkL, types.NewSet(context.Background(), types.Format_7_18, suite.sink))
 	srcL := buildListOfHeight(3, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
+	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), types.Format_7_18, suite.source))
 
 	sinkL = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
-	sinkRef = suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink, sinkRef))
+	sinkRef = suite.commitToSink(sinkL, types.NewSet(context.Background(), types.Format_7_18, suite.sink, sinkRef))
 	srcL = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), types.Format_7_18, suite.source, sourceRef))
 	preReads := suite.sinkCS.Reads
 
 	pt := startProgressTracker()
@@ -269,17 +269,17 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 //                                         \ -1-> L0
 func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sink)
-	suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink))
+	suite.commitToSink(sinkL, types.NewSet(context.Background(), types.Format_7_18, suite.sink))
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(4, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
+	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), types.Format_7_18, suite.source))
 	L3 := srcL.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
 	L2 := L3.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
 	L2 = L2.Edit().Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List(context.Background())
 	L3 = L3.Edit().Set(1, suite.source.WriteValue(context.Background(), L2)).List(context.Background())
 	srcL = srcL.Edit().Set(1, suite.source.WriteValue(context.Background(), L3)).List(context.Background())
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), types.Format_7_18, suite.source, sourceRef))
 
 	pt := startProgressTracker()
 

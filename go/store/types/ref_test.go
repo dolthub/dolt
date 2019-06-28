@@ -29,7 +29,7 @@ func TestRefInSet(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	s := NewSet(context.Background(), vs)
+	s := NewSet(context.Background(), Format_7_18, vs)
 	r := NewRef(s, Format_7_18)
 	s = s.Edit().Insert(r).Set(context.Background())
 	r2 := s.First(context.Background())

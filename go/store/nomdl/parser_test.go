@@ -294,10 +294,10 @@ func TestValueList(t *testing.T) {
 
 func TestValueSet(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "set {}", types.NewSet(context.Background(), vs))
+	assertParse(t, vs, "set {}", types.NewSet(context.Background(), types.Format_7_18, vs))
 
-	assertParse(t, vs, "set {42}", types.NewSet(context.Background(), vs, types.Float(42)))
-	assertParse(t, vs, "set {42,}", types.NewSet(context.Background(), vs, types.Float(42)))
+	assertParse(t, vs, "set {42}", types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(42)))
+	assertParse(t, vs, "set {42,}", types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(42)))
 
 	assertParseError(t, "set", "Unexpected token EOF, expected \"{\", example:1:4")
 	assertParseError(t, "set {", "Unexpected token EOF, example:1:6")
@@ -308,10 +308,10 @@ func TestValueSet(t *testing.T) {
 
 	assertParse(t, vs, `set {42,
                 Bool,
-        }`, types.NewSet(context.Background(), vs, types.Float(42), types.BoolType))
+        }`, types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `set {42,
                 Bool
-        }`, types.NewSet(context.Background(), vs, types.Float(42), types.BoolType))
+        }`, types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(42), types.BoolType))
 }
 
 func TestValueMap(t *testing.T) {
@@ -444,8 +444,8 @@ func TestRoundTrips(t *testing.T) {
 	test(types.NewList(context.Background(), types.Format_7_18, vs))
 	test(types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true), types.String("abc")))
 
-	test(types.NewSet(context.Background(), vs))
-	test(types.NewSet(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc")))
+	test(types.NewSet(context.Background(), types.Format_7_18, vs))
+	test(types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true), types.String("abc")))
 
 	test(types.NewMap(context.Background(), types.Format_7_18, vs))
 	test(types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true), types.String("abc"), types.NewMap(context.Background(), types.Format_7_18, vs)))
