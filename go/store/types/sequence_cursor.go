@@ -54,8 +54,7 @@ func (cur *sequenceCursor) getChildSequence(ctx context.Context) sequence {
 // current returns the value at the current cursor position
 func (cur *sequenceCursor) current() sequenceItem {
 	d.PanicIfFalse(cur.valid())
-	// TODO(binformat)
-	return cur.getItem(cur.idx, Format_7_18)
+	return cur.getItem(cur.idx, cur.format)
 }
 
 func (cur *sequenceCursor) valid() bool {
@@ -121,12 +120,11 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, all
 type cursorIterCallback func(item interface{}) bool
 
 func (cur *sequenceCursor) String() string {
-	// TODO(binformat)
 	if cur.parent == nil {
-		return fmt.Sprintf("%s (%d): %d", newMap(cur.seq.(orderedSequence), Format_7_18).Hash(Format_7_18).String(), cur.seq.seqLen(), cur.idx)
+		return fmt.Sprintf("%s (%d): %d", newMap(cur.seq.(orderedSequence), cur.format).Hash(cur.format).String(), cur.seq.seqLen(), cur.idx)
 	}
 
-	return fmt.Sprintf("%s (%d): %d -- %s", newMap(cur.seq.(orderedSequence), Format_7_18).Hash(Format_7_18).String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
+	return fmt.Sprintf("%s (%d): %d -- %s", newMap(cur.seq.(orderedSequence), cur.format).Hash(cur.format).String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
 }
 
 func (cur *sequenceCursor) compare(other *sequenceCursor) int {
@@ -148,8 +146,7 @@ func (cur *sequenceCursor) compare(other *sequenceCursor) int {
 
 // iter iterates forward from the current position
 func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) {
-	// TODO(binformat)
-	for cur.valid() && !cb(cur.getItem(cur.idx, Format_7_18)) {
+	for cur.valid() && !cb(cur.getItem(cur.idx, cur.format)) {
 		cur.advance(ctx)
 	}
 }
