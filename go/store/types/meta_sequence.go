@@ -305,7 +305,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 		for _, seq := range output {
 			valueItems = append(valueItems, seq.(setLeafSequence).values(ms.format)...)
 		}
-		return newSetLeafSequence(ms.vrw, valueItems...)
+		return newSetLeafSequence(ms.format, ms.vrw, valueItems...)
 	}
 
 	panic("unreachable")

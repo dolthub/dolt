@@ -52,12 +52,11 @@ func (si *setIterator) Next(ctx context.Context) Value {
 func (si *setIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
 	if si.cursor.valid() {
-		if compareValue(v, si.currentValue) <= 0 {
+		if compareValue(si.s.format, v, si.currentValue) <= 0 {
 			return si.Next(ctx)
 		}
 
-		// TODO(binformat)
-		si.cursor = newCursorAtValue(ctx, Format_7_18, si.s.orderedSequence, v, true, false)
+		si.cursor = newCursorAtValue(ctx, si.s.format, si.s.orderedSequence, v, true, false)
 		if si.cursor.valid() {
 			si.currentValue = si.cursor.current().(Value)
 			si.cursor.advance(ctx)
@@ -99,19 +98,20 @@ func (st *iterState) SkipTo(ctx context.Context, v Value) Value {
 type UnionIterator struct {
 	aState iterState
 	bState iterState
+	format *Format
 }
 
 // NewUnionIterator creates a union iterator from two other SetIterators.
-func NewUnionIterator(ctx context.Context, iterA, iterB SetIterator) SetIterator {
+func NewUnionIterator(ctx context.Context, f *Format, iterA, iterB SetIterator) SetIterator {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
 	a := iterState{i: iterA, v: iterA.Next(ctx)}
 	b := iterState{i: iterB, v: iterB.Next(ctx)}
-	return &UnionIterator{aState: a, bState: b}
+	return &UnionIterator{aState: a, bState: b, format: f}
 }
 
 func (u *UnionIterator) Next(ctx context.Context) Value {
-	switch compareValue(u.aState.v, u.bState.v) {
+	switch compareValue(u.format, u.aState.v, u.bState.v) {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
@@ -126,18 +126,18 @@ func (u *UnionIterator) Next(ctx context.Context) Value {
 func (u *UnionIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
 	didAdvance := false
-	if compareValue(u.aState.v, v) < 0 {
+	if compareValue(u.format, u.aState.v, v) < 0 {
 		didAdvance = true
 		u.aState.SkipTo(ctx, v)
 	}
-	if compareValue(u.bState.v, v) < 0 {
+	if compareValue(u.format, u.bState.v, v) < 0 {
 		didAdvance = true
 		u.bState.SkipTo(ctx, v)
 	}
 	if !didAdvance {
 		return u.Next(ctx)
 	}
-	switch compareValue(u.aState.v, u.bState.v) {
+	switch compareValue(u.format, u.aState.v, u.bState.v) {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
@@ -154,20 +154,21 @@ func (u *UnionIterator) SkipTo(ctx context.Context, v Value) Value {
 type IntersectionIterator struct {
 	aState iterState
 	bState iterState
+	format *Format
 }
 
 // NewIntersectionIterator creates a intersect iterator from two other SetIterators.
-func NewIntersectionIterator(ctx context.Context, iterA, iterB SetIterator) SetIterator {
+func NewIntersectionIterator(ctx context.Context, f *Format, iterA, iterB SetIterator) SetIterator {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
 	a := iterState{i: iterA, v: iterA.Next(ctx)}
 	b := iterState{i: iterB, v: iterB.Next(ctx)}
-	return &IntersectionIterator{aState: a, bState: b}
+	return &IntersectionIterator{aState: a, bState: b, format: f}
 }
 
 func (i *IntersectionIterator) Next(ctx context.Context) Value {
 	for cont := true; cont; {
-		switch compareValue(i.aState.v, i.bState.v) {
+		switch compareValue(i.format, i.aState.v, i.bState.v) {
 		case -1:
 			i.aState.SkipTo(ctx, i.bState.v)
 		case 0:
@@ -185,25 +186,24 @@ func (i *IntersectionIterator) Next(ctx context.Context) Value {
 
 func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
-	if compareValue(v, i.aState.v) >= 0 {
+	if compareValue(i.format, v, i.aState.v) >= 0 {
 		i.aState.SkipTo(ctx, v)
 	}
-	if compareValue(v, i.bState.v) >= 0 {
+	if compareValue(i.format, v, i.bState.v) >= 0 {
 		i.bState.SkipTo(ctx, v)
 	}
 	return i.Next(ctx)
 }
 
 // considers nil max value, return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-func compareValue(v1, v2 Value) int {
+func compareValue(f *Format, v1, v2 Value) int {
 	if v1 == nil && v2 == nil {
 		return 0
 	}
-	// TODO(binformat)
-	if v2 == nil || (v1 != nil && v1.Less(Format_7_18, v2)) {
+	if v2 == nil || (v1 != nil && v1.Less(f, v2)) {
 		return -1
 	}
-	if v1 == nil || (v2 != nil && v2.Less(Format_7_18, v1)) {
+	if v1 == nil || (v2 != nil && v2.Less(f, v1)) {
 		return 1
 	}
 	return 0

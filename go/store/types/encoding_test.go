@@ -461,8 +461,8 @@ func TestWriteCompoundList(t *testing.T) {
 func TestWriteCompoundSet(t *testing.T) {
 	vrw := newTestValueStore()
 
-	set1 := newSet(Format_7_18, newSetLeafSequence(vrw, Float(0), Float(1)))
-	set2 := newSet(Format_7_18, newSetLeafSequence(vrw, Float(2), Float(3), Float(4)))
+	set1 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, Float(0), Float(1)))
+	set2 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, Float(2), Float(3), Float(4)))
 
 	assertEncoding(t,
 		[]interface{}{
@@ -493,8 +493,8 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	blob3 := newBlobOfInt(3)
 	blob4 := newBlobOfInt(4)
 
-	set1 := newSet(Format_7_18, newSetLeafSequence(vrw, blob0, blob1))
-	set2 := newSet(Format_7_18, newSetLeafSequence(vrw, blob2, blob3, blob4))
+	set1 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, blob0, blob1))
+	set2 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, blob2, blob3, blob4))
 
 	assertEncoding(t,
 		[]interface{}{

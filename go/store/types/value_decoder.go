@@ -110,7 +110,7 @@ func (r *valueDecoder) readListSequence() sequence {
 func (r *valueDecoder) readSetSequence() orderedSequence {
 	seq := r.readSequence(SetKind, r.skipSetLeafSequence)
 	if seq.isLeaf() {
-		return setLeafSequence{seq.(leafSequence)}
+		return setLeafSequence{seq.(leafSequence), Format_7_18}
 	}
 	return seq.(orderedSequence)
 }
