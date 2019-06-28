@@ -11,12 +11,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
-func newListMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequenceFromTuples(ListKind, level, tuples, vrw)
+func newListMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueReadWriter) metaSequence {
+	return newMetaSequenceFromTuples(f, ListKind, level, tuples, vrw)
 }
 
-func newBlobMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
-	return newMetaSequenceFromTuples(BlobKind, level, tuples, vrw)
+func newBlobMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueReadWriter) metaSequence {
+	return newMetaSequenceFromTuples(f, BlobKind, level, tuples, vrw)
 }
 
 // advanceCursorToOffset advances the cursor as close as possible to idx
@@ -71,10 +71,10 @@ func newIndexedMetaSequenceChunkFn(f *Format, kind NomsKind, vrw ValueReadWriter
 
 		var col Collection
 		if kind == ListKind {
-			col = newList(newListMetaSequence(level, tuples, vrw), f)
+			col = newList(newListMetaSequence(level, tuples, f, vrw), f)
 		} else {
 			d.PanicIfFalse(BlobKind == kind)
-			col = newBlob(newBlobMetaSequence(level, tuples, vrw), f)
+			col = newBlob(newBlobMetaSequence(level, tuples, f, vrw), f)
 		}
 		return col, orderedKeyFromSum(tuples), numLeaves
 	}

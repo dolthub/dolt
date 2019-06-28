@@ -302,5 +302,5 @@ func makeMapLeafChunkFn(f *Format, vrw ValueReadWriter) makeChunkFn {
 }
 
 func newEmptyMapSequenceChunker(ctx context.Context, f *Format, vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(f, vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(f, vrw), newOrderedMetaSequenceChunkFn(MapKind, f, vrw), mapHashValueBytes)
 }

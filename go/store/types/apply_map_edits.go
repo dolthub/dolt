@@ -141,7 +141,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 					}
 
 					if ch == nil {
-						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(f, vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(f, vrw), newOrderedMetaSequenceChunkFn(MapKind, f, vrw), mapHashValueBytes)
 					} else {
 						ch.advanceTo(ctx, cur)
 					}

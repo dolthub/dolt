@@ -14,25 +14,24 @@ import (
 
 var emptyKey = orderedKey{}
 
-func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) metaTuple {
+func newMetaTuple(f *Format, ref Ref, key orderedKey, numLeaves uint64) metaTuple {
 	d.PanicIfTrue(ref.buff == nil)
 	w := newBinaryNomsWriter()
 	var offsets [metaTuplePartNumLeaves + 1]uint32
 	offsets[metaTuplePartRef] = w.offset
-	// TODO(binformat)
-	ref.writeTo(&w, Format_7_18)
+	ref.writeTo(&w, f)
 	offsets[metaTuplePartKey] = w.offset
-	// TODO(binformat)
-	key.writeTo(&w, Format_7_18)
+	key.writeTo(&w, f)
 	offsets[metaTuplePartNumLeaves] = w.offset
 	w.writeCount(numLeaves)
-	return metaTuple{w.data(), offsets}
+	return metaTuple{w.data(), offsets, f}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
 	buff    []byte
 	offsets [metaTuplePartNumLeaves + 1]uint32
+	format  *Format
 }
 
 const (
@@ -114,8 +113,7 @@ func (key orderedKey) Less(f *Format, mk2 orderedKey) bool {
 func (key orderedKey) writeTo(w nomsWriter, f *Format) {
 	if !key.isOrderedByValue {
 		d.PanicIfTrue(key != emptyKey && key.h.IsEmpty())
-		// TODO(binformat)
-		hashKind.writeTo(w, Format_7_18)
+		hashKind.writeTo(w, f)
 		w.writeHash(key.h)
 	} else {
 		key.v.writeTo(w, f)
@@ -124,19 +122,19 @@ func (key orderedKey) writeTo(w nomsWriter, f *Format) {
 
 type metaSequence struct {
 	sequenceImpl
+	format *Format
 }
 
-func newMetaSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
-	return metaSequence{newSequenceImpl(vrw, buff, offsets, len)}
+func newMetaSequence(f *Format, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
+	return metaSequence{newSequenceImpl(vrw, buff, offsets, len), f}
 }
 
-func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
+func newMetaSequenceFromTuples(f *Format, kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
 	d.PanicIfFalse(level > 0)
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(tuples)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	// TODO(binformat)
-	kind.writeTo(&w, Format_7_18)
+	kind.writeTo(&w, f)
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(level)
 	offsets[sequencePartCount] = w.offset
@@ -145,33 +143,30 @@ func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, 
 	length := uint64(0)
 	for i, mt := range tuples {
 		length += mt.numLeaves()
-		// TODO(binformat)
-		mt.writeTo(&w, Format_7_18)
+		mt.writeTo(&w, f)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return newMetaSequence(vrw, w.data(), offsets, length)
+	return newMetaSequence(f, vrw, w.data(), offsets, length)
 }
 
 func (ms metaSequence) tuples() []metaTuple {
 	dec, count := ms.decoderSkipToValues()
 	tuples := make([]metaTuple, count)
 	for i := uint64(0); i < count; i++ {
-		tuples[i] = ms.readTuple(&dec)
+		tuples[i] = ms.readTuple(ms.format, &dec)
 	}
 	return tuples
 }
 
 func (ms metaSequence) getKey(idx int) orderedKey {
 	dec := ms.decoderSkipToIndex(idx)
-	// TODO(binformat)
-	dec.skipValue(Format_7_18) // ref
+	dec.skipValue(ms.format) // ref
 	return dec.readOrderedKey()
 }
 
 func (ms metaSequence) search(key orderedKey) int {
 	return sort.Search(ms.seqLen(), func(i int) bool {
-		// TODO(binformat)
-		return !ms.getKey(i).Less(Format_7_18, key)
+		return !ms.getKey(i).Less(ms.format, key)
 	})
 }
 
@@ -179,9 +174,8 @@ func (ms metaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	cum := uint64(0)
 	dec, _ := ms.decoderSkipToValues()
 	for i := 0; i <= idx; i++ {
-		// TODO(binformat)
-		dec.skipValue(Format_7_18) // ref
-		dec.skipValue(Format_7_18) // v
+		dec.skipValue(ms.format) // ref
+		dec.skipValue(ms.format) // v
 		cum += dec.readCount()
 	}
 	return cum
@@ -196,7 +190,7 @@ func (ms metaSequence) getCompareFn(f *Format, other sequence) compareFn {
 	}
 }
 
-func (ms metaSequence) readTuple(dec *valueDecoder) metaTuple {
+func (ms metaSequence) readTuple(f *Format, dec *valueDecoder) metaTuple {
 	var offsets [metaTuplePartNumLeaves + 1]uint32
 	start := dec.offset
 	offsets[metaTuplePartRef] = start
@@ -206,7 +200,7 @@ func (ms metaSequence) readTuple(dec *valueDecoder) metaTuple {
 	offsets[metaTuplePartNumLeaves] = dec.offset
 	dec.skipCount()
 	end := dec.offset
-	return metaTuple{dec.byteSlice(start, end), offsets}
+	return metaTuple{dec.byteSlice(start, end), offsets, f}
 }
 
 func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
@@ -216,8 +210,7 @@ func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
 
 func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 	dec := ms.decoderSkipToIndex(idx)
-	// TODO(binformat)
-	dec.skipValue(Format_7_18)
+	dec.skipValue(ms.format)
 	dec.skipOrderedKey()
 	return dec.readCount()
 }
@@ -225,7 +218,7 @@ func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 // sequence interface
 func (ms metaSequence) getItem(idx int, f *Format) sequenceItem {
 	dec := ms.decoderSkipToIndex(idx)
-	return ms.readTuple(&dec)
+	return ms.readTuple(f, &dec)
 }
 
 func (ms metaSequence) valuesSlice(f *Format, from, to uint64) []Value {
@@ -267,8 +260,7 @@ func (ms metaSequence) isLeaf() bool {
 
 // metaSequence interface
 func (ms metaSequence) getChildSequence(ctx context.Context, idx int) sequence {
-	// TODO(binformat)
-	mt := ms.getItem(idx, Format_7_18).(metaTuple)
+	mt := ms.getItem(idx, ms.format).(metaTuple)
 	// TODO: IsZeroValue?
 	if mt.buff == nil {
 		return nil
@@ -292,30 +284,26 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 		for _, seq := range output {
 			metaItems = append(metaItems, seq.(metaSequence).tuples()...)
 		}
-		return newMetaSequenceFromTuples(ms.Kind(), level-1, metaItems, ms.vrw)
+		return newMetaSequenceFromTuples(Format_7_18, ms.Kind(), level-1, metaItems, ms.vrw)
 	}
 
 	switch ms.Kind() {
 	case ListKind:
 		var valueItems []Value
 		for _, seq := range output {
-			// TODO(binformat)
-			valueItems = append(valueItems, seq.(listLeafSequence).values(Format_7_18)...)
+			valueItems = append(valueItems, seq.(listLeafSequence).values(ms.format)...)
 		}
-		// TODO(binformat)
-		return newListLeafSequence(ms.vrw, Format_7_18, valueItems...)
+		return newListLeafSequence(ms.vrw, ms.format, valueItems...)
 	case MapKind:
 		var valueItems []mapEntry
 		for _, seq := range output {
 			valueItems = append(valueItems, seq.(mapLeafSequence).entries()...)
 		}
-		// TODO(binformat)
-		return newMapLeafSequence(Format_7_18, ms.vrw, valueItems...)
+		return newMapLeafSequence(ms.format, ms.vrw, valueItems...)
 	case SetKind:
 		var valueItems []Value
 		for _, seq := range output {
-			// TODO(binformat)
-			valueItems = append(valueItems, seq.(setLeafSequence).values(Format_7_18)...)
+			valueItems = append(valueItems, seq.(setLeafSequence).values(ms.format)...)
 		}
 		return newSetLeafSequence(ms.vrw, valueItems...)
 	}

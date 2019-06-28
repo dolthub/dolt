@@ -115,9 +115,9 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(listLeaf)
 
 	assertRoundTrips(newList(newListMetaSequence(1, []metaTuple{
-		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(10), 10),
-		newMetaTuple(NewRef(listLeaf), orderedKeyFromInt(20), 20),
-	}, vs), Format_7_18))
+		newMetaTuple(Format_7_18, NewRef(listLeaf), orderedKeyFromInt(10), 10),
+		newMetaTuple(Format_7_18, NewRef(listLeaf), orderedKeyFromInt(20), 20),
+	}, Format_7_18, vs), Format_7_18))
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
@@ -311,10 +311,10 @@ func TestWriteCompoundBlob(t *testing.T) {
 			RefKind, r3, BlobKind, uint64(33), FloatKind, Float(60), uint64(60),
 		},
 		newBlob(newBlobMetaSequence(1, []metaTuple{
-			newMetaTuple(constructRef(r1, BlobType, 11), orderedKeyFromInt(20), 20),
-			newMetaTuple(constructRef(r2, BlobType, 22), orderedKeyFromInt(40), 40),
-			newMetaTuple(constructRef(r3, BlobType, 33), orderedKeyFromInt(60), 60),
-		}, newTestValueStore()), Format_7_18),
+			newMetaTuple(Format_7_18, constructRef(r1, BlobType, 11), orderedKeyFromInt(20), 20),
+			newMetaTuple(Format_7_18, constructRef(r2, BlobType, 22), orderedKeyFromInt(40), 40),
+			newMetaTuple(Format_7_18, constructRef(r3, BlobType, 33), orderedKeyFromInt(60), 60),
+		}, Format_7_18, newTestValueStore()), Format_7_18),
 	)
 }
 
@@ -448,9 +448,9 @@ func TestWriteCompoundList(t *testing.T) {
 			RefKind, list2.Hash(Format_7_18), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
 		},
 		newList(newListMetaSequence(1, []metaTuple{
-			newMetaTuple(NewRef(list1), orderedKeyFromInt(1), 1),
-			newMetaTuple(NewRef(list2), orderedKeyFromInt(3), 3),
-		}, nil), Format_7_18),
+			newMetaTuple(Format_7_18, NewRef(list1), orderedKeyFromInt(1), 1),
+			newMetaTuple(Format_7_18, NewRef(list2), orderedKeyFromInt(3), 3),
+		}, Format_7_18, nil), Format_7_18),
 	)
 }
 
@@ -468,9 +468,9 @@ func TestWriteCompoundSet(t *testing.T) {
 			RefKind, set2.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
 		},
 		newSet(newSetMetaSequence(1, []metaTuple{
-			newMetaTuple(NewRef(set1), orderedKeyFromInt(1), 2),
-			newMetaTuple(NewRef(set2), orderedKeyFromInt(4), 3),
-		}, vrw)),
+			newMetaTuple(Format_7_18, NewRef(set1), orderedKeyFromInt(1), 2),
+			newMetaTuple(Format_7_18, NewRef(set2), orderedKeyFromInt(4), 3),
+		}, Format_7_18, vrw)),
 	)
 }
 
@@ -500,9 +500,9 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 			RefKind, set2.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(Format_7_18), uint64(3),
 		},
 		newSet(newSetMetaSequence(1, []metaTuple{
-			newMetaTuple(NewRef(set1), newOrderedKey(blob1), 2),
-			newMetaTuple(NewRef(set2), newOrderedKey(blob4), 3),
-		}, vrw)),
+			newMetaTuple(Format_7_18, NewRef(set1), newOrderedKey(blob1), 2),
+			newMetaTuple(Format_7_18, NewRef(set2), newOrderedKey(blob4), 3),
+		}, Format_7_18, vrw)),
 	)
 }
 

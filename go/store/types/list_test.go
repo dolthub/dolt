@@ -1062,15 +1062,15 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 		// TODO(binformat)
 		seq := newListLeafSequence(vrw, Format_7_18, vs...)
 		list := newList(seq, Format_7_18)
-		return newMetaTuple(vrw.WriteValue(context.Background(), list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
+		return newMetaTuple(Format_7_18, vrw.WriteValue(context.Background(), list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
 	}
 
 	m1 := newSequenceMetaTuple(Float(1), Float(2), Float(3))
 	m2 := newSequenceMetaTuple(Float(4), Float(5), Float(6), Float(7), Float(8))
 	m3 := newSequenceMetaTuple(Float(9), Float(10), Float(11), Float(12), Float(13), Float(14), Float(15))
 
-	l1 := newList(newListMetaSequence(1, []metaTuple{m1, m3}, vrw), Format_7_18)     // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
-	l2 := newList(newListMetaSequence(1, []metaTuple{m1, m2, m3}, vrw), Format_7_18) // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]
+	l1 := newList(newListMetaSequence(1, []metaTuple{m1, m3}, Format_7_18, vrw), Format_7_18)     // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
+	l2 := newList(newListMetaSequence(1, []metaTuple{m1, m2, m3}, Format_7_18, vrw), Format_7_18) // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]
 
 	diff := accumulateDiffSplices(l2, l1)
 

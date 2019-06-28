@@ -276,7 +276,7 @@ func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) 
 
 		go func(ch chan metaTuple, cp []byte) {
 			col, key, numLeaves := chunkBlobLeaf(vrw, f, cp)
-			ch <- newMetaTuple(vrw.WriteValue(ctx, col), key, numLeaves)
+			ch <- newMetaTuple(f, vrw.WriteValue(ctx, col), key, numLeaves)
 		}(ch, cp)
 
 		offset = 0
