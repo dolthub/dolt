@@ -27,7 +27,7 @@ func createTestRowData(vrw types.ValueReadWriter, sch schema.Schema) (types.Map,
 	rows[3] = row.New(sch, row.TaggedValues{
 		idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)})
 
-	ed := types.NewMap(context.Background(), vrw).Edit()
+	ed := types.NewMap(context.Background(), types.Format_7_18, vrw).Edit()
 	for _, r := range rows {
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
 	}

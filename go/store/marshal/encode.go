@@ -624,7 +624,7 @@ func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 			kvs[2*i] = keyEncoder(ctx, k, vrw)
 			kvs[2*i+1] = valueEncoder(ctx, v.MapIndex(k), vrw)
 		}
-		return types.NewMap(ctx, vrw, kvs...)
+		return types.NewMap(ctx, types.Format_7_18, vrw, kvs...)
 	}
 
 	encoderCache.set(t, e)

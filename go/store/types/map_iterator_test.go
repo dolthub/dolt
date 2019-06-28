@@ -16,7 +16,7 @@ func TestMapIterator(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	me := NewMap(context.Background(), vrw).Edit()
+	me := NewMap(context.Background(), Format_7_18, vrw).Edit()
 	for i := 0; i < 5; i++ {
 		me.Set(String(string(byte(65+i))), Float(i))
 	}

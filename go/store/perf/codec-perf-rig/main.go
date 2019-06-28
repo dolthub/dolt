@@ -200,11 +200,11 @@ func buildMap(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewMap(context.Background(), vrw, values...)
+	return types.NewMap(context.Background(), types.Format_7_18, vrw, values...)
 }
 
 func buildMapIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	me := types.NewMap(context.Background(), vrw).Edit()
+	me := types.NewMap(context.Background(), types.Format_7_18, vrw).Edit()
 
 	for i := uint64(0); i < count*2; i += 2 {
 		me.Set(createFn(i), createFn(i+1))

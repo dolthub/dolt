@@ -81,6 +81,6 @@ func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_ImmediateConflict() {
-	s.tryThreeWayConflict(types.NewMap(context.Background(), s.vs), s.create(ss1b), s.create(ss1), "Cannot merge Map<> with "+s.typeStr)
-	s.tryThreeWayConflict(s.create(ss1b), types.NewMap(context.Background(), s.vs), s.create(ss1), "Cannot merge "+s.typeStr)
+	s.tryThreeWayConflict(types.NewMap(context.Background(), types.Format_7_18, s.vs), s.create(ss1b), s.create(ss1), "Cannot merge Map<> with "+s.typeStr)
+	s.tryThreeWayConflict(s.create(ss1b), types.NewMap(context.Background(), types.Format_7_18, s.vs), s.create(ss1), "Cannot merge "+s.typeStr)
 }

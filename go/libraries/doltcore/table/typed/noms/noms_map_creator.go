@@ -27,7 +27,7 @@ type NomsMapCreator struct {
 // NewNomsMapCreator creates a new NomsMapCreator.
 func NewNomsMapCreator(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) *NomsMapCreator {
 	kvsChan := make(chan types.Value)
-	mapChan := types.NewStreamingMap(ctx, vrw, kvsChan)
+	mapChan := types.NewStreamingMap(ctx, types.Format_7_18, vrw, kvsChan)
 
 	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, nil}
 }

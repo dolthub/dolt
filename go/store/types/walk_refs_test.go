@@ -37,7 +37,7 @@ func TestWalkRefs(t *testing.T) {
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
 			s := NewStruct("", StructData{"n": Float(1)})
-			runTest(NewRef(NewMap(context.Background(), vrw, s, Float(2))), t)
+			runTest(NewRef(NewMap(context.Background(), Format_7_18, vrw, s, Float(2))), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
 			runTest(ToRefOfValue(NewRef(Bool(false))), t)
@@ -110,12 +110,12 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			m := NewMap(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
+			m := NewMap(context.Background(), Format_7_18, vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(m, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			m := NewMap(context.Background(), vrw, newValueSlice(r)...)
+			m := NewMap(context.Background(), Format_7_18, vrw, newValueSlice(r)...)
 			for m.isLeaf() {
 				e := m.Edit()
 				vs := newValueSlice(r)

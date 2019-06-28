@@ -113,7 +113,7 @@ func TestPathIndex(t *testing.T) {
 	resolvesTo(String("foo"), Float(2), "[-2]")
 	resolvesTo(Bool(false), Float(3), "[-1]")
 
-	v = NewMap(context.Background(), vs,
+	v = NewMap(context.Background(), Format_7_18, vs,
 		Bool(false), Float(23),
 		Float(1), String("foo"),
 		Float(2.3), Float(4.5),
@@ -181,7 +181,7 @@ func TestPathHashIndex(t *testing.T) {
 	// TODO(binformat)
 	l := NewList(context.Background(), Format_7_18, vs, b, i, str)
 	lr := NewRef(l)
-	m := NewMap(context.Background(), vs,
+	m := NewMap(context.Background(), Format_7_18, vs,
 		b, br,
 		br, i,
 		i, str,
@@ -226,7 +226,7 @@ func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 	}
 
 	b := Bool(true)
-	resolvesToNil(NewMap(context.Background(), vs, b, b), b)
+	resolvesToNil(NewMap(context.Background(), Format_7_18, vs, b, b), b)
 	resolvesToNil(NewSet(context.Background(), vs, b), b)
 }
 
@@ -235,13 +235,13 @@ func TestPathMulti(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	m1 := NewMap(context.Background(), vs,
+	m1 := NewMap(context.Background(), Format_7_18, vs,
 		String("a"), String("foo"),
 		String("b"), String("bar"),
 		String("c"), String("car"),
 	)
 
-	m2 := NewMap(context.Background(), vs,
+	m2 := NewMap(context.Background(), Format_7_18, vs,
 		Bool(false), String("earth"),
 		String("d"), String("dar"),
 		m1, String("fire"),
@@ -486,13 +486,13 @@ func TestPathType(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	m := NewMap(context.Background(), vs,
+	m := NewMap(context.Background(), Format_7_18, vs,
 		String("string"), String("foo"),
 		String("bool"), Bool(false),
 		String("number"), Float(42),
 		// TODO(binformat)
 		String("List<number|string>"), NewList(context.Background(), Format_7_18, vs, Float(42), String("foo")),
-		String("Map<Bool, Bool>"), NewMap(context.Background(), vs, Bool(true), Bool(false)))
+		String("Map<Bool, Bool>"), NewMap(context.Background(), Format_7_18, vs, Bool(true), Bool(false)))
 
 	m.IterAll(context.Background(), func(k, cv Value) {
 		ks := k.(String)
@@ -570,7 +570,7 @@ func TestPathAtAnnotation(t *testing.T) {
 	resolvesTo(Float(2.3), Float(2.3), "@at(-2)")
 	resolvesTo(String("two"), String("two"), `@at(-1)`)
 
-	v = NewMap(context.Background(), vs,
+	v = NewMap(context.Background(), Format_7_18, vs,
 		Bool(false), Float(23),
 		Float(1), String("foo"),
 		Float(2.3), Float(4.5),

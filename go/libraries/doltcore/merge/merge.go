@@ -129,7 +129,7 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 	defer stopAndDrain(mergeStopChan, mergeChangeChan)
 
 	conflictValChan := make(chan types.Value)
-	conflictMapChan := types.NewStreamingMap(ctx, vrw, conflictValChan)
+	conflictMapChan := types.NewStreamingMap(ctx, types.Format_7_18, vrw, conflictValChan)
 	mapEditor := rows.Edit()
 
 	stats := &MergeStats{Operation: TableModified}

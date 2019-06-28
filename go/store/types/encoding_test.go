@@ -280,7 +280,7 @@ func TestWriteMap(t *testing.T) {
 			StringKind, "b", BoolKind, true,
 			StringKind, "c", TupleKind, uint64(1), FloatKind, Float(1.0),
 		},
-		NewMap(context.Background(), vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Float(1.0))),
+		NewMap(context.Background(), Format_7_18, vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Float(1.0))),
 	)
 }
 
@@ -293,7 +293,7 @@ func TestWriteMapOfMap(t *testing.T) {
 			MapKind, uint64(0), uint64(1) /* len */, StringKind, "a", FloatKind, Float(0),
 			SetKind, uint64(0), uint64(1) /* len */, BoolKind, true,
 		},
-		NewMap(context.Background(), vrw, NewMap(context.Background(), vrw, String("a"), Float(0)), NewSet(context.Background(), vrw, Bool(true))),
+		NewMap(context.Background(), Format_7_18, vrw, NewMap(context.Background(), Format_7_18, vrw, String("a"), Float(0)), NewSet(context.Background(), vrw, Bool(true))),
 	)
 }
 

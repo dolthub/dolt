@@ -232,7 +232,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		panic(err)
 	}
 
-	initialRows := types.NewMap(context.Background(), vrw,
+	initialRows := types.NewMap(context.Background(), types.Format_7_18, vrw,
 		keyTuples[0], valsToTestTupleWithoutPks([]types.Value{types.String("person 1"), types.String("dufus")}),
 		keyTuples[1], valsToTestTupleWithoutPks([]types.Value{types.String("person 2"), types.NullValue}),
 		keyTuples[2], valsToTestTupleWithoutPks([]types.Value{types.String("person 3"), types.NullValue}),
@@ -270,7 +270,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 
 	mergeRows := mergeRowEditor.Map(context.Background())
 
-	expectedRows := types.NewMap(context.Background(), vrw,
+	expectedRows := types.NewMap(context.Background(), types.Format_7_18, vrw,
 		keyTuples[0], initialRows.Get(context.Background(), keyTuples[0]), // unaltered
 		keyTuples[4], updatedRows.Get(context.Background(), keyTuples[4]), // modified in updated
 		keyTuples[5], mergeRows.Get(context.Background(), keyTuples[5]), // modified in merged
@@ -290,7 +290,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue}),
 		valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue}),
 	)
-	expectedConflicts := types.NewMap(context.Background(), vrw,
+	expectedConflicts := types.NewMap(context.Background(), types.Format_7_18, vrw,
 		keyTuples[8], updateConflict.ToNomsList(vrw),
 		keyTuples[12], addConflict.ToNomsList(vrw),
 	)

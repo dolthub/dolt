@@ -41,7 +41,7 @@ func TestRefInMap(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	m := NewMap(context.Background(), vs)
+	m := NewMap(context.Background(), Format_7_18, vs)
 	r := NewRef(m)
 	m = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
 	r2 := m.Get(context.Background(), Float(0))
