@@ -61,8 +61,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 			cursChan <- cc
 
 			go func() {
-				// TODO(binformat)
-				cc <- newCursorAtValue(ctx, Format_7_18, seq, edit.value, true, false)
+				cc <- newCursorAtValue(ctx, se.s.format, seq, edit.value, true, false)
 			}()
 
 			editChan <- edit
@@ -93,8 +92,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		}
 
 		if ch == nil {
-			// TODO(binformat)
-			ch = newSequenceChunker(ctx, Format_7_18, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, Format_7_18, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, se.s.format, cur, 0, vrw, makeSetLeafChunkFn(se.s.format, vrw), newOrderedMetaSequenceChunkFn(SetKind, se.s.format, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(ctx, cur)
 		}
@@ -110,7 +108,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		return se.s // no edits required application
 	}
 
-	return newSet(ch.Done(ctx).(orderedSequence))
+	return newSet(se.s.format, ch.Done(ctx).(orderedSequence))
 }
 
 func (se *SetEditor) Insert(vs ...Value) *SetEditor {
@@ -153,8 +151,7 @@ func (se *SetEditor) edit(v Value, insert bool) {
 
 	se.edits = append(se.edits, setEdit{v, insert})
 
-	// TODO(binformat)
-	if se.normalized && final.value.Less(Format_7_18, v) {
+	if se.normalized && final.value.Less(se.s.format, v) {
 		// fast-path: edits take place in key-order
 		return
 	}
@@ -168,8 +165,7 @@ func (se *SetEditor) findEdit(v Value) (idx int, found bool) {
 	se.normalize()
 
 	idx = sort.Search(len(se.edits), func(i int) bool {
-		// TODO(binformat)
-		return !se.edits[i].value.Less(Format_7_18, v)
+		return !se.edits[i].value.Less(se.s.format, v)
 	})
 
 	if idx == len(se.edits) {

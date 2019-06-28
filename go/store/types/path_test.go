@@ -188,7 +188,7 @@ func TestPathHashIndex(t *testing.T) {
 		l, lr,
 		lr, b,
 	)
-	s := NewSet(context.Background(), vs, b, br, i, str, l, lr)
+	s := NewSet(context.Background(), Format_7_18, vs, b, br, i, str, l, lr)
 
 	resolvesTo := func(col, key, expVal, expKey Value) {
 		assertResolvesTo(assert, expVal, col, hashIdx(key))
@@ -227,7 +227,7 @@ func TestPathHashIndexOfSingletonCollection(t *testing.T) {
 
 	b := Bool(true)
 	resolvesToNil(NewMap(context.Background(), Format_7_18, vs, b, b), b)
-	resolvesToNil(NewSet(context.Background(), vs, b), b)
+	resolvesToNil(NewSet(context.Background(), Format_7_18, vs, b), b)
 }
 
 func TestPathMulti(t *testing.T) {
@@ -552,7 +552,7 @@ func TestPathAtAnnotation(t *testing.T) {
 	resolvesTo(String("foo"), nil, "@at(-2)")
 	resolvesTo(Bool(false), nil, "@at(-1)")
 
-	v = NewSet(context.Background(), vs,
+	v = NewSet(context.Background(), Format_7_18, vs,
 		Bool(false),
 		Float(1),
 		Float(2.3),

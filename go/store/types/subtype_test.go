@@ -106,7 +106,7 @@ func TestAssertTypeSet(tt *testing.T) {
 	vs := newTestValueStore()
 
 	setOfNumberType := MakeSetType(FloaTType)
-	s := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
+	s := NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(context.Background(), setOfNumberType, s)
 	assertAll(tt, setOfNumberType, s)
 	assertSubtype(context.Background(), MakeSetType(ValueType), s)
@@ -144,13 +144,13 @@ func TestAssertTypeUnion(tt *testing.T) {
 
 	st := MakeSetType(StringType)
 	assertSubtype(context.Background(), MakeUnionType(st, FloaTType), Float(42))
-	assertSubtype(context.Background(), MakeUnionType(st, FloaTType), NewSet(context.Background(), vs, String("a"), String("b")))
+	assertSubtype(context.Background(), MakeUnionType(st, FloaTType), NewSet(context.Background(), Format_7_18, vs, String("a"), String("b")))
 
 	assertInvalid(tt, MakeUnionType(), Float(42))
 	assertInvalid(tt, MakeUnionType(StringType), Float(42))
 	assertInvalid(tt, MakeUnionType(StringType, BoolType), Float(42))
 	assertInvalid(tt, MakeUnionType(st, StringType), Float(42))
-	assertInvalid(tt, MakeUnionType(st, FloaTType), NewSet(context.Background(), vs, Float(1), Float(2)))
+	assertInvalid(tt, MakeUnionType(st, FloaTType), NewSet(context.Background(), Format_7_18, vs, Float(1), Float(2)))
 }
 
 func TestAssertConcreteTypeIsUnion(tt *testing.T) {
@@ -206,10 +206,10 @@ func TestAssertTypeEmptySet(tt *testing.T) {
 	vs := newTestValueStore()
 
 	st := MakeSetType(FloaTType)
-	assertSubtype(context.Background(), st, NewSet(context.Background(), vs))
+	assertSubtype(context.Background(), st, NewSet(context.Background(), Format_7_18, vs))
 
 	// Set<> not a subtype of Set<Float>
-	assertInvalid(tt, MakeSetType(MakeUnionType()), NewSet(context.Background(), vs, Float(1)))
+	assertInvalid(tt, MakeSetType(MakeUnionType()), NewSet(context.Background(), Format_7_18, vs, Float(1)))
 }
 
 func TestAssertTypeEmptyMap(tt *testing.T) {
@@ -264,7 +264,7 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	c1 := NewStruct("Commit", StructData{
 		"value":   Float(1),
-		"parents": NewSet(context.Background(), vs),
+		"parents": NewSet(context.Background(), Format_7_18, vs),
 	})
 	t1 := MakeStructType("Commit",
 		StructField{"parents", MakeSetType(MakeUnionType()), false},
@@ -280,7 +280,7 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	c2 := NewStruct("Commit", StructData{
 		"value":   Float(2),
-		"parents": NewSet(context.Background(), vs, NewRef(c1, Format_7_18)),
+		"parents": NewSet(context.Background(), Format_7_18, vs, NewRef(c1, Format_7_18)),
 	})
 	assertSubtype(context.Background(), t11, c2)
 }
@@ -560,7 +560,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		{BoolType, TypeType},
 		// TODO(binformat)
 		{NewList(context.Background(), Format_7_18, vs, Float(42)), MakeListType(FloaTType)},
-		{NewSet(context.Background(), vs, Float(42)), MakeSetType(FloaTType)},
+		{NewSet(context.Background(), Format_7_18, vs, Float(42)), MakeSetType(FloaTType)},
 		{NewRef(Float(42), Format_7_18), MakeRefType(FloaTType)},
 		{NewMap(context.Background(), Format_7_18, vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
 		{NewStruct("A", StructData{}), MakeStructType("A")},
@@ -617,19 +617,19 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(newChunkedList(Float(0)), MakeListType(MakeUnionType()))
 	}
 
-	assertTrue(NewSet(context.Background(), vs), MakeSetType(FloaTType))
-	assertTrue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(FloaTType))
-	assertFalse(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(BoolType))
-	assertTrue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
-	assertTrue(NewSet(context.Background(), vs, Float(0), Bool(true)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
-	assertFalse(NewSet(context.Background(), vs, Float(0)), MakeSetType(MakeUnionType()))
-	assertTrue(NewSet(context.Background(), vs), MakeSetType(MakeUnionType()))
+	assertTrue(NewSet(context.Background(), Format_7_18, vs), MakeSetType(FloaTType))
+	assertTrue(NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(FloaTType))
+	assertFalse(NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(BoolType))
+	assertTrue(NewSet(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
+	assertTrue(NewSet(context.Background(), Format_7_18, vs, Float(0), Bool(true)), MakeSetType(MakeUnionType(FloaTType, BoolType)))
+	assertFalse(NewSet(context.Background(), Format_7_18, vs, Float(0)), MakeSetType(MakeUnionType()))
+	assertTrue(NewSet(context.Background(), Format_7_18, vs), MakeSetType(MakeUnionType()))
 
 	{
 		newChunkedSet := func(vals ...Value) Set {
 			newSequenceMetaTuple := func(v Value) metaTuple {
 				seq := newSetLeafSequence(vs, v)
-				set := newSet(seq)
+				set := newSet(Format_7_18, seq)
 				return newMetaTuple(Format_7_18, vs.WriteValue(context.Background(), set), newOrderedKey(v, Format_7_18), 1)
 			}
 
@@ -637,7 +637,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			for i, v := range vals {
 				tuples[i] = newSequenceMetaTuple(v)
 			}
-			return newSet(newSetMetaSequence(1, tuples, Format_7_18, vs))
+			return newSet(Format_7_18, newSetMetaSequence(1, tuples, Format_7_18, vs))
 		}
 		assertTrue(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), MakeSetType(FloaTType))
 		assertFalse(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), MakeSetType(BoolType))

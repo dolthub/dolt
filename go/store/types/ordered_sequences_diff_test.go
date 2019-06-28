@@ -95,7 +95,7 @@ func (suite *diffTestSuite) TestDiff() {
 		runTestDf(name, vf, cf, orderedSequenceDiffBest)
 	}
 
-	newSetAsCol := func(vals []Value) Collection { return NewSet(context.Background(), vs, vals...) }
+	newSetAsCol := func(vals []Value) Collection { return NewSet(context.Background(), Format_7_18, vs, vals...) }
 	newMapAsCol := func(vals []Value) Collection { return NewMap(context.Background(), Format_7_18, vs, vals...) }
 
 	rw := func(col Collection) Collection {
@@ -161,9 +161,9 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 	vs := newTestValueStore()
 
 	runTest := func(df diffFn) {
-		s1 := NewSet(context.Background(), vs).orderedSequence
+		s1 := NewSet(context.Background(), Format_7_18, vs).orderedSequence
 		// A single item should be enough, but generate lots anyway.
-		s2 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
+		s2 := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
 
 		changeChan := make(chan ValueChanged)
 		closeChan := make(chan struct{})
@@ -190,7 +190,7 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 
 	newSetSequenceMt := func(v ...Value) metaTuple {
 		seq := newSetLeafSequence(vrw, v...)
-		set := newSet(seq)
+		set := newSet(Format_7_18, seq)
 		return newMetaTuple(Format_7_18, vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1], Format_7_18), uint64(len(v)))
 	}
 

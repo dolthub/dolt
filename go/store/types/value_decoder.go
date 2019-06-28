@@ -207,7 +207,7 @@ func (r *valueDecoder) readValue(f *Format) Value {
 	case RefKind:
 		return r.readRef()
 	case SetKind:
-		return newSet(r.readSetSequence())
+		return newSet(f, r.readSetSequence())
 	case StructKind:
 		return r.readStruct()
 	case TupleKind:

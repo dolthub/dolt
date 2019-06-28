@@ -107,7 +107,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, f *Format, vrw ValueReadWriter
 
 		var col Collection
 		if kind == SetKind {
-			col = newSet(newSetMetaSequence(level, tuples, f, vrw))
+			col = newSet(f, newSetMetaSequence(level, tuples, f, vrw))
 		} else {
 			d.PanicIfFalse(MapKind == kind)
 			col = newMap(newMapMetaSequence(level, tuples, f, vrw), f)

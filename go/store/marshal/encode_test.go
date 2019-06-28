@@ -99,7 +99,7 @@ func TestEncode(tt *testing.T) {
 
 	t(types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42)), types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42)))
 	t(types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.String("hi")), types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.String("hi")))
-	t(types.NewSet(context.Background(), vs, types.String("bye")), types.NewSet(context.Background(), vs, types.String("bye")))
+	t(types.NewSet(context.Background(), types.Format_7_18, vs, types.String("bye")), types.NewSet(context.Background(), types.Format_7_18, vs, types.String("bye")))
 	// TODO(binformat)
 	t(types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("hello")), types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("hello")))
 
@@ -550,10 +550,10 @@ func TestEncodeStructWithArrayOfNomsValue(t *testing.T) {
 	type S struct {
 		List [1]types.Set
 	}
-	v, err := Marshal(context.Background(), vs, S{[1]types.Set{types.NewSet(context.Background(), vs, types.Bool(true))}})
+	v, err := Marshal(context.Background(), vs, S{[1]types.Set{types.NewSet(context.Background(), types.Format_7_18, vs, types.Bool(true))}})
 	assert.NoError(err)
 	assert.True(types.NewStruct("S", types.StructData{
-		"list": types.NewList(context.Background(), types.Format_7_18, vs, types.NewSet(context.Background(), vs, types.Bool(true))),
+		"list": types.NewList(context.Background(), types.Format_7_18, vs, types.NewSet(context.Background(), types.Format_7_18, vs, types.Bool(true))),
 	}).Equals(v))
 }
 
@@ -780,7 +780,7 @@ func TestEncodeOpt(t *testing.T) {
 		{
 			[]string{"a", "b"},
 			Opt{Set: true},
-			types.NewSet(context.Background(), vs, types.String("a"), types.String("b")),
+			types.NewSet(context.Background(), types.Format_7_18, vs, types.String("a"), types.String("b")),
 		},
 		{
 			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
@@ -790,7 +790,7 @@ func TestEncodeOpt(t *testing.T) {
 		{
 			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
 			Opt{Set: true},
-			types.NewSet(context.Background(), vs, types.String("a"), types.String("b")),
+			types.NewSet(context.Background(), types.Format_7_18, vs, types.String("a"), types.String("b")),
 		},
 	}
 
@@ -828,11 +828,11 @@ func TestEncodeSetWithTags(t *testing.T) {
 
 	foo, ok := s.Get("foo").(types.Set)
 	assert.True(ok)
-	assert.True(types.NewSet(context.Background(), vs, types.Float(0), types.Float(1)).Equals(foo))
+	assert.True(types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(0), types.Float(1)).Equals(foo))
 
 	bar, ok := s.Get("bar").(types.Set)
 	assert.True(ok)
-	assert.True(types.NewSet(context.Background(), vs, types.Float(2), types.Float(3)).Equals(bar))
+	assert.True(types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(2), types.Float(3)).Equals(bar))
 }
 
 func TestInvalidTag(t *testing.T) {
@@ -998,7 +998,7 @@ func (u primitiveMapType) MarshalNoms(vrw types.ValueReadWriter) (types.Value, e
 	for k, v := range u {
 		vals = append(vals, types.String(k+","+v))
 	}
-	return types.NewSet(context.Background(), vrw, vals...), nil
+	return types.NewSet(context.Background(), types.Format_7_18, vrw, vals...), nil
 }
 
 func TestMarshalerPrimitiveMapType(t *testing.T) {
@@ -1012,7 +1012,7 @@ func TestMarshalerPrimitiveMapType(t *testing.T) {
 		"b": "bar",
 	})
 	v := MustMarshal(context.Background(), vs, u)
-	assert.True(types.NewSet(context.Background(), vs, types.String("a,foo"), types.String("b,bar")).Equals(v))
+	assert.True(types.NewSet(context.Background(), types.Format_7_18, vs, types.String("a,foo"), types.String("b,bar")).Equals(v))
 }
 
 type primitiveStructType struct {
@@ -1112,7 +1112,7 @@ func TestMarshalerComplexStructType(t *testing.T) {
 		"ps":      types.NewList(context.Background(), types.Format_7_18, vs, types.Float(2), types.Float(3)),
 		"pm":      types.NewMap(context.Background(), types.Format_7_18, vs, types.String("x"), types.Float(101), types.String("y"), types.Float(102)),
 		"pslice":  types.String("a,b,c"),
-		"pmap":    types.NewSet(context.Background(), vs, types.String("c,123"), types.String("d,456")),
+		"pmap":    types.NewSet(context.Background(), types.Format_7_18, vs, types.String("c,123"), types.String("d,456")),
 		"pstruct": types.Float(30),
 		"b":       types.String(s),
 	}).Equals(v))

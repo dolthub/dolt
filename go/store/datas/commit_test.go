@@ -25,7 +25,7 @@ func TestNewCommit(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	commit := NewCommit(types.Float(1), types.NewSet(context.Background(), db), types.EmptyStruct)
+	commit := NewCommit(types.Float(1), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct)
 	at := types.TypeOf(commit)
 	et := makeCommitStructType(
 		types.EmptyStructType,
@@ -35,7 +35,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et, at)
 
 	// Committing another Float
-	commit2 := NewCommit(types.Float(2), types.NewSet(context.Background(), db, types.NewRef(commit, types.Format_7_18)), types.EmptyStruct)
+	commit2 := NewCommit(types.Float(2), types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(commit, types.Format_7_18)), types.EmptyStruct)
 	at2 := types.TypeOf(commit2)
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
@@ -45,7 +45,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
-	commit3 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), db, types.NewRef(commit2, types.Format_7_18)), types.EmptyStruct)
+	commit3 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(commit2, types.Format_7_18)), types.EmptyStruct)
 	at3 := types.TypeOf(commit3)
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
@@ -61,7 +61,7 @@ func TestNewCommit(t *testing.T) {
                 number: Float,
 	}`)
 	assertTypeEquals(metaType, types.TypeOf(meta))
-	commit4 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), db, types.NewRef(commit2, types.Format_7_18)), meta)
+	commit4 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(commit2, types.Format_7_18)), meta)
 	at4 := types.TypeOf(commit4)
 	et4 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {} | Struct Meta {
@@ -76,7 +76,7 @@ func TestNewCommit(t *testing.T) {
 	// Merge-commit with different parent types
 	commit5 := NewCommit(
 		types.String("Hi"),
-		types.NewSet(context.Background(), db,
+		types.NewSet(context.Background(), types.Format_7_18, db,
 			types.NewRef(commit2, types.Format_7_18),
 			types.NewRef(commit3, types.Format_7_18)),
 		types.EmptyStruct)
@@ -98,7 +98,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 
 	metaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Float(9),
-		"parents": types.NewSet(context.Background(), db),
+		"parents": types.NewSet(context.Background(), types.Format_7_18, db),
 		"meta":    types.EmptyStruct,
 	})
 	assert.True(IsCommit(metaCommit))
@@ -106,7 +106,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 
 	noMetaCommit := types.NewStruct("Commit", types.StructData{
 		"value":   types.Float(9),
-		"parents": types.NewSet(context.Background(), db),
+		"parents": types.NewSet(context.Background(), types.Format_7_18, db),
 	})
 	assert.False(IsCommit(noMetaCommit))
 	assert.False(IsCommitType(types.TypeOf(noMetaCommit)))
@@ -114,7 +114,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 
 // Convert list of Struct's to Set<Ref>
 func toRefSet(vrw types.ValueReadWriter, commits ...types.Struct) types.Set {
-	set := types.NewSet(context.Background(), vrw).Edit()
+	set := types.NewSet(context.Background(), types.Format_7_18, vrw).Edit()
 	for _, p := range commits {
 		set.Insert(types.NewRef(p, types.Format_7_18))
 	}
@@ -204,10 +204,10 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	c1 := NewCommit(types.String("one"), types.NewSet(context.Background(), db), types.EmptyStruct)
-	cx := NewCommit(types.Bool(true), types.NewSet(context.Background(), db), types.EmptyStruct)
+	c1 := NewCommit(types.String("one"), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct)
+	cx := NewCommit(types.Bool(true), types.NewSet(context.Background(), types.Format_7_18, db), types.EmptyStruct)
 	value := types.String("two")
-	parents := types.NewSet(context.Background(), db, types.NewRef(c1, types.Format_7_18))
+	parents := types.NewSet(context.Background(), types.Format_7_18, db, types.NewRef(c1, types.Format_7_18))
 	meta := types.NewStruct("", types.StructData{
 		"basis": cx,
 	})

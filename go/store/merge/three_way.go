@@ -326,7 +326,7 @@ func setAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent type
 	if parent != nil {
 		pSet, pOk = parent.(types.Set)
 	} else {
-		pSet, pOk = types.NewSet(ctx, vrw), true
+		pSet, pOk = types.NewSet(ctx, types.Format_7_18, vrw), true
 	}
 	return aSet, bSet, pSet, aOk && bOk && pOk
 }

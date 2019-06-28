@@ -102,13 +102,13 @@ func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 
 		vm["mh1"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("k1", "struct1", "k2", "l1")...)
 		vm["mh2"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("k1", "n1", "k2", "l2", "k3", "l3")...)
-		vm["set1"] = types.NewSet(context.Background(), vrw)
-		vm["set2"] = types.NewSet(context.Background(), vrw, vfk("s1", "s2")...)
-		vm["set3"] = types.NewSet(context.Background(), vrw, vfk("s1", "s2", "s3")...)
-		vm["set1"] = types.NewSet(context.Background(), vrw, vfk("s2")...)
-		vm["seth1"] = types.NewSet(context.Background(), vrw, vfk("struct1", "struct2", "struct3")...)
-		vm["seth2"] = types.NewSet(context.Background(), vrw, vfk("struct2", "struct3")...)
-		vm["setj3"] = types.NewSet(context.Background(), vrw, vfk("struct1")...)
+		vm["set1"] = types.NewSet(context.Background(), types.Format_7_18, vrw)
+		vm["set2"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("s1", "s2")...)
+		vm["set3"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("s1", "s2", "s3")...)
+		vm["set1"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("s2")...)
+		vm["seth1"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("struct1", "struct2", "struct3")...)
+		vm["seth2"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("struct2", "struct3")...)
+		vm["setj3"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("struct1")...)
 		vm["mk1"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("struct1", "s1", "struct2", "s2")...)
 		vm["mk2"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("struct1", "s3", "struct4", "s4")...)
 	}
@@ -219,18 +219,18 @@ func TestUpdateNode(t *testing.T) {
 		return parent.(types.Map).Get(context.Background(), k1)
 	})
 
-	set1 := types.NewSet(context.Background(), vs, oldVal, k1)
+	set1 := types.NewSet(context.Background(), types.Format_7_18, vs, oldVal, k1)
 	pp = types.IndexPath{Index: oldVal}
-	exp := types.NewSet(context.Background(), vs, newVal, k1)
+	exp := types.NewSet(context.Background(), types.Format_7_18, vs, newVal, k1)
 	doTest(pp, set1, oldVal, newVal, exp, func(parent types.Value) types.Value {
 		return parent
 	})
 
 	k2 := types.NewStruct("Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
-	set1 = types.NewSet(context.Background(), vs, oldVal, k1)
+	set1 = types.NewSet(context.Background(), types.Format_7_18, vs, oldVal, k1)
 	// TODO(binformat)
 	pp = types.HashIndexPath{Hash: k1.Hash(types.Format_7_18)}
-	exp = types.NewSet(context.Background(), vs, oldVal, k2)
+	exp = types.NewSet(context.Background(), types.Format_7_18, vs, oldVal, k2)
 	doTest(pp, set1, k1, k2, exp, func(parent types.Value) types.Value {
 		return parent
 	})
@@ -353,8 +353,8 @@ func TestUpdateSet(t *testing.T) {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	a1 := types.NewSet(context.Background(), vs, types.Float(1), types.String("two"), mustMarshal([]string{"one", "two", "three"}))
-	a2 := types.NewSet(context.Background(), vs, types.Float(3), types.String("three"), mustMarshal([]string{"one", "two", "three", "four"}))
+	a1 := types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(1), types.String("two"), mustMarshal([]string{"one", "two", "three"}))
+	a2 := types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(3), types.String("three"), mustMarshal([]string{"one", "two", "three", "four"}))
 
 	checkApplyDiffs(a, a1, a2, true)
 	checkApplyDiffs(a, a1, a2, false)

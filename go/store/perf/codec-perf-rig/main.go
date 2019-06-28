@@ -177,11 +177,11 @@ func buildSet(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewSet(context.Background(), vrw, values...)
+	return types.NewSet(context.Background(), types.Format_7_18, vrw, values...)
 }
 
 func buildSetIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	s := types.NewSet(context.Background(), vrw).Edit()
+	s := types.NewSet(context.Background(), types.Format_7_18, vrw).Edit()
 	for i := uint64(0); i < count; i++ {
 		s.Insert(createFn(i))
 	}

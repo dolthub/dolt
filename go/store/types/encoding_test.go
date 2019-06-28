@@ -253,7 +253,7 @@ func TestWriteSet(t *testing.T) {
 			SetKind, uint64(0), uint64(4), /* len */
 			FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewSet(context.Background(), vrw, Float(3), Float(1), Float(2), Float(0)),
+		NewSet(context.Background(), Format_7_18, vrw, Float(3), Float(1), Float(2), Float(0)),
 	)
 }
 
@@ -266,7 +266,9 @@ func TestWriteSetOfSet(t *testing.T) {
 			SetKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 			SetKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
 		},
-		NewSet(context.Background(), vrw, NewSet(context.Background(), vrw, Float(0)), NewSet(context.Background(), vrw, Float(1), Float(2), Float(3))),
+		NewSet(context.Background(), Format_7_18, vrw,
+			NewSet(context.Background(), Format_7_18, vrw, Float(0)),
+			NewSet(context.Background(), Format_7_18, vrw, Float(1), Float(2), Float(3))),
 	)
 }
 
@@ -293,7 +295,9 @@ func TestWriteMapOfMap(t *testing.T) {
 			MapKind, uint64(0), uint64(1) /* len */, StringKind, "a", FloatKind, Float(0),
 			SetKind, uint64(0), uint64(1) /* len */, BoolKind, true,
 		},
-		NewMap(context.Background(), Format_7_18, vrw, NewMap(context.Background(), Format_7_18, vrw, String("a"), Float(0)), NewSet(context.Background(), vrw, Bool(true))),
+		NewMap(context.Background(), Format_7_18, vrw,
+			NewMap(context.Background(), Format_7_18, vrw, String("a"), Float(0)),
+			NewSet(context.Background(), Format_7_18, vrw, Bool(true))),
 	)
 }
 
@@ -457,8 +461,8 @@ func TestWriteCompoundList(t *testing.T) {
 func TestWriteCompoundSet(t *testing.T) {
 	vrw := newTestValueStore()
 
-	set1 := newSet(newSetLeafSequence(vrw, Float(0), Float(1)))
-	set2 := newSet(newSetLeafSequence(vrw, Float(2), Float(3), Float(4)))
+	set1 := newSet(Format_7_18, newSetLeafSequence(vrw, Float(0), Float(1)))
+	set2 := newSet(Format_7_18, newSetLeafSequence(vrw, Float(2), Float(3), Float(4)))
 
 	assertEncoding(t,
 		[]interface{}{
@@ -467,7 +471,7 @@ func TestWriteCompoundSet(t *testing.T) {
 			RefKind, set1.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
 			RefKind, set2.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
 		},
-		newSet(newSetMetaSequence(1, []metaTuple{
+		newSet(Format_7_18, newSetMetaSequence(1, []metaTuple{
 			newMetaTuple(Format_7_18, NewRef(set1, Format_7_18), orderedKeyFromInt(1, Format_7_18), 2),
 			newMetaTuple(Format_7_18, NewRef(set2, Format_7_18), orderedKeyFromInt(4, Format_7_18), 3),
 		}, Format_7_18, vrw)),
@@ -489,8 +493,8 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	blob3 := newBlobOfInt(3)
 	blob4 := newBlobOfInt(4)
 
-	set1 := newSet(newSetLeafSequence(vrw, blob0, blob1))
-	set2 := newSet(newSetLeafSequence(vrw, blob2, blob3, blob4))
+	set1 := newSet(Format_7_18, newSetLeafSequence(vrw, blob0, blob1))
+	set2 := newSet(Format_7_18, newSetLeafSequence(vrw, blob2, blob3, blob4))
 
 	assertEncoding(t,
 		[]interface{}{
@@ -499,7 +503,7 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 			RefKind, set1.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob1.Hash(Format_7_18), uint64(2),
 			RefKind, set2.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(Format_7_18), uint64(3),
 		},
-		newSet(newSetMetaSequence(1, []metaTuple{
+		newSet(Format_7_18, newSetMetaSequence(1, []metaTuple{
 			newMetaTuple(Format_7_18, NewRef(set1, Format_7_18), newOrderedKey(blob1, Format_7_18), 2),
 			newMetaTuple(Format_7_18, NewRef(set2, Format_7_18), newOrderedKey(blob4, Format_7_18), 3),
 		}, Format_7_18, vrw)),

@@ -227,7 +227,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		// TODO: surely there is a better way to do this without resorting to interface{}
 		ts := &chunks.TestStorage{}
 		vs := types.NewValueStore(ts.NewView())
-		set := types.NewSet(context.Background(), vs, vals...)
+		set := types.NewSet(context.Background(), types.Format_7_18, vs, vals...)
 
 		// TODO: better type checking (set type is not literally the underlying type)
 		getter := LiteralValueGetter(set)
