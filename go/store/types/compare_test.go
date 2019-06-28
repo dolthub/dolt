@@ -306,7 +306,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	// TODO(binformat)
 	blob := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBuffer([]byte{1, 2, 3}))
 	nList := NewList(context.Background(), Format_7_18, vrw, nums...)
-	nMap := NewMap(context.Background(), vrw, words...)
+	nMap := NewMap(context.Background(), Format_7_18, vrw, words...)
 	nRef := NewRef(blob)
 	nSet := NewSet(context.Background(), vrw, nums...)
 	nStruct := NewStruct("teststruct", map[string]Value{"f1": Float(1)})

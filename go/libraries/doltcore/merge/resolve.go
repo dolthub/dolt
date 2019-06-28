@@ -72,7 +72,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 	}
 
 	newTbl := doltdb.NewTable(ctx, vrw, tblSchVal, rowEditor.Map(ctx))
-	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(ctx, vrw))
+	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(ctx, types.Format_7_18, vrw))
 
 	return newTbl, nil
 }

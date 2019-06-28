@@ -96,7 +96,7 @@ func (suite *diffTestSuite) TestDiff() {
 	}
 
 	newSetAsCol := func(vals []Value) Collection { return NewSet(context.Background(), vs, vals...) }
-	newMapAsCol := func(vals []Value) Collection { return NewMap(context.Background(), vs, vals...) }
+	newMapAsCol := func(vals []Value) Collection { return NewMap(context.Background(), Format_7_18, vs, vals...) }
 
 	rw := func(col Collection) Collection {
 		h := vs.WriteValue(context.Background(), col).TargetHash()

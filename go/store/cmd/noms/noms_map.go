@@ -49,7 +49,7 @@ func nomsMap(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause
 func nomsMapNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyMapEdits(ctx, sp, types.NewMap(ctx, sp.GetDatabase(ctx)), nil, args)
+	applyMapEdits(ctx, sp, types.NewMap(ctx, types.Format_7_18, sp.GetDatabase(ctx)), nil, args)
 	return 0
 }
 

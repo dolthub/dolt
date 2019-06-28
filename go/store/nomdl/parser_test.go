@@ -316,10 +316,10 @@ func TestValueSet(t *testing.T) {
 
 func TestValueMap(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "map {}", types.NewMap(context.Background(), vs))
+	assertParse(t, vs, "map {}", types.NewMap(context.Background(), types.Format_7_18, vs))
 
-	assertParse(t, vs, "map {42: true}", types.NewMap(context.Background(), vs, types.Float(42), types.Bool(true)))
-	assertParse(t, vs, "map {42: true,}", types.NewMap(context.Background(), vs, types.Float(42), types.Bool(true)))
+	assertParse(t, vs, "map {42: true}", types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true)))
+	assertParse(t, vs, "map {42: true,}", types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true)))
 
 	assertParseError(t, "map", "Unexpected token EOF, expected \"{\", example:1:4")
 	assertParseError(t, "map {", "Unexpected token EOF, example:1:6")
@@ -332,10 +332,10 @@ func TestValueMap(t *testing.T) {
 
 	assertParse(t, vs, `map {42:
                 Bool,
-        }`, types.NewMap(context.Background(), vs, types.Float(42), types.BoolType))
+        }`, types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `map {42:
                 Bool
-        }`, types.NewMap(context.Background(), vs, types.Float(42), types.BoolType))
+        }`, types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.BoolType))
 }
 
 func TestValueType(t *testing.T) {
@@ -447,8 +447,8 @@ func TestRoundTrips(t *testing.T) {
 	test(types.NewSet(context.Background(), vs))
 	test(types.NewSet(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc")))
 
-	test(types.NewMap(context.Background(), vs))
-	test(types.NewMap(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc"), types.NewMap(context.Background(), vs)))
+	test(types.NewMap(context.Background(), types.Format_7_18, vs))
+	test(types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true), types.String("abc"), types.NewMap(context.Background(), types.Format_7_18, vs)))
 
 	test(types.NewStruct("", nil))
 	test(types.NewStruct("Float", nil))

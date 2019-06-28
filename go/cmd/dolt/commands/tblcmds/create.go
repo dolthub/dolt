@@ -2,6 +2,9 @@ package tblcmds
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -10,8 +13,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io/ioutil"
-	"os"
 )
 
 var tblCreateShortDesc = "Creates or overwrite existing table(s) with an empty table(s)."
@@ -49,7 +50,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if verr == nil {
 			force := apr.Contains(forceParam)
-			tbl := doltdb.NewTable(context.Background(), root.VRW(), schVal, types.NewMap(context.TODO(), root.VRW()))
+			tbl := doltdb.NewTable(context.Background(), root.VRW(), schVal, types.NewMap(context.TODO(), types.Format_7_18, root.VRW()))
 			for i := 0; i < apr.NArg() && verr == nil; i++ {
 				tblName := apr.Arg(i)
 				if !force && root.HasTable(context.TODO(), tblName) {

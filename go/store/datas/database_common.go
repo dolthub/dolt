@@ -70,7 +70,7 @@ func (db *database) Flush(ctx context.Context) {
 func (db *database) Datasets(ctx context.Context) types.Map {
 	rootHash := db.rt.Root(ctx)
 	if rootHash.IsEmpty() {
-		return types.NewMap(ctx, db)
+		return types.NewMap(ctx, types.Format_7_18, db)
 	}
 
 	return db.ReadValue(ctx, rootHash).(types.Map)

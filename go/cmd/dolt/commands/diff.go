@@ -2,6 +2,10 @@ package commands
 
 import (
 	"context"
+	"reflect"
+	"sort"
+	"strconv"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -21,9 +25,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"reflect"
-	"sort"
-	"strconv"
 )
 
 const (
@@ -170,8 +171,8 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 		var sch2 schema.Schema
 		var sch1Hash hash.Hash
 		var sch2Hash hash.Hash
-		rowData1 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
-		rowData2 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+		rowData1 := types.NewMap(context.TODO(), types.Format_7_18, dEnv.DoltDB.ValueReadWriter())
+		rowData2 := types.NewMap(context.TODO(), types.Format_7_18, dEnv.DoltDB.ValueReadWriter())
 
 		if ok1 {
 			sch1 = tbl1.GetSchema(context.TODO())

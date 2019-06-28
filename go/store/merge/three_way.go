@@ -293,7 +293,7 @@ func mapAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent type
 	if parent != nil {
 		pMap, pOk = parent.(types.Map)
 	} else {
-		pMap, pOk = types.NewMap(ctx, vrw), true
+		pMap, pOk = types.NewMap(ctx, types.Format_7_18, vrw), true
 	}
 	return aMap, bMap, pMap, aOk && bOk && pOk
 }

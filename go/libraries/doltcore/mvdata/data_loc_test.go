@@ -141,7 +141,7 @@ func TestExists(t *testing.T) {
 
 		if loc.Format == DoltDB {
 			schVal, _ := encoding.MarshalAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
-			tbl := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, types.NewMap(context.Background(), ddb.ValueReadWriter()))
+			tbl := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, types.NewMap(context.Background(), types.Format_7_18, ddb.ValueReadWriter()))
 			root = root.PutTable(context.Background(), ddb, loc.Path, tbl)
 		} else {
 			fs.WriteFile(loc.Path, []byte("test"))

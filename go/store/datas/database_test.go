@@ -295,7 +295,7 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	ds1, ds2 := suite.db.GetDataset(context.Background(), datasetID1), suite.db.GetDataset(context.Background(), datasetID2)
 
 	var err error
-	v := types.NewMap(context.Background(), suite.db, types.String("Hello"), types.Float(42))
+	v := types.NewMap(context.Background(), types.Format_7_18, suite.db, types.String("Hello"), types.Float(42))
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, v)
 	ds1First := ds1
 	suite.NoError(err)

@@ -24,7 +24,7 @@ func getTestVals(vrw ValueReadWriter) []Value {
 		NewSet(context.Background(), vrw, String("hi")),
 		// TODO(binformat)
 		NewList(context.Background(), Format_7_18, vrw, String("hi")),
-		NewMap(context.Background(), vrw, String("hi"), String("hi")),
+		NewMap(context.Background(), Format_7_18, vrw, String("hi"), String("hi")),
 	}
 }
 
@@ -94,7 +94,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewMap(context.Background(), vs, getTestVals(vs)...)
+	expected := NewMap(context.Background(), Format_7_18, vs, getTestVals(vs)...)
 	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
 	actualVar := vs.ReadValue(context.Background(), ref)

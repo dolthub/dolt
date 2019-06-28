@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/alterschema"
@@ -107,7 +108,7 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), sch)
-	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, types.NewMap(ctx, root.VRW()))
+	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, types.NewMap(ctx, types.Format_7_18, root.VRW()))
 	root = root.PutTable(ctx, db, tableName, tbl)
 
 	return root, sch, nil

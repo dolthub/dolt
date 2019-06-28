@@ -76,7 +76,7 @@ func (s *ThreeWayMapMergeSuite) SetupSuite() {
 	s.create = func(seq seq) (val types.Value) {
 		if seq != nil {
 			keyValues := valsToTypesValues(s.create, seq.items()...)
-			val = types.NewMap(context.Background(), s.vs, keyValues...)
+			val = types.NewMap(context.Background(), types.Format_7_18, s.vs, keyValues...)
 		}
 		return
 	}
