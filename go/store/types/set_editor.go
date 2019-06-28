@@ -36,7 +36,7 @@ func (se *SetEditor) Value(ctx context.Context) Value {
 }
 
 func (se *SetEditor) Set(ctx context.Context) Set {
-	if len(se.edits) == 0 {
+	if len(se.edits.edits) == 0 {
 		return se.s // no edits
 	}
 
@@ -49,8 +49,8 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 	editChan := make(chan setEdit)
 
 	go func() {
-		for i, edit := range se.edits {
-			if i+1 < len(se.edits) && se.edits[i+1].value.Equals(edit.value) {
+		for i, edit := range se.edits.edits {
+			if i+1 < len(se.edits.edits) && se.edits.edits[i+1].value.Equals(edit.value) {
 				continue // next edit supercedes this one
 			}
 
@@ -131,25 +131,25 @@ func (se *SetEditor) Remove(vs ...Value) *SetEditor {
 
 func (se *SetEditor) Has(ctx context.Context, v Value) bool {
 	if idx, found := se.findEdit(v); found {
-		return se.edits[idx].insert
+		return se.edits.edits[idx].insert
 	}
 
 	return se.s.Has(ctx, v)
 }
 
 func (se *SetEditor) edit(v Value, insert bool) {
-	if len(se.edits) == 0 {
-		se.edits = append(se.edits, setEdit{v, insert})
+	if len(se.edits.edits) == 0 {
+		se.edits.edits = append(se.edits.edits, setEdit{v, insert})
 		return
 	}
 
-	final := se.edits[len(se.edits)-1]
+	final := se.edits.edits[len(se.edits.edits)-1]
 	if final.value.Equals(v) {
-		se.edits[len(se.edits)-1] = setEdit{v, insert}
+		se.edits.edits[len(se.edits.edits)-1] = setEdit{v, insert}
 		return // update the last edit
 	}
 
-	se.edits = append(se.edits, setEdit{v, insert})
+	se.edits.edits = append(se.edits.edits, setEdit{v, insert})
 
 	if se.normalized && final.value.Less(se.s.format, v) {
 		// fast-path: edits take place in key-order
@@ -164,20 +164,20 @@ func (se *SetEditor) edit(v Value, insert bool) {
 func (se *SetEditor) findEdit(v Value) (idx int, found bool) {
 	se.normalize()
 
-	idx = sort.Search(len(se.edits), func(i int) bool {
-		return !se.edits[i].value.Less(se.s.format, v)
+	idx = sort.Search(len(se.edits.edits), func(i int) bool {
+		return !se.edits.edits[i].value.Less(se.s.format, v)
 	})
 
-	if idx == len(se.edits) {
+	if idx == len(se.edits.edits) {
 		return
 	}
 
-	if !se.edits[idx].value.Equals(v) {
+	if !se.edits.edits[idx].value.Equals(v) {
 		return
 	}
 
 	// advance to final edit position where kv.key == k
-	for idx < len(se.edits) && se.edits[idx].value.Equals(v) {
+	for idx < len(se.edits.edits) && se.edits.edits[idx].value.Equals(v) {
 		idx++
 	}
 	idx--
@@ -201,11 +201,13 @@ type setEdit struct {
 	insert bool
 }
 
-type setEditSlice []setEdit
+type setEditSlice struct {
+	edits  []setEdit
+	format *Format
+}
 
-func (ses setEditSlice) Len() int      { return len(ses) }
-func (ses setEditSlice) Swap(i, j int) { ses[i], ses[j] = ses[j], ses[i] }
+func (ses setEditSlice) Len() int      { return len(ses.edits) }
+func (ses setEditSlice) Swap(i, j int) { ses.edits[i], ses.edits[j] = ses.edits[j], ses.edits[i] }
 func (ses setEditSlice) Less(i, j int) bool {
-	// TODO(binformat)
-	return ses[i].value.Less(Format_7_18, ses[j].value)
+	return ses.edits[i].value.Less(ses.format, ses.edits[j].value)
 }
