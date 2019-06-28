@@ -48,9 +48,7 @@ func NewMapEditor(m Map) *MapEditor {
 // Map applies all edits and returns a newly updated Map
 func (me *MapEditor) Map(ctx context.Context) Map {
 	edits := me.acc.FinishedEditing()
-	// TODO(binformat)
-	m, _ := ApplyEdits(ctx, Format_7_18, edits, me.m)
-
+	m, _ := ApplyEdits(ctx, me.m.format, edits, me.m)
 	return m
 }
 
