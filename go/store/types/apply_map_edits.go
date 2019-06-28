@@ -184,7 +184,7 @@ func prepWorker(ctx context.Context, f *Format, seq orderedSequence, wc chan map
 		for ; i < len(work.kvps); i++ {
 			edit := work.kvps[i]
 			key := edit.Key.Value(ctx)
-			ordKey := newOrderedKey(key)
+			ordKey := newOrderedKey(key, f)
 
 			if cur == nil || !ordKey.Less(f, curKey) {
 				cur = newCursorAt(ctx, seq, ordKey, true, false)

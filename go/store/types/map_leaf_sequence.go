@@ -149,7 +149,7 @@ func (ml mapLeafSequence) decoderSkipToIndex(idx int) valueDecoder {
 
 func (ml mapLeafSequence) getKey(idx int) orderedKey {
 	dec := ml.decoderSkipToIndex(idx)
-	return newOrderedKey(dec.readValue(ml.f))
+	return newOrderedKey(dec.readValue(ml.f), ml.f)
 }
 
 func (ml mapLeafSequence) search(key orderedKey) int {

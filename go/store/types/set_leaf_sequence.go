@@ -23,7 +23,7 @@ func (sl setLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
 
 func (sl setLeafSequence) getKey(idx int) orderedKey {
 	// TODO(binformat)
-	return newOrderedKey(sl.getItem(idx, Format_7_18).(Value))
+	return newOrderedKey(sl.getItem(idx, Format_7_18).(Value), Format_7_18)
 }
 
 func (sl setLeafSequence) search(key orderedKey) int {

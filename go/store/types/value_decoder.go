@@ -400,7 +400,7 @@ func (r *valueDecoder) readOrderedKey() orderedKey {
 	default:
 		// TODO(binformat)
 		v := r.readValue(Format_7_18)
-		return newOrderedKey(v)
+		return newOrderedKey(v, Format_7_18)
 	}
 }
 

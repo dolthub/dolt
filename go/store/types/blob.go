@@ -203,7 +203,7 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
 
 func chunkBlobLeaf(vrw ValueReadWriter, f *Format, buff []byte) (Collection, orderedKey, uint64) {
 	blob := newBlob(newBlobLeafSequence(vrw, f, buff), f)
-	return blob, orderedKeyFromInt(len(buff)), uint64(len(buff))
+	return blob, orderedKeyFromInt(len(buff), f), uint64(len(buff))
 }
 
 // NewBlob creates a Blob by reading from every Reader in rs and

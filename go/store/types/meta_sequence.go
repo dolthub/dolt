@@ -76,24 +76,24 @@ type orderedKey struct {
 	h                hash.Hash
 }
 
-func newOrderedKey(v Value) orderedKey {
+func newOrderedKey(v Value, f *Format) orderedKey {
 	if isKindOrderedByValue(v.Kind()) {
 		return orderedKey{true, v, hash.Hash{}}
 	}
 	// TODO(binformat)
-	return orderedKey{false, v, v.Hash(Format_7_18)}
+	return orderedKey{false, v, v.Hash(f)}
 }
 
 func orderedKeyFromHash(h hash.Hash) orderedKey {
 	return orderedKey{false, nil, h}
 }
 
-func orderedKeyFromInt(n int) orderedKey {
-	return newOrderedKey(Float(n))
+func orderedKeyFromInt(n int, f *Format) orderedKey {
+	return newOrderedKey(Float(n), f)
 }
 
-func orderedKeyFromUint64(n uint64) orderedKey {
-	return newOrderedKey(Float(n))
+func orderedKeyFromUint64(n uint64, f *Format) orderedKey {
+	return newOrderedKey(Float(n), f)
 }
 
 func (key orderedKey) Less(f *Format, mk2 orderedKey) bool {

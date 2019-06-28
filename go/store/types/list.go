@@ -265,7 +265,7 @@ func makeListLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
 		}
 
 		list := newList(newListLeafSequence(vrw, f, values...), f)
-		return list, orderedKeyFromInt(len(values)), uint64(len(values))
+		return list, orderedKeyFromInt(len(values), f), uint64(len(values))
 	}
 }
 
