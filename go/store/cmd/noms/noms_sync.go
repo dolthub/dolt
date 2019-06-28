@@ -78,7 +78,7 @@ func runSync(ctx context.Context, args []string) int {
 		lastProgressCh <- last
 	}()
 
-	sourceRef := types.NewRef(sourceObj)
+	sourceRef := types.NewRef(sourceObj, types.Format_7_18)
 	sinkRef, sinkExists := sinkDataset.MaybeHeadRef()
 	nonFF := false
 	f := func() error {

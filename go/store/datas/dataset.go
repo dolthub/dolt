@@ -69,7 +69,7 @@ func (ds Dataset) MaybeHeadRef() (types.Ref, bool) {
 	if ds.head == nil {
 		return types.Ref{}, false
 	}
-	return types.NewRef(ds.head), true
+	return types.NewRef(ds.head, types.Format_7_18), true
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.

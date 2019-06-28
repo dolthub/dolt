@@ -24,16 +24,17 @@ type sequenceChunker struct {
 	rv                         *rollingValueHasher
 	done                       bool
 	unwrittenCol               Collection
+	format                     *Format
 }
 
 // makeChunkFn takes a sequence of items to chunk, and returns the result of chunking those items, a tuple of a reference to that chunk which can itself be chunked + its underlying value.
 type makeChunkFn func(level uint64, values []sequenceItem) (Collection, orderedKey, uint64)
 
-func newEmptySequenceChunker(ctx context.Context, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
-	return newSequenceChunker(ctx, nil, uint64(0), vrw, makeChunk, parentMakeChunk, hashValueBytes)
+func newEmptySequenceChunker(ctx context.Context, f *Format, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
+	return newSequenceChunker(ctx, f, nil, uint64(0), vrw, makeChunk, parentMakeChunk, hashValueBytes)
 }
 
-func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
+func newSequenceChunker(ctx context.Context, format *Format, cur *sequenceCursor, level uint64, vrw ValueReadWriter, makeChunk, parentMakeChunk makeChunkFn, hashValueBytes hashValueBytesFn) *sequenceChunker {
 	d.PanicIfFalse(makeChunk != nil)
 	d.PanicIfFalse(parentMakeChunk != nil)
 	d.PanicIfFalse(hashValueBytes != nil)
@@ -53,6 +54,7 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 		newRollingValueHasher(byte(level % 256)),
 		false,
 		nil,
+		format,
 	}
 
 	if cur != nil {
@@ -169,7 +171,7 @@ func (sc *sequenceChunker) createParent(ctx context.Context) {
 		// Clone the parent cursor because otherwise calling cur.advance() will affect our parent - and vice versa - in surprising ways. Instead, Skip moves forward our parent's cursor if we advance across a boundary.
 		parent = sc.cur.parent
 	}
-	sc.parent = newSequenceChunker(ctx, parent, sc.level+1, sc.vrw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
+	sc.parent = newSequenceChunker(ctx, sc.format, parent, sc.level+1, sc.vrw, sc.parentMakeChunk, sc.parentMakeChunk, metaHashValueBytes)
 	sc.parent.isLeaf = false
 
 	if sc.unwrittenCol != nil {
@@ -203,11 +205,11 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 	if write {
 		ref = sc.vrw.WriteValue(ctx, col)
 	} else {
-		ref = NewRef(col)
+		ref = NewRef(col, sc.format)
 		sc.unwrittenCol = col
 	}
 
-	mt := newMetaTuple(Format_7_18, ref, key, numLeaves)
+	mt := newMetaTuple(sc.format, ref, key, numLeaves)
 	return col.asSequence(), mt
 }
 

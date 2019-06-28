@@ -33,7 +33,7 @@ func TestValidateRef(t *testing.T) {
 	r := db.WriteValue(context.Background(), b)
 
 	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), r) })
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), types.NewRef(b)) })
+	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), types.NewRef(b, types.Format_7_18)) })
 }
 
 type DatabaseSuite struct {
@@ -71,7 +71,7 @@ func (suite *DatabaseSuite) TearDownTest() {
 
 func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	ds := suite.db.GetDataset(context.Background(), "foo")
-	r := types.NewRef(types.Bool(true))
+	r := types.NewRef(types.Bool(true), types.Format_7_18)
 	suite.Panics(func() { suite.db.CommitValue(context.Background(), ds, r) })
 }
 
@@ -93,7 +93,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	suite.NoError(err)
 
 	s = ds1.HeadValue().(types.Set)
-	s = s.Edit().Insert(types.NewRef(types.Float(1000))).Set(context.Background()) // danging ref
+	s = s.Edit().Insert(types.NewRef(types.Float(1000), types.Format_7_18)).Set(context.Background()) // danging ref
 	suite.Panics(func() {
 		ds1, err = suite.db.CommitValue(context.Background(), ds1, s)
 	})

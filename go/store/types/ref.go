@@ -25,24 +25,22 @@ const (
 	refPartEnd
 )
 
-func NewRef(v Value) Ref {
-	// TODO(binformat)
-	return constructRef(v.Hash(Format_7_18), TypeOf(v), maxChunkHeight(v)+1)
+func NewRef(v Value, f *Format) Ref {
+	return constructRef(f, v.Hash(f), TypeOf(v), maxChunkHeight(v)+1)
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
 // with the type 'Ref<Value>'.
-func ToRefOfValue(r Ref) Ref {
-	return constructRef(r.TargetHash(), ValueType, r.Height())
+func ToRefOfValue(r Ref, f *Format) Ref {
+	return constructRef(f, r.TargetHash(), ValueType, r.Height())
 }
 
-func constructRef(targetHash hash.Hash, targetType *Type, height uint64) Ref {
+func constructRef(f *Format, targetHash hash.Hash, targetType *Type, height uint64) Ref {
 	w := newBinaryNomsWriter()
 
 	offsets := make([]uint32, refPartEnd)
 	offsets[refPartKind] = w.offset
-	// TODO(binformat)
-	RefKind.writeTo(&w, Format_7_18)
+	RefKind.writeTo(&w, f)
 	offsets[refPartTargetHash] = w.offset
 	w.writeHash(targetHash)
 	offsets[refPartTargetType] = w.offset

@@ -32,7 +32,7 @@ func TestGenericStructChunks(t *testing.T) {
 	assert := assert.New(t)
 
 	b := Bool(true)
-	s1 := NewStruct("S1", StructData{"r": NewRef(b)})
+	s1 := NewStruct("S1", StructData{"r": NewRef(b, Format_7_18)})
 
 	assert.Len(getChunks(s1), 1)
 	// TODO(binformat)

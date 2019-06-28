@@ -280,7 +280,7 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 
 	c2 := NewStruct("Commit", StructData{
 		"value":   Float(2),
-		"parents": NewSet(context.Background(), vs, NewRef(c1)),
+		"parents": NewSet(context.Background(), vs, NewRef(c1, Format_7_18)),
 	})
 	assertSubtype(context.Background(), t11, c2)
 }
@@ -561,7 +561,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		// TODO(binformat)
 		{NewList(context.Background(), Format_7_18, vs, Float(42)), MakeListType(FloaTType)},
 		{NewSet(context.Background(), vs, Float(42)), MakeSetType(FloaTType)},
-		{NewRef(Float(42)), MakeRefType(FloaTType)},
+		{NewRef(Float(42), Format_7_18), MakeRefType(FloaTType)},
 		{NewMap(context.Background(), Format_7_18, vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
 		{NewStruct("A", StructData{}), MakeStructType("A")},
 		// Not including CycleType or Union here
@@ -684,10 +684,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(newChunkedMap(Float(0), String("a")), MakeMapType(FloaTType, MakeUnionType()))
 	}
 
-	assertTrue(NewRef(Float(1)), MakeRefType(FloaTType))
-	assertFalse(NewRef(Float(1)), MakeRefType(BoolType))
-	assertTrue(NewRef(Float(1)), MakeRefType(MakeUnionType(FloaTType, BoolType)))
-	assertFalse(NewRef(Float(1)), MakeRefType(MakeUnionType()))
+	assertTrue(NewRef(Float(1), Format_7_18), MakeRefType(FloaTType))
+	assertFalse(NewRef(Float(1), Format_7_18), MakeRefType(BoolType))
+	assertTrue(NewRef(Float(1), Format_7_18), MakeRefType(MakeUnionType(FloaTType, BoolType)))
+	assertFalse(NewRef(Float(1), Format_7_18), MakeRefType(MakeUnionType()))
 
 	assertTrue(
 		NewStruct("Struct", StructData{"x": Bool(true)}),
@@ -764,7 +764,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		node := func(value Value, children ...Value) Value {
 			childrenAsRefs := make(ValueSlice, len(children))
 			for i, c := range children {
-				childrenAsRefs[i] = NewRef(c)
+				childrenAsRefs[i] = NewRef(c, Format_7_18)
 			}
 			rv := NewStruct("Node", StructData{
 				"value":    value,

@@ -33,7 +33,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 				return ErrHashNotFound
 			}
 
-			values[index+1] = types.NewRef(valForHash)
+			values[index+1] = types.NewRef(valForHash, types.Format_7_18)
 			index += 2
 		}
 

@@ -109,7 +109,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 	currentRootHash, currentDatasets := db.rt.Root(ctx), db.Datasets(ctx)
 	commitRef := db.WriteValue(ctx, commit) // will be orphaned if the tryCommitChunks() below fails
 
-	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef)).Map(ctx)
+	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef, types.Format_7_18)).Map(ctx)
 	return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 }
 
@@ -164,7 +164,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
 			if hasHead {
 				head := r.(types.Ref).TargetValue(ctx, db)
-				currentHeadRef := types.NewRef(head)
+				currentHeadRef := types.NewRef(head, types.Format_7_18)
 				ancestorRef, found := FindCommonAncestor(ctx, commitRef, currentHeadRef, db)
 				if !found {
 					return ErrMergeNeeded
@@ -187,7 +187,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 				}
 			}
 		}
-		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef)).Map(ctx)
+		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef, types.Format_7_18)).Map(ctx)
 		err = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 	}
 	return err

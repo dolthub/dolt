@@ -902,7 +902,7 @@ func TestSetChunks(t *testing.T) {
 	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
-	l2 := NewSet(context.Background(), vs, NewRef(Float(0)))
+	l2 := NewSet(context.Background(), vs, NewRef(Float(0), Format_7_18))
 	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 }
@@ -1018,15 +1018,15 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		NewMap(context.Background(), Format_7_18, vs, Bool(true), Float(0)),
 		NewStruct("", StructData{"field": Bool(true)}),
 		// Refs of values
-		NewRef(Bool(true)),
-		NewRef(Float(0)),
-		NewRef(String("hello")),
+		NewRef(Bool(true), Format_7_18),
+		NewRef(Float(0), Format_7_18),
+		NewRef(String("hello"), Format_7_18),
 		// TODO(binformat)
-		NewRef(NewBlob(context.Background(), Format_7_18, vs, bytes.NewBufferString("buf"))),
-		NewRef(NewSet(context.Background(), vs, Bool(true))),
-		NewRef(NewList(context.Background(), Format_7_18, vs, Bool(true))),
-		NewRef(NewMap(context.Background(), Format_7_18, vs, Bool(true), Float(0))),
-		NewRef(NewStruct("", StructData{"field": Bool(true)})),
+		NewRef(NewBlob(context.Background(), Format_7_18, vs, bytes.NewBufferString("buf")), Format_7_18),
+		NewRef(NewSet(context.Background(), vs, Bool(true)), Format_7_18),
+		NewRef(NewList(context.Background(), Format_7_18, vs, Bool(true)), Format_7_18),
+		NewRef(NewMap(context.Background(), Format_7_18, vs, Bool(true), Float(0)), Format_7_18),
+		NewRef(NewStruct("", StructData{"field": Bool(true)}), Format_7_18),
 	}
 
 	s := NewSet(context.Background(), vs, vals...)

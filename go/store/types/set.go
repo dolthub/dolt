@@ -225,5 +225,5 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func newEmptySetSequenceChunker(ctx context.Context, f *Format, vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, f, vrw), hashValueBytes)
+	return newEmptySequenceChunker(ctx, f, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, f, vrw), hashValueBytes)
 }
