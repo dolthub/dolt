@@ -17,15 +17,15 @@ func assertSubtype(ctx context.Context, f *Format, t *Type, v Value) {
 }
 
 // IsSubtype determines whether concreteType is a subtype of requiredType. For example, `Float` is a subtype of `Float | String`.
-func IsSubtype(requiredType, concreteType *Type) bool {
-	isSub, _ := isSubtypeTopLevel(requiredType, concreteType)
+func IsSubtype(f *Format, requiredType, concreteType *Type) bool {
+	isSub, _ := isSubtypeTopLevel(f, requiredType, concreteType)
 	return isSub
 }
 
 // IsSubtypeDisallowExtraFields is a slightly weird variant of IsSubtype. It returns true IFF IsSubtype(requiredType, concreteType) AND Structs in concreteType CANNOT have field names absent in requiredType
 // ISSUE: https://github.com/attic-labs/noms/issues/3446
-func IsSubtypeDisallowExtraStructFields(requiredType, concreteType *Type) bool {
-	isSub, hasExtra := isSubtypeDetails(requiredType, concreteType, false, nil)
+func IsSubtypeDisallowExtraStructFields(f *Format, requiredType, concreteType *Type) bool {
+	isSub, hasExtra := isSubtypeDetails(f, requiredType, concreteType, false, nil)
 	if hasExtra {
 		return false
 	}
@@ -34,23 +34,23 @@ func IsSubtypeDisallowExtraStructFields(requiredType, concreteType *Type) bool {
 
 // isSubtypeTopLevel returns two values: IsSub and hasExtra. See IsValueSubtypeOf()
 // below for an explanation.
-func isSubtypeTopLevel(requiredType, concreteType *Type) (isSub bool, hasExtra bool) {
-	return isSubtypeDetails(requiredType, concreteType, false, nil)
+func isSubtypeTopLevel(f *Format, requiredType, concreteType *Type) (isSub bool, hasExtra bool) {
+	return isSubtypeDetails(f, requiredType, concreteType, false, nil)
 }
 
 // IsSubtypeDetails returns two values:
 //   isSub - which indicates whether concreteType is a subtype of requiredType.
 //   hasExtra - which indicates whether concreteType has additional fields.
 // See comment below on isValueSubtypeOfDetails
-func isSubtypeDetails(requiredType, concreteType *Type, hasExtra bool, parentStructTypes []*Type) (bool, bool) {
-	if requiredType.Equals(Format_7_18, concreteType) {
+func isSubtypeDetails(f *Format, requiredType, concreteType *Type, hasExtra bool, parentStructTypes []*Type) (bool, bool) {
+	if requiredType.Equals(f, concreteType) {
 		return true, hasExtra
 	}
 
 	// If the concrete type is a union, all component types must be compatible.
 	if concreteType.TargetKind() == UnionKind {
 		for _, t := range concreteType.Desc.(CompoundDesc).ElemTypes {
-			isSub, hasMore := isSubtypeDetails(requiredType, t, hasExtra, parentStructTypes)
+			isSub, hasMore := isSubtypeDetails(f, requiredType, t, hasExtra, parentStructTypes)
 			if !isSub {
 				return false, hasExtra
 			}
@@ -62,7 +62,7 @@ func isSubtypeDetails(requiredType, concreteType *Type, hasExtra bool, parentStr
 	// If the required type is a union, at least one of the component types must be compatible.
 	if requiredType.TargetKind() == UnionKind {
 		for _, t := range requiredType.Desc.(CompoundDesc).ElemTypes {
-			isSub, hasMore := isSubtypeDetails(t, concreteType, hasExtra, parentStructTypes)
+			isSub, hasMore := isSubtypeDetails(f, t, concreteType, hasExtra, parentStructTypes)
 			if isSub {
 				hasExtra = hasExtra || hasMore
 				return true, hasExtra
@@ -78,7 +78,7 @@ func isSubtypeDetails(requiredType, concreteType *Type, hasExtra bool, parentStr
 	if desc, ok := requiredType.Desc.(CompoundDesc); ok {
 		concreteElemTypes := concreteType.Desc.(CompoundDesc).ElemTypes
 		for i, t := range desc.ElemTypes {
-			isSub, hasMore := compoundSubtype(t, concreteElemTypes[i], hasExtra, parentStructTypes)
+			isSub, hasMore := compoundSubtype(f, t, concreteElemTypes[i], hasExtra, parentStructTypes)
 			if !isSub {
 				return false, hasExtra
 			}
@@ -112,7 +112,7 @@ func isSubtypeDetails(requiredType, concreteType *Type, hasExtra bool, parentStr
 					return false, hasExtra
 				}
 
-				isSub, hasMore := isSubtypeDetails(requiredField.Type, concreteField.Type, hasExtra, append(parentStructTypes, requiredType))
+				isSub, hasMore := isSubtypeDetails(f, requiredField.Type, concreteField.Type, hasExtra, append(parentStructTypes, requiredType))
 				if !isSub {
 					return false, hasExtra
 				}
@@ -154,18 +154,18 @@ func isSubtypeDetails(requiredType, concreteType *Type, hasExtra bool, parentStr
 
 // compoundSubtype is called when comparing the element types of two compound types. This is the only case
 // where a concrete type may have be a union type.
-func compoundSubtype(requiredType, concreteType *Type, hasExtra bool, parentStructTypes []*Type) (bool, bool) {
+func compoundSubtype(f *Format, requiredType, concreteType *Type, hasExtra bool, parentStructTypes []*Type) (bool, bool) {
 	// If the concrete type is a union then all the types in the union must be subtypes of the required typ. This also means that a compound type with an empty union is going to be a subtype of all compounds, List<> is a subtype of List<T> for all T.
 	if concreteType.TargetKind() == UnionKind {
 		for _, ct := range concreteType.Desc.(CompoundDesc).ElemTypes {
-			isSub, hasExtra1 := isSubtypeDetails(requiredType, ct, hasExtra, parentStructTypes)
+			isSub, hasExtra1 := isSubtypeDetails(f, requiredType, ct, hasExtra, parentStructTypes)
 			if !isSub {
 				return false, hasExtra1
 			}
 		}
 		return true, hasExtra
 	}
-	return isSubtypeDetails(requiredType, concreteType, hasExtra, parentStructTypes)
+	return isSubtypeDetails(f, requiredType, concreteType, hasExtra, parentStructTypes)
 }
 
 func IsValueSubtypeOf(f *Format, v Value, t *Type) bool {
@@ -281,7 +281,7 @@ func isValueSubtypeOfDetails(format *Format, v Value, t *Type, hasExtra bool) (b
 		switch v := v.(type) {
 		case Ref:
 			// Switching to the type is subtype of type here.
-			return isSubtypeTopLevel(desc.ElemTypes[0], v.TargetType())
+			return isSubtypeTopLevel(format, desc.ElemTypes[0], v.TargetType())
 		case Map:
 			kt := desc.ElemTypes[0]
 			vt := desc.ElemTypes[1]
@@ -300,7 +300,7 @@ func isValueSubtypeOfDetails(format *Format, v Value, t *Type, hasExtra bool) (b
 				}
 				return true, hasExtra
 			}
-			return isMetaSequenceSubtypeOf(v.orderedSequence.(metaSequence), t, hasExtra)
+			return isMetaSequenceSubtypeOf(format, v.orderedSequence.(metaSequence), t, hasExtra)
 		case Set:
 			et := desc.ElemTypes[0]
 			if seq, ok := v.orderedSequence.(setLeafSequence); ok {
@@ -313,7 +313,7 @@ func isValueSubtypeOfDetails(format *Format, v Value, t *Type, hasExtra bool) (b
 				}
 				return true, hasExtra
 			}
-			return isMetaSequenceSubtypeOf(v.orderedSequence.(metaSequence), t, hasExtra)
+			return isMetaSequenceSubtypeOf(format, v.orderedSequence.(metaSequence), t, hasExtra)
 		case List:
 			et := desc.ElemTypes[0]
 			if seq, ok := v.sequence.(listLeafSequence); ok {
@@ -326,17 +326,17 @@ func isValueSubtypeOfDetails(format *Format, v Value, t *Type, hasExtra bool) (b
 				}
 				return true, hasExtra
 			}
-			return isMetaSequenceSubtypeOf(v.sequence.(metaSequence), t, hasExtra)
+			return isMetaSequenceSubtypeOf(format, v.sequence.(metaSequence), t, hasExtra)
 		}
 	}
 	panic("unreachable")
 }
 
-func isMetaSequenceSubtypeOf(ms metaSequence, t *Type, hasExtra bool) (bool, bool) {
+func isMetaSequenceSubtypeOf(f *Format, ms metaSequence, t *Type, hasExtra bool) (bool, bool) {
 	// TODO: iterRefs
 	for _, mt := range ms.tuples() {
 		// Each prolly tree is also a List<T> where T needs to be a subtype.
-		isSub, hasMore := isSubtypeTopLevel(t, mt.ref().TargetType())
+		isSub, hasMore := isSubtypeTopLevel(f, t, mt.ref().TargetType())
 		if !isSub {
 			return false, hasExtra
 		}

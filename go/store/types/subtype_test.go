@@ -155,17 +155,20 @@ func TestAssertTypeUnion(tt *testing.T) {
 
 func TestAssertConcreteTypeIsUnion(tt *testing.T) {
 	assert.True(tt, IsSubtype(
+		Format_7_18,
 		MakeStructTypeFromFields("", FieldMap{}),
 		MakeUnionType(
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
 			MakeStructTypeFromFields("", FieldMap{"bar": StringType}))))
 
 	assert.False(tt, IsSubtype(
+		Format_7_18,
 		MakeStructTypeFromFields("", FieldMap{}),
 		MakeUnionType(MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
 			FloaTType)))
 
 	assert.True(tt, IsSubtype(
+		Format_7_18,
 		MakeUnionType(
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
 			MakeStructTypeFromFields("", FieldMap{"bar": StringType})),
@@ -174,6 +177,7 @@ func TestAssertConcreteTypeIsUnion(tt *testing.T) {
 			MakeStructTypeFromFields("", FieldMap{"bar": StringType}))))
 
 	assert.False(tt, IsSubtype(
+		Format_7_18,
 		MakeUnionType(
 			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
 			MakeStructTypeFromFields("", FieldMap{"bar": StringType})),
@@ -303,8 +307,8 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		StructField{"y", MakeUnionType(FloaTType, StringType), false},
 	)
 
-	assert.True(tt, IsSubtype(t2, t1))
-	assert.False(tt, IsSubtype(t1, t2))
+	assert.True(tt, IsSubtype(Format_7_18, t2, t1))
+	assert.False(tt, IsSubtype(Format_7_18, t1, t2))
 
 	// struct S {
 	//   x: Cycle<S> | Float,
@@ -315,11 +319,11 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		StructField{"y", MakeUnionType(FloaTType, StringType), false},
 	)
 
-	assert.True(tt, IsSubtype(t3, t1))
-	assert.False(tt, IsSubtype(t1, t3))
+	assert.True(tt, IsSubtype(Format_7_18, t3, t1))
+	assert.False(tt, IsSubtype(Format_7_18, t1, t3))
 
-	assert.True(tt, IsSubtype(t3, t2))
-	assert.False(tt, IsSubtype(t2, t3))
+	assert.True(tt, IsSubtype(Format_7_18, t3, t2))
+	assert.False(tt, IsSubtype(Format_7_18, t2, t3))
 
 	// struct S {
 	//   x: Cycle<S> | Float,
@@ -330,14 +334,14 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		StructField{"y", FloaTType, false},
 	)
 
-	assert.True(tt, IsSubtype(t4, t1))
-	assert.False(tt, IsSubtype(t1, t4))
+	assert.True(tt, IsSubtype(Format_7_18, t4, t1))
+	assert.False(tt, IsSubtype(Format_7_18, t1, t4))
 
-	assert.False(tt, IsSubtype(t4, t2))
-	assert.False(tt, IsSubtype(t2, t4))
+	assert.False(tt, IsSubtype(Format_7_18, t4, t2))
+	assert.False(tt, IsSubtype(Format_7_18, t2, t4))
 
-	assert.True(tt, IsSubtype(t3, t4))
-	assert.False(tt, IsSubtype(t4, t3))
+	assert.True(tt, IsSubtype(Format_7_18, t3, t4))
+	assert.False(tt, IsSubtype(Format_7_18, t4, t3))
 
 	// struct B {
 	//   b: struct C {
@@ -366,8 +370,8 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 		},
 	)
 
-	assert.False(tt, IsSubtype(tb, tc))
-	assert.False(tt, IsSubtype(tc, tb))
+	assert.False(tt, IsSubtype(Format_7_18, tb, tc))
+	assert.False(tt, IsSubtype(Format_7_18, tc, tb))
 }
 
 func TestIsSubtypeEmptySruct(tt *testing.T) {
@@ -385,8 +389,8 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	// }
 	t2 := MakeStructType("X", StructField{"a", FloaTType, false})
 
-	assert.False(tt, IsSubtype(t1, t2))
-	assert.True(tt, IsSubtype(t2, t1))
+	assert.False(tt, IsSubtype(Format_7_18, t1, t2))
+	assert.True(tt, IsSubtype(Format_7_18, t2, t1))
 }
 
 func TestIsSubtypeCompoundUnion(tt *testing.T) {
@@ -396,12 +400,12 @@ func TestIsSubtypeCompoundUnion(tt *testing.T) {
 	st2 := MakeStructType("Two", StructField{"b", StringType, false})
 	ct := MakeListType(MakeUnionType(st1, st2))
 
-	assert.True(tt, IsSubtype(rt, ct))
-	assert.False(tt, IsSubtype(ct, rt))
+	assert.True(tt, IsSubtype(Format_7_18, rt, ct))
+	assert.False(tt, IsSubtype(Format_7_18, ct, rt))
 
 	ct2 := MakeListType(MakeUnionType(st1, st2, FloaTType))
-	assert.False(tt, IsSubtype(rt, ct2))
-	assert.False(tt, IsSubtype(ct2, rt))
+	assert.False(tt, IsSubtype(Format_7_18, rt, ct2))
+	assert.False(tt, IsSubtype(Format_7_18, ct2, rt))
 }
 
 func TestIsSubtypeOptionalFields(tt *testing.T) {
@@ -409,22 +413,22 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 
 	s1 := MakeStructType("", StructField{"a", FloaTType, true})
 	s2 := MakeStructType("", StructField{"a", FloaTType, false})
-	assert.True(IsSubtype(s1, s2))
-	assert.False(IsSubtype(s2, s1))
+	assert.True(IsSubtype(Format_7_18, s1, s2))
+	assert.False(IsSubtype(Format_7_18, s2, s1))
 
 	s3 := MakeStructType("", StructField{"a", StringType, false})
-	assert.False(IsSubtype(s1, s3))
-	assert.False(IsSubtype(s3, s1))
+	assert.False(IsSubtype(Format_7_18, s1, s3))
+	assert.False(IsSubtype(Format_7_18, s3, s1))
 
 	s4 := MakeStructType("", StructField{"a", StringType, true})
-	assert.False(IsSubtype(s1, s4))
-	assert.False(IsSubtype(s4, s1))
+	assert.False(IsSubtype(Format_7_18, s1, s4))
+	assert.False(IsSubtype(Format_7_18, s4, s1))
 
 	test := func(t1s, t2s string, exp1, exp2 bool) {
 		t1 := makeTestStructTypeFromFieldNames(t1s)
 		t2 := makeTestStructTypeFromFieldNames(t2s)
-		assert.Equal(exp1, IsSubtype(t1, t2))
-		assert.Equal(exp2, IsSubtype(t2, t1))
+		assert.Equal(exp1, IsSubtype(Format_7_18, t1, t2))
+		assert.Equal(exp2, IsSubtype(Format_7_18, t2, t1))
 		assert.False(t1.Equals(Format_7_18, t2))
 	}
 
@@ -457,8 +461,8 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 
 	t1 := MakeStructType("", StructField{"a", BoolType, true})
 	t2 := MakeStructType("", StructField{"a", FloaTType, true})
-	assert.False(IsSubtype(t1, t2))
-	assert.False(IsSubtype(t2, t1))
+	assert.False(IsSubtype(Format_7_18, t1, t2))
+	assert.False(IsSubtype(Format_7_18, t2, t1))
 }
 
 func makeTestStructTypeFromFieldNames(s string) *Type {
@@ -502,8 +506,8 @@ func TestIsSubtypeDisallowExtraStructFields(tt *testing.T) {
 	test := func(t1s, t2s string, exp1, exp2 bool) {
 		t1 := makeTestStructTypeFromFieldNames(t1s)
 		t2 := makeTestStructTypeFromFieldNames(t2s)
-		assert.Equal(exp1, IsSubtypeDisallowExtraStructFields(t1, t2))
-		assert.Equal(exp2, IsSubtypeDisallowExtraStructFields(t2, t1))
+		assert.Equal(exp1, IsSubtypeDisallowExtraStructFields(Format_7_18, t1, t2))
+		assert.Equal(exp2, IsSubtypeDisallowExtraStructFields(Format_7_18, t2, t1))
 		assert.False(t1.Equals(Format_7_18, t2))
 	}
 
