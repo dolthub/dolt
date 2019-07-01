@@ -473,7 +473,7 @@ func (r *typedBinaryNomsReader) readStructType(seenStructs map[string]*Type) *Ty
 	count := r.readCount()
 	fields := make(structTypeFields, count)
 
-	t := newType(Format_7_18, StructDesc{name, fields})
+	t := newType(StructDesc{name, fields})
 	seenStructs[name] = t
 
 	for i := uint64(0); i < count; i++ {

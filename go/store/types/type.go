@@ -21,12 +21,11 @@ import (
 // If Kind() refers to Struct, then Desc contains a []field.
 
 type Type struct {
-	Desc   TypeDesc
-	format *Format
+	Desc TypeDesc
 }
 
-func newType(f *Format, desc TypeDesc) *Type {
-	return &Type{desc, f}
+func newType(desc TypeDesc) *Type {
+	return &Type{desc}
 }
 
 // Describe generate text that should parse into the struct being described.
@@ -50,7 +49,7 @@ func (t *Type) Equals(format *Format, other Value) (res bool) {
 	}
 
 	if otherType, ok := other.(*Type); ok {
-		return t.TargetKind() == otherType.TargetKind() && t.Hash(t.format) == other.Hash(t.format)
+		return t.TargetKind() == otherType.TargetKind() && t.Hash(format) == other.Hash(format)
 	}
 
 	return false
@@ -70,7 +69,7 @@ func (t *Type) writeTo(w nomsWriter, f *Format) {
 }
 
 func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type) {
-	t.Desc.writeTo(w, t.format, t, seensStructs)
+	t.Desc.writeTo(w, Format_7_18, t, seensStructs)
 }
 
 func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
