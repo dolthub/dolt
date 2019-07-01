@@ -47,7 +47,7 @@ type tableReader struct {
 // and footer, though it may contain an unspecified number of bytes before that data.
 // |tableIndex| doesn't keep alive any references to |buff|.
 func parseTableIndex(buff []byte) (tableIndex, error) {
-	pos := uint64(len(buff))
+	pos := int64(len(buff))
 
 	// footer
 	pos -= magicNumberSize
@@ -74,7 +74,7 @@ func parseTableIndex(buff []byte) (tableIndex, error) {
 	chunkCount := binary.BigEndian.Uint32(buff[pos:])
 
 	// index
-	suffixesSize := uint64(chunkCount) * addrSuffixSize
+	suffixesSize := int64(chunkCount) * addrSuffixSize
 	pos -= suffixesSize
 
 	if pos < 0 {
@@ -84,7 +84,7 @@ func parseTableIndex(buff []byte) (tableIndex, error) {
 	suffixes := make([]byte, suffixesSize)
 	copy(suffixes, buff[pos:])
 
-	lengthsSize := uint64(chunkCount) * lengthSize
+	lengthsSize := int64(chunkCount) * lengthSize
 	pos -= lengthsSize
 
 	if pos < 0 {
@@ -93,7 +93,7 @@ func parseTableIndex(buff []byte) (tableIndex, error) {
 
 	lengths, offsets := computeOffsets(chunkCount, buff[pos:pos+lengthsSize])
 
-	tuplesSize := uint64(chunkCount) * prefixTupleSize
+	tuplesSize := int64(chunkCount) * prefixTupleSize
 	pos -= tuplesSize
 
 	if pos < 0 {
@@ -485,7 +485,7 @@ func (tr tableReader) parseChunk(buff []byte) ([]byte, error) {
 	data, err := snappy.Decode(nil, buff[:dataLen])
 
 	if err != nil {
-		return nil, errors.New("Decode error. Likely corrupt data.")
+		return nil, errors.New("decode error - likely corrupt data")
 	}
 
 	return data, nil

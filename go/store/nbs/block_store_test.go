@@ -198,6 +198,7 @@ func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
 
 	chunkChan := make(chan *chunks.Chunk, len(hashes))
 	err = suite.store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
+	suite.NoError(err)
 	close(chunkChan)
 
 	found := make(hash.HashSlice, 0)
