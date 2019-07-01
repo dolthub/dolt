@@ -58,7 +58,7 @@ func (al awsLimits) tableMayBeInDynamo(chunkCount uint32) bool {
 	return chunkCount <= al.chunkMax
 }
 
-func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
+func (s3p awsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newAWSChunkSource(
 		ctx,
 		s3p.ddb,
@@ -83,32 +83,51 @@ func (s3p awsTablePersister) key(k string) string {
 	return k
 }
 
-func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	name, data, chunkCount := mt.write(haver, stats)
 	if chunkCount == 0 {
-		return emptyChunkSource{}
+		return emptyChunkSource{}, nil
 	}
+
 	if s3p.limits.tableFitsInDynamo(name, len(data), chunkCount) {
-		s3p.ddb.Write(ctx, name, data)
+		err := s3p.ddb.Write(ctx, name, data)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return newReaderFromIndexData(s3p.indexCache, data, name, &dynamoTableReaderAt{ddb: s3p.ddb, h: name}, s3BlockSize)
 	}
 
 	if s3p.tc != nil {
-		go s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
+		go func() {
+			err := s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
+
+			// TODO: fix panics
+			d.PanicIfError(err)
+		}()
 	}
-	s3p.multipartUpload(ctx, data, name.String())
+
+	err := s3p.multipartUpload(ctx, data, name.String())
+
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns}, name}
 	return newReaderFromIndexData(s3p.indexCache, data, name, tra, s3BlockSize)
 }
 
-func (s3p awsTablePersister) multipartUpload(ctx context.Context, data []byte, key string) {
+func (s3p awsTablePersister) multipartUpload(ctx context.Context, data []byte, key string) error {
 	uploadID := s3p.startMultipartUpload(ctx, key)
 	multipartUpload, err := s3p.uploadParts(ctx, data, key, uploadID)
 	if err != nil {
 		s3p.abortMultipartUpload(ctx, key, uploadID)
-		d.PanicIfError(err) // TODO: Better error handling here
+		return err
 	}
+
 	s3p.completeMultipartUpload(ctx, key, uploadID, multipartUpload)
+	return nil
 }
 
 func (s3p awsTablePersister) startMultipartUpload(ctx context.Context, key string) string {
@@ -236,10 +255,10 @@ func (s partsByPartNum) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
-func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
+func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
 	plan := planConjoin(sources, stats)
 	if plan.chunkCount == 0 {
-		return emptyChunkSource{}
+		return emptyChunkSource{}, nil
 	}
 	t1 := time.Now()
 	name := nameFromSuffixes(plan.suffixes())
@@ -249,6 +268,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 	if s3p.tc != nil {
 		go s3p.loadIntoCache(ctx, name) // load conjoined table to the cache
 	}
+
 	tra := &s3TableReaderAt{&s3ObjectReader{s3: s3p.s3, bucket: s3p.bucket, readRl: s3p.rl, tc: s3p.tc, ns: s3p.ns}, name}
 	return newReaderFromIndexData(s3p.indexCache, plan.mergedIndex, name, tra, s3BlockSize)
 }

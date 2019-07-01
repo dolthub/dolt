@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"io"
 	"io/ioutil"
 	"os"
@@ -13,14 +14,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
 )
 
 type tableCache interface {
-	checkout(h addr) io.ReaderAt
-	checkin(h addr)
-	store(h addr, data io.Reader, size uint64)
+	checkout(h addr) (io.ReaderAt, error)
+	checkin(h addr) error
+	store(h addr, data io.Reader, size uint64) error
 }
 
 type fsTableCache struct {
@@ -35,11 +35,15 @@ func newFSTableCache(dir string, cacheSize uint64, maxOpenFds int) *fsTableCache
 		ftc.expire(elm.(addr))
 	})
 
-	ftc.init(maxOpenFds)
+	err := ftc.init(maxOpenFds)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
 	return ftc
 }
 
-func (ftc *fsTableCache) init(concurrency int) {
+func (ftc *fsTableCache) init(concurrency int) error {
 	type finfo struct {
 		path string
 		h    addr
@@ -65,7 +69,8 @@ func (ftc *fsTableCache) init(concurrency int) {
 				return nil
 			}
 			if isTempTableFile(info) {
-				os.Remove(path)
+				// ignore failure to remove temp file
+				_ = os.Remove(path)
 				return nil
 			}
 			if !isTableFile(info) {
@@ -74,8 +79,9 @@ func (ftc *fsTableCache) init(concurrency int) {
 
 			ad, err := ParseAddr([]byte(info.Name()))
 
-			// TODO: fix panics
-			d.PanicIfError(err)
+			if err != nil {
+				return err
+			}
 
 			infos <- finfo{path, ad, uint64(info.Size())}
 			return nil
@@ -89,51 +95,77 @@ func (ftc *fsTableCache) init(concurrency int) {
 			defer wg.Done()
 			for info := range infos {
 				ftc.cache.Add(info.h, info.size, true)
-				ftc.fd.RefFile(info.path)
-				ftc.fd.UnrefFile(info.path)
+
+				if _, err := ftc.fd.RefFile(info.path); err == nil {
+					ftc.fd.UnrefFile(info.path)
+				}
 			}
 		}()
 	}
 	wg.Wait()
-	d.PanicIfError(<-errc)
+	return <-errc
 }
 
-func (ftc *fsTableCache) checkout(h addr) io.ReaderAt {
+func (ftc *fsTableCache) checkout(h addr) (io.ReaderAt, error) {
 	if _, ok := ftc.cache.Get(h); !ok {
-		return nil
+		return nil, nil
 	}
 
-	if fd, err := ftc.fd.RefFile(filepath.Join(ftc.dir, h.String())); err == nil {
-		return fd
+	fd, err := ftc.fd.RefFile(filepath.Join(ftc.dir, h.String()))
+
+	if err != nil {
+		return nil, err
 	}
+
+	return fd, nil
+}
+
+func (ftc *fsTableCache) checkin(h addr) error {
+	ftc.fd.UnrefFile(filepath.Join(ftc.dir, h.String()))
 	return nil
 }
 
-func (ftc *fsTableCache) checkin(h addr) {
-	ftc.fd.UnrefFile(filepath.Join(ftc.dir, h.String()))
-}
-
-func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) {
+func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 	path := filepath.Join(ftc.dir, h.String())
-	tempName := func() string {
+	tempName, err := func() (string, error) {
 		temp, err := ioutil.TempFile(ftc.dir, tempTablePrefix)
-		d.PanicIfError(err)
+
+		if err != nil {
+			return "", err
+		}
+
 		defer checkClose(temp)
-		io.Copy(temp, data)
-		return temp.Name()
+		_, err = io.Copy(temp, data)
+
+		if err != nil {
+			return "", err
+		}
+
+		return temp.Name(), nil
 	}()
 
+	if err != nil {
+		return err
+	}
+
 	ftc.fd.ShrinkCache()
-	err := os.Rename(tempName, path)
-	d.PanicIfError(err)
+
+	err = os.Rename(tempName, path)
+
+	if err != nil {
+		return err
+	}
 
 	ftc.cache.Add(h, size, true)
 
-	ftc.fd.RefFile(path) // Prime the file in the fd cache
-	ftc.fd.UnrefFile(path)
+	// Prime the file in the fd cache ignore err
+	if _, err = ftc.fd.RefFile(path); err == nil {
+		ftc.fd.UnrefFile(path)
+	}
+
+	return nil
 }
 
-func (ftc *fsTableCache) expire(h addr) {
-	err := os.Remove(filepath.Join(ftc.dir, h.String()))
-	d.PanicIfError(err)
+func (ftc *fsTableCache) expire(h addr) error {
+	return os.Remove(filepath.Join(ftc.dir, h.String()))
 }

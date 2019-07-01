@@ -23,7 +23,10 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 	rl <- struct{}{}
 	go func() {
 		defer ccs.wg.Done()
-		cs := p.Persist(ctx, mt, haver, stats)
+		cs, err := p.Persist(ctx, mt, haver, stats)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
 
 		ccs.mu.Lock()
 		defer ccs.mu.Unlock()
@@ -35,6 +38,7 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 			stats.PersistLatency.SampleTimeSince(t1)
 		}
 	}()
+
 	return ccs
 }
 
@@ -55,28 +59,36 @@ func (ccs *persistingChunkSource) getReader() chunkReader {
 	return ccs.cs
 }
 
-func (ccs *persistingChunkSource) has(h addr) bool {
+func (ccs *persistingChunkSource) has(h addr) (bool, error) {
 	cr := ccs.getReader()
+
+	// TODO: fix panics
 	d.Chk.True(cr != nil)
 	return cr.has(h)
 }
 
-func (ccs *persistingChunkSource) hasMany(addrs []hasRecord) bool {
+func (ccs *persistingChunkSource) hasMany(addrs []hasRecord) (bool, error) {
 	cr := ccs.getReader()
+
+	// TODO: fix panics
 	d.Chk.True(cr != nil)
 	return cr.hasMany(addrs)
 }
 
-func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats) []byte {
+func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
 	cr := ccs.getReader()
+
+	// TODO: fix panics
 	d.Chk.True(cr != nil)
 	return cr.get(ctx, h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
+func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
 	cr := ccs.getReader()
+
+	// TODO: fix panics
 	d.Chk.True(cr != nil)
-	return cr.getMany(ctx, reqs, foundChunks, wg, stats)
+	return cr.getMany(ctx, reqs, foundChunks, wg, ae, stats)
 }
 
 func (ccs *persistingChunkSource) count() uint32 {
@@ -115,27 +127,27 @@ func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) 
 	return ccs.cs.calcReads(reqs, blockSize)
 }
 
-func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) {
+func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
 	ccs.wg.Wait()
 	d.Chk.True(ccs.cs != nil)
-	ccs.cs.extract(ctx, chunks)
+	return ccs.cs.extract(ctx, chunks)
 }
 
 type emptyChunkSource struct{}
 
-func (ecs emptyChunkSource) has(h addr) bool {
-	return false
+func (ecs emptyChunkSource) has(h addr) (bool, error) {
+	return false, nil
 }
 
-func (ecs emptyChunkSource) hasMany(addrs []hasRecord) bool {
-	return true
+func (ecs emptyChunkSource) hasMany(addrs []hasRecord) (bool, error) {
+	return true, nil
 }
 
-func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) []byte {
-	return nil
+func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+	return nil, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool {
+func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
 	return true
 }
 
@@ -163,4 +175,6 @@ func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads
 	return 0, true
 }
 
-func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) {}
+func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
+	return nil
+}

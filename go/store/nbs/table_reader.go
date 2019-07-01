@@ -8,15 +8,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"io"
-	"sort"
-	"sync"
-
+	"errors"
 	"github.com/golang/snappy"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"io"
+	"sort"
+	"sync"
 )
+
+var ErrInvalidTableFile = errors.New("invalid or corrupt table file")
 
 type tableIndex struct {
 	chunkCount            uint32
@@ -44,32 +46,60 @@ type tableReader struct {
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data.
 // |tableIndex| doesn't keep alive any references to |buff|.
-func parseTableIndex(buff []byte) tableIndex {
+func parseTableIndex(buff []byte) (tableIndex, error) {
 	pos := uint64(len(buff))
 
 	// footer
 	pos -= magicNumberSize
-	d.Chk.True(string(buff[pos:]) == magicNumber)
+
+	if string(buff[pos:]) != magicNumber {
+		return tableIndex{}, ErrInvalidTableFile
+	}
 
 	// total uncompressed chunk data
 	pos -= uint64Size
+
+	if pos < 0 {
+		return tableIndex{}, ErrInvalidTableFile
+	}
+
 	totalUncompressedData := binary.BigEndian.Uint64(buff[pos:])
 
 	pos -= uint32Size
+
+	if pos < 0 {
+		return tableIndex{}, ErrInvalidTableFile
+	}
+
 	chunkCount := binary.BigEndian.Uint32(buff[pos:])
 
 	// index
 	suffixesSize := uint64(chunkCount) * addrSuffixSize
 	pos -= suffixesSize
+
+	if pos < 0 {
+		return tableIndex{}, ErrInvalidTableFile
+	}
+
 	suffixes := make([]byte, suffixesSize)
 	copy(suffixes, buff[pos:])
 
 	lengthsSize := uint64(chunkCount) * lengthSize
 	pos -= lengthsSize
+
+	if pos < 0 {
+		return tableIndex{}, ErrInvalidTableFile
+	}
+
 	lengths, offsets := computeOffsets(chunkCount, buff[pos:pos+lengthsSize])
 
 	tuplesSize := uint64(chunkCount) * prefixTupleSize
 	pos -= tuplesSize
+
+	if pos < 0 {
+		return tableIndex{}, ErrInvalidTableFile
+	}
+
 	prefixes, ordinals := computePrefixes(chunkCount, buff[pos:pos+tuplesSize])
 
 	return tableIndex{
@@ -77,7 +107,7 @@ func parseTableIndex(buff []byte) tableIndex {
 		prefixes, offsets,
 		lengths, ordinals,
 		suffixes,
-	}
+	}, nil
 }
 
 func computeOffsets(count uint32, buff []byte) (lengths []uint32, offsets []uint64) {
@@ -156,12 +186,13 @@ func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) tableRe
 }
 
 // Scan across (logically) two ordered slices of address prefixes.
-func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
+func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 	// TODO: Use findInIndex if (tr.chunkCount - len(addrs)*Log2(tr.chunkCount)) > (tr.chunkCount - len(addrs))
 
 	filterIdx := uint32(0)
 	filterLen := uint32(len(tr.prefixes))
 
+	var remaining bool
 	for i, addr := range addrs {
 		if addr.has {
 			continue
@@ -173,7 +204,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
 
 		if filterIdx >= filterLen {
 			remaining = true
-			return
+			return remaining, nil
 		}
 
 		if addr.prefix != tr.prefixes[filterIdx] {
@@ -194,7 +225,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (remaining bool) {
 		}
 	}
 
-	return
+	return remaining, nil
 }
 
 func (tr tableReader) count() uint32 {
@@ -210,17 +241,17 @@ func (tr tableReader) index() tableIndex {
 }
 
 // returns true iff |h| can be found in this table.
-func (tr tableReader) has(h addr) bool {
+func (tr tableReader) has(h addr) (bool, error) {
 	ordinal := tr.lookupOrdinal(h)
-	return ordinal < tr.count()
+	return ordinal < tr.count(), nil
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
-func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) (data []byte) {
+func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
 	ordinal := tr.lookupOrdinal(h)
 	if ordinal == tr.count() {
-		return
+		return nil, nil
 	}
 
 	offset := tr.offsets[ordinal]
@@ -230,10 +261,17 @@ func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) (data []byt
 	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(offset), stats)
 	d.Chk.NoError(err)
 	d.Chk.True(n == int(length))
-	data = tr.parseChunk(buff)
-	d.Chk.True(data != nil)
+	data, err := tr.parseChunk(buff)
 
-	return
+	if err != nil {
+		return nil, err
+	}
+
+	if data == nil {
+		return nil, errors.New("failed to get data")
+	}
+
+	return data, nil
 }
 
 type offsetRec struct {
@@ -254,30 +292,44 @@ func (tr tableReader) readAtOffsets(
 	reqs []getRecord,
 	offsets offsetRecSlice,
 	foundChunks chan *chunks.Chunk,
-	wg *sync.WaitGroup,
 	stats *Stats,
-) {
-
+) error {
 	readLength := readEnd - readStart
 	buff := make([]byte, readLength)
 
 	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(readStart), stats)
 
-	d.Chk.NoError(err)
-	d.Chk.True(uint64(n) == readLength)
+	if err != nil {
+		return err
+	}
+
+	if uint64(n) != readLength {
+		return errors.New("failed to read all data")
+	}
 
 	for _, rec := range offsets {
-		d.Chk.True(rec.offset >= readStart)
+		if rec.offset < readStart {
+			return errors.New("offset before the start")
+		}
+
 		localStart := rec.offset - readStart
 		localEnd := localStart + uint64(tr.lengths[rec.ordinal])
-		d.Chk.True(localEnd <= readLength)
-		data := tr.parseChunk(buff[localStart:localEnd])
+
+		if localEnd > readLength {
+			return errors.New("length goes past the end")
+		}
+
+		data, err := tr.parseChunk(buff[localStart:localEnd])
+
+		if err != nil {
+			return err
+		}
+
 		c := chunks.NewChunkWithHash(hash.Hash(*rec.a), data)
 		foundChunks <- &c
 	}
 
-	wg.Done()
-
+	return nil
 }
 
 // getMany retrieves multiple stored blocks and optimizes by attempting to read in larger physical
@@ -287,12 +339,13 @@ func (tr tableReader) getMany(
 	reqs []getRecord,
 	foundChunks chan *chunks.Chunk,
 	wg *sync.WaitGroup,
-	stats *Stats,
-) (remaining bool) {
+	ae *AtomicError,
+	stats *Stats) bool {
+
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
-	tr.getManyAtOffsets(ctx, reqs, offsetRecords, foundChunks, wg, stats)
+	tr.getManyAtOffsets(ctx, reqs, offsetRecords, foundChunks, wg, ae, stats)
 	return remaining
 }
 
@@ -302,8 +355,10 @@ func (tr tableReader) getManyAtOffsets(
 	offsetRecords offsetRecSlice,
 	foundChunks chan *chunks.Chunk,
 	wg *sync.WaitGroup,
+	ae *AtomicError,
 	stats *Stats,
 ) {
+
 	// Now |offsetRecords| contains all locations within the table which must be search (note
 	// that there may be duplicates of a particular location). Sort by offset and scan forward,
 	// grouping sequences of reads into large physical reads.
@@ -312,6 +367,10 @@ func (tr tableReader) getManyAtOffsets(
 	var readStart, readEnd uint64
 
 	for i := 0; i < len(offsetRecords); {
+		if ae.IsSet() {
+			return
+		}
+
 		rec := offsetRecords[i]
 		length := tr.lengths[rec.ordinal]
 
@@ -332,14 +391,24 @@ func (tr tableReader) getManyAtOffsets(
 		}
 
 		wg.Add(1)
-		go tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, wg, stats)
+		go func(batch offsetRecSlice) {
+			defer wg.Done()
+			err := tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, stats)
+			ae.Set(err)
+		}(batch)
 		batch = nil
 	}
 
-	if batch != nil {
-		wg.Add(1)
-		go tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, wg, stats)
-		batch = nil
+	if err := ae.Get(); err == nil {
+		if batch != nil {
+			wg.Add(1)
+			go func(batch offsetRecSlice) {
+				defer wg.Done()
+				err := tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, stats)
+				ae.Set(err)
+			}(batch)
+			batch = nil
+		}
 	}
 }
 
@@ -407,16 +476,19 @@ func canReadAhead(fRec offsetRec, fLength uint32, readStart, readEnd, blockSize 
 }
 
 // Fetches the byte stream of data logically encoded within the table starting at |pos|.
-func (tr tableReader) parseChunk(buff []byte) []byte {
+func (tr tableReader) parseChunk(buff []byte) ([]byte, error) {
 	dataLen := uint64(len(buff)) - checksumSize
 
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])
 	d.Chk.True(chksum == crc(buff[:dataLen]))
 
 	data, err := snappy.Decode(nil, buff[:dataLen])
-	d.Chk.NoError(err)
 
-	return data
+	if err != nil {
+		return nil, errors.New("Decode error. Likely corrupt data.")
+	}
+
+	return data, nil
 }
 
 func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {
@@ -457,7 +529,7 @@ func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, 
 	return
 }
 
-func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) {
+func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) error {
 	// Build reverse lookup table from ordinal -> chunk hash
 	hashes := make(addrSlice, len(tr.prefixes))
 	for idx, prefix := range tr.prefixes {
@@ -466,20 +538,40 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 		li := uint64(ordinal) * addrSuffixSize
 		copy(hashes[ordinal][addrPrefixSize:], tr.suffixes[li:li+addrSuffixSize])
 	}
+
 	chunkLen := tr.offsets[tr.chunkCount-1] + uint64(tr.lengths[tr.chunkCount-1])
 	buff := make([]byte, chunkLen)
 	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(tr.offsets[0]), &Stats{})
-	d.Chk.NoError(err)
-	d.Chk.True(uint64(n) == chunkLen)
 
-	sendChunk := func(i uint32) {
+	if err != nil {
+		return err
+	}
+
+	if uint64(n) != chunkLen {
+		return errors.New("did not read all data")
+	}
+
+	sendChunk := func(i uint32) error {
 		localOffset := tr.offsets[i] - tr.offsets[0]
-		chunks <- extractRecord{a: hashes[i], data: tr.parseChunk(buff[localOffset : localOffset+uint64(tr.lengths[i])])}
+		data, err := tr.parseChunk(buff[localOffset : localOffset+uint64(tr.lengths[i])])
+
+		if err != nil {
+			return err
+		}
+
+		chunks <- extractRecord{a: hashes[i], data: data}
+		return nil
 	}
 
 	for i := uint32(0); i < tr.chunkCount; i++ {
-		sendChunk(i)
+		err = sendChunk(i)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (tr tableReader) reader(ctx context.Context) io.Reader {

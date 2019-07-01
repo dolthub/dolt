@@ -329,20 +329,36 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 	}()
 
 	a := addr(h)
-	data, tables := func() (data []byte, tables chunkReader) {
+	data, tables, err := func() ([]byte, chunkReader, error) {
+		var data []byte
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		if nbs.mt != nil {
-			data = nbs.mt.get(ctx, a, nbs.stats)
+			var err error
+			data, err = nbs.mt.get(ctx, a, nbs.stats)
+
+			if err != nil {
+				return nil, nil, err
+			}
 		}
-		return data, nbs.tables
+		return data, nbs.tables, nil
 	}()
+
+	if err != nil {
+		return chunks.EmptyChunk, err
+	}
 
 	if data != nil {
 		return chunks.NewChunkWithHash(h, data), nil
 	}
 
-	if data := tables.get(ctx, a, nbs.stats); data != nil {
+	data, err = tables.get(ctx, a, nbs.stats)
+
+	if err != nil {
+		return chunks.EmptyChunk, err
+	}
+
+	if data != nil {
 		return chunks.NewChunkWithHash(h, data), nil
 	}
 
@@ -360,6 +376,7 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		}
 	}()
 
+	ae := NewAtomicError()
 	wg := &sync.WaitGroup{}
 
 	tables, remaining := func() (tables chunkReader, remaining bool) {
@@ -368,18 +385,22 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		tables = nbs.tables
 		remaining = true
 		if nbs.mt != nil {
-			remaining = nbs.mt.getMany(ctx, reqs, foundChunks, nil, nbs.stats)
+			remaining = nbs.mt.getMany(ctx, reqs, foundChunks, nil, ae, nbs.stats)
 		}
 
 		return
 	}()
 
+	if err := ae.Get(); err != nil {
+		return err
+	}
+
 	if remaining {
-		tables.getMany(ctx, reqs, foundChunks, wg, nbs.stats)
+		tables.getMany(ctx, reqs, foundChunks, wg, ae, nbs.stats)
 		wg.Wait()
 	}
 
-	return nil
+	return ae.Get()
 }
 
 func toGetRecords(hashes hash.HashSet) []getRecord {
@@ -451,12 +472,34 @@ func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	}()
 
 	a := addr(h)
-	has, tables := func() (bool, chunkReader) {
+	has, tables, err := func() (bool, chunkReader, error) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
-		return nbs.mt != nil && nbs.mt.has(a), nbs.tables
+
+		if nbs.mt != nil {
+			has, err := nbs.mt.has(a)
+
+			if err != nil {
+				return false, nil, err
+			}
+
+			return has, nbs.tables, nil
+		}
+
+		return false, nbs.tables, nil
 	}()
-	has = has || tables.has(a)
+
+	if err != nil {
+		return false, err
+	}
+
+	if !has {
+		has, err = tables.has(a)
+
+		if err != nil {
+			return false, err
+		}
+	}
 
 	return has, nil
 }
@@ -466,21 +509,33 @@ func (nbs *NomsBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 
 	reqs := toHasRecords(hashes)
 
-	tables, remaining := func() (tables chunkReader, remaining bool) {
+	tables, remaining, err := func() (tables chunkReader, remaining bool, err error) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		tables = nbs.tables
 
 		remaining = true
 		if nbs.mt != nil {
-			remaining = nbs.mt.hasMany(reqs)
+			remaining, err = nbs.mt.hasMany(reqs)
+
+			if err != nil {
+				return nil, false, err
+			}
 		}
 
-		return
+		return tables, remaining, nil
 	}()
 
+	if err != nil {
+		return nil, err
+	}
+
 	if remaining {
-		tables.hasMany(reqs)
+		_, err := tables.hasMany(reqs)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if len(hashes) > 0 {

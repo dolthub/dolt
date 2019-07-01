@@ -26,7 +26,9 @@ func TestPlanCompaction(t *testing.T) {
 			totalUnc += uint64(len(chnk))
 		}
 		data, name := buildTable(content)
-		src := chunkSourceAdapter{newTableReader(parseTableIndex(data), tableReaderAtFromBytes(data), fileBlockSize), name}
+		ti, err := parseTableIndex(data)
+		assert.NoError(err)
+		src := chunkSourceAdapter{newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize), name}
 		dataLens = append(dataLens, uint64(len(data))-indexSize(src.count())-footerSize)
 		sources = append(sources, src)
 	}
@@ -39,7 +41,8 @@ func TestPlanCompaction(t *testing.T) {
 		totalChunks += src.count()
 	}
 
-	idx := parseTableIndex(plan.mergedIndex)
+	idx, err := parseTableIndex(plan.mergedIndex)
+	assert.NoError(err)
 
 	assert.Equal(totalChunks, idx.chunkCount)
 	assert.Equal(totalUnc, idx.totalUncompressedData)

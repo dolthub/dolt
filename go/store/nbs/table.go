@@ -201,17 +201,19 @@ func (hs getRecordByPrefix) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 type extractRecord struct {
 	a    addr
 	data []byte
-	err  interface{} // only set when there was a panic during extraction.
+	err  error
 }
 
 type chunkReader interface {
-	has(h addr) bool
-	hasMany(addrs []hasRecord) bool
-	get(ctx context.Context, h addr, stats *Stats) []byte
-	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
+	has(h addr) (bool, error)
+	hasMany(addrs []hasRecord) (bool, error)
+	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
+	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool
+	extract(ctx context.Context, chunks chan<- extractRecord) error
+
+	// TODO: fix panics (need to look at these closer)
 	count() uint32
 	uncompressedLen() uint64
-	extract(ctx context.Context, chunks chan<- extractRecord)
 }
 
 type chunkReadPlanner interface {
@@ -221,6 +223,7 @@ type chunkReadPlanner interface {
 		offsetRecords offsetRecSlice,
 		foundChunks chan *chunks.Chunk,
 		wg *sync.WaitGroup,
+		ae *AtomicError,
 		stats *Stats,
 	) (remaining bool)
 }
