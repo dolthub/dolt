@@ -127,7 +127,7 @@ func getRefElementType(t *types.Type) *types.Type {
 }
 
 func IsCommitType(t *types.Type) bool {
-	return types.IsSubtype(valueCommitType, t)
+	return types.IsSubtype(types.Format_7_18, valueCommitType, t)
 }
 
 func IsCommit(v types.Value) bool {
