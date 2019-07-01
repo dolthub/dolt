@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"testing"
 
@@ -29,7 +28,7 @@ func (ts tableSpecsByAscendingCount) Less(i, j int) bool {
 }
 func (ts tableSpecsByAscendingCount) Swap(i, j int) { ts[i], ts[j] = ts[j], ts[i] }
 
-func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
+func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 	count := uint32(0)
 	nextChunk := func() (chunk []byte) {
 		chunk = make([]byte, 4)
@@ -45,7 +44,7 @@ func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 			mt.addChunk(computeAddr(c), c)
 		}
 		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
-		d.PanicIfError(err)
+		assert.NoError(t, err)
 		srcs = append(srcs, cs)
 	}
 	return
@@ -54,7 +53,7 @@ func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 func TestConjoin(t *testing.T) {
 	// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
 	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
-		for _, src := range makeTestSrcs(tableSizes, p) {
+		for _, src := range makeTestSrcs(t, tableSizes, p) {
 			specs = append(specs, tableSpec{src.hash(), src.count()})
 		}
 		return

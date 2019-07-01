@@ -463,7 +463,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		fm := &fakeManifest{}
 		p := newFakeTablePersister()
 
-		srcs := makeTestSrcs([]uint32{1, 1, 3, 7}, p)
+		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream := toSpecs(srcs)
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
@@ -489,7 +489,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		fm := &fakeManifest{}
 		p := newFakeTablePersister()
 
-		srcs := makeTestSrcs([]uint32{1, 1, 3, 7, 13}, p)
+		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream := toSpecs(srcs)
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
