@@ -2,14 +2,15 @@ package diff
 
 import (
 	"errors"
+	"io"
+	"time"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"time"
 )
 
 const (
@@ -122,7 +123,7 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 				_, inNew := originalNewSch.GetAllCols().GetByTag(tag)
 
 				if inOld && inNew {
-					if !valutil.NilSafeEqCheck(oldVal, newVal) {
+					if !valutil.NilSafeEqCheck(types.Format_7_18, oldVal, newVal) {
 						newColDiffs[col.Name] = DiffModifiedNew
 						oldColDiffs[col.Name] = DiffModifiedOld
 					}

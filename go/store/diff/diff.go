@@ -89,7 +89,7 @@ func Diff(ctx context.Context, v1, v2 types.Value, dChan chan<- Difference, stop
 	}
 
 	d := differ{diffChan: dChan, stopChan: stopChan, leftRight: leftRight, shouldDescend: descFunc}
-	if !v1.Equals(v2) {
+	if !v1.Equals(types.Format_7_18, v2) {
 		if !d.shouldDescend(v1, v2) {
 			d.sendDiff(Difference{Path: nil, ChangeType: types.DiffChangeModified, OldValue: v1, NewValue: v2})
 		} else {

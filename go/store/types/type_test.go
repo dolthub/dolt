@@ -28,14 +28,14 @@ func TestTypes(t *testing.T) {
 	mahRef := vs.WriteValue(context.Background(), mahType).TargetHash()
 	recRef := vs.WriteValue(context.Background(), recType).TargetHash()
 
-	assert.True(mapType.Equals(vs.ReadValue(context.Background(), mRef)))
-	assert.True(setType.Equals(vs.ReadValue(context.Background(), setRef)))
-	assert.True(mahType.Equals(vs.ReadValue(context.Background(), mahRef)))
-	assert.True(recType.Equals(vs.ReadValue(context.Background(), recRef)))
+	assert.True(mapType.Equals(Format_7_18, vs.ReadValue(context.Background(), mRef)))
+	assert.True(setType.Equals(Format_7_18, vs.ReadValue(context.Background(), setRef)))
+	assert.True(mahType.Equals(Format_7_18, vs.ReadValue(context.Background(), mahRef)))
+	assert.True(recType.Equals(Format_7_18, vs.ReadValue(context.Background(), recRef)))
 }
 
 func TestTypeType(t *testing.T) {
-	assert.True(t, TypeOf(BoolType).Equals(TypeType))
+	assert.True(t, TypeOf(BoolType).Equals(Format_7_18, TypeType))
 }
 
 func TestTypeRefDescribe(t *testing.T) {
@@ -86,7 +86,7 @@ func TestFlattenUnionTypes(t *testing.T) {
 	assert.Equal(BoolType, MakeUnionType(BoolType, BoolType))
 	assert.Equal(BoolType, MakeUnionType(BoolType, MakeUnionType()))
 	assert.Equal(BoolType, MakeUnionType(MakeUnionType(), BoolType))
-	assert.True(MakeUnionType(MakeUnionType(), MakeUnionType()).Equals(MakeUnionType()))
+	assert.True(MakeUnionType(MakeUnionType(), MakeUnionType()).Equals(Format_7_18, MakeUnionType()))
 	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(BoolType, FloaTType))
 	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(FloaTType, BoolType))
 	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(BoolType, FloaTType, BoolType))
@@ -174,7 +174,7 @@ func TestStructUnionWithCycles(tt *testing.T) {
 	// TODO(binformat)
 	t2 := DecodeValue(EncodeValue(t1, Format_7_18), nil, Format_7_18)
 
-	assert.True(tt, t1.Equals(t2))
+	assert.True(tt, t1.Equals(Format_7_18, t2))
 	// Note that we cannot ensure pointer equality between t1 and t2 because the
 	// types used to the construct the Unions, while eventually equivalent, are
 	// not identical due to the potentially differing placement of the Cycle type.

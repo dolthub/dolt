@@ -50,7 +50,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 
 	go func() {
 		for i, edit := range se.edits.edits {
-			if i+1 < len(se.edits.edits) && se.edits.edits[i+1].value.Equals(edit.value) {
+			if i+1 < len(se.edits.edits) && se.edits.edits[i+1].value.Equals(se.s.format, edit.value) {
 				continue // next edit supercedes this one
 			}
 
@@ -78,7 +78,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		exists := false
 		if cur.idx < cur.seq.seqLen() {
 			v := cur.current().(Value)
-			if v.Equals(edit.value) {
+			if v.Equals(se.s.format, edit.value) {
 				exists = true
 			}
 		}
@@ -144,7 +144,7 @@ func (se *SetEditor) edit(v Value, insert bool) {
 	}
 
 	final := se.edits.edits[len(se.edits.edits)-1]
-	if final.value.Equals(v) {
+	if final.value.Equals(se.s.format, v) {
 		se.edits.edits[len(se.edits.edits)-1] = setEdit{v, insert}
 		return // update the last edit
 	}
@@ -172,12 +172,12 @@ func (se *SetEditor) findEdit(v Value) (idx int, found bool) {
 		return
 	}
 
-	if !se.edits.edits[idx].value.Equals(v) {
+	if !se.edits.edits[idx].value.Equals(se.s.format, v) {
 		return
 	}
 
 	// advance to final edit position where kv.key == k
-	for idx < len(se.edits.edits) && se.edits.edits[idx].value.Equals(v) {
+	for idx < len(se.edits.edits) && se.edits.edits[idx].value.Equals(se.s.format, v) {
 		idx++
 	}
 	idx--

@@ -42,7 +42,7 @@ type Value interface {
 	LesserValuable
 
 	// Equals determines if two different Noms values represents the same underlying value.
-	Equals(other Value) bool
+	Equals(format *Format, other Value) bool
 
 	// Hash is the hash of the value. All Noms values have a unique hash and if two values have the
 	// same hash they must be equal.
@@ -79,7 +79,7 @@ func (vs ValueSlice) Equals(other ValueSlice) bool {
 	}
 
 	for i, v := range vs {
-		if !v.Equals(other[i]) {
+		if !v.Equals(Format_7_18, other[i]) {
 			return false
 		}
 	}
@@ -89,7 +89,7 @@ func (vs ValueSlice) Equals(other ValueSlice) bool {
 
 func (vs ValueSlice) Contains(v Value) bool {
 	for _, v := range vs {
-		if v.Equals(v) {
+		if v.Equals(Format_7_18, v) {
 			return true
 		}
 	}
@@ -139,7 +139,7 @@ func (v valueImpl) asValueImpl() valueImpl {
 	return v
 }
 
-func (v valueImpl) Equals(other Value) bool {
+func (v valueImpl) Equals(format *Format, other Value) bool {
 	if otherValueImpl, ok := other.(asValueImpl); ok {
 		return bytes.Equal(v.buff, otherValueImpl.asValueImpl().buff)
 	}

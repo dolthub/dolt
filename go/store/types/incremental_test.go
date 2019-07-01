@@ -56,7 +56,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	chunkReads := make([]int, expected.Len())
 	for i := uint64(0); i < expected.Len(); i++ {
 		v := actual.Get(context.Background(), i)
-		assert.True(expected.Get(context.Background(), i).Equals(v))
+		assert.True(expected.Get(context.Background(), i).Equals(Format_7_18, v))
 
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
@@ -125,15 +125,15 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	actualVar := vs.ReadValue(context.Background(), ref.TargetHash())
 
 	assert.Equal(1, cs.Reads)
-	assert.True(expected.Equals(actualVar))
+	assert.True(expected.Equals(Format_7_18, actualVar))
 
 	actual := actualVar.(List)
 	actualItem := actual.Get(context.Background(), 0)
 	assert.Equal(2, cs.Reads)
-	assert.True(expectedItem.Equals(actualItem))
+	assert.True(expectedItem.Equals(Format_7_18, actualItem))
 
 	// do it again to make sure caching works.
 	actualItem = actual.Get(context.Background(), 0)
 	assert.Equal(2, cs.Reads)
-	assert.True(expectedItem.Equals(actualItem))
+	assert.True(expectedItem.Equals(Format_7_18, actualItem))
 }

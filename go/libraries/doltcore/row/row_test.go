@@ -15,7 +15,7 @@ func TestGetFieldByName(t *testing.T) {
 
 	if !ok {
 		t.Error("Expected to find value")
-	} else if !val.Equals(lnVal) {
+	} else if !val.Equals(types.Format_7_18, lnVal) {
 		t.Error("Unexpected value")
 	}
 
@@ -34,13 +34,13 @@ func TestGetFieldByNameWithDefault(t *testing.T) {
 
 	val := GetFieldByNameWithDefault(lnColName, defVal, r, sch)
 
-	if !val.Equals(lnVal) {
+	if !val.Equals(types.Format_7_18, lnVal) {
 		t.Error("expected:", lnVal, "actual", val)
 	}
 
 	val = GetFieldByNameWithDefault(reservedColName, defVal, r, sch)
 
-	if !val.Equals(defVal) {
+	if !val.Equals(types.Format_7_18, defVal) {
 		t.Error("expected:", defVal, "actual", val)
 	}
 }

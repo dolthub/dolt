@@ -18,7 +18,7 @@ func (b Bool) Value(ctx context.Context) Value {
 	return b
 }
 
-func (b Bool) Equals(other Value) bool {
+func (b Bool) Equals(format *Format, other Value) bool {
 	return b == other
 }
 

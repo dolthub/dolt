@@ -103,7 +103,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 func structFieldEqual(old, now types.Struct, field string) bool {
 	oldValue, oldOk := old.MaybeGet(field)
 	nowValue, nowOk := now.MaybeGet(field)
-	return oldOk && nowOk && nowValue.Equals(oldValue)
+	return oldOk && nowOk && nowValue.Equals(types.Format_7_18, oldValue)
 }
 
 func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
@@ -161,10 +161,10 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	metaNew := sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
 
-	s.False(metaOld.Equals(metaNew), "meta didn't change")
+	s.False(metaOld.Equals(types.Format_7_18, metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "message"), "message didn't change")
-	s.True(metaNew.Get("message").Equals(types.String("foo")), "message wasn't set")
+	s.True(metaNew.Get("message").Equals(types.Format_7_18, types.String("foo")), "message wasn't set")
 
 	metaOld = metaNew
 
@@ -177,10 +177,10 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	metaNew = sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
 
-	s.False(metaOld.Equals(metaNew), "meta didn't change")
+	s.False(metaOld.Equals(types.Format_7_18, metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "message"), "message didn't change")
-	s.True(metaNew.Get("message").Equals(types.String("bar")), "message wasn't set")
+	s.True(metaNew.Get("message").Equals(types.Format_7_18, types.String("bar")), "message wasn't set")
 }
 
 func (s *nomsCommitTestSuite) TestNomsCommitHashNotFound() {

@@ -30,7 +30,7 @@ func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
 
 				otherVal := otherTVs[i]
 
-				if !val.Equals(otherVal) {
+				if !val.Equals(types.Format_7_18, otherVal) {
 					return val.Less(f, otherVal)
 				}
 			}

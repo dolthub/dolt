@@ -73,7 +73,7 @@ func readSetInput(ctx context.Context, f *Format, vrw ValueReadWriter, vChan <-c
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
 func (s Set) Diff(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if s.Equals(last) {
+	if s.Equals(s.format, last) {
 		return
 	}
 	orderedSequenceDiffTopDown(ctx, s.format, last.orderedSequence, s.orderedSequence, changes, closeChan)
@@ -82,7 +82,7 @@ func (s Set) Diff(ctx context.Context, last Set, changes chan<- ValueChanged, cl
 // DiffHybrid computes the diff from |last| to |s| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
 func (s Set) DiffHybrid(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if s.Equals(last) {
+	if s.Equals(s.format, last) {
 		return
 	}
 	orderedSequenceDiffBest(ctx, s.format, last.orderedSequence, s.orderedSequence, changes, closeChan)
@@ -92,7 +92,7 @@ func (s Set) DiffHybrid(ctx context.Context, last Set, changes chan<- ValueChang
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
 func (s Set) DiffLeftRight(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if s.Equals(last) {
+	if s.Equals(s.format, last) {
 		return
 	}
 	orderedSequenceDiffLeftRight(ctx, s.format, last.orderedSequence, s.orderedSequence, changes, closeChan)
@@ -132,7 +132,7 @@ func (s Set) At(ctx context.Context, idx uint64) Value {
 
 func (s Set) Has(ctx context.Context, v Value) bool {
 	cur := newCursorAtValue(ctx, s.format, s.orderedSequence, v, false, false)
-	return cur.valid() && cur.current().(Value).Equals(v)
+	return cur.valid() && cur.current().(Value).Equals(s.format, v)
 }
 
 type setIterCallback func(v Value) bool
@@ -184,7 +184,7 @@ func buildSetData(values ValueSlice) ValueSlice {
 	last := values[0]
 	for i := 1; i < len(values); i++ {
 		v := values[i]
-		if !v.Equals(last) {
+		if !v.Equals(Format_7_18, last) {
 			uniqueSorted = append(uniqueSorted, last)
 		}
 		last = v

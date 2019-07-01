@@ -82,7 +82,7 @@ func parseWhere(sch schema.Schema, whereClause string) (filterFn, error) {
 				return false
 			}
 
-			return val.Equals(rowVal)
+			return val.Equals(types.Format_7_18, rowVal)
 		}, nil
 	}
 }

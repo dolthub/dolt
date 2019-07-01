@@ -501,5 +501,5 @@ func TestExternalProtocol(t *testing.T) {
 	ds, err = ds.Database().CommitValue(context.Background(), ds, types.String("hi!"))
 	d.PanicIfError(err)
 
-	assert.True(types.String("hi!").Equals(ds.HeadValue()))
+	assert.True(types.String("hi!").Equals(types.Format_7_18, ds.HeadValue()))
 }

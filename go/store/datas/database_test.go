@@ -110,7 +110,7 @@ func (suite *DatabaseSuite) TestRebase() {
 	b := types.String("b")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
 	suite.NoError(err)
-	suite.True(ds1.HeadValue().Equals(b))
+	suite.True(ds1.HeadValue().Equals(types.Format_7_18, b))
 
 	interloper := suite.makeDb(suite.storage.NewView())
 	defer interloper.Close()
@@ -120,13 +120,13 @@ func (suite *DatabaseSuite) TestRebase() {
 	e := types.String("e")
 	iDS, concErr := interloper.CommitValue(context.Background(), interloper.GetDataset(context.Background(), datasetID), e)
 	suite.NoError(concErr)
-	suite.True(iDS.HeadValue().Equals(e))
+	suite.True(iDS.HeadValue().Equals(types.Format_7_18, e))
 
 	// suite.ds shouldn't see the above change yet
-	suite.True(suite.db.GetDataset(context.Background(), datasetID).HeadValue().Equals(b))
+	suite.True(suite.db.GetDataset(context.Background(), datasetID).HeadValue().Equals(types.Format_7_18, b))
 
 	suite.db.Rebase(context.Background())
-	suite.True(suite.db.GetDataset(context.Background(), datasetID).HeadValue().Equals(e))
+	suite.True(suite.db.GetDataset(context.Background(), datasetID).HeadValue().Equals(types.Format_7_18, e))
 
 	cs := suite.storage.NewView()
 	noChangeDB := suite.makeDb(cs)
@@ -156,8 +156,8 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 
 	suite.EqualValues(ds1HeadVal, ds1.HeadValue())
 	suite.EqualValues(ds2HeadVal, ds2.HeadValue())
-	suite.False(ds2.HeadValue().Equals(ds1HeadVal))
-	suite.False(ds1.HeadValue().Equals(ds2HeadVal))
+	suite.False(ds2.HeadValue().Equals(types.Format_7_18, ds1HeadVal))
+	suite.False(ds1.HeadValue().Equals(types.Format_7_18, ds2HeadVal))
 }
 
 func (suite *DatabaseSuite) TestDatabaseCommit() {
@@ -172,12 +172,12 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 
 	// ds2 matches the Datasets Map in suite.db
-	suite.True(ds2.HeadRef().Equals(suite.db.GetDataset(context.Background(), datasetID).HeadRef()))
+	suite.True(ds2.HeadRef().Equals(types.Format_7_18, suite.db.GetDataset(context.Background(), datasetID).HeadRef()))
 
 	// ds2 has |a| at its head
 	h, ok := ds2.MaybeHeadValue()
 	suite.True(ok)
-	suite.True(h.Equals(a))
+	suite.True(h.Equals(types.Format_7_18, a))
 	suite.Equal(uint64(1), ds2.HeadRef().Height())
 
 	ds = ds2
@@ -187,7 +187,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	b := types.String("b")
 	ds, err = suite.db.CommitValue(context.Background(), ds, b)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(b))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, b))
 	suite.Equal(uint64(2), ds.HeadRef().Height())
 
 	// |a| <- |b|
@@ -196,20 +196,20 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	c := types.String("c")
 	ds, err = suite.db.Commit(context.Background(), ds, c, newOpts(suite.db, aCommitRef))
 	suite.Error(err)
-	suite.True(ds.HeadValue().Equals(b))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, b))
 
 	// |a| <- |b| <- |d|
 	d := types.String("d")
 	ds, err = suite.db.CommitValue(context.Background(), ds, d)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(d))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, d))
 	suite.Equal(uint64(3), ds.HeadRef().Height())
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
 	ds, err = suite.db.Commit(context.Background(), ds, b, newOpts(suite.db, aCommitRef))
 	suite.Error(err)
-	suite.True(ds.HeadValue().Equals(d))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, d))
 
 	// Add a commit to a different datasetId
 	_, err = suite.db.CommitValue(context.Background(), suite.db.GetDataset(context.Background(), "otherDS"), a)
@@ -320,12 +320,12 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 
 	theirs, err := suite.db.Commit(context.Background(), ds1, newV, newOptsWithMerge(suite.db, merge.Theirs, ds1First.HeadRef()))
 	suite.NoError(err)
-	suite.True(types.Bool(true).Equals(theirs.HeadValue().(types.Map).Get(context.Background(), types.String("Friends"))))
+	suite.True(types.Bool(true).Equals(types.Format_7_18, theirs.HeadValue().(types.Map).Get(context.Background(), types.String("Friends"))))
 
 	newV = v.Edit().Set(types.String("Friends"), types.Float(47)).Map(context.Background())
 	ours, err := suite.db.Commit(context.Background(), ds1First, newV, newOptsWithMerge(suite.db, merge.Ours, ds1First.HeadRef()))
 	suite.NoError(err)
-	suite.True(types.Float(47).Equals(ours.HeadValue().(types.Map).Get(context.Background(), types.String("Friends"))))
+	suite.True(types.Float(47).Equals(types.Format_7_18, ours.HeadValue().(types.Map).Get(context.Background(), types.String("Friends"))))
 }
 
 func newOptsWithMerge(vrw types.ValueReadWriter, policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
@@ -343,17 +343,17 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	a := types.String("a")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, a)
 	suite.NoError(err)
-	suite.True(ds1.HeadValue().Equals(a))
+	suite.True(ds1.HeadValue().Equals(types.Format_7_18, a))
 
 	// ds1: |a|, ds2: |b|
 	b := types.String("b")
 	ds2, err = suite.db.CommitValue(context.Background(), ds2, b)
 	suite.NoError(err)
-	suite.True(ds2.HeadValue().Equals(b))
+	suite.True(ds2.HeadValue().Equals(types.Format_7_18, b))
 
 	ds1, err = suite.db.Delete(context.Background(), ds1)
 	suite.NoError(err)
-	suite.True(suite.db.GetDataset(context.Background(), datasetID2).HeadValue().Equals(b))
+	suite.True(suite.db.GetDataset(context.Background(), datasetID2).HeadValue().Equals(types.Format_7_18, b))
 	_, present := suite.db.GetDataset(context.Background(), datasetID1).MaybeHead()
 	suite.False(present, "Dataset %s should not be present", datasetID1)
 
@@ -377,7 +377,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	b := types.String("b")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
 	suite.NoError(err)
-	suite.True(ds1.HeadValue().Equals(b))
+	suite.True(ds1.HeadValue().Equals(types.Format_7_18, b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
 	interloper := suite.makeDb(suite.storage.NewView())
@@ -389,13 +389,13 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	stf := types.String("stuff")
 	ds2, concErr := interloper.CommitValue(context.Background(), interloper.GetDataset(context.Background(), "ds2"), stf)
 	suite.NoError(concErr)
-	suite.True(ds2.HeadValue().Equals(stf))
+	suite.True(ds2.HeadValue().Equals(types.Format_7_18, stf))
 
 	// Change ds1 via suite.db, which should proceed without a problem
 	c := types.String("c")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, c)
 	suite.NoError(err)
-	suite.True(ds1.HeadValue().Equals(c))
+	suite.True(ds1.HeadValue().Equals(types.Format_7_18, c))
 
 	// Change ds1 behind suite.db's back. Will block changes to ds1 below.
 	// ds1: |a| <- |b| <- |c| <- |e|
@@ -403,14 +403,14 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	interloper.Rebase(context.Background())
 	iDS, concErr := interloper.CommitValue(context.Background(), interloper.GetDataset(context.Background(), "ds1"), e)
 	suite.NoError(concErr)
-	suite.True(iDS.HeadValue().Equals(e))
+	suite.True(iDS.HeadValue().Equals(types.Format_7_18, e))
 
 	// Attempted Concurrent change, which should fail due to the above
 	nope := types.String("nope")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, nope)
 	suite.Error(err)
 	v := ds1.HeadValue()
-	suite.True(v.Equals(e), "%s", v.(types.String))
+	suite.True(v.Equals(types.Format_7_18, e), "%s", v.(types.String))
 }
 
 func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
@@ -424,7 +424,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	b := types.String("b")
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
 	suite.NoError(err)
-	suite.True(ds1.HeadValue().Equals(b))
+	suite.True(ds1.HeadValue().Equals(types.Format_7_18, b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
 	interloper := suite.makeDb(suite.storage.NewView())
@@ -435,12 +435,12 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	e := types.String("e")
 	iDS, concErr := interloper.CommitValue(context.Background(), interloper.GetDataset(context.Background(), datasetID), e)
 	suite.NoError(concErr)
-	suite.True(iDS.HeadValue().Equals(e))
+	suite.True(iDS.HeadValue().Equals(types.Format_7_18, e))
 
 	// Attempt to delete ds1 via suite.db, which should fail due to the above
 	ds1, err = suite.db.Delete(context.Background(), ds1)
 	suite.Error(err)
-	suite.True(ds1.HeadValue().Equals(e))
+	suite.True(ds1.HeadValue().Equals(types.Format_7_18, e))
 
 	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
 	// ds1: |a| <- |b| <- |e|
@@ -448,7 +448,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	stf := types.String("stuff")
 	iDS, concErr = interloper.CommitValue(context.Background(), suite.db.GetDataset(context.Background(), "other"), stf)
 	suite.NoError(concErr)
-	suite.True(iDS.HeadValue().Equals(stf))
+	suite.True(iDS.HeadValue().Equals(types.Format_7_18, stf))
 
 	// Attempted concurrent delete, which should proceed without a problem
 	ds1, err = suite.db.Delete(context.Background(), ds1)
@@ -471,16 +471,16 @@ func (suite *DatabaseSuite) TestSetHead() {
 	b := types.String("b")
 	ds, err = suite.db.CommitValue(context.Background(), ds, b)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(b))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, b))
 	bCommitRef := ds.HeadRef() // To use in FF SetHead() below.
 
 	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(a))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, a))
 
 	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(b))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, b))
 }
 
 func (suite *DatabaseSuite) TestFastForward() {
@@ -497,28 +497,28 @@ func (suite *DatabaseSuite) TestFastForward() {
 	b := types.String("b")
 	ds, err = suite.db.CommitValue(context.Background(), ds, b)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(b))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, b))
 
 	c := types.String("c")
 	ds, err = suite.db.CommitValue(context.Background(), ds, c)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(c))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, c))
 	cCommitRef := ds.HeadRef() // To use in FastForward() below.
 
 	// FastForward should disallow this, as |a| is not a descendant of |c|
 	ds, err = suite.db.FastForward(context.Background(), ds, aCommitRef)
 	suite.Error(err)
-	suite.True(ds.HeadValue().Equals(c))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, c))
 
 	// Move Head back to something earlier in the lineage, so we can test FastForward
 	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(a))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, a))
 
 	// This should succeed, because while |a| is not a direct parent of |c|, it is an ancestor.
 	ds, err = suite.db.FastForward(context.Background(), ds, cCommitRef)
 	suite.NoError(err)
-	suite.True(ds.HeadValue().Equals(c))
+	suite.True(ds.HeadValue().Equals(types.Format_7_18, c))
 }
 
 func (suite *DatabaseSuite) TestDatabaseHeightOfRefs() {

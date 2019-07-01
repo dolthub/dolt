@@ -62,14 +62,14 @@ func TestPutRow(t *testing.T) {
 			for i, v := range expectedFieldVals {
 				val, fld := row.GetColVal(i)
 
-				if !val.Equals(v) {
+				if !val.Equals(types.Format_7_18, v) {
 					t.Error("Unexpected value for", fld, "expected:", v, "actual:", val)
 				}
 			}
 
 			titleVal, _ := row.GetColVal(dtestutils.TitleTag)
 
-			if !titleVal.Equals(types.String(test.expectedTitle)) {
+			if !titleVal.Equals(types.Format_7_18, types.String(test.expectedTitle)) {
 				t.Error("Value of title was not the expected value. expected", test.expectedTitle, "actual", titleVal)
 			}
 		}

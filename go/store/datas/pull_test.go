@@ -159,7 +159,7 @@ func (suite *PullSuite) TestPullEverything() {
 
 	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
-	suite.True(l.Equals(v.Get(ValueField)))
+	suite.True(l.Equals(types.Format_7_18, v.Get(ValueField)))
 }
 
 // Source: -6-> C3(L5) -1-> N
@@ -202,7 +202,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(v.Get(ValueField)))
+	suite.True(srcL.Equals(types.Format_7_18, v.Get(ValueField)))
 }
 
 // Source: -6-> C2(L5) -1-> N
@@ -248,7 +248,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 
 	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(v.Get(ValueField)))
+	suite.True(srcL.Equals(types.Format_7_18, v.Get(ValueField)))
 }
 
 // Source: -6-> C2(L4) -1-> N
@@ -290,7 +290,7 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(v.Get(ValueField)))
+	suite.True(srcL.Equals(types.Format_7_18, v.Get(ValueField)))
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p types.Set) types.Ref {

@@ -1,6 +1,9 @@
 package sqltestutil
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -8,8 +11,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"reflect"
-	"testing"
 )
 
 // This file collects useful test table definitions and functions for SQL tests to use. It primarily defines a table
@@ -193,7 +194,7 @@ func FindRowIndex(find row.Row, rows []row.Row) int {
 	for i, updatedRow := range rows {
 		rowId, _ := find.GetColVal(IdTag)
 		updatedId, _ := updatedRow.GetColVal(IdTag)
-		if rowId.Equals(updatedId) {
+		if rowId.Equals(types.Format_7_18, updatedId) {
 			idx = i
 			break
 		}

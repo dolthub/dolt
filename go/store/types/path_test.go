@@ -34,7 +34,7 @@ func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str st
 	} else if actual == nil {
 		assert.Fail("", "Expected %s, but got nil", EncodedValue(context.Background(), expect))
 	} else {
-		assert.True(expect.Equals(actual), "Expected %s, but got %s", EncodedValue(context.Background(), expect), EncodedValue(context.Background(), actual))
+		assert.True(expect.Equals(Format_7_18, actual), "Expected %s, but got %s", EncodedValue(context.Background(), expect), EncodedValue(context.Background(), actual))
 	}
 }
 

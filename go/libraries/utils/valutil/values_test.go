@@ -19,7 +19,7 @@ func TestNilSafeEqCheck(t *testing.T) {
 	}
 
 	for i, test := range tests {
-		actual := NilSafeEqCheck(test.v1, test.v2)
+		actual := NilSafeEqCheck(types.Format_7_18, test.v1, test.v2)
 
 		if actual != test.expectedEq {
 			t.Error("test", i, "failed")

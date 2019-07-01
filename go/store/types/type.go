@@ -43,7 +43,7 @@ func (t *Type) Value(ctx context.Context) Value {
 	return t
 }
 
-func (t *Type) Equals(other Value) (res bool) {
+func (t *Type) Equals(format *Format, other Value) (res bool) {
 	// This is highly optimized to not having to encode a *Type unless we have too.
 	if t == other {
 		return true

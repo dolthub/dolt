@@ -36,7 +36,7 @@ func assertAll(tt *testing.T, t *Type, v Value) {
 	}
 
 	for _, at := range allTypes {
-		if at == ValueType || t.Equals(at) {
+		if at == ValueType || t.Equals(Format_7_18, at) {
 			assertSubtype(context.Background(), Format_7_18, at, v)
 		} else {
 			assertInvalid(tt, at, v)
@@ -425,7 +425,7 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 		t2 := makeTestStructTypeFromFieldNames(t2s)
 		assert.Equal(exp1, IsSubtype(t1, t2))
 		assert.Equal(exp2, IsSubtype(t2, t1))
-		assert.False(t1.Equals(t2))
+		assert.False(t1.Equals(Format_7_18, t2))
 	}
 
 	test("n?", "n", true, false)
@@ -504,7 +504,7 @@ func TestIsSubtypeDisallowExtraStructFields(tt *testing.T) {
 		t2 := makeTestStructTypeFromFieldNames(t2s)
 		assert.Equal(exp1, IsSubtypeDisallowExtraStructFields(t1, t2))
 		assert.Equal(exp2, IsSubtypeDisallowExtraStructFields(t2, t1))
-		assert.False(t1.Equals(t2))
+		assert.False(t1.Equals(Format_7_18, t2))
 	}
 
 	test("n?", "n", true, false)

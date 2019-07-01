@@ -412,7 +412,7 @@ func (es emptySequence) Hash(f *Format) hash.Hash {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Equals(other Value) bool {
+func (es emptySequence) Equals(format *Format, other Value) bool {
 	panic("empty sequence")
 }
 
