@@ -24,7 +24,7 @@ func newSet(f *Format, seq orderedSequence) Set {
 }
 
 func NewSet(ctx context.Context, f *Format, vrw ValueReadWriter, v ...Value) Set {
-	data := buildSetData(v)
+	data := buildSetData(f, v)
 	ch := newEmptySetSequenceChunker(ctx, f, vrw)
 
 	for _, v := range data {
@@ -174,7 +174,7 @@ func (s Set) Edit() *SetEditor {
 	return NewSetEditor(s)
 }
 
-func buildSetData(values ValueSlice) ValueSlice {
+func buildSetData(f *Format, values ValueSlice) ValueSlice {
 	if len(values) == 0 {
 		return ValueSlice{}
 	}
@@ -184,7 +184,7 @@ func buildSetData(values ValueSlice) ValueSlice {
 	last := values[0]
 	for i := 1; i < len(values); i++ {
 		v := values[i]
-		if !v.Equals(Format_7_18, last) {
+		if !v.Equals(f, last) {
 			uniqueSorted = append(uniqueSorted, last)
 		}
 		last = v

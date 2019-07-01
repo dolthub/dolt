@@ -235,7 +235,7 @@ func (l List) Diff(ctx context.Context, last List, changes chan<- Splice, closeC
 // The maxSpliceMatrixSize determines the how big of an edit distance matrix we are willing to
 // compute versus just saying the thing changed.
 func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) {
-	if l.Equals(Format_7_18, last) {
+	if l.Equals(l.format, last) {
 		return
 	}
 	lLen, lastLen := l.Len(), last.Len()
