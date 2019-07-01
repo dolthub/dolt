@@ -65,11 +65,11 @@ func (t *Type) Hash(f *Format) hash.Hash {
 
 func (t *Type) writeTo(w nomsWriter, f *Format) {
 	TypeKind.writeTo(w, f)
-	t.writeToAsType(w, map[string]*Type{})
+	t.writeToAsType(w, map[string]*Type{}, f)
 }
 
-func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type) {
-	t.Desc.writeTo(w, Format_7_18, t, seensStructs)
+func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type, f *Format) {
+	t.Desc.writeTo(w, f, t, seensStructs)
 }
 
 func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
