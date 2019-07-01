@@ -39,7 +39,7 @@ func (v Float) Hash(f *Format) hash.Hash {
 func (v Float) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (v Float) WalkRefs(cb RefCallback) {
+func (v Float) WalkRefs(f *Format, cb RefCallback) {
 }
 
 func (v Float) typeOf() *Type {

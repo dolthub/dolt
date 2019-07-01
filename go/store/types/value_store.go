@@ -232,7 +232,7 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) Ref {
 	c := EncodeValue(v, Format_7_18)
 	d.PanicIfTrue(c.IsEmpty())
 	h := c.Hash()
-	height := maxChunkHeight(v) + 1
+	height := maxChunkHeight(Format_7_18, v) + 1
 	r := constructRef(Format_7_18, h, TypeOf(v), height)
 	lvs.bufferChunk(ctx, v, c, height)
 	return r
@@ -304,7 +304,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 	// Enforce invariant (1)
 	if height > 1 {
 		var err error
-		v.WalkRefs(func(childRef Ref) {
+		v.WalkRefs(Format_7_18, func(childRef Ref) {
 			if err != nil {
 				// as soon as an error occurs ignore the rest of the refs
 				return

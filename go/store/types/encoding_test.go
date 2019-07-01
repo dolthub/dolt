@@ -620,7 +620,7 @@ func (bg bogusType) Equals(f *Format, other Value) bool               { return f
 func (bg bogusType) Less(f *Format, other LesserValuable) bool        { return false }
 func (bg bogusType) Hash(*Format) hash.Hash                           { return hash.Hash{} }
 func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) {}
-func (bg bogusType) WalkRefs(cb RefCallback)                          {}
+func (bg bogusType) WalkRefs(f *Format, cb RefCallback)               {}
 func (bg bogusType) Kind() NomsKind {
 	return CycleKind
 }

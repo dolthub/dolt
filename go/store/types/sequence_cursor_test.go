@@ -93,7 +93,7 @@ func (ts testSequence) WalkValues(cb ValueCallback) {
 	panic("not reached")
 }
 
-func (ts testSequence) WalkRefs(cb RefCallback) {
+func (ts testSequence) WalkRefs(f *Format, cb RefCallback) {
 	panic("not reached")
 }
 

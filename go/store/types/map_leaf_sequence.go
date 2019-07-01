@@ -89,7 +89,7 @@ func (ml mapLeafSequence) getItem(idx int, f *Format) sequenceItem {
 	return readMapEntry(&dec, f)
 }
 
-func (ml mapLeafSequence) WalkRefs(cb RefCallback) {
+func (ml mapLeafSequence) WalkRefs(f *Format, cb RefCallback) {
 	walkRefs(ml.valueBytes(ml.f), ml.f, cb)
 }
 
