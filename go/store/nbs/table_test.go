@@ -384,7 +384,7 @@ func TestEmpty(t *testing.T) {
 	buff := make([]byte, footerSize)
 	tw := newTableWriter(buff, nil)
 	length, _ := tw.finish()
-	assert.Equal(length, footerSize)
+	assert.True(length == footerSize)
 
 	d.PanicIfError(nil)
 }
