@@ -2,9 +2,9 @@ package commands
 
 import (
 	"fmt"
-	"os/exec"
 
 	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/config"
+	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/doltops"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/utils"
 )
 
@@ -16,17 +16,10 @@ func Fetch(ptrFname string) error {
 		return err
 	}
 
-	if _, err := exec.Command("dolt", "clone", config.Remote).Output(); err != nil {
-		return fmt.Errorf("error cloning remote repository at %s: %v", config.Remote, err)
+	if err := doltops.CloneToRevision(config.Remote, config.Revision); err != nil {
+		return err
 	}
 
-	dirname := utils.LastSegment(config.Remote)
-	checkoutCmd := exec.Command("dolt", "checkout", "-b", "git-dolt-pinned", config.Revision)
-	checkoutCmd.Dir = dirname
-	if _, err := checkoutCmd.Output(); err != nil {
-		return fmt.Errorf("error checking out revision %s in directory %s: %v", config.Revision, dirname, err)
-	}
-
-	fmt.Printf("Dolt repository cloned from remote %s to directory %s at revision %s\n", config.Remote, dirname, config.Revision)
+	fmt.Printf("Dolt repository cloned from remote %s to directory %s at revision %s\n", config.Remote, utils.LastSegment(config.Remote), config.Revision)
 	return nil
 }
