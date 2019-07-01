@@ -46,7 +46,7 @@ func skipStruct(f *Format, dec *valueDecoder) {
 	}
 }
 
-func isStructSameTypeForSure(dec *valueDecoder, t *Type) bool {
+func isStructSameTypeForSure(format *Format, dec *valueDecoder, t *Type) bool {
 	desc := t.Desc.(StructDesc)
 	dec.skipKind()
 	if !dec.isStringSame(desc.Name) {
@@ -64,7 +64,7 @@ func isStructSameTypeForSure(dec *valueDecoder, t *Type) bool {
 			return false
 		}
 
-		if !dec.isValueSameTypeForSure(desc.fields[i].Type) {
+		if !dec.isValueSameTypeForSure(format, desc.fields[i].Type) {
 			return false
 		}
 	}
@@ -168,10 +168,10 @@ func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) {
 
 func (s Struct) typeOf() *Type {
 	dec := s.decoder()
-	return readStructTypeOfValue(&dec)
+	return readStructTypeOfValue(s.format, &dec)
 }
 
-func readStructTypeOfValue(dec *valueDecoder) *Type {
+func readStructTypeOfValue(format *Format, dec *valueDecoder) *Type {
 	dec.skipKind()
 	name := dec.readString()
 	count := dec.readCount()
@@ -180,7 +180,7 @@ func readStructTypeOfValue(dec *valueDecoder) *Type {
 		typeFields[i] = StructField{
 			Name:     dec.readString(),
 			Optional: false,
-			Type:     dec.readTypeOfValue(),
+			Type:     dec.readTypeOfValue(format),
 		}
 	}
 	return makeStructTypeQuickly(name, typeFields)

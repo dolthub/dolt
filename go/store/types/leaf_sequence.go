@@ -13,10 +13,11 @@ import (
 
 type leafSequence struct {
 	sequenceImpl
+	format *Format
 }
 
-func newLeafSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) leafSequence {
-	return leafSequence{newSequenceImpl(vrw, buff, offsets, len)}
+func newLeafSequence(format *Format, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) leafSequence {
+	return leafSequence{newSequenceImpl(vrw, buff, offsets, len), format}
 }
 
 func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *Format, vs ...Value) leafSequence {
@@ -35,7 +36,7 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *Format, vs
 		v.writeTo(&w, f)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return newLeafSequence(vrw, w.data(), offsets, count)
+	return newLeafSequence(f, vrw, w.data(), offsets, count)
 }
 
 func (seq leafSequence) values(f *Format) []Value {
@@ -80,13 +81,13 @@ func (seq leafSequence) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(lastType) {
+			if dec.isValueSameTypeForSure(seq.format, lastType) {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue()
+		lastType = dec.readTypeOfValue(seq.format)
 		ts = append(ts, lastType)
 	}
 

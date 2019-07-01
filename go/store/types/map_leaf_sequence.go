@@ -75,7 +75,7 @@ func newMapLeafSequence(f *Format, vrw ValueReadWriter, data ...mapEntry) ordere
 		me.writeTo(&w, f)
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count), f}
+	return mapLeafSequence{newLeafSequence(f, vrw, w.data(), offsets, count), f}
 }
 
 func (ml mapLeafSequence) writeTo(w nomsWriter, f *Format) {
@@ -131,16 +131,16 @@ func (ml mapLeafSequence) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastKeyType != nil && lastValueType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(lastKeyType) && dec.isValueSameTypeForSure(lastValueType) {
+			if dec.isValueSameTypeForSure(ml.format, lastKeyType) && dec.isValueSameTypeForSure(ml.format, lastValueType) {
 				continue
 			}
 			dec.offset = offset
 
 		}
 
-		lastKeyType = dec.readTypeOfValue()
+		lastKeyType = dec.readTypeOfValue(ml.format)
 		kts = append(kts, lastKeyType)
-		lastValueType = dec.readTypeOfValue()
+		lastValueType = dec.readTypeOfValue(ml.format)
 		vts = append(vts, lastValueType)
 	}
 

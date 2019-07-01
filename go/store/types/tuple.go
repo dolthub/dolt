@@ -113,13 +113,13 @@ func (t Tuple) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(lastType) {
+			if dec.isValueSameTypeForSure(t.format, lastType) {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue()
+		lastType = dec.readTypeOfValue(t.format)
 		ts = append(ts, lastType)
 	}
 
