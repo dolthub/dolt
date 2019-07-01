@@ -112,7 +112,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 }
 
 func (se *SetEditor) Insert(vs ...Value) *SetEditor {
-	sort.Stable(ValueSlice(vs))
+	sort.Stable(ValueSort{vs, se.s.format})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		se.edit(v, true)
@@ -121,7 +121,7 @@ func (se *SetEditor) Insert(vs ...Value) *SetEditor {
 }
 
 func (se *SetEditor) Remove(vs ...Value) *SetEditor {
-	sort.Stable(ValueSlice(vs))
+	sort.Stable(ValueSort{vs, se.s.format})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		se.edit(v, false)

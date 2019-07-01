@@ -67,19 +67,13 @@ type Value interface {
 
 type ValueSlice []Value
 
-func (vs ValueSlice) Len() int      { return len(vs) }
-func (vs ValueSlice) Swap(i, j int) { vs[i], vs[j] = vs[j], vs[i] }
-func (vs ValueSlice) Less(i, j int) bool {
-	// TODO(binformat)
-	return vs[i].Less(Format_7_18, vs[j])
-}
-func (vs ValueSlice) Equals(other ValueSlice) bool {
-	if vs.Len() != other.Len() {
+func (vs ValueSlice) Equals(format *Format, other ValueSlice) bool {
+	if len(vs) != len(other) {
 		return false
 	}
 
 	for i, v := range vs {
-		if !v.Equals(Format_7_18, other[i]) {
+		if !v.Equals(format, other[i]) {
 			return false
 		}
 	}
@@ -87,13 +81,31 @@ func (vs ValueSlice) Equals(other ValueSlice) bool {
 	return true
 }
 
-func (vs ValueSlice) Contains(v Value) bool {
+func (vs ValueSlice) Contains(format *Format, v Value) bool {
 	for _, v := range vs {
-		if v.Equals(Format_7_18, v) {
+		if v.Equals(format, v) {
 			return true
 		}
 	}
 	return false
+}
+
+type ValueSort struct {
+	values []Value
+	format *Format
+}
+
+func (vs ValueSort) Len() int      { return len(vs.values) }
+func (vs ValueSort) Swap(i, j int) { vs.values[i], vs.values[j] = vs.values[j], vs.values[i] }
+func (vs ValueSort) Less(i, j int) bool {
+	return vs.values[i].Less(vs.format, vs.values[j])
+}
+func (vs ValueSort) Equals(other ValueSort) bool {
+	return ValueSlice(vs.values).Equals(vs.format, ValueSlice(other.values))
+}
+
+func (vs ValueSort) Contains(v Value) bool {
+	return ValueSlice(vs.values).Contains(vs.format, v)
 }
 
 type valueReadWriter interface {

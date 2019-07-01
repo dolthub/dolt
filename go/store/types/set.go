@@ -179,8 +179,9 @@ func buildSetData(f *Format, values ValueSlice) ValueSlice {
 		return ValueSlice{}
 	}
 
+	sort.Stable(ValueSort{values, f})
+
 	uniqueSorted := make(ValueSlice, 0, len(values))
-	sort.Stable(values)
 	last := values[0]
 	for i := 1; i < len(values); i++ {
 		v := values[i]
