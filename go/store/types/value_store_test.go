@@ -233,12 +233,13 @@ func TestPanicOnBadVersion(t *testing.T) {
 	storage := &chunks.MemoryStorage{}
 	t.Run("Read", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
-		assert.Panics(t, func() { cvs.ReadValue(context.Background(), hash.Hash{}) })
+		assert.Panics(t, func() {
+			cvs.ReadValue(context.Background(), hash.Hash{})
+		})
 	})
 	t.Run("Write", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
 		assert.Panics(t, func() {
-			// TODO(binformat)
 			cvs.WriteValue(context.Background(), NewEmptyBlob(cvs, Format_7_18))
 			cvs.Commit(context.Background(), cvs.Root(context.Background()), cvs.Root(context.Background()))
 		})
