@@ -65,7 +65,8 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		}
 
 		if fi.Size() < 0 {
-			return nil, errors.New(path + " is of size 0")
+			// Size returns the number of bytes for regular files and is system dependant for others (Some of which can be negative).
+			return nil, fmt.Errorf("%s has invalid size: %d", path, fi.Size())
 		}
 
 		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
