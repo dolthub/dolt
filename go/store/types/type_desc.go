@@ -74,7 +74,7 @@ func (c CompoundDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[
 		w.writeCount(uint64(len(c.ElemTypes)))
 	}
 	for _, t := range c.ElemTypes {
-		t.writeToAsType(w, seenStructs)
+		t.writeToAsType(w, seenStructs, f)
 	}
 }
 
@@ -132,7 +132,7 @@ func (s StructDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[st
 		w.writeString(field.Name)
 	}
 	for _, field := range s.fields {
-		field.Type.writeToAsType(w, seenStructs)
+		field.Type.writeToAsType(w, seenStructs, f)
 	}
 	for _, field := range s.fields {
 		w.writeBool(field.Optional)
