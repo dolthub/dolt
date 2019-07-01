@@ -30,11 +30,9 @@ type DecodedChunk struct {
 // the decoded Value.
 func (vbs *ValidatingDecoder) Decode(c *chunks.Chunk) DecodedChunk {
 	h := c.Hash()
-	// TODO(binformat)
 	v := decodeFromBytesWithValidation(c.Data(), vbs.vs, vbs.format)
 
-	// TODO(binformat)
-	if getHash(v, Format_7_18) != h {
+	if getHash(v, vbs.format) != h {
 		d.Panic("Invalid hash found")
 	}
 	return DecodedChunk{c, &v}
