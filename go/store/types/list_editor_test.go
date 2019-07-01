@@ -48,7 +48,7 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 
 	assert.Equal(t, expectEditCount, actualEditCount)
 
-	assert.True(t, listOfInts(vrw, expectItems...).Equals(le.List(context.Background())))
+	assert.True(t, listOfInts(vrw, expectItems...).Equals(Format_7_18, le.List(context.Background())))
 }
 
 func TestListEditorBasic(t *testing.T) {
@@ -95,7 +95,7 @@ func TestListEditorBasic(t *testing.T) {
 		l := le.List(context.Background())
 
 		assert.True(t, IsNull(l.Get(context.Background(), 3)))
-		assert.True(t, l.Get(context.Background(), 4).Equals(Float(4)))
+		assert.True(t, l.Get(context.Background(), 4).Equals(Format_7_18, Float(4)))
 	})
 }
 
@@ -231,6 +231,6 @@ func TestListSpliceFuzzer(t *testing.T) {
 		}
 		expect := tl.toList(vrw)
 		actual := le.List(context.Background())
-		assert.True(t, expect.Equals(actual))
+		assert.True(t, expect.Equals(Format_7_18, actual))
 	}
 }

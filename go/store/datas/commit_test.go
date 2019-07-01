@@ -18,7 +18,7 @@ func TestNewCommit(t *testing.T) {
 	assert := assert.New(t)
 
 	assertTypeEquals := func(e, a *types.Type) {
-		assert.True(a.Equals(e), "Actual: %s\nExpected %s", a.Describe(context.Background()), e.Describe(context.Background()))
+		assert.True(a.Equals(types.Format_7_18, e), "Actual: %s\nExpected %s", a.Describe(context.Background()), e.Describe(context.Background()))
 	}
 
 	storage := &chunks.TestStorage{}
@@ -141,7 +141,7 @@ func TestFindCommonAncestor(t *testing.T) {
 		if found, ok := FindCommonAncestor(context.Background(), types.NewRef(a, types.Format_7_18), types.NewRef(b, types.Format_7_18), db); assert.True(ok) {
 			ancestor := found.TargetValue(context.Background(), db).(types.Struct)
 			assert.True(
-				expected.Equals(ancestor),
+				expected.Equals(types.Format_7_18, ancestor),
 				"%s should be common ancestor of %s, %s. Got %s",
 				expected.Get(ValueField),
 				a.Get(ValueField),

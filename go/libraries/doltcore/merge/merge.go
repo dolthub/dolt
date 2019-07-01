@@ -203,7 +203,7 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 func rowMerge(ctx context.Context, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
-		if r.Equals(mergeRow) {
+		if r.Equals(types.Format_7_18, mergeRow) {
 			// same row added to both
 			return r, false
 		}
@@ -225,11 +225,11 @@ func rowMerge(ctx context.Context, sch schema.Schema, r, mergeRow, baseRow types
 		val, _ := rowVals.Get(tag)
 		mergeVal, _ := mergeVals.Get(tag)
 
-		if valutil.NilSafeEqCheck(val, mergeVal) {
+		if valutil.NilSafeEqCheck(types.Format_7_18, val, mergeVal) {
 			return val, false
 		} else {
-			modified := !valutil.NilSafeEqCheck(val, baseVal)
-			mergeModified := !valutil.NilSafeEqCheck(mergeVal, baseVal)
+			modified := !valutil.NilSafeEqCheck(types.Format_7_18, val, baseVal)
+			mergeModified := !valutil.NilSafeEqCheck(types.Format_7_18, mergeVal, baseVal)
 			switch {
 			case modified && mergeModified:
 				return nil, true

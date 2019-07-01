@@ -136,7 +136,7 @@ func (bl branchList) HighestBranchIndexes() []int {
 			maxHeight = b.cr.Height()
 			cr = b.cr
 			cols = []int{i}
-		} else if b.cr.Height() == maxHeight && b.cr.Equals(cr) {
+		} else if b.cr.Height() == maxHeight && b.cr.Equals(types.Format_7_18, cr) {
 			cols = append(cols, i)
 		}
 	}

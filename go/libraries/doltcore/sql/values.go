@@ -258,7 +258,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		switch e.Operator {
 		case sqlparser.EqualStr:
 			predicate = func(left, right types.Value) bool {
-				return left.Equals(right)
+				return left.Equals(types.Format_7_18, right)
 			}
 		case sqlparser.LessThanStr:
 			predicate = func(left, right types.Value) bool {
@@ -273,16 +273,16 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		case sqlparser.LessEqualStr:
 			predicate = func(left, right types.Value) bool {
 				// TODO(binformat)
-				return left.Less(types.Format_7_18, right) || left.Equals(right)
+				return left.Less(types.Format_7_18, right) || left.Equals(types.Format_7_18, right)
 			}
 		case sqlparser.GreaterEqualStr:
 			predicate = func(left, right types.Value) bool {
 				// TODO(binformat)
-				return right.Less(types.Format_7_18, left) || right.Equals(left)
+				return right.Less(types.Format_7_18, left) || right.Equals(types.Format_7_18, left)
 			}
 		case sqlparser.NotEqualStr:
 			predicate = func(left, right types.Value) bool {
-				return !left.Equals(right)
+				return !left.Equals(types.Format_7_18, right)
 			}
 		case sqlparser.InStr:
 			predicate = func(left, right types.Value) bool {
@@ -379,7 +379,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 					return types.Bool(false)
 				}
 				// TODO: this may not be the correct nullness semantics for "is not" comparisons
-				if val.Equals(types.Bool(true)) {
+				if val.Equals(types.Format_7_18, types.Bool(true)) {
 					return types.Bool(op == sqlparser.IsTrueStr || op == sqlparser.IsNotFalseStr)
 				} else {
 					return types.Bool(op == sqlparser.IsFalseStr || op == sqlparser.IsNotTrueStr)

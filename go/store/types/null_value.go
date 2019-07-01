@@ -25,7 +25,7 @@ func (v Null) Value(ctx context.Context) Value {
 	return v
 }
 
-func (v Null) Equals(other Value) bool {
+func (v Null) Equals(format *Format, other Value) bool {
 	return other.Kind() == NullKind
 }
 

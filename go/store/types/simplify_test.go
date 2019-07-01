@@ -63,7 +63,7 @@ func TestSimplifyType(t *testing.T) {
 	run := func(intersectStructs bool) {
 		test := func(in, exp *Type) {
 			act := simplifyType(in, intersectStructs)
-			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", exp.Describe(context.Background()), act.Describe(context.Background()))
+			assert.True(exp.Equals(Format_7_18, act), "Expected: %s\nActual: %s", exp.Describe(context.Background()), act.Describe(context.Background()))
 		}
 		testSame := func(t *Type) {
 			test(t, t)

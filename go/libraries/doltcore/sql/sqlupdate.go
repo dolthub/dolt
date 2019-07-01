@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
-	"io"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -127,7 +129,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			currVal, _ := r.GetColVal(tag)
 			val := getter.Get(r)
 
-			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(val)) {
+			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(types.Format_7_18, val)) {
 				anyColChanged = true
 			}
 

@@ -106,7 +106,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 		ch := chunks.NewChunk([]byte(res))
 		// TODO(binformat)
 		out := types.DecodeValue(ch, db, types.Format_7_18)
-		s.True(out.Equals(in))
+		s.True(out.Equals(types.Format_7_18, in))
 	}
 
 	// Primitive value with no child chunks

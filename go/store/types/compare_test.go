@@ -281,7 +281,7 @@ func TestCompareTotalOrdering(t *testing.T) {
 	for i, vi := range values {
 		for j, vj := range values {
 			if i == j {
-				assert.True(vi.Equals(vj))
+				assert.True(vi.Equals(Format_7_18, vj))
 			} else if i < j {
 				// TODO(binformat)
 				x := vi.Less(Format_7_18, vj)

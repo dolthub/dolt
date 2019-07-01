@@ -19,7 +19,7 @@ type sequence interface {
 	asValueImpl() valueImpl
 	cumulativeNumberOfLeaves(idx int) uint64
 	Empty() bool
-	Equals(other Value) bool
+	Equals(format *Format, other Value) bool
 	getChildSequence(ctx context.Context, idx int) sequence
 	getCompareFn(f *Format, other sequence) compareFn
 	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence

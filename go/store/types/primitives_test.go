@@ -20,9 +20,9 @@ func TestPrimitives(t *testing.T) {
 	for i := range data {
 		for j := range data {
 			if i == j {
-				assert.True(t, data[i].Equals(data[j]), "Expected value to equal self at index %d", i)
+				assert.True(t, data[i].Equals(Format_7_18, data[j]), "Expected value to equal self at index %d", i)
 			} else {
-				assert.False(t, data[i].Equals(data[j]), "Expected values at indices %d and %d to not equal", i, j)
+				assert.False(t, data[i].Equals(Format_7_18, data[j]), "Expected values at indices %d and %d to not equal", i, j)
 			}
 		}
 	}
@@ -38,6 +38,6 @@ func TestPrimitivesType(t *testing.T) {
 	}
 
 	for _, d := range data {
-		assert.True(t, TypeOf(d.v).Equals(MakePrimitiveType(d.k)))
+		assert.True(t, TypeOf(d.v).Equals(Format_7_18, MakePrimitiveType(d.k)))
 	}
 }

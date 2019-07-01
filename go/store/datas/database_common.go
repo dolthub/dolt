@@ -101,7 +101,7 @@ func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadRef types.Re
 }
 
 func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) error {
-	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef.Equals(currentHeadRef) {
+	if currentHeadRef, ok := ds.MaybeHeadRef(); ok && newHeadRef.Equals(types.Format_7_18, currentHeadRef) {
 		return nil
 	}
 	commit := db.validateRefAsCommit(ctx, newHeadRef)
@@ -119,7 +119,7 @@ func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadRef type
 
 func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadRef types.Ref) error {
 	currentHeadRef, ok := ds.MaybeHeadRef()
-	if ok && newHeadRef.Equals(currentHeadRef) {
+	if ok && newHeadRef.Equals(types.Format_7_18, currentHeadRef) {
 		return nil
 	}
 
@@ -217,7 +217,7 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 		}
 		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
 		currentRootHash, currentDatasets = db.rt.Root(ctx), db.Datasets(ctx)
-		if r, hasHead := currentDatasets.MaybeGet(ctx, datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
+		if r, hasHead := currentDatasets.MaybeGet(ctx, datasetID); !hasHead || (hasHead && !initialHead.Equals(types.Format_7_18, r)) {
 			err = ErrMergeNeeded
 			break
 		}

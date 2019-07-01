@@ -76,16 +76,16 @@ func TestValueEquals(t *testing.T) {
 	for i, f1 := range values {
 		for j, f2 := range values {
 			if i == j {
-				assert.True(f1().Equals(f2()))
+				assert.True(f1().Equals(Format_7_18, f2()))
 			} else {
-				assert.False(f1().Equals(f2()))
+				assert.False(f1().Equals(Format_7_18, f2()))
 			}
 		}
 		v := f1()
 		if v != nil {
 			r := NewRef(v, Format_7_18)
-			assert.False(r.Equals(v))
-			assert.False(v.Equals(r))
+			assert.False(r.Equals(Format_7_18, v))
+			assert.False(v.Equals(Format_7_18, r))
 		}
 	}
 }

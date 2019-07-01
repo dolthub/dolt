@@ -69,7 +69,7 @@ func (ts testSequence) isLeaf() bool {
 	panic("not reached")
 }
 
-func (ts testSequence) Equals(other Value) bool {
+func (ts testSequence) Equals(f *Format, other Value) bool {
 	panic("not reached")
 }
 

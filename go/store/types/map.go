@@ -86,7 +86,7 @@ func readMapInput(ctx context.Context, f *Format, vrw ValueReadWriter, kvs <-cha
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
 func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if m.Equals(last) {
+	if m.Equals(m.format, last) {
 		return
 	}
 	orderedSequenceDiffTopDown(ctx, m.format, last.orderedSequence, m.orderedSequence, changes, closeChan)
@@ -95,7 +95,7 @@ func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged, cl
 // DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
 func (m Map) DiffHybrid(ctx context.Context, last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if m.Equals(last) {
+	if m.Equals(m.format, last) {
 		return
 	}
 	orderedSequenceDiffBest(ctx, m.format, last.orderedSequence, m.orderedSequence, changes, closeChan)
@@ -105,7 +105,7 @@ func (m Map) DiffHybrid(ctx context.Context, last Map, changes chan<- ValueChang
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
 func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if m.Equals(last) {
+	if m.Equals(m.format, last) {
 		return
 	}
 	orderedSequenceDiffLeftRight(ctx, m.format, last.orderedSequence, m.orderedSequence, changes, closeChan)
@@ -161,7 +161,7 @@ func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool) {
 		return nil, false
 	}
 	entry := cur.current().(mapEntry)
-	if !entry.key.Equals(key) {
+	if !entry.key.Equals(m.format, key) {
 		return nil, false
 	}
 
@@ -174,7 +174,7 @@ func (m Map) Has(ctx context.Context, key Value) bool {
 		return false
 	}
 	entry := cur.current().(mapEntry)
-	return entry.key.Equals(key)
+	return entry.key.Equals(m.format, key)
 }
 
 func (m Map) Get(ctx context.Context, key Value) Value {
@@ -276,7 +276,7 @@ func buildMapData(f *Format, values []Value) mapEntrySlice {
 	last := kvs.entries[0]
 	for i := 1; i < kvs.Len(); i++ {
 		kv := kvs.entries[i]
-		if !kv.key.Equals(last.key) {
+		if !kv.key.Equals(f, last.key) {
 			uniqueSorted.entries = append(uniqueSorted.entries, last)
 		}
 

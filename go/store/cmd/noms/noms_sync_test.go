@@ -72,7 +72,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 	dest := db.GetDataset(context.Background(), "dest")
-	s.True(types.Float(42).Equals(dest.HeadValue()))
+	s.True(types.Float(42).Equals(types.Format_7_18, dest.HeadValue()))
 	db.Close()
 
 	// Pull from a dataset in one DB to an existing dataset in another
@@ -84,7 +84,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
 	dest = db.GetDataset(context.Background(), "dest")
-	s.True(types.Float(43).Equals(dest.HeadValue()))
+	s.True(types.Float(43).Equals(types.Format_7_18, dest.HeadValue()))
 	db.Close()
 
 	// Pull when sink dataset is already up to date
@@ -100,7 +100,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
 	dest = db.GetDataset(context.Background(), "dest2")
-	s.True(types.Float(43).Equals(dest.HeadValue()))
+	s.True(types.Float(43).Equals(types.Format_7_18, dest.HeadValue()))
 	db.Close()
 }
 
@@ -131,7 +131,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	db := datas.NewDatabase(cs)
 	dest := db.GetDataset(context.Background(), "dest")
-	s.True(types.Float(43).Equals(dest.HeadValue()))
+	s.True(types.Float(43).Equals(types.Format_7_18, dest.HeadValue()))
 	db.Close()
 
 	// Now, try syncing a second dataset. This crashed in issue #2598
@@ -142,7 +142,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
 	dest = db.GetDataset(context.Background(), "dest2")
-	s.True(types.Float(1).Equals(dest.HeadValue()))
+	s.True(types.Float(1).Equals(types.Format_7_18, dest.HeadValue()))
 	db.Close()
 
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
@@ -170,6 +170,6 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 	dest := db.GetDataset(context.Background(), "foo")
-	s.True(types.Float(42).Equals(dest.HeadValue()))
+	s.True(types.Float(42).Equals(types.Format_7_18, dest.HeadValue()))
 	db.Close()
 }

@@ -19,7 +19,7 @@ func (s String) Value(ctx context.Context) Value {
 	return s
 }
 
-func (s String) Equals(other Value) bool {
+func (s String) Equals(format *Format, other Value) bool {
 	return s == other
 }
 

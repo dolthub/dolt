@@ -75,7 +75,7 @@ type diffSummaryProgress struct {
 }
 
 func diffSummary(ctx context.Context, ch chan diffSummaryProgress, v1, v2 types.Value) {
-	if !v1.Equals(v2) {
+	if !v1.Equals(types.Format_7_18, v2) {
 		if ShouldDescend(v1, v2) {
 			switch v1.Kind() {
 			case types.ListKind:

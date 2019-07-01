@@ -118,7 +118,7 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 		val1, _ := row1.GetColVal(tag)
 		val2, _ := row2.GetColVal(tag)
 
-		if !valutil.NilSafeEqCheck(val1, val2) {
+		if !valutil.NilSafeEqCheck(types.Format_7_18, val1, val2) {
 			return false
 		}
 	}

@@ -24,8 +24,8 @@ func TestGenericStructEquals(t *testing.T) {
 	s1 := NewStruct(Format_7_18, "S1", StructData{"s": String("hi"), "x": Bool(true)})
 	s2 := NewStruct(Format_7_18, "S1", StructData{"s": String("hi"), "x": Bool(true)})
 
-	assert.True(s1.Equals(s2))
-	assert.True(s2.Equals(s1))
+	assert.True(s1.Equals(Format_7_18, s2))
+	assert.True(s2.Equals(Format_7_18, s1))
 }
 
 func TestGenericStructChunks(t *testing.T) {
@@ -42,15 +42,15 @@ func TestGenericStructNew(t *testing.T) {
 	assert := assert.New(t)
 
 	s := NewStruct(Format_7_18, "S2", StructData{"b": Bool(true), "o": String("hi")})
-	assert.True(s.Get("b").Equals(Bool(true)))
+	assert.True(s.Get("b").Equals(Format_7_18, Bool(true)))
 	_, ok := s.MaybeGet("missing")
 	assert.False(ok)
 
 	s2 := NewStruct(Format_7_18, "S2", StructData{"b": Bool(false), "o": String("hi")})
-	assert.True(s2.Get("b").Equals(Bool(false)))
+	assert.True(s2.Get("b").Equals(Format_7_18, Bool(false)))
 	o, ok := s2.MaybeGet("o")
 	assert.True(ok)
-	assert.True(String("hi").Equals(o))
+	assert.True(String("hi").Equals(Format_7_18, o))
 }
 
 func TestGenericStructSet(t *testing.T) {
@@ -61,14 +61,14 @@ func TestGenericStructSet(t *testing.T) {
 	s2 := s.Set("b", Bool(false))
 
 	s3 := s2.Set("b", Bool(true))
-	assert.True(s.Equals(s3))
+	assert.True(s.Equals(Format_7_18, s3))
 
 	// Changes the type
 	s4 := s.Set("b", Float(42))
 	assert.True(MakeStructType("S3",
 		StructField{"b", FloaTType, false},
 		StructField{"o", StringType, false},
-	).Equals(TypeOf(s4)))
+	).Equals(Format_7_18, TypeOf(s4)))
 
 	// Adds a new field
 	s5 := s.Set("x", Float(42))
@@ -76,7 +76,7 @@ func TestGenericStructSet(t *testing.T) {
 		StructField{"b", BoolType, false},
 		StructField{"o", StringType, false},
 		StructField{"x", FloaTType, false},
-	).Equals(TypeOf(s5)))
+	).Equals(Format_7_18, TypeOf(s5)))
 
 	// Subtype is not equal.
 	// TODO(binformat)
@@ -85,11 +85,11 @@ func TestGenericStructSet(t *testing.T) {
 	t7 := MakeStructTypeFromFields("", FieldMap{
 		"l": MakeListType(FloaTType),
 	})
-	assert.True(t7.Equals(TypeOf(s7)))
+	assert.True(t7.Equals(Format_7_18, TypeOf(s7)))
 
 	s8 := NewStruct(Format_7_18, "S", StructData{"a": Bool(true), "c": Bool(true)})
 	s9 := s8.Set("b", Bool(true))
-	assert.True(s9.Equals(NewStruct(Format_7_18, "S", StructData{"a": Bool(true), "b": Bool(true), "c": Bool(true)})))
+	assert.True(s9.Equals(Format_7_18, NewStruct(Format_7_18, "S", StructData{"a": Bool(true), "b": Bool(true), "c": Bool(true)})))
 }
 
 func TestGenericStructDelete(t *testing.T) {
@@ -98,15 +98,15 @@ func TestGenericStructDelete(t *testing.T) {
 	s1 := NewStruct(Format_7_18, "S", StructData{"b": Bool(true), "o": String("hi")})
 
 	s2 := s1.Delete("notThere")
-	assert.True(s1.Equals(s2))
+	assert.True(s1.Equals(Format_7_18, s2))
 
 	s3 := s1.Delete("o")
 	s4 := NewStruct(Format_7_18, "S", StructData{"b": Bool(true)})
-	assert.True(s3.Equals(s4))
+	assert.True(s3.Equals(Format_7_18, s4))
 
 	s5 := s3.Delete("b")
 	s6 := NewStruct(Format_7_18, "S", StructData{})
-	assert.True(s5.Equals(s6))
+	assert.True(s5.Equals(Format_7_18, s6))
 }
 
 func assertValueChangeEqual(assert *assert.Assertions, c1, c2 ValueChanged) {
@@ -327,7 +327,7 @@ func TestMakeStructTemplate(t *testing.T) {
 	assert.True(NewStruct(Format_7_18, "A", StructData{
 		"a": Float(42),
 		"b": Bool(true),
-	}).Equals(str))
+	}).Equals(Format_7_18, str))
 }
 
 func TestStructWithNil(t *testing.T) {

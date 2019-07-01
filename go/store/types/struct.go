@@ -344,7 +344,7 @@ func (s Struct) Delete(n string) Struct {
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
-	if s.Equals(last) {
+	if s.Equals(s.format, last) {
 		return
 	}
 	dec1, dec2 := s.decoder(), last.decoder()
@@ -366,7 +366,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		var change ValueChanged
 		if fn1 == fn2 {
 			v1, v2 := dec1.readValue(s.format), dec2.readValue(s.format)
-			if !v1.Equals(v2) {
+			if !v1.Equals(s.format, v2) {
 				change = ValueChanged{DiffChangeModified, String(fn1), v2, v1}
 			}
 			i1++

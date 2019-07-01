@@ -44,7 +44,7 @@ func (tm testMap) Remove(from, to int) testMap {
 
 func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {
 	for _, entry := range tm.entries.entries {
-		if entry.key.Equals(key) {
+		if entry.key.Equals(Format_7_18, key) {
 			return entry.value, true
 		}
 	}
@@ -76,7 +76,7 @@ func (tm testMap) Diff(last testMap) (added []Value, removed []Value, modified [
 		otherValue, exists := last.MaybeGet(entry.key)
 		if !exists {
 			added = append(added, entry.key)
-		} else if !entry.value.Equals(otherValue) {
+		} else if !entry.value.Equals(Format_7_18, otherValue) {
 			modified = append(modified, entry.key)
 		}
 	}
@@ -162,7 +162,7 @@ func newRandomTestMap(length int, gen genValueFn) testMap {
 
 func validateMap(t *testing.T, vrw ValueReadWriter, m Map, entries mapEntrySlice) {
 	tm := testMap{entries: entries}
-	assert.True(t, m.Equals(tm.toMap(vrw)))
+	assert.True(t, m.Equals(Format_7_18, tm.toMap(vrw)))
 
 	out := mapEntrySlice{}
 	m.IterAll(context.Background(), func(k Value, v Value) {
@@ -202,12 +202,12 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 				idx := uint64(0)
 				l2.Iter(context.Background(), func(key, value Value) (stop bool) {
 					entry := elems.entries.entries[idx]
-					if !key.Equals(entry.key) {
+					if !key.Equals(Format_7_18, entry.key) {
 						// TODO(binformat)
 						fmt.Printf("%d: %s (%s)\n!=\n%s (%s)\n", idx, EncodedValue(context.Background(), key), key.Hash(Format_7_18), EncodedValue(context.Background(), entry.key), entry.key.Hash(Format_7_18))
 						stop = true
 					}
-					if !value.Equals(entry.value) {
+					if !value.Equals(Format_7_18, entry.value) {
 						// TODO(binformat)
 						fmt.Printf("%s (%s) !=\n%s (%s)\n", EncodedValue(context.Background(), value), value.Hash(Format_7_18), EncodedValue(context.Background(), entry.value), entry.value.Hash(Format_7_18))
 						stop = true
@@ -487,8 +487,8 @@ func TestNewMap(t *testing.T) {
 	assert.Equal(uint64(0), m.Len())
 	m = NewMap(context.Background(), Format_7_18, vrw, String("foo1"), String("bar1"), String("foo2"), String("bar2"))
 	assert.Equal(uint64(2), m.Len())
-	assert.True(String("bar1").Equals(m.Get(context.Background(), String("foo1"))))
-	assert.True(String("bar2").Equals(m.Get(context.Background(), String("foo2"))))
+	assert.True(String("bar1").Equals(Format_7_18, m.Get(context.Background(), String("foo1"))))
+	assert.True(String("bar2").Equals(Format_7_18, m.Get(context.Background(), String("foo2"))))
 }
 
 func TestMapUniqueKeysString(t *testing.T) {
@@ -503,7 +503,7 @@ func TestMapUniqueKeysString(t *testing.T) {
 	}
 	m := NewMap(context.Background(), Format_7_18, vrw, l...)
 	assert.Equal(uint64(3), m.Len())
-	assert.True(String("foo").Equals(m.Get(context.Background(), String("hello"))))
+	assert.True(String("foo").Equals(Format_7_18, m.Get(context.Background(), String("hello"))))
 }
 
 func TestMapUniqueKeysNumber(t *testing.T) {
@@ -519,7 +519,7 @@ func TestMapUniqueKeysNumber(t *testing.T) {
 	}
 	m := NewMap(context.Background(), Format_7_18, vrw, l...)
 	assert.Equal(uint64(4), m.Len())
-	assert.True(Float(5).Equals(m.Get(context.Background(), Float(1))))
+	assert.True(Float(5).Equals(Format_7_18, m.Get(context.Background(), Float(1))))
 }
 
 type toTestMapFunc func(scale int, vrw ValueReadWriter) testMap
@@ -542,9 +542,9 @@ func TestMapHas(t *testing.T) {
 		for _, entry := range tm.entries.entries {
 			k, v := entry.key, entry.value
 			assert.True(m.Has(context.Background(), k))
-			assert.True(m.Get(context.Background(), k).Equals(v))
+			assert.True(m.Get(context.Background(), k).Equals(Format_7_18, v))
 			assert.True(m2.Has(context.Background(), k))
-			assert.True(m2.Get(context.Background(), k).Equals(v))
+			assert.True(m2.Get(context.Background(), k).Equals(Format_7_18, v))
 		}
 		diffMapTest(assert, m, m2, 0, 0, 0)
 	}
@@ -648,7 +648,7 @@ func TestMapRemove(t *testing.T) {
 			expected := tm.Remove(i, i+1).toMap(vs)
 			actual := whole.Edit().Remove(tm.entries.entries[i].key).Map(context.Background())
 			assert.Equal(expected.Len(), actual.Len())
-			assert.True(expected.Equals(actual))
+			assert.True(expected.Equals(Format_7_18, actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
 		}
 		for i := 0; i < len(tm.entries.entries); i += incr {
@@ -676,7 +676,7 @@ func TestMapRemoveNonexistentKey(t *testing.T) {
 	actual := original.Edit().Remove(Float(-1)).Map(context.Background()) // rand.Int63 returns non-negative numbers.
 
 	assert.Equal(original.Len(), actual.Len())
-	assert.True(original.Equals(actual))
+	assert.True(original.Equals(Format_7_18, actual))
 }
 
 func TestMapFirst(t *testing.T) {
@@ -701,8 +701,8 @@ func TestMapFirst(t *testing.T) {
 		return true
 	})
 
-	assert.True(ek.Equals(ak))
-	assert.True(ev.Equals(av))
+	assert.True(ek.Equals(Format_7_18, ak))
+	assert.True(ev.Equals(Format_7_18, av))
 }
 
 func TestMapFirst2(t *testing.T) {
@@ -720,8 +720,8 @@ func TestMapFirst2(t *testing.T) {
 		m := tm.toMap(vrw)
 		sort.Stable(tm.entries)
 		actualKey, actualValue := m.First(context.Background())
-		assert.True(tm.entries.entries[0].key.Equals(actualKey))
-		assert.True(tm.entries.entries[0].value.Equals(actualValue))
+		assert.True(tm.entries.entries[0].key.Equals(Format_7_18, actualKey))
+		assert.True(tm.entries.entries[0].value.Equals(Format_7_18, actualValue))
 	}
 
 	doTest(getTestNativeOrderMap, 16)
@@ -752,8 +752,8 @@ func TestMapLast(t *testing.T) {
 		return false
 	})
 
-	assert.True(ek.Equals(ak))
-	assert.True(ev.Equals(av))
+	assert.True(ek.Equals(Format_7_18, ak))
+	assert.True(ev.Equals(Format_7_18, av))
 }
 
 func TestMapLast2(t *testing.T) {
@@ -771,8 +771,8 @@ func TestMapLast2(t *testing.T) {
 		m := tm.toMap(vrw)
 		sort.Stable(tm.entries)
 		actualKey, actualValue := m.Last(context.Background())
-		assert.True(tm.entries.entries[len(tm.entries.entries)-1].key.Equals(actualKey))
-		assert.True(tm.entries.entries[len(tm.entries.entries)-1].value.Equals(actualValue))
+		assert.True(tm.entries.entries[len(tm.entries.entries)-1].key.Equals(Format_7_18, actualKey))
+		assert.True(tm.entries.entries[len(tm.entries.entries)-1].value.Equals(Format_7_18, actualValue))
 	}
 
 	doTest(getTestNativeOrderMap, 16)
@@ -793,7 +793,7 @@ func TestMapSetGet(t *testing.T) {
 	assertMapVal := func(me *MapEditor, k, expectedVal Value) *MapEditor {
 		m := me.Map(ctx)
 		mV := m.Get(ctx, k)
-		assert.True((expectedVal == nil && mV == nil) || expectedVal.Equals(mV))
+		assert.True((expectedVal == nil && mV == nil) || expectedVal.Equals(Format_7_18, mV))
 		return m.Edit()
 	}
 
@@ -890,7 +890,7 @@ func TestMapSet(t *testing.T) {
 		run := func(from, to int) {
 			actual := tm.Remove(from, to).toMap(vrw).Edit().SetM(toValuable(tm.Flatten(from, to))...).Map(context.Background())
 			assert.Equal(expected.Len(), actual.Len())
-			assert.True(expected.Equals(actual))
+			assert.True(expected.Equals(Format_7_18, actual))
 			diffMapTest(assert, expected, actual, 0, 0, 0)
 		}
 		for i := 0; i < len(tm.entries.entries)-offset; i += incr {
@@ -912,11 +912,11 @@ func TestMapSetM(t *testing.T) {
 
 	m1 := NewMap(context.Background(), Format_7_18, vrw)
 	m2 := m1.Edit().SetM().Map(context.Background())
-	assert.True(m1.Equals(m2))
+	assert.True(m1.Equals(Format_7_18, m2))
 	m3 := m2.Edit().SetM(String("foo"), String("bar"), String("hot"), String("dog")).Map(context.Background())
 	assert.Equal(uint64(2), m3.Len())
-	assert.True(String("bar").Equals(m3.Get(context.Background(), String("foo"))))
-	assert.True(String("dog").Equals(m3.Get(context.Background(), String("hot"))))
+	assert.True(String("bar").Equals(Format_7_18, m3.Get(context.Background(), String("foo"))))
+	assert.True(String("dog").Equals(Format_7_18, m3.Get(context.Background(), String("hot"))))
 	m4 := m3.Edit().SetM(String("mon"), String("key")).Map(context.Background())
 	assert.Equal(uint64(2), m3.Len())
 	assert.Equal(uint64(3), m4.Len())
@@ -947,8 +947,8 @@ func TestMapSetExistingKeyToNewValue(t *testing.T) {
 
 	expected := expectedWorking.toMap(vrw)
 	assert.Equal(expected.Len(), actual.Len())
-	assert.True(expected.Equals(actual))
-	assert.False(original.Equals(actual))
+	assert.True(expected.Equals(Format_7_18, actual))
+	assert.False(original.Equals(Format_7_18, actual))
 	diffMapTest(assert, expected, actual, 0, 0, 0)
 }
 
@@ -978,7 +978,7 @@ func TestMapMaybeGet(t *testing.T) {
 		for _, entry := range tm.entries.entries {
 			v, ok := m.MaybeGet(context.Background(), entry.key)
 			if assert.True(ok, "%v should have been in the map!", entry.key) {
-				assert.True(v.Equals(entry.value), "%v != %v", v, entry.value)
+				assert.True(v.Equals(Format_7_18, entry.value), "%v != %v", v, entry.value)
 			}
 		}
 		_, ok := m.MaybeGet(context.Background(), tm.knownBadKey)
@@ -1006,7 +1006,7 @@ func TestMapIter(t *testing.T) {
 	results := resultList{}
 	got := func(key, val Value) bool {
 		for _, r := range results {
-			if key.Equals(r.key) && val.Equals(r.value) {
+			if key.Equals(Format_7_18, r.key) && val.Equals(Format_7_18, r.value) {
 				return true
 			}
 		}
@@ -1051,8 +1051,8 @@ func TestMapIter2(t *testing.T) {
 		endAt := uint64(64)
 
 		m.Iter(context.Background(), func(k, v Value) (done bool) {
-			assert.True(tm.entries.entries[idx].key.Equals(k))
-			assert.True(tm.entries.entries[idx].value.Equals(v))
+			assert.True(tm.entries.entries[idx].key.Equals(Format_7_18, k))
+			assert.True(tm.entries.entries[idx].value.Equals(Format_7_18, v))
 			if idx == endAt {
 				done = true
 			}
@@ -1075,7 +1075,7 @@ func TestMapAny(t *testing.T) {
 	vrw := newTestValueStore()
 
 	p := func(k, v Value) bool {
-		return k.Equals(String("foo")) && v.Equals(String("bar"))
+		return k.Equals(Format_7_18, String("foo")) && v.Equals(Format_7_18, String("bar"))
 	}
 
 	assert.False(NewMap(context.Background(), Format_7_18, vrw).Any(context.Background(), p))
@@ -1101,8 +1101,8 @@ func TestMapIterAll(t *testing.T) {
 		idx := uint64(0)
 
 		m.IterAll(context.Background(), func(k, v Value) {
-			assert.True(tm.entries.entries[idx].key.Equals(k))
-			assert.True(tm.entries.entries[idx].value.Equals(v))
+			assert.True(tm.entries.entries[idx].key.Equals(Format_7_18, k))
+			assert.True(tm.entries.entries[idx].value.Equals(Format_7_18, v))
 			idx++
 		})
 	}
@@ -1122,10 +1122,10 @@ func TestMapEquals(t *testing.T) {
 	m2 := m1
 	m3 := NewMap(context.Background(), Format_7_18, vrw)
 
-	assert.True(m1.Equals(m2))
-	assert.True(m2.Equals(m1))
-	assert.True(m3.Equals(m2))
-	assert.True(m2.Equals(m3))
+	assert.True(m1.Equals(Format_7_18, m2))
+	assert.True(m2.Equals(Format_7_18, m1))
+	assert.True(m3.Equals(Format_7_18, m2))
+	assert.True(m2.Equals(Format_7_18, m3))
 	diffMapTest(assert, m1, m2, 0, 0, 0)
 	diffMapTest(assert, m1, m3, 0, 0, 0)
 	diffMapTest(assert, m2, m1, 0, 0, 0)
@@ -1136,10 +1136,10 @@ func TestMapEquals(t *testing.T) {
 	// TODO(binformat)
 	m1 = NewMap(context.Background(), Format_7_18, vrw, String("foo"), Float(0.0), String("bar"), NewList(context.Background(), Format_7_18, vrw))
 	m2 = m2.Edit().Set(String("foo"), Float(0.0)).Set(String("bar"), NewList(context.Background(), Format_7_18, vrw)).Map(context.Background())
-	assert.True(m1.Equals(m2))
-	assert.True(m2.Equals(m1))
-	assert.False(m2.Equals(m3))
-	assert.False(m3.Equals(m2))
+	assert.True(m1.Equals(Format_7_18, m2))
+	assert.True(m2.Equals(Format_7_18, m1))
+	assert.False(m2.Equals(Format_7_18, m3))
+	assert.False(m3.Equals(Format_7_18, m2))
 	diffMapTest(assert, m1, m2, 0, 0, 0)
 	diffMapTest(assert, m1, m3, 2, 0, 0)
 	diffMapTest(assert, m2, m1, 0, 0, 0)
@@ -1173,7 +1173,7 @@ func TestMapNotStringKeys(t *testing.T) {
 	m1 := NewMap(context.Background(), Format_7_18, vrw, l...)
 	assert.Equal(uint64(12), m1.Len())
 	for i := 0; i < len(l); i += 2 {
-		assert.True(m1.Get(context.Background(), l[i]).Equals(l[i+1]))
+		assert.True(m1.Get(context.Background(), l[i]).Equals(Format_7_18, l[i+1]))
 	}
 	assert.Nil(m1.Get(context.Background(), Float(42)))
 }
@@ -1435,22 +1435,22 @@ func TestMapType(t *testing.T) {
 
 	emptyMapType := MakeMapType(MakeUnionType(), MakeUnionType())
 	m := NewMap(context.Background(), Format_7_18, vrw)
-	assert.True(TypeOf(m).Equals(emptyMapType))
+	assert.True(TypeOf(m).Equals(Format_7_18, emptyMapType))
 
 	m2 := m.Edit().Remove(String("B")).Map(context.Background())
-	assert.True(emptyMapType.Equals(TypeOf(m2)))
+	assert.True(emptyMapType.Equals(Format_7_18, TypeOf(m2)))
 
 	tr := MakeMapType(StringType, FloaTType)
 	m2 = m.Edit().Set(String("A"), Float(1)).Map(context.Background())
-	assert.True(tr.Equals(TypeOf(m2)))
+	assert.True(tr.Equals(Format_7_18, TypeOf(m2)))
 
 	m2 = m.Edit().Set(String("B"), Float(2)).Set(String("C"), Float(2)).Map(context.Background())
-	assert.True(tr.Equals(TypeOf(m2)))
+	assert.True(tr.Equals(Format_7_18, TypeOf(m2)))
 
 	m3 := m2.Edit().Set(String("A"), Bool(true)).Map(context.Background())
-	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m3)), TypeOf(m3).Describe(context.Background()))
+	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, FloaTType)).Equals(Format_7_18, TypeOf(m3)), TypeOf(m3).Describe(context.Background()))
 	m4 := m3.Edit().Set(Bool(true), Float(1)).Map(context.Background())
-	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m4)))
+	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, FloaTType)).Equals(Format_7_18, TypeOf(m4)))
 }
 
 func TestMapChunks(t *testing.T) {
@@ -1546,17 +1546,17 @@ func TestMapTypeAfterMutations(t *testing.T) {
 		m := NewMap(context.Background(), Format_7_18, vrw, values...)
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.asSequence())
-		assert.True(TypeOf(m).Equals(MakeMapType(FloaTType, FloaTType)))
+		assert.True(TypeOf(m).Equals(Format_7_18, MakeMapType(FloaTType, FloaTType)))
 
 		m = m.Edit().Set(String("a"), String("a")).Map(context.Background())
 		assert.Equal(m.Len(), uint64(n+1))
 		assert.IsType(c, m.asSequence())
-		assert.True(TypeOf(m).Equals(MakeMapType(MakeUnionType(FloaTType, StringType), MakeUnionType(FloaTType, StringType))))
+		assert.True(TypeOf(m).Equals(Format_7_18, MakeMapType(MakeUnionType(FloaTType, StringType), MakeUnionType(FloaTType, StringType))))
 
 		m = m.Edit().Remove(String("a")).Map(context.Background())
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.asSequence())
-		assert.True(TypeOf(m).Equals(MakeMapType(FloaTType, FloaTType)))
+		assert.True(TypeOf(m).Equals(Format_7_18, MakeMapType(FloaTType, FloaTType)))
 	}
 
 	test(10, mapLeafSequence{})
@@ -1602,14 +1602,14 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	assert.Equal(len(kvs)/2, int(m.Len()))
 	fk, fv := m.First(context.Background())
 	assert.True(bool(fk.(Bool)))
-	assert.True(v.Equals(fv))
+	assert.True(v.Equals(Format_7_18, fv))
 
 	for i, keyOrValue := range kvs {
 		if i%2 == 0 {
 			assert.True(m.Has(context.Background(), keyOrValue))
-			assert.True(v.Equals(m.Get(context.Background(), keyOrValue)))
+			assert.True(v.Equals(Format_7_18, m.Get(context.Background(), keyOrValue)))
 		} else {
-			assert.True(v.Equals(keyOrValue))
+			assert.True(v.Equals(Format_7_18, keyOrValue))
 		}
 	}
 
@@ -1642,7 +1642,7 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 		entr = entr[:len(entr)-1]
 		tm.entries.entries = entr
 		nm = reload(nm.Edit().Remove(last.key).Map(context.Background()))
-		assert.True(tm.toMap(vs).Equals(nm))
+		assert.True(tm.toMap(vs).Equals(Format_7_18, nm))
 	}
 }
 
@@ -1717,7 +1717,7 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 				StructField{"a", FloaTType, false},
 				StructField{"b", StringType, true},
 			),
-		).Equals(TypeOf(list)))
+		).Equals(Format_7_18, TypeOf(list)))
 
 	// transpose
 	list = NewMap(context.Background(), Format_7_18, vrw,
@@ -1738,7 +1738,7 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 				StructField{"b", StringType, true},
 			),
 			StringType,
-		).Equals(TypeOf(list)))
+		).Equals(Format_7_18, TypeOf(list)))
 
 }
 

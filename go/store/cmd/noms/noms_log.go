@@ -276,7 +276,7 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 			fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
 			// Encode dates as formatted string if this is a top-level meta
 			// field of type datetime.DateTimeType
-			if types.TypeOf(v).Equals(datetime.DateTimeType) {
+			if types.TypeOf(v).Equals(types.Format_7_18, datetime.DateTimeType) {
 				var dt datetime.DateTime
 				err = dt.UnmarshalNoms(ctx, v)
 
