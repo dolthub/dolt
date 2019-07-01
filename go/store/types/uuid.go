@@ -44,7 +44,7 @@ func (v UUID) Hash(f *Format) hash.Hash {
 func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (v UUID) WalkRefs(cb RefCallback) {
+func (v UUID) WalkRefs(f *Format, cb RefCallback) {
 }
 
 func (v UUID) typeOf() *Type {

@@ -36,7 +36,7 @@ type sequence interface {
 	valueBytes(*Format) []byte
 	valueReadWriter() ValueReadWriter
 	valuesSlice(f *Format, from, to uint64) []Value
-	WalkRefs(cb RefCallback)
+	WalkRefs(f *Format, cb RefCallback)
 	writeTo(nomsWriter, *Format)
 }
 

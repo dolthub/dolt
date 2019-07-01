@@ -19,7 +19,7 @@ func TestWalkRefs(t *testing.T) {
 	runTest := func(v Value, t *testing.T) {
 		assert := assert.New(t)
 		expected := hash.HashSlice{}
-		v.WalkRefs(func(r Ref) {
+		v.WalkRefs(Format_7_18, func(r Ref) {
 			expected = append(expected, r.TargetHash())
 		})
 		// TODO(binformat)

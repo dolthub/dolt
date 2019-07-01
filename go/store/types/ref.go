@@ -26,7 +26,7 @@ const (
 )
 
 func NewRef(v Value, f *Format) Ref {
-	return constructRef(f, v.Hash(f), TypeOf(v), maxChunkHeight(v)+1)
+	return constructRef(f, v.Hash(f), TypeOf(v), maxChunkHeight(f, v)+1)
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
@@ -73,8 +73,8 @@ func skipRef(dec *typedBinaryNomsReader) []uint32 {
 	return offsets
 }
 
-func maxChunkHeight(v Value) (max uint64) {
-	v.WalkRefs(func(r Ref) {
+func maxChunkHeight(f *Format, v Value) (max uint64) {
+	v.WalkRefs(f, func(r Ref) {
 		if height := r.Height(); height > max {
 			max = height
 		}

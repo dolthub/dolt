@@ -54,7 +54,7 @@ type Value interface {
 
 	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
-	WalkRefs(RefCallback)
+	WalkRefs(*Format, RefCallback)
 
 	// typeOf is the internal implementation of types.TypeOf. It is not normalized
 	// and unions might have a single element, duplicates and be in the wrong
@@ -162,9 +162,8 @@ func (v valueImpl) Less(f *Format, other LesserValuable) bool {
 	return valueLess(f, v, other.(Value))
 }
 
-func (v valueImpl) WalkRefs(cb RefCallback) {
-	// TODO(binformat)
-	walkRefs(v.valueBytes(Format_7_18), Format_7_18, cb)
+func (v valueImpl) WalkRefs(f *Format, cb RefCallback) {
+	walkRefs(v.valueBytes(f), f, cb)
 }
 
 type asValueImpl interface {

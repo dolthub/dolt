@@ -37,7 +37,7 @@ func (v Uint) Hash(f *Format) hash.Hash {
 func (v Uint) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (v Uint) WalkRefs(cb RefCallback) {
+func (v Uint) WalkRefs(f *Format, cb RefCallback) {
 }
 
 func (v Uint) typeOf() *Type {

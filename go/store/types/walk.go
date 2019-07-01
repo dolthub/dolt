@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -47,7 +48,7 @@ func WalkValues(ctx context.Context, target Value, vr ValueReader, cb SkipValueC
 			}
 
 			if col, ok := v.(Collection); ok && !col.asSequence().isLeaf() {
-				col.WalkRefs(func(r Ref) {
+				col.WalkRefs(Format_7_18, func(r Ref) {
 					refs[r.TargetHash()] = false
 				})
 				continue

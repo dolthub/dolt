@@ -362,7 +362,7 @@ func (es emptySequence) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (es emptySequence) WalkRefs(cb RefCallback) {
+func (es emptySequence) WalkRefs(f *Format, cb RefCallback) {
 }
 
 func (es emptySequence) getCompareFn(f *Format, other sequence) compareFn {

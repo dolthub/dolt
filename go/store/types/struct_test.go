@@ -12,7 +12,7 @@ import (
 )
 
 func getChunks(v Value) (chunks []Ref) {
-	v.WalkRefs(func(r Ref) {
+	v.WalkRefs(Format_7_18, func(r Ref) {
 		chunks = append(chunks, r)
 	})
 	return
