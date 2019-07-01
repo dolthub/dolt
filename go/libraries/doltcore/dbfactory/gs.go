@@ -3,7 +3,6 @@ package dbfactory
 import (
 	"cloud.google.com/go/storage"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"net/url"
@@ -16,18 +15,19 @@ type GSFactory struct {
 // CreateDB creates an GCS backed database
 func (fact GSFactory) CreateDB(ctx context.Context, urlObj *url.URL, params map[string]string) (datas.Database, error) {
 	var db datas.Database
-	err := pantoerr.PanicToError("failed to create database", func() error {
-		gcs, err := storage.NewClient(ctx)
+	gcs, err := storage.NewClient(ctx)
 
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return nil, err
+	}
 
-		gcsStore := nbs.NewGCSStore(ctx, urlObj.Host, urlObj.Path, gcs, defaultMemTableSize)
-		db = datas.NewDatabase(gcsStore)
+	gcsStore, err := nbs.NewGCSStore(ctx, urlObj.Host, urlObj.Path, gcs, defaultMemTableSize)
 
-		return nil
-	})
+	if err != nil {
+		return nil, err
+	}
+
+	db = datas.NewDatabase(gcsStore)
 
 	return db, err
 }

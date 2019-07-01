@@ -76,19 +76,19 @@ func main() {
 	open := newNullBlockStore
 	wrote := false
 	var writeDB func()
-	var refresh func() chunks.ChunkStore
+	var refresh func() (chunks.ChunkStore, error)
 	if *toNBS != "" || *toFile != "" || *toAWS != "" {
 		var reset func()
 		if *toNBS != "" {
 			dir := makeTempDir(*toNBS, pb)
 			defer os.RemoveAll(dir)
-			open = func() chunks.ChunkStore { return nbs.NewLocalStore(context.Background(), dir, bufSize) }
+			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), dir, bufSize) }
 			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
 
 		} else if *toFile != "" {
 			dir := makeTempDir(*toFile, pb)
 			defer os.RemoveAll(dir)
-			open = func() chunks.ChunkStore {
+			open = func() (chunks.ChunkStore, error) {
 				f, err := ioutil.TempFile(dir, "")
 				d.Chk.NoError(err)
 				return newFileBlockStore(f)
@@ -97,7 +97,7 @@ func main() {
 
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-			open = func() chunks.ChunkStore {
+			open = func() (chunks.ChunkStore, error) {
 				return nbs.NewAWSStore(context.Background(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 			reset = func() {
@@ -113,21 +113,21 @@ func main() {
 		}
 
 		writeDB = func() { wrote = ensureNovelWrite(wrote, open, src, pb) }
-		refresh = func() chunks.ChunkStore {
+		refresh = func() (chunks.ChunkStore, error) {
 			reset()
 			return open()
 		}
 	} else {
 		if *useNBS != "" {
-			open = func() chunks.ChunkStore { return nbs.NewLocalStore(context.Background(), *useNBS, bufSize) }
+			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), *useNBS, bufSize) }
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-			open = func() chunks.ChunkStore {
+			open = func() (chunks.ChunkStore, error) {
 				return nbs.NewAWSStore(context.Background(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 		}
 		writeDB = func() {}
-		refresh = func() chunks.ChunkStore { panic("WriteNovel unsupported with --useLDB and --useNBS") }
+		refresh = func() (chunks.ChunkStore, error) { panic("WriteNovel unsupported with --useLDB and --useNBS") }
 	}
 
 	benchmarks := []struct {

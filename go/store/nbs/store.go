@@ -193,7 +193,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	return updatedContents, nil
 }
 
-func NewAWSStore(ctx context.Context, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) *NomsBlockStore {
+func NewAWSStore(ctx context.Context, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
@@ -211,7 +211,7 @@ func NewAWSStore(ctx context.Context, table, ns, bucket string, s3 s3svc, ddb dd
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewGCSStore(ctx context.Context, bucketName, path string, gcs *storage.Client, memTableSize uint64) *NomsBlockStore {
+func NewGCSStore(ctx context.Context, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
 	bucket := gcs.Bucket(bucketName)
@@ -222,9 +222,13 @@ func NewGCSStore(ctx context.Context, bucketName, path string, gcs *storage.Clie
 	return newNomsBlockStore(ctx, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
-func NewLocalStore(ctx context.Context, dir string, memTableSize uint64) *NomsBlockStore {
+func NewLocalStore(ctx context.Context, dir string, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
-	d.PanicIfError(checkDir(dir))
+	err := checkDir(dir)
+
+	if err != nil {
+		return nil, err
+	}
 
 	mm := makeManifestManager(fileManifest{dir})
 	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
@@ -242,7 +246,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
+func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -262,15 +266,16 @@ func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister
 
 	exists, contents, err := nbs.mm.Fetch(ctx, nbs.stats)
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return nil, err
+	}
 
 	if exists {
 		nbs.upstream = contents
 		nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 	}
 
-	return nbs
+	return nbs, nil
 }
 
 /*func newNomsBlockStoreWithContents(ctx context.Context, mm manifestManager, mc manifestContents, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {

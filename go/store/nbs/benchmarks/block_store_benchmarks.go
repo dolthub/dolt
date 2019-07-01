@@ -15,10 +15,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type storeOpenFn func() chunks.ChunkStore
+type storeOpenFn func() (chunks.ChunkStore, error)
 
 func benchmarkNovelWrite(refreshStore storeOpenFn, src *dataSource, t assert.TestingT) bool {
-	store := refreshStore()
+	store, err := refreshStore()
+	assert.NoError(t, err)
 	writeToEmptyStore(store, src, t)
 	assert.NoError(t, store.Close())
 	return true
@@ -52,7 +53,8 @@ func goReadChunks(src *dataSource) <-chan *chunks.Chunk {
 }
 
 func benchmarkNoRefreshWrite(openStore storeOpenFn, src *dataSource, t assert.TestingT) {
-	store := openStore()
+	store, err := openStore()
+	assert.NoError(t, err)
 	chunx := goReadChunks(src)
 	for c := range chunx {
 		err := store.Put(context.Background(), *c)
@@ -68,7 +70,8 @@ func verifyChunk(h hash.Hash, c chunks.Chunk) {
 }
 
 func benchmarkRead(openStore storeOpenFn, hashes hashSlice, src *dataSource, t assert.TestingT) {
-	store := openStore()
+	store, err := openStore()
+	assert.NoError(t, err)
 	for _, h := range hashes {
 		c, err := store.Get(context.Background(), h)
 		assert.NoError(t, err)
@@ -97,7 +100,9 @@ func verifyChunks(hashes hash.HashSlice, foundChunks chan *chunks.Chunk) {
 }
 
 func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource, batchSize, concurrency int, t assert.TestingT) {
-	store := openStore()
+	store, err := openStore()
+	assert.NoError(t, err)
+
 	batch := make(hash.HashSlice, 0, batchSize)
 
 	wg := sync.WaitGroup{}
@@ -129,9 +134,7 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 	if len(batch) > 0 {
 		chunkChan := make(chan *chunks.Chunk, len(batch))
 		err := store.GetMany(context.Background(), batch.HashSet(), chunkChan)
-
-		// TODO: fix panics
-		d.PanicIfError(err)
+		assert.NoError(t, err)
 
 		close(chunkChan)
 
@@ -145,7 +148,8 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 
 func ensureNovelWrite(wrote bool, openStore storeOpenFn, src *dataSource, t assert.TestingT) bool {
 	if !wrote {
-		store := openStore()
+		store, err := openStore()
+		assert.NoError(t, err)
 		defer store.Close()
 		writeToEmptyStore(store, src, t)
 	}

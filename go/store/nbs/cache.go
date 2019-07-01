@@ -18,12 +18,20 @@ const (
 	defaultCacheMemTableSize uint64 = 1 << 27 // 128MiB
 )
 
-func NewCache(ctx context.Context) *NomsBlockCache {
+func NewCache(ctx context.Context) (*NomsBlockCache, error) {
 	dir, err := ioutil.TempDir("", "")
-	d.PanicIfError(err)
-	store := NewLocalStore(ctx, dir, defaultCacheMemTableSize)
-	d.Chk.NoError(err, "opening put cache in %s", dir)
-	return &NomsBlockCache{store, dir}
+
+	if err != nil {
+		return nil, err
+	}
+
+	store, err := NewLocalStore(ctx, dir, defaultCacheMemTableSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &NomsBlockCache{store, dir}, nil
 }
 
 // NomsBlockCache holds Chunks, allowing them to be retrieved by hash or enumerated in hash order.

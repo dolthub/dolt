@@ -127,7 +127,7 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, urlObj *url.URL, param
 	}
 
 	sess := session.Must(session.NewSessionWithOptions(opts))
-	return nbs.NewAWSStore(ctx, parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize), nil
+	return nbs.NewAWSStore(ctx, parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize)
 }
 
 func validatePath(path string) (string, error) {

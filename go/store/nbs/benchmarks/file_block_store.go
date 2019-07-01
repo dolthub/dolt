@@ -20,8 +20,8 @@ type fileBlockStore struct {
 	w  io.WriteCloser
 }
 
-func newFileBlockStore(w io.WriteCloser) chunks.ChunkStore {
-	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}
+func newFileBlockStore(w io.WriteCloser) (chunks.ChunkStore, error) {
+	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}, nil
 }
 
 func (fb fileBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
