@@ -124,7 +124,7 @@ func newSortedTestMap(length int, gen genValueFn) testMap {
 		keys = append(keys, gen(i))
 	}
 
-	sort.Sort(keys)
+	sort.Sort(ValueSort{keys, Format_7_18})
 
 	entries := make([]mapEntry, 0, len(keys))
 	for i, k := range keys {
@@ -1666,15 +1666,15 @@ func TestMapIterFrom(t *testing.T) {
 
 	kvs := generateNumbersAsValuesFromToBy(-50, 50, 1)
 	m1 := NewMap(context.Background(), Format_7_18, vrw, kvs...)
-	assert.True(kvs.Equals(test(m1, nil, Float(1000))))
-	assert.True(kvs.Equals(test(m1, Float(-1000), Float(1000))))
-	assert.True(kvs.Equals(test(m1, Float(-50), Float(1000))))
-	assert.True(kvs[2:].Equals(test(m1, Float(-49), Float(1000))))
-	assert.True(kvs[2:].Equals(test(m1, Float(-48), Float(1000))))
-	assert.True(kvs[4:].Equals(test(m1, Float(-47), Float(1000))))
-	assert.True(kvs[98:].Equals(test(m1, Float(48), Float(1000))))
-	assert.True(kvs[0:0].Equals(test(m1, Float(100), Float(1000))))
-	assert.True(kvs[50:60].Equals(test(m1, Float(0), Float(8))))
+	assert.True(kvs.Equals(Format_7_18, test(m1, nil, Float(1000))))
+	assert.True(kvs.Equals(Format_7_18, test(m1, Float(-1000), Float(1000))))
+	assert.True(kvs.Equals(Format_7_18, test(m1, Float(-50), Float(1000))))
+	assert.True(kvs[2:].Equals(Format_7_18, test(m1, Float(-49), Float(1000))))
+	assert.True(kvs[2:].Equals(Format_7_18, test(m1, Float(-48), Float(1000))))
+	assert.True(kvs[4:].Equals(Format_7_18, test(m1, Float(-47), Float(1000))))
+	assert.True(kvs[98:].Equals(Format_7_18, test(m1, Float(48), Float(1000))))
+	assert.True(kvs[0:0].Equals(Format_7_18, test(m1, Float(100), Float(1000))))
+	assert.True(kvs[50:60].Equals(Format_7_18, test(m1, Float(0), Float(8))))
 }
 
 func TestMapAt(t *testing.T) {

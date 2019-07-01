@@ -113,7 +113,7 @@ func validateSet(t *testing.T, vrw ValueReadWriter, s Set, values ValueSlice) {
 	s.IterAll(context.Background(), func(v Value) {
 		out = append(out, v)
 	})
-	assert.True(t, out.Equals(values))
+	assert.True(t, out.Equals(Format_7_18, values))
 }
 
 type setTestSuite struct {
@@ -144,7 +144,7 @@ func newSetTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 					out = append(out, v)
 				})
 				exp := ValueSlice(elems)
-				rv := exp.Equals(out)
+				rv := exp.Equals(Format_7_18, out)
 				if !rv {
 					printBadCollections(exp, out)
 				}
@@ -681,7 +681,7 @@ func TestSetIter2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		sort.Sort(ValueSlice(ts))
+		sort.Sort(ValueSort{ts, Format_7_18})
 		idx := uint64(0)
 		endAt := uint64(64)
 
@@ -727,7 +727,7 @@ func TestSetIterAll2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		sort.Sort(ValueSlice(ts))
+		sort.Sort(ValueSort{ts, Format_7_18})
 		idx := uint64(0)
 
 		set.IterAll(context.Background(), func(v Value) {

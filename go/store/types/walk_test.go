@@ -176,7 +176,7 @@ func (suite *WalkTestSuite) TestSkipListElement() {
 	wholeList := NewList(context.Background(), Format_7_18, suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeList)
 	for _, v := range []Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 6)
 }
@@ -185,7 +185,7 @@ func (suite *WalkTestSuite) TestSkipSetElement() {
 	wholeSet := NewSet(context.Background(), Format_7_18, suite.vs, suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set(context.Background())
 	reached := suite.skipWorker(wholeSet)
 	for _, v := range []Value{wholeSet, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 4)
 }
@@ -196,7 +196,7 @@ func (suite *WalkTestSuite) TestSkipMapValue() {
 	wholeMap := NewMap(context.Background(), Format_7_18, suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.shouldSee, suite.shouldSeeItem, suite.mustSkip, shouldAlsoSee, shouldAlsoSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 8)
 }
@@ -205,7 +205,7 @@ func (suite *WalkTestSuite) TestSkipMapKey() {
 	wholeMap := NewMap(context.Background(), Format_7_18, suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 8)
 }

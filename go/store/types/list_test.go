@@ -72,7 +72,7 @@ func validateList(t *testing.T, vrw ValueReadWriter, l List, values ValueSlice) 
 	l.IterAll(context.Background(), func(v Value, idx uint64) {
 		out = append(out, v)
 	})
-	assert.True(t, out.Equals(values))
+	assert.True(t, out.Equals(Format_7_18, values))
 }
 
 type listTestSuite struct {
@@ -102,7 +102,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 				l2.IterAll(context.Background(), func(v Value, index uint64) {
 					out = append(out, v)
 				})
-				return ValueSlice(elems).Equals(out)
+				return ValueSlice(elems).Equals(Format_7_18, out)
 			},
 			prependOne: func() Collection {
 				dup := make([]Value, length+1)
