@@ -66,11 +66,11 @@ func MakeStructType(name string, fields ...StructField) *Type {
 
 func MakeCycleType(name string) *Type {
 	d.PanicIfTrue(name == "")
-	return newType(CycleDesc(name))
+	return newType(Format_7_18, CycleDesc(name))
 }
 
 func makePrimitiveType(k NomsKind) *Type {
-	return newType(PrimitiveDesc(k))
+	return newType(Format_7_18, PrimitiveDesc(k))
 }
 
 var BoolType = makePrimitiveType(BoolKind)
@@ -85,7 +85,7 @@ var UintType = makePrimitiveType(UintKind)
 var NullType = makePrimitiveType(NullKind)
 
 func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
-	return newType(CompoundDesc{kind, elemTypes})
+	return newType(Format_7_18, CompoundDesc{kind, elemTypes})
 }
 
 func makeUnionType(elemTypes ...*Type) *Type {
@@ -96,7 +96,7 @@ func makeUnionType(elemTypes ...*Type) *Type {
 }
 
 func makeStructTypeQuickly(name string, fields structTypeFields) *Type {
-	return newType(StructDesc{name, fields})
+	return newType(Format_7_18, StructDesc{name, fields})
 }
 
 func makeStructType(name string, fields structTypeFields) *Type {

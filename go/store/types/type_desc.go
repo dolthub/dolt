@@ -12,7 +12,7 @@ import (
 type TypeDesc interface {
 	Kind() NomsKind
 	walkValues(cb ValueCallback)
-	writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type)
+	writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type)
 
 	// isSimplifiedForSure is used to determine if the type should be
 	// simplified. It may contain false negatives.
@@ -39,9 +39,8 @@ func (p PrimitiveDesc) Kind() NomsKind {
 func (p PrimitiveDesc) walkValues(cb ValueCallback) {
 }
 
-func (p PrimitiveDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type) {
-	// TODO(binformat)
-	NomsKind(p).writeTo(w, Format_7_18)
+func (p PrimitiveDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type) {
+	NomsKind(p).writeTo(w, f)
 }
 
 func (p PrimitiveDesc) isSimplifiedForSure() bool {
@@ -69,9 +68,8 @@ func (c CompoundDesc) walkValues(cb ValueCallback) {
 	}
 }
 
-func (c CompoundDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type) {
-	// TODO(binformat)
-	c.kind.writeTo(w, Format_7_18)
+func (c CompoundDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type) {
+	c.kind.writeTo(w, f)
 	if c.kind == UnionKind {
 		w.writeCount(uint64(len(c.ElemTypes)))
 	}
@@ -113,21 +111,19 @@ func (s StructDesc) walkValues(cb ValueCallback) {
 	}
 }
 
-func (s StructDesc) writeTo(w nomsWriter, t *Type, seenStructs map[string]*Type) {
+func (s StructDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type) {
 	name := s.Name
 
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
-			// TODO(binformat)
-			CycleKind.writeTo(w, Format_7_18)
+			CycleKind.writeTo(w, f)
 			w.writeString(name)
 			return
 		}
 		seenStructs[name] = t
 	}
 
-	// TODO(binformat)
-	StructKind.writeTo(w, Format_7_18)
+	StructKind.writeTo(w, f)
 	w.writeString(name)
 	w.writeCount(uint64(s.Len()))
 
@@ -193,7 +189,7 @@ func (c CycleDesc) Kind() NomsKind {
 func (c CycleDesc) walkValues(cb ValueCallback) {
 }
 
-func (c CycleDesc) writeTo(w nomsWriter, t *Type, seenStruct map[string]*Type) {
+func (c CycleDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStruct map[string]*Type) {
 	panic("Should not write cycle types")
 }
 
