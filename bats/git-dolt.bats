@@ -28,6 +28,22 @@ teardown() {
 	rm -rf $BATS_TMPDIR/remotes-$$
 }
 
+@test "git dolt install sets up a smudge filter in the current git repository" {
+	init_git_repo
+	run git dolt install
+	[ "$status" -eq 0 ]
+	[[ "${lines[0]}" =~ "Installed git-dolt smudge filter" ]] || false
+	[[ "${lines[1]}" =~ "commit the changes to .gitattributes" ]] || false
+
+	run cat .gitattributes
+	[ "${lines[0]}" = "*.git-dolt filter=git-dolt" ]
+
+	run cat .git/config
+	len=${#lines[@]}
+	[ "${lines[len-2]}" = "[filter \"git-dolt\"]" ]
+	[[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
+}
+
 @test "git dolt link takes a remote url (and an optional revspec and destination directory), clones the repo, and outputs a pointer file" {
 	init_git_repo
 	run git dolt link $REMOTE
@@ -49,13 +65,30 @@ teardown() {
 	[[ "${lines[0]}" =~ "test-repo" ]] || false
 }
 
+@test "git dolt's smudge filter automatically clones dolt repositories referenced in checked out git-dolt pointer files" {
+	init_git_repo
+	git dolt install
+	git dolt link $REMOTE
+	git add .
+	git commit -m "set up git-dolt integration"
+	rm -rf test-repo test-repo.git-dolt
+
+	run git checkout -- test-repo.git-dolt
+	[[ "$output" =~ "Found git-dolt pointer file" ]] || false
+	[[ "$output" =~ "Cloning remote $REMOTE" ]] || false
+	[ -d test-repo ]
+
+	cd test-repo
+	[ `get_head_commit` = "$DOLT_HEAD_COMMIT" ]
+}
+
 @test "git dolt fetch takes the name of a git-dolt pointer file and clones the repo to the specified revision if it doesn't exist" {
 	init_git_repo
 	create_test_pointer
 
 	run git dolt fetch test-repo
 	[ "$status" -eq 0 ]
-	[ "${lines[0]}" = "Dolt repository cloned from remote $REMOTE to directory test-repo at revision $DOLT_HEAD_COMMIT" ]
+	[[ "$output" =~ "Dolt repository cloned from remote $REMOTE to directory test-repo at revision $DOLT_HEAD_COMMIT" ]] || false
 	[ -d test-repo ]
 
 	cd test-repo
@@ -108,6 +141,8 @@ init_git_repo() {
 	mkdir ../git-repo-$$
 	cd ../git-repo-$$
 	git init
+	git config user.email "foo@bar.com"
+	git config user.name "Foo User"
 }
 
 create_test_pointer() {

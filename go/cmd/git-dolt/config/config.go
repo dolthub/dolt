@@ -1,3 +1,5 @@
+// Package config contains types and functions for dealing with
+// git-dolt configuration, including config file I/O.
 package config
 
 import (
