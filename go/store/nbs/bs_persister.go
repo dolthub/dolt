@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 type blobstorePersister struct {
@@ -97,8 +96,6 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 		if err != nil {
 			return nil, nil, err
 		}
-
-		d.PanicIfFalse(size == int64(len(buff)))
 
 		if size != int64(len(buff)) {
 			return nil, nil, errors.New("failed to read all data")
