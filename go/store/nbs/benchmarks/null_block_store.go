@@ -13,8 +13,8 @@ import (
 type nullBlockStore struct {
 }
 
-func newNullBlockStore() chunks.ChunkStore {
-	return nullBlockStore{}
+func newNullBlockStore() (chunks.ChunkStore, error) {
+	return nullBlockStore{}, nil
 }
 
 func (nb nullBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {

@@ -45,7 +45,11 @@ func (cache *DBCache) Get(org, repo string) (*nbs.NomsBlockStore, error) {
 			return nil, err
 		}
 
-		newCS = nbs.NewLocalStore(context.TODO(), id, defaultMemTableSize)
+		newCS, err = nbs.NewLocalStore(context.TODO(), id, defaultMemTableSize)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	cache.dbs[id] = newCS
