@@ -50,7 +50,7 @@ func testASE(t *testing.T, rng *rand.Rand) {
 	sortConcurrency := int(minSortCon + rng.Int31n(maxSortCon-minSortCon))
 
 	kvps := createKVPs(rng, numKVPs)
-	asyncSorted := NewAsyncSortedEdits(buffSize, asyncSortConcurrency, sortConcurrency)
+	asyncSorted := NewAsyncSortedEdits(types.Format_7_18, buffSize, asyncSortConcurrency, sortConcurrency)
 
 	for _, kvp := range kvps {
 		asyncSorted.AddEdit(kvp.Key, kvp.Val)

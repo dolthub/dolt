@@ -20,8 +20,8 @@ import (
 )
 
 func init() {
-	types.CreateEditAccForMapEdits = func() types.EditAccumulator {
-		return edits.NewAsyncSortedEdits(16*1024, 4, 2)
+	types.CreateEditAccForMapEdits = func(f *types.Format) types.EditAccumulator {
+		return edits.NewAsyncSortedEdits(f, 16*1024, 4, 2)
 	}
 }
 

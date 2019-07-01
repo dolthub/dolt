@@ -58,7 +58,7 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 
 	for len(colls) > 1 {
 		for i, coll := range colls {
-			inOrder, _ := IsInOrder(NewItr(coll))
+			inOrder, _ := IsInOrder(NewItr(types.Format_7_18, coll))
 			if !inOrder {
 				t.Fatal(i, "not in order")
 			}
@@ -88,7 +88,7 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 		colls = newColls
 	}
 
-	inOrder, numItems := IsInOrder(NewItr(colls[0]))
+	inOrder, numItems := IsInOrder(NewItr(types.Format_7_18, colls[0]))
 	if !inOrder {
 		t.Fatal("collection not in order")
 	} else if numItems != numColls*size {
@@ -103,7 +103,7 @@ func createKVPColl(rng *rand.Rand, size int) *KVPCollection {
 		kvps[i] = types.KVP{types.Uint(rng.Uint64() % 10000), types.NullValue}
 	}
 
-	sort.Stable(kvps)
+	sort.Stable(types.KVPSort{kvps, types.Format_7_18})
 
-	return NewKVPCollection(kvps)
+	return NewKVPCollection(types.Format_7_18, kvps)
 }

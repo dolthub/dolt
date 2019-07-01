@@ -104,7 +104,7 @@ func main() {
 		orderedChildren := hash.HashSlice{}
 		nextLevel := hash.HashSlice{}
 		for _, h := range current {
-			currentValues[h].WalkRefs(func(r types.Ref) {
+			currentValues[h].WalkRefs(types.Format_7_18, func(r types.Ref) {
 				target := r.TargetHash()
 				orderedChildren = append(orderedChildren, target)
 				if !visited[target] && r.Height() > 1 {
