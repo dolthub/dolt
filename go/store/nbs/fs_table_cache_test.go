@@ -32,17 +32,21 @@ func TestFSTableCache(t *testing.T) {
 
 		tc := newFSTableCache(dir, uint64(sum), len(datas))
 		for _, d := range datas {
-			tc.store(computeAddr(d), bytes.NewReader(d), uint64(len(d)))
+			err := tc.store(computeAddr(d), bytes.NewReader(d), uint64(len(d)))
+			assert.NoError(t, err)
 		}
 
 		expiredName := computeAddr(datas[0])
-		assert.Nil(t, tc.checkout(expiredName))
+		r, err := tc.checkout(expiredName)
+		assert.NoError(t, err)
+		assert.Nil(t, r)
 		_, fserr := os.Stat(filepath.Join(dir, expiredName.String()))
 		assert.True(t, os.IsNotExist(fserr))
 
 		for _, d := range datas[1:] {
 			name := computeAddr(d)
-			r := tc.checkout(name)
+			r, err := tc.checkout(name)
+			assert.NoError(t, err)
 			assert.NotNil(t, r)
 			assertDataInReaderAt(t, d, r)
 			_, fserr := os.Stat(filepath.Join(dir, name.String()))

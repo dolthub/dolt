@@ -35,14 +35,16 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 			names = append(names, name)
 		}
 		for _, name := range names {
-			fts.Open(context.Background(), name, 1, nil)
+			_, err := fts.Open(context.Background(), name, 1, nil)
+			assert.NoError(err)
 		}
 		removeTables(dir, names...)
 	}()
 
 	// Tables should still be cached, even though they're gone from disk
 	for i, name := range names {
-		src := fts.Open(context.Background(), name, 1, nil)
+		src, err := fts.Open(context.Background(), name, 1, nil)
+		assert.NoError(err)
 		h := computeAddr([]byte{byte(i)})
 		assert.True(src.has(h))
 	}
@@ -92,7 +94,9 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
 		assert.NoError(err)
-		tr := newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), fileBlockSize)
+		ti, err := parseTableIndex(buff)
+		assert.NoError(err)
+		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		assertChunksInReader(testChunks, tr, assert)
 	}
 }
@@ -104,7 +108,7 @@ func persistTableData(p tablePersister, chunx ...[]byte) (src chunkSource, err e
 			return nil, fmt.Errorf("memTable too full to add %s", computeAddr(c))
 		}
 	}
-	return p.Persist(context.Background(), mt, nil, &Stats{}), nil
+	return p.Persist(context.Background(), mt, nil, &Stats{})
 }
 
 func TestFSTablePersisterPersistNoData(t *testing.T) {
@@ -123,10 +127,11 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
 
-	src := fts.Persist(context.Background(), mt, existingTable, &Stats{})
+	src, err := fts.Persist(context.Background(), mt, existingTable, &Stats{})
+	assert.NoError(err)
 	assert.True(src.count() == 0)
 
-	_, err := os.Stat(filepath.Join(dir, src.hash().String()))
+	_, err = os.Stat(filepath.Join(dir, src.hash().String()))
 	assert.True(os.IsNotExist(err), "%v", err)
 }
 
@@ -147,11 +152,12 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	}()
 
 	// Table should still be cached, even though it's gone from disk
-	src := fts.Open(context.Background(), name, uint32(len(testChunks)), nil)
+	src, err := fts.Open(context.Background(), name, uint32(len(testChunks)), nil)
+	assert.NoError(err)
 	assertChunksInReader(testChunks, src, assert)
 
 	// Evict |name| from cache
-	_, err := persistTableData(fts, []byte{0xff})
+	_, err = persistTableData(fts, []byte{0xff})
 	assert.NoError(err)
 
 	present := fc.reportEntries()
@@ -176,15 +182,19 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		assert.NoError(err)
 		name, err := writeTableData(dir, c, randChunk)
 		assert.NoError(err)
-		sources[i] = fts.Open(context.Background(), name, 2, nil)
+		sources[i], err = fts.Open(context.Background(), name, 2, nil)
+		assert.NoError(err)
 	}
 
-	src := fts.ConjoinAll(context.Background(), sources, &Stats{})
+	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
+	assert.NoError(err)
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
 		assert.NoError(err)
-		tr := newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), fileBlockSize)
+		ti, err := parseTableIndex(buff)
+		assert.NoError(err)
+		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		assertChunksInReader(testChunks, tr, assert)
 	}
 
@@ -208,14 +218,21 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		for _, c := range testChunks {
 			mt.addChunk(computeAddr(c), c)
 		}
-		sources[i] = fts.Persist(context.Background(), mt, nil, &Stats{})
+
+		var err error
+		sources[i], err = fts.Persist(context.Background(), mt, nil, &Stats{})
+		assert.NoError(err)
 	}
-	src := fts.ConjoinAll(context.Background(), sources, &Stats{})
+
+	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
+	assert.NoError(err)
 
 	if assert.True(src.count() > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
 		assert.NoError(err)
-		tr := newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), fileBlockSize)
+		ti, err := parseTableIndex(buff)
+		assert.NoError(err)
+		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		assertChunksInReader(testChunks, tr, assert)
 		assert.EqualValues(reps*len(testChunks), tr.count())
 	}

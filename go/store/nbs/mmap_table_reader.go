@@ -6,6 +6,8 @@ package nbs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/edsrzf/mmap-go"
 	"io"
 	"math"
@@ -36,7 +38,7 @@ func init() {
 	}
 }
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) chunkSource {
+func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) (chunkSource, error) {
 	path := filepath.Join(dir, h.String())
 
 	var index tableIndex
@@ -49,35 +51,60 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 
 	if !found {
 		f, err := fc.RefFile(path)
-		d.PanicIfError(err)
+
+		if err != nil {
+			return nil, err
+		}
+
 		defer fc.UnrefFile(path)
 
 		fi, err := f.Stat()
-		d.PanicIfError(err)
-		d.PanicIfTrue(fi.Size() < 0)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if fi.Size() < 0 {
+			return nil, errors.New(path + " is of size 0")
+		}
+
 		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
 		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
 		aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
-		d.PanicIfTrue(fi.Size()-aligned > maxInt)
+
+		if fi.Size()-aligned > maxInt {
+			return nil, fmt.Errorf("%s - size: %d alignment: %d> maxInt: %d", path, fi.Size(), aligned, maxInt)
+		}
 
 		mm, err := mmap.MapRegion(f, int(fi.Size()-aligned), mmap.RDONLY, 0, aligned)
 		d.PanicIfError(err)
 		buff := []byte(mm)
-		index = parseTableIndex(buff[indexOffset-aligned:])
+		index, err = parseTableIndex(buff[indexOffset-aligned:])
+
+		if err != nil {
+			return nil, err
+		}
 
 		if indexCache != nil {
 			indexCache.put(h, index)
 		}
+
 		err = mm.Unmap()
-		d.PanicIfError(err)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	d.PanicIfFalse(chunkCount == index.chunkCount)
+	if chunkCount != index.chunkCount {
+		return nil, errors.New("unexpected chunk count")
+	}
+
 	return &mmapTableReader{
 		newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize),
 		fc,
 		h,
-	}
+	}, nil
 }
 
 func (mmtr *mmapTableReader) hash() addr {

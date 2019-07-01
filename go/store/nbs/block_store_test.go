@@ -408,7 +408,8 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			rdrs[i] = src
 		}
 		chunkChan := make(chan extractRecord, rdrs.count())
-		rdrs.extract(context.Background(), chunkChan)
+		err := rdrs.extract(context.Background(), chunkChan)
+		assert.NoError(t, err)
 		close(chunkChan)
 
 		for rec := range chunkChan {
@@ -447,9 +448,12 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	makeCanned := func(conjoinees, keepers []tableSpec, p tablePersister) cannedConjoin {
 		srcs := chunkSources{}
 		for _, sp := range conjoinees {
-			srcs = append(srcs, p.Open(context.Background(), sp.name, sp.chunkCount, nil))
+			cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
+			assert.NoError(t, err)
+			srcs = append(srcs, cs)
 		}
-		conjoined := p.ConjoinAll(context.Background(), srcs, stats)
+		conjoined, err := p.ConjoinAll(context.Background(), srcs, stats)
+		assert.NoError(t, err)
 		cannedSpecs := []tableSpec{{conjoined.hash(), conjoined.count()}}
 		return cannedConjoin{true, append(cannedSpecs, keepers...)}
 	}

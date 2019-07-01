@@ -26,7 +26,7 @@ func TestAWSChunkSource(t *testing.T) {
 	dts := &ddbTableStore{ddb, "table", nil, nil}
 
 	makeSrc := func(chunkMax int, ic *indexCache) chunkSource {
-		return newAWSChunkSource(
+		cs, err := newAWSChunkSource(
 			context.Background(),
 			dts,
 			s3or,
@@ -36,6 +36,10 @@ func TestAWSChunkSource(t *testing.T) {
 			ic,
 			&Stats{},
 		)
+
+		assert.NoError(t, err)
+
+		return cs
 	}
 
 	t.Run("Dynamo", func(t *testing.T) {
@@ -48,7 +52,8 @@ func TestAWSChunkSource(t *testing.T) {
 
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
-			index := parseTableIndex(tableData)
+			index, err := parseTableIndex(tableData)
+			assert.NoError(err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)
 
@@ -71,7 +76,8 @@ func TestAWSChunkSource(t *testing.T) {
 
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
-			index := parseTableIndex(tableData)
+			index, err := parseTableIndex(tableData)
+			assert.NoError(err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)
 

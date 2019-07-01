@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"testing"
 
@@ -43,7 +44,9 @@ func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 			c := nextChunk()
 			mt.addChunk(computeAddr(c), c)
 		}
-		srcs = append(srcs, p.Persist(context.Background(), mt, nil, &Stats{}))
+		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		d.PanicIfError(err)
+		srcs = append(srcs, cs)
 	}
 	return
 }
@@ -70,7 +73,13 @@ func TestConjoin(t *testing.T) {
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
 		open := func(specs []tableSpec) (srcs chunkReaderGroup) {
 			for _, sp := range specs {
-				srcs = append(srcs, p.Open(context.Background(), sp.name, sp.chunkCount, nil))
+				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
+
+				if err != nil {
+					assert.NoError(t, err)
+				}
+
+				srcs = append(srcs, cs)
 			}
 			return
 		}
@@ -80,7 +89,9 @@ func TestConjoin(t *testing.T) {
 		close(chunkChan)
 
 		for rec := range chunkChan {
-			assert.True(t, actualSrcs.has(rec.a))
+			has, err := actualSrcs.has(rec.a)
+			assert.NoError(t, err)
+			assert.True(t, has)
 		}
 	}
 
@@ -133,7 +144,8 @@ func TestConjoin(t *testing.T) {
 			mt := newMemTable(testMemTableSize)
 			data := []byte{0xde, 0xad}
 			mt.addChunk(computeAddr(data), data)
-			src := p.Persist(context.Background(), mt, nil, &Stats{})
+			src, err := p.Persist(context.Background(), mt, nil, &Stats{})
+			assert.NoError(t, err)
 			return tableSpec{src.hash(), src.count()}
 		}
 		for _, c := range tc {

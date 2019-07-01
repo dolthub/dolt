@@ -25,51 +25,103 @@ type tableSet struct {
 	rl              chan struct{}
 }
 
-func (ts tableSet) has(h addr) bool {
-	f := func(css chunkSources) bool {
+func (ts tableSet) has(h addr) (bool, error) {
+	f := func(css chunkSources) (bool, error) {
 		for _, haver := range css {
-			if haver.has(h) {
-				return true
-			}
-		}
-		return false
-	}
-	return f(ts.novel) || f(ts.upstream)
-}
+			has, err := haver.has(h)
 
-func (ts tableSet) hasMany(addrs []hasRecord) (remaining bool) {
-	f := func(css chunkSources) (remaining bool) {
-		for _, haver := range css {
-			if !haver.hasMany(addrs) {
-				return false
+			if err != nil {
+				return false, err
 			}
-		}
-		return true
-	}
-	return f(ts.novel) && f(ts.upstream)
-}
 
-func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) []byte {
-	f := func(css chunkSources) []byte {
-		for _, haver := range css {
-			if data := haver.get(ctx, h, stats); data != nil {
-				return data
+			if has {
+				return true, nil
 			}
 		}
-		return nil
+		return false, nil
 	}
-	if data := f(ts.novel); data != nil {
-		return data
+
+	novelHas, err := f(ts.novel)
+
+	if err != nil {
+		return false, err
 	}
+
+	if novelHas {
+		return true, nil
+	}
+
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
-	f := func(css chunkSources) (remaining bool) {
+func (ts tableSet) hasMany(addrs []hasRecord) (bool, error) {
+	f := func(css chunkSources) (bool, error) {
 		for _, haver := range css {
+			has, err := haver.hasMany(addrs)
+
+			if err != nil {
+				return false, err
+			}
+
+			if !has {
+				return false, nil
+			}
+		}
+		return true, nil
+	}
+	remaining, err := f(ts.novel)
+
+	if err != nil {
+		return false, err
+	}
+
+	if !remaining {
+		return false, nil
+	}
+
+	return f(ts.upstream)
+}
+
+func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+	f := func(css chunkSources) ([]byte, error) {
+		for _, haver := range css {
+			data, err := haver.get(ctx, h, stats)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if data != nil {
+				return data, nil
+			}
+		}
+
+		return nil, nil
+	}
+
+	data, err := f(ts.novel)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if data != nil {
+		return data, nil
+	}
+
+	return f(ts.upstream)
+}
+
+func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+	f := func(css chunkSources) bool {
+		for _, haver := range css {
+			if ae.IsSet() {
+				return false
+			}
+
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
-				go rp.getManyAtOffsets(reqs, offsets, foundChunks, wg, stats)
+				go rp.getManyAtOffsets(reqs, offsets, foundChunks, wg, ae, stats)
 				if !remaining {
 					return false
 				}
@@ -77,12 +129,16 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 				continue
 			}
 
-			if !haver.getMany(ctx, reqs, foundChunks, wg, stats) {
+			remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
+
+			if !remaining {
 				return false
 			}
 		}
+
 		return true
 	}
+
 	return f(ts.novel) && f(ts.upstream)
 }
 
@@ -171,14 +227,24 @@ func (ts tableSet) Prepend(ctx context.Context, mt *memTable, stats *Stats) tabl
 	return newTs
 }
 
-func (ts tableSet) extract(ctx context.Context, chunks chan<- extractRecord) {
+func (ts tableSet) extract(ctx context.Context, chunks chan<- extractRecord) error {
 	// Since new tables are _prepended_ to a tableSet, extracting chunks in insertOrder requires iterating ts.upstream back to front, followed by ts.novel.
 	for i := len(ts.upstream) - 1; i >= 0; i-- {
-		ts.upstream[i].extract(ctx, chunks)
+		err := ts.upstream[i].extract(ctx, chunks)
+
+		if err != nil {
+			return err
+		}
 	}
 	for i := len(ts.novel) - 1; i >= 0; i-- {
-		ts.novel[i].extract(ctx, chunks)
+		err := ts.novel[i].extract(ctx, chunks)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // Flatten returns a new tableSet with |upstream| set to the union of ts.novel
@@ -224,18 +290,27 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	}
 
 	// Open all the new upstream tables concurrently
+	ae := NewAtomicError()
 	merged.upstream = make(chunkSources, len(tablesToOpen))
 	wg := &sync.WaitGroup{}
 	i := 0
 	for _, spec := range tablesToOpen {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			merged.upstream[idx] = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
-			wg.Done()
+			defer wg.Done()
+
+			if !ae.IsSet() {
+				var err error
+				merged.upstream[idx], err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
+				ae.Set(err)
+			}
 		}(i, spec)
 		i++
 	}
 	wg.Wait()
+
+	// TODO: fix panics
+	d.PanicIfError(ae.Get())
 
 	return merged
 }

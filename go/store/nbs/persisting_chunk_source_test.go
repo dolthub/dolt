@@ -23,7 +23,7 @@ type pausingFakeTablePersister struct {
 	trigger <-chan struct{}
 }
 
-func (ftp pausingFakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (ftp pausingFakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	<-ftp.trigger
 	return ftp.tablePersister.Persist(context.Background(), mt, haver, stats)
 }

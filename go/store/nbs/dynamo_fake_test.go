@@ -33,13 +33,19 @@ func makeFakeDDB(t *testing.T) *fakeDDB {
 	}
 }
 
-func (m *fakeDDB) readerForTable(name addr) chunkReader {
+func (m *fakeDDB) readerForTable(name addr) (chunkReader, error) {
 	if i, present := m.data[fmtTableName(name)]; present {
 		buff, ok := i.([]byte)
 		assert.True(m.t, ok)
-		return newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), fileBlockSize)
+		ti, err := parseTableIndex(buff)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize), nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInput, opts ...request.Option) (*dynamodb.GetItemOutput, error) {

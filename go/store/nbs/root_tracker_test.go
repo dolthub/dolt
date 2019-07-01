@@ -7,6 +7,7 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sync"
 	"testing"
 
@@ -318,7 +319,11 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunks ...[]byte) (newRoot hash.Hash, persisted [][]byte) {
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of(rootChunk)
 	persisted = append(chunks, rootChunk)
-	src := p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
+	src, err := p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
 	return
 }
@@ -393,28 +398,40 @@ type fakeTablePersister struct {
 	mu      *sync.RWMutex
 }
 
-func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	if mt.count() > 0 {
 		name, data, chunkCount := mt.write(haver, stats)
 		if chunkCount > 0 {
 			ftp.mu.Lock()
 			defer ftp.mu.Unlock()
-			ftp.sources[name] = newTableReader(parseTableIndex(data), tableReaderAtFromBytes(data), fileBlockSize)
-			return chunkSourceAdapter{ftp.sources[name], name}
+			ti, err := parseTableIndex(data)
+
+			if err != nil {
+				return nil, err
+			}
+
+			ftp.sources[name] = newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+			return chunkSourceAdapter{ftp.sources[name], name}, nil
 		}
 	}
-	return emptyChunkSource{}
+	return emptyChunkSource{}, nil
 }
 
-func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
 	name, data, chunkCount := compactSourcesToBuffer(sources)
 	if chunkCount > 0 {
 		ftp.mu.Lock()
 		defer ftp.mu.Unlock()
-		ftp.sources[name] = newTableReader(parseTableIndex(data), tableReaderAtFromBytes(data), fileBlockSize)
-		return chunkSourceAdapter{ftp.sources[name], name}
+		ti, err := parseTableIndex(data)
+
+		if err != nil {
+			return nil, err
+		}
+
+		ftp.sources[name] = newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+		return chunkSourceAdapter{ftp.sources[name], name}, nil
 	}
-	return emptyChunkSource{}
+	return emptyChunkSource{}, nil
 }
 
 func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32) {
@@ -436,13 +453,13 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 		chunks := make(chan extractRecord)
 		go func() {
 			defer close(chunks)
-			defer func() {
-				if r := recover(); r != nil {
-					chunks <- extractRecord{a: src.hash(), err: r}
-				}
-			}()
-			src.extract(context.Background(), chunks)
+			err := src.extract(context.Background(), chunks)
+
+			if err != nil {
+				chunks <- extractRecord{a: src.hash(), err: err}
+			}
 		}()
+
 		for rec := range chunks {
 			if rec.err != nil {
 				errString += fmt.Sprintf("Failed to extract %s:\n %v\n******\n\n", rec.a, rec.err)
@@ -452,15 +469,17 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 		}
 	}
 
+	// TODO: fix panics
 	if errString != "" {
 		panic(fmt.Errorf(errString))
 	}
+
 	tableSize, name := tw.finish()
 	return name, buff[:tableSize], chunkCount
 }
 
-func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
+func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	ftp.mu.RLock()
 	defer ftp.mu.RUnlock()
-	return chunkSourceAdapter{ftp.sources[name], name}
+	return chunkSourceAdapter{ftp.sources[name], name}, nil
 }

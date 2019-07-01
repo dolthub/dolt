@@ -38,6 +38,12 @@ func buildTable(chunks [][]byte) ([]byte, addr) {
 	return buff[:length], blockHash
 }
 
+func getStringOrAssert(assert *assert.Assertions, ctx context.Context, tr tableReader, data []byte) string {
+	bytes, err := tr.get(ctx, computeAddr(data), &Stats{})
+	assert.NoError(err)
+	return string(bytes)
+}
+
 func TestSimple(t *testing.T) {
 	assert := assert.New(t)
 
@@ -48,13 +54,15 @@ func TestSimple(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
+	ti, err := parseTableIndex(tableData)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	assertChunksInReader(chunks, tr, assert)
 
-	assert.Equal(string(chunks[0]), string(tr.get(context.Background(), computeAddr(chunks[0]), &Stats{})))
-	assert.Equal(string(chunks[1]), string(tr.get(context.Background(), computeAddr(chunks[1]), &Stats{})))
-	assert.Equal(string(chunks[2]), string(tr.get(context.Background(), computeAddr(chunks[2]), &Stats{})))
+	assert.Equal(string(chunks[0]), getStringOrAssert(assert, context.Background(), tr, chunks[0]))
+	assert.Equal(string(chunks[1]), getStringOrAssert(assert, context.Background(), tr, chunks[1]))
+	assert.Equal(string(chunks[2]), getStringOrAssert(assert, context.Background(), tr, chunks[2]))
 
 	notPresent := [][]byte{
 		[]byte("yo"),
@@ -64,9 +72,9 @@ func TestSimple(t *testing.T) {
 
 	assertChunksNotInReader(notPresent, tr, assert)
 
-	assert.NotEqual(string(notPresent[0]), string(tr.get(context.Background(), computeAddr(notPresent[0]), &Stats{})))
-	assert.NotEqual(string(notPresent[1]), string(tr.get(context.Background(), computeAddr(notPresent[1]), &Stats{})))
-	assert.NotEqual(string(notPresent[2]), string(tr.get(context.Background(), computeAddr(notPresent[2]), &Stats{})))
+	assert.NotEqual(string(notPresent[0]), getStringOrAssert(assert, context.Background(), tr, notPresent[0]))
+	assert.NotEqual(string(notPresent[1]), getStringOrAssert(assert, context.Background(), tr, notPresent[1]))
+	assert.NotEqual(string(notPresent[2]), getStringOrAssert(assert, context.Background(), tr, notPresent[2]))
 }
 
 func assertChunksInReader(chunks [][]byte, r chunkReader, assert *assert.Assertions) {
@@ -91,7 +99,9 @@ func TestHasMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
+	ti, err := parseTableIndex(tableData)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
@@ -101,7 +111,8 @@ func TestHasMany(t *testing.T) {
 	}
 	sort.Sort(hasRecordByPrefix(hasAddrs))
 
-	tr.hasMany(hasAddrs)
+	_, err = tr.hasMany(hasAddrs)
+	assert.NoError(err)
 	for _, ha := range hasAddrs {
 		assert.True(ha.has, "Nothing for prefix %d", ha.prefix)
 	}
@@ -137,14 +148,17 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	length, _ := tw.finish()
 	buff = buff[:length]
 
-	tr := newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), fileBlockSize)
+	ti, err := parseTableIndex(buff)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 
 	hasAddrs := make([]hasRecord, 2)
 	// Leave out the first address
 	hasAddrs[0] = hasRecord{&addrs[1], addrs[1].Prefix(), 1, false}
 	hasAddrs[1] = hasRecord{&addrs[2], addrs[2].Prefix(), 2, false}
 
-	tr.hasMany(hasAddrs)
+	_, err = tr.hasMany(hasAddrs)
+	assert.NoError(err)
 
 	for _, ha := range hasAddrs {
 		assert.True(ha.has, fmt.Sprintf("Nothing for prefix %x\n", ha.prefix))
@@ -161,7 +175,9 @@ func TestGetMany(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(data)
-	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
+	ti, err := parseTableIndex(tableData)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
 	getBatch := []getRecord{
@@ -172,11 +188,14 @@ func TestGetMany(t *testing.T) {
 	sort.Sort(getRecordByPrefix(getBatch))
 
 	wg := &sync.WaitGroup{}
+	ae := NewAtomicError()
 
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(context.Background(), getBatch, chunkChan, wg, &Stats{})
+	tr.getMany(context.Background(), getBatch, chunkChan, wg, ae, &Stats{})
 	wg.Wait()
 	close(chunkChan)
+
+	assert.NoError(ae.Get())
 
 	gotCount := 0
 	for range chunkChan {
@@ -196,7 +215,9 @@ func TestCalcReads(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), 0)
+	ti, err := parseTableIndex(tableData)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), false},
@@ -227,12 +248,19 @@ func TestExtract(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
+	ti, err := parseTableIndex(tableData)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
 	chunkChan := make(chan extractRecord)
-	go func() { tr.extract(context.Background(), chunkChan); close(chunkChan) }()
+	go func() {
+		err := tr.extract(context.Background(), chunkChan)
+		assert.NoError(err)
+		close(chunkChan)
+	}()
+
 	i := 0
 	for rec := range chunkChan {
 		assert.NotNil(rec.data, "Nothing for", addrs[i])
@@ -257,20 +285,26 @@ func Test65k(t *testing.T) {
 	}
 
 	tableData, _ := buildTable(chunks)
-	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
+	ti, err := parseTableIndex(tableData)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
 		h := computeAddr(data)
 		assert.True(tr.has(computeAddr(data)))
-		assert.Equal(string(data), string(tr.get(context.Background(), h, &Stats{})))
+		bytes, err := tr.get(context.Background(), h, &Stats{})
+		assert.NoError(err)
+		assert.Equal(string(data), string(bytes))
 	}
 
 	for i := count; i < count*2; i++ {
 		data := dataFn(i)
 		h := computeAddr(data)
 		assert.False(tr.has(computeAddr(data)))
-		assert.NotEqual(string(data), string(tr.get(context.Background(), h, &Stats{})))
+		bytes, err := tr.get(context.Background(), h, &Stats{})
+		assert.NoError(err)
+		assert.NotEqual(string(data), string(bytes))
 	}
 }
 
@@ -302,7 +336,9 @@ func doTestNGetMany(t *testing.T, count int) {
 	}
 
 	tableData, _ := buildTable(data)
-	tr := newTableReader(parseTableIndex(tableData), tableReaderAtFromBytes(tableData), fileBlockSize)
+	ti, err := parseTableIndex(tableData)
+	assert.NoError(err)
+	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
 
 	getBatch := make([]getRecord, len(data))
 	for i := 0; i < count; i++ {
@@ -312,11 +348,14 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	sort.Sort(getRecordByPrefix(getBatch))
 
+	ae := NewAtomicError()
 	wg := &sync.WaitGroup{}
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
-	tr.getMany(context.Background(), getBatch, chunkChan, wg, &Stats{})
+	tr.getMany(context.Background(), getBatch, chunkChan, wg, ae, &Stats{})
 	wg.Wait()
 	close(chunkChan)
+
+	assert.NoError(ae.Get())
 
 	gotCount := 0
 	for range chunkChan {

@@ -101,8 +101,12 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 	for i, spec := range upstream {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			sources[idx] = p.Open(ctx, spec.name, spec.chunkCount, stats)
-			wg.Done()
+			defer wg.Done()
+			var err error
+			sources[idx], err = p.Open(ctx, spec.name, spec.chunkCount, stats)
+
+			// TODO: fix panics
+			d.PanicIfError(err)
 		}(i, spec)
 		i++
 	}
@@ -111,7 +115,10 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 	t1 := time.Now()
 
 	toConjoin, toKeep := chooseConjoinees(sources)
-	conjoinedSrc := p.ConjoinAll(ctx, toConjoin, stats)
+	conjoinedSrc, err := p.ConjoinAll(ctx, toConjoin, stats)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))

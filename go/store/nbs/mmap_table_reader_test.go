@@ -32,6 +32,7 @@ func TestMmapTableReader(t *testing.T) {
 	err = ioutil.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
 	assert.NoError(err)
 
-	trc := newMmapTableReader(dir, h, uint32(len(chunks)), nil, fc)
+	trc, err := newMmapTableReader(dir, h, uint32(len(chunks)), nil, fc)
+	assert.NoError(err)
 	assertChunksInReader(chunks, trc, assert)
 }
