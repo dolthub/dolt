@@ -104,19 +104,19 @@ import (
 */
 
 const (
-	addrSize        uint64 = 20
-	addrPrefixSize  uint64 = 8
-	addrSuffixSize         = addrSize - addrPrefixSize
-	uint64Size      uint64 = 8
-	uint32Size      uint64 = 4
-	ordinalSize     uint64 = uint32Size
-	lengthSize      uint64 = uint32Size
-	magicNumber            = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
-	magicNumberSize uint64 = uint64(len(magicNumber))
-	footerSize             = uint32Size + uint64Size + magicNumberSize
-	prefixTupleSize        = addrPrefixSize + ordinalSize
-	checksumSize    uint64 = uint32Size
-	maxChunkSize    uint64 = 0xffffffff // Snappy won't compress slices bigger than this
+	addrSize        = 20
+	addrPrefixSize  = 8
+	addrSuffixSize  = addrSize - addrPrefixSize
+	uint64Size      = 8
+	uint32Size      = 4
+	ordinalSize     = uint32Size
+	lengthSize      = uint32Size
+	magicNumber     = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
+	magicNumberSize = 8 //len(magicNumber)
+	footerSize      = uint32Size + uint64Size + magicNumberSize
+	prefixTupleSize = addrPrefixSize + ordinalSize
+	checksumSize    = uint32Size
+	maxChunkSize    = 0xffffffff // Snappy won't compress slices bigger than this
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)

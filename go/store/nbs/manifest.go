@@ -16,7 +16,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
-var ErrCorruptManifest = errors.New("Corrupt manifest")
+var ErrCorruptManifest = errors.New("corrupt manifest")
 
 type manifest interface {
 	// Name returns a stable, unique identifier for the store this manifest describes.
