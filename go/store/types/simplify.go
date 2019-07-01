@@ -105,7 +105,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 
 	ensureInstance := func(name string) {
 		if _, ok := namedStructs[name]; !ok {
-			instance := newType(Format_7_18, StructDesc{Name: name})
+			instance := newType(StructDesc{Name: name})
 			namedStructs[name] = structInfo{instance, typeset{}}
 		}
 	}
@@ -122,7 +122,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 			for i, et := range t.Desc.(CompoundDesc).ElemTypes {
 				elemTypes[i] = rec(et)
 			}
-			return newType(Format_7_18, CompoundDesc{kind, elemTypes})
+			return newType(CompoundDesc{kind, elemTypes})
 		case StructKind:
 			desc := t.Desc.(StructDesc)
 			name := desc.Name
@@ -143,7 +143,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 			for i, f := range desc.fields {
 				fields[i] = StructField{f.Name, rec(f.Type), f.Optional}
 			}
-			newStruct := newType(Format_7_18, StructDesc{name, fields})
+			newStruct := newType(StructDesc{name, fields})
 			if name == "" {
 				return newStruct
 			}
@@ -263,7 +263,7 @@ func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) *Type
 
 	sort.Sort(out)
 
-	return newType(Format_7_18, CompoundDesc{UnionKind, out})
+	return newType(CompoundDesc{UnionKind, out})
 }
 
 func foldCompoundTypesForUnion(k NomsKind, ts, seenStructs typeset, intersectStructs bool) *Type {
@@ -308,7 +308,7 @@ func foldStructTypesFieldsOnly(name string, ts, seenStructs typeset, intersectSt
 
 func foldStructTypes(name string, ts, seenStructs typeset, intersectStructs bool) *Type {
 	fields := foldStructTypesFieldsOnly(name, ts, seenStructs, intersectStructs)
-	return newType(Format_7_18, StructDesc{name, fields})
+	return newType(StructDesc{name, fields})
 }
 
 func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectStructs bool) structTypeFields {
