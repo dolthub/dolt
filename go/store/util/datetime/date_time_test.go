@@ -110,7 +110,7 @@ func TestMarshalType(t *testing.T) {
 	defer vs.Close()
 
 	dt := DateTime{time.Unix(0, 0)}
-	typ := marshal.MustMarshalType(dt)
+	typ := marshal.MustMarshalType(types.Format_7_18, dt)
 	assert.Equal(DateTimeType, typ)
 
 	v := marshal.MustMarshal(context.Background(), vs, dt)

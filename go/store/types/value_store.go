@@ -19,6 +19,7 @@ import (
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value reading.
 type ValueReader interface {
+	Format() *Format
 	ReadValue(ctx context.Context, h hash.Hash) Value
 	ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice
 }
@@ -118,6 +119,11 @@ func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
 
 func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 	return lvs.cs
+}
+
+func (lvs *ValueStore) Format() *Format {
+	lvs.versOnce.Do(lvs.expectVersion)
+	return lvs.format
 }
 
 // ReadValue reads and decodes a value from lvs. It is not considered an error
