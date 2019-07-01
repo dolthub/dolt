@@ -169,7 +169,7 @@ func TestContainCommonSupertype(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		act := ContainCommonSupertype(c.a, c.b)
+		act := ContainCommonSupertype(Format_7_18, c.a, c.b)
 		assert.Equal(t, c.out, act, "Test case at position %d; \n\ta:%s\n\tb:%s", i, c.a.Describe(context.Background()), c.b.Describe(context.Background()))
 	}
 }
