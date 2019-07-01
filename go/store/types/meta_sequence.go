@@ -52,7 +52,7 @@ func (mt metaTuple) ref() Ref {
 
 func (mt metaTuple) key() orderedKey {
 	dec := mt.decoderAtPart(metaTuplePartKey)
-	return dec.readOrderedKey()
+	return dec.readOrderedKey(mt.format)
 }
 
 func (mt metaTuple) numLeaves() uint64 {
@@ -161,7 +161,7 @@ func (ms metaSequence) tuples() []metaTuple {
 func (ms metaSequence) getKey(idx int) orderedKey {
 	dec := ms.decoderSkipToIndex(idx)
 	dec.skipValue(ms.format) // ref
-	return dec.readOrderedKey()
+	return dec.readOrderedKey(ms.format)
 }
 
 func (ms metaSequence) search(key orderedKey) int {
@@ -196,7 +196,7 @@ func (ms metaSequence) readTuple(f *Format, dec *valueDecoder) metaTuple {
 	offsets[metaTuplePartRef] = start
 	dec.skipRef()
 	offsets[metaTuplePartKey] = dec.offset
-	dec.skipOrderedKey()
+	dec.skipOrderedKey(f)
 	offsets[metaTuplePartNumLeaves] = dec.offset
 	dec.skipCount()
 	end := dec.offset
@@ -211,7 +211,7 @@ func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
 func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 	dec := ms.decoderSkipToIndex(idx)
 	dec.skipValue(ms.format)
-	dec.skipOrderedKey()
+	dec.skipOrderedKey(ms.format)
 	return dec.readCount()
 }
 
@@ -237,8 +237,8 @@ func (ms metaSequence) typeOf() *Type {
 			ts = append(ts, t)
 		}
 
-		dec.skipOrderedKey() // key
-		dec.skipCount()      // numLeaves
+		dec.skipOrderedKey(ms.format) // key
+		dec.skipCount()               // numLeaves
 	}
 
 	return makeUnionType(ts...)
