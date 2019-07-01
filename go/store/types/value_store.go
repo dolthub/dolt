@@ -54,6 +54,7 @@ type ValueStore struct {
 	unresolvedRefs       hash.HashSet
 	enforceCompleteness  bool
 	decodedChunks        *sizecache.SizeCache
+	format               *Format
 
 	versOnce sync.Once
 }
@@ -108,6 +109,7 @@ func (lvs *ValueStore) expectVersion() {
 	if constants.NomsVersion != dataVersion {
 		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
 	}
+	lvs.format = getFormatForVersionString(dataVersion)
 }
 
 func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
@@ -148,8 +150,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 		return nil
 	}
 
-	// TODO(binformat)
-	v := DecodeValue(chunk, lvs, Format_7_18)
+	v := DecodeValue(chunk, lvs, lvs.format)
 	d.PanicIfTrue(v == nil)
 	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 	return v
@@ -161,8 +162,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice {
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) Value {
-		// TODO(binformat)
-		v := DecodeValue(*chunk, lvs, Format_7_18)
+		v := DecodeValue(*chunk, lvs, lvs.format)
 		d.PanicIfTrue(v == nil)
 		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 		return v
@@ -228,12 +228,11 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) Ref {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 
-	// TODO(binformat)
-	c := EncodeValue(v, Format_7_18)
+	c := EncodeValue(v, lvs.format)
 	d.PanicIfTrue(c.IsEmpty())
 	h := c.Hash()
-	height := maxChunkHeight(Format_7_18, v) + 1
-	r := constructRef(Format_7_18, h, TypeOf(v), height)
+	height := maxChunkHeight(lvs.format, v) + 1
+	r := constructRef(lvs.format, h, TypeOf(v), height)
 	lvs.bufferChunk(ctx, v, c, height)
 	return r
 }
@@ -279,8 +278,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		}
 
 		var err error
-		// TODO(binformat)
-		WalkRefs(pending, Format_7_18, func(grandchildRef Ref) {
+		WalkRefs(pending, lvs.format, func(grandchildRef Ref) {
 			if err != nil {
 				// as soon as an error occurs ignore the rest of the refs
 				return
@@ -304,7 +302,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 	// Enforce invariant (1)
 	if height > 1 {
 		var err error
-		v.WalkRefs(Format_7_18, func(childRef Ref) {
+		v.WalkRefs(lvs.format, func(childRef Ref) {
 			if err != nil {
 				// as soon as an error occurs ignore the rest of the refs
 				return
@@ -402,8 +400,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		for parent := range lvs.withBufferedChildren {
 			if pending, present := lvs.bufferedChunks[parent]; present {
 				var err error
-				// TODO(binformat)
-				WalkRefs(pending, Format_7_18, func(reachable Ref) {
+				WalkRefs(pending, lvs.format, func(reachable Ref) {
 					if err != nil {
 						// as soon as an error occurs ignore the rest of the refs
 						return
