@@ -73,7 +73,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showStats {
-		types.WriteValueStats(ctx, os.Stdout, value, database)
+		types.WriteValueStats(ctx, types.Format_7_18, os.Stdout, value, database)
 		return 0
 	}
 
