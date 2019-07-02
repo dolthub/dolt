@@ -29,12 +29,12 @@ func assertResolvesToWithVR(assert *assert.Assertions, expect, ref Value, str st
 	actual := p.Resolve(context.Background(), Format_7_18, ref, vr)
 	if expect == nil {
 		if actual != nil {
-			assert.Fail("", "Expected nil, but got %s", EncodedValue(context.Background(), actual))
+			assert.Fail("", "Expected nil, but got %s", EncodedValue(context.Background(), Format_7_18, actual))
 		}
 	} else if actual == nil {
-		assert.Fail("", "Expected %s, but got nil", EncodedValue(context.Background(), expect))
+		assert.Fail("", "Expected %s, but got nil", EncodedValue(context.Background(), Format_7_18, expect))
 	} else {
-		assert.True(expect.Equals(Format_7_18, actual), "Expected %s, but got %s", EncodedValue(context.Background(), expect), EncodedValue(context.Background(), actual))
+		assert.True(expect.Equals(Format_7_18, actual), "Expected %s, but got %s", EncodedValue(context.Background(), Format_7_18, expect), EncodedValue(context.Background(), Format_7_18, actual))
 	}
 }
 

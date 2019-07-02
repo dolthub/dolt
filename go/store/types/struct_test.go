@@ -111,16 +111,16 @@ func TestGenericStructDelete(t *testing.T) {
 
 func assertValueChangeEqual(assert *assert.Assertions, c1, c2 ValueChanged) {
 	assert.Equal(c1.ChangeType, c2.ChangeType)
-	assert.Equal(EncodedValue(context.Background(), c1.Key), EncodedValue(context.Background(), c2.Key))
+	assert.Equal(EncodedValue(context.Background(), Format_7_18, c1.Key), EncodedValue(context.Background(), Format_7_18, c2.Key))
 	if c1.NewValue == nil {
 		assert.Nil(c2.NewValue)
 	} else {
-		assert.Equal(EncodedValue(context.Background(), c1.NewValue), EncodedValue(context.Background(), c2.NewValue))
+		assert.Equal(EncodedValue(context.Background(), Format_7_18, c1.NewValue), EncodedValue(context.Background(), Format_7_18, c2.NewValue))
 	}
 	if c1.OldValue == nil {
 		assert.Nil(c2.OldValue)
 	} else {
-		assert.Equal(EncodedValue(context.Background(), c1.OldValue), EncodedValue(context.Background(), c2.OldValue))
+		assert.Equal(EncodedValue(context.Background(), Format_7_18, c1.OldValue), EncodedValue(context.Background(), Format_7_18, c2.OldValue))
 	}
 }
 

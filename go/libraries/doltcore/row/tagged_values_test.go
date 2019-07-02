@@ -126,7 +126,7 @@ func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 	}
 	for _, test := range tests {
 		if got := tt.NomsTupleForTags(test.tags, test.encodeNulls).Value(ctx); !reflect.DeepEqual(got, test.want) {
-			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", types.EncodedValue(ctx, got), types.EncodedValue(ctx, test.want))
+			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", types.EncodedValue(ctx, types.Format_7_18, got), types.EncodedValue(ctx, types.Format_7_18, test.want))
 		}
 	}
 }
@@ -171,7 +171,7 @@ func TestTaggedTuple_Get(t *testing.T) {
 		if ok != test.found {
 			t.Errorf("expected to be found: %v, found: %v", ok, test.found)
 		} else if !reflect.DeepEqual(got, test.want) {
-			t.Errorf("TaggedValues.Get() = %s, want %s", types.EncodedValue(context.Background(), got), types.EncodedValue(context.Background(), test.want))
+			t.Errorf("TaggedValues.Get() = %s, want %s", types.EncodedValue(context.Background(), types.Format_7_18, got), types.EncodedValue(context.Background(), types.Format_7_18, test.want))
 		}
 	}
 }

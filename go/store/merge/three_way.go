@@ -137,7 +137,7 @@ func NewThreeWay(resolve ResolveFunc) Policy {
 func ThreeWay(ctx context.Context, a, b, parent types.Value, vrw types.ValueReadWriter, resolve ResolveFunc, progress chan struct{}) (merged types.Value, err error) {
 	describe := func(v types.Value) string {
 		if v != nil {
-			return types.TypeOf(v).Describe(ctx)
+			return types.TypeOf(v).Describe(ctx, vrw.Format())
 		}
 		return "nil Value"
 	}
@@ -216,9 +216,9 @@ func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path ty
 
 	pDescription := "<nil>"
 	if parent != nil {
-		pDescription = types.TypeOf(parent).Describe(ctx)
+		pDescription = types.TypeOf(parent).Describe(ctx, types.Format_7_18)
 	}
-	return parent, newMergeConflict("Cannot merge %s and %s on top of %s.", types.TypeOf(a).Describe(ctx), types.TypeOf(b).Describe(ctx), pDescription)
+	return parent, newMergeConflict("Cannot merge %s and %s on top of %s.", types.TypeOf(a).Describe(ctx, types.Format_7_18), types.TypeOf(b).Describe(ctx, types.Format_7_18), pDescription)
 }
 
 func (m *merger) threeWayMapMerge(ctx context.Context, a, b, parent types.Map, path types.Path) (merged types.Value, err error) {
@@ -269,7 +269,7 @@ func (m *merger) threeWayStructMerge(ctx context.Context, a, b, parent types.Str
 			}
 			return structCandidate{types.NewStruct(types.Format_7_18, targetVal.Name(), data)}
 		}
-		panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(change.Key).Describe(ctx)))
+		panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(change.Key).Describe(ctx, types.Format_7_18)))
 	}
 	return m.threeWayOrderedSequenceMerge(ctx, structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
 }

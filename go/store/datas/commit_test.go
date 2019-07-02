@@ -18,7 +18,7 @@ func TestNewCommit(t *testing.T) {
 	assert := assert.New(t)
 
 	assertTypeEquals := func(e, a *types.Type) {
-		assert.True(a.Equals(types.Format_7_18, e), "Actual: %s\nExpected %s", a.Describe(context.Background()), e.Describe(context.Background()))
+		assert.True(a.Equals(types.Format_7_18, e), "Actual: %s\nExpected %s", a.Describe(context.Background(), types.Format_7_18), e.Describe(context.Background(), types.Format_7_18))
 	}
 
 	storage := &chunks.TestStorage{}

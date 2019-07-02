@@ -151,7 +151,7 @@ func (e *UnmarshalTypeMismatchError) Error() string {
 	} else {
 		ts = e.Type.String()
 	}
-	return fmt.Sprintf("Cannot unmarshal %s into Go value of type %s%s", types.TypeOf(e.Value).Describe(context.Background()), ts, e.details)
+	return fmt.Sprintf("Cannot unmarshal %s into Go value of type %s%s", types.TypeOf(e.Value).Describe(context.Background(), types.Format_7_18), ts, e.details)
 }
 
 func overflowError(v types.Float, t reflect.Type) *UnmarshalTypeMismatchError {

@@ -24,7 +24,7 @@ func TestValueReadWriteRead(t *testing.T) {
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 	v := vs.ReadValue(context.Background(), h) // non-nil
 	if assert.NotNil(v) {
-		assert.True(s.Equals(Format_7_18, v), "%s != %s", EncodedValue(context.Background(), s), EncodedValue(context.Background(), v))
+		assert.True(s.Equals(Format_7_18, v), "%s != %s", EncodedValue(context.Background(), Format_7_18, s), EncodedValue(context.Background(), Format_7_18, v))
 	}
 }
 

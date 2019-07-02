@@ -103,7 +103,7 @@ func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueC
 		// TODO: Correctly encode Old/NewValue with this change report. https://github.com/attic-labs/noms/issues/3467
 		return types.ValueChanged{change, aChange.Key, nil, nil}, mergedVal, nil
 	}
-	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(ctx, aValue), describeChange(bChange), types.EncodedValue(ctx, bValue))
+	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(ctx, types.Format_7_18, aValue), describeChange(bChange), types.EncodedValue(ctx, types.Format_7_18, bValue))
 }
 
 func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
@@ -122,5 +122,5 @@ func describeChange(change types.ValueChanged) string {
 	case types.DiffChangeRemoved:
 		op = "removed"
 	}
-	return fmt.Sprintf("%s %s", op, types.EncodedValue(context.Background(), change.Key))
+	return fmt.Sprintf("%s %s", op, types.EncodedValue(context.Background(), types.Format_7_18, change.Key))
 }
