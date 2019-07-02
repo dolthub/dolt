@@ -26,3 +26,23 @@ func TestEnsureSuffix(t *testing.T) {
 		})
 	}
 }
+
+func TestLastSegment(t *testing.T) {
+	type args struct {
+		s string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"gets the last segment of a slash-separated string", args{"foo/bar/baz"}, "baz"},
+		{"gets the name at the end of a path", args{"/Users/foouser/some/path/somewhere"}, "somewhere"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := LastSegment(tt.args.s)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
