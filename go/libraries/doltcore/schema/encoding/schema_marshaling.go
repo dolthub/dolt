@@ -131,7 +131,7 @@ func MarshalAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch sche
 // UnmarshalNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
 func UnmarshalNomsValue(ctx context.Context, schemaVal types.Value) (schema.Schema, error) {
 	var sd schemaData
-	err := marshal.Unmarshal(ctx, schemaVal, &sd)
+	err := marshal.Unmarshal(ctx, types.Format_7_18, schemaVal, &sd)
 
 	if err != nil {
 		return nil, err
