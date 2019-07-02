@@ -100,8 +100,8 @@ func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 			"ms2":     mustMarshal(map[testKey]int{{1, 1}: 1, {4, 4}: 4, {5, 5}: 5}),
 		}
 
-		vm["mh1"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("k1", "struct1", "k2", "l1")...)
-		vm["mh2"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("k1", "n1", "k2", "l2", "k3", "l3")...)
+		vm["mh1"] = types.NewMap(context.Background(), vrw, vfk("k1", "struct1", "k2", "l1")...)
+		vm["mh2"] = types.NewMap(context.Background(), vrw, vfk("k1", "n1", "k2", "l2", "k3", "l3")...)
 		vm["set1"] = types.NewSet(context.Background(), types.Format_7_18, vrw)
 		vm["set2"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("s1", "s2")...)
 		vm["set3"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("s1", "s2", "s3")...)
@@ -109,8 +109,8 @@ func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 		vm["seth1"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("struct1", "struct2", "struct3")...)
 		vm["seth2"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("struct2", "struct3")...)
 		vm["setj3"] = types.NewSet(context.Background(), types.Format_7_18, vrw, vfk("struct1")...)
-		vm["mk1"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("struct1", "s1", "struct2", "s2")...)
-		vm["mk2"] = types.NewMap(context.Background(), types.Format_7_18, vrw, vfk("struct1", "s3", "struct4", "s4")...)
+		vm["mk1"] = types.NewMap(context.Background(), vrw, vfk("struct1", "s1", "struct2", "s2")...)
+		vm["mk2"] = types.NewMap(context.Background(), vrw, vfk("struct1", "s3", "struct4", "s4")...)
 	}
 	return vm
 }
@@ -204,7 +204,7 @@ func TestUpdateNode(t *testing.T) {
 		return parent.(types.List).Get(context.Background(), 1)
 	})
 
-	m1 := types.NewMap(context.Background(), types.Format_7_18, vs, types.String("k1"), types.Float(1), types.String("k2"), oldVal)
+	m1 := types.NewMap(context.Background(), vs, types.String("k1"), types.Float(1), types.String("k2"), oldVal)
 	pp = types.IndexPath{Index: types.String("k2")}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.Map).Get(context.Background(), types.String("k2"))
@@ -212,7 +212,7 @@ func TestUpdateNode(t *testing.T) {
 
 	k1 := types.NewStruct(types.Format_7_18, "Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
 	vs.WriteValue(context.Background(), k1)
-	m1 = types.NewMap(context.Background(), types.Format_7_18, vs, k1, oldVal)
+	m1 = types.NewMap(context.Background(), vs, k1, oldVal)
 	// TODO(binformat)
 	pp = types.HashIndexPath{Hash: k1.Hash(types.Format_7_18)}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {

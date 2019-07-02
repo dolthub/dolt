@@ -44,7 +44,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 		return nil, err
 	}
 
-	tblMap := types.NewMap(ctx, types.Format_7_18, vrw, values...)
+	tblMap := types.NewMap(ctx, vrw, values...)
 	return newRootFromTblMap(vrw, tblMap), nil
 }
 
@@ -53,7 +53,7 @@ func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
 }
 
 func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) *RootValue {
-	return newRootFromTblMap(vrw, types.NewMap(ctx, types.Format_7_18, vrw))
+	return newRootFromTblMap(vrw, types.NewMap(ctx, vrw))
 }
 
 func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {

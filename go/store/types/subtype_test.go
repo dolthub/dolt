@@ -96,7 +96,7 @@ func TestAssertTypeMap(tt *testing.T) {
 	vs := newTestValueStore()
 
 	mapOfNumberToStringType := MakeMapType(FloaTType, StringType)
-	m := NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Float(2), String("b"))
+	m := NewMap(context.Background(), vs, Float(0), String("a"), Float(2), String("b"))
 	assertSubtype(context.Background(), Format_7_18, mapOfNumberToStringType, m)
 	assertAll(tt, mapOfNumberToStringType, m)
 	assertSubtype(context.Background(), Format_7_18, MakeMapType(ValueType, ValueType), m)
@@ -220,10 +220,10 @@ func TestAssertTypeEmptyMap(tt *testing.T) {
 	vs := newTestValueStore()
 
 	mt := MakeMapType(FloaTType, StringType)
-	assertSubtype(context.Background(), Format_7_18, mt, NewMap(context.Background(), Format_7_18, vs))
+	assertSubtype(context.Background(), Format_7_18, mt, NewMap(context.Background(), vs))
 
 	// Map<> not a subtype of Map<Float, Float>
-	assertInvalid(tt, MakeMapType(MakeUnionType(), MakeUnionType()), NewMap(context.Background(), Format_7_18, vs, Float(1), Float(2)))
+	assertInvalid(tt, MakeMapType(MakeUnionType(), MakeUnionType()), NewMap(context.Background(), vs, Float(1), Float(2)))
 }
 
 func TestAssertTypeStructSubtypeByName(tt *testing.T) {
@@ -566,7 +566,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		{NewList(context.Background(), vs, Float(42)), MakeListType(FloaTType)},
 		{NewSet(context.Background(), Format_7_18, vs, Float(42)), MakeSetType(FloaTType)},
 		{NewRef(Float(42), Format_7_18), MakeRefType(FloaTType)},
-		{NewMap(context.Background(), Format_7_18, vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
+		{NewMap(context.Background(), vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
 		{NewStruct(Format_7_18, "A", StructData{}), MakeStructType("A")},
 		// Not including CycleType or Union here
 	}
@@ -650,17 +650,17 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assertFalse(newChunkedSet(Float(0)), MakeSetType(MakeUnionType()))
 	}
 
-	assertTrue(NewMap(context.Background(), Format_7_18, vs), MakeMapType(FloaTType, StringType))
-	assertTrue(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, StringType))
-	assertFalse(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(BoolType, StringType))
-	assertFalse(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, BoolType))
-	assertTrue(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
-	assertTrue(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
-	assertTrue(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
-	assertTrue(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a"), Float(1), Bool(true)), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
-	assertFalse(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a")), MakeMapType(MakeUnionType(), StringType))
-	assertFalse(NewMap(context.Background(), Format_7_18, vs, Float(0), String("a")), MakeMapType(FloaTType, MakeUnionType()))
-	assertTrue(NewMap(context.Background(), Format_7_18, vs), MakeMapType(MakeUnionType(), MakeUnionType()))
+	assertTrue(NewMap(context.Background(), vs), MakeMapType(FloaTType, StringType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, StringType))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(BoolType, StringType))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, BoolType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b")), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Bool(true), String("b")), MakeMapType(MakeUnionType(FloaTType, BoolType), StringType))
+	assertTrue(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), Bool(true)), MakeMapType(FloaTType, MakeUnionType(BoolType, StringType)))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a")), MakeMapType(MakeUnionType(), StringType))
+	assertFalse(NewMap(context.Background(), vs, Float(0), String("a")), MakeMapType(FloaTType, MakeUnionType()))
+	assertTrue(NewMap(context.Background(), vs), MakeMapType(MakeUnionType(), MakeUnionType()))
 
 	{
 		newChunkedMap := func(vals ...Value) Map {

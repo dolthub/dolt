@@ -50,7 +50,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 			"num": types.Float(42),
 			"str": types.String("foobar"),
 			"lst": types.NewList(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
-			"map": types.NewMap(context.Background(), types.Format_7_18, parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
+			"map": types.NewMap(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 				types.String("foo"), types.Float(1)),
 		},
 		types.NewSet(context.Background(), types.Format_7_18, parentSpec.GetDatabase(context.Background())))
@@ -61,7 +61,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 			"num": types.Float(42),
 			"str": types.String("foobaz"),
 			"lst": types.NewList(context.Background(), leftSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
-			"map": types.NewMap(context.Background(), types.Format_7_18, leftSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
+			"map": types.NewMap(context.Background(), leftSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 				types.String("foo"), types.Float(1)),
 		},
 		types.NewSet(context.Background(), types.Format_7_18, leftSpec.GetDatabase(context.Background()), p))
@@ -72,7 +72,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 			"num": types.Float(42),
 			"str": types.String("foobar"),
 			"lst": types.NewList(context.Background(), rightSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
-			"map": types.NewMap(context.Background(), types.Format_7_18, rightSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
+			"map": types.NewMap(context.Background(), rightSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 				types.String("foo"), types.Float(1), types.Float(2), types.String("bar")),
 		},
 		types.NewSet(context.Background(), types.Format_7_18, rightSpec.GetDatabase(context.Background()), p))
@@ -81,7 +81,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 		"num": types.Float(42),
 		"str": types.String("foobaz"),
 		"lst": types.NewList(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
-		"map": types.NewMap(context.Background(), types.Format_7_18, parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
+		"map": types.NewMap(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo"),
 			types.String("foo"), types.Float(1), types.Float(2), types.String("bar")),
 	})
 
@@ -206,7 +206,7 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 
 	prep := func(dsName string) {
 		ds := db.GetDataset(context.Background(), dsName)
-		db.CommitValue(context.Background(), ds, types.NewMap(context.Background(), types.Format_7_18, db, types.String("foo"), types.String("bar")))
+		db.CommitValue(context.Background(), ds, types.NewMap(context.Background(), db, types.String("foo"), types.String("bar")))
 	}
 	prep(l)
 	prep(r)

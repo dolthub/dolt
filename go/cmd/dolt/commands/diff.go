@@ -171,8 +171,8 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 		var sch2 schema.Schema
 		var sch1Hash hash.Hash
 		var sch2Hash hash.Hash
-		rowData1 := types.NewMap(context.TODO(), types.Format_7_18, dEnv.DoltDB.ValueReadWriter())
-		rowData2 := types.NewMap(context.TODO(), types.Format_7_18, dEnv.DoltDB.ValueReadWriter())
+		rowData1 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+		rowData2 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
 
 		if ok1 {
 			sch1 = tbl1.GetSchema(context.TODO())

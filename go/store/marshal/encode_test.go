@@ -98,7 +98,7 @@ func TestEncode(tt *testing.T) {
 	}
 
 	t(types.NewList(context.Background(), vs, types.Float(42)), types.NewList(context.Background(), vs, types.Float(42)))
-	t(types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.String("hi")), types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.String("hi")))
+	t(types.NewMap(context.Background(), vs, types.Float(42), types.String("hi")), types.NewMap(context.Background(), vs, types.Float(42), types.String("hi")))
 	t(types.NewSet(context.Background(), types.Format_7_18, vs, types.String("bye")), types.NewSet(context.Background(), types.Format_7_18, vs, types.String("bye")))
 	// TODO(binformat)
 	t(types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("hello")), types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("hello")))
@@ -422,7 +422,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	assert.NoError(err)
 	assert.True(types.NewStruct(types.Format_7_18, "S2", types.StructData{
 		"slice": types.NewList(context.Background(), vs, types.Float(0)),
-		"map":   types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(0), types.Float(0)),
+		"map":   types.NewMap(context.Background(), vs, types.Float(0), types.Float(0)),
 	}).Equals(types.Format_7_18, v3))
 
 	s4 := S2{
@@ -640,7 +640,6 @@ func TestEncodeMap(t *testing.T) {
 	v, err := Marshal(context.Background(), vs, map[string]int{"a": 1, "b": 2, "c": 3})
 	assert.NoError(err)
 	assert.True(types.NewMap(context.Background(),
-		types.Format_7_18,
 		vs,
 		types.String("a"), types.Float(1),
 		types.String("b"), types.Float(2),
@@ -652,18 +651,17 @@ func TestEncodeMap(t *testing.T) {
 	v, err = Marshal(context.Background(), vs, map[S]bool{S{"Yes"}: true, S{"No"}: false})
 	assert.NoError(err)
 	assert.True(types.NewMap(context.Background(),
-		types.Format_7_18,
 		vs,
 		types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("Yes")}), types.Bool(true),
 		types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("No")}), types.Bool(false)).Equals(types.Format_7_18, v))
 
 	v, err = Marshal(context.Background(), vs, map[string]int(nil))
 	assert.NoError(err)
-	assert.True(types.NewMap(context.Background(), types.Format_7_18, vs).Equals(types.Format_7_18, v))
+	assert.True(types.NewMap(context.Background(), vs).Equals(types.Format_7_18, v))
 
 	v, err = Marshal(context.Background(), vs, map[string]int{})
 	assert.NoError(err)
-	assert.True(types.NewMap(context.Background(), types.Format_7_18, vs).Equals(types.Format_7_18, v))
+	assert.True(types.NewMap(context.Background(), vs).Equals(types.Format_7_18, v))
 }
 
 func TestEncodeInterface(t *testing.T) {
@@ -681,7 +679,6 @@ func TestEncodeInterface(t *testing.T) {
 	v, err = Marshal(context.Background(), vs, i)
 	assert.NoError(err)
 	assert.True(types.NewMap(context.Background(),
-		types.Format_7_18,
 		vs,
 		types.String("a"), types.Bool(true),
 		types.NewStruct(types.Format_7_18, "", types.StructData{"name": types.String("b")}), types.Float(42),
@@ -784,7 +781,7 @@ func TestEncodeOpt(t *testing.T) {
 		{
 			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
 			Opt{},
-			types.NewMap(context.Background(), types.Format_7_18, vs, types.String("a"), types.NewStruct(types.Format_7_18, "", nil), types.String("b"), types.NewStruct(types.Format_7_18, "", nil)),
+			types.NewMap(context.Background(), vs, types.String("a"), types.NewStruct(types.Format_7_18, "", nil), types.String("b"), types.NewStruct(types.Format_7_18, "", nil)),
 		},
 		{
 			map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
@@ -1109,7 +1106,7 @@ func TestMarshalerComplexStructType(t *testing.T) {
 	assert.True(types.NewStruct(types.Format_7_18, "TestComplexStructType", types.StructData{
 		"p":       types.Float(43),
 		"ps":      types.NewList(context.Background(), vs, types.Float(2), types.Float(3)),
-		"pm":      types.NewMap(context.Background(), types.Format_7_18, vs, types.String("x"), types.Float(101), types.String("y"), types.Float(102)),
+		"pm":      types.NewMap(context.Background(), vs, types.String("x"), types.Float(101), types.String("y"), types.Float(102)),
 		"pslice":  types.String("a,b,c"),
 		"pmap":    types.NewSet(context.Background(), types.Format_7_18, vs, types.String("c,123"), types.String("d,456")),
 		"pstruct": types.Float(30),

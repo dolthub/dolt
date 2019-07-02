@@ -50,7 +50,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if verr == nil {
 			force := apr.Contains(forceParam)
-			tbl := doltdb.NewTable(context.Background(), root.VRW(), schVal, types.NewMap(context.TODO(), types.Format_7_18, root.VRW()))
+			tbl := doltdb.NewTable(context.Background(), root.VRW(), schVal, types.NewMap(context.TODO(), root.VRW()))
 			for i := 0; i < apr.NArg() && verr == nil; i++ {
 				tblName := apr.Arg(i)
 				if !force && root.HasTable(context.TODO(), tblName) {
