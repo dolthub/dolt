@@ -32,7 +32,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	// ds1: |a|
 	//        \ds2
 	ds2 := store.GetDataset(context.Background(), id2)
-	ds2, err = store.Commit(context.Background(), ds2, ds1.HeadValue(), CommitOptions{Parents: types.NewSet(context.Background(), types.Format_7_18, store, ds1.HeadRef())})
+	ds2, err = store.Commit(context.Background(), ds2, ds1.HeadValue(), CommitOptions{Parents: types.NewSet(context.Background(), store, ds1.HeadRef())})
 	assert.NoError(err)
 	assert.True(ds2.Head().Get(ValueField).Equals(types.Format_7_18, a))
 
@@ -51,7 +51,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents := types.NewSet(context.Background(), types.Format_7_18, store, types.NewRef(ds1.Head(), types.Format_7_18), types.NewRef(ds2.Head(), types.Format_7_18))
+	mergeParents := types.NewSet(context.Background(), store, types.NewRef(ds1.Head(), types.Format_7_18), types.NewRef(ds2.Head(), types.Format_7_18))
 	d := types.String("d")
 	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: mergeParents})
 	assert.NoError(err)

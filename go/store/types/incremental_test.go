@@ -21,7 +21,7 @@ func getTestVals(vrw ValueReadWriter) []Value {
 		// TODO(binformat)
 		NewBlob(context.Background(), Format_7_18, vrw, bytes.NewReader([]byte("hi"))),
 		// compoundBlob
-		NewSet(context.Background(), Format_7_18, vrw, String("hi")),
+		NewSet(context.Background(), vrw, String("hi")),
 		// TODO(binformat)
 		NewList(context.Background(), vrw, String("hi")),
 		NewMap(context.Background(), vrw, String("hi"), String("hi")),
@@ -73,7 +73,7 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewSet(context.Background(), Format_7_18, vs, getTestVals(vs)...)
+	expected := NewSet(context.Background(), vs, getTestVals(vs)...)
 	ref := vs.WriteValue(context.Background(), expected).TargetHash()
 
 	actualVar := vs.ReadValue(context.Background(), ref)

@@ -253,7 +253,7 @@ func TestWriteSet(t *testing.T) {
 			SetKind, uint64(0), uint64(4), /* len */
 			FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewSet(context.Background(), Format_7_18, vrw, Float(3), Float(1), Float(2), Float(0)),
+		NewSet(context.Background(), vrw, Float(3), Float(1), Float(2), Float(0)),
 	)
 }
 
@@ -266,9 +266,9 @@ func TestWriteSetOfSet(t *testing.T) {
 			SetKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 			SetKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
 		},
-		NewSet(context.Background(), Format_7_18, vrw,
-			NewSet(context.Background(), Format_7_18, vrw, Float(0)),
-			NewSet(context.Background(), Format_7_18, vrw, Float(1), Float(2), Float(3))),
+		NewSet(context.Background(), vrw,
+			NewSet(context.Background(), vrw, Float(0)),
+			NewSet(context.Background(), vrw, Float(1), Float(2), Float(3))),
 	)
 }
 
@@ -297,7 +297,7 @@ func TestWriteMapOfMap(t *testing.T) {
 		},
 		NewMap(context.Background(), vrw,
 			NewMap(context.Background(), vrw, String("a"), Float(0)),
-			NewSet(context.Background(), Format_7_18, vrw, Bool(true))),
+			NewSet(context.Background(), vrw, Bool(true))),
 	)
 }
 

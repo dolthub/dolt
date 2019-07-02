@@ -95,7 +95,7 @@ func (suite *diffTestSuite) TestDiff() {
 		runTestDf(name, vf, cf, orderedSequenceDiffBest)
 	}
 
-	newSetAsCol := func(vals []Value) Collection { return NewSet(context.Background(), Format_7_18, vs, vals...) }
+	newSetAsCol := func(vals []Value) Collection { return NewSet(context.Background(), vs, vals...) }
 	newMapAsCol := func(vals []Value) Collection { return NewMap(context.Background(), vs, vals...) }
 
 	rw := func(col Collection) Collection {
@@ -161,16 +161,16 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 	vs := newTestValueStore()
 
 	runTest := func(df diffFn) {
-		s1 := NewSet(context.Background(), Format_7_18, vs).orderedSequence
+		s1 := NewSet(context.Background(), vs).orderedSequence
 		// A single item should be enough, but generate lots anyway.
-		s2 := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
+		s2 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...).orderedSequence
 
 		changeChan := make(chan ValueChanged)
 		closeChan := make(chan struct{})
 		stopChan := make(chan struct{})
 
 		go func() {
-			df(context.Background(), Format_7_18, s1, s2, changeChan, closeChan)
+			df(context.Background(), vs.Format(), s1, s2, changeChan, closeChan)
 			stopChan <- struct{}{}
 		}()
 

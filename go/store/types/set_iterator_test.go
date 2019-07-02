@@ -18,7 +18,7 @@ func TestSetIterator(t *testing.T) {
 	vs := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
-	s := NewSet(context.Background(), Format_7_18, vs, numbers...)
+	s := NewSet(context.Background(), vs, numbers...)
 	i := s.Iterator(context.Background())
 	vals := iterToSlice(i)
 	assert.True(vals.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)
@@ -42,19 +42,19 @@ func TestSetIterator(t *testing.T) {
 	assert.Equal(Float(3), i.SkipTo(context.Background(), Float(3)))
 	assert.Equal(Float(4), i.Next(context.Background()))
 
-	empty := NewSet(context.Background(), Format_7_18, vs)
+	empty := NewSet(context.Background(), vs)
 	assert.Nil(empty.Iterator(context.Background()).Next(context.Background()))
 	assert.Nil(empty.Iterator(context.Background()).SkipTo(context.Background(), Float(-30)))
 
-	single := NewSet(context.Background(), Format_7_18, vs, Float(42)).Iterator(context.Background())
+	single := NewSet(context.Background(), vs, Float(42)).Iterator(context.Background())
 	assert.Equal(Float(42), single.SkipTo(context.Background(), Float(42)))
 	assert.Equal(nil, single.SkipTo(context.Background(), Float(42)))
 
-	single = NewSet(context.Background(), Format_7_18, vs, Float(42)).Iterator(context.Background())
+	single = NewSet(context.Background(), vs, Float(42)).Iterator(context.Background())
 	assert.Equal(Float(42), single.SkipTo(context.Background(), Float(42)))
 	assert.Equal(nil, single.Next(context.Background()))
 
-	single = NewSet(context.Background(), Format_7_18, vs, Float(42)).Iterator(context.Background())
+	single = NewSet(context.Background(), vs, Float(42)).Iterator(context.Background())
 	assert.Equal(Float(42), single.SkipTo(context.Background(), Float(21)))
 }
 
@@ -64,7 +64,7 @@ func TestSetIteratorAt(t *testing.T) {
 	vs := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(5), Float(10))
-	s := NewSet(context.Background(), Format_7_18, vs, numbers...)
+	s := NewSet(context.Background(), vs, numbers...)
 	i := s.IteratorAt(context.Background(), 0)
 	vals := iterToSlice(i)
 	assert.True(vals.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)
@@ -84,7 +84,7 @@ func TestSetIteratorFrom(t *testing.T) {
 	vs := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(5), Float(10), Float(20))
-	s := NewSet(context.Background(), Format_7_18, vs, numbers...)
+	s := NewSet(context.Background(), vs, numbers...)
 	i := s.IteratorFrom(context.Background(), Float(0))
 	vals := iterToSlice(i)
 	assert.True(vals.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)
@@ -116,10 +116,10 @@ func TestUnionIterator(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	set1 := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 10, 1)...)
-	set2 := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(5, 15, 1)...)
-	set3 := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(10, 20, 1)...)
-	set4 := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(15, 25, 1)...)
+	set1 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 10, 1)...)
+	set2 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(5, 15, 1)...)
+	set3 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(10, 20, 1)...)
+	set4 := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(15, 25, 1)...)
 
 	ui1 := NewUnionIterator(context.Background(), Format_7_18, set1.Iterator(context.Background()), set2.Iterator(context.Background()))
 	vals := iterToSlice(ui1)
@@ -149,8 +149,8 @@ func TestUnionIterator(t *testing.T) {
 	assert.Equal(Float(24), ui3.SkipTo(context.Background(), Float(24)))
 	assert.Nil(ui3.SkipTo(context.Background(), Float(25)))
 
-	singleElemSet := NewSet(context.Background(), Format_7_18, vs, Float(4))
-	emptySet := NewSet(context.Background(), Format_7_18, vs)
+	singleElemSet := NewSet(context.Background(), vs, Float(4))
+	emptySet := NewSet(context.Background(), vs)
 
 	ui10 := NewUnionIterator(context.Background(), Format_7_18, singleElemSet.Iterator(context.Background()), singleElemSet.Iterator(context.Background()))
 	ui20 := NewUnionIterator(context.Background(), Format_7_18, emptySet.Iterator(context.Background()), emptySet.Iterator(context.Background()))
@@ -165,9 +165,9 @@ func TestIntersectionIterator(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	byTwos := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 200, 2)...)
-	byThrees := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 200, 3)...)
-	byFives := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 200, 5)...)
+	byTwos := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 200, 2)...)
+	byThrees := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 200, 3)...)
+	byFives := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 200, 5)...)
 
 	i1 := NewIntersectionIterator(context.Background(), Format_7_18, byTwos.Iterator(context.Background()), byThrees.Iterator(context.Background()))
 	vals := iterToSlice(i1)
@@ -197,10 +197,10 @@ func TestCombinationIterator(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	byTwos := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 70, 2)...)
-	byThrees := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 70, 3)...)
-	byFives := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 70, 5)...)
-	bySevens := NewSet(context.Background(), Format_7_18, vs, generateNumbersAsValuesFromToBy(0, 70, 7)...)
+	byTwos := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 2)...)
+	byThrees := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 3)...)
+	byFives := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 5)...)
+	bySevens := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 70, 7)...)
 
 	it1 := NewIntersectionIterator(context.Background(), Format_7_18, byTwos.Iterator(context.Background()), bySevens.Iterator(context.Background()))
 	it2 := NewIntersectionIterator(context.Background(), Format_7_18, byFives.Iterator(context.Background()), byThrees.Iterator(context.Background()))
@@ -323,7 +323,7 @@ func createSetsWithDistinctNumbers(vrw ValueReadWriter, numSets, numElemsPerSet 
 		for j := 0; j < numElemsPerSet; j++ {
 			vals = append(vals, Float(i+(numSets*j)))
 		}
-		s := NewSet(context.Background(), Format_7_18, vrw, vals...)
+		s := NewSet(context.Background(), vrw, vals...)
 		iterSlice = append(iterSlice, s.Iterator(context.Background()))
 	}
 	return iterSlice
@@ -336,7 +336,7 @@ func createSetsWithSameNumbers(vrw ValueReadWriter, numSets, numElemsPerSet int)
 	}
 	iterSlice := []SetIterator{}
 	for i := 0; i < numSets; i++ {
-		iterSlice = append(iterSlice, NewSet(context.Background(), Format_7_18, vrw, vs...).Iterator(context.Background()))
+		iterSlice = append(iterSlice, NewSet(context.Background(), vrw, vs...).Iterator(context.Background()))
 	}
 	return iterSlice
 }
