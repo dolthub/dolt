@@ -33,7 +33,7 @@ type Path []PathPart
 
 type PathPart interface {
 	Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) Value
-	String() string
+	String(f *Format) string
 }
 
 // ParsePath parses str into a Path, or returns an error if parsing failed.
@@ -121,7 +121,7 @@ func constructPath(f *Format, p Path, str string) (Path, error) {
 				p[len(p)-1] = ki.setIntoKey(true).(PathPart)
 				return constructPath(f, p, rem)
 			}
-			return Path{}, fmt.Errorf("cannot use @key annotation on: %s", lastPart.String())
+			return Path{}, fmt.Errorf("cannot use @key annotation on: %s", lastPart.String(f))
 
 		case "target":
 			if hasArg {
@@ -180,10 +180,10 @@ func (p Path) Append(pp PathPart) Path {
 	return append(p1, pp)
 }
 
-func (p Path) String() string {
+func (p Path) String(f *Format) string {
 	strs := make([]string, 0, len(p))
 	for _, part := range p {
-		strs = append(strs, part.String())
+		strs = append(strs, part.String(f))
 	}
 	return strings.Join(strs, "")
 }
@@ -218,7 +218,7 @@ func (fp FieldPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueRea
 	return nil
 }
 
-func (fp FieldPath) String() string {
+func (fp FieldPath) String(f *Format) string {
 	return fmt.Sprintf(".%s", fp.Name)
 }
 
@@ -293,8 +293,8 @@ func (ip IndexPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueRea
 	return nil
 }
 
-func (ip IndexPath) String() (str string) {
-	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), Format_7_18, ip.Index))
+func (ip IndexPath) String(f *Format) (str string) {
+	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), f, ip.Index))
 	if ip.IntoKey {
 		str += "@key"
 	}
@@ -365,7 +365,7 @@ func (hip HashIndexPath) Resolve(ctx context.Context, f *Format, v Value, vr Val
 	return getCurrentValue(cur)
 }
 
-func (hip HashIndexPath) String() (str string) {
+func (hip HashIndexPath) String(f *Format) (str string) {
 	str = fmt.Sprintf("[#%s]", hip.Hash.String())
 	if hip.IntoKey {
 		str += "@key"
@@ -450,7 +450,7 @@ func (ann TypeAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr Va
 	return TypeOf(v)
 }
 
-func (ann TypeAnnotation) String() string {
+func (ann TypeAnnotation) String(f *Format) string {
 	return "@type"
 }
 
@@ -469,7 +469,7 @@ func (ann TargetAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr 
 	}
 }
 
-func (ann TargetAnnotation) String() string {
+func (ann TargetAnnotation) String(f *Format) string {
 	return "@target"
 }
 
@@ -516,7 +516,7 @@ func (ann AtAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr Valu
 	return nil
 }
 
-func (ann AtAnnotation) String() (str string) {
+func (ann AtAnnotation) String(f *Format) (str string) {
 	str = fmt.Sprintf("@at(%d)", ann.Index)
 	if ann.IntoKey {
 		str += "@key"

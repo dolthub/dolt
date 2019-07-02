@@ -90,7 +90,7 @@ func pathsFromDiff(v1, v2 types.Value, leftRight bool) []string {
 
 	var paths []string
 	for d := range dChan {
-		paths = append(paths, d.Path.String())
+		paths = append(paths, d.Path.String(types.Format_7_18))
 	}
 	return paths
 }
