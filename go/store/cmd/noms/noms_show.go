@@ -64,8 +64,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showRaw {
-		// TODO(binformat)
-		ch := types.EncodeValue(value, types.Format_7_18)
+		ch := types.EncodeValue(value, database.Format())
 		buf := bytes.NewBuffer(ch.Data())
 		_, err = io.Copy(os.Stdout, buf)
 		util.CheckError(err)
@@ -73,7 +72,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showStats {
-		types.WriteValueStats(ctx, types.Format_7_18, os.Stdout, value, database)
+		types.WriteValueStats(ctx, database.Format(), os.Stdout, value, database)
 		return 0
 	}
 
@@ -84,10 +83,10 @@ func runShow(ctx context.Context, args []string) int {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
 
-		types.WriteEncodedValue(ctx, types.Format_7_18, pgr.Writer, value)
+		types.WriteEncodedValue(ctx, database.Format(), pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
-		types.WriteEncodedValue(ctx, types.Format_7_18, os.Stdout, value)
+		types.WriteEncodedValue(ctx, database.Format(), os.Stdout, value)
 	}
 
 	return 0

@@ -19,7 +19,7 @@ type CommitIterator struct {
 
 // NewCommitIterator initializes a new CommitIterator with the first commit to be printed.
 func NewCommitIterator(db datas.Database, commit types.Struct) *CommitIterator {
-	cr := types.NewRef(commit, types.Format_7_18)
+	cr := types.NewRef(commit, db.Format())
 	return &CommitIterator{db: db, branches: branchList{branch{cr: cr, commit: commit}}}
 }
 

@@ -53,7 +53,7 @@ func runCommit(ctx context.Context, args []string) int {
 		util.CheckError(err)
 		path = string(readPath)
 	}
-	absPath, err := spec.NewAbsolutePath(types.Format_7_18, path)
+	absPath, err := spec.NewAbsolutePath(db.Format(), path)
 	util.CheckError(err)
 
 	value := absPath.Resolve(ctx, db)
@@ -64,14 +64,13 @@ func runCommit(ctx context.Context, args []string) int {
 	oldCommitRef, oldCommitExists := ds.MaybeHeadRef()
 	if oldCommitExists {
 		head := ds.HeadValue()
-		// TODO(binformat)
-		if head.Hash(types.Format_7_18) == value.Hash(types.Format_7_18) && !allowDupe {
+		if head.Hash(db.Format()) == value.Hash(db.Format()) && !allowDupe {
 			fmt.Fprintf(os.Stdout, "Commit aborted - allow-dupe is set to off and this commit would create a duplicate\n")
 			return 0
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(ctx, types.Format_7_18, db, "", "", nil, nil)
+	meta, err := spec.CreateCommitMetaStruct(ctx, db.Format(), db, "", "", nil, nil)
 	util.CheckErrorNoUsage(err)
 
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})

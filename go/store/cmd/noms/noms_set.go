@@ -59,7 +59,8 @@ func nomsSetNew(ctx context.Context, dbStr string, args []string) int {
 func nomsSetInsert(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeAdded, args)
 	return 0
 }
@@ -67,7 +68,8 @@ func nomsSetInsert(ctx context.Context, specStr string, args []string) int {
 func nomsSetDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeRemoved, args)
 	return 0
 }
