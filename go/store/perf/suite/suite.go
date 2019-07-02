@@ -250,7 +250,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 					"total":   types.Float(info.total.Nanoseconds()),
 				}))
 			}
-			reps[i] = types.NewMap(context.Background(), types.Format_7_18, db, timesSlice...)
+			reps[i] = types.NewMap(context.Background(), db, timesSlice...)
 		}
 
 		record := types.NewStruct(types.Format_7_18, "", map[string]types.Value{

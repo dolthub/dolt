@@ -182,7 +182,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, mvOpts 
 		if sortedInput {
 			return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
 		} else {
-			m := types.NewMap(ctx, types.Format_7_18, root.VRW())
+			m := types.NewMap(ctx, root.VRW())
 			return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
 		}
 

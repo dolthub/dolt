@@ -29,15 +29,15 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 	hashValueBytes(entry.value, rv)
 }
 
-func NewMap(ctx context.Context, f *Format, vrw ValueReadWriter, kv ...Value) Map {
-	entries := buildMapData(f, kv)
-	ch := newEmptyMapSequenceChunker(ctx, f, vrw)
+func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) Map {
+	entries := buildMapData(vrw.Format(), kv)
+	ch := newEmptyMapSequenceChunker(ctx, vrw.Format(), vrw)
 
 	for _, entry := range entries.entries {
 		ch.Append(ctx, entry)
 	}
 
-	return newMap(ch.Done(ctx).(orderedSequence), f)
+	return newMap(ch.Done(ctx).(orderedSequence), vrw.Format())
 }
 
 // NewStreamingMap takes an input channel of values and returns a output
@@ -47,10 +47,10 @@ func NewMap(ctx context.Context, f *Format, vrw ValueReadWriter, kv ...Value) Ma
 // input channel out of order will result in a panic. Once the input channel is
 // closed by the caller, a finished Map will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingMap(ctx context.Context, f *Format, vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
+func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
 	d.PanicIfTrue(vrw == nil)
 	return newStreamingMap(vrw, kvs, func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
-		go readMapInput(ctx, f, vrw, kvs, outChan)
+		go readMapInput(ctx, vrw.Format(), vrw, kvs, outChan)
 	})
 }
 

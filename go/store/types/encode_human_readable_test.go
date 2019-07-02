@@ -70,7 +70,7 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 	s := NewSet(context.Background(), Format_7_18, vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "set {  // 4 items\n  0,\n  1,\n  2,\n  3,\n}", s)
 
-	m := NewMap(context.Background(), Format_7_18, vrw, Float(0), Bool(false), Float(1), Bool(true))
+	m := NewMap(context.Background(), vrw, Float(0), Bool(false), Float(1), Bool(true))
 	assertWriteHRSEqual(t, "map {\n  0: false,\n  1: true,\n}", m)
 
 	// TODO(binformat)
@@ -100,7 +100,7 @@ func TestWriteHumanReadableNested(t *testing.T) {
 	s := NewSet(context.Background(), Format_7_18, vrw, String("a"), String("b"))
 	s2 := NewSet(context.Background(), Format_7_18, vrw, String("c"), String("d"))
 
-	m := NewMap(context.Background(), Format_7_18, vrw, s, l, s2, l2)
+	m := NewMap(context.Background(), vrw, s, l, s2, l2)
 	assertWriteHRSEqual(t, `map {
   set {
     "c",
@@ -316,7 +316,7 @@ func TestEmptyCollections(t *testing.T) {
 	assertWriteHRSEqual(t, "struct Rien {}", b)
 	c := MakeMapType(BlobType, FloaTType)
 	assertWriteHRSEqual(t, "Map<Blob, Float>", c)
-	d := NewMap(context.Background(), Format_7_18, vrw)
+	d := NewMap(context.Background(), vrw)
 	assertWriteHRSEqual(t, "map {}", d)
 	e := MakeSetType(StringType)
 	assertWriteHRSEqual(t, "Set<String>", e)

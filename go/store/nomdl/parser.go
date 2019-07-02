@@ -406,7 +406,7 @@ func (p *Parser) parseSet(ctx context.Context) types.Set {
 func (p *Parser) parseMap(ctx context.Context) types.Map {
 	// already swallowed 'map'
 	p.lex.eat('{')
-	me := types.NewMap(ctx, p.vrw.Format(), p.vrw).Edit()
+	me := types.NewMap(ctx, p.vrw).Edit()
 
 	for p.lex.peek() != '}' {
 		key := p.parseValue(ctx)

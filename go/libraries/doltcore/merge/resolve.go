@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
@@ -72,7 +73,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 	}
 
 	newTbl := doltdb.NewTable(ctx, vrw, tblSchVal, rowEditor.Map(ctx))
-	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(ctx, types.Format_7_18, vrw))
+	newTbl = newTbl.SetConflicts(ctx, schemas, types.NewMap(ctx, vrw))
 
 	return newTbl, nil
 }
