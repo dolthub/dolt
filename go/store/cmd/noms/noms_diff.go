@@ -12,6 +12,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
 	"github.com/liquidata-inc/ld/dolt/go/store/diff"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/outputpager"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
@@ -38,14 +39,14 @@ func setupDiffFlags() *flag.FlagSet {
 
 func runDiff(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	db1, value1, err := cfg.GetPath(ctx, args[0])
+	db1, value1, err := cfg.GetPath(ctx, types.Format_7_18, args[0])
 	util.CheckErrorNoUsage(err)
 	if value1 == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 	defer db1.Close()
 
-	db2, value2, err := cfg.GetPath(ctx, args[1])
+	db2, value2, err := cfg.GetPath(ctx, types.Format_7_18, args[1])
 	util.CheckErrorNoUsage(err)
 	if value2 == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[1]))

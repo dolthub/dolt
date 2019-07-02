@@ -49,7 +49,7 @@ func setupShowFlags() *flag.FlagSet {
 
 func runShow(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	database, value, err := cfg.GetPath(ctx, args[0])
+	database, value, err := cfg.GetPath(ctx, types.Format_7_18, args[0])
 	util.CheckErrorNoUsage(err)
 	defer database.Close()
 
