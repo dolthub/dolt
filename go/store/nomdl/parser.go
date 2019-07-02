@@ -368,8 +368,7 @@ func (p *Parser) parseFloat() types.Float {
 
 func (p *Parser) parseList(ctx context.Context) types.List {
 	// already swallowed '['
-	// TODO(binformat)
-	le := types.NewList(ctx, types.Format_7_18, p.vrw).Edit()
+	le := types.NewList(ctx, p.vrw.Format(), p.vrw).Edit()
 
 	for p.lex.peek() != ']' {
 		v := p.parseValue(ctx)
@@ -388,7 +387,7 @@ func (p *Parser) parseList(ctx context.Context) types.List {
 func (p *Parser) parseSet(ctx context.Context) types.Set {
 	// already swallowed 'set'
 	p.lex.eat('{')
-	se := types.NewSet(ctx, types.Format_7_18, p.vrw).Edit()
+	se := types.NewSet(ctx, p.vrw.Format(), p.vrw).Edit()
 
 	for p.lex.peek() != '}' {
 		v := p.parseValue(ctx)
@@ -407,7 +406,7 @@ func (p *Parser) parseSet(ctx context.Context) types.Set {
 func (p *Parser) parseMap(ctx context.Context) types.Map {
 	// already swallowed 'map'
 	p.lex.eat('{')
-	me := types.NewMap(ctx, types.Format_7_18, p.vrw).Edit()
+	me := types.NewMap(ctx, p.vrw.Format(), p.vrw).Edit()
 
 	for p.lex.peek() != '}' {
 		key := p.parseValue(ctx)
@@ -463,8 +462,7 @@ func (p *Parser) parseBlob(ctx context.Context) types.Blob {
 
 	}
 	p.lex.eat('}')
-	// TODO(binformat)
-	return types.NewBlob(ctx, types.Format_7_18, p.vrw, bytes.NewReader(buff.Bytes()))
+	return types.NewBlob(ctx, p.vrw.Format(), p.vrw, bytes.NewReader(buff.Bytes()))
 }
 
 func (p *Parser) parseStruct(ctx context.Context) types.Struct {
@@ -494,5 +492,5 @@ func (p *Parser) parseStruct(ctx context.Context) types.Struct {
 		break
 	}
 	p.lex.eat('}')
-	return types.NewStruct(types.Format_7_18, name, data)
+	return types.NewStruct(p.vrw.Format(), name, data)
 }
