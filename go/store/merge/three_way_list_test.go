@@ -24,7 +24,7 @@ func (s *ThreeWayListMergeSuite) SetupSuite() {
 	s.create = func(i seq) (val types.Value) {
 		if i != nil {
 			items := valsToTypesValues(s.create, i.items()...)
-			val = types.NewList(context.Background(), types.Format_7_18, s.vs, items...)
+			val = types.NewList(context.Background(), s.vs, items...)
 		}
 		return
 	}

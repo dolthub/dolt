@@ -1134,8 +1134,8 @@ func TestMapEquals(t *testing.T) {
 	diffMapTest(assert, m3, m2, 0, 0, 0)
 
 	// TODO(binformat)
-	m1 = NewMap(context.Background(), Format_7_18, vrw, String("foo"), Float(0.0), String("bar"), NewList(context.Background(), Format_7_18, vrw))
-	m2 = m2.Edit().Set(String("foo"), Float(0.0)).Set(String("bar"), NewList(context.Background(), Format_7_18, vrw)).Map(context.Background())
+	m1 = NewMap(context.Background(), Format_7_18, vrw, String("foo"), Float(0.0), String("bar"), NewList(context.Background(), vrw))
+	m2 = m2.Edit().Set(String("foo"), Float(0.0)).Set(String("bar"), NewList(context.Background(), vrw)).Map(context.Background())
 	assert.True(m1.Equals(Format_7_18, m2))
 	assert.True(m2.Equals(Format_7_18, m1))
 	assert.False(m2.Equals(Format_7_18, m3))
@@ -1163,8 +1163,8 @@ func TestMapNotStringKeys(t *testing.T) {
 		Float(0), String("Float: 0"),
 		b1, String("blob1"),
 		b2, String("blob2"),
-		NewList(context.Background(), Format_7_18, vrw), String("empty list"),
-		NewList(context.Background(), Format_7_18, vrw, NewList(context.Background(), Format_7_18, vrw)), String("list of list"),
+		NewList(context.Background(), vrw), String("empty list"),
+		NewList(context.Background(), vrw, NewList(context.Background(), vrw)), String("list of list"),
 		NewMap(context.Background(), Format_7_18, vrw), String("empty map"),
 		NewMap(context.Background(), Format_7_18, vrw, NewMap(context.Background(), Format_7_18, vrw), NewMap(context.Background(), Format_7_18, vrw)), String("map of map/map"),
 		NewSet(context.Background(), Format_7_18, vrw), String("empty set"),
@@ -1423,7 +1423,7 @@ func TestMapEmpty(t *testing.T) {
 	assert.False(m.Empty())
 
 	// TODO(binformat)
-	me.Set(NewList(ctx, Format_7_18, vrw), NewMap(ctx, Format_7_18, vrw))
+	me.Set(NewList(ctx, vrw), NewMap(ctx, Format_7_18, vrw))
 	m = me.Map(ctx)
 	assert.False(m.Empty())
 }
@@ -1577,7 +1577,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		// TODO(binformat)
 		NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf")), v,
 		NewSet(context.Background(), Format_7_18, vrw, Bool(true)), v,
-		NewList(context.Background(), Format_7_18, vrw, Bool(true)), v,
+		NewList(context.Background(), vrw, Bool(true)), v,
 		NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), v,
 		NewStruct(Format_7_18, "", StructData{"field": Bool(true)}), v,
 		// Refs of values
@@ -1587,7 +1587,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		// TODO(binformat)
 		NewRef(NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("buf")), Format_7_18), v,
 		NewRef(NewSet(context.Background(), Format_7_18, vrw, Bool(true)), Format_7_18), v,
-		NewRef(NewList(context.Background(), Format_7_18, vrw, Bool(true)), Format_7_18), v,
+		NewRef(NewList(context.Background(), vrw, Bool(true)), Format_7_18), v,
 		NewRef(NewMap(context.Background(), Format_7_18, vrw, Bool(true), Float(0)), Format_7_18), v,
 		NewRef(NewStruct(Format_7_18, "", StructData{"field": Bool(true)}), Format_7_18), v,
 	}

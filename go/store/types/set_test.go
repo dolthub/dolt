@@ -1014,7 +1014,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		// TODO(binformat)
 		NewBlob(context.Background(), Format_7_18, vs, bytes.NewBufferString("buf")),
 		NewSet(context.Background(), Format_7_18, vs, Bool(true)),
-		NewList(context.Background(), Format_7_18, vs, Bool(true)),
+		NewList(context.Background(), vs, Bool(true)),
 		NewMap(context.Background(), Format_7_18, vs, Bool(true), Float(0)),
 		NewStruct(Format_7_18, "", StructData{"field": Bool(true)}),
 		// Refs of values
@@ -1024,7 +1024,7 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		// TODO(binformat)
 		NewRef(NewBlob(context.Background(), Format_7_18, vs, bytes.NewBufferString("buf")), Format_7_18),
 		NewRef(NewSet(context.Background(), Format_7_18, vs, Bool(true)), Format_7_18),
-		NewRef(NewList(context.Background(), Format_7_18, vs, Bool(true)), Format_7_18),
+		NewRef(NewList(context.Background(), vs, Bool(true)), Format_7_18),
 		NewRef(NewMap(context.Background(), Format_7_18, vs, Bool(true), Float(0)), Format_7_18),
 		NewRef(NewStruct(Format_7_18, "", StructData{"field": Bool(true)}), Format_7_18),
 	}

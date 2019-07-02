@@ -18,7 +18,7 @@ func listOfInts(vrw ValueReadWriter, vals ...int) List {
 		vs = append(vs, Float(v))
 	}
 	// TODO(binformat)
-	return NewList(context.Background(), Format_7_18, vrw, vs...)
+	return NewList(context.Background(), vrw, vs...)
 }
 
 func testEditor(vrw ValueReadWriter, vals ...int) *ListEditor {

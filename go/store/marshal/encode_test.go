@@ -97,7 +97,7 @@ func TestEncode(tt *testing.T) {
 		t(types.String(s), s)
 	}
 
-	t(types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42)), types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42)))
+	t(types.NewList(context.Background(), vs, types.Float(42)), types.NewList(context.Background(), vs, types.Float(42)))
 	t(types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.String("hi")), types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(42), types.String("hi")))
 	t(types.NewSet(context.Background(), types.Format_7_18, vs, types.String("bye")), types.NewSet(context.Background(), types.Format_7_18, vs, types.String("bye")))
 	// TODO(binformat)
@@ -132,14 +132,14 @@ func TestEncode(tt *testing.T) {
 		C float64
 	}
 	t(types.NewStruct(types.Format_7_18, "TestNestedStruct", types.StructData{
-		"a": types.NewList(context.Background(), types.Format_7_18, vs, types.String("hi")),
+		"a": types.NewList(context.Background(), vs, types.String("hi")),
 		"b": types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 			"str": types.String("bye"),
 			"num": types.Float(5678),
 		}),
 		"c": types.Float(1234),
 	}), TestNestedStruct{
-		A: types.NewList(context.Background(), types.Format_7_18, vs, types.String("hi")),
+		A: types.NewList(context.Background(), vs, types.String("hi")),
 		B: TestStruct{
 			Str: "bye",
 			Num: 5678,
@@ -421,7 +421,7 @@ func TestEncodeOmitEmpty(t *testing.T) {
 	v3, err := Marshal(context.Background(), vs, s3)
 	assert.NoError(err)
 	assert.True(types.NewStruct(types.Format_7_18, "S2", types.StructData{
-		"slice": types.NewList(context.Background(), types.Format_7_18, vs, types.Float(0)),
+		"slice": types.NewList(context.Background(), vs, types.Float(0)),
 		"map":   types.NewMap(context.Background(), types.Format_7_18, vs, types.Float(0), types.Float(0)),
 	}).Equals(types.Format_7_18, v3))
 
@@ -446,13 +446,13 @@ func TestEncodeOmitEmpty(t *testing.T) {
 		Value types.Value `noms:",omitempty"`
 	}
 	s6 := S3{
-		List:  types.NewList(context.Background(), types.Format_7_18, vs),
+		List:  types.NewList(context.Background(), vs),
 		Value: types.Float(0),
 	}
 	v6, err := Marshal(context.Background(), vs, s6)
 	assert.NoError(err)
 	assert.True(types.NewStruct(types.Format_7_18, "S3", types.StructData{
-		"list":  types.NewList(context.Background(), types.Format_7_18, vs),
+		"list":  types.NewList(context.Background(), vs),
 		"value": types.Float(0),
 	}).Equals(types.Format_7_18, v6))
 
@@ -511,7 +511,7 @@ func TestEncodeSlice(t *testing.T) {
 
 	v, err := Marshal(context.Background(), vs, []string{"a", "b", "c"})
 	assert.NoError(err)
-	assert.True(types.NewList(context.Background(), types.Format_7_18, vs, types.String("a"), types.String("b"), types.String("c")).Equals(types.Format_7_18, v))
+	assert.True(types.NewList(context.Background(), vs, types.String("a"), types.String("b"), types.String("c")).Equals(types.Format_7_18, v))
 }
 
 func TestEncodeArray(t *testing.T) {
@@ -522,7 +522,7 @@ func TestEncodeArray(t *testing.T) {
 
 	v, err := Marshal(context.Background(), vs, [3]int{1, 2, 3})
 	assert.NoError(err)
-	assert.True(types.NewList(context.Background(), types.Format_7_18, vs, types.Float(1), types.Float(2), types.Float(3)).Equals(types.Format_7_18, v))
+	assert.True(types.NewList(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3)).Equals(types.Format_7_18, v))
 }
 
 func TestEncodeStructWithSlice(t *testing.T) {
@@ -537,7 +537,7 @@ func TestEncodeStructWithSlice(t *testing.T) {
 	v, err := Marshal(context.Background(), vs, S{[]int{1, 2, 3}})
 	assert.NoError(err)
 	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"list": types.NewList(context.Background(), types.Format_7_18, vs, types.Float(1), types.Float(2), types.Float(3)),
+		"list": types.NewList(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3)),
 	}).Equals(types.Format_7_18, v))
 }
 
@@ -553,7 +553,7 @@ func TestEncodeStructWithArrayOfNomsValue(t *testing.T) {
 	v, err := Marshal(context.Background(), vs, S{[1]types.Set{types.NewSet(context.Background(), types.Format_7_18, vs, types.Bool(true))}})
 	assert.NoError(err)
 	assert.True(types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"list": types.NewList(context.Background(), types.Format_7_18, vs, types.NewSet(context.Background(), types.Format_7_18, vs, types.Bool(true))),
+		"list": types.NewList(context.Background(), vs, types.NewSet(context.Background(), types.Format_7_18, vs, types.Bool(true))),
 	}).Equals(types.Format_7_18, v))
 }
 
@@ -617,14 +617,13 @@ func TestEncodeRecursive(t *testing.T) {
 
 	assert.True(types.NewStruct(types.Format_7_18, "Node", types.StructData{
 		"children": types.NewList(context.Background(),
-			types.Format_7_18,
 			vs,
 			types.NewStruct(types.Format_7_18, "Node", types.StructData{
-				"children": types.NewList(context.Background(), types.Format_7_18, vs),
+				"children": types.NewList(context.Background(), vs),
 				"value":    types.Float(2),
 			}),
 			types.NewStruct(types.Format_7_18, "Node", types.StructData{
-				"children": types.NewList(context.Background(), types.Format_7_18, vs),
+				"children": types.NewList(context.Background(), vs),
 				"value":    types.Float(3),
 			}),
 		),
@@ -676,7 +675,7 @@ func TestEncodeInterface(t *testing.T) {
 	var i interface{} = []string{"a", "b"}
 	v, err := Marshal(context.Background(), vs, i)
 	assert.NoError(err)
-	assert.True(types.NewList(context.Background(), types.Format_7_18, vs, types.String("a"), types.String("b")).Equals(types.Format_7_18, v))
+	assert.True(types.NewList(context.Background(), vs, types.String("a"), types.String("b")).Equals(types.Format_7_18, v))
 
 	i = map[interface{}]interface{}{"a": true, struct{ Name string }{"b"}: 42}
 	v, err = Marshal(context.Background(), vs, i)
@@ -775,7 +774,7 @@ func TestEncodeOpt(t *testing.T) {
 		{
 			[]string{"a", "b"},
 			Opt{},
-			types.NewList(context.Background(), types.Format_7_18, vs, types.String("a"), types.String("b")),
+			types.NewList(context.Background(), vs, types.String("a"), types.String("b")),
 		},
 		{
 			[]string{"a", "b"},
@@ -1109,7 +1108,7 @@ func TestMarshalerComplexStructType(t *testing.T) {
 
 	assert.True(types.NewStruct(types.Format_7_18, "TestComplexStructType", types.StructData{
 		"p":       types.Float(43),
-		"ps":      types.NewList(context.Background(), types.Format_7_18, vs, types.Float(2), types.Float(3)),
+		"ps":      types.NewList(context.Background(), vs, types.Float(2), types.Float(3)),
 		"pm":      types.NewMap(context.Background(), types.Format_7_18, vs, types.String("x"), types.Float(101), types.String("y"), types.Float(102)),
 		"pslice":  types.String("a,b,c"),
 		"pmap":    types.NewSet(context.Background(), types.Format_7_18, vs, types.String("c,123"), types.String("d,456")),

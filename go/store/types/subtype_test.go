@@ -69,7 +69,7 @@ func TestAssertTypeValue(t *testing.T) {
 	assertSubtype(context.Background(), Format_7_18, ValueType, Float(1))
 	assertSubtype(context.Background(), Format_7_18, ValueType, String("abc"))
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3))
+	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(context.Background(), Format_7_18, ValueType, l)
 }
 
@@ -86,7 +86,7 @@ func TestAssertTypeList(tt *testing.T) {
 
 	listOfNumberType := MakeListType(FloaTType)
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3))
+	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(context.Background(), Format_7_18, listOfNumberType, l)
 	assertAll(tt, listOfNumberType, l)
 	assertSubtype(context.Background(), Format_7_18, MakeListType(ValueType), l)
@@ -140,7 +140,7 @@ func TestAssertTypeUnion(tt *testing.T) {
 
 	lt := MakeListType(MakeUnionType(FloaTType, StringType))
 	// TODO(binformat)
-	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), Format_7_18, vs, Float(1), String("hi"), Float(2), String("bye")))
+	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), vs, Float(1), String("hi"), Float(2), String("bye")))
 
 	st := MakeSetType(StringType)
 	assertSubtype(context.Background(), Format_7_18, MakeUnionType(st, FloaTType), Float(42))
@@ -191,7 +191,7 @@ func TestAssertTypeEmptyListUnion(tt *testing.T) {
 
 	lt := MakeListType(MakeUnionType())
 	// TODO(binformat)
-	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), Format_7_18, vs))
+	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), vs))
 }
 
 func TestAssertTypeEmptyList(tt *testing.T) {
@@ -199,11 +199,11 @@ func TestAssertTypeEmptyList(tt *testing.T) {
 
 	lt := MakeListType(FloaTType)
 	// TODO(binformat)
-	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), Format_7_18, vs))
+	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), vs))
 
 	// List<> not a subtype of List<Float>
 	// TODO(binformat)
-	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(context.Background(), Format_7_18, vs, Float(1)))
+	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(context.Background(), vs, Float(1)))
 }
 
 func TestAssertTypeEmptySet(tt *testing.T) {
@@ -563,7 +563,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		{NewEmptyBlob(vs, Format_7_18), BlobType},
 		{BoolType, TypeType},
 		// TODO(binformat)
-		{NewList(context.Background(), Format_7_18, vs, Float(42)), MakeListType(FloaTType)},
+		{NewList(context.Background(), vs, Float(42)), MakeListType(FloaTType)},
 		{NewSet(context.Background(), Format_7_18, vs, Float(42)), MakeSetType(FloaTType)},
 		{NewRef(Float(42), Format_7_18), MakeRefType(FloaTType)},
 		{NewMap(context.Background(), Format_7_18, vs, Float(42), String("a")), MakeMapType(FloaTType, StringType)},
@@ -591,13 +591,13 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse(String("abc"), MakeUnionType())
 
 	// TODO(binformat)
-	assertTrue(NewList(context.Background(), Format_7_18, vs), MakeListType(FloaTType))
-	assertTrue(NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
-	assertFalse(NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(BoolType))
-	assertTrue(NewList(context.Background(), Format_7_18, vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(MakeUnionType(FloaTType, BoolType)))
-	assertTrue(NewList(context.Background(), Format_7_18, vs, Float(0), Bool(true)), MakeListType(MakeUnionType(FloaTType, BoolType)))
-	assertFalse(NewList(context.Background(), Format_7_18, vs, Float(0)), MakeListType(MakeUnionType()))
-	assertTrue(NewList(context.Background(), Format_7_18, vs), MakeListType(MakeUnionType()))
+	assertTrue(NewList(context.Background(), vs), MakeListType(FloaTType))
+	assertTrue(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
+	assertFalse(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(BoolType))
+	assertTrue(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(MakeUnionType(FloaTType, BoolType)))
+	assertTrue(NewList(context.Background(), vs, Float(0), Bool(true)), MakeListType(MakeUnionType(FloaTType, BoolType)))
+	assertFalse(NewList(context.Background(), vs, Float(0)), MakeListType(MakeUnionType()))
+	assertTrue(NewList(context.Background(), vs), MakeListType(MakeUnionType()))
 
 	{
 		newChunkedList := func(vals ...Value) List {
@@ -734,10 +734,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		NewStruct(Format_7_18, "Node", StructData{
 			"value": Float(1),
 			// TODO(binformat)
-			"children": NewList(context.Background(), Format_7_18, vs,
+			"children": NewList(context.Background(), vs,
 				NewStruct(Format_7_18, "Node", StructData{
 					"value":    Float(2),
-					"children": NewList(context.Background(), Format_7_18, vs),
+					"children": NewList(context.Background(), vs),
 				}),
 			),
 		}),
@@ -751,10 +751,10 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		NewStruct(Format_7_18, "Node", StructData{
 			"value": Float(1),
 			// TODO(binformat)
-			"children": NewList(context.Background(), Format_7_18, vs,
+			"children": NewList(context.Background(), vs,
 				NewStruct(Format_7_18, "Node", StructData{
 					"value":    Bool(true),
-					"children": NewList(context.Background(), Format_7_18, vs),
+					"children": NewList(context.Background(), vs),
 				}),
 			),
 		}),
@@ -772,7 +772,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			}
 			rv := NewStruct(Format_7_18, "Node", StructData{
 				"value":    value,
-				"children": NewList(context.Background(), Format_7_18, vs, childrenAsRefs...),
+				"children": NewList(context.Background(), vs, childrenAsRefs...),
 			})
 			return rv
 		}

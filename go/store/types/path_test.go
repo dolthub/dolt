@@ -100,7 +100,7 @@ func TestPathIndex(t *testing.T) {
 	}
 
 	// TODO(binformat)
-	v = NewList(context.Background(), Format_7_18, vs, Float(1), Float(3), String("foo"), Bool(false))
+	v = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
 
 	resolvesTo(Float(1), Float(0), "[0]")
 	resolvesTo(Float(3), Float(1), "[1]")
@@ -179,7 +179,7 @@ func TestPathHashIndex(t *testing.T) {
 	i := Float(0)
 	str := String("foo")
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vs, b, i, str)
+	l := NewList(context.Background(), vs, b, i, str)
 	lr := NewRef(l, Format_7_18)
 	m := NewMap(context.Background(), Format_7_18, vs,
 		b, br,
@@ -248,7 +248,7 @@ func TestPathMulti(t *testing.T) {
 	)
 
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vs, m1, m2)
+	l := NewList(context.Background(), vs, m1, m2)
 
 	s := NewStruct(Format_7_18, "", StructData{
 		"foo": l,
@@ -491,7 +491,7 @@ func TestPathType(t *testing.T) {
 		String("bool"), Bool(false),
 		String("number"), Float(42),
 		// TODO(binformat)
-		String("List<number|string>"), NewList(context.Background(), Format_7_18, vs, Float(42), String("foo")),
+		String("List<number|string>"), NewList(context.Background(), vs, Float(42), String("foo")),
 		String("Map<Bool, Bool>"), NewMap(context.Background(), Format_7_18, vs, Bool(true), Bool(false)))
 
 	m.IterAll(context.Background(), func(k, cv Value) {
@@ -539,7 +539,7 @@ func TestPathAtAnnotation(t *testing.T) {
 	}
 
 	// TODO(binformat)
-	v = NewList(context.Background(), Format_7_18, vs, Float(1), Float(3), String("foo"), Bool(false))
+	v = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
 
 	resolvesTo(Float(1), nil, "@at(0)")
 	resolvesTo(Float(3), nil, "@at(1)")

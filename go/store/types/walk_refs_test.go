@@ -69,15 +69,15 @@ func TestWalkRefs(t *testing.T) {
 
 		t.Run("OfRefs", func(t *testing.T) {
 			// TODO(binformat)
-			l := NewList(context.Background(), Format_7_18, vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
+			l := NewList(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(l, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
 			// TODO(binformat)
-			l := NewList(context.Background(), Format_7_18, vrw, newValueSlice(r)...)
+			l := NewList(context.Background(), vrw, newValueSlice(r)...)
 			for l.sequence.isLeaf() {
-				l = l.Concat(context.Background(), NewList(context.Background(), Format_7_18, vrw, newValueSlice(r)...))
+				l = l.Concat(context.Background(), NewList(context.Background(), vrw, newValueSlice(r)...))
 			}
 			runTest(l, t)
 		})

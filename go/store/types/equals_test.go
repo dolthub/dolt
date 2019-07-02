@@ -47,9 +47,9 @@ func TestValueEquals(t *testing.T) {
 			}, Format_7_18, nil), Format_7_18)
 		},
 		// TODO(binformat)
-		func() Value { return NewList(context.Background(), Format_7_18, vrw) },
-		func() Value { return NewList(context.Background(), Format_7_18, vrw, String("foo")) },
-		func() Value { return NewList(context.Background(), Format_7_18, vrw, String("bar")) },
+		func() Value { return NewList(context.Background(), vrw) },
+		func() Value { return NewList(context.Background(), vrw, String("foo")) },
+		func() Value { return NewList(context.Background(), vrw, String("bar")) },
 		func() Value { return NewMap(context.Background(), Format_7_18, vrw) },
 		func() Value { return NewMap(context.Background(), Format_7_18, vrw, String("a"), String("a")) },
 		func() Value { return NewSet(context.Background(), Format_7_18, vrw) },

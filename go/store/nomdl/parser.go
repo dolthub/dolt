@@ -368,7 +368,7 @@ func (p *Parser) parseFloat() types.Float {
 
 func (p *Parser) parseList(ctx context.Context) types.List {
 	// already swallowed '['
-	le := types.NewList(ctx, p.vrw.Format(), p.vrw).Edit()
+	le := types.NewList(ctx, p.vrw).Edit()
 
 	for p.lex.peek() != ']' {
 		v := p.parseValue(ctx)
