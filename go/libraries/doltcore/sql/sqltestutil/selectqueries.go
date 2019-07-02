@@ -147,7 +147,6 @@ var BasicSelectTests = []SelectTest{
 		Query:           "select * from people order by rating",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Barney, Moe, Marge, Homer, Bart, Lisa),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, order by string",
@@ -238,7 +237,6 @@ var BasicSelectTests = []SelectTest{
 		Query:           "select * from people where rating > 8.0 order by id",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Bart, Lisa),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, where < float",
@@ -251,14 +249,12 @@ var BasicSelectTests = []SelectTest{
 		Query:           "select * from people where rating = 8.0",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Marge),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, where < float reversed",
 		Query:           "select * from people where 8.0 < rating",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Bart, Lisa),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, where > float reversed",
@@ -271,7 +267,6 @@ var BasicSelectTests = []SelectTest{
 		Query:           "select * from people where 8.0 = rating",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Marge),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select *, where bool = ",
@@ -326,7 +321,6 @@ var BasicSelectTests = []SelectTest{
 		Query:           "select * from people where rating in (-10.0, 8.5)",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Homer),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, in clause, mixed types",
@@ -370,34 +364,29 @@ var BasicSelectTests = []SelectTest{
 		ExpectedRows:   CompressRows(PeopleTestSchema, Marge, Bart, Lisa, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
-	// TODO: is true, is false is unsupported by sql engine
 	{
 		Name:            "select *, is true clause ",
 		Query:           "select * from people where is_married is true",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Marge),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, is not true clause ",
 		Query:           "select * from people where is_married is not true",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Bart, Lisa, Moe, Barney),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, is false clause ",
 		Query:           "select * from people where is_married is false",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Bart, Lisa, Moe, Barney),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, is not false clause ",
 		Query:           "select * from people where is_married is not false",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Marge),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, is true clause on non-bool column",
@@ -446,7 +435,6 @@ var BasicSelectTests = []SelectTest{
 		Query:           "select * from people where -rating = -8.5",
 		ExpectedRows:    CompressRows(PeopleTestSchema, Homer),
 		ExpectedSchema:  CompressSchema(PeopleTestSchema),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, -column, string type",

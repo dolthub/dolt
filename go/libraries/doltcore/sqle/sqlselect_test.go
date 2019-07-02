@@ -56,7 +56,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		t.Skip("Skipping tests until " + singleQueryTest)
 	}
 
-	if test.SkipOnSqlEngine && skipBroken {
+	if len(singleQueryTest) == 0 && test.SkipOnSqlEngine && skipBroken {
 		t.Skip("Skipping test broken on SQL engine")
 	}
 
