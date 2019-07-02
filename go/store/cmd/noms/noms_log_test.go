@@ -26,7 +26,7 @@ type nomsLogTestSuite struct {
 }
 
 func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
-	sp, err := spec.ForDataset(str)
+	sp, err := spec.ForDataset(types.Format_7_18, str)
 	s.NoError(err)
 	defer sp.Close()
 
@@ -40,19 +40,19 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 }
 
 func (s *nomsLogTestSuite) TestNomsLog() {
-	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, "dsTest"))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, "dsTest"))
 	s.NoError(err)
 	defer sp.Close()
 
 	sp.GetDatabase(context.Background()) // create the database
-	s.Panics(func() { s.MustRun(main, []string{"log", sp.String()}) })
+	s.Panics(func() { s.MustRun(main, []string{"log", sp.String(types.Format_7_18)}) })
 
-	testCommitInResults(s, sp.String(), 1)
-	testCommitInResults(s, sp.String(), 2)
+	testCommitInResults(s, sp.String(types.Format_7_18), 1)
+	testCommitInResults(s, sp.String(types.Format_7_18), 2)
 }
 
 func (s *nomsLogTestSuite) TestNomsLogPath() {
-	sp, err := spec.ForPath(spec.CreateValueSpecString("nbs", s.DBDir, "dsTest.value.bar"))
+	sp, err := spec.ForPath(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, "dsTest.value.bar"))
 	s.NoError(err)
 	defer sp.Close()
 
@@ -66,11 +66,11 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 		s.NoError(err)
 	}
 
-	stdout, stderr := s.MustRun(main, []string{"log", "--show-value", sp.String()})
+	stdout, stderr := s.MustRun(main, []string{"log", "--show-value", sp.String(types.Format_7_18)})
 	s.Empty(stderr)
 	test.EqualsIgnoreHashes(s.T(), pathValue, stdout)
 
-	stdout, stderr = s.MustRun(main, []string{"log", sp.String()})
+	stdout, stderr = s.MustRun(main, []string{"log", sp.String(types.Format_7_18)})
 	s.Empty(stderr)
 	test.EqualsIgnoreHashes(s.T(), pathDiff, stdout)
 }

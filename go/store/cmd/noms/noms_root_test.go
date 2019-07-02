@@ -25,7 +25,7 @@ type nomsRootTestSuite struct {
 func (s *nomsRootTestSuite) TestBasic() {
 	datasetName := "root-get"
 	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
-	sp, err := spec.ForDataset(dsSpec)
+	sp, err := spec.ForDataset(types.Format_7_18, dsSpec)
 	s.NoError(err)
 	defer sp.Close()
 

@@ -53,7 +53,7 @@ func runCommit(ctx context.Context, args []string) int {
 		util.CheckError(err)
 		path = string(readPath)
 	}
-	absPath, err := spec.NewAbsolutePath(path)
+	absPath, err := spec.NewAbsolutePath(types.Format_7_18, path)
 	util.CheckError(err)
 
 	value := absPath.Resolve(ctx, db)
@@ -71,7 +71,7 @@ func runCommit(ctx context.Context, args []string) int {
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(ctx, db, "", "", nil, nil)
+	meta, err := spec.CreateCommitMetaStruct(ctx, types.Format_7_18, db, "", "", nil, nil)
 	util.CheckErrorNoUsage(err)
 
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})

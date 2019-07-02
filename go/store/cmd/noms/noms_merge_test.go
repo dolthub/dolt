@@ -96,7 +96,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 }
 
 func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
-	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, name))
 	s.NoError(err)
 	return sp
 }
@@ -109,7 +109,7 @@ func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructDa
 }
 
 func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...types.Value) {
-	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, name))
 	db := sp.GetDatabase(context.Background())
 	if s.NoError(err) {
 		defer sp.Close()
@@ -196,10 +196,10 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 		err  string
 	}
 	cases := []c{
-		{[]string{sp.String(), l + "!!", r, o}, "error: Invalid dataset " + l + "!!, must match [a-zA-Z0-9\\-_/]+\n"},
-		{[]string{sp.String(), l + "2", r, o}, "error: Dataset " + l + "2 has no data\n"},
-		{[]string{sp.String(), l, r + "2", o}, "error: Dataset " + r + "2 has no data\n"},
-		{[]string{sp.String(), l, r, "!invalid"}, "error: Invalid dataset !invalid, must match [a-zA-Z0-9\\-_/]+\n"},
+		{[]string{sp.String(types.Format_7_18), l + "!!", r, o}, "error: Invalid dataset " + l + "!!, must match [a-zA-Z0-9\\-_/]+\n"},
+		{[]string{sp.String(types.Format_7_18), l + "2", r, o}, "error: Dataset " + l + "2 has no data\n"},
+		{[]string{sp.String(types.Format_7_18), l, r + "2", o}, "error: Dataset " + r + "2 has no data\n"},
+		{[]string{sp.String(types.Format_7_18), l, r, "!invalid"}, "error: Invalid dataset !invalid, must match [a-zA-Z0-9\\-_/]+\n"},
 	}
 
 	db := sp.GetDatabase(context.Background())

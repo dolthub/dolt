@@ -57,7 +57,7 @@ func nomsSetNew(ctx context.Context, dbStr string, args []string) int {
 }
 
 func nomsSetInsert(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(specStr)
+	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 	rootVal, basePath := splitPath(ctx, sp)
 	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeAdded, args)
@@ -65,7 +65,7 @@ func nomsSetInsert(ctx context.Context, specStr string, args []string) int {
 }
 
 func nomsSetDel(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(specStr)
+	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 	rootVal, basePath := splitPath(ctx, sp)
 	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeRemoved, args)
@@ -74,7 +74,7 @@ func nomsSetDel(ctx context.Context, specStr string, args []string) int {
 
 func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, ct types.DiffChangeType, args []string) {
 	if rootVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(types.Format_7_18)))
 		return
 	}
 	db := sp.GetDatabase(ctx)
@@ -135,7 +135,7 @@ func argumentToValue(ctx context.Context, arg string, db datas.Database) (types.
 		return nil, fmt.Errorf("Invalid string argument: %s", arg)
 	}
 	if arg[0] == '@' {
-		p, err := spec.NewAbsolutePath(arg[1:])
+		p, err := spec.NewAbsolutePath(types.Format_7_18, arg[1:])
 		d.PanicIfError(err)
 		return p.Resolve(ctx, db), nil
 	}

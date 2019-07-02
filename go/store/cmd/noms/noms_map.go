@@ -54,7 +54,7 @@ func nomsMapNew(ctx context.Context, dbStr string, args []string) int {
 }
 
 func nomsMapSet(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(specStr)
+	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 	rootVal, basePath := splitPath(ctx, sp)
 	applyMapEdits(ctx, sp, rootVal, basePath, args)
@@ -62,7 +62,7 @@ func nomsMapSet(ctx context.Context, specStr string, args []string) int {
 }
 
 func nomsMapDel(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(specStr)
+	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 
 	rootVal, basePath := splitPath(ctx, sp)
@@ -84,7 +84,7 @@ func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
 	if rootVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(types.Format_7_18)))
 		return
 	}
 	db := sp.GetDatabase(ctx)

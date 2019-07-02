@@ -21,9 +21,9 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 	assert := assert.New(t)
 
 	test := func(str string) {
-		p, err := NewAbsolutePath(str)
+		p, err := NewAbsolutePath(types.Format_7_18, str)
 		assert.NoError(err)
-		assert.Equal(str, p.String())
+		assert.Equal(str, p.String(types.Format_7_18))
 	}
 
 	// TODO(binformat)
@@ -53,7 +53,7 @@ func TestAbsolutePaths(t *testing.T) {
 	head := ds.Head()
 
 	resolvesTo := func(exp types.Value, str string) {
-		p, err := NewAbsolutePath(str)
+		p, err := NewAbsolutePath(types.Format_7_18, str)
 		assert.NoError(err)
 		act := p.Resolve(context.Background(), db)
 		if exp == nil {
@@ -117,7 +117,7 @@ func TestAbsolutePathParseErrors(t *testing.T) {
 	assert := assert.New(t)
 
 	test := func(path, errMsg string) {
-		p, err := NewAbsolutePath(path)
+		p, err := NewAbsolutePath(types.Format_7_18, path)
 		assert.Equal(AbsolutePath{}, p)
 		assert.Error(err)
 		assert.Equal(errMsg, err.Error())

@@ -137,7 +137,7 @@ func (r *Resolver) GetChunkStore(ctx context.Context, str string) (chunks.ChunkS
 //  - if the db prefix is an alias, replace it
 func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, datas.Dataset, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForDatasetOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForDatasetOpts(types.Format_7_18, r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, datas.Dataset{}, err
 	}
@@ -149,7 +149,7 @@ func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, 
 //  - if the db spec is an alias, replace it
 func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, types.Value, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForPathOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForPathOpts(types.Format_7_18, r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, nil, err
 	}
