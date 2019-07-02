@@ -56,7 +56,8 @@ func nomsMapNew(ctx context.Context, dbStr string, args []string) int {
 func nomsMapSet(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	applyMapEdits(ctx, sp, rootVal, basePath, args)
 	return 0
 }
@@ -65,7 +66,8 @@ func nomsMapDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		kp := parseKeyPart(args, i)

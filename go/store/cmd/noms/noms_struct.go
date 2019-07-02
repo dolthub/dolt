@@ -12,6 +12,7 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/diff"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -58,7 +59,8 @@ func nomsStructSet(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	applyStructEdits(ctx, sp, rootVal, basePath, args)
 	return 0
 }
@@ -67,7 +69,8 @@ func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		if !types.IsValidStructFieldName(args[i]) {
@@ -83,8 +86,7 @@ func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 	return 0
 }
 
-func splitPath(ctx context.Context, sp spec.Spec) (rootVal types.Value, basePath types.Path) {
-	db := sp.GetDatabase(ctx)
+func splitPath(ctx context.Context, db datas.Database, sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 	rootPath := sp.Path
 	rootPath.Path = types.Path{}
 	rootVal = rootPath.Resolve(ctx, db)

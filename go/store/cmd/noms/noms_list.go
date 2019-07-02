@@ -12,6 +12,7 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/diff"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -57,16 +58,18 @@ func nomsList(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClaus
 func nomsListNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyListInserts(ctx, sp, types.NewList(ctx, sp.GetDatabase(ctx)), nil, 0, args)
+	db := sp.GetDatabase(ctx)
+	applyListInserts(ctx, db, sp, types.NewList(ctx, db), nil, 0, args)
 	return 0
 }
 
 func nomsListAppend(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	if list, ok := rootVal.(types.List); ok {
-		applyListInserts(ctx, sp, rootVal, basePath, list.Len(), args)
+		applyListInserts(ctx, db, sp, rootVal, basePath, list.Len(), args)
 	} else {
 		util.CheckErrorNoUsage(fmt.Errorf("%s is not a list", specStr))
 	}
@@ -76,8 +79,9 @@ func nomsListAppend(ctx context.Context, specStr string, args []string) int {
 func nomsListInsert(ctx context.Context, specStr string, pos uint64, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
-	applyListInserts(ctx, sp, rootVal, basePath, pos, args)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
+	applyListInserts(ctx, db, sp, rootVal, basePath, pos, args)
 	return 0
 }
 
@@ -85,7 +89,8 @@ func nomsListDel(ctx context.Context, specStr string, pos uint64, len uint64) in
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	patch := diff.Patch{}
 	// TODO: if len-pos is large this will start to become problematic
 	for i := pos; i < pos+len; i++ {
@@ -99,12 +104,11 @@ func nomsListDel(ctx context.Context, specStr string, pos uint64, len uint64) in
 	return 0
 }
 
-func applyListInserts(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, pos uint64, args []string) {
+func applyListInserts(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, pos uint64, args []string) {
 	if rootVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(types.Format_7_18)))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(db.Format())))
 		return
 	}
-	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		vv, err := argumentToValue(ctx, args[i], db)

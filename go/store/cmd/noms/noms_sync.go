@@ -78,7 +78,7 @@ func runSync(ctx context.Context, args []string) int {
 		lastProgressCh <- last
 	}()
 
-	sourceRef := types.NewRef(sourceObj, types.Format_7_18)
+	sourceRef := types.NewRef(sourceObj, sourceStore.Format())
 	sinkRef, sinkExists := sinkDataset.MaybeHeadRef()
 	nonFF := false
 	f := func() error {
@@ -108,7 +108,7 @@ func runSync(ctx context.Context, args []string) int {
 		status.Done()
 	} else if !sinkExists {
 		fmt.Printf("All chunks already exist at destination! Created new dataset %s.\n", args[1])
-	} else if nonFF && !sourceRef.Equals(types.Format_7_18, sinkRef) {
+	} else if nonFF && !sourceRef.Equals(sourceStore.Format(), sinkRef) {
 		fmt.Printf("Abandoning %s; new head is %s\n", sinkRef.TargetHash(), sourceRef.TargetHash())
 	} else {
 		fmt.Printf("Dataset %s is already up to date.\n", args[1])
