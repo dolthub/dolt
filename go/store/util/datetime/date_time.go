@@ -62,11 +62,11 @@ func (dt DateTime) MarshalNomsType() (*types.Type, error) {
 // UnmarshalNoms makes DateTime implement marshal.Unmarshaler and it allows
 // Noms struct with type DateTimeType able to be unmarshaled onto a DateTime
 // Go struct
-func (dt *DateTime) UnmarshalNoms(ctx context.Context, v types.Value) error {
+func (dt *DateTime) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
 	strct := struct {
 		SecSinceEpoch float64
 	}{}
-	err := marshal.Unmarshal(ctx, v, &strct)
+	err := marshal.Unmarshal(ctx, f, v, &strct)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,7 @@ func (c DateTimeCommenter) Comment(ctx context.Context, f *types.Format, v types
 		return ""
 	}
 	var dt DateTime
-	marshal.MustUnmarshal(ctx, v, &dt)
+	marshal.MustUnmarshal(ctx, f, v, &dt)
 	return dt.In(c.tz).Format(time.RFC3339)
 }
 

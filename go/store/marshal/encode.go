@@ -257,14 +257,14 @@ func typeEncoder(format *types.Format, t reflect.Type, seenStructs map[string]re
 		return structEncoder(format, t, seenStructs)
 	case reflect.Slice, reflect.Array:
 		if shouldEncodeAsSet(t, tags) {
-			return setFromListEncoder(t, seenStructs)
+			return setFromListEncoder(format, t, seenStructs)
 		}
-		return listEncoder(t, seenStructs)
+		return listEncoder(format, t, seenStructs)
 	case reflect.Map:
 		if shouldEncodeAsSet(t, tags) {
-			return setEncoder(t, seenStructs)
+			return setEncoder(format, t, seenStructs)
 		}
-		return mapEncoder(t, seenStructs)
+		return mapEncoder(format, t, seenStructs)
 	case reflect.Interface:
 		return func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
 			// Get the dynamic type.
@@ -523,7 +523,7 @@ func typeFields(format *types.Format, t reflect.Type, seenStructs map[string]ref
 	return
 }
 
-func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func listEncoder(f *types.Format, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := encoderCache.get(t)
 	if e != nil {
 		return e
@@ -542,16 +542,16 @@ func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFun
 			values[i] = elemEncoder(ctx, v.Index(i), vrw)
 		}
 		// TODO(binformat)
-		return types.NewList(ctx, types.Format_7_18, vrw, values...)
+		return types.NewList(ctx, f, vrw, values...)
 	}
 
 	encoderCache.set(t, e)
-	elemEncoder = typeEncoder(types.Format_7_18, t.Elem(), seenStructs, nomsTags{})
+	elemEncoder = typeEncoder(f, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
 // Encode set from array or slice
-func setFromListEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setFromListEncoder(f *types.Format, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := setEncoderCache.get(t)
 	if e != nil {
 		return e
@@ -569,15 +569,15 @@ func setFromListEncoder(t reflect.Type, seenStructs map[string]reflect.Type) enc
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(ctx, v.Index(i), vrw)
 		}
-		return types.NewSet(ctx, types.Format_7_18, vrw, values...)
+		return types.NewSet(ctx, f, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
-	elemEncoder = typeEncoder(types.Format_7_18, t.Elem(), seenStructs, nomsTags{})
+	elemEncoder = typeEncoder(f, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
-func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setEncoder(f *types.Format, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := setEncoderCache.get(t)
 	if e != nil {
 		return e
@@ -595,15 +595,15 @@ func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 		for i, k := range v.MapKeys() {
 			values[i] = encoder(ctx, k, vrw)
 		}
-		return types.NewSet(ctx, types.Format_7_18, vrw, values...)
+		return types.NewSet(ctx, f, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
-	encoder = typeEncoder(types.Format_7_18, t.Key(), seenStructs, nomsTags{})
+	encoder = typeEncoder(f, t.Key(), seenStructs, nomsTags{})
 	return e
 }
 
-func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func mapEncoder(f *types.Format, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := encoderCache.get(t)
 	if e != nil {
 		return e
@@ -624,12 +624,12 @@ func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 			kvs[2*i] = keyEncoder(ctx, k, vrw)
 			kvs[2*i+1] = valueEncoder(ctx, v.MapIndex(k), vrw)
 		}
-		return types.NewMap(ctx, types.Format_7_18, vrw, kvs...)
+		return types.NewMap(ctx, f, vrw, kvs...)
 	}
 
 	encoderCache.set(t, e)
-	keyEncoder = typeEncoder(types.Format_7_18, t.Key(), seenStructs, nomsTags{})
-	valueEncoder = typeEncoder(types.Format_7_18, t.Elem(), seenStructs, nomsTags{})
+	keyEncoder = typeEncoder(f, t.Key(), seenStructs, nomsTags{})
+	valueEncoder = typeEncoder(f, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 

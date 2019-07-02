@@ -882,21 +882,21 @@ func TestEncodeOriginal(t *testing.T) {
 	orig := types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"foo": types.Float(42),
 	})
-	err = Unmarshal(context.Background(), orig, &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, orig, &s)
 	assert.NoError(err)
 	s.Foo = 43
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(types.Format_7_18, orig.Set("foo", types.Float(43))))
 
 	// New field extends old struct
 	orig = types.NewStruct(types.Format_7_18, "S", types.StructData{})
-	err = Unmarshal(context.Background(), orig, &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, orig, &s)
 	assert.NoError(err)
 	s.Foo = 43
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(types.Format_7_18, orig.Set("foo", types.Float(43))))
 
 	// Old struct name always used
 	orig = types.NewStruct(types.Format_7_18, "Q", types.StructData{})
-	err = Unmarshal(context.Background(), orig, &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, orig, &s)
 	assert.NoError(err)
 	s.Foo = 43
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(types.Format_7_18, orig.Set("foo", types.Float(43))))
@@ -905,7 +905,7 @@ func TestEncodeOriginal(t *testing.T) {
 	orig = types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"foo": types.Float(42),
 	})
-	err = Unmarshal(context.Background(), orig, &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, orig, &s)
 	assert.NoError(err)
 	s.Foo = 43
 	out := MustMarshal(context.Background(), vs, s)

@@ -278,7 +278,7 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 			// field of type datetime.DateTimeType
 			if types.TypeOf(v).Equals(types.Format_7_18, datetime.DateTimeType) {
 				var dt datetime.DateTime
-				err = dt.UnmarshalNoms(ctx, v)
+				err = dt.UnmarshalNoms(ctx, types.Format_7_18, v)
 
 				if err != nil {
 					return
