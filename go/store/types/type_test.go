@@ -170,9 +170,9 @@ func TestStructUnionWithCycles(tt *testing.T) {
 		),
 	})
 
+	vs := newTestValueStore()
 	t1, _ := inodeType.Desc.(StructDesc).Field("contents")
-	// TODO(binformat)
-	t2 := DecodeValue(EncodeValue(t1, Format_7_18), nil, Format_7_18)
+	t2 := DecodeValue(EncodeValue(t1, Format_7_18), vs)
 
 	assert.True(tt, t1.Equals(Format_7_18, t2))
 	// Note that we cannot ensure pointer equality between t1 and t2 because the

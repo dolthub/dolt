@@ -102,11 +102,10 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 		r1 := db.WriteValue(context.Background(), in)
 		db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
-			spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "#"+r1.TargetHash().String())})
+			spec.CreateValueSpecString(db.Format(), "nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))
-		// TODO(binformat)
-		out := types.DecodeValue(ch, db, types.Format_7_18)
-		s.True(out.Equals(types.Format_7_18, in))
+		out := types.DecodeValue(ch, db)
+		s.True(out.Equals(db.Format(), in))
 	}
 
 	// Primitive value with no child chunks

@@ -62,8 +62,7 @@ func TestRoundTrips(t *testing.T) {
 	vs := newTestValueStore()
 
 	assertRoundTrips := func(v Value) {
-		// TODO(binformat)
-		out := DecodeValue(EncodeValue(v, Format_7_18), vs, Format_7_18)
+		out := DecodeValue(EncodeValue(v, Format_7_18), vs)
 		assert.True(t, v.Equals(Format_7_18, out))
 	}
 

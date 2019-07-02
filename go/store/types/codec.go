@@ -48,9 +48,9 @@ func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter, f *Format) 
 }
 
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
-func DecodeValue(c chunks.Chunk, vrw ValueReadWriter, f *Format) Value {
+func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) Value {
 	d.PanicIfTrue(c.IsEmpty())
-	return decodeFromBytes(c.Data(), vrw, f)
+	return decodeFromBytes(c.Data(), vrw, vrw.Format())
 }
 
 type nomsWriter interface {
