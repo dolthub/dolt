@@ -54,13 +54,13 @@ func runDiff(ctx context.Context, args []string) int {
 	defer db2.Close()
 
 	if stat {
-		diff.Summary(ctx, value1, value2)
+		diff.Summary(ctx, types.Format_7_18, value1, value2)
 		return 0
 	}
 
 	pgr := outputpager.Start()
 	defer pgr.Stop()
 
-	diff.PrintDiff(ctx, pgr.Writer, value1, value2, false)
+	diff.PrintDiff(ctx, types.Format_7_18, pgr.Writer, value1, value2, false)
 	return 0
 }

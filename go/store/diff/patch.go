@@ -15,31 +15,36 @@ import (
 // applying the patch in an efficient way.
 type Patch []Difference
 
-func (r Patch) Swap(i, j int) {
-	r[i], r[j] = r[j], r[i]
+type PatchSort struct {
+	patch  Patch
+	format *types.Format
 }
 
-func (r Patch) Len() int {
-	return len(r)
+func (ps PatchSort) Swap(i, j int) {
+	ps.patch[i], ps.patch[j] = ps.patch[j], ps.patch[i]
+}
+
+func (ps PatchSort) Len() int {
+	return len(ps.patch)
 }
 
 var vals = map[types.DiffChangeType]int{types.DiffChangeRemoved: 0, types.DiffChangeModified: 1, types.DiffChangeAdded: 2}
 
-func (r Patch) Less(i, j int) bool {
-	if r[i].Path.Equals(r[j].Path) {
-		return vals[r[i].ChangeType] < vals[r[j].ChangeType]
+func (ps PatchSort) Less(i, j int) bool {
+	if ps.patch[i].Path.Equals(ps.patch[j].Path) {
+		return vals[ps.patch[i].ChangeType] < vals[ps.patch[j].ChangeType]
 	}
-	return pathIsLess(r[i].Path, r[j].Path)
+	return pathIsLess(ps.format, ps.patch[i].Path, ps.patch[j].Path)
 }
 
 // Utility methods on path
 // TODO: Should these be on types.Path & types.PathPart?
-func pathIsLess(p1, p2 types.Path) bool {
+func pathIsLess(format *types.Format, p1, p2 types.Path) bool {
 	for i, pp1 := range p1 {
 		if len(p2) == i {
 			return false // p1 > p2
 		}
-		switch pathPartCompare(pp1, p2[i]) {
+		switch pathPartCompare(format, pp1, p2[i]) {
 		case -1:
 			return true // p1 < p2
 		case 1:
@@ -68,12 +73,12 @@ func fieldPathCompare(pp types.FieldPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func indexPathCompare(pp types.IndexPath, o types.PathPart) int {
+func indexPathCompare(format *types.Format, pp types.IndexPath, o types.PathPart) int {
 	switch opp := o.(type) {
 	case types.FieldPath:
 		return 1
 	case types.IndexPath:
-		if pp.Index.Equals(types.Format_7_18, opp.Index) {
+		if pp.Index.Equals(format, opp.Index) {
 			if pp.IntoKey == opp.IntoKey {
 				return 0
 			}
@@ -82,8 +87,7 @@ func indexPathCompare(pp types.IndexPath, o types.PathPart) int {
 			}
 			return 1
 		}
-		// TODO(binformat)
-		if pp.Index.Less(types.Format_7_18, opp.Index) {
+		if pp.Index.Less(format, opp.Index) {
 			return -1
 		}
 		return 1
@@ -118,12 +122,12 @@ func hashIndexPathCompare(pp types.HashIndexPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func pathPartCompare(pp, pp2 types.PathPart) int {
+func pathPartCompare(format *types.Format, pp, pp2 types.PathPart) int {
 	switch pp1 := pp.(type) {
 	case types.FieldPath:
 		return fieldPathCompare(pp1, pp2)
 	case types.IndexPath:
-		return indexPathCompare(pp1, pp2)
+		return indexPathCompare(format, pp1, pp2)
 	case types.HashIndexPath:
 		return hashIndexPathCompare(pp1, pp2)
 	}

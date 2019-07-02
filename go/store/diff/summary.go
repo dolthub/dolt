@@ -16,7 +16,7 @@ import (
 )
 
 // Summary prints a summary of the diff between two values to stdout.
-func Summary(ctx context.Context, value1, value2 types.Value) {
+func Summary(ctx context.Context, format *types.Format, value1, value2 types.Value) {
 	if datas.IsCommit(value1) && datas.IsCommit(value2) {
 		fmt.Println("Comparing commit values")
 		value1 = value1.(types.Struct).Get(datas.ValueField)
@@ -47,7 +47,7 @@ func Summary(ctx context.Context, value1, value2 types.Value) {
 				rp.Store(r)
 			}
 		}()
-		diffSummary(ctx, ch, value1, value2)
+		diffSummary(ctx, format, ch, value1, value2)
 	}()
 
 	acc := diffSummaryProgress{}
@@ -74,8 +74,8 @@ type diffSummaryProgress struct {
 	Adds, Removes, Changes, NewSize, OldSize uint64
 }
 
-func diffSummary(ctx context.Context, ch chan diffSummaryProgress, v1, v2 types.Value) {
-	if !v1.Equals(types.Format_7_18, v2) {
+func diffSummary(ctx context.Context, format *types.Format, ch chan diffSummaryProgress, v1, v2 types.Value) {
+	if !v1.Equals(format, v2) {
 		if ShouldDescend(v1, v2) {
 			switch v1.Kind() {
 			case types.ListKind:
@@ -87,7 +87,7 @@ func diffSummary(ctx context.Context, ch chan diffSummaryProgress, v1, v2 types.
 			case types.StructKind:
 				diffSummaryStructs(ch, v1.(types.Struct), v2.(types.Struct))
 			default:
-				panic("Unrecognized type in diff function: " + types.TypeOf(v1).Describe(ctx, types.Format_7_18) + " and " + types.TypeOf(v2).Describe(ctx, types.Format_7_18))
+				panic("Unrecognized type in diff function: " + types.TypeOf(v1).Describe(ctx, format) + " and " + types.TypeOf(v2).Describe(ctx, format))
 			}
 		} else {
 			ch <- diffSummaryProgress{Adds: 1, Removes: 1, NewSize: 1, OldSize: 1}

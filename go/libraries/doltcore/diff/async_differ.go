@@ -36,7 +36,7 @@ func (ad *AsyncDiffer) Start(ctx context.Context, v1, v2 types.Value) {
 			// Ignore a panic from Diff...
 			recover()
 		}()
-		diff.Diff(ctx, v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
+		diff.Diff(ctx, types.Format_7_18, v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
 	}()
 }
 
