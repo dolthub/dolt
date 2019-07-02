@@ -78,7 +78,7 @@ func valToTypesValue(f func(seq) types.Value, v interface{}) types.Value {
 func TestThreeWayMerge_PrimitiveConflict(t *testing.T) {
 	threeWayConflict := func(a, b, p types.Value, contained string) {
 		mrgr := &merger{}
-		m, err := mrgr.threeWay(context.Background(), a, b, p, nil)
+		m, err := mrgr.threeWay(context.Background(), types.Format_7_18, a, b, p, nil)
 		if assert.Error(t, err) {
 			assert.Contains(t, err.Error(), contained)
 			return
