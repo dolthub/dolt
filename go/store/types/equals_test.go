@@ -26,21 +26,17 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return String("hi") },
 		func() Value { return String("bye") },
 		func() Value {
-			// TODO(binformat)
-			return NewBlob(context.Background(), Format_7_18, vrw, &bytes.Buffer{})
+			return NewBlob(context.Background(), vrw, &bytes.Buffer{})
 		},
 		func() Value {
-			// TODO(binformat)
-			return NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("hi"))
+			return NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
 		},
 		func() Value {
-			// TODO(binformat)
-			return NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("bye"))
+			return NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
 		},
 		func() Value {
-			// TODO(binformat)
-			b1 := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("hi"))
-			b2 := NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBufferString("bye"))
+			b1 := NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
+			b2 := NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
 			return newBlob(newBlobMetaSequence(1, []metaTuple{
 				newMetaTuple(Format_7_18, NewRef(b1, Format_7_18), orderedKeyFromInt(2, Format_7_18), 2),
 				newMetaTuple(Format_7_18, NewRef(b2, Format_7_18), orderedKeyFromInt(5, Format_7_18), 5),

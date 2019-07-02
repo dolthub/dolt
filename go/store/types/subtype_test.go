@@ -76,8 +76,7 @@ func TestAssertTypeValue(t *testing.T) {
 func TestAssertTypeBlob(t *testing.T) {
 	vs := newTestValueStore()
 
-	// TODO(binformat)
-	blob := NewBlob(context.Background(), Format_7_18, vs, bytes.NewBuffer([]byte{0x00, 0x01}))
+	blob := NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0x00, 0x01}))
 	assertAll(t, BlobType, blob)
 }
 
@@ -560,9 +559,8 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		{Bool(true), BoolType},
 		{Float(42), FloaTType},
 		{String("s"), StringType},
-		{NewEmptyBlob(vs, Format_7_18), BlobType},
+		{NewEmptyBlob(vs), BlobType},
 		{BoolType, TypeType},
-		// TODO(binformat)
 		{NewList(context.Background(), vs, Float(42)), MakeListType(FloaTType)},
 		{NewSet(context.Background(), vs, Float(42)), MakeSetType(FloaTType)},
 		{NewRef(Float(42), Format_7_18), MakeRefType(FloaTType)},

@@ -442,8 +442,7 @@ func TestPathCanBePathIndex(t *testing.T) {
 	assert.True(ValueCanBePathIndex(String("yes")))
 
 	assert.False(ValueCanBePathIndex(NewRef(String("yes"), Format_7_18)))
-	// TODO(binformat)
-	assert.False(ValueCanBePathIndex(NewBlob(context.Background(), Format_7_18, vs, bytes.NewReader([]byte("yes")))))
+	assert.False(ValueCanBePathIndex(NewBlob(context.Background(), vs, bytes.NewReader([]byte("yes")))))
 }
 
 func TestCopyPath(t *testing.T) {

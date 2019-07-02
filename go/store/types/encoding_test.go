@@ -202,8 +202,7 @@ func TestWriteSimpleBlob(t *testing.T) {
 		[]interface{}{
 			BlobKind, uint64(0), []byte{0x00, 0x01},
 		},
-		// TODO(binformat)
-		NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBuffer([]byte{0x00, 0x01})),
+		NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01})),
 	)
 }
 
@@ -433,8 +432,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"b", BlobKind, uint64(0), []byte{0x00, 0x01},
 		},
-		// TODO(binformat)
-		NewStruct(Format_7_18, "S", StructData{"b": NewBlob(context.Background(), Format_7_18, vrw, bytes.NewBuffer([]byte{0x00, 0x01}))}),
+		NewStruct(Format_7_18, "S", StructData{"b": NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01}))}),
 	)
 }
 
@@ -482,8 +480,7 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 
 	// Blobs are interesting because unlike the numbers used in TestWriteCompondSet, refs are sorted by their hashes, not their value.
 	newBlobOfInt := func(i int) Blob {
-		// TODO(binformat)
-		return NewBlob(context.Background(), Format_7_18, vrw, strings.NewReader(strconv.Itoa(i)))
+		return NewBlob(context.Background(), vrw, strings.NewReader(strconv.Itoa(i)))
 	}
 
 	blob0 := newBlobOfInt(0)

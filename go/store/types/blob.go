@@ -25,8 +25,8 @@ func newBlob(seq sequence, f *Format) Blob {
 	return Blob{seq, f}
 }
 
-func NewEmptyBlob(vrw ValueReadWriter, f *Format) Blob {
-	return Blob{newBlobLeafSequence(vrw, f, []byte{}), f}
+func NewEmptyBlob(vrw ValueReadWriter) Blob {
+	return Blob{newBlobLeafSequence(vrw, vrw.Format(), []byte{}), vrw.Format()}
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
@@ -208,16 +208,16 @@ func chunkBlobLeaf(vrw ValueReadWriter, f *Format, buff []byte) (Collection, ord
 
 // NewBlob creates a Blob by reading from every Reader in rs and
 // concatenating the result. NewBlob uses one goroutine per Reader.
-func NewBlob(ctx context.Context, f *Format, vrw ValueReadWriter, rs ...io.Reader) Blob {
-	return readBlobsP(ctx, f, vrw, rs...)
+func NewBlob(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob {
+	return readBlobsP(ctx, vrw, rs...)
 }
 
-func readBlobsP(ctx context.Context, f *Format, vrw ValueReadWriter, rs ...io.Reader) Blob {
+func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob {
 	switch len(rs) {
 	case 0:
-		return NewEmptyBlob(vrw, f)
+		return NewEmptyBlob(vrw)
 	case 1:
-		return readBlob(ctx, f, rs[0], vrw)
+		return readBlob(ctx, vrw.Format(), rs[0], vrw)
 	}
 
 	blobs := make([]Blob, len(rs))
@@ -228,7 +228,7 @@ func readBlobsP(ctx context.Context, f *Format, vrw ValueReadWriter, rs ...io.Re
 	for i, r := range rs {
 		i2, r2 := i, r
 		go func() {
-			blobs[i2] = readBlob(ctx, f, r2, vrw)
+			blobs[i2] = readBlob(ctx, vrw.Format(), r2, vrw)
 			wg.Done()
 		}()
 	}

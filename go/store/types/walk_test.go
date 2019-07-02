@@ -62,8 +62,7 @@ func (suite *WalkAllTestSuite) TestWalkValuesDuplicates() {
 
 func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 	buff := randomBuff(16)
-	// TODO(binformat)
-	blob := NewBlob(context.Background(), Format_7_18, suite.vs, bytes.NewReader(buff))
+	blob := NewBlob(context.Background(), suite.vs, bytes.NewReader(buff))
 	r := suite.vs.WriteValue(context.Background(), blob)
 	suite.True(r.Height() > 1)
 	outBlob := suite.vs.ReadValue(context.Background(), r.TargetHash()).(Blob)
