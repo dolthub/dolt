@@ -156,7 +156,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 		return nil
 	}
 
-	v := DecodeValue(chunk, lvs, lvs.format)
+	v := DecodeValue(chunk, lvs)
 	d.PanicIfTrue(v == nil)
 	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 	return v
@@ -168,7 +168,7 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice {
 	lvs.versOnce.Do(lvs.expectVersion)
 	decode := func(h hash.Hash, chunk *chunks.Chunk) Value {
-		v := DecodeValue(*chunk, lvs, lvs.format)
+		v := DecodeValue(*chunk, lvs)
 		d.PanicIfTrue(v == nil)
 		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 		return v
