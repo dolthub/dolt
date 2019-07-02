@@ -30,7 +30,7 @@ func (s *ThreeWaySetMergeSuite) SetupSuite() {
 	s.create = func(i seq) (val types.Value) {
 		if i != nil {
 			keyValues := valsToTypesValues(s.create, i.items()...)
-			val = types.NewSet(context.Background(), types.Format_7_18, s.vs, keyValues...)
+			val = types.NewSet(context.Background(), s.vs, keyValues...)
 		}
 		return
 	}

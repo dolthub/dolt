@@ -84,12 +84,12 @@ func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) 
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(context.Background(), types.Format_7_18, vrw, parentDs.HeadRef())
+	p := types.NewSet(context.Background(), vrw, parentDs.HeadRef())
 	return newDs.Database().Commit(context.Background(), newDs, types.String(v), datas.CommitOptions{Parents: p})
 }
 
 func mergeDatasets(vrw types.ValueReadWriter, ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(context.Background(), types.Format_7_18, vrw, ds1.HeadRef(), ds2.HeadRef())
+	p := types.NewSet(context.Background(), vrw, ds1.HeadRef(), ds2.HeadRef())
 	return ds1.Database().Commit(context.Background(), ds1, types.String(v), datas.CommitOptions{Parents: p})
 }
 

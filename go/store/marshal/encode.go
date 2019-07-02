@@ -569,7 +569,7 @@ func setFromListEncoder(f *types.Format, t reflect.Type, seenStructs map[string]
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(ctx, v.Index(i), vrw)
 		}
-		return types.NewSet(ctx, f, vrw, values...)
+		return types.NewSet(ctx, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
@@ -595,7 +595,7 @@ func setEncoder(f *types.Format, t reflect.Type, seenStructs map[string]reflect.
 		for i, k := range v.MapKeys() {
 			values[i] = encoder(ctx, k, vrw)
 		}
-		return types.NewSet(ctx, f, vrw, values...)
+		return types.NewSet(ctx, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)

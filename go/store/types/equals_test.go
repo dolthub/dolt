@@ -52,8 +52,8 @@ func TestValueEquals(t *testing.T) {
 		func() Value { return NewList(context.Background(), vrw, String("bar")) },
 		func() Value { return NewMap(context.Background(), vrw) },
 		func() Value { return NewMap(context.Background(), vrw, String("a"), String("a")) },
-		func() Value { return NewSet(context.Background(), Format_7_18, vrw) },
-		func() Value { return NewSet(context.Background(), Format_7_18, vrw, String("hi")) },
+		func() Value { return NewSet(context.Background(), vrw) },
+		func() Value { return NewSet(context.Background(), vrw, String("hi")) },
 
 		func() Value { return BoolType },
 		func() Value { return StringType },

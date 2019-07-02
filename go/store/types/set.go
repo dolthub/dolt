@@ -23,15 +23,15 @@ func newSet(f *Format, seq orderedSequence) Set {
 	return Set{seq, f}
 }
 
-func NewSet(ctx context.Context, f *Format, vrw ValueReadWriter, v ...Value) Set {
-	data := buildSetData(f, v)
-	ch := newEmptySetSequenceChunker(ctx, f, vrw)
+func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) Set {
+	data := buildSetData(vrw.Format(), v)
+	ch := newEmptySetSequenceChunker(ctx, vrw.Format(), vrw)
 
 	for _, v := range data {
 		ch.Append(ctx, v)
 	}
 
-	return newSet(f, ch.Done(ctx).(orderedSequence))
+	return newSet(vrw.Format(), ch.Done(ctx).(orderedSequence))
 }
 
 // NewStreamingSet takes an input channel of values and returns a output
@@ -40,9 +40,9 @@ func NewSet(ctx context.Context, f *Format, vrw ValueReadWriter, v ...Value) Set
 // out of order will result in a panic. Once the input channel is closed
 // by the caller, a finished Set will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingSet(ctx context.Context, f *Format, vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
+func NewStreamingSet(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
 	return newStreamingSet(vrw, vChan, func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
-		go readSetInput(ctx, f, vrw, vChan, outChan)
+		go readSetInput(ctx, vrw.Format(), vrw, vChan, outChan)
 	})
 }
 

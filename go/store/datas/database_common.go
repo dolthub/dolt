@@ -183,7 +183,7 @@ func (db *database) doCommit(ctx context.Context, format *types.Format, datasetI
 					if err != nil {
 						return err
 					}
-					commitRef = db.WriteValue(ctx, NewCommit(format, merged, types.NewSet(ctx, db.Format(), db, commitRef, currentHeadRef), types.EmptyStruct(db.Format())))
+					commitRef = db.WriteValue(ctx, NewCommit(format, merged, types.NewSet(ctx, db, commitRef, currentHeadRef), types.EmptyStruct(db.Format())))
 				}
 			}
 		}
@@ -253,7 +253,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) types.
 func buildNewCommit(ctx context.Context, format *types.Format, ds Dataset, v types.Value, opts CommitOptions) types.Struct {
 	parents := opts.Parents
 	if (parents == types.Set{}) {
-		parents = types.NewSet(ctx, format, ds.Database())
+		parents = types.NewSet(ctx, ds.Database())
 		if headRef, ok := ds.MaybeHeadRef(); ok {
 			parents = parents.Edit().Insert(headRef).Set(ctx)
 		}

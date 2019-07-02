@@ -288,7 +288,7 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 		}
 
 		ds := ddb.db.GetDataset(ctx, dref.String())
-		parentEditor := types.NewSet(ctx, types.Format_7_18, ddb.db).Edit()
+		parentEditor := types.NewSet(ctx, ddb.db).Edit()
 
 		if ds.HasHead() {
 			parentEditor.Insert(ds.HeadRef())

@@ -270,7 +270,7 @@ func TestCompareTotalOrdering(t *testing.T) {
 		String("a"), String("b"), String("c"),
 
 		// The order of these are done by the hash.
-		NewSet(context.Background(), Format_7_18, vrw, Float(0), Float(1), Float(2), Float(3)),
+		NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3)),
 		BoolType,
 
 		// Value - values cannot be value
@@ -308,7 +308,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nList := NewList(context.Background(), vrw, nums...)
 	nMap := NewMap(context.Background(), vrw, words...)
 	nRef := NewRef(blob, Format_7_18)
-	nSet := NewSet(context.Background(), Format_7_18, vrw, nums...)
+	nSet := NewSet(context.Background(), vrw, nums...)
 	nStruct := NewStruct(Format_7_18, "teststruct", map[string]Value{"f1": Float(1)})
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}

@@ -67,7 +67,7 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 	l := NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "[  // 4 items\n  0,\n  1,\n  2,\n  3,\n]", l)
 
-	s := NewSet(context.Background(), Format_7_18, vrw, Float(0), Float(1), Float(2), Float(3))
+	s := NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "set {  // 4 items\n  0,\n  1,\n  2,\n  3,\n}", s)
 
 	m := NewMap(context.Background(), vrw, Float(0), Bool(false), Float(1), Bool(true))
@@ -97,8 +97,8 @@ func TestWriteHumanReadableNested(t *testing.T) {
 	l := NewList(context.Background(), vrw, Float(0), Float(1))
 	l2 := NewList(context.Background(), vrw, Float(2), Float(3))
 
-	s := NewSet(context.Background(), Format_7_18, vrw, String("a"), String("b"))
-	s2 := NewSet(context.Background(), Format_7_18, vrw, String("c"), String("d"))
+	s := NewSet(context.Background(), vrw, String("a"), String("b"))
+	s2 := NewSet(context.Background(), vrw, String("c"), String("d"))
 
 	m := NewMap(context.Background(), vrw, s, l, s2, l2)
 	assertWriteHRSEqual(t, `map {
@@ -320,7 +320,7 @@ func TestEmptyCollections(t *testing.T) {
 	assertWriteHRSEqual(t, "map {}", d)
 	e := MakeSetType(StringType)
 	assertWriteHRSEqual(t, "Set<String>", e)
-	f := NewSet(context.Background(), Format_7_18, vrw)
+	f := NewSet(context.Background(), vrw)
 	assertWriteHRSEqual(t, "set {}", f)
 }
 

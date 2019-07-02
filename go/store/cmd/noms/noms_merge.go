@@ -67,7 +67,7 @@ func runMerge(ctx context.Context, args []string) int {
 	util.CheckErrorNoUsage(err)
 	close(pc)
 
-	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(types.Format_7_18, merged, types.NewSet(ctx, types.Format_7_18, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct(types.Format_7_18))))
+	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(types.Format_7_18, merged, types.NewSet(ctx, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct(types.Format_7_18))))
 	d.PanicIfError(err)
 	if !verbose.Quiet() {
 		status.Printf("Done")

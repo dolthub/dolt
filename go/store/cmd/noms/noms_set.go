@@ -52,7 +52,7 @@ func nomsSet(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause
 func nomsSetNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applySetEdits(ctx, sp, types.NewSet(ctx, types.Format_7_18, sp.GetDatabase(ctx)), nil, types.DiffChangeAdded, args)
+	applySetEdits(ctx, sp, types.NewSet(ctx, sp.GetDatabase(ctx)), nil, types.DiffChangeAdded, args)
 	return 0
 }
 
