@@ -41,19 +41,19 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 // }
 // ```
 // where M is a struct type and T is any type.
-func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.Struct {
-	return commitTemplate.NewStruct(types.Format_7_18, []types.Value{meta, parents, value})
+func NewCommit(format *types.Format, value types.Value, parents types.Set, meta types.Struct) types.Struct {
+	return commitTemplate.NewStruct(format, []types.Value{meta, parents, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false.
-func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
-	if !IsRefOfCommitType(types.TypeOf(c1)) {
-		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx, types.Format_7_18))
+func FindCommonAncestor(ctx context.Context, format *types.Format, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
+	if !IsRefOfCommitType(format, types.TypeOf(c1)) {
+		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx, format))
 	}
-	if !IsRefOfCommitType(types.TypeOf(c2)) {
-		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe(ctx, types.Format_7_18))
+	if !IsRefOfCommitType(format, types.TypeOf(c2)) {
+		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe(ctx, format))
 	}
 
 	c1Q, c2Q := &types.RefByHeight{c1}, &types.RefByHeight{c2}
@@ -126,14 +126,14 @@ func getRefElementType(t *types.Type) *types.Type {
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
-func IsCommitType(t *types.Type) bool {
-	return types.IsSubtype(types.Format_7_18, valueCommitType, t)
+func IsCommitType(format *types.Format, t *types.Type) bool {
+	return types.IsSubtype(format, valueCommitType, t)
 }
 
-func IsCommit(v types.Value) bool {
-	return types.IsValueSubtypeOf(types.Format_7_18, v, valueCommitType)
+func IsCommit(format *types.Format, v types.Value) bool {
+	return types.IsValueSubtypeOf(format, v, valueCommitType)
 }
 
-func IsRefOfCommitType(t *types.Type) bool {
-	return t.TargetKind() == types.RefKind && IsCommitType(getRefElementType(t))
+func IsRefOfCommitType(format *types.Format, t *types.Type) bool {
+	return t.TargetKind() == types.RefKind && IsCommitType(format, getRefElementType(t))
 }
