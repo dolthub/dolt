@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 
@@ -10,8 +11,7 @@ import (
 
 func main() {
 	if _, err := exec.LookPath("dolt"); err != nil {
-		fmt.Println("It looks like Dolt is not installed on your system. Make sure that the `dolt` binary is in your PATH before attempting to run git-dolt commands.")
-		os.Exit(1)
+		log.Fatal("It looks like Dolt is not installed on your system. Make sure that the `dolt` binary is in your PATH before attempting to run git-dolt commands.")
 	}
 
 	if len(os.Args) == 1 {
@@ -36,14 +36,12 @@ func main() {
 		revision := os.Args[3]
 		err = commands.Update(ptrFname, revision)
 	default:
-		fmt.Printf("Unknown command %s\n", cmd)
 		printUsage()
-		os.Exit(1)
+		log.Fatalf("Unknown command %s\n", cmd)
 	}
 
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		log.Fatalf("Error: %v\n", err)
 	}
 }
 
