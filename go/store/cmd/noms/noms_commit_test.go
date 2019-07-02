@@ -26,7 +26,7 @@ func TestNomsCommit(t *testing.T) {
 
 func (s *nomsCommitTestSuite) setupDataset(name string, doCommit bool) (sp spec.Spec, ref types.Ref) {
 	var err error
-	sp, err = spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, name))
+	sp, err = spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, name))
 	s.NoError(err)
 
 	v := types.String("testcommit")
