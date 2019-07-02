@@ -96,7 +96,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 }
 
 func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
-	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, name))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, name))
 	s.NoError(err)
 	return sp
 }
@@ -109,7 +109,7 @@ func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructDa
 }
 
 func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...types.Value) {
-	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, name))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, name))
 	db := sp.GetDatabase(context.Background())
 	if s.NoError(err) {
 		defer sp.Close()
@@ -186,7 +186,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 }
 
 func (s *nomsMergeTestSuite) TestBadInput() {
-	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("nbs", s.DBDir))
+	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString(types.Format_7_18, "nbs", s.DBDir))
 	s.NoError(err)
 	defer sp.Close()
 

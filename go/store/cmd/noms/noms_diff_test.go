@@ -25,24 +25,24 @@ func TestNomsDiff(t *testing.T) {
 }
 
 func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
-	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, "diffTest"))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "diffTest"))
 	s.NoError(err)
 	defer sp.Close()
 
 	ds, err := addCommit(sp.GetDataset(context.Background()), "first commit")
 	s.NoError(err)
-	r1 := spec.CreateValueSpecString("nbs", s.DBDir, "#"+ds.HeadRef().TargetHash().String())
+	r1 := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "#"+ds.HeadRef().TargetHash().String())
 
 	ds, err = addCommit(ds, "second commit")
 	s.NoError(err)
-	r2 := spec.CreateValueSpecString("nbs", s.DBDir, "#"+ds.HeadRef().TargetHash().String())
+	r2 := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "#"+ds.HeadRef().TargetHash().String())
 
 	out, _ := s.MustRun(main, []string{"diff", r1, r2})
 	s.True(strings.HasSuffix(out, "\"second commit\"\n  }\n"), out)
 }
 
 func (s *nomsDiffTestSuite) TestNomsDiffStat() {
-	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, "diffStatTest"))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "diffStatTest"))
 	s.NoError(err)
 	defer sp.Close()
 

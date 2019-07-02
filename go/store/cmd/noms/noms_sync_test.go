@@ -35,9 +35,9 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 	// TODO(binformat)
 	source1HeadRef := source1.Head().Hash(types.Format_7_18)
 	source1.Database().Close()
-	sourceSpecMissingHashSymbol := spec.CreateValueSpecString("nbs", s.DBDir, source1HeadRef.String())
+	sourceSpecMissingHashSymbol := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, source1HeadRef.String())
 
-	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
+	sinkDatasetSpec := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir2, "dest")
 
 	defer func() {
 		err := recover()
@@ -63,8 +63,8 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sourceDB.Close()
 
 	// Pull from a hash to a not-yet-existing dataset in a new DB
-	sourceSpec := spec.CreateValueSpecString("nbs", s.DBDir, "#"+source1HeadRef.String())
-	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
+	sourceSpec := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "#"+source1HeadRef.String())
+	sinkDatasetSpec := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir2, "dest")
 	sout, _ := s.MustRun(main, []string{"sync", sourceSpec, sinkDatasetSpec})
 	s.Regexp("Synced", sout)
 
@@ -76,7 +76,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	db.Close()
 
 	// Pull from a dataset in one DB to an existing dataset in another
-	sourceDataset := spec.CreateValueSpecString("nbs", s.DBDir, "src")
+	sourceDataset := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "src")
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("Synced", sout)
 
@@ -92,7 +92,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	s.Regexp("up to date", sout)
 
 	// Pull from a source dataset to a not-yet-existing dataset in another DB, BUT all the needed chunks already exists in the sink.
-	sinkDatasetSpec = spec.CreateValueSpecString("nbs", s.DBDir2, "dest2")
+	sinkDatasetSpec = spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir2, "dest2")
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("Created", sout)
 
@@ -125,8 +125,8 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	sourceDB.Close() // Close Database backing both Datasets
 
 	// Sync over "src1"
-	sourceDataset := spec.CreateValueSpecString("nbs", s.DBDir, "src1")
-	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
+	sourceDataset := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "src1")
+	sinkDatasetSpec := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir2, "dest")
 	sout, _ := s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	db := datas.NewDatabase(cs)
@@ -135,8 +135,8 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	db.Close()
 
 	// Now, try syncing a second dataset. This crashed in issue #2598
-	sourceDataset2 := spec.CreateValueSpecString("nbs", s.DBDir, "src2")
-	sinkDatasetSpec2 := spec.CreateValueSpecString("nbs", s.DBDir2, "dest2")
+	sourceDataset2 := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "src2")
+	sinkDatasetSpec2 := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir2, "dest2")
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset2, sinkDatasetSpec2})
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	s.NoError(err)
@@ -162,8 +162,8 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	s.NoError(err)
 	sourceDB.Close() // Close Database backing both Datasets
 
-	sourceSpec := spec.CreateValueSpecString("nbs", s.DBDir, "#"+rewindRef.String())
-	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir, "foo")
+	sourceSpec := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "#"+rewindRef.String())
+	sinkDatasetSpec := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "foo")
 	s.MustRun(main, []string{"sync", sourceSpec, sinkDatasetSpec})
 
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir, clienttest.DefaultMemTableSize)

@@ -10,16 +10,16 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
-func CreateDatabaseSpecString(protocol, db string) string {
-	return Spec{Protocol: protocol, DatabaseName: db}.String(types.Format_7_18)
+func CreateDatabaseSpecString(format *types.Format, protocol, db string) string {
+	return Spec{Protocol: protocol, DatabaseName: db}.String(format)
 }
 
-func CreateValueSpecString(protocol, db, path string) string {
-	p, err := NewAbsolutePath(types.Format_7_18, path)
+func CreateValueSpecString(format *types.Format, protocol, db, path string) string {
+	p, err := NewAbsolutePath(format, path)
 	d.Chk.NoError(err)
-	return Spec{Protocol: protocol, DatabaseName: db, Path: p}.String(types.Format_7_18)
+	return Spec{Protocol: protocol, DatabaseName: db, Path: p}.String(format)
 }
 
-func CreateHashSpecString(protocol, db string, h hash.Hash) string {
-	return Spec{Protocol: protocol, DatabaseName: db, Path: AbsolutePath{Hash: h}}.String(types.Format_7_18)
+func CreateHashSpecString(format *types.Format, protocol, db string, h hash.Hash) string {
+	return Spec{Protocol: protocol, DatabaseName: db, Path: AbsolutePath{Hash: h}}.String(format)
 }

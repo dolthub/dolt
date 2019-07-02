@@ -24,13 +24,13 @@ type nomsRootTestSuite struct {
 
 func (s *nomsRootTestSuite) TestBasic() {
 	datasetName := "root-get"
-	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
+	dsSpec := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, datasetName)
 	sp, err := spec.ForDataset(types.Format_7_18, dsSpec)
 	s.NoError(err)
 	defer sp.Close()
 
 	ds := sp.GetDataset(context.Background())
-	dbSpecStr := spec.CreateDatabaseSpecString("nbs", s.DBDir)
+	dbSpecStr := spec.CreateDatabaseSpecString(types.Format_7_18, "nbs", s.DBDir)
 	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("hello!"))
 	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal("5te45oue1g918rpcvmc3d2emqkse4fhq\n", c1)
