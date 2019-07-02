@@ -294,7 +294,7 @@ func (ip IndexPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueRea
 }
 
 func (ip IndexPath) String() (str string) {
-	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), ip.Index))
+	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), Format_7_18, ip.Index))
 	if ip.IntoKey {
 		str += "@key"
 	}

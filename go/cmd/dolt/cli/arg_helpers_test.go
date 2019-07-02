@@ -131,7 +131,7 @@ func TestParseKeyValues(t *testing.T) {
 				}
 
 				if !currActual.Equals(types.Format_7_18, currExpected) {
-					t.Error("actual:", types.EncodedValue(context.Background(), currActual), "!= expected:", types.EncodedValue(context.Background(), currExpected))
+					t.Error("actual:", types.EncodedValue(context.Background(), types.Format_7_18, currActual), "!= expected:", types.EncodedValue(context.Background(), types.Format_7_18, currExpected))
 				}
 			}
 		}

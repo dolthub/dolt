@@ -50,7 +50,7 @@ func Now() DateTime {
 // MarshalNoms makes DateTime implement marshal.Marshaler and it makes
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms(vrw types.ValueReadWriter) (types.Value, error) {
-	return dateTimeTemplate.NewStruct(types.Format_7_18, []types.Value{types.Float(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)}), nil
+	return dateTimeTemplate.NewStruct(vrw.Format(), []types.Value{types.Float(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)}), nil
 }
 
 // MarshalNomsType makes DateTime implement marshal.TypeMarshaler and it
@@ -80,8 +80,8 @@ type DateTimeCommenter struct {
 	tz *time.Location
 }
 
-func (c DateTimeCommenter) Comment(ctx context.Context, v types.Value) string {
-	if !types.IsValueSubtypeOf(types.Format_7_18, v, DateTimeType) {
+func (c DateTimeCommenter) Comment(ctx context.Context, f *types.Format, v types.Value) string {
+	if !types.IsValueSubtypeOf(f, v, DateTimeType) {
 		return ""
 	}
 	var dt DateTime

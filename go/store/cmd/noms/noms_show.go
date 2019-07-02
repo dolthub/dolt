@@ -84,10 +84,10 @@ func runShow(ctx context.Context, args []string) int {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
 
-		types.WriteEncodedValue(ctx, pgr.Writer, value)
+		types.WriteEncodedValue(ctx, types.Format_7_18, pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
-		types.WriteEncodedValue(ctx, os.Stdout, value)
+		types.WriteEncodedValue(ctx, types.Format_7_18, os.Stdout, value)
 	}
 
 	return 0

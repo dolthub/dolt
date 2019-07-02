@@ -296,7 +296,7 @@ func printValue(ctx context.Context, w io.Writer, v types.Value, valSpec string)
 		}
 	}()
 
-	types.WriteEncodedValue(ctx, w, v)
+	types.WriteEncodedValue(ctx, types.Format_7_18, w, v)
 }
 
 func hexStr(bytes []byte) string {

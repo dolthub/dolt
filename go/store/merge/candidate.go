@@ -90,14 +90,14 @@ func (sc structCandidate) get(ctx context.Context, key types.Value) types.Value 
 		val, _ := sc.s.MaybeGet(string(field))
 		return val
 	}
-	panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(key).Describe(ctx)))
+	panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(key).Describe(ctx, types.Format_7_18)))
 }
 
 func (sc structCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
 	out = append(out, path...)
 	str, ok := change.Key.(types.String)
 	if !ok {
-		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe(ctx))
+		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe(ctx, types.Format_7_18))
 	}
 	return append(out, types.NewFieldPath(string(str)))
 }

@@ -50,10 +50,10 @@ func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.St
 // to false.
 func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
 	if !IsRefOfCommitType(types.TypeOf(c1)) {
-		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx))
+		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx, types.Format_7_18))
 	}
 	if !IsRefOfCommitType(types.TypeOf(c2)) {
-		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe(ctx))
+		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe(ctx, types.Format_7_18))
 	}
 
 	c1Q, c2Q := &types.RefByHeight{c1}, &types.RefByHeight{c2}

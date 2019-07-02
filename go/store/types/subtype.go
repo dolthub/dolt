@@ -12,7 +12,7 @@ import (
 
 func assertSubtype(ctx context.Context, f *Format, t *Type, v Value) {
 	if !IsValueSubtypeOf(f, v, t) {
-		d.Panic("Invalid type. %s is not a subtype of %s", TypeOf(v).Describe(ctx), t.Describe(ctx))
+		d.Panic("Invalid type. %s is not a subtype of %s", TypeOf(v).Describe(ctx, f), t.Describe(ctx, f))
 	}
 }
 

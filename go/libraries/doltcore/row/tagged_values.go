@@ -138,7 +138,7 @@ func ParseTaggedValues(tpl types.Tuple) TaggedValues {
 func (tt TaggedValues) String() string {
 	str := "{"
 	for k, v := range tt {
-		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(context.Background(), v))
+		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(context.Background(), types.Format_7_18, v))
 	}
 
 	str += "\n}"

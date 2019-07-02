@@ -64,7 +64,7 @@ func (xlsxw *XLSXWriter) WriteRow(ctx context.Context, r row.Row) error {
 			if val.Kind() == types.StringKind {
 				colValStrs[0] = string(val.(types.String))
 			} else {
-				colValStrs[0] = types.EncodedValue(ctx, val)
+				colValStrs[0] = types.EncodedValue(ctx, types.Format_7_18, val)
 			}
 		}
 
