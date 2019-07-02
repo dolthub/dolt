@@ -100,8 +100,7 @@ func TestEncode(tt *testing.T) {
 	t(types.NewList(context.Background(), vs, types.Float(42)), types.NewList(context.Background(), vs, types.Float(42)))
 	t(types.NewMap(context.Background(), vs, types.Float(42), types.String("hi")), types.NewMap(context.Background(), vs, types.Float(42), types.String("hi")))
 	t(types.NewSet(context.Background(), vs, types.String("bye")), types.NewSet(context.Background(), vs, types.String("bye")))
-	// TODO(binformat)
-	t(types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("hello")), types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("hello")))
+	t(types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello")), types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello")))
 
 	type TestStruct struct {
 		Str string
@@ -933,18 +932,16 @@ func TestNomsTypes(t *testing.T) {
 		String types.String
 		Type   *types.Type
 	}
-	// TODO(binformat)
 	s := S{
-		Blob:   types.NewBlob(context.Background(), types.Format_7_18, vs),
+		Blob:   types.NewBlob(context.Background(), vs),
 		Bool:   types.Bool(true),
 		Number: types.Float(42),
 		String: types.String("hi"),
 		Type:   types.FloaTType,
 	}
 	assert.True(MustMarshal(context.Background(), vs, s).Equals(types.Format_7_18,
-		// TODO(binformat)
 		types.NewStruct(types.Format_7_18, "S", types.StructData{
-			"blob":   types.NewBlob(context.Background(), types.Format_7_18, vs),
+			"blob":   types.NewBlob(context.Background(), vs),
 			"bool":   types.Bool(true),
 			"number": types.Float(42),
 			"string": types.String("hi"),
