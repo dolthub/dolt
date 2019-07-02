@@ -65,7 +65,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	sp := s.spec(str)
 	defer sp.Close()
-	list := types.NewList(context.Background(), types.Format_7_18, sp.GetDatabase(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
+	list := types.NewList(context.Background(), sp.GetDatabase(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
 	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
@@ -120,7 +120,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	for i := 0; i < len(items); i++ {
 		items[i] = types.Float(i)
 	}
-	l := types.NewList(context.Background(), types.Format_7_18, db, items...)
+	l := types.NewList(context.Background(), db, items...)
 	numChildChunks := 0
 	l.WalkRefs(types.Format_7_18, func(r types.Ref) {
 		numChildChunks++

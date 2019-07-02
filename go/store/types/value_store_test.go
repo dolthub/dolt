@@ -151,25 +151,25 @@ func TestFlushOrder(t *testing.T) {
 	sr, nr := vs.WriteValue(context.Background(), s), vs.WriteValue(context.Background(), n)
 	ccs.expect(sr, nr)
 	// TODO(binformat)
-	ml := NewList(context.Background(), Format_7_18, vs, sr, nr)
+	ml := NewList(context.Background(), vs, sr, nr)
 
 	// TODO(binformat)
 	b := NewEmptyBlob(vs, Format_7_18)
 	br, mlr := vs.WriteValue(context.Background(), b), vs.WriteValue(context.Background(), ml)
 	ccs.expect(br, mlr)
 	// TODO(binformat)
-	ml1 := NewList(context.Background(), Format_7_18, vs, br, mlr)
+	ml1 := NewList(context.Background(), vs, br, mlr)
 
 	f := Bool(false)
 	fr := vs.WriteValue(context.Background(), f)
 	ccs.expect(fr)
 	// TODO(binformat)
-	ml2 := NewList(context.Background(), Format_7_18, vs, fr)
+	ml2 := NewList(context.Background(), vs, fr)
 
 	ml1r, ml2r := vs.WriteValue(context.Background(), ml1), vs.WriteValue(context.Background(), ml2)
 	ccs.expect(ml1r, ml2r)
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vs, ml1r, ml2r)
+	l := NewList(context.Background(), vs, ml1r, ml2r)
 
 	r := vs.WriteValue(context.Background(), l)
 	ccs.expect(r)
@@ -186,7 +186,7 @@ func TestFlushOverSize(t *testing.T) {
 	sr := vs.WriteValue(context.Background(), s)
 	ccs.expect(sr)
 	// TODO(binformat)
-	NewList(context.Background(), Format_7_18, vs, sr) // will write the root chunk
+	NewList(context.Background(), vs, sr) // will write the root chunk
 }
 
 func TestTolerateTopDown(t *testing.T) {
@@ -205,12 +205,12 @@ func TestTolerateTopDown(t *testing.T) {
 	ccs.expect(sr)
 
 	// TODO(binformat)
-	ML := NewList(context.Background(), Format_7_18, vs, sr)
+	ML := NewList(context.Background(), vs, sr)
 	mlr := vs.WriteValue(context.Background(), ML)
 	ccs.expect(mlr)
 
 	// TODO(binformat)
-	L := NewList(context.Background(), Format_7_18, vs, mlr)
+	L := NewList(context.Background(), vs, mlr)
 	lr := vs.WriteValue(context.Background(), L)
 	ccs.expect(lr)
 
@@ -252,7 +252,7 @@ func TestPanicIfDangling(t *testing.T) {
 
 	r := NewRef(Bool(true), Format_7_18)
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vs, r)
+	l := NewList(context.Background(), vs, r)
 	vs.WriteValue(context.Background(), l)
 
 	assert.Panics(func() {
@@ -266,7 +266,7 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 
 	r := NewRef(Bool(true), Format_7_18)
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vs, r)
+	l := NewList(context.Background(), vs, r)
 	vs.WriteValue(context.Background(), l)
 
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))

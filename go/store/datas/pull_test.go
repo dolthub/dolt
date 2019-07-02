@@ -309,13 +309,13 @@ func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
 
 func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
 	unique := 0
-	l := types.NewList(context.Background(), types.Format_7_18, vrw, types.Float(unique), types.Float(unique+1))
+	l := types.NewList(context.Background(), vrw, types.Float(unique), types.Float(unique+1))
 	unique += 2
 
 	for i := 0; i < height; i++ {
 		r1, r2 := vrw.WriteValue(context.Background(), types.Float(unique)), vrw.WriteValue(context.Background(), l)
 		unique++
-		l = types.NewList(context.Background(), types.Format_7_18, vrw, r1, r2)
+		l = types.NewList(context.Background(), vrw, r1, r2)
 	}
 	return l
 }

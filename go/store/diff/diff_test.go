@@ -68,7 +68,7 @@ func createList(kv ...interface{}) types.List {
 	vs := newTestValueStore()
 	defer vs.Close()
 	keyValues := valsToTypesValues(kv...)
-	return types.NewList(context.Background(), types.Format_7_18, vs, keyValues...)
+	return types.NewList(context.Background(), vs, keyValues...)
 }
 
 func createStruct(name string, kv ...interface{}) types.Struct {

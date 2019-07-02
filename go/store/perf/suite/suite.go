@@ -257,7 +257,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			"environment":      suite.getEnvironment(db),
 			"nomsRevision":     types.String(suite.getGitHead(path.Join(suite.AtticLabs, "noms"))),
 			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
-			"reps":             types.NewList(context.Background(), types.Format_7_18, db, reps...),
+			"reps":             types.NewList(context.Background(), db, reps...),
 		})
 
 		ds := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)

@@ -29,7 +29,7 @@ func (s *perfSuite) SetupSuite() {
 func (s *perfSuite) Test01BuildList10mNumbers() {
 	assert := s.NewAssert()
 	in := make(chan types.Value, 16)
-	out := types.NewStreamingList(context.Background(), types.Format_7_18, s.Database, in)
+	out := types.NewStreamingList(context.Background(), s.Database, in)
 
 	for i := 0; i < 1e7; i++ {
 		in <- types.Float(s.r.Int63())
@@ -48,7 +48,7 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 func (s *perfSuite) Test02BuildList10mStructs() {
 	assert := s.NewAssert()
 	in := make(chan types.Value, 16)
-	out := types.NewStreamingList(context.Background(), types.Format_7_18, s.Database, in)
+	out := types.NewStreamingList(context.Background(), s.Database, in)
 
 	for i := 0; i < 1e7; i++ {
 		in <- types.NewStruct(types.Format_7_18, "", types.StructData{
@@ -86,7 +86,7 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	l1Len, l2Len := l1.Len(), l2.Len()
 	l1Last, l2Last := last(l1), last(l2)
 
-	l3 := types.NewList(context.Background(), types.Format_7_18, s.Database)
+	l3 := types.NewList(context.Background(), s.Database)
 	for i := uint64(0); i < 1e3; i++ { // 1k iterations * 2 concat ops = 2k times
 		// Include some basic sanity checks.
 		l3 = l3.Concat(context.Background(), l1)

@@ -17,7 +17,7 @@ func TestListIterator(t *testing.T) {
 
 	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
 	// TODO(binformat)
-	l := NewList(context.Background(), Format_7_18, vrw, numbers...)
+	l := NewList(context.Background(), vrw, numbers...)
 	i := l.Iterator(context.Background())
 	vs := iterToSlice(i)
 	assert.True(vs.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)

@@ -272,10 +272,10 @@ func TestValuePrimitives(t *testing.T) {
 func TestValueList(t *testing.T) {
 	vs := newTestValueStore()
 	// TODO(binformat)
-	assertParse(t, vs, "[]", types.NewList(context.Background(), types.Format_7_18, vs))
+	assertParse(t, vs, "[]", types.NewList(context.Background(), vs))
 
-	assertParse(t, vs, "[42]", types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42)))
-	assertParse(t, vs, "[42,]", types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42)))
+	assertParse(t, vs, "[42]", types.NewList(context.Background(), vs, types.Float(42)))
+	assertParse(t, vs, "[42,]", types.NewList(context.Background(), vs, types.Float(42)))
 
 	assertParseError(t, "[", "Unexpected token EOF, example:1:2")
 	assertParseError(t, "[,", "Unexpected token \",\", example:1:3")
@@ -286,10 +286,10 @@ func TestValueList(t *testing.T) {
 	// TODO(binformat)
 	assertParse(t, vs, `[42,
                 Bool,
-        ]`, types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42), types.BoolType))
+        ]`, types.NewList(context.Background(), vs, types.Float(42), types.BoolType))
 	assertParse(t, vs, `[42,
                 Bool
-        ]`, types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42), types.BoolType))
+        ]`, types.NewList(context.Background(), vs, types.Float(42), types.BoolType))
 }
 
 func TestValueSet(t *testing.T) {
@@ -441,8 +441,8 @@ func TestRoundTrips(t *testing.T) {
 	test(types.NewBlob(context.Background(), types.Format_7_18, vs, bytes.NewBufferString("abc")))
 
 	// TODO(binformat)
-	test(types.NewList(context.Background(), types.Format_7_18, vs))
-	test(types.NewList(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true), types.String("abc")))
+	test(types.NewList(context.Background(), vs))
+	test(types.NewList(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc")))
 
 	test(types.NewSet(context.Background(), types.Format_7_18, vs))
 	test(types.NewSet(context.Background(), types.Format_7_18, vs, types.Float(42), types.Bool(true), types.String("abc")))

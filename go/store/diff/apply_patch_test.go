@@ -169,8 +169,8 @@ func TestNestedLists(t *testing.T) {
 	ol2 := mustMarshal([]int{2, 3})
 	nl2 := mustMarshal([]int{1, 2, 3, 4})
 	nl3 := mustMarshal([]bool{true, false, true})
-	g1 := types.NewList(context.Background(), types.Format_7_18, vs, ol1, ol2)
-	g2 := types.NewList(context.Background(), types.Format_7_18, vs, nl1, nl2, nl3)
+	g1 := types.NewList(context.Background(), vs, ol1, ol2)
+	g2 := types.NewList(context.Background(), vs, nl1, nl2, nl3)
 	checkApplyPatch(assert, g1, g2, "g1", "g2")
 }
 
@@ -198,7 +198,7 @@ func TestUpdateNode(t *testing.T) {
 		return parent.(types.Struct).Get("f2")
 	})
 
-	l1 := types.NewList(context.Background(), types.Format_7_18, vs, types.String("one"), oldVal, types.String("three"))
+	l1 := types.NewList(context.Background(), vs, types.String("one"), oldVal, types.String("three"))
 	pp = types.IndexPath{Index: types.Float(1)}
 	doTest(pp, l1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.List).Get(context.Background(), 1)

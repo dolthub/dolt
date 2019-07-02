@@ -33,26 +33,26 @@ func newList(seq sequence, f *Format) List {
 
 // NewList creates a new List where the type is computed from the elements in the list, populated
 // with values, chunking if and when needed.
-func NewList(ctx context.Context, f *Format, vrw ValueReadWriter, values ...Value) List {
-	ch := newEmptyListSequenceChunker(ctx, f, vrw)
+func NewList(ctx context.Context, vrw ValueReadWriter, values ...Value) List {
+	ch := newEmptyListSequenceChunker(ctx, vrw.Format(), vrw)
 	for _, v := range values {
 		ch.Append(ctx, v)
 	}
-	return newList(ch.Done(ctx), f)
+	return newList(ch.Done(ctx), vrw.Format())
 }
 
 // NewStreamingList creates a new List, populated with values, chunking if and when needed. As
 // chunks are created, they're written to vrw -- including the root chunk of the list. Once the
 // caller has closed values, the caller can read the completed List from the returned channel.
-func NewStreamingList(ctx context.Context, f *Format, vrw ValueReadWriter, values <-chan Value) <-chan List {
+func NewStreamingList(ctx context.Context, vrw ValueReadWriter, values <-chan Value) <-chan List {
 	out := make(chan List, 1)
 	go func() {
 		defer close(out)
-		ch := newEmptyListSequenceChunker(ctx, f, vrw)
+		ch := newEmptyListSequenceChunker(ctx, vrw.Format(), vrw)
 		for v := range values {
 			ch.Append(ctx, v)
 		}
-		out <- newList(ch.Done(ctx), f)
+		out <- newList(ch.Done(ctx), vrw.Format())
 	}()
 	return out
 }

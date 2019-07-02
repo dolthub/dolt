@@ -293,7 +293,7 @@ func (s *nomsLogTestSuite) TestTruncation() {
 		for _, v := range l {
 			nv = append(nv, types.String(v))
 		}
-		return types.NewList(context.Background(), types.Format_7_18, db, nv...)
+		return types.NewList(context.Background(), db, nv...)
 	}
 
 	t := db.GetDataset(context.Background(), "truncate")

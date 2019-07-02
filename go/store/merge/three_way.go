@@ -281,7 +281,7 @@ func listAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent typ
 	if parent != nil {
 		pList, pOk = parent.(types.List)
 	} else {
-		pList, pOk = types.NewList(ctx, vrw.Format(), vrw), true
+		pList, pOk = types.NewList(ctx, vrw), true
 	}
 	return aList, bList, pList, aOk && bOk && pOk
 }
