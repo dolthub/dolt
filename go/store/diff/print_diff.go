@@ -117,7 +117,7 @@ func writeHeader(w io.Writer, p types.Path, wroteHdr *bool) error {
 	*wroteHdr = true
 	hdr := "(root)"
 	if len(p) > 0 {
-		hdr = p.String()
+		hdr = p.String(types.Format_7_18)
 	}
 	return write(w, []byte(hdr+" {\n"))
 }

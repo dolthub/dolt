@@ -172,7 +172,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
 	if s.Len(conflictPaths, len(expectedConflictPaths), "Wrong number of conflicts!") {
 		for i := 0; i < len(conflictPaths); i++ {
 			for j, c := range conflictPaths[i] {
-				s.Contains(c.String(), expectedConflictPaths[i][j])
+				s.Contains(c.String(types.Format_7_18), expectedConflictPaths[i][j])
 			}
 		}
 	}

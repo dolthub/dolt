@@ -356,10 +356,10 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	// of some of the code in PrintDiff() because it cannot tolerate nil parameters.
 	// TODO(binformat)
 	if neu == nil {
-		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash(types.Format_7_18).String(), path.String())
+		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash(types.Format_7_18).String(), path.String(types.Format_7_18))
 	}
 	if old == nil {
-		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash(types.Format_7_18).String(), path.String())
+		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash(types.Format_7_18).String(), path.String(types.Format_7_18))
 	}
 
 	if old != nil && neu != nil {

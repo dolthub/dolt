@@ -163,7 +163,7 @@ func cliResolve(in io.Reader, out io.Writer, aType, bType types.DiffChangeType, 
 	}
 
 	// TODO: Handle removes as well.
-	fmt.Fprintf(out, "\nConflict at: %s\n", path.String())
+	fmt.Fprintf(out, "\nConflict at: %s\n", path.String(types.Format_7_18))
 	fmt.Fprintf(out, "Left:  %s\nRight: %s\n\n", left, right)
 	var choice rune
 	for {

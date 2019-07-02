@@ -295,7 +295,7 @@ func TestPathParseSuccess(t *testing.T) {
 		case "[\"line\nbreak\rreturn\"]":
 			expectStr = `["line\nbreak\rreturn"]`
 		}
-		assert.Equal(expectStr, p.String())
+		assert.Equal(expectStr, p.String(Format_7_18))
 	}
 
 	// TODO(binformat)

@@ -120,7 +120,7 @@ func (p AbsolutePath) String() (str string) {
 		panic("Unreachable")
 	}
 
-	return str + p.Path.String()
+	return str + p.Path.String(types.Format_7_18)
 }
 
 // ReadAbsolutePaths attempts to parse each path in 'paths' and resolve them.
