@@ -55,7 +55,7 @@ func nomsStructNew(ctx context.Context, dbStr string, name string, args []string
 }
 
 func nomsStructSet(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(specStr)
+	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 
 	rootVal, basePath := splitPath(ctx, sp)
@@ -64,7 +64,7 @@ func nomsStructSet(ctx context.Context, specStr string, args []string) int {
 }
 
 func nomsStructDel(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(specStr)
+	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
 
 	rootVal, basePath := splitPath(ctx, sp)
@@ -89,7 +89,7 @@ func splitPath(ctx context.Context, sp spec.Spec) (rootVal types.Value, basePath
 	rootPath.Path = types.Path{}
 	rootVal = rootPath.Resolve(ctx, db)
 	if rootVal == nil {
-		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
+		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String(types.Format_7_18)))
 		return
 	}
 	basePath = sp.Path.Path
@@ -101,7 +101,7 @@ func applyStructEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, ba
 		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
 	if rootVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(types.Format_7_18)))
 		return
 	}
 	db := sp.GetDatabase(ctx)
@@ -127,7 +127,7 @@ func appplyPatch(ctx context.Context, sp spec.Spec, rootVal types.Value, basePat
 	db := sp.GetDatabase(ctx)
 	baseVal := basePath.Resolve(ctx, types.Format_7_18, rootVal, db)
 	if baseVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(types.Format_7_18)))
 	}
 
 	newRootVal := diff.Apply(ctx, rootVal, patch)
@@ -140,5 +140,5 @@ func appplyPatch(ctx context.Context, sp spec.Spec, rootVal types.Value, basePat
 	}
 	newSpec := sp
 	newSpec.Path = newAbsPath
-	fmt.Println(newSpec.String())
+	fmt.Println(newSpec.String(types.Format_7_18))
 }

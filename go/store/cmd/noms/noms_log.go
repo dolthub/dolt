@@ -74,11 +74,11 @@ func runLog(ctx context.Context, args []string) int {
 	datetime.RegisterHRSCommenter(tz)
 
 	resolved := cfg.ResolvePathSpec(args[0])
-	sp, err := spec.ForPath(resolved)
+	sp, err := spec.ForPath(types.Format_7_18, resolved)
 	util.CheckErrorNoUsage(err)
 	defer sp.Close()
 
-	pinned, ok := sp.Pin(ctx)
+	pinned, ok := sp.Pin(ctx, types.Format_7_18)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Cannot resolve spec: %s\n", args[0])
 		return 1

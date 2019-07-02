@@ -25,7 +25,7 @@ func TestNomsDiff(t *testing.T) {
 }
 
 func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
-	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, "diffTest"))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, "diffTest"))
 	s.NoError(err)
 	defer sp.Close()
 
@@ -42,7 +42,7 @@ func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
 }
 
 func (s *nomsDiffTestSuite) TestNomsDiffStat() {
-	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, "diffStatTest"))
+	sp, err := spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString("nbs", s.DBDir, "diffStatTest"))
 	s.NoError(err)
 	defer sp.Close()
 

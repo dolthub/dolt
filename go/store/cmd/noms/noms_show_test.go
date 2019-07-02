@@ -34,7 +34,7 @@ const (
 )
 
 func (s *nomsShowTestSuite) spec(str string) spec.Spec {
-	sp, err := spec.ForDataset(str)
+	sp, err := spec.ForDataset(types.Format_7_18, str)
 	s.NoError(err)
 	return sp
 }
@@ -90,7 +90,7 @@ func (s *nomsShowTestSuite) TestNomsShowNotFound() {
 func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	datasetName := "showRaw"
 	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
-	sp, err := spec.ForDataset(str)
+	sp, err := spec.ForDataset(types.Format_7_18, str)
 	s.NoError(err)
 	defer sp.Close()
 

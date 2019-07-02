@@ -174,12 +174,12 @@ func ForDatabaseOpts(spec string, opts SpecOptions) (Spec, error) {
 }
 
 // ForDataset parses a spec for a Dataset.
-func ForDataset(spec string) (Spec, error) {
-	return ForDatasetOpts(spec, SpecOptions{})
+func ForDataset(format *types.Format, spec string) (Spec, error) {
+	return ForDatasetOpts(format, spec, SpecOptions{})
 }
 
 // ForDatasetOpts parses a spec for a Dataset.
-func ForDatasetOpts(spec string, opts SpecOptions) (Spec, error) {
+func ForDatasetOpts(format *types.Format, spec string, opts SpecOptions) (Spec, error) {
 	dbSpec, pathStr, err := splitDatabaseSpec(spec)
 	if err != nil {
 		return Spec{}, err
@@ -190,7 +190,7 @@ func ForDatasetOpts(spec string, opts SpecOptions) (Spec, error) {
 		return Spec{}, err
 	}
 
-	path, err := NewAbsolutePath(pathStr)
+	path, err := NewAbsolutePath(format, pathStr)
 	if err != nil {
 		return Spec{}, err
 	}
@@ -208,12 +208,12 @@ func ForDatasetOpts(spec string, opts SpecOptions) (Spec, error) {
 }
 
 // ForPath parses a spec for a path to a Value.
-func ForPath(spec string) (Spec, error) {
-	return ForPathOpts(spec, SpecOptions{})
+func ForPath(format *types.Format, spec string) (Spec, error) {
+	return ForPathOpts(format, spec, SpecOptions{})
 }
 
 // ForPathOpts parses a spec for a path to a Value.
-func ForPathOpts(spec string, opts SpecOptions) (Spec, error) {
+func ForPathOpts(format *types.Format, spec string, opts SpecOptions) (Spec, error) {
 	dbSpec, pathStr, err := splitDatabaseSpec(spec)
 	if err != nil {
 		return Spec{}, err
@@ -221,7 +221,7 @@ func ForPathOpts(spec string, opts SpecOptions) (Spec, error) {
 
 	var path AbsolutePath
 	if pathStr != "" {
-		path, err = NewAbsolutePath(pathStr)
+		path, err = NewAbsolutePath(format, pathStr)
 		if err != nil {
 			return Spec{}, err
 		}
@@ -236,12 +236,12 @@ func ForPathOpts(spec string, opts SpecOptions) (Spec, error) {
 	return sp, nil
 }
 
-func (sp Spec) String() string {
+func (sp Spec) String(f *types.Format) string {
 	s := sp.Protocol
 	if s != "mem" {
 		s += ":" + sp.DatabaseName
 	}
-	p := sp.Path.String()
+	p := sp.Path.String(f)
 	if p != "" {
 		s += Separator + p
 	}
@@ -387,7 +387,7 @@ func (sp Spec) Href() string {
 // with the hash of the HEAD of that dataset. This "pins" the path to the state
 // of the database at the current moment in time.  Returns itself if the
 // PathSpec is already "pinned".
-func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
+func (sp Spec) Pin(ctx context.Context, format *types.Format) (Spec, bool) {
 	var ds datas.Dataset
 
 	if !sp.Path.IsEmpty() {
@@ -408,7 +408,7 @@ func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
 
 	r := sp
 	// TODO(binformat)
-	r.Path.Hash = commit.Hash(types.Format_7_18)
+	r.Path.Hash = commit.Hash(format)
 	r.Path.Dataset = ""
 
 	return r, true

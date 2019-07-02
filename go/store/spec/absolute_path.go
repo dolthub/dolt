@@ -38,7 +38,7 @@ type AbsolutePath struct {
 }
 
 // NewAbsolutePath attempts to parse 'str' and return an AbsolutePath.
-func NewAbsolutePath(str string) (AbsolutePath, error) {
+func NewAbsolutePath(format *types.Format, str string) (AbsolutePath, error) {
 	if len(str) == 0 {
 		return AbsolutePath{}, errors.New("empty path")
 	}
@@ -75,7 +75,7 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 		return AbsolutePath{Hash: h, Dataset: dataset}, nil
 	}
 
-	path, err := types.ParsePath(pathStr, types.Format_7_18)
+	path, err := types.ParsePath(pathStr, format)
 	if err != nil {
 		return AbsolutePath{}, err
 	}
@@ -98,7 +98,7 @@ func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database) (val types
 	}
 
 	if val != nil && p.Path != nil {
-		val = p.Path.Resolve(ctx, types.Format_7_18, val, db)
+		val = p.Path.Resolve(ctx, db.Format(), val, db)
 	}
 	return
 }
@@ -107,7 +107,7 @@ func (p AbsolutePath) IsEmpty() bool {
 	return p.Dataset == "" && p.Hash.IsEmpty()
 }
 
-func (p AbsolutePath) String() (str string) {
+func (p AbsolutePath) String(f *types.Format) (str string) {
 	if p.IsEmpty() {
 		return ""
 	}
@@ -120,7 +120,7 @@ func (p AbsolutePath) String() (str string) {
 		panic("Unreachable")
 	}
 
-	return str + p.Path.String(types.Format_7_18)
+	return str + p.Path.String(f)
 }
 
 // ReadAbsolutePaths attempts to parse each path in 'paths' and resolve them.
@@ -129,7 +129,7 @@ func (p AbsolutePath) String() (str string) {
 func ReadAbsolutePaths(ctx context.Context, db datas.Database, paths ...string) ([]types.Value, error) {
 	r := make([]types.Value, 0, len(paths))
 	for _, ps := range paths {
-		p, err := NewAbsolutePath(ps)
+		p, err := NewAbsolutePath(db.Format(), ps)
 		if err != nil {
 			return nil, fmt.Errorf("invalid input path '%s'", ps)
 		}

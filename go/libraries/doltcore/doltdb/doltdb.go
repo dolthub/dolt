@@ -133,7 +133,7 @@ func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types
 		prefixed = "#" + c
 	}
 
-	ap, err := spec.NewAbsolutePath(prefixed)
+	ap, err := spec.NewAbsolutePath(types.Format_7_18, prefixed)
 
 	if err != nil {
 		return types.EmptyStruct(types.Format_7_18), err
