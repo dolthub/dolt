@@ -1,7 +1,7 @@
 module github.com/liquidata-inc/ld/dolt/go
 
 require (
-	cloud.google.com/go v0.40.0
+	cloud.google.com/go v0.41.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
