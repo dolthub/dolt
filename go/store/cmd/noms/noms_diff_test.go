@@ -50,11 +50,11 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 
 	ds, err := addCommit(sp.GetDataset(context.Background()), "first commit")
 	s.NoError(err)
-	r1 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash())
+	r1 := spec.CreateHashSpecString(types.Format_7_18, "nbs", s.DBDir, ds.HeadRef().TargetHash())
 
 	ds, err = addCommit(ds, "second commit")
 	s.NoError(err)
-	r2 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash())
+	r2 := spec.CreateHashSpecString(types.Format_7_18, "nbs", s.DBDir, ds.HeadRef().TargetHash())
 
 	out, _ := s.MustRun(main, []string{"diff", "--stat", r1, r2})
 	s.Contains(out, "Comparing commit values")
@@ -65,11 +65,11 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 
 	ds, err = db.CommitValue(context.Background(), ds, types.NewList(context.Background(), types.Format_7_18, db, types.Float(1), types.Float(2), types.Float(3), types.Float(4)))
 	s.NoError(err)
-	r3 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
+	r3 := spec.CreateHashSpecString(types.Format_7_18, "nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
 
 	ds, err = db.CommitValue(context.Background(), ds, types.NewList(context.Background(), types.Format_7_18, db, types.Float(1), types.Float(222), types.Float(4)))
 	s.NoError(err)
-	r4 := spec.CreateHashSpecString("nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
+	r4 := spec.CreateHashSpecString(types.Format_7_18, "nbs", s.DBDir, ds.HeadRef().TargetHash()) + ".value"
 
 	out, _ = s.MustRun(main, []string{"diff", "--stat", r3, r4})
 	s.Contains(out, "1 insertion (25.00%), 2 deletions (50.00%), 0 changes (0.00%), (4 values vs 3 values)")

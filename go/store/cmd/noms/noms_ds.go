@@ -36,7 +36,7 @@ func setupDsFlags() *flag.FlagSet {
 func runDs(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	if toDelete != "" {
-		db, set, err := cfg.GetDataset(ctx, toDelete)
+		db, set, err := cfg.GetDataset(ctx, types.Format_7_18, toDelete)
 		util.CheckError(err)
 		defer db.Close()
 

@@ -41,7 +41,7 @@ func setupCommitFlags() *flag.FlagSet {
 
 func runCommit(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(ctx, args[len(args)-1])
+	db, ds, err := cfg.GetDataset(ctx, types.Format_7_18, args[len(args)-1])
 	util.CheckError(err)
 	defer db.Close()
 

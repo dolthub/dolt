@@ -44,7 +44,7 @@ func setupSyncFlags() *flag.FlagSet {
 
 func runSync(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	sourceStore, sourceObj, err := cfg.GetPath(ctx, args[0])
+	sourceStore, sourceObj, err := cfg.GetPath(ctx, types.Format_7_18, args[0])
 	util.CheckError(err)
 	defer sourceStore.Close()
 
@@ -52,7 +52,7 @@ func runSync(ctx context.Context, args []string) int {
 		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	sinkDB, sinkDataset, err := cfg.GetDataset(ctx, args[1])
+	sinkDB, sinkDataset, err := cfg.GetDataset(ctx, types.Format_7_18, args[1])
 	util.CheckError(err)
 	defer sinkDB.Close()
 
