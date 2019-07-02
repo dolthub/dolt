@@ -6,7 +6,6 @@ import (
 	"bufio"
 	"fmt"
 	"os/exec"
-	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/utils"
 )
@@ -46,11 +45,7 @@ func runAndStreamOutput(cmd *exec.Cmd, name string) error {
 	scanner := bufio.NewScanner(cmdReader)
 	go func() {
 		for scanner.Scan() {
-			text := scanner.Text()
-			// TODO: Remove this hacky conditional
-			if !strings.HasPrefix(text, "Switched to branch") {
-				fmt.Println(scanner.Text())
-			}
+			fmt.Println(scanner.Text())
 		}
 	}()
 
