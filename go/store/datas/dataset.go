@@ -27,7 +27,7 @@ type Dataset struct {
 }
 
 func newDataset(db Database, id string, head types.Value) Dataset {
-	d.PanicIfFalse(head == nil || IsCommit(head))
+	d.PanicIfFalse(head == nil || IsCommit(db.Format(), head))
 	return Dataset{db, id, head}
 }
 
@@ -69,7 +69,7 @@ func (ds Dataset) MaybeHeadRef() (types.Ref, bool) {
 	if ds.head == nil {
 		return types.Ref{}, false
 	}
-	return types.NewRef(ds.head, types.Format_7_18), true
+	return types.NewRef(ds.head, ds.Database().Format()), true
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.

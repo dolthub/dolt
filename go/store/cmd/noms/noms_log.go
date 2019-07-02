@@ -93,7 +93,7 @@ func runLog(ctx context.Context, args []string) int {
 	}
 
 	origCommit, ok := database.ReadValue(ctx, absPath.Hash).(types.Struct)
-	if !ok || !datas.IsCommit(origCommit) {
+	if !ok || !datas.IsCommit(types.Format_7_18, origCommit) {
 		util.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 

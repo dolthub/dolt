@@ -67,7 +67,7 @@ func runMerge(ctx context.Context, args []string) int {
 	util.CheckErrorNoUsage(err)
 	close(pc)
 
-	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(merged, types.NewSet(ctx, types.Format_7_18, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct(types.Format_7_18))))
+	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(types.Format_7_18, merged, types.NewSet(ctx, types.Format_7_18, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct(types.Format_7_18))))
 	d.PanicIfError(err)
 	if !verbose.Quiet() {
 		status.Printf("Done")
@@ -101,7 +101,7 @@ func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS 
 }
 
 func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
-	aRef, found := datas.FindCommonAncestor(ctx, r1, r2, vr)
+	aRef, found := datas.FindCommonAncestor(ctx, types.Format_7_18, r1, r2, vr)
 	if !found {
 		return
 	}
@@ -109,7 +109,7 @@ func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueRead
 	if v == nil {
 		panic(aRef.TargetHash().String() + " not found")
 	}
-	if !datas.IsCommit(v) {
+	if !datas.IsCommit(types.Format_7_18, v) {
 		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, types.Format_7_18, v, 10) + "  ...")
 	}
 	return v.(types.Struct), true

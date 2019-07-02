@@ -146,8 +146,7 @@ func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, need
 		// TODO: fix panics
 		d.PanicIfError(err)
 
-		// TODO(binformat)
-		types.WalkRefs(*c, types.Format_7_18, func(r types.Ref) {
+		types.WalkRefs(*c, sinkDB.Format(), func(r types.Ref) {
 			if !nextLevel.Has(r.TargetHash()) {
 				uniqueOrdered = append(uniqueOrdered, r.TargetHash())
 				nextLevel.Insert(r.TargetHash())
