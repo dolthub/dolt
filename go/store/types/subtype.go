@@ -43,7 +43,7 @@ func isSubtypeTopLevel(f *Format, requiredType, concreteType *Type) (isSub bool,
 //   hasExtra - which indicates whether concreteType has additional fields.
 // See comment below on isValueSubtypeOfDetails
 func isSubtypeDetails(f *Format, requiredType, concreteType *Type, hasExtra bool, parentStructTypes []*Type) (bool, bool) {
-	if requiredType.Equals(f, concreteType) {
+	if requiredType.Equals(concreteType) {
 		return true, hasExtra
 	}
 

@@ -30,7 +30,7 @@ func readMapEntry(r *valueDecoder, f *Format) mapEntry {
 }
 
 func (entry mapEntry) equals(f *Format, other mapEntry) bool {
-	return entry.key.Equals(f, other.key) && entry.value.Equals(f, other.value)
+	return entry.key.Equals(other.key) && entry.value.Equals(other.value)
 }
 
 type mapEntrySlice struct {
@@ -114,12 +114,12 @@ func (ml mapLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
 		dec2.offset = uint32(ml2.getItemOffset(otherIdx))
 		k1 := dec1.readValue(ml.f)
 		k2 := dec2.readValue(ml2.f)
-		if !k1.Equals(ml.f, k2) {
+		if !k1.Equals(k2) {
 			return false
 		}
 		v1 := dec1.readValue(ml.f)
 		v2 := dec2.readValue(ml2.f)
-		return v1.Equals(ml.f, v2)
+		return v1.Equals(v2)
 	}
 }
 

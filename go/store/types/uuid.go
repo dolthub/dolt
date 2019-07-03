@@ -17,7 +17,7 @@ func (v UUID) Value(ctx context.Context) Value {
 	return v
 }
 
-func (v UUID) Equals(format *Format, other Value) bool {
+func (v UUID) Equals(other Value) bool {
 	return v == other
 }
 

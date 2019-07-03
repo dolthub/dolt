@@ -24,7 +24,7 @@ func TestValueReadWriteRead(t *testing.T) {
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
 	v := vs.ReadValue(context.Background(), h) // non-nil
 	if assert.NotNil(v) {
-		assert.True(s.Equals(Format_7_18, v), "%s != %s", EncodedValue(context.Background(), Format_7_18, s), EncodedValue(context.Background(), Format_7_18, v))
+		assert.True(s.Equals(v), "%s != %s", EncodedValue(context.Background(), Format_7_18, s), EncodedValue(context.Background(), Format_7_18, v))
 	}
 }
 
@@ -41,11 +41,11 @@ func TestReadWriteCache(t *testing.T) {
 	assert.Equal(1, ts.Writes)
 
 	v = vs.ReadValue(context.Background(), r.TargetHash())
-	assert.True(v.Equals(Format_7_18, Bool(true)))
+	assert.True(v.Equals(Bool(true)))
 	assert.Equal(1, ts.Reads)
 
 	v = vs.ReadValue(context.Background(), r.TargetHash())
-	assert.True(v.Equals(Format_7_18, Bool(true)))
+	assert.True(v.Equals(Bool(true)))
 	assert.Equal(1, ts.Reads)
 }
 
@@ -88,7 +88,7 @@ func TestValueReadMany(t *testing.T) {
 	assert.Len(found, len(vals))
 	for _, v := range vals {
 		// TODO(binformat)
-		assert.True(v.Equals(Format_7_18, found[v.Hash(Format_7_18)]))
+		assert.True(v.Equals(found[v.Hash(Format_7_18)]))
 	}
 }
 

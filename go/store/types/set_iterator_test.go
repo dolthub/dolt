@@ -21,7 +21,7 @@ func TestSetIterator(t *testing.T) {
 	s := NewSet(context.Background(), vs, numbers...)
 	i := s.Iterator(context.Background())
 	vals := iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)
+	assert.True(vals.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
 	i = s.Iterator(context.Background())
 	assert.Panics(func() { i.SkipTo(context.Background(), nil) })
@@ -67,15 +67,15 @@ func TestSetIteratorAt(t *testing.T) {
 	s := NewSet(context.Background(), vs, numbers...)
 	i := s.IteratorAt(context.Background(), 0)
 	vals := iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)
+	assert.True(vals.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
 	i = s.IteratorAt(context.Background(), 2)
 	vals = iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
+	assert.True(vals.Equals(numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
 
 	i = s.IteratorAt(context.Background(), 10)
 	vals = iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, nil), "Expected: %v != actual: %v", nil, vs)
+	assert.True(vals.Equals(nil), "Expected: %v != actual: %v", nil, vs)
 }
 
 func TestSetIteratorFrom(t *testing.T) {
@@ -87,28 +87,28 @@ func TestSetIteratorFrom(t *testing.T) {
 	s := NewSet(context.Background(), vs, numbers...)
 	i := s.IteratorFrom(context.Background(), Float(0))
 	vals := iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)
+	assert.True(vals.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
 	i = s.IteratorFrom(context.Background(), Float(2))
 	vals = iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
+	assert.True(vals.Equals(numbers[2:]), "Expected: %v != actual: %v", numbers[2:], vs)
 
 	i = s.IteratorFrom(context.Background(), Float(10))
 	vals = iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, ValueSlice{Float(10), Float(20)}), "Expected: %v != actual: %v", nil, vs)
+	assert.True(vals.Equals(ValueSlice{Float(10), Float(20)}), "Expected: %v != actual: %v", nil, vs)
 
 	i = s.IteratorFrom(context.Background(), Float(20))
 	vals = iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, ValueSlice{Float(20)}), "Expected: %v != actual: %v", nil, vs)
+	assert.True(vals.Equals(ValueSlice{Float(20)}), "Expected: %v != actual: %v", nil, vs)
 
 	i = s.IteratorFrom(context.Background(), Float(100))
 	vals = iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, nil), "Expected: %v != actual: %v", nil, vs)
+	assert.True(vals.Equals(nil), "Expected: %v != actual: %v", nil, vs)
 
 	// Not present. Starts at next larger.
 	i = s.IteratorFrom(context.Background(), Float(15))
 	vals = iterToSlice(i)
-	assert.True(vals.Equals(Format_7_18, ValueSlice{Float(20)}), "Expected: %v != actual: %v", nil, vs)
+	assert.True(vals.Equals(ValueSlice{Float(20)}), "Expected: %v != actual: %v", nil, vs)
 }
 
 func TestUnionIterator(t *testing.T) {
@@ -124,14 +124,14 @@ func TestUnionIterator(t *testing.T) {
 	ui1 := NewUnionIterator(context.Background(), Format_7_18, set1.Iterator(context.Background()), set2.Iterator(context.Background()))
 	vals := iterToSlice(ui1)
 	expectedRes := generateNumbersAsValues(15)
-	assert.True(vals.Equals(Format_7_18, expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
+	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
 	ui1 = NewUnionIterator(context.Background(), Format_7_18, set1.Iterator(context.Background()), set4.Iterator(context.Background()))
 	ui2 := NewUnionIterator(context.Background(), Format_7_18, set3.Iterator(context.Background()), set2.Iterator(context.Background()))
 	ui3 := NewUnionIterator(context.Background(), Format_7_18, ui1, ui2)
 	vals = iterToSlice(ui3)
 	expectedRes = generateNumbersAsValues(25)
-	assert.True(vals.Equals(Format_7_18, expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
+	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
 	ui1 = NewUnionIterator(context.Background(), Format_7_18, set1.Iterator(context.Background()), set4.Iterator(context.Background()))
 	ui2 = NewUnionIterator(context.Background(), Format_7_18, set3.Iterator(context.Background()), set2.Iterator(context.Background()))
@@ -157,7 +157,7 @@ func TestUnionIterator(t *testing.T) {
 	ui30 := NewUnionIterator(context.Background(), Format_7_18, ui10, ui20)
 	vals = iterToSlice(ui30)
 	expectedRes = ValueSlice{Float(4)}
-	assert.True(vals.Equals(Format_7_18, expectedRes), "%v != %v\n", expectedRes, vs)
+	assert.True(vals.Equals(expectedRes), "%v != %v\n", expectedRes, vs)
 }
 
 func TestIntersectionIterator(t *testing.T) {
@@ -172,13 +172,13 @@ func TestIntersectionIterator(t *testing.T) {
 	i1 := NewIntersectionIterator(context.Background(), Format_7_18, byTwos.Iterator(context.Background()), byThrees.Iterator(context.Background()))
 	vals := iterToSlice(i1)
 	expectedRes := generateNumbersAsValuesFromToBy(0, 200, 6)
-	assert.True(vals.Equals(Format_7_18, expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
+	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
 	it1 := NewIntersectionIterator(context.Background(), Format_7_18, byTwos.Iterator(context.Background()), byThrees.Iterator(context.Background()))
 	it2 := NewIntersectionIterator(context.Background(), Format_7_18, it1, byFives.Iterator(context.Background()))
 	vals = iterToSlice(it2)
 	expectedRes = generateNumbersAsValuesFromToBy(0, 200, 30)
-	assert.True(vals.Equals(Format_7_18, expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
+	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
 	it1 = NewIntersectionIterator(context.Background(), Format_7_18, byThrees.Iterator(context.Background()), byFives.Iterator(context.Background()))
 	it2 = NewIntersectionIterator(context.Background(), Format_7_18, it1, byTwos.Iterator(context.Background()))
@@ -207,14 +207,14 @@ func TestCombinationIterator(t *testing.T) {
 	ut1 := NewUnionIterator(context.Background(), Format_7_18, it1, it2)
 	vals := iterToSlice(ut1)
 	expectedRes := intsToValueSlice(0, 14, 15, 28, 30, 42, 45, 56, 60)
-	assert.True(vals.Equals(Format_7_18, expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
+	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 
 	ut1 = NewUnionIterator(context.Background(), Format_7_18, byTwos.Iterator(context.Background()), bySevens.Iterator(context.Background()))
 	it2 = NewIntersectionIterator(context.Background(), Format_7_18, byFives.Iterator(context.Background()), byThrees.Iterator(context.Background()))
 	ut2 := NewIntersectionIterator(context.Background(), Format_7_18, ut1, it2)
 	vals = iterToSlice(ut2)
 	expectedRes = intsToValueSlice(0, 30, 60)
-	assert.True(vals.Equals(Format_7_18, expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
+	assert.True(vals.Equals(expectedRes), "Expected: %v != actual: %v", expectedRes, vs)
 }
 
 type UnionTestIterator struct {
@@ -255,14 +255,14 @@ func TestUnionComplexity(t *testing.T) {
 	iter := iterize(createSetsWithDistinctNumbers(vs, numSets, numElemsPerSet), NewUnionTestIterator, &callCount1)
 	vals := iterToSlice(iter)
 	expected := generateNumbersAsValueSlice(numSets * numElemsPerSet)
-	assert.True(expected.Equals(Format_7_18, vals), "expected: %v != actual: %v", expected, vals)
+	assert.True(expected.Equals(vals), "expected: %v != actual: %v", expected, vals)
 	assert.True(expectedMax > callCount1, "callCount: %d exceeds expectedMax: %d", callCount1, expectedMax)
 
 	callCount2 := 0
 	iter = iterize(createSetsWithSameNumbers(vs, numSets, numElemsPerSet), NewUnionTestIterator, &callCount2)
 	vals = iterToSlice(iter)
 	expected = generateNumbersAsValueSlice(numElemsPerSet)
-	assert.True(expected.Equals(Format_7_18, vals), "expected: %v != actual: %v", expected, vals)
+	assert.True(expected.Equals(vals), "expected: %v != actual: %v", expected, vals)
 	assert.True(expectedMax > callCount2, "callCount: %d exceeds expectedMax: %d", callCount2, expectedMax)
 }
 
@@ -304,14 +304,14 @@ func TestIntersectComplexity(t *testing.T) {
 	iter := iterize(createSetsWithDistinctNumbers(vs, numSets, numElemsPerSet), NewIntersectionTestIterator, &callCount1)
 	vals := iterToSlice(iter)
 	expected := ValueSlice{}
-	assert.True(expected.Equals(Format_7_18, vals), "expected: %v != actual: %v", expected, vals)
+	assert.True(expected.Equals(vals), "expected: %v != actual: %v", expected, vals)
 	assert.True(expectedMax > callCount1, "callCount: %d exceeds expectedMax: %d", callCount1, expectedMax)
 
 	callCount2 := 0
 	iter = iterize(createSetsWithSameNumbers(vs, numSets, numElemsPerSet), NewIntersectionTestIterator, &callCount2)
 	vals = iterToSlice(iter)
 	expected = generateNumbersAsValueSlice(numElemsPerSet)
-	assert.True(expected.Equals(Format_7_18, vals), "expected: %v != actual: %v", expected, vals)
+	assert.True(expected.Equals(vals), "expected: %v != actual: %v", expected, vals)
 	assert.True(expectedMax > callCount2, "callCount: %d exceeds expectedMax: %d", callCount2, expectedMax)
 }
 

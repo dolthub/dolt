@@ -162,9 +162,9 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 
 func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
 	WalkValues(context.Background(), Format_7_18, composite, suite.vs, func(v Value) bool {
-		suite.False(v.Equals(Format_7_18, suite.deadValue), "Should never have reached %+v", suite.deadValue)
+		suite.False(v.Equals(suite.deadValue), "Should never have reached %+v", suite.deadValue)
 		reached = append(reached, v)
-		return v.Equals(Format_7_18, suite.mustSkip)
+		return v.Equals(suite.mustSkip)
 	})
 	return
 }

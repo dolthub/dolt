@@ -19,7 +19,7 @@ func TestValidatingBatchingSinkDecode(t *testing.T) {
 	vdc := NewValidatingDecoder(storage.NewView())
 
 	dc := vdc.Decode(&c)
-	assert.True(t, v.Equals(Format_7_18, *dc.Value))
+	assert.True(t, v.Equals(*dc.Value))
 }
 
 func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {

@@ -125,7 +125,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 					var existingValue Value
 					if cur.idx < cur.seq.seqLen() {
 						ckv := cur.current().(mapEntry)
-						if ckv.key.Equals(f, kv.key) {
+						if ckv.key.Equals(kv.key) {
 							existingValue = ckv.value
 						}
 					}
@@ -135,7 +135,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 						continue // already non-present
 					}
 
-					if existingValue != nil && kv.value != nil && existingValue.Equals(f, kv.value) {
+					if existingValue != nil && kv.value != nil && existingValue.Equals(kv.value) {
 						stats.SameVal++
 						continue // same value
 					}

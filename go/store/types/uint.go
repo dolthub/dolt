@@ -19,7 +19,7 @@ func (v Uint) Value(ctx context.Context) Value {
 	return v
 }
 
-func (v Uint) Equals(format *Format, other Value) bool {
+func (v Uint) Equals(other Value) bool {
 	return v == other
 }
 
