@@ -150,16 +150,15 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 			break
 		}
 
-		// TODO(binformat)
-		if key != nil && (mergeKey == nil || key.Less(types.Format_7_18, mergeKey)) {
+		if key != nil && (mergeKey == nil || key.Less(vrw.Format(), mergeKey)) {
 			// change will already be in the map
 			change = types.ValueChanged{}
-		} else if mergeKey != nil && (key == nil || mergeKey.Less(types.Format_7_18, key)) {
+		} else if mergeKey != nil && (key == nil || mergeKey.Less(vrw.Format(), key)) {
 			applyChange(mapEditor, stats, mergeChange)
 			mergeChange = types.ValueChanged{}
 		} else {
 			r, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
-			mergedRow, isConflict := rowMerge(ctx, sch, r, mergeRow, ancRow)
+			mergedRow, isConflict := rowMerge(ctx, vrw.Format(), sch, r, mergeRow, ancRow)
 
 			if isConflict {
 				stats.Conflicts++
@@ -200,10 +199,10 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(ctx context.Context, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
+func rowMerge(ctx context.Context, format *types.Format, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
-		if r.Equals(types.Format_7_18, mergeRow) {
+		if r.Equals(format, mergeRow) {
 			// same row added to both
 			return r, false
 		}
@@ -225,11 +224,11 @@ func rowMerge(ctx context.Context, sch schema.Schema, r, mergeRow, baseRow types
 		val, _ := rowVals.Get(tag)
 		mergeVal, _ := mergeVals.Get(tag)
 
-		if valutil.NilSafeEqCheck(types.Format_7_18, val, mergeVal) {
+		if valutil.NilSafeEqCheck(format, val, mergeVal) {
 			return val, false
 		} else {
-			modified := !valutil.NilSafeEqCheck(types.Format_7_18, val, baseVal)
-			mergeModified := !valutil.NilSafeEqCheck(types.Format_7_18, mergeVal, baseVal)
+			modified := !valutil.NilSafeEqCheck(format, val, baseVal)
+			mergeModified := !valutil.NilSafeEqCheck(format, mergeVal, baseVal)
 			switch {
 			case modified && mergeModified:
 				return nil, true
