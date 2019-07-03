@@ -51,24 +51,23 @@ func nomsStruct(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdCla
 func nomsStructNew(ctx context.Context, dbStr string, name string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyStructEdits(ctx, sp, types.NewStruct(types.Format_7_18, name, nil), nil, args)
+	db := sp.GetDatabase(ctx)
+	applyStructEdits(ctx, db, sp, types.NewStruct(db.Format(), name, nil), nil, args)
 	return 0
 }
 
 func nomsStructSet(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
-
 	db := sp.GetDatabase(ctx)
 	rootVal, basePath := splitPath(ctx, db, sp)
-	applyStructEdits(ctx, sp, rootVal, basePath, args)
+	applyStructEdits(ctx, db, sp, rootVal, basePath, args)
 	return 0
 }
 
 func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(types.Format_7_18, specStr)
 	d.PanicIfError(err)
-
 	db := sp.GetDatabase(ctx)
 	rootVal, basePath := splitPath(ctx, db, sp)
 	patch := diff.Patch{}
@@ -82,7 +81,7 @@ func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 		})
 	}
 
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 	return 0
 }
 
@@ -91,22 +90,21 @@ func splitPath(ctx context.Context, db datas.Database, sp spec.Spec) (rootVal ty
 	rootPath.Path = types.Path{}
 	rootVal = rootPath.Resolve(ctx, db)
 	if rootVal == nil {
-		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String(types.Format_7_18)))
+		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String(db.Format())))
 		return
 	}
 	basePath = sp.Path.Path
 	return
 }
 
-func applyStructEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
+func applyStructEdits(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
 	if len(args)%2 != 0 {
 		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
 	if rootVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(types.Format_7_18)))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(db.Format())))
 		return
 	}
-	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		if !types.IsValidStructFieldName(args[i]) {
@@ -122,17 +120,16 @@ func applyStructEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, ba
 			NewValue:   nv,
 		})
 	}
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 }
 
-func appplyPatch(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
-	db := sp.GetDatabase(ctx)
-	baseVal := basePath.Resolve(ctx, types.Format_7_18, rootVal, db)
+func appplyPatch(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
+	baseVal := basePath.Resolve(ctx, db.Format(), rootVal, db)
 	if baseVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(types.Format_7_18)))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(db.Format())))
 	}
 
-	newRootVal := diff.Apply(ctx, types.Format_7_18, rootVal, patch)
+	newRootVal := diff.Apply(ctx, db.Format(), rootVal, patch)
 	d.Chk.NotNil(newRootVal)
 	r := db.WriteValue(ctx, newRootVal)
 	db.Flush(ctx)
@@ -142,5 +139,5 @@ func appplyPatch(ctx context.Context, sp spec.Spec, rootVal types.Value, basePat
 	}
 	newSpec := sp
 	newSpec.Path = newAbsPath
-	fmt.Println(newSpec.String(types.Format_7_18))
+	fmt.Println(newSpec.String(db.Format()))
 }

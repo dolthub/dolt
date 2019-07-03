@@ -100,7 +100,7 @@ func nomsListDel(ctx context.Context, specStr string, pos uint64, len uint64) in
 		})
 	}
 
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, sp.GetDatabase(ctx), sp, rootVal, basePath, patch)
 	return 0
 }
 
@@ -121,5 +121,5 @@ func applyListInserts(ctx context.Context, db datas.Database, sp spec.Spec, root
 			NewValue:   vv,
 		})
 	}
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 }

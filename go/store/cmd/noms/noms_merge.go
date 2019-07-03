@@ -61,13 +61,13 @@ func runMerge(ctx context.Context, args []string) int {
 
 	leftDS, rightDS, outDS := resolveDatasets(ctx, db, args[1], args[2], args[3])
 	left, right, ancestor := getMergeCandidates(ctx, db, leftDS, rightDS)
-	policy := decidePolicy(resolver)
+	policy := decidePolicy(db.Format(), resolver)
 	pc := newMergeProgressChan()
 	merged, err := policy(ctx, left, right, ancestor, db, pc)
 	util.CheckErrorNoUsage(err)
 	close(pc)
 
-	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(types.Format_7_18, merged, types.NewSet(ctx, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct(types.Format_7_18))))
+	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(db.Format(), merged, types.NewSet(ctx, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct(db.Format()))))
 	d.PanicIfError(err)
 	if !verbose.Quiet() {
 		status.Printf("Done")
@@ -101,7 +101,7 @@ func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS 
 }
 
 func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
-	aRef, found := datas.FindCommonAncestor(ctx, types.Format_7_18, r1, r2, vr)
+	aRef, found := datas.FindCommonAncestor(ctx, vr.Format(), r1, r2, vr)
 	if !found {
 		return
 	}
@@ -109,8 +109,8 @@ func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueRead
 	if v == nil {
 		panic(aRef.TargetHash().String() + " not found")
 	}
-	if !datas.IsCommit(types.Format_7_18, v) {
-		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, types.Format_7_18, v, 10) + "  ...")
+	if !datas.IsCommit(vr.Format(), v) {
+		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, vr.Format(), v, 10) + "  ...")
 	}
 	return v.(types.Struct), true
 }
@@ -129,7 +129,7 @@ func newMergeProgressChan() chan struct{} {
 	return pc
 }
 
-func decidePolicy(policy string) merge.Policy {
+func decidePolicy(format *types.Format, policy string) merge.Policy {
 	var resolve merge.ResolveFunc
 	switch policy {
 	case "n", "N":
@@ -140,7 +140,7 @@ func decidePolicy(policy string) merge.Policy {
 		resolve = merge.Theirs
 	case "p", "P":
 		resolve = func(aType, bType types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
-			return cliResolve(os.Stdin, os.Stdout, aType, bType, a, b, path)
+			return cliResolve(os.Stdin, os.Stdout, format, aType, bType, a, b, path)
 		}
 	default:
 		util.CheckErrorNoUsage(fmt.Errorf("Unsupported merge policy: %s. Choices are n, l, r and a.", policy))
@@ -148,7 +148,7 @@ func decidePolicy(policy string) merge.Policy {
 	return merge.NewThreeWay(resolve)
 }
 
-func cliResolve(in io.Reader, out io.Writer, aType, bType types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
+func cliResolve(in io.Reader, out io.Writer, format *types.Format, aType, bType types.DiffChangeType, a, b types.Value, path types.Path) (change types.DiffChangeType, merged types.Value, ok bool) {
 	stringer := func(v types.Value) (s string, success bool) {
 		switch v := v.(type) {
 		case types.Bool, types.Float, types.String:
@@ -163,7 +163,7 @@ func cliResolve(in io.Reader, out io.Writer, aType, bType types.DiffChangeType, 
 	}
 
 	// TODO: Handle removes as well.
-	fmt.Fprintf(out, "\nConflict at: %s\n", path.String(types.Format_7_18))
+	fmt.Fprintf(out, "\nConflict at: %s\n", path.String(format))
 	fmt.Fprintf(out, "Left:  %s\nRight: %s\n\n", left, right)
 	var choice rune
 	for {

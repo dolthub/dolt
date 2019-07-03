@@ -246,7 +246,7 @@ func TestNomsMergeCliResolve(t *testing.T) {
 	for _, c := range cases {
 		input := bytes.NewBufferString(c.input)
 
-		changeType, newVal, ok := cliResolve(input, ioutil.Discard, c.aChange, c.bChange, c.aVal, c.bVal, types.Path{})
+		changeType, newVal, ok := cliResolve(input, ioutil.Discard, types.Format_7_18, c.aChange, c.bChange, c.aVal, c.bVal, types.Path{})
 		if !c.success {
 			assert.False(t, ok)
 		} else if assert.True(t, ok) {

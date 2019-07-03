@@ -71,7 +71,7 @@ func runRoot(ctx context.Context, args []string) int {
 	db, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 	defer db.Close()
-	if !validate(ctx, db.ReadValue(ctx, h)) {
+	if !validate(ctx, db.Format(), db.ReadValue(ctx, h)) {
 		return 1
 	}
 
@@ -107,15 +107,15 @@ Continue?`)
 	return 0
 }
 
-func validate(ctx context.Context, r types.Value) bool {
+func validate(ctx context.Context, f *types.Format, r types.Value) bool {
 	rootType := types.MakeMapType(types.StringType, types.MakeRefType(types.ValueType))
-	if !types.IsValueSubtypeOf(types.Format_7_18, r, rootType) {
-		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(ctx, types.Format_7_18), types.TypeOf(r).Describe(ctx, types.Format_7_18))
+	if !types.IsValueSubtypeOf(f, r, rootType) {
+		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(ctx, f), types.TypeOf(r).Describe(ctx, f))
 		return false
 	}
 
 	return r.(types.Map).Any(ctx, func(k, v types.Value) bool {
-		if !datas.IsRefOfCommitType(types.Format_7_18, types.TypeOf(v)) {
+		if !datas.IsRefOfCommitType(f, types.TypeOf(v)) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false
 		}

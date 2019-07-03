@@ -117,6 +117,10 @@ func NewStruct(format *Format, name string, data StructData) Struct {
 	return newStruct(format, name, fieldNames, values)
 }
 
+func (s Struct) Format() *Format {
+	return s.format
+}
+
 // StructTemplate allows creating a template for structs with a known shape
 // (name and fields). If a lot of structs of the same shape are being created
 // then using a StructTemplate makes that slightly more efficient.

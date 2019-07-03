@@ -11,6 +11,7 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/diff"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/outputpager"
@@ -53,14 +54,16 @@ func runDiff(ctx context.Context, args []string) int {
 	}
 	defer db2.Close()
 
+	d.PanicIfFalse(db1.Format() == db2.Format())
+
 	if stat {
-		diff.Summary(ctx, types.Format_7_18, value1, value2)
+		diff.Summary(ctx, db1.Format(), value1, value2)
 		return 0
 	}
 
 	pgr := outputpager.Start()
 	defer pgr.Stop()
 
-	diff.PrintDiff(ctx, types.Format_7_18, pgr.Writer, value1, value2, false)
+	diff.PrintDiff(ctx, db1.Format(), pgr.Writer, value1, value2, false)
 	return 0
 }
