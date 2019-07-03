@@ -95,7 +95,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			}
 		}
 
-		key := r.NomsMapKey(tableSch).Value(ctx)
+		key := r.NomsMapKey(types.Format_7_18, tableSch).Value(ctx)
 
 		rowExists := rowData.Get(ctx, key) != nil
 		// TODO(binformat)
@@ -111,7 +111,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 				return errInsert("Duplicate primary key: '%v'", getPrimaryKeyString(r, tableSch))
 			}
 		}
-		me.Set(key, r.NomsMapValue(tableSch))
+		me.Set(key, r.NomsMapValue(types.Format_7_18, tableSch))
 
 		// TODO(binformat)
 		insertedPKHashes[key.Hash(types.Format_7_18)] = struct{}{}

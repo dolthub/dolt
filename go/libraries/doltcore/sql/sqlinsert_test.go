@@ -318,7 +318,7 @@ func TestExecuteInsert(t *testing.T) {
 			assert.True(t, ok)
 
 			for _, expectedRow := range tt.insertedValues {
-				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
+				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(types.Format_7_18, PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
 				opts := cmp.Options{cmp.AllowUnexported(expectedRow), dtestutils.FloatComparer}
 				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))

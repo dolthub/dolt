@@ -256,7 +256,7 @@ func rowMerge(ctx context.Context, format *types.Format, sch schema.Schema, r, m
 		return nil, true
 	}
 
-	tpl := resultVals.NomsTupleForTags(sch.GetNonPKCols().SortedTags, false)
+	tpl := resultVals.NomsTupleForTags(format, sch.GetNonPKCols().SortedTags, false)
 
 	return tpl.Value(ctx), false
 }

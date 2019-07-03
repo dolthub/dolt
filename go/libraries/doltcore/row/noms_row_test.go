@@ -255,15 +255,15 @@ func TestConvToAndFromTuple(t *testing.T) {
 
 	r := newTestRow()
 
-	keyTpl := r.NomsMapKey(sch).(TupleVals)
-	valTpl := r.NomsMapValue(sch).(TupleVals)
+	keyTpl := r.NomsMapKey(types.Format_7_18, sch).(TupleVals)
+	valTpl := r.NomsMapValue(types.Format_7_18, sch).(TupleVals)
 
 	r2 := FromNoms(sch, keyTpl.Value(ctx).(types.Tuple), valTpl.Value(ctx).(types.Tuple))
 
-	fmt.Println(Fmt(context.Background(), r, sch))
-	fmt.Println(Fmt(context.Background(), r2, sch))
+	fmt.Println(Fmt(context.Background(), types.Format_7_18, r, sch))
+	fmt.Println(Fmt(context.Background(), types.Format_7_18, r2, sch))
 
-	if !AreEqual(r, r2, sch) {
+	if !AreEqual(types.Format_7_18, r, r2, sch) {
 		t.Error("Failed to convert to a noms tuple, and then convert back to the same row")
 	}
 }

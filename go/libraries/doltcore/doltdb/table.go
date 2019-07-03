@@ -187,7 +187,7 @@ func (t *Table) HashOf() hash.Hash {
 }
 
 func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {
-	pkTuple := pkVals.NomsTupleForTags(sch.GetPKCols().Tags, true)
+	pkTuple := pkVals.NomsTupleForTags(t.vrw.Format(), sch.GetPKCols().Tags, true)
 	return t.GetRow(ctx, pkTuple.Value(ctx).(types.Tuple), sch)
 }
 

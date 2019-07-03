@@ -2,6 +2,7 @@ package alterschema
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -62,7 +63,7 @@ func updateTableWithNewSchema(ctx context.Context, db *doltdb.DoltDB, tbl *doltd
 			return true
 		}
 
-		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
+		me.Set(newRow.NomsMapKey(vrw.Format(), newSchema), newRow.NomsMapValue(vrw.Format(), newSchema))
 		return false
 	})
 	if updateErr != nil {

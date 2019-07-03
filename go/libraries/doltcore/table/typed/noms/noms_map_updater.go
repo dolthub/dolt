@@ -81,15 +81,15 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 			}
 		}()
 
-		pk := r.NomsMapKey(nmu.sch)
-		fieldVals := r.NomsMapValue(nmu.sch)
+		pk := r.NomsMapKey(nmu.vrw.Format(), nmu.sch)
+		fieldVals := r.NomsMapValue(nmu.vrw.Format(), nmu.sch)
 
 		nmu.acc.AddEdit(pk, fieldVals)
 		nmu.count++
 
 		if nmu.count%maxEdits == 0 {
 			nmu.mapChan <- nmu.acc.FinishedEditing()
-			nmu.acc = types.CreateEditAccForMapEdits(types.Format_7_18)
+			nmu.acc = types.CreateEditAccForMapEdits(nmu.vrw.Format())
 		}
 	}()
 

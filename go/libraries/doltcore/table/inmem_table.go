@@ -49,8 +49,7 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 	sort.Slice(imt.rows, func(i, j int) bool {
 		iRow := imt.rows[i]
 		jRow := imt.rows[j]
-		// TODO(binformat)
-		return iRow.NomsMapKey(imt.sch).Less(types.Format_7_18, jRow.NomsMapKey(imt.sch))
+		return iRow.NomsMapKey(types.Format_7_18, imt.sch).Less(types.Format_7_18, jRow.NomsMapKey(types.Format_7_18, imt.sch))
 	})
 
 	return nil
