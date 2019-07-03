@@ -114,6 +114,7 @@ type valueReadWriter interface {
 
 type valueImpl struct {
 	vrw     ValueReadWriter
+	format  *Format
 	buff    []byte
 	offsets []uint32
 }

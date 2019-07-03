@@ -48,15 +48,15 @@ func constructRef(f *Format, targetHash hash.Hash, targetType *Type, height uint
 	offsets[refPartHeight] = w.offset
 	w.writeCount(height)
 
-	return Ref{valueImpl{nil, w.data(), offsets}}
+	return Ref{valueImpl{nil, f, w.data(), offsets}}
 }
 
 // readRef reads the data provided by a reader and moves the reader forward.
-func readRef(dec *typedBinaryNomsReader) Ref {
+func readRef(f *Format, dec *typedBinaryNomsReader) Ref {
 	start := dec.pos()
 	offsets := skipRef(dec)
 	end := dec.pos()
-	return Ref{valueImpl{nil, dec.byteSlice(start, end), offsets}}
+	return Ref{valueImpl{nil, f, dec.byteSlice(start, end), offsets}}
 }
 
 // skipRef moves the reader forward, past the data representing the Ref, and returns the offsets of the component parts.

@@ -252,7 +252,7 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 }
 
 func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-	return newSequenceChunker(ctx, l.format, cur, 0, vrw, makeListLeafChunkFn(vrw, l.format), newIndexedMetaSequenceChunkFn(l.format, ListKind, vrw), hashValueBytes)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw, l.format), newIndexedMetaSequenceChunkFn(l.format, ListKind, vrw), hashValueBytes)
 }
 
 func makeListLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
@@ -270,5 +270,5 @@ func makeListLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
 }
 
 func newEmptyListSequenceChunker(ctx context.Context, f *Format, vrw ValueReadWriter) *sequenceChunker {
-	return newEmptySequenceChunker(ctx, f, vrw, makeListLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(f, ListKind, vrw), hashValueBytes)
+	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(f, ListKind, vrw), hashValueBytes)
 }

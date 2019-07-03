@@ -48,7 +48,6 @@ func (itr *TupleIterator) Pos() uint64 {
 
 type Tuple struct {
 	valueImpl
-	format *Format
 }
 
 // readTuple reads the data provided by a decoder and moves the decoder forward.
@@ -56,7 +55,7 @@ func readTuple(f *Format, dec *valueDecoder) Tuple {
 	start := dec.pos()
 	skipTuple(f, dec)
 	end := dec.pos()
-	return Tuple{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}, f}
+	return Tuple{valueImpl{dec.vrw, f, dec.byteSlice(start, end), nil}}
 }
 
 func skipTuple(f *Format, dec *valueDecoder) {
@@ -87,7 +86,7 @@ func NewTuple(f *Format, values ...Value) Tuple {
 		}
 		values[i].writeTo(&w, f)
 	}
-	return Tuple{valueImpl{vrw, w.data(), nil}, f}
+	return Tuple{valueImpl{vrw, f, w.data(), nil}}
 }
 
 func (t Tuple) Empty() bool {
@@ -198,7 +197,7 @@ func (t Tuple) Set(n uint64, v Value) Tuple {
 	v.writeTo(&w, t.format)
 	w.writeRaw(tail)
 
-	return Tuple{valueImpl{t.vrw, w.data(), nil}, t.format}
+	return Tuple{valueImpl{t.vrw, t.format, w.data(), nil}}
 }
 
 func (t Tuple) Append(v Value) Tuple {
@@ -214,7 +213,7 @@ func (t Tuple) Append(v Value) Tuple {
 	w.writeRaw(dec.buff[fieldsOffset:])
 	v.writeTo(&w, t.format)
 
-	return Tuple{valueImpl{t.vrw, w.data(), nil}, t.format}
+	return Tuple{valueImpl{t.vrw, t.format, w.data(), nil}}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for

@@ -91,7 +91,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 		sp := <-<-spliceChan
 
 		if ch == nil {
-			ch = newSequenceChunker(ctx, le.f, cur, 0, vrw, makeListLeafChunkFn(vrw, le.f), newIndexedMetaSequenceChunkFn(le.f, ListKind, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw, le.f), newIndexedMetaSequenceChunkFn(le.f, ListKind, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(ctx, cur)
 		}

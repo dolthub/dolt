@@ -17,7 +17,7 @@ type leafSequence struct {
 }
 
 func newLeafSequence(format *Format, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) leafSequence {
-	return leafSequence{newSequenceImpl(vrw, buff, offsets, len), format}
+	return leafSequence{newSequenceImpl(vrw, format, buff, offsets, len), format}
 }
 
 func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *Format, vs ...Value) leafSequence {
