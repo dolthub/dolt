@@ -45,7 +45,7 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
 	}
 
-	unMarshalled, err := UnmarshalNomsValue(context.Background(), val)
+	unMarshalled, err := UnmarshalNomsValue(context.Background(), types.Format_7_18, val)
 
 	if err != nil {
 		t.Fatal("Failed to unmarshal types.Value as Schema")

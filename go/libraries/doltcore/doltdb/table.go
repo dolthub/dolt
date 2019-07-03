@@ -145,7 +145,7 @@ func refToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) 
 		schemaVal := ref.TargetValue(ctx, vrw)
 
 		var err error
-		schema, err = encoding.UnmarshalNomsValue(ctx, schemaVal)
+		schema, err = encoding.UnmarshalNomsValue(ctx, vrw.Format(), schemaVal)
 
 		if err != nil {
 			return err
