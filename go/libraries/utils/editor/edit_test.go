@@ -3,6 +3,8 @@ package editor
 import (
 	"reflect"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 )
 
 func TestGetCmdNameAndArgsForEditor(t *testing.T) {
@@ -30,6 +32,9 @@ func TestGetCmdNameAndArgsForEditor(t *testing.T) {
 }
 
 func TestOpenCommitEditor(t *testing.T) {
+	if osutil.IsWindows {
+		t.Skip("Invalid test on Windows as /bin/sh does not exist")
+	}
 	tests := []struct {
 		editorStr       string
 		initialContents string

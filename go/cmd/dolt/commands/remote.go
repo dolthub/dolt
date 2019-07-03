@@ -198,6 +198,10 @@ func getAbsFileRemoteUrl(urlStr string, fs filesys.Filesys) (string, error) {
 		return "", filesys.ErrIsFile
 	}
 
+	urlStr = strings.ReplaceAll(urlStr, `\`, "/")
+	if !strings.HasPrefix(urlStr, "/") {
+		urlStr = "/" + urlStr
+	}
 	return dbfactory.FileScheme + "://" + urlStr, nil
 }
 

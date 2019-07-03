@@ -54,7 +54,9 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 		}
 		return temp.Name()
 	}()
-	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
+	newName := filepath.Join(ftp.dir, name.String())
+	ftp.fc.ShrinkCache()
+	err := os.Rename(tempName, newName)
 	d.PanicIfError(err)
 	return ftp.Open(ctx, name, chunkCount, stats)
 }
