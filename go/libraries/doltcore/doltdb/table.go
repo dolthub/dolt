@@ -48,7 +48,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 		tableRowsKey: rowDataRef,
 	}
 
-	tableStruct := types.NewStruct(types.Format_7_18, tableStructName, sd)
+	tableStruct := types.NewStruct(vrw.Format(), tableStructName, sd)
 	return &Table{vrw, tableStruct}
 }
 
@@ -183,8 +183,7 @@ func (t *Table) HasTheSameSchema(t2 *Table) bool {
 
 // HashOf returns the hash of the underlying table struct
 func (t *Table) HashOf() hash.Hash {
-	// TODO(binformat)
-	return t.tableStruct.Hash(types.Format_7_18)
+	return t.tableStruct.Hash(t.vrw.Format())
 }
 
 func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {

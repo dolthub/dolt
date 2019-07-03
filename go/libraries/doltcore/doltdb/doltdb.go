@@ -98,7 +98,7 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 
 		cm, _ := NewCommitMeta(name, email, "Data repository created.")
 
-		commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(), Policy: nil}
+		commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
 
 		dref := ref.NewInternalRef(creationBranch)
 		firstCommit, err := ddb.db.Commit(ctx, ddb.db.GetDataset(ctx, dref.String()), rv.valueSt, commitOpts)
@@ -123,7 +123,7 @@ func getCommitStForRef(ctx context.Context, db datas.Database, dref ref.DoltRef)
 		return ds.Head(), nil
 	}
 
-	return types.EmptyStruct(types.Format_7_18), ErrBranchNotFound
+	return types.EmptyStruct(db.Format()), ErrBranchNotFound
 }
 
 func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types.Struct, error) {
@@ -133,22 +133,22 @@ func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types
 		prefixed = "#" + c
 	}
 
-	ap, err := spec.NewAbsolutePath(types.Format_7_18, prefixed)
+	ap, err := spec.NewAbsolutePath(db.Format(), prefixed)
 
 	if err != nil {
-		return types.EmptyStruct(types.Format_7_18), err
+		return types.EmptyStruct(db.Format()), err
 	}
 
 	val := ap.Resolve(ctx, db)
 
 	if val == nil {
-		return types.EmptyStruct(types.Format_7_18), ErrHashNotFound
+		return types.EmptyStruct(db.Format()), ErrHashNotFound
 	}
 
 	valSt, ok := val.(types.Struct)
 
 	if !ok || valSt.Name() != CommitStructName {
-		return types.EmptyStruct(types.Format_7_18), ErrFoundHashNotACommit
+		return types.EmptyStruct(db.Format()), ErrFoundHashNotACommit
 	}
 
 	return valSt, nil
@@ -167,11 +167,11 @@ func walkAncestorSpec(ctx context.Context, db datas.Database, commitSt types.Str
 			commitStPtr := cm.getParent(ctx, inst)
 
 			if commitStPtr == nil {
-				return types.EmptyStruct(types.Format_7_18), ErrInvalidAnscestorSpec
+				return types.EmptyStruct(db.Format()), ErrInvalidAnscestorSpec
 			}
 			commitSt = *commitStPtr
 		} else {
-			return types.EmptyStruct(types.Format_7_18), ErrInvalidAnscestorSpec
+			return types.EmptyStruct(db.Format()), ErrInvalidAnscestorSpec
 		}
 	}
 
@@ -255,7 +255,7 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 // FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
 	ds := ddb.db.GetDataset(ctx, branch.String())
-	_, err := ddb.db.FastForward(ctx, ds, types.NewRef(commit.commitSt, types.Format_7_18))
+	_, err := ddb.db.FastForward(ctx, ds, types.NewRef(commit.commitSt, ddb.db.Format()))
 
 	return err
 }
@@ -301,11 +301,11 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 				return err
 			}
 
-			parentEditor.Insert(types.NewRef(cs.commitSt, types.Format_7_18))
+			parentEditor.Insert(types.NewRef(cs.commitSt, ddb.db.Format()))
 		}
 
 		parents := parentEditor.Set(ctx)
-		commitOpts := datas.CommitOptions{Parents: parents, Meta: cm.toNomsStruct(), Policy: nil}
+		commitOpts := datas.CommitOptions{Parents: parents, Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
 		ds, err := ddb.db.Commit(ctx, ddb.db.GetDataset(ctx, dref.String()), val, commitOpts)
 
 		if ds.HasHead() {
@@ -330,7 +330,7 @@ func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 }
 
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) types.Ref {
-	valRef := types.NewRef(val, types.Format_7_18)
+	valRef := types.NewRef(val, vrw.Format())
 
 	targetVal := valRef.TargetValue(ctx, vrw)
 
@@ -404,7 +404,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 	}
 
 	ds := ddb.db.GetDataset(ctx, dref.String())
-	_, err := ddb.db.SetHead(ctx, ds, types.NewRef(commit.commitSt, types.Format_7_18))
+	_, err := ddb.db.SetHead(ctx, ds, types.NewRef(commit.commitSt, ddb.db.Format()))
 	return err
 }
 
@@ -423,13 +423,13 @@ func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
 // PushChunks initiates a push into a database from the source database given, at the commit given. Pull progress is
 // communicated over the provided channel.
 func (ddb *DoltDB) PushChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
-	datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, types.Format_7_18), progChan)
+	datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, ddb.db.Format()), progChan)
 	return nil
 }
 
 // PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
 // communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
-	datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, types.Format_7_18), progChan)
+	datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, ddb.db.Format()), progChan)
 	return nil
 }

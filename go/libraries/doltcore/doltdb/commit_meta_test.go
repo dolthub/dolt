@@ -3,11 +3,12 @@ package doltdb
 import (
 	"reflect"
 	"testing"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestCommitMetaToAndFromNomsStruct(t *testing.T) {
 	cm, _ := NewCommitMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
-	cmSt := cm.toNomsStruct()
+	cmSt := cm.toNomsStruct(types.Format_7_18)
 	result, err := commitMetaFromNomsSt(cmSt)
 
 	if err != nil {
