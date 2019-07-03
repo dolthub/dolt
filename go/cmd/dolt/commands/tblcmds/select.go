@@ -228,7 +228,7 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	wr := tabular.NewTextTableWriter(iohelp.NopWrCloser(cli.CliOut), outSch)
 
 	badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.TODO(), types.Format_7_18, tff.Row, outSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.TODO(), tff.Row, outSch)))
 		return true
 	}
 

@@ -295,7 +295,7 @@ func TestWriteHumanReadableWriterError(t *testing.T) {
 	assert := assert.New(t)
 	err := errors.New("test")
 	w := &errorWriter{err}
-	assert.Equal(err, WriteEncodedValue(context.Background(), Format_7_18, w, Float(42)))
+	assert.Equal(err, WriteEncodedValue(context.Background(), w, Float(42)))
 }
 
 func TestEmptyCollections(t *testing.T) {
@@ -322,10 +322,10 @@ func TestEncodedValueMaxLines(t *testing.T) {
 	// TODO(binformat)
 	l1 := NewList(context.Background(), vrw, generateNumbersAsValues(11)...)
 	expected := strings.Join(strings.SplitAfterN(EncodedValue(context.Background(), l1), "\n", 6)[:5], "")
-	assert.Equal(expected, EncodedValueMaxLines(context.Background(), Format_7_18, l1, 5))
+	assert.Equal(expected, EncodedValueMaxLines(context.Background(), l1, 5))
 
 	buf := bytes.Buffer{}
-	WriteEncodedValueMaxLines(context.Background(), Format_7_18, &buf, l1, 5)
+	WriteEncodedValueMaxLines(context.Background(), &buf, l1, 5)
 	assert.Equal(expected, buf.String())
 }
 

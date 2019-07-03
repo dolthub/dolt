@@ -110,7 +110,7 @@ func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueRead
 		panic(aRef.TargetHash().String() + " not found")
 	}
 	if !datas.IsCommit(vr.Format(), v) {
-		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, vr.Format(), v, 10) + "  ...")
+		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, v, 10) + "  ...")
 	}
 	return v.(types.Struct), true
 }

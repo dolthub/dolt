@@ -245,7 +245,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) types.
 		panic(r.TargetHash().String() + " not found")
 	}
 	if !IsCommit(db.Format(), v) {
-		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, db.Format(), v, 10) + "  ...\n")
+		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, v, 10) + "  ...\n")
 	}
 	return v.(types.Struct)
 }

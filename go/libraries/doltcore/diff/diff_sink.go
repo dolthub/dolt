@@ -3,6 +3,8 @@ package diff
 import (
 	"context"
 	"errors"
+	"io"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -10,7 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
 )
 
 const (
