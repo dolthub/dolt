@@ -130,8 +130,7 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, f *Format, last order
 		return orderedSequenceDiffLeftRight(ctx, f, last, current, changes, stopChan)
 	}
 
-	// TODO(binformat)
-	compareFn := last.getCompareFn(f, current)
+	compareFn := last.getCompareFn(current)
 	initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
 		func(i uint64, j uint64) bool { return compareFn(int(i), int(j)) })
 
@@ -163,7 +162,7 @@ func orderedSequenceDiffLeftRight(ctx context.Context, f *Format, last orderedSe
 		fastForward(ctx, f, lastCur, currentCur)
 
 		for lastCur.valid() && currentCur.valid() &&
-			!lastCur.seq.getCompareFn(f, currentCur.seq)(lastCur.idx, currentCur.idx) {
+			!lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx) {
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
 			if currentKey.Less(f, lastKey) {
@@ -247,5 +246,5 @@ func doFastForward(ctx context.Context, f *Format, allowPastEnd bool, a *sequenc
 }
 
 func isCurrentEqual(f *Format, a *sequenceCursor, b *sequenceCursor) bool {
-	return a.seq.getCompareFn(f, b.seq)(a.idx, b.idx)
+	return a.seq.getCompareFn(b.seq)(a.idx, b.idx)
 }

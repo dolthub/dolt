@@ -26,7 +26,7 @@ func indexedSequenceDiff(ctx context.Context, f *Format, last sequence, lastOffs
 		return indexedSequenceDiff(ctx, f, last, lastOffset, currentChild, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
-	compareFn := last.getCompareFn(f, current)
+	compareFn := last.getCompareFn(current)
 	initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), maxSpliceMatrixSize,
 		func(i uint64, j uint64) bool { return compareFn(int(i), int(j)) })
 

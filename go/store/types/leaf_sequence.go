@@ -56,18 +56,18 @@ func (seq leafSequence) valuesSlice(f *Format, from, to uint64) []Value {
 	return vs
 }
 
-func (seq leafSequence) getCompareFnHelper(f *Format, other leafSequence) compareFn {
+func (seq leafSequence) getCompareFnHelper(other leafSequence) compareFn {
 	dec := seq.decoder()
 	otherDec := other.decoder()
 
 	return func(idx, otherIdx int) bool {
 		dec.offset = uint32(seq.getItemOffset(idx))
 		otherDec.offset = uint32(other.getItemOffset(otherIdx))
-		return dec.readValue(f).Equals(otherDec.readValue(f))
+		return dec.readValue(seq.format).Equals(otherDec.readValue(seq.format))
 	}
 }
 
-func (seq leafSequence) getCompareFn(f *Format, other sequence) compareFn {
+func (seq leafSequence) getCompareFn(other sequence) compareFn {
 	panic("unreachable")
 }
 

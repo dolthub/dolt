@@ -45,7 +45,7 @@ func (ts testSequence) Kind() NomsKind {
 	panic("not reached")
 }
 
-func (ts testSequence) getCompareFn(f *Format, other sequence) compareFn {
+func (ts testSequence) getCompareFn(other sequence) compareFn {
 	obl := other.(testSequence)
 	return func(idx, otherIdx int) bool {
 		return ts.items[idx] == obl.items[otherIdx]
