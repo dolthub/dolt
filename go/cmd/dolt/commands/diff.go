@@ -309,10 +309,10 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	}
 
 	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(context.TODO(), newRows, oldRows)
+	ad.Start(context.TODO(), types.Format_7_18, newRows, oldRows)
 	defer ad.Close()
 
-	src := diff.NewRowDiffSource(ad, oldToUnionConv, newToUnionConv, untypedUnionSch)
+	src := diff.NewRowDiffSource(types.Format_7_18, ad, oldToUnionConv, newToUnionConv, untypedUnionSch)
 	defer src.Close()
 
 	oldColNames := make(map[uint64]string)
