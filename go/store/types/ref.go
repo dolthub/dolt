@@ -91,6 +91,10 @@ func (r Ref) decoderAtPart(part refPart) valueDecoder {
 	return newValueDecoder(r.buff[offset:], nil)
 }
 
+func (r Ref) Format() *Format {
+	return r.format
+}
+
 func (r Ref) TargetHash() hash.Hash {
 	dec := r.decoderAtPart(refPartTargetHash)
 	return dec.readHash()

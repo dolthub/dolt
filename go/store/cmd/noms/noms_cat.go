@@ -166,7 +166,7 @@ func runCat(ctx context.Context, args []string) int {
 		if !catNoShow {
 			fmt.Printf("        chunk[%d].value.kind:  %s\n", cidx, value.Kind())
 			fmt.Printf("        chunk[%d].value:\n\n", cidx)
-			printValue(ctx, os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)
+			printValue(ctx, db.Format(), os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)
 			fmt.Println()
 		}
 
@@ -287,7 +287,7 @@ func parseChunks(bytes []byte, pos int, sizes []int) (int, []chunkData) {
 	return pos, cd
 }
 
-func printValue(ctx context.Context, w io.Writer, v types.Value, valSpec string) {
+func printValue(ctx context.Context, f *types.Format, w io.Writer, v types.Value, valSpec string) {
 	defer func() {
 		if r := recover(); r != nil {
 			msg := "   Failed to write the value " + valSpec + "\n"
@@ -295,7 +295,7 @@ func printValue(ctx context.Context, w io.Writer, v types.Value, valSpec string)
 		}
 	}()
 
-	types.WriteEncodedValue(ctx, types.Format_7_18, w, v)
+	types.WriteEncodedValue(ctx, f, w, v)
 }
 
 func hexStr(bytes []byte) string {

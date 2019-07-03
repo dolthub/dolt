@@ -89,11 +89,11 @@ func runLog(ctx context.Context, args []string) int {
 	absPath := pinned.Path
 	path := absPath.Path
 	if len(path) == 0 {
-		path = types.MustParsePath(".value", types.Format_7_18)
+		path = types.MustParsePath(".value", database.Format())
 	}
 
 	origCommit, ok := database.ReadValue(ctx, absPath.Hash).(types.Struct)
-	if !ok || !datas.IsCommit(types.Format_7_18, origCommit) {
+	if !ok || !datas.IsCommit(database.Format(), origCommit) {
 		util.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 
@@ -114,7 +114,7 @@ func runLog(ctx context.Context, args []string) int {
 
 			go func(ch chan []byte, node LogNode) {
 				buff := &bytes.Buffer{}
-				printCommit(ctx, node, path, buff, database, tz)
+				printCommit(ctx, database.Format(), node, path, buff, database, tz)
 				ch <- buff.Bytes()
 			}(ch, ln)
 
@@ -142,7 +142,7 @@ func runLog(ctx context.Context, args []string) int {
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
-func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
+func printCommit(ctx context.Context, f *types.Format, node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
 	maxMetaFieldNameLength := func(commit types.Struct) int {
 		maxLen := 0
 		if m, ok := commit.MaybeGet(datas.MetaField); ok {
@@ -154,8 +154,7 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 		return maxLen
 	}
 
-	// TODO(binformat)
-	hashStr := node.commit.Hash(types.Format_7_18).String()
+	hashStr := node.commit.Hash(db.Format()).String()
 	if useColor {
 		hashStr = ansi.Color("commit "+hashStr, "red+h")
 	}
@@ -189,16 +188,16 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 	lineno := 1
 
 	if maxLines != 0 {
-		lineno, err = writeMetaLines(ctx, node, maxLines, lineno, maxFieldNameLen, w, tz)
+		lineno, err = writeMetaLines(ctx, f, node, maxLines, lineno, maxFieldNameLen, w, tz)
 		if err != nil && err != writers.MaxLinesErr {
 			fmt.Fprintf(w, "error: %s\n", err)
 			return
 		}
 
 		if showValue {
-			_, err = writeCommitLines(ctx, node, path, maxLines, lineno, w, db)
+			_, err = writeCommitLines(ctx, f, node, path, maxLines, lineno, w, db)
 		} else {
-			_, err = writeDiffLines(ctx, node, path, db, maxLines, lineno, w)
+			_, err = writeDiffLines(ctx, f, node, path, db, maxLines, lineno, w)
 		}
 	}
 	return
@@ -257,7 +256,7 @@ func genGraph(node LogNode, lineno int) string {
 	return string(buf)
 }
 
-func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
+func writeMetaLines(ctx context.Context, f *types.Format, node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
 	if m, ok := node.commit.MaybeGet(datas.MetaField); ok {
 		genPrefix := func(w *writers.PrefixWriter) []byte {
 			return []byte(genGraph(node, int(w.NumLines)))
@@ -276,9 +275,9 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 			fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
 			// Encode dates as formatted string if this is a top-level meta
 			// field of type datetime.DateTimeType
-			if types.TypeOf(v).Equals(types.Format_7_18, datetime.DateTimeType) {
+			if types.TypeOf(v).Equals(f, datetime.DateTimeType) {
 				var dt datetime.DateTime
-				err = dt.UnmarshalNoms(ctx, types.Format_7_18, v)
+				err = dt.UnmarshalNoms(ctx, f, v)
 
 				if err != nil {
 					return
@@ -286,7 +285,7 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 
 				fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
 			} else {
-				err = types.WriteEncodedValue(ctx, types.Format_7_18, pw, v)
+				err = types.WriteEncodedValue(ctx, f, pw, v)
 
 				if err != nil {
 					return
@@ -300,17 +299,17 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 	return lineno, nil
 }
 
-func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLines, lineno int, w io.Writer, db datas.Database) (lineCnt int, err error) {
+func writeCommitLines(ctx context.Context, f *types.Format, node LogNode, path types.Path, maxLines, lineno int, w io.Writer, db datas.Database) (lineCnt int, err error) {
 	genPrefix := func(pw *writers.PrefixWriter) []byte {
 		return []byte(genGraph(node, int(pw.NumLines)+1))
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	v := path.Resolve(ctx, types.Format_7_18, node.commit, db)
+	v := path.Resolve(ctx, f, node.commit, db)
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
 	} else {
-		err = types.WriteEncodedValue(ctx, types.Format_7_18, pw, v)
+		err = types.WriteEncodedValue(ctx, f, pw, v)
 		mlw.MaxLines = 0
 		if err != nil {
 			d.PanicIfNotType(writers.MaxLinesErr, err)
@@ -329,7 +328,7 @@ func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLin
 	return int(pw.NumLines), err
 }
 
-func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
+func writeDiffLines(ctx context.Context, f *types.Format, node LogNode, path types.Path, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
 	genPrefix := func(w *writers.PrefixWriter) []byte {
 		return []byte(genGraph(node, int(w.NumLines)+1))
 	}
@@ -348,22 +347,21 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	parentCommit := parent.(types.Ref).TargetValue(ctx, db).(types.Struct)
 	var old, neu types.Value
 	functions.All(
-		func() { old = path.Resolve(ctx, types.Format_7_18, parentCommit, db) },
-		func() { neu = path.Resolve(ctx, types.Format_7_18, node.commit, db) },
+		func() { old = path.Resolve(ctx, f, parentCommit, db) },
+		func() { neu = path.Resolve(ctx, f, node.commit, db) },
 	)
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization
 	// of some of the code in PrintDiff() because it cannot tolerate nil parameters.
-	// TODO(binformat)
 	if neu == nil {
-		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash(types.Format_7_18).String(), path.String(types.Format_7_18))
+		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash(f).String(), path.String(f))
 	}
 	if old == nil {
-		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash(types.Format_7_18).String(), path.String(types.Format_7_18))
+		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash(f).String(), path.String(f))
 	}
 
 	if old != nil && neu != nil {
-		err = diff.PrintDiff(ctx, types.Format_7_18, pw, old, neu, true)
+		err = diff.PrintDiff(ctx, f, pw, old, neu, true)
 		mlw.MaxLines = 0
 		if err != nil {
 			d.PanicIfNotType(err, writers.MaxLinesErr)
