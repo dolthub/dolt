@@ -105,7 +105,7 @@ func (ml mapLeafSequence) entries() mapEntrySlice {
 	return entries
 }
 
-func (ml mapLeafSequence) getCompareFn(f *Format, other sequence) compareFn {
+func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
 	dec1 := ml.decoder()
 	ml2 := other.(mapLeafSequence)
 	dec2 := ml2.decoder()
