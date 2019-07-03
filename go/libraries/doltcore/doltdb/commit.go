@@ -24,8 +24,7 @@ type Commit struct {
 
 // HashOf returns the hash of the commit
 func (c *Commit) HashOf() hash.Hash {
-	// TODO(binformat)
-	return c.commitSt.Hash(types.Format_7_18)
+	return c.commitSt.Hash(c.vrw.Format())
 }
 
 // GetCommitMeta gets the metadata associated with the commit
@@ -103,7 +102,7 @@ func (c *Commit) GetRootValue() *RootValue {
 var ErrNoCommonAnscestor = errors.New("no common anscestor")
 
 func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
-	ref1, ref2 := types.NewRef(cm1.commitSt, types.Format_7_18), types.NewRef(cm2.commitSt, types.Format_7_18)
+	ref1, ref2 := types.NewRef(cm1.commitSt, cm1.vrw.Format()), types.NewRef(cm2.commitSt, cm2.vrw.Format())
 
 	var ancestorSt types.Struct
 	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
@@ -141,12 +140,12 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(types.Format_7_18, c.commitSt) {
-		if ancestor.commitSt.Equals(types.Format_7_18, new.commitSt) {
+	} else if ancestor.commitSt.Equals(c.vrw.Format(), c.commitSt) {
+		if ancestor.commitSt.Equals(c.vrw.Format(), new.commitSt) {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(types.Format_7_18, new.commitSt) {
+	} else if ancestor.commitSt.Equals(c.vrw.Format(), new.commitSt) {
 		return false, ErrIsAhead
 	}
 
@@ -160,12 +159,12 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(types.Format_7_18, new.commitSt) {
-		if ancestor.commitSt.Equals(types.Format_7_18, c.commitSt) {
+	} else if ancestor.commitSt.Equals(c.vrw.Format(), new.commitSt) {
+		if ancestor.commitSt.Equals(c.vrw.Format(), c.commitSt) {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(types.Format_7_18, c.commitSt) {
+	} else if ancestor.commitSt.Equals(c.vrw.Format(), c.commitSt) {
 		return false, ErrIsBehind
 	}
 

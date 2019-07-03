@@ -88,7 +88,7 @@ func commitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	}, nil
 }
 
-func (cm *CommitMeta) toNomsStruct() types.Struct {
+func (cm *CommitMeta) toNomsStruct(format *types.Format) types.Struct {
 	metadata := types.StructData{
 		commitMetaNameKey:      types.String(cm.Name),
 		commitMetaEmailKey:     types.String(cm.Email),
@@ -97,7 +97,7 @@ func (cm *CommitMeta) toNomsStruct() types.Struct {
 		commitMetaVersionKey:   types.String(metaVersion),
 	}
 
-	return types.NewStruct(types.Format_7_18, "metadata", metadata)
+	return types.NewStruct(format, "metadata", metadata)
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format

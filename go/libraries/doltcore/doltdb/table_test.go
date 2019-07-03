@@ -81,7 +81,7 @@ func TestTables(t *testing.T) {
 		t.Error("GetRow should have returned false.")
 	}
 
-	idItr := SingleColPKItr(idTag, ids)
+	idItr := SingleColPKItr(types.Format_7_18, idTag, ids)
 	readRows, missing := tbl.GetRows(context.Background(), idItr, -1, tSchema)
 
 	if len(readRows) != len(rows) {

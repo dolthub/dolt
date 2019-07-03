@@ -12,7 +12,7 @@ import (
 // and true until all the values in the collection are exhausted.  At that time nil and false will be returned.
 type PKItr func() (val types.Tuple, ok bool)
 
-func SingleColPKItr(pkTag uint64, vals []types.Value) func() (types.Tuple, bool) {
+func SingleColPKItr(format *types.Format, pkTag uint64, vals []types.Value) func() (types.Tuple, bool) {
 	next := 0
 	size := len(vals)
 	return func() (types.Tuple, bool) {
@@ -20,15 +20,15 @@ func SingleColPKItr(pkTag uint64, vals []types.Value) func() (types.Tuple, bool)
 		next++
 
 		if current < size {
-			tpl := types.NewTuple(types.Format_7_18, types.Uint(pkTag), vals[current])
+			tpl := types.NewTuple(format, types.Uint(pkTag), vals[current])
 			return tpl, true
 		}
 
-		return types.EmptyTuple(types.Format_7_18), false
+		return types.EmptyTuple(format), false
 	}
 }
 
-func TaggedValueSliceItr(sch schema.Schema, vals []row.TaggedValues) func() (types.Tuple, bool) {
+func TaggedValueSliceItr(format *types.Format, sch schema.Schema, vals []row.TaggedValues) func() (types.Tuple, bool) {
 	pkTags := sch.GetPKCols().Tags
 	next := 0
 	size := len(vals)
@@ -41,12 +41,12 @@ func TaggedValueSliceItr(sch schema.Schema, vals []row.TaggedValues) func() (typ
 			return tpl.Value(context.TODO()).(types.Tuple), true
 		}
 
-		return types.EmptyTuple(types.Format_7_18), false
+		return types.EmptyTuple(format), false
 	}
 }
 
 // TupleSliceItr returns a closure that has the signature of a PKItr and can be used to iterate over a slice of values
-func TupleSliceItr(vals []types.Tuple) func() (types.Tuple, bool) {
+func TupleSliceItr(format *types.Format, vals []types.Tuple) func() (types.Tuple, bool) {
 	next := 0
 	size := len(vals)
 	return func() (types.Tuple, bool) {
@@ -57,7 +57,7 @@ func TupleSliceItr(vals []types.Tuple) func() (types.Tuple, bool) {
 			return vals[current], true
 		}
 
-		return types.EmptyTuple(types.Format_7_18), false
+		return types.EmptyTuple(format), false
 	}
 }
 

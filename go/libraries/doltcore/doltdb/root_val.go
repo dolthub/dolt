@@ -33,7 +33,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 				return ErrHashNotFound
 			}
 
-			values[index+1] = types.NewRef(valForHash, types.Format_7_18)
+			values[index+1] = types.NewRef(valForHash, vrw.Format())
 			index += 2
 		}
 
@@ -61,7 +61,7 @@ func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {
 		tablesKey: tblMap,
 	}
 
-	st := types.NewStruct(types.Format_7_18, ddbRootStructName, sd)
+	st := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
 
 	return newRootValue(vrw, st)
 }
@@ -167,8 +167,7 @@ func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, 
 
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() hash.Hash {
-	// TODO(binformat)
-	return root.valueSt.Hash(types.Format_7_18)
+	return root.valueSt.Hash(root.vrw.Format())
 }
 
 // TableDiff returns the slices of tables added, modified, and removed when compared with another root value.  Tables
@@ -189,9 +188,9 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 	pk2, val2 := itr2.Next(ctx)
 
 	for pk1 != nil || pk2 != nil {
-		if pk1 == nil || pk2 == nil || !pk1.Equals(types.Format_7_18, pk2) {
+		if pk1 == nil || pk2 == nil || !pk1.Equals(root.vrw.Format(), pk2) {
 			// TODO(binformat)
-			if pk2 == nil || (pk1 != nil && pk1.Less(types.Format_7_18, pk2)) {
+			if pk2 == nil || (pk1 != nil && pk1.Less(root.vrw.Format(), pk2)) {
 				added = append(added, string(pk1.(types.String)))
 				pk1, val1 = itr1.Next(ctx)
 			} else {
@@ -204,7 +203,7 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 			//tbl1 := Table{root.vrw, tblSt1.(types.Struct)}
 			//tbl2 := Table{root.vrw, tblSt2.(types.Struct)}
 
-			if !val1.Equals(types.Format_7_18, val2) {
+			if !val1.Equals(root.vrw.Format(), val2) {
 				modified = append(modified, string(pk1.(types.String)))
 			}
 
