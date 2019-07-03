@@ -2,6 +2,7 @@ package tblcmds
 
 import (
 	"context"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -98,7 +99,7 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 		_, ok := m.MaybeGet(context.TODO(), pk)
 
 		if !ok {
-			cli.PrintErrln(color.YellowString(`No row with pk equal to %s was found.`, types.EncodedValue(context.TODO(), types.Format_7_18, pk)))
+			cli.PrintErrln(color.YellowString(`No row with pk equal to %s was found.`, types.EncodedValue(context.TODO(), pk)))
 			continue
 		}
 

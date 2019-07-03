@@ -204,12 +204,12 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 					entry := elems.entries.entries[idx]
 					if !key.Equals(entry.key) {
 						// TODO(binformat)
-						fmt.Printf("%d: %s (%s)\n!=\n%s (%s)\n", idx, EncodedValue(context.Background(), Format_7_18, key), key.Hash(Format_7_18), EncodedValue(context.Background(), Format_7_18, entry.key), entry.key.Hash(Format_7_18))
+						fmt.Printf("%d: %s (%s)\n!=\n%s (%s)\n", idx, EncodedValue(context.Background(), key), key.Hash(Format_7_18), EncodedValue(context.Background(), entry.key), entry.key.Hash(Format_7_18))
 						stop = true
 					}
 					if !value.Equals(entry.value) {
 						// TODO(binformat)
-						fmt.Printf("%s (%s) !=\n%s (%s)\n", EncodedValue(context.Background(), Format_7_18, value), value.Hash(Format_7_18), EncodedValue(context.Background(), Format_7_18, entry.value), entry.value.Hash(Format_7_18))
+						fmt.Printf("%s (%s) !=\n%s (%s)\n", EncodedValue(context.Background(), value), value.Hash(Format_7_18), EncodedValue(context.Background(), entry.value), entry.value.Hash(Format_7_18))
 						stop = true
 					}
 					idx++
@@ -1448,7 +1448,7 @@ func TestMapType(t *testing.T) {
 	assert.True(tr.Equals(TypeOf(m2)))
 
 	m3 := m2.Edit().Set(String("A"), Bool(true)).Map(context.Background())
-	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m3)), TypeOf(m3).Describe(context.Background(), Format_7_18))
+	assert.True(MakeMapType(StringType, MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m3)), TypeOf(m3).Describe(context.Background()))
 	m4 := m3.Edit().Set(Bool(true), Float(1)).Map(context.Background())
 	assert.True(MakeMapType(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, FloaTType)).Equals(TypeOf(m4)))
 }

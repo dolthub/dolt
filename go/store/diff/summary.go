@@ -87,7 +87,7 @@ func diffSummary(ctx context.Context, format *types.Format, ch chan diffSummaryP
 			case types.StructKind:
 				diffSummaryStructs(ch, v1.(types.Struct), v2.(types.Struct))
 			default:
-				panic("Unrecognized type in diff function: " + types.TypeOf(v1).Describe(ctx, format) + " and " + types.TypeOf(v2).Describe(ctx, format))
+				panic("Unrecognized type in diff function: " + types.TypeOf(v1).Describe(ctx) + " and " + types.TypeOf(v2).Describe(ctx))
 			}
 		} else {
 			ch <- diffSummaryProgress{Adds: 1, Removes: 1, NewSize: 1, OldSize: 1}

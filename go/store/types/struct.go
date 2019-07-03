@@ -221,17 +221,17 @@ func (s Struct) IterFields(cb func(name string, value Value)) {
 }
 
 type structPartCallbacks interface {
-	name(ctx context.Context, f *Format, n string)
+	name(ctx context.Context, n string)
 	count(c uint64)
 	fieldName(n string)
 	fieldValue(ctx context.Context, v Value)
 	end()
 }
 
-func (s Struct) iterParts(ctx context.Context, f *Format, cbs structPartCallbacks) {
+func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) {
 	dec := s.decoder()
 	dec.skipKind()
-	cbs.name(ctx, f, dec.readString())
+	cbs.name(ctx, dec.readString())
 	count := dec.readCount()
 	cbs.count(count)
 	for i := uint64(0); i < count; i++ {

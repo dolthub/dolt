@@ -80,13 +80,17 @@ type DateTimeCommenter struct {
 	tz *time.Location
 }
 
-func (c DateTimeCommenter) Comment(ctx context.Context, f *types.Format, v types.Value) string {
-	if !types.IsValueSubtypeOf(f, v, DateTimeType) {
-		return ""
+func (c DateTimeCommenter) Comment(ctx context.Context, v types.Value) string {
+	if s, ok := v.(types.Struct); ok {
+		if secsV, ok := s.MaybeGet("secSinceEpoch"); ok {
+			if secsF, ok := secsV.(types.Float); ok {
+				s, frac := math.Modf(float64(secsF))
+				dt := time.Unix(int64(s), int64(frac*1e9))
+				return dt.In(c.tz).Format(time.RFC3339)
+			}
+		}
 	}
-	var dt DateTime
-	marshal.MustUnmarshal(ctx, f, v, &dt)
-	return dt.In(c.tz).Format(time.RFC3339)
+	return ""
 }
 
 func RegisterHRSCommenter(tz *time.Location) {

@@ -22,7 +22,7 @@ func (coll *KVPCollection) String() string {
 	}
 
 	tpl := types.NewTuple(types.Format_7_18, keys...)
-	return types.EncodedValue(ctx, types.Format_7_18, tpl)
+	return types.EncodedValue(ctx, tpl)
 }
 
 func TestKVPCollection(t *testing.T) {

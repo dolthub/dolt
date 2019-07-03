@@ -89,7 +89,7 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 			if val.Kind() == types.StringKind {
 				colValStrs[i] = string(val.(types.String))
 			} else {
-				colValStrs[i] = types.EncodedValue(ctx, types.Format_7_18, val)
+				colValStrs[i] = types.EncodedValue(ctx, val)
 			}
 		}
 
