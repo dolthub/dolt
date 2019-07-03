@@ -8,13 +8,13 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
-type RowFormatFunc func(ctx context.Context, r Row, sch schema.Schema) string
+type RowFormatFunc func(ctx context.Context, format *types.Format, r Row, sch schema.Schema) string
 
 var Fmt = FieldSeparatedFmt(':')
 var fieldDelim = []byte(" | ")
 
 func FieldSeparatedFmt(delim rune) RowFormatFunc {
-	return func(ctx context.Context, r Row, sch schema.Schema) string {
+	return func(ctx context.Context, format *types.Format, r Row, sch schema.Schema) string {
 		if r == nil {
 			return "null"
 		}
@@ -37,7 +37,7 @@ func FieldSeparatedFmt(delim rune) RowFormatFunc {
 			if ok {
 				buf.Write([]byte(col.Name))
 				buf.WriteRune(delim)
-				types.WriteEncodedValue(ctx, types.Format_7_18, buf, val)
+				types.WriteEncodedValue(ctx, format, buf, val)
 				kvps = append(kvps, buf.String())
 			}
 

@@ -75,7 +75,7 @@ func TestInMemTable(t *testing.T) {
 
 			if err != nil {
 				t.Error("Unexpected read error")
-			} else if !row.AreEqual(expectedRow, actualRow, rowSch) {
+			} else if !row.AreEqual(types.Format_7_18, expectedRow, actualRow, rowSch) {
 				t.Error("Unexpected row value")
 			}
 		}
@@ -117,8 +117,8 @@ func TestPipeRows(t *testing.T) {
 			t.Fatal("Couldn't Get row.")
 		}
 
-		if !row.AreEqual(r1, r2, rowSch) {
-			t.Error("Rows should be the same.", row.Fmt(context.Background(), r1, rowSch), "!=", row.Fmt(context.Background(), r2, rowSch))
+		if !row.AreEqual(types.Format_7_18, r1, r2, rowSch) {
+			t.Error("Rows should be the same.", row.Fmt(context.Background(), types.Format_7_18, r1, rowSch), "!=", row.Fmt(context.Background(), types.Format_7_18, r2, rowSch))
 		}
 	}
 }
@@ -148,8 +148,8 @@ func TestReadAllRows(t *testing.T) {
 	}
 
 	for i := 0; i < len(rows); i++ {
-		if !row.AreEqual(rows[i], results[i], rowSch) {
-			t.Error(row.Fmt(context.Background(), rows[i], rowSch), "!=", row.Fmt(context.Background(), results[i], rowSch))
+		if !row.AreEqual(types.Format_7_18, rows[i], results[i], rowSch) {
+			t.Error(row.Fmt(context.Background(), types.Format_7_18, rows[i], rowSch), "!=", row.Fmt(context.Background(), types.Format_7_18, results[i], rowSch))
 		}
 	}
 }

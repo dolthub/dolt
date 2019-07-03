@@ -18,7 +18,7 @@ func TestBadRow(t *testing.T) {
 		t.Error("Should be a bad row error")
 	}
 
-	if !row.AreEqual(GetBadRowRow(err), emptyRow, sch) {
+	if !row.AreEqual(types.Format_7_18, GetBadRowRow(err), emptyRow, sch) {
 		t.Error("did not get back expected empty row")
 	}
 

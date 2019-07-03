@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io"
 	"strings"
 	"testing"
@@ -93,8 +94,8 @@ func TestReader(t *testing.T) {
 		} else {
 			for i, r := range rows {
 				expectedRow := test.expectedRows[i]
-				if !row.AreEqual(r, expectedRow, sch) {
-					t.Error(row.Fmt(context.Background(), r, sch), "!=", row.Fmt(context.Background(), expectedRow, sch))
+				if !row.AreEqual(types.Format_7_18, r, expectedRow, sch) {
+					t.Error(row.Fmt(context.Background(), types.Format_7_18, r, sch), "!=", row.Fmt(context.Background(), types.Format_7_18, expectedRow, sch))
 				}
 			}
 		}

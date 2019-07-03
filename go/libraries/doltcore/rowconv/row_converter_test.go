@@ -56,8 +56,8 @@ func TestRowConverter(t *testing.T) {
 		6: types.NullValue,
 	})
 
-	if !row.AreEqual(outData, expected, destSch) {
-		t.Error("\n", row.Fmt(context.Background(), expected, destSch), "!=\n", row.Fmt(context.Background(), outData, destSch))
+	if !row.AreEqual(types.Format_7_18, outData, expected, destSch) {
+		t.Error("\n", row.Fmt(context.Background(), types.Format_7_18, expected, destSch), "!=\n", row.Fmt(context.Background(), types.Format_7_18, outData, destSch))
 	}
 }
 

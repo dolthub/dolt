@@ -3,6 +3,8 @@ package tblcmds
 import (
 	"context"
 	"errors"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -23,7 +25,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"strings"
 )
 
 const (
@@ -227,7 +228,7 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	wr := tabular.NewTextTableWriter(iohelp.NopWrCloser(cli.CliOut), outSch)
 
 	badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.TODO(), tff.Row, outSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.TODO(), types.Format_7_18, tff.Row, outSch)))
 		return true
 	}
 
@@ -314,7 +315,7 @@ var noConfLabel = types.String("   ")
 func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 	return func(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 		ctx := context.TODO()
-		key := inRow.NomsMapKey(inSch)
+		key := inRow.NomsMapKey(types.Format_7_18, inSch)
 
 		var err error
 		if conflicts.Has(ctx, key.Value(ctx)) {

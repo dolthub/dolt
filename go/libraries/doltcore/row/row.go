@@ -12,10 +12,10 @@ var ErrRowNotValid = errors.New("invalid row for current schema")
 
 type Row interface {
 	// Returns the noms map key for this row, using the schema provided.
-	NomsMapKey(sch schema.Schema) types.LesserValuable
+	NomsMapKey(format *types.Format, sch schema.Schema) types.LesserValuable
 
 	// Returns the noms map value for this row, using the schema provided.
-	NomsMapValue(sch schema.Schema) types.Valuable
+	NomsMapValue(format *types.Format, sch schema.Schema) types.Valuable
 
 	// Iterates over all the columns in the row. Columns that have no value set will not be visited.
 	IterCols(cb func(tag uint64, val types.Value) (stop bool)) bool
@@ -107,7 +107,7 @@ func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstra
 	return badCol, badCnst
 }
 
-func AreEqual(row1, row2 Row, sch schema.Schema) bool {
+func AreEqual(format *types.Format, row1, row2 Row, sch schema.Schema) bool {
 	if row1 == nil && row2 == nil {
 		return true
 	} else if row1 == nil || row2 == nil {
@@ -118,7 +118,7 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 		val1, _ := row1.GetColVal(tag)
 		val2, _ := row2.GetColVal(tag)
 
-		if !valutil.NilSafeEqCheck(types.Format_7_18, val1, val2) {
+		if !valutil.NilSafeEqCheck(format, val1, val2) {
 			return false
 		}
 	}

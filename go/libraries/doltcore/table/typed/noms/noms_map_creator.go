@@ -52,10 +52,9 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 			}
 		}()
 
-		pk := r.NomsMapKey(nmc.sch)
-		fieldVals := r.NomsMapValue(nmc.sch)
-		// TODO(binformat)
-		if nmc.lastPK == nil || nmc.lastPK.Less(types.Format_7_18, pk) {
+		pk := r.NomsMapKey(nmc.vrw.Format(), nmc.sch)
+		fieldVals := r.NomsMapValue(nmc.vrw.Format(), nmc.sch)
+		if nmc.lastPK == nil || nmc.lastPK.Less(nmc.vrw.Format(), pk) {
 			pkVal := pk.Value(ctx)
 
 			nmc.kvsChan <- pkVal

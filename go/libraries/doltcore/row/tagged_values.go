@@ -9,33 +9,36 @@ import (
 
 type TaggedValues map[uint64]types.Value
 
-type TupleVals []types.Value
+type TupleVals struct {
+	vs     []types.Value
+	format *types.Format
+}
 
 func (tvs TupleVals) Kind() types.NomsKind {
 	return types.TupleKind
 }
 
 func (tvs TupleVals) Value(ctx context.Context) types.Value {
-	return types.NewTuple(types.Format_7_18, tvs...)
+	return types.NewTuple(tvs.format, tvs.vs...)
 }
 
 func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
 	if other.Kind() == types.TupleKind {
 		if otherTVs, ok := other.(TupleVals); ok {
-			for i, val := range tvs {
-				if i == len(otherTVs) {
+			for i, val := range tvs.vs {
+				if i == len(otherTVs.vs) {
 					// equal up til the end of other. other is shorter, therefore it is less
 					return false
 				}
 
-				otherVal := otherTVs[i]
+				otherVal := otherTVs.vs[i]
 
-				if !val.Equals(types.Format_7_18, otherVal) {
+				if !val.Equals(f, otherVal) {
 					return val.Less(f, otherVal)
 				}
 			}
 
-			return len(tvs) < len(otherTVs)
+			return len(tvs.vs) < len(otherTVs.vs)
 		} else {
 			panic("not supported")
 		}
@@ -44,7 +47,7 @@ func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
 	return types.TupleKind < other.Kind()
 }
 
-func (tt TaggedValues) NomsTupleForTags(tags []uint64, encodeNulls bool) TupleVals {
+func (tt TaggedValues) NomsTupleForTags(format *types.Format, tags []uint64, encodeNulls bool) TupleVals {
 	numVals := 0
 	for _, tag := range tags {
 		val := tt[tag]
@@ -70,7 +73,7 @@ func (tt TaggedValues) NomsTupleForTags(tags []uint64, encodeNulls bool) TupleVa
 		}
 	}
 
-	return TupleVals(vals)
+	return TupleVals{vals, format}
 }
 
 func (tt TaggedValues) Iter(cb func(tag uint64, val types.Value) (stop bool)) bool {
@@ -135,10 +138,10 @@ func ParseTaggedValues(tpl types.Tuple) TaggedValues {
 	return taggedTuple
 }
 
-func (tt TaggedValues) String() string {
+func (tt TaggedValues) String(format *types.Format) string {
 	str := "{"
 	for k, v := range tt {
-		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(context.Background(), types.Format_7_18, v))
+		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(context.Background(), format, v))
 	}
 
 	str += "\n}"

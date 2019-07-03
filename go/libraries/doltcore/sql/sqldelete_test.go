@@ -131,7 +131,7 @@ func TestExecuteDelete(t *testing.T) {
 			for _, r := range AllPeopleRows {
 				deletedIdx := FindRowIndex(r, tt.deletedRows)
 
-				key := r.NomsMapKey(PeopleTestSchema)
+				key := r.NomsMapKey(types.Format_7_18, PeopleTestSchema)
 				_, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), PeopleTestSchema)
 				if deletedIdx >= 0 {
 					assert.False(t, ok, "Row not deleted: %v", r)

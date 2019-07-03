@@ -23,6 +23,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"path/filepath"
 	"strings"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -338,7 +339,7 @@ func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, untypedSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), types.Format_7_18, tff.Row, untypedSch)))
 		return true
 	})
 

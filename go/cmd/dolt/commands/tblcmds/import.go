@@ -238,7 +238,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(context.TODO(), r, mover.Rd.GetSchema()))
+				bdr.AddDetails("Bad Row:" + row.Fmt(context.TODO(), types.Format_7_18, r, mover.Rd.GetSchema()))
 			}
 
 			details := pipeline.GetTransFailureDetails(err)

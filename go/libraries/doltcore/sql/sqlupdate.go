@@ -144,7 +144,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
 		}
 
-		tvs := r.NomsMapKey(tableSch).(row.TupleVals)
+		tvs := r.NomsMapKey(types.Format_7_18, tableSch).(row.TupleVals)
 		key := tvs.Value(ctx)
 
 		if anyColChanged {
@@ -153,7 +153,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			result.NumRowsUnchanged += 1
 		}
 
-		me.Set(key, r.NomsMapValue(tableSch))
+		me.Set(key, r.NomsMapValue(types.Format_7_18, tableSch))
 	}
 	table = table.UpdateRows(ctx, me.Map(ctx))
 
