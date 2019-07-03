@@ -159,7 +159,7 @@ func orderedSequenceDiffLeftRight(ctx context.Context, f *Format, last orderedSe
 	currentCur := newCursorAt(ctx, f, current, emptyKey, false, false)
 
 	for lastCur.valid() && currentCur.valid() {
-		fastForward(ctx, f, lastCur, currentCur)
+		fastForward(ctx, lastCur, currentCur)
 
 		for lastCur.valid() && currentCur.valid() &&
 			!lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx) {
@@ -204,9 +204,9 @@ func orderedSequenceDiffLeftRight(ctx context.Context, f *Format, last orderedSe
 /**
  * Advances |a| and |b| past their common sequence of equal values.
  */
-func fastForward(ctx context.Context, f *Format, a *sequenceCursor, b *sequenceCursor) {
+func fastForward(ctx context.Context, a *sequenceCursor, b *sequenceCursor) {
 	if a.valid() && b.valid() {
-		doFastForward(ctx, f, true, a, b)
+		doFastForward(ctx, true, a, b)
 	}
 }
 
@@ -224,17 +224,17 @@ func syncWithIdx(ctx context.Context, cur *sequenceCursor, hasMore bool, allowPa
 /*
  * Returns an array matching |a| and |b| respectively to whether that cursor has more values.
  */
-func doFastForward(ctx context.Context, f *Format, allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHasMore bool, bHasMore bool) {
+func doFastForward(ctx context.Context, allowPastEnd bool, a *sequenceCursor, b *sequenceCursor) (aHasMore bool, bHasMore bool) {
 	d.PanicIfFalse(a.valid())
 	d.PanicIfFalse(b.valid())
 	aHasMore = true
 	bHasMore = true
 
-	for aHasMore && bHasMore && isCurrentEqual(f, a, b) {
-		if nil != a.parent && nil != b.parent && isCurrentEqual(f, a.parent, b.parent) {
+	for aHasMore && bHasMore && isCurrentEqual(a, b) {
+		if nil != a.parent && nil != b.parent && isCurrentEqual(a.parent, b.parent) {
 			// Key optimisation: if the sequences have common parents, then entire chunks can be
 			// fast-forwarded without reading unnecessary data.
-			aHasMore, bHasMore = doFastForward(ctx, f, false, a.parent, b.parent)
+			aHasMore, bHasMore = doFastForward(ctx, false, a.parent, b.parent)
 			syncWithIdx(ctx, a, aHasMore, allowPastEnd)
 			syncWithIdx(ctx, b, bHasMore, allowPastEnd)
 		} else {
@@ -245,6 +245,6 @@ func doFastForward(ctx context.Context, f *Format, allowPastEnd bool, a *sequenc
 	return aHasMore, bHasMore
 }
 
-func isCurrentEqual(f *Format, a *sequenceCursor, b *sequenceCursor) bool {
+func isCurrentEqual(a *sequenceCursor, b *sequenceCursor) bool {
 	return a.seq.getCompareFn(b.seq)(a.idx, b.idx)
 }
