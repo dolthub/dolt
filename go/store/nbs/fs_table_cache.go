@@ -6,7 +6,6 @@ package nbs
 
 import (
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"io"
 	"io/ioutil"
 	"os"
@@ -29,7 +28,7 @@ type fsTableCache struct {
 	fd    *fdCache
 }
 
-func newFSTableCache(dir string, cacheSize uint64, maxOpenFds int) *fsTableCache {
+func newFSTableCache(dir string, cacheSize uint64, maxOpenFds int) (*fsTableCache, error) {
 	ftc := &fsTableCache{dir: dir, fd: newFDCache(maxOpenFds)}
 	ftc.cache = sizecache.NewWithExpireCallback(cacheSize, func(elm interface{}) {
 		ftc.expire(elm.(addr))
@@ -37,10 +36,11 @@ func newFSTableCache(dir string, cacheSize uint64, maxOpenFds int) *fsTableCache
 
 	err := ftc.init(maxOpenFds)
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return ftc
+	return ftc, nil
 }
 
 func (ftc *fsTableCache) init(concurrency int) error {
@@ -77,7 +77,7 @@ func (ftc *fsTableCache) init(concurrency int) error {
 				return errors.New(path + " is not a table file; cache dir must contain only table files")
 			}
 
-			ad, err := ParseAddr([]byte(info.Name()))
+			ad, err := parseAddr([]byte(info.Name()))
 
 			if err != nil {
 				return err
@@ -88,22 +88,40 @@ func (ftc *fsTableCache) init(concurrency int) error {
 		})
 	}()
 
+	ae := NewAtomicError()
 	wg := sync.WaitGroup{}
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func() {
 			defer wg.Done()
 			for info := range infos {
+				if ae.IsSet() {
+					break
+				}
+
 				ftc.cache.Add(info.h, info.size, true)
 
 				if _, err := ftc.fd.RefFile(info.path); err == nil {
-					ftc.fd.UnrefFile(info.path)
+					err := ftc.fd.UnrefFile(info.path)
+					ae.Set(err)
+					break
 				}
 			}
 		}()
 	}
 	wg.Wait()
-	return <-errc
+
+	err := <-errc
+
+	if err != nil {
+		return err
+	}
+
+	if err := ae.Get(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (ftc *fsTableCache) checkout(h addr) (io.ReaderAt, error) {
@@ -121,8 +139,7 @@ func (ftc *fsTableCache) checkout(h addr) (io.ReaderAt, error) {
 }
 
 func (ftc *fsTableCache) checkin(h addr) error {
-	ftc.fd.UnrefFile(filepath.Join(ftc.dir, h.String()))
-	return nil
+	return ftc.fd.UnrefFile(filepath.Join(ftc.dir, h.String()))
 }
 
 func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
@@ -134,7 +151,7 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 			return "", err
 		}
 
-		defer checkClose(temp)
+		defer mustClose(temp)
 		_, err = io.Copy(temp, data)
 
 		if err != nil {
@@ -160,7 +177,11 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 
 	// Prime the file in the fd cache ignore err
 	if _, err = ftc.fd.RefFile(path); err == nil {
-		ftc.fd.UnrefFile(path)
+		err := ftc.fd.UnrefFile(path)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

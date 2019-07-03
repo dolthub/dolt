@@ -67,7 +67,8 @@ func TestDynamoManifestUpdateWontClobberOldVersion(t *testing.T) {
 	ddb.putRecord(db, lock[:], badRoot[:], "0", "")
 
 	assert.Panics(func() {
-		mm.Update(context.Background(), lock, manifestContents{vers: constants.NomsVersion}, stats, nil)
+		_, err := mm.Update(context.Background(), lock, manifestContents{vers: constants.NomsVersion}, stats, nil)
+		assert.NoError(err)
 	})
 }
 

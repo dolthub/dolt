@@ -25,8 +25,10 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 		defer ccs.wg.Done()
 		cs, err := p.Persist(ctx, mt, haver, stats)
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			ccs.err = err
+			return
+		}
 
 		ccs.mu.Lock()
 		defer ccs.mu.Unlock()
@@ -34,7 +36,12 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 		ccs.mt = nil
 		<-rl
 
-		if cs.count() > 0 {
+		cnt, err := cs.count()
+
+		// TODO: fix errors
+		d.PanicIfError(err)
+
+		if cnt > 0 {
 			stats.PersistLatency.SampleTimeSince(t1)
 		}
 	}()
@@ -43,8 +50,9 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 }
 
 type persistingChunkSource struct {
-	mu sync.RWMutex
-	mt *memTable
+	err error
+	mu  sync.RWMutex
+	mt  *memTable
 
 	wg sync.WaitGroup
 	cs chunkSource
@@ -91,44 +99,82 @@ func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord,
 	return cr.getMany(ctx, reqs, foundChunks, wg, ae, stats)
 }
 
-func (ccs *persistingChunkSource) count() uint32 {
+func (ccs *persistingChunkSource) wait() error {
 	ccs.wg.Wait()
+	return ccs.err
+}
+
+func (ccs *persistingChunkSource) count() (uint32, error) {
+	err := ccs.wait()
+
+	if err != nil {
+		return 0, err
+	}
+
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.count()
 }
 
-func (ccs *persistingChunkSource) uncompressedLen() uint64 {
-	ccs.wg.Wait()
+func (ccs *persistingChunkSource) uncompressedLen() (uint64, error) {
+	err := ccs.wait()
+
+	if err != nil {
+		return 0, err
+	}
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.uncompressedLen()
 }
 
-func (ccs *persistingChunkSource) hash() addr {
-	ccs.wg.Wait()
+func (ccs *persistingChunkSource) hash() (addr, error) {
+	err := ccs.wait()
+
+	if err != nil {
+		return addr{}, err
+	}
+
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.hash()
 }
 
-func (ccs *persistingChunkSource) index() tableIndex {
-	ccs.wg.Wait()
+func (ccs *persistingChunkSource) index() (tableIndex, error) {
+	err := ccs.wait()
+
+	if err != nil {
+		return tableIndex{}, err
+	}
+
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.index()
 }
 
-func (ccs *persistingChunkSource) reader(ctx context.Context) io.Reader {
-	ccs.wg.Wait()
+func (ccs *persistingChunkSource) reader(ctx context.Context) (io.Reader, error) {
+	err := ccs.wait()
+
+	if err != nil {
+		return nil, err
+	}
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.reader(ctx)
 }
 
-func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {
-	ccs.wg.Wait()
+func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
+	err = ccs.wait()
+
+	if err != nil {
+		return 0, false, err
+	}
+
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.calcReads(reqs, blockSize)
 }
 
 func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {
-	ccs.wg.Wait()
+	err := ccs.wait()
+
+	if err != nil {
+		return err
+	}
+
 	d.Chk.True(ccs.cs != nil)
 	return ccs.cs.extract(ctx, chunks)
 }
@@ -151,28 +197,28 @@ func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, found
 	return true
 }
 
-func (ecs emptyChunkSource) count() uint32 {
-	return 0
+func (ecs emptyChunkSource) count() (uint32, error) {
+	return 0, nil
 }
 
-func (ecs emptyChunkSource) uncompressedLen() uint64 {
-	return 0
+func (ecs emptyChunkSource) uncompressedLen() (uint64, error) {
+	return 0, nil
 }
 
-func (ecs emptyChunkSource) hash() addr {
-	return addr{}
+func (ecs emptyChunkSource) hash() (addr, error) {
+	return addr{}, nil
 }
 
-func (ecs emptyChunkSource) index() tableIndex {
-	return tableIndex{}
+func (ecs emptyChunkSource) index() (tableIndex, error) {
+	return tableIndex{}, nil
 }
 
-func (ecs emptyChunkSource) reader(context.Context) io.Reader {
-	return &bytes.Buffer{}
+func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
+	return &bytes.Buffer{}, nil
 }
 
-func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {
-	return 0, true
+func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
+	return 0, true, nil
 }
 
 func (ecs emptyChunkSource) extract(ctx context.Context, chunks chan<- extractRecord) error {

@@ -75,7 +75,13 @@ func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off
 				stats.FileBytesPerRead.Sample(uint64(len(p)))
 				stats.FileReadLatency.SampleTimeSince(t1)
 			}()
-			defer s3or.tc.checkin(name)
+			defer func() {
+				err := s3or.tc.checkin(name)
+
+				// TODO: fix panics
+				d.PanicIfError(err)
+			}()
+
 			return r.ReadAt(p, off)
 		}
 	}

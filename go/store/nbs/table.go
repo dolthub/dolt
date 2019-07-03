@@ -10,6 +10,7 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"hash/crc32"
 	"io"
 	"sync"
@@ -150,7 +151,7 @@ func (a addr) Checksum() uint32 {
 	return binary.BigEndian.Uint32(a[addrSize-checksumSize:])
 }
 
-func ParseAddr(b []byte) (addr, error) {
+func parseAddr(b []byte) (addr, error) {
 	var h addr
 	_, err := encoding.Decode(h[:], b)
 	return h, err
@@ -159,6 +160,11 @@ func ParseAddr(b []byte) (addr, error) {
 func ValidateAddr(s string) bool {
 	_, err := encoding.DecodeString(s)
 	return err == nil
+}
+
+func mustAddr(h addr, err error) addr {
+	d.PanicIfError(err)
+	return h
 }
 
 type addrSlice []addr
@@ -210,10 +216,8 @@ type chunkReader interface {
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
 	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool
 	extract(ctx context.Context, chunks chan<- extractRecord) error
-
-	// TODO: fix panics (need to look at these closer)
-	count() uint32
-	uncompressedLen() uint64
+	count() (uint32, error)
+	uncompressedLen() (uint64, error)
 }
 
 type chunkReadPlanner interface {
@@ -230,12 +234,12 @@ type chunkReadPlanner interface {
 
 type chunkSource interface {
 	chunkReader
-	hash() addr
-	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool)
+	hash() (addr, error)
+	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error)
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader(context.Context) io.Reader
-	index() tableIndex
+	reader(context.Context) (io.Reader, error)
+	index() (tableIndex, error)
 }
 
 type chunkSources []chunkSource

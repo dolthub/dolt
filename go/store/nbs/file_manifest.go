@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"github.com/juju/fslock"
 	"io"
 	"io/ioutil"
@@ -38,22 +39,21 @@ func newLock(dir string) *fslock.Lock {
 	return fslock.New(lockPath)
 }
 
-func lockFileExists(dir string) bool {
+func lockFileExists(dir string) (bool, error) {
 	lockPath := filepath.Join(dir, lockFileName)
 	info, err := os.Stat(lockPath)
 
 	if err != nil {
 		if os.IsNotExist(err) {
-			return false
+			return false, nil
 		}
 
-		// When in rome
-		d.Panic("Failed to determine if lock file exists")
+		return false, errors.New("failed to determine if lock file exists")
 	} else if info.IsDir() {
-		d.Panic("Lock file is a directory")
+		return false, errors.New("lock file is a directory")
 	}
 
-	return true
+	return true, nil
 }
 
 func (fm fileManifest) Name() string {
@@ -72,8 +72,15 @@ func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook
 
 	var exists bool
 	var contents manifestContents
+
+	locked, err := lockFileExists(fm.dir)
+
+	if err != nil {
+		return false, manifestContents{}, err
+	}
+
 	// !exists(lockFileName) => unitialized store
-	if lockFileExists(fm.dir) {
+	if locked {
 		var f io.ReadCloser
 		err := func() error {
 			lck := newLock(fm.dir)
@@ -107,7 +114,7 @@ func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook
 		}
 
 		if f != nil {
-			defer checkClose(f)
+			defer mustClose(f)
 			exists = true
 
 			var err error
@@ -151,7 +158,9 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, ErrCorruptManifest
 	}
 
-	d.PanicIfFalse(StorageVersion == string(slices[0]))
+	if StorageVersion != string(slices[0]) {
+		return manifestContents{}, errors.New("invalid storage version")
+	}
 
 	specs, err := parseSpecs(slices[4:])
 
@@ -159,7 +168,7 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 		return manifestContents{}, err
 	}
 
-	ad, err := ParseAddr([]byte(slices[2]))
+	ad, err := parseAddr([]byte(slices[2]))
 
 	if err != nil {
 		return manifestContents{}, err
@@ -179,38 +188,69 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
 	// The closure here ensures this file is closed before moving on.
-	tempManifestPath := func() string {
+	tempManifestPath, err := func() (string, error) {
 		temp, err := ioutil.TempFile(fm.dir, "nbs_manifest_")
-		d.PanicIfError(err)
-		defer checkClose(temp)
-		writeManifest(temp, newContents)
-		return temp.Name()
+
+		if err != nil {
+			return "", err
+		}
+
+		defer mustClose(temp)
+		err = writeManifest(temp, newContents)
+
+		if err != nil {
+			return "", err
+		}
+
+		return temp.Name(), nil
 	}()
+
+	if err != nil {
+		return manifestContents{}, nil
+	}
+
 	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
 
 	// Take manifest file lock
 	lck := newLock(fm.dir)
-	d.PanicIfError(lck.Lock())
-	defer lck.Unlock()
+	err = lck.Lock()
+
+	if err != nil {
+		return manifestContents{}, nil
+	}
+
+	defer func() {
+		err := lck.Unlock()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+	}()
 
 	// writeHook is for testing, allowing other code to slip in and try to do stuff while we hold the lock.
 	if writeHook != nil {
-		writeHook()
+		err := writeHook()
+
+		if err != nil {
+			return manifestContents{}, err
+		}
 	}
 
 	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
 	manifestPath := filepath.Join(fm.dir, manifestFileName)
 	upstream, err := func() (manifestContents, error) {
 		if f, err := openIfExists(manifestPath); err == nil && f != nil {
-			defer checkClose(f)
+			defer mustClose(f)
 
 			upstream, err := parseManifest(f)
 
 			if err != nil {
-				return upstream, err
+				return manifestContents{}, err
 			}
 
-			d.PanicIfFalse(constants.NomsVersion == upstream.vers)
+			if constants.NomsVersion != upstream.vers {
+				return manifestContents{}, errors.New("invalid noms version")
+			}
+
 			return upstream, nil
 		} else if err != nil {
 			return manifestContents{}, err
@@ -237,15 +277,16 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	return newContents, nil
 }
 
-func writeManifest(temp io.Writer, contents manifestContents) {
+func writeManifest(temp io.Writer, contents manifestContents) error {
 	strs := make([]string, 2*len(contents.specs)+4)
 	strs[0], strs[1], strs[2], strs[3] = StorageVersion, contents.vers, contents.lock.String(), contents.root.String()
 	tableInfo := strs[4:]
 	formatSpecs(contents.specs, tableInfo)
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
-	d.PanicIfError(err)
+
+	return err
 }
 
-func checkClose(c io.Closer) {
+func mustClose(c io.Closer) {
 	d.PanicIfError(c.Close())
 }

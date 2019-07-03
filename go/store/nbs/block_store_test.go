@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -415,7 +417,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		for i, src := range srcs {
 			rdrs[i] = src
 		}
-		chunkChan := make(chan extractRecord, rdrs.count())
+		chunkChan := make(chan extractRecord, must.Uint32(rdrs.count()))
 		err := rdrs.extract(context.Background(), chunkChan)
 		assert.NoError(t, err)
 		close(chunkChan)
@@ -463,7 +465,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		}
 		conjoined, err := p.ConjoinAll(context.Background(), srcs, stats)
 		assert.NoError(t, err)
-		cannedSpecs := []tableSpec{{conjoined.hash(), conjoined.count()}}
+		cannedSpecs := []tableSpec{{mustAddr(conjoined.hash()), must.Uint32(conjoined.count())}}
 		return cannedConjoin{true, append(cannedSpecs, keepers...)}
 	}
 
@@ -472,7 +474,8 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		p := newFakeTablePersister()
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
-		upstream := toSpecs(srcs)
+		upstream, err := toSpecs(srcs)
+		assert.NoError(t, err)
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
@@ -499,7 +502,8 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		p := newFakeTablePersister()
 
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
-		upstream := toSpecs(srcs)
+		upstream, err := toSpecs(srcs)
+		assert.NoError(t, err)
 		fm.set(constants.NomsVersion, computeAddr([]byte{0xbe}), hash.Of([]byte{0xef}), upstream)
 		c := &fakeConjoiner{
 			[]cannedConjoin{
@@ -541,7 +545,7 @@ func (fc *fakeConjoiner) ConjoinRequired(ts tableSet) bool {
 	return fc.canned[0].should
 }
 
-func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
+func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
 	d.PanicIfTrue(len(fc.canned) == 0)
 	canned := fc.canned[0]
 	fc.canned = fc.canned[1:]
@@ -556,11 +560,15 @@ func (fc *fakeConjoiner) Conjoin(ctx context.Context, upstream manifestContents,
 	var err error
 	upstream, err = mm.Update(context.Background(), upstream.lock, newContents, stats, nil)
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return manifestContents{}, err
+	}
 
-	d.PanicIfFalse(upstream.lock == newContents.lock)
-	return upstream
+	if upstream.lock != newContents.lock {
+		return manifestContents{}, errors.New("lock failed")
+	}
+
+	return upstream, err
 }
 
 func assertInputInStore(input []byte, h hash.Hash, s chunks.ChunkStore, assert *assert.Assertions) {

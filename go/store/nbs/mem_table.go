@@ -6,6 +6,8 @@ package nbs
 
 import (
 	"context"
+	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"sync"
 
@@ -23,7 +25,7 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 
 	for _, chunk := range chunks {
 		if !mt.addChunk(addr(chunk.Hash()), chunk.Data()) {
-			panic("Didn't create this memory table with enough space to add all the chunks.")
+			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")
 		}
 	}
 
@@ -31,7 +33,7 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 	name, data, count := mt.write(nil, &stats)
 
 	if count != uint32(len(chunks)) {
-		panic("Didn't write everything.")
+		return "", nil, errors.New("didn't write everything")
 	}
 
 	return name.String(), data, nil
@@ -71,12 +73,12 @@ func (mt *memTable) addChunk(h addr, data []byte) bool {
 	return true
 }
 
-func (mt *memTable) count() uint32 {
-	return uint32(len(mt.order))
+func (mt *memTable) count() (uint32, error) {
+	return uint32(len(mt.order)), nil
 }
 
-func (mt *memTable) uncompressedLen() uint64 {
-	return mt.totalData
+func (mt *memTable) uncompressedLen() (uint64, error) {
+	return mt.totalData, nil
 }
 
 func (mt *memTable) has(h addr) (bool, error) {
@@ -140,7 +142,11 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
-		haver.hasMany(mt.order)
+		_, err := haver.hasMany(mt.order)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
 	}
 

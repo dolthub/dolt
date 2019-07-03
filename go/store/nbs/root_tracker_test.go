@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"sync"
 	"testing"
 
@@ -331,7 +332,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 	// TODO: fix panics
 	d.PanicIfError(err)
 
-	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{src.hash(), uint32(len(chunks))}})
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks))}})
 	return
 }
 
@@ -406,7 +407,7 @@ type fakeTablePersister struct {
 }
 
 func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	if mt.count() > 0 {
+	if must.Uint32(mt.count()) > 0 {
 		name, data, chunkCount := mt.write(haver, stats)
 		if chunkCount > 0 {
 			ftp.mu.Lock()
@@ -444,8 +445,8 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32) {
 	totalData := uint64(0)
 	for _, src := range sources {
-		chunkCount += src.count()
-		totalData += src.uncompressedLen()
+		chunkCount += must.Uint32(src.count())
+		totalData += must.Uint64(src.uncompressedLen())
 	}
 	if chunkCount == 0 {
 		return
@@ -463,7 +464,7 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 			err := src.extract(context.Background(), chunks)
 
 			if err != nil {
-				chunks <- extractRecord{a: src.hash(), err: err}
+				chunks <- extractRecord{a: mustAddr(src.hash()), err: err}
 			}
 		}()
 
