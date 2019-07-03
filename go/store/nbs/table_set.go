@@ -142,58 +142,130 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 	return f(ts.novel) && f(ts.upstream)
 }
 
-func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool) {
-	f := func(css chunkSources) (int, bool, bool) {
+func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
+	f := func(css chunkSources) (int, bool, bool, error) {
 		reads, split := 0, false
 		for _, haver := range css {
-			rds, rmn := haver.calcReads(reqs, blockSize)
+			rds, rmn, err := haver.calcReads(reqs, blockSize)
+
+			if err != nil {
+				return 0, false, false, err
+			}
+
 			reads += rds
 			if !rmn {
-				return reads, split, false
+				return reads, split, false, nil
 			}
 			split = true
 		}
-		return reads, split, true
+		return reads, split, true, nil
 	}
-	reads, split, remaining = f(ts.novel)
+	reads, split, remaining, err = f(ts.novel)
+
+	if err != nil {
+		return 0, false, false, err
+	}
+
 	if remaining {
 		var rds int
-		rds, split, remaining = f(ts.upstream)
+		rds, split, remaining, err = f(ts.upstream)
+
+		if err != nil {
+			return 0, false, false, err
+		}
+
 		reads += rds
 	}
-	return reads, split, remaining
+
+	return reads, split, remaining, nil
 }
 
-func (ts tableSet) count() uint32 {
-	f := func(css chunkSources) (count uint32) {
+func (ts tableSet) count() (uint32, error) {
+	f := func(css chunkSources) (count uint32, err error) {
 		for _, haver := range css {
-			count += haver.count()
+			thisCount, err := haver.count()
+
+			if err != nil {
+				return 0, err
+			}
+
+			count += thisCount
 		}
 		return
 	}
-	return f(ts.novel) + f(ts.upstream)
+
+	novelCount, err := f(ts.novel)
+
+	if err != nil {
+		return 0, err
+	}
+
+	upCount, err := f(ts.upstream)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return novelCount + upCount, nil
 }
 
-func (ts tableSet) uncompressedLen() uint64 {
-	f := func(css chunkSources) (data uint64) {
+func (ts tableSet) uncompressedLen() (uint64, error) {
+	f := func(css chunkSources) (data uint64, err error) {
 		for _, haver := range css {
-			data += haver.uncompressedLen()
+			uncmpLen, err := haver.uncompressedLen()
+
+			if err != nil {
+				return 0, err
+			}
+
+			data += uncmpLen
 		}
 		return
 	}
-	return f(ts.novel) + f(ts.upstream)
+
+	novelCount, err := f(ts.novel)
+
+	if err != nil {
+		return 0, err
+	}
+
+	upCount, err := f(ts.upstream)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return novelCount + upCount, nil
 }
 
-func (ts tableSet) physicalLen() uint64 {
-	f := func(css chunkSources) (data uint64) {
+func (ts tableSet) physicalLen() (uint64, error) {
+	f := func(css chunkSources) (data uint64, err error) {
 		for _, haver := range css {
-			index := haver.index()
+			index, err := haver.index()
+
+			if err != nil {
+				return 0, err
+			}
+
 			data += indexSize(index.chunkCount)
 			data += index.offsets[index.chunkCount-1] + (uint64(index.lengths[index.chunkCount-1]))
 		}
 		return
 	}
-	return f(ts.novel) + f(ts.upstream)
+
+	lenNovel, err := f(ts.novel)
+
+	if err != nil {
+		return 0, err
+	}
+
+	lenUp, err := f(ts.upstream)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return lenNovel + lenUp, nil
 }
 
 // Size returns the number of tables in this tableSet.
@@ -256,7 +328,12 @@ func (ts tableSet) Flatten() (flattened tableSet) {
 		rl:       ts.rl,
 	}
 	for _, src := range ts.novel {
-		if src.count() > 0 {
+		cnt, err := src.count()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		if cnt > 0 {
 			flattened.upstream = append(flattened.upstream, src)
 		}
 	}
@@ -276,7 +353,12 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 
 	// Rebase the novel tables, skipping those that are actually empty (usually due to de-duping during table compaction)
 	for _, t := range ts.novel {
-		if t.count() > 0 {
+		cnt, err := t.count()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		if cnt > 0 {
 			merged.novel = append(merged.novel, t)
 		}
 	}
@@ -318,13 +400,33 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 func (ts tableSet) ToSpecs() []tableSpec {
 	tableSpecs := make([]tableSpec, 0, ts.Size())
 	for _, src := range ts.novel {
-		if src.count() > 0 {
-			tableSpecs = append(tableSpecs, tableSpec{src.hash(), src.count()})
+		cnt, err := src.count()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		if cnt > 0 {
+			h, err := src.hash()
+
+			// TODO: fix panics
+			d.PanicIfError(err)
+
+			tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 		}
 	}
 	for _, src := range ts.upstream {
-		d.Chk.True(src.count() > 0)
-		tableSpecs = append(tableSpecs, tableSpec{src.hash(), src.count()})
+		cnt, err := src.count()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+		d.Chk.True(cnt > 0)
+
+		h, err := src.hash()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 	}
 	return tableSpecs
 }

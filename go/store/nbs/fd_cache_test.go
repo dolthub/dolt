@@ -92,7 +92,8 @@ func TestFDCache(t *testing.T) {
 		assert.EqualValues(expected, fc.reportEntries())
 
 		// Unreffing f1 now should evict it
-		fc.UnrefFile(paths[1])
+		err := fc.UnrefFile(paths[1])
+		assert.NoError(err)
 		assert.EqualValues(paths[:1], fc.reportEntries())
 
 		// Bring f1 back so we can test multiple evictions in a row
@@ -104,9 +105,12 @@ func TestFDCache(t *testing.T) {
 		assert.NotEqual(f0, f2)
 		assert.NotEqual(f1, f2)
 
-		fc.UnrefFile(paths[0])
-		fc.UnrefFile(paths[0])
-		fc.UnrefFile(paths[1])
+		err = fc.UnrefFile(paths[0])
+		assert.NoError(err)
+		err = fc.UnrefFile(paths[0])
+		assert.NoError(err)
+		err = fc.UnrefFile(paths[1])
+		assert.NoError(err)
 
 		assert.EqualValues(paths[2:], fc.reportEntries())
 	})

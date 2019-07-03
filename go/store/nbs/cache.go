@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 
@@ -41,8 +42,14 @@ type NomsBlockCache struct {
 }
 
 // Insert stores c in the cache.
-func (nbc *NomsBlockCache) Insert(ctx context.Context, c chunks.Chunk) {
-	d.PanicIfFalse(nbc.chunks.addChunk(ctx, addr(c.Hash()), c.Data()))
+func (nbc *NomsBlockCache) Insert(ctx context.Context, c chunks.Chunk) error {
+	success := nbc.chunks.addChunk(ctx, addr(c.Hash()), c.Data())
+
+	if !success {
+		return errors.New("failed to add chunk")
+	}
+
+	return nil
 }
 
 // Has checks if the chunk referenced by hash is in the cache.
@@ -76,7 +83,7 @@ func (nbc *NomsBlockCache) ExtractChunks(ctx context.Context, chunkChan chan *ch
 }
 
 // Count returns the number of items in the cache.
-func (nbc *NomsBlockCache) Count() uint32 {
+func (nbc *NomsBlockCache) Count() (uint32, error) {
 	return nbc.chunks.Count()
 }
 

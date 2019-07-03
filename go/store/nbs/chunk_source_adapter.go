@@ -5,12 +5,12 @@ type chunkSourceAdapter struct {
 	h addr
 }
 
-func (csa chunkSourceAdapter) hash() addr {
-	return csa.h
+func (csa chunkSourceAdapter) hash() (addr, error) {
+	return csa.h, nil
 }
 
-func (csa chunkSourceAdapter) index() tableIndex {
-	return csa.tableIndex
+func (csa chunkSourceAdapter) index() (tableIndex, error) {
+	return csa.tableIndex, nil
 }
 
 func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (chunkSource, error) {

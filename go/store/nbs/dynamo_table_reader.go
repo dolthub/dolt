@@ -13,7 +13,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
 )
 
@@ -38,7 +37,11 @@ func (t tableNotInDynamoErr) Error() string {
 
 func (dtra *dynamoTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (n int, err error) {
 	data, err := dtra.ddb.ReadTable(ctx, dtra.h, stats)
-	d.PanicIfError(err)
+
+	if err != nil {
+		return 0, err
+	}
+
 	n = copy(p, data[off:])
 	if n < len(p) {
 		err = io.ErrUnexpectedEOF

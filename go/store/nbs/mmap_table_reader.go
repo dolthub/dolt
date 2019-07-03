@@ -56,7 +56,10 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 			return nil, err
 		}
 
-		defer fc.UnrefFile(path)
+		defer func() {
+			err := fc.UnrefFile(path)
+			d.PanicIfError(err)
+		}()
 
 		fi, err := f.Stat()
 
@@ -78,7 +81,11 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		}
 
 		mm, err := mmap.MapRegion(f, int(fi.Size()-aligned), mmap.RDONLY, 0, aligned)
-		d.PanicIfError(err)
+
+		if err != nil {
+			return nil, err
+		}
+
 		buff := []byte(mm)
 		index, err = parseTableIndex(buff[indexOffset-aligned:])
 
@@ -108,8 +115,8 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 	}, nil
 }
 
-func (mmtr *mmapTableReader) hash() addr {
-	return mmtr.h
+func (mmtr *mmapTableReader) hash() (addr, error) {
+	return mmtr.h, nil
 }
 
 type cacheReaderAt struct {
@@ -129,7 +136,10 @@ func (cra *cacheReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int
 		stats.FileReadLatency.SampleTimeSince(t1)
 	}()
 
-	defer cra.fc.UnrefFile(cra.path)
+	defer func() {
+		err := cra.fc.UnrefFile(cra.path)
+		d.PanicIfError(err)
+	}()
 
 	return r.ReadAt(p, off)
 }

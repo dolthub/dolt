@@ -5,6 +5,7 @@
 package nbs
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,7 +30,7 @@ func TestPlanCompaction(t *testing.T) {
 		ti, err := parseTableIndex(data)
 		assert.NoError(err)
 		src := chunkSourceAdapter{newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize), name}
-		dataLens = append(dataLens, uint64(len(data))-indexSize(src.count())-footerSize)
+		dataLens = append(dataLens, uint64(len(data))-indexSize(must.Uint32(src.count()))-footerSize)
 		sources = append(sources, src)
 	}
 
@@ -38,7 +39,7 @@ func TestPlanCompaction(t *testing.T) {
 	var totalChunks uint32
 	for i, src := range sources {
 		assert.Equal(dataLens[i], plan.sources[i].dataLen)
-		totalChunks += src.count()
+		totalChunks += must.Uint32(src.count())
 	}
 
 	idx, err := parseTableIndex(plan.mergedIndex)

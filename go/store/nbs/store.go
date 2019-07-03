@@ -117,7 +117,11 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) map[hash.Hash]
 					y = make(map[hash.Hash]Range)
 				}
 
-				tableIndex := tr.index()
+				tableIndex, err := tr.index()
+
+				// TODO: fix panics
+				d.PanicIfError(err)
+
 				var foundHashes []hash.Hash
 				for h := range hashes {
 					ord := tableIndex.lookupOrdinal(addr(h))
@@ -148,7 +152,12 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) map[hash.Hash]
 
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
 	nbs.mm.LockForUpdate()
-	defer nbs.mm.UnlockForUpdate()
+	defer func() {
+		err := nbs.mm.UnlockForUpdate()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+	}()
 
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -434,7 +443,11 @@ func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (rea
 		return
 	}()
 
-	reads, split, remaining := tables.calcReads(reqs, blockSize)
+	reads, split, remaining, err := tables.calcReads(reqs, blockSize)
+
+	//TODO: fix panics
+	d.PanicIfError(err)
+
 	d.Chk.False(remaining)
 	return
 }
@@ -446,9 +459,16 @@ func (nbs *NomsBlockStore) extractChunks(ctx context.Context, chunkChan chan<- *
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		// Chunks in nbs.tables were inserted before those in nbs.mt, so extract chunks there _first_
-		nbs.tables.extract(ctx, ch)
+		err := nbs.tables.extract(ctx, ch)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		if nbs.mt != nil {
-			nbs.mt.extract(ctx, ch)
+			err = nbs.mt.extract(ctx, ch)
+
+			// TODO: fix panics
+			d.PanicIfError(err)
 		}
 	}()
 	for rec := range ch {
@@ -457,16 +477,32 @@ func (nbs *NomsBlockStore) extractChunks(ctx context.Context, chunkChan chan<- *
 	}
 }
 
-func (nbs *NomsBlockStore) Count() uint32 {
-	count, tables := func() (count uint32, tables chunkReader) {
+func (nbs *NomsBlockStore) Count() (uint32, error) {
+	count, tables, err := func() (count uint32, tables chunkReader, err error) {
 		nbs.mu.RLock()
 		defer nbs.mu.RUnlock()
 		if nbs.mt != nil {
-			count = nbs.mt.count()
+			count, err = nbs.mt.count()
 		}
-		return count, nbs.tables
+
+		if err != nil {
+			return 0, nil, err
+		}
+
+		return count, nbs.tables, nil
 	}()
-	return count + tables.count()
+
+	if err != nil {
+		return 0, err
+	}
+
+	tablesCount, err := tables.count()
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count + tablesCount, nil
 }
 
 func (nbs *NomsBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
@@ -617,7 +653,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		return true, nil
 	}
 
-	func() {
+	err := func() error {
 		// This is unfortunate. We want to serialize commits to the same store
 		// so that we avoid writing a bunch of unreachable small tables which result
 		// from optismistic lock failures. However, this means that the time to
@@ -627,14 +663,32 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
 
-		if nbs.mt != nil && nbs.mt.count() > preflushChunkCount {
+		cnt, err := nbs.mt.count()
+
+		if err != nil {
+			return err
+		}
+
+		if nbs.mt != nil && cnt > preflushChunkCount {
 			nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
 			nbs.mt = nil
 		}
+
+		return nil
 	}()
 
+	if err != nil {
+		return false, err
+	}
+
 	nbs.mm.LockForUpdate()
-	defer nbs.mm.UnlockForUpdate()
+	defer func() {
+		err := nbs.mm.UnlockForUpdate()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+	}()
+
 	for {
 		if err := nbs.updateManifest(ctx, current, last); err == nil {
 			return true, nil
@@ -676,13 +730,24 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return handleOptimisticLockFailure(cached)
 	}
 
-	if nbs.mt != nil && nbs.mt.count() > 0 {
+	cnt, err := nbs.mt.count()
+
+	if err != nil {
+		return err
+	}
+
+	if nbs.mt != nil && cnt > 0 {
 		nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
 		nbs.mt = nil
 	}
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
-		nbs.upstream = nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		nbs.upstream, err = nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+
+		if err != nil {
+			return err
+		}
+
 		nbs.tables = nbs.tables.Rebase(ctx, nbs.upstream.specs, nbs.stats)
 		return errOptimisticLockFailedTables
 	}
@@ -725,6 +790,7 @@ func (nbs *NomsBlockStore) Stats() interface{} {
 func (nbs *NomsBlockStore) StatsSummary() string {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
-
-	return fmt.Sprintf("Root: %s; Chunk Count %d; Physical Bytes %s", nbs.upstream.root, nbs.tables.count(), humanize.Bytes(nbs.tables.physicalLen()))
+	cnt, _ := nbs.tables.count()
+	physLen, _ := nbs.tables.physicalLen()
+	return fmt.Sprintf("Root: %s; Chunk Count %d; Physical Bytes %s", nbs.upstream.root, cnt, humanize.Bytes(physLen))
 }

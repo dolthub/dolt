@@ -245,7 +245,8 @@ func (m *fakeS3) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput,
 	m.assert.NotNil(input.Key, "Key is a required field")
 
 	buff := &bytes.Buffer{}
-	io.Copy(buff, input.Body)
+	_, err := io.Copy(buff, input.Body)
+	m.assert.NoError(err)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.data[*input.Key] = buff.Bytes()

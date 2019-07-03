@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -38,7 +39,8 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 			_, err := fts.Open(context.Background(), name, 1, nil)
 			assert.NoError(err)
 		}
-		removeTables(dir, names...)
+		err := removeTables(dir, names...)
+		assert.NoError(err)
 	}()
 
 	// Tables should still be cached, even though they're gone from disk
@@ -52,7 +54,8 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	// Kick a table out of the cache
 	name, err := writeTableData(dir, []byte{0xff})
 	assert.NoError(err)
-	fts.Open(context.Background(), name, 1, nil)
+	_, err = fts.Open(context.Background(), name, 1, nil)
+	assert.NoError(err)
 
 	present := fc.reportEntries()
 	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
@@ -91,8 +94,8 @@ func TestFSTablePersisterPersist(t *testing.T) {
 
 	src, err := persistTableData(fts, testChunks...)
 	assert.NoError(err)
-	if assert.True(src.count() > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
+	if assert.True(must.Uint32(src.count()) > 0) {
+		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		assert.NoError(err)
 		ti, err := parseTableIndex(buff)
 		assert.NoError(err)
@@ -129,9 +132,9 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 
 	src, err := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	assert.NoError(err)
-	assert.True(src.count() == 0)
+	assert.True(must.Uint32(src.count()) == 0)
 
-	_, err = os.Stat(filepath.Join(dir, src.hash().String()))
+	_, err = os.Stat(filepath.Join(dir, mustAddr(src.hash()).String()))
 	assert.True(os.IsNotExist(err), "%v", err)
 }
 
@@ -147,8 +150,9 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	func() {
 		src, err := persistTableData(fts, testChunks...)
 		assert.NoError(err)
-		name = src.hash()
-		removeTables(dir, name)
+		name = mustAddr(src.hash())
+		err = removeTables(dir, name)
+		assert.NoError(err)
 	}()
 
 	// Table should still be cached, even though it's gone from disk
@@ -189,8 +193,8 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
 	assert.NoError(err)
 
-	if assert.True(src.count() > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
+	if assert.True(must.Uint32(src.count()) > 0) {
+		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		assert.NoError(err)
 		ti, err := parseTableIndex(buff)
 		assert.NoError(err)
@@ -227,13 +231,13 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
 	assert.NoError(err)
 
-	if assert.True(src.count() > 0) {
-		buff, err := ioutil.ReadFile(filepath.Join(dir, src.hash().String()))
+	if assert.True(must.Uint32(src.count()) > 0) {
+		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		assert.NoError(err)
 		ti, err := parseTableIndex(buff)
 		assert.NoError(err)
 		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		assertChunksInReader(testChunks, tr, assert)
-		assert.EqualValues(reps*len(testChunks), tr.count())
+		assert.EqualValues(reps*len(testChunks), must.Uint32(tr.count()))
 	}
 }

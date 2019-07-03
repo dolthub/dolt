@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"io"
 	"math/rand"
 	"sync"
@@ -20,7 +21,7 @@ import (
 
 func TestAWSTablePersisterPersist(t *testing.T) {
 	calcPartSize := func(rdr chunkReader, maxPartNum uint64) uint64 {
-		return maxTableSize(uint64(rdr.count()), rdr.uncompressedLen()) / maxPartNum
+		return maxTableSize(uint64(must.Uint32(rdr.count())), must.Uint64(rdr.uncompressedLen())) / maxPartNum
 	}
 
 	mt := newMemTable(testMemTableSize)
@@ -39,10 +40,10 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				assert.NoError(err)
-				assert.NotNil(ic.get(src.hash()))
+				assert.NotNil(ic.get(mustAddr(src.hash())))
 
-				if assert.True(src.count() > 0) {
-					if r, err := s3svc.readerForTableWithNamespace(ns, src.hash()); assert.NotNil(r) && assert.NoError(err) {
+				if assert.True(must.Uint32(src.count()) > 0) {
+					if r, err := s3svc.readerForTableWithNamespace(ns, mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
 					}
 				}
@@ -61,7 +62,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 				tc.storeWG.Wait()
 
 				// Now, open the table that should have been cached by the above Persist() and read out all the chunks. All the reads should be serviced from tc.
-				rdr, err := s3p.Open(context.Background(), src.hash(), src.count(), &Stats{})
+				rdr, err := s3p.Open(context.Background(), mustAddr(src.hash()), must.Uint32(src.count()), &Stats{})
 				assert.NoError(t, err)
 				baseline := s3svc.getCount
 				ch := make(chan extractRecord)
@@ -84,8 +85,8 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				assert.NoError(err)
-				if assert.True(src.count() > 0) {
-					if r, err := s3svc.readerForTableWithNamespace(ns, src.hash()); assert.NotNil(r) && assert.NoError(err) {
+				if assert.True(must.Uint32(src.count()) > 0) {
+					if r, err := s3svc.readerForTableWithNamespace(ns, mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
 					}
 				}
@@ -108,9 +109,9 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 				src, err := s3p.Persist(context.Background(), mt, existingTable, &Stats{})
 				assert.NoError(err)
-				assert.True(src.count() == 0)
+				assert.True(must.Uint32(src.count()) == 0)
 
-				_, present := s3svc.data[src.hash().String()]
+				_, present := s3svc.data[mustAddr(src.hash()).String()]
 				assert.False(present)
 			})
 
@@ -140,13 +141,13 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 			ddb := makeFakeDDB(t)
 			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
-			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mt.count()}
+			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * must.Uint32(mt.count())}
 			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: ""}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 			assert.NoError(err)
-			if assert.True(src.count() > 0) {
-				if r, err := ddb.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+			if assert.True(must.Uint32(src.count()) > 0) {
+				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(testChunks, r, assert)
 				}
 			}
@@ -158,7 +159,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			tc := sizecache.New(maxDynamoItemSize)
 			ddb := makeFakeDDB(t)
 			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, tc)
-			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * mt.count()}
+			limits := awsLimits{itemMax: maxDynamoItemSize, chunkMax: 2 * must.Uint32(mt.count())}
 
 			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: ""}
 
@@ -167,8 +168,8 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 			src, err := s3p.Open(context.Background(), name, uint32(len(testChunks)), &Stats{})
 			assert.NoError(err)
-			if assert.True(src.count() > 0) {
-				if r, err := ddb.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+			if assert.True(must.Uint32(src.count()) > 0) {
+				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(testChunks, r, assert)
 				}
 				if data, present := tc.Get(name); assert.True(present) {
@@ -187,9 +188,9 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 			assert.NoError(err)
-			if assert.True(src.count() > 0) {
-				if r, err := ddb.readerForTable(src.hash()); assert.Nil(r) && assert.NoError(err) {
-					if r, err := s3svc.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+			if assert.True(must.Uint32(src.count()) > 0) {
+				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.Nil(r) && assert.NoError(err) {
+					if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
 					}
 				}
@@ -201,14 +202,14 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 			ddb := makeFakeDDB(t)
 			s3svc, dts := makeFakeS3(t), makeFakeDTS(ddb, nil)
-			limits := awsLimits{itemMax: 0, chunkMax: 2 * mt.count(), partTarget: calcPartSize(mt, 1)}
+			limits := awsLimits{itemMax: 0, chunkMax: 2 * must.Uint32(mt.count()), partTarget: calcPartSize(mt, 1)}
 			s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: dts, limits: limits, ns: ""}
 
 			src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 			assert.NoError(err)
-			if assert.True(src.count() > 0) {
-				if r, err := ddb.readerForTable(src.hash()); assert.Nil(r) && assert.NoError(err) {
-					if r, err := s3svc.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+			if assert.True(must.Uint32(src.count()) > 0) {
+				if r, err := ddb.readerForTable(mustAddr(src.hash())); assert.Nil(r) && assert.NoError(err) {
+					if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 						assertChunksInReader(testChunks, r, assert)
 					}
 				}
@@ -273,7 +274,8 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
 	plan := planConjoin(sources, &Stats{})
-	copies, manuals, _ := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
+	copies, manuals, _, err := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
+	assert.NoError(err)
 
 	perTableDataSize := map[string]int64{}
 	for _, c := range copies {
@@ -284,13 +286,19 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 		perTableDataSize[c.name] = totalSize
 	}
 	assert.Len(perTableDataSize, 2)
-	assert.Contains(perTableDataSize, justRight.hash().String())
-	assert.Contains(perTableDataSize, tooBig.hash().String())
-	assert.EqualValues(calcChunkDataLen(justRight.index()), perTableDataSize[justRight.hash().String()])
-	assert.EqualValues(calcChunkDataLen(tooBig.index()), perTableDataSize[tooBig.hash().String()])
+	assert.Contains(perTableDataSize, mustAddr(justRight.hash()).String())
+	assert.Contains(perTableDataSize, mustAddr(tooBig.hash()).String())
+	ti, err := justRight.index()
+	assert.NoError(err)
+	assert.EqualValues(calcChunkDataLen(ti), perTableDataSize[mustAddr(justRight.hash()).String()])
+	ti, err = tooBig.index()
+	assert.NoError(err)
+	assert.EqualValues(calcChunkDataLen(ti), perTableDataSize[mustAddr(tooBig.hash()).String()])
 
 	assert.Len(manuals, 1)
-	assert.EqualValues(calcChunkDataLen(tooSmall.index()), manuals[0].dstEnd-manuals[0].dstStart)
+	ti, err = tooSmall.index()
+	assert.NoError(err)
+	assert.EqualValues(calcChunkDataLen(ti), manuals[0].dstEnd-manuals[0].dstStart)
 }
 
 func TestAWSTablePersisterCalcPartSizes(t *testing.T) {
@@ -327,14 +335,16 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		return awsTablePersister{s3svc, "bucket", rl, nil, ddb, awsLimits{targetPartSize, minPartSize, maxPartSize, maxItemSize, maxChunkCount}, ic, ""}
 	}
 
-	smallChunks := [][]byte{}
+	var smallChunks [][]byte
 	rnd := rand.New(rand.NewSource(0))
 	for smallChunkTotal := uint64(0); smallChunkTotal <= uint64(minPartSize); {
 		small := make([]byte, minPartSize/5)
 		rnd.Read(small)
 		src := bytesToChunkSource(t, small)
 		smallChunks = append(smallChunks, small)
-		smallChunkTotal += calcChunkDataLen(src.index())
+		ti, err := src.index()
+		assert.NoError(t, err)
+		smallChunkTotal += calcChunkDataLen(ti)
 	}
 
 	t.Run("Small", func(t *testing.T) {
@@ -358,10 +368,10 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			sources := makeSources(s3p, chunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			assert.NoError(err)
-			assert.NotNil(ic.get(src.hash()))
+			assert.NotNil(ic.get(mustAddr(src.hash())))
 
-			if assert.True(src.count() > 0) {
-				if r, err := s3svc.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+			if assert.True(must.Uint32(src.count()) > 0) {
+				if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(chunks, r, assert)
 				}
 			}
@@ -375,10 +385,10 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			sources := makeSources(s3p, smallChunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			assert.NoError(err)
-			assert.NotNil(ic.get(src.hash()))
+			assert.NotNil(ic.get(mustAddr(src.hash())))
 
-			if assert.True(src.count() > 0) {
-				if r, err := s3svc.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+			if assert.True(must.Uint32(src.count()) > 0) {
+				if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 					assertChunksInReader(smallChunks, r, assert)
 				}
 			}
@@ -413,10 +423,10 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		assert.NoError(err)
-		assert.NotNil(ic.get(src.hash()))
+		assert.NotNil(ic.get(mustAddr(src.hash())))
 
-		if assert.True(src.count() > 0) {
-			if r, err := s3svc.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+		if assert.True(must.Uint32(src.count()) > 0) {
+			if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(bigUns2, r, assert)
 			}
@@ -450,10 +460,10 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		assert.NoError(err)
-		assert.NotNil(ic.get(src.hash()))
+		assert.NotNil(ic.get(mustAddr(src.hash())))
 
-		if assert.True(src.count() > 0) {
-			if r, err := s3svc.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+		if assert.True(must.Uint32(src.count()) > 0) {
+			if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(medChunks, r, assert)
 			}
@@ -501,10 +511,10 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		assert.NoError(err)
-		assert.NotNil(ic.get(src.hash()))
+		assert.NotNil(ic.get(mustAddr(src.hash())))
 
-		if assert.True(src.count() > 0) {
-			if r, err := s3svc.readerForTable(src.hash()); assert.NotNil(r) && assert.NoError(err) {
+		if assert.True(must.Uint32(src.count()) > 0) {
+			if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
 				assertChunksInReader(smallChunks, r, assert)
 				assertChunksInReader(bigUns1, r, assert)
 				assertChunksInReader(medChunks, r, assert)

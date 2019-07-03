@@ -228,29 +228,41 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 	return remaining, nil
 }
 
-func (tr tableReader) count() uint32 {
-	return tr.chunkCount
+func (tr tableReader) count() (uint32, error) {
+	return tr.chunkCount, nil
 }
 
-func (tr tableReader) uncompressedLen() uint64 {
-	return tr.totalUncompressedData
+func (tr tableReader) uncompressedLen() (uint64, error) {
+	return tr.totalUncompressedData, nil
 }
 
-func (tr tableReader) index() tableIndex {
-	return tr.tableIndex
+func (tr tableReader) index() (tableIndex, error) {
+	return tr.tableIndex, nil
 }
 
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) (bool, error) {
 	ordinal := tr.lookupOrdinal(h)
-	return ordinal < tr.count(), nil
+	count, err := tr.count()
+
+	if err != nil {
+		return false, err
+	}
+
+	return ordinal < count, nil
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
 func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
 	ordinal := tr.lookupOrdinal(h)
-	if ordinal == tr.count() {
+	cnt, err := tr.count()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if ordinal == cnt {
 		return nil, nil
 	}
 
@@ -259,8 +271,15 @@ func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, er
 	buff := make([]byte, length) // TODO: Avoid this allocation for every get
 
 	n, err := tr.r.ReadAtWithStats(ctx, buff, int64(offset), stats)
-	d.Chk.NoError(err)
-	d.Chk.True(n == int(length))
+
+	if err != nil {
+		return nil, err
+	}
+
+	if n != int(length) {
+		return nil, errors.New("failed to read all data")
+	}
+
 	data, err := tr.parseChunk(buff)
 
 	if err != nil {
@@ -491,7 +510,7 @@ func (tr tableReader) parseChunk(buff []byte) ([]byte, error) {
 	return data, nil
 }
 
-func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool) {
+func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
 	var offsetRecords offsetRecSlice
 	// Pass #1: Build the set of table locations which must be read in order to find all the elements of |reqs| which are present in this table.
 	offsetRecords, remaining = tr.findOffsets(reqs)
@@ -574,8 +593,8 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	return nil
 }
 
-func (tr tableReader) reader(ctx context.Context) io.Reader {
-	return &readerAdapter{tr.r, 0, ctx}
+func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
+	return &readerAdapter{tr.r, 0, ctx}, nil
 }
 
 type readerAdapter struct {

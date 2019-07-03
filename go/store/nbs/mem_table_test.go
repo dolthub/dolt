@@ -7,6 +7,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io/ioutil"
 	"os"
@@ -241,16 +242,16 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, found
 	return true
 }
 
-func (crg chunkReaderGroup) count() (count uint32) {
+func (crg chunkReaderGroup) count() (count uint32, err error) {
 	for _, haver := range crg {
-		count += haver.count()
+		count += must.Uint32(haver.count())
 	}
 	return
 }
 
-func (crg chunkReaderGroup) uncompressedLen() (data uint64) {
+func (crg chunkReaderGroup) uncompressedLen() (data uint64, err error) {
 	for _, haver := range crg {
-		data += haver.uncompressedLen()
+		data += must.Uint64(haver.uncompressedLen())
 	}
 	return
 }

@@ -98,7 +98,8 @@ func TestFileManifestUpdateWontClobberOldVersion(t *testing.T) {
 	err := clobberManifest(fm.dir, strings.Join([]string{StorageVersion, "0", addr{}.String(), hash.Hash{}.String()}, ":"))
 	assert.NoError(err)
 
-	assert.Panics(func() { fm.Update(context.Background(), addr{}, manifestContents{}, stats, nil) })
+	_, err = fm.Update(context.Background(), addr{}, manifestContents{}, stats, nil)
+	assert.Error(err)
 }
 
 func TestFileManifestUpdateEmpty(t *testing.T) {

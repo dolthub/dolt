@@ -19,6 +19,7 @@ import (
 const tempTablePrefix = "nbs_table_"
 
 func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
+	// TODO: fix panics
 	d.PanicIfTrue(fc == nil)
 	return &fsTablePersister{dir, fc, indexCache}
 }
@@ -50,7 +51,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 			return "", err
 		}
 
-		defer checkClose(temp)
+		defer mustClose(temp)
 
 		_, err = io.Copy(temp, bytes.NewReader(data))
 
@@ -104,10 +105,15 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 			return "", err
 		}
 
-		defer checkClose(temp)
+		defer mustClose(temp)
 
 		for _, sws := range plan.sources {
-			r := sws.source.reader(ctx)
+			r, err := sws.source.reader(ctx)
+
+			if err != nil {
+				return "", err
+			}
+
 			n, err := io.CopyN(temp, r, int64(sws.dataLen))
 
 			if err != nil {
