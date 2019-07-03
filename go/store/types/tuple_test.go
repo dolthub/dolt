@@ -134,7 +134,7 @@ func TestTupleLess(t *testing.T) {
 		actual := tpl1.Less(Format_7_18, tpl2)
 
 		if actual != test.expected {
-			t.Error("tpl1:", EncodedValue(context.Background(), Format_7_18, tpl1), "tpl2:", EncodedValue(context.Background(), Format_7_18, tpl2), "expected", test.expected, "actual:", actual)
+			t.Error("tpl1:", EncodedValue(context.Background(), tpl1), "tpl2:", EncodedValue(context.Background(), tpl2), "expected", test.expected, "actual:", actual)
 		}
 	}
 }

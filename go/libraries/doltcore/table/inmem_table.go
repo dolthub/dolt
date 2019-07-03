@@ -40,7 +40,7 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 		if !ok {
 			return NewBadRow(r, col.Name+" is missing")
 		} else {
-			return NewBadRow(r, col.Name+":"+types.EncodedValue(context.Background(), types.Format_7_18, val)+" is not valid.")
+			return NewBadRow(r, col.Name+":"+types.EncodedValue(context.Background(), val)+" is not valid.")
 		}
 	}
 

@@ -43,20 +43,20 @@ func TestTypeRefDescribe(t *testing.T) {
 	mapType := MakeMapType(StringType, FloaTType)
 	setType := MakeSetType(StringType)
 
-	assert.Equal("Bool", BoolType.Describe(context.Background(), Format_7_18))
-	assert.Equal("Float", FloaTType.Describe(context.Background(), Format_7_18))
-	assert.Equal("String", StringType.Describe(context.Background(), Format_7_18))
-	assert.Equal("UUID", UUIDType.Describe(context.Background(), Format_7_18))
-	assert.Equal("Int", IntType.Describe(context.Background(), Format_7_18))
-	assert.Equal("Uint", UintType.Describe(context.Background(), Format_7_18))
-	assert.Equal("Map<String, Float>", mapType.Describe(context.Background(), Format_7_18))
-	assert.Equal("Set<String>", setType.Describe(context.Background(), Format_7_18))
+	assert.Equal("Bool", BoolType.Describe(context.Background()))
+	assert.Equal("Float", FloaTType.Describe(context.Background()))
+	assert.Equal("String", StringType.Describe(context.Background()))
+	assert.Equal("UUID", UUIDType.Describe(context.Background()))
+	assert.Equal("Int", IntType.Describe(context.Background()))
+	assert.Equal("Uint", UintType.Describe(context.Background()))
+	assert.Equal("Map<String, Float>", mapType.Describe(context.Background()))
+	assert.Equal("Set<String>", setType.Describe(context.Background()))
 
 	mahType := MakeStructType("MahStruct",
 		StructField{"Field1", StringType, false},
 		StructField{"Field2", BoolType, false},
 	)
-	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe(context.Background(), Format_7_18))
+	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe(context.Background()))
 }
 
 func TestTypeOrdered(t *testing.T) {

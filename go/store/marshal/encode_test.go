@@ -1168,7 +1168,7 @@ func TestMarshalStructName(t *testing.T) {
 	v := MustMarshal(context.Background(), vs, ts)
 	assert.True(types.NewStruct(types.Format_7_18, "A", types.StructData{
 		"x": types.Float(1),
-	}).Equals(v), types.EncodedValue(context.Background(), types.Format_7_18, v))
+	}).Equals(v), types.EncodedValue(context.Background(), v))
 }
 
 type TestStructWithNameImpl2 struct {
@@ -1190,5 +1190,5 @@ func TestMarshalStructName2(t *testing.T) {
 	v := MustMarshal(context.Background(), vs, ts)
 	assert.True(types.NewStruct(types.Format_7_18, "", types.StructData{
 		"x": types.Float(1),
-	}).Equals(v), types.EncodedValue(context.Background(), types.Format_7_18, v))
+	}).Equals(v), types.EncodedValue(context.Background(), v))
 }

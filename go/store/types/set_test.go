@@ -919,7 +919,7 @@ func TestSetChunks2(t *testing.T) {
 		set := ts.toSet(vrw)
 		set2chunks := getChunks(vrw.ReadValue(context.Background(), vrw.WriteValue(context.Background(), set).TargetHash()))
 		for i, r := range getChunks(set) {
-			assert.True(TypeOf(r).Equals(TypeOf(set2chunks[i])), "%s != %s", TypeOf(r).Describe(context.Background(), Format_7_18), TypeOf(set2chunks[i]).Describe(context.Background(), Format_7_18))
+			assert.True(TypeOf(r).Equals(TypeOf(set2chunks[i])), "%s != %s", TypeOf(r).Describe(context.Background()), TypeOf(set2chunks[i]).Describe(context.Background()))
 		}
 	}
 

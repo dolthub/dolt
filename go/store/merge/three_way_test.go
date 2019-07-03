@@ -38,7 +38,7 @@ func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq) {
 	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, nil, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
-		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 }
 
@@ -48,7 +48,7 @@ func (s *ThreeWayMergeSuite) tryThreeWayConflict(a, b, p types.Value, contained 
 		s.Contains(err.Error(), contained)
 		return
 	}
-	s.Fail("Expected error!", "Got successful merge: %s", types.EncodedValue(context.Background(), types.Format_7_18, m))
+	s.Fail("Expected error!", "Got successful merge: %s", types.EncodedValue(context.Background(), m))
 }
 
 func valsToTypesValues(f func(seq) types.Value, items ...interface{}) []types.Value {
@@ -83,7 +83,7 @@ func TestThreeWayMerge_PrimitiveConflict(t *testing.T) {
 			assert.Contains(t, err.Error(), contained)
 			return
 		}
-		assert.Fail(t, "Expected error!", "Got successful merge: %s", types.EncodedValue(context.Background(), types.Format_7_18, m))
+		assert.Fail(t, "Expected error!", "Got successful merge: %s", types.EncodedValue(context.Background(), m))
 	}
 
 	a, b, p := types.Float(7), types.String("nope"), types.String("parent")

@@ -321,7 +321,7 @@ func TestEncodedValueMaxLines(t *testing.T) {
 
 	// TODO(binformat)
 	l1 := NewList(context.Background(), vrw, generateNumbersAsValues(11)...)
-	expected := strings.Join(strings.SplitAfterN(EncodedValue(context.Background(), Format_7_18, l1), "\n", 6)[:5], "")
+	expected := strings.Join(strings.SplitAfterN(EncodedValue(context.Background(), l1), "\n", 6)[:5], "")
 	assert.Equal(expected, EncodedValueMaxLines(context.Background(), Format_7_18, l1, 5))
 
 	buf := bytes.Buffer{}
@@ -341,7 +341,7 @@ type TestCommenter struct {
 	testType *Type
 }
 
-func (c TestCommenter) Comment(ctx context.Context, f *Format, v Value) string {
+func (c TestCommenter) Comment(ctx context.Context, v Value) string {
 	if !(v.typeOf().Equals(c.testType)) {
 		return ""
 	}
@@ -356,16 +356,16 @@ func TestRegisterCommenter(t *testing.T) {
 
 	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest: ", testType: tt.typeOf()})
 
-	s1 := EncodedValue(context.Background(), Format_7_18, tt)
+	s1 := EncodedValue(context.Background(), tt)
 	a.True(strings.Contains(s1, "// MyTest: abc-123"))
-	s1 = EncodedValue(context.Background(), Format_7_18, nt)
+	s1 = EncodedValue(context.Background(), nt)
 	a.False(strings.Contains(s1, "// MyTest: abc-123"))
 
 	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest2: ", testType: tt.typeOf()})
-	s1 = EncodedValue(context.Background(), Format_7_18, tt)
+	s1 = EncodedValue(context.Background(), tt)
 	a.True(strings.Contains(s1, "// MyTest2: abc-123"))
 
 	UnregisterHRSCommenter("TestType1", "mylib1")
-	s1 = EncodedValue(context.Background(), Format_7_18, tt)
+	s1 = EncodedValue(context.Background(), tt)
 	a.False(strings.Contains(s1, "// MyTest2: abc-123"))
 }

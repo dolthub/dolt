@@ -166,7 +166,7 @@ func TestRowMerge(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			actualResult, isConflict := rowMerge(context.Background(), types.Format_7_18, test.sch, test.row, test.mergeRow, test.ancRow)
-			assert.Equal(t, test.expectedResult, actualResult, "expected "+types.EncodedValue(context.Background(), types.Format_7_18, test.expectedResult)+"got "+types.EncodedValue(context.Background(), types.Format_7_18, actualResult))
+			assert.Equal(t, test.expectedResult, actualResult, "expected "+types.EncodedValue(context.Background(), test.expectedResult)+"got "+types.EncodedValue(context.Background(), actualResult))
 			assert.Equal(t, test.expectConflict, isConflict)
 		})
 	}
@@ -345,7 +345,7 @@ func TestMergeCommits(t *testing.T) {
 	if merged.HashOf() != expected.HashOf() {
 		mergedRows := merged.GetRowData(context.Background())
 		if !mergedRows.Equals(expectedRows) {
-			t.Error(types.EncodedValue(context.Background(), types.Format_7_18, mergedRows), "\n!=\n", types.EncodedValue(context.Background(), types.Format_7_18, expectedRows))
+			t.Error(types.EncodedValue(context.Background(), mergedRows), "\n!=\n", types.EncodedValue(context.Background(), expectedRows))
 		}
 	}
 }

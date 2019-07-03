@@ -167,7 +167,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_CustomMerge() {
 	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, resolve, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
-		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 	if s.Len(conflictPaths, len(expectedConflictPaths), "Wrong number of conflicts!") {
 		for i := 0; i < len(conflictPaths); i++ {
@@ -187,7 +187,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_MergeOurs() {
 	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, Ours, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
-		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 }
 
@@ -200,7 +200,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_MergeTheirs() {
 	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, Theirs, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
-		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 }
 
@@ -228,8 +228,8 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NestedConflict() {
 	a := mm2a.set("k2", types.NewSet(context.Background(), s.vs))
-	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(context.Background(), types.Format_7_18, types.NewSet(context.Background(), s.vs)))
-	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(context.Background(), types.Format_7_18, s.create(aa1b)))
+	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(context.Background(), types.NewSet(context.Background(), s.vs)))
+	s.tryThreeWayConflict(s.create(a), s.create(mm2b), s.create(mm2), types.EncodedValue(context.Background(), s.create(aa1b)))
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_NestedConflictingOperation() {

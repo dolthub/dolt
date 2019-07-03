@@ -138,10 +138,10 @@ func ParseTaggedValues(tpl types.Tuple) TaggedValues {
 	return taggedTuple
 }
 
-func (tt TaggedValues) String(format *types.Format) string {
+func (tt TaggedValues) String() string {
 	str := "{"
 	for k, v := range tt {
-		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(context.Background(), format, v))
+		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(context.Background(), v))
 	}
 
 	str += "\n}"

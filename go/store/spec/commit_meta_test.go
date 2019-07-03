@@ -25,7 +25,7 @@ func TestCreateCommitMetaStructBasic(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), types.Format_7_18, nil, "", "", nil, nil)
 	assert.NoError(err)
 	assert.False(isEmptyStruct(meta))
-	assert.Equal("Struct Meta {\n  date: String,\n}", types.TypeOf(meta).Describe(context.Background(), types.Format_7_18))
+	assert.Equal("Struct Meta {\n  date: String,\n}", types.TypeOf(meta).Describe(context.Background()))
 }
 
 func TestCreateCommitMetaStructFromFlags(t *testing.T) {
@@ -37,7 +37,7 @@ func TestCreateCommitMetaStructFromFlags(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), types.Format_7_18, nil, "", "", nil, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
-		types.TypeOf(meta).Describe(context.Background(), types.Format_7_18))
+		types.TypeOf(meta).Describe(context.Background()))
 	assert.Equal(types.String(commitMetaDate), meta.Get("date"))
 	assert.Equal(types.String(commitMetaMessage), meta.Get("message"))
 	assert.Equal(types.String("v1"), meta.Get("k1"))
@@ -54,7 +54,7 @@ func TestCreateCommitMetaStructFromArgs(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), types.Format_7_18, nil, dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
-		types.TypeOf(meta).Describe(context.Background(), types.Format_7_18))
+		types.TypeOf(meta).Describe(context.Background()))
 	assert.Equal(types.String(dateArg), meta.Get("date"))
 	assert.Equal(types.String(messageArg), meta.Get("message"))
 	assert.Equal(types.String("v1"), meta.Get("k1"))
@@ -76,7 +76,7 @@ func TestCreateCommitMetaStructFromFlagsAndArgs(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), types.Format_7_18, nil, dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  k4: String,\n  message: String,\n}",
-		types.TypeOf(meta).Describe(context.Background(), types.Format_7_18))
+		types.TypeOf(meta).Describe(context.Background()))
 	assert.Equal(types.String(dateArg), meta.Get("date"))
 	assert.Equal(types.String(messageArg), meta.Get("message"))
 	assert.Equal(types.String("v1"), meta.Get("k1"))
