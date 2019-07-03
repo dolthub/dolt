@@ -55,7 +55,7 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	dec := newValueDecoder(expectedAsByteSlice, vs)
 	// TODO(binformat)
 	v2 := dec.readValue(Format_7_18)
-	assert.True(t, v.Equals(Format_7_18, v2))
+	assert.True(t, v.Equals(v2))
 }
 
 func TestRoundTrips(t *testing.T) {
@@ -63,7 +63,7 @@ func TestRoundTrips(t *testing.T) {
 
 	assertRoundTrips := func(v Value) {
 		out := DecodeValue(EncodeValue(v, Format_7_18), vs)
-		assert.True(t, v.Equals(Format_7_18, out))
+		assert.True(t, v.Equals(out))
 	}
 
 	assertRoundTrips(Bool(false))
@@ -612,7 +612,7 @@ func TestWriteEmptyUnionList(t *testing.T) {
 type bogusType int
 
 func (bg bogusType) Value(ctx context.Context) Value                  { return bg }
-func (bg bogusType) Equals(f *Format, other Value) bool               { return false }
+func (bg bogusType) Equals(other Value) bool                          { return false }
 func (bg bogusType) Less(f *Format, other LesserValuable) bool        { return false }
 func (bg bogusType) Hash(*Format) hash.Hash                           { return hash.Hash{} }
 func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) {}

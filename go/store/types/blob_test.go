@@ -204,19 +204,19 @@ func TestBlobConcat(t *testing.T) {
 	b = reload(b)
 
 	b1 := NewEmptyBlob(vs).Concat(context.Background(), b)
-	assert.True(b.Equals(Format_7_18, b1))
+	assert.True(b.Equals(b1))
 
 	b2 := b.Concat(context.Background(), NewEmptyBlob(vs))
-	assert.True(b.Equals(Format_7_18, b2))
+	assert.True(b.Equals(b2))
 
 	b3, b4 := split(b, 10)
-	assert.True(b.Equals(Format_7_18, b3.Concat(context.Background(), b4)))
+	assert.True(b.Equals(b3.Concat(context.Background(), b4)))
 
 	b5, b6 := split(b, 1e6-10)
-	assert.True(b.Equals(Format_7_18, b5.Concat(context.Background(), b6)))
+	assert.True(b.Equals(b5.Concat(context.Background(), b6)))
 
 	b7, b8 := split(b, 1e6/2)
-	assert.True(b.Equals(Format_7_18, b7.Concat(context.Background(), b8)))
+	assert.True(b.Equals(b7.Concat(context.Background(), b8)))
 }
 
 func TestBlobNewParallel(t *testing.T) {

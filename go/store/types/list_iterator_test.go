@@ -20,11 +20,11 @@ func TestListIterator(t *testing.T) {
 	l := NewList(context.Background(), vrw, numbers...)
 	i := l.Iterator(context.Background())
 	vs := iterToSlice(i)
-	assert.True(vs.Equals(Format_7_18, numbers), "Expected: %v != actual: %v", numbers, vs)
+	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
 	i = l.IteratorAt(context.Background(), 3)
 	vs = iterToSlice(i)
-	assert.True(vs.Equals(Format_7_18, numbers[3:]), "Expected: %v != actual: %v", numbers, vs)
+	assert.True(vs.Equals(numbers[3:]), "Expected: %v != actual: %v", numbers, vs)
 
 	i = l.IteratorAt(context.Background(), l.Len())
 	assert.Nil(i.Next(context.Background()))

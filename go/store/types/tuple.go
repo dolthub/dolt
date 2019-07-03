@@ -282,7 +282,7 @@ func (t Tuple) Less(f *Format, other LesserValuable) bool {
 			_, currVal := itr.Next()
 			_, currOthVal := otherItr.Next()
 
-			if !currVal.Equals(f, currOthVal) {
+			if !currVal.Equals(currOthVal) {
 				return currVal.Less(f, currOthVal)
 			}
 		}

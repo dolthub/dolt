@@ -16,12 +16,12 @@ func TestStringEquals(t *testing.T) {
 	s2 := String("foo")
 	s3 := s2
 	s4 := String("bar")
-	assert.True(s1.Equals(Format_7_18, s2))
-	assert.True(s2.Equals(Format_7_18, s1))
-	assert.True(s1.Equals(Format_7_18, s3))
-	assert.True(s3.Equals(Format_7_18, s1))
-	assert.False(s1.Equals(Format_7_18, s4))
-	assert.False(s4.Equals(Format_7_18, s1))
+	assert.True(s1.Equals(s2))
+	assert.True(s2.Equals(s1))
+	assert.True(s1.Equals(s3))
+	assert.True(s3.Equals(s1))
+	assert.False(s1.Equals(s4))
+	assert.False(s4.Equals(s1))
 }
 
 func TestStringString(t *testing.T) {
@@ -33,5 +33,5 @@ func TestStringString(t *testing.T) {
 }
 
 func TestStringType(t *testing.T) {
-	assert.True(t, TypeOf(String("hi")).Equals(Format_7_18, StringType))
+	assert.True(t, TypeOf(String("hi")).Equals(StringType))
 }

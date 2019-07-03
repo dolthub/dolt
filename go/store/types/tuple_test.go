@@ -15,7 +15,7 @@ func TestTupleEquality(t *testing.T) {
 	values := []Value{String("aoeu"), Int(-1234), Uint(1234)}
 	tpl := NewTuple(Format_7_18, values...)
 
-	if !tpl.Equals(Format_7_18, tpl) {
+	if !tpl.Equals(tpl) {
 		t.Error("Tuple not equal to itself")
 	}
 
@@ -23,41 +23,41 @@ func TestTupleEquality(t *testing.T) {
 	tpl2 := tpl.Append(id)
 	idIdx := tpl2.Len() - 1
 
-	if tpl.Equals(Format_7_18, tpl2) {
+	if tpl.Equals(tpl2) {
 		t.Error("Tuples should not be equal")
 	}
 
 	tpl3 := tpl2.Set(idIdx, id).Set(0, String("aoeu")).Set(1, Int(-1234)).Set(2, Uint(1234))
 
-	if !tpl2.Equals(Format_7_18, tpl3) {
+	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3 = tpl2.Set(0, String("aoeu"))
 
-	if !tpl2.Equals(Format_7_18, tpl3) {
+	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3 = tpl2.Set(1, Int(-1234))
 
-	if !tpl2.Equals(Format_7_18, tpl3) {
+	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3 = tpl2.Set(2, Uint(1234))
 
-	if !tpl2.Equals(Format_7_18, tpl3) {
+	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
 	tpl3 = tpl2.Set(idIdx, id)
 
-	if !tpl2.Equals(Format_7_18, tpl3) {
+	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
-	if !tpl2.Equals(Format_7_18, tpl3) {
+	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
@@ -71,9 +71,9 @@ func TestTupleEquality(t *testing.T) {
 		equal := false
 		switch index {
 		case 0, 1, 2:
-			equal = values[index].Equals(Format_7_18, value)
+			equal = values[index].Equals(value)
 		case 3:
-			equal = id.Equals(Format_7_18, value)
+			equal = id.Equals(value)
 		}
 
 		if !equal {

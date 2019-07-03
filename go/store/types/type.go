@@ -42,14 +42,14 @@ func (t *Type) Value(ctx context.Context) Value {
 	return t
 }
 
-func (t *Type) Equals(format *Format, other Value) (res bool) {
+func (t *Type) Equals(other Value) (res bool) {
 	// This is highly optimized to not having to encode a *Type unless we have too.
 	if t == other {
 		return true
 	}
 
 	if otherType, ok := other.(*Type); ok {
-		return t.TargetKind() == otherType.TargetKind() && t.Hash(format) == other.Hash(format)
+		return t.TargetKind() == otherType.TargetKind() && t.Hash(Format_7_18) == other.Hash(Format_7_18)
 	}
 
 	return false

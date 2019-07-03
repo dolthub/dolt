@@ -21,7 +21,7 @@ func (v Float) Value(ctx context.Context) Value {
 	return v
 }
 
-func (v Float) Equals(format *Format, other Value) bool {
+func (v Float) Equals(other Value) bool {
 	return v == other
 }
 

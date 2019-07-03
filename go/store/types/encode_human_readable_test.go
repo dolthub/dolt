@@ -342,7 +342,7 @@ type TestCommenter struct {
 }
 
 func (c TestCommenter) Comment(ctx context.Context, f *Format, v Value) string {
-	if !(v.typeOf().Equals(f, c.testType)) {
+	if !(v.typeOf().Equals(c.testType)) {
 		return ""
 	}
 	return c.prefix + string(v.(Struct).Get("Name").(String))
