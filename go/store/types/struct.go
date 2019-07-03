@@ -33,7 +33,7 @@ func readStruct(f *Format, dec *valueDecoder) Struct {
 	start := dec.pos()
 	skipStruct(f, dec)
 	end := dec.pos()
-	return Struct{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}, f}
+	return Struct{valueImpl{dec.vrw, f, dec.byteSlice(start, end), nil}, f}
 }
 
 func skipStruct(f *Format, dec *valueDecoder) {
@@ -94,7 +94,7 @@ func newStruct(f *Format, name string, fieldNames []string, values []Value) Stru
 		}
 		values[i].writeTo(&w, f)
 	}
-	return Struct{valueImpl{vrw, w.data(), nil}, f}
+	return Struct{valueImpl{vrw, f, w.data(), nil}, f}
 }
 
 func NewStruct(format *Format, name string, data StructData) Struct {
@@ -287,7 +287,7 @@ func (s Struct) Set(n string, v Value) Struct {
 	v.writeTo(&w, s.format)
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, w.data(), nil}, s.format}
+	return Struct{valueImpl{s.vrw, s.format, w.data(), nil}, s.format}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
@@ -340,7 +340,7 @@ func (s Struct) Delete(n string) Struct {
 	w.writeRaw(head)
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, w.data(), nil}, s.format}
+	return Struct{valueImpl{s.vrw, s.format, w.data(), nil}, s.format}
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {

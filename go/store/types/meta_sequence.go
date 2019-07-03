@@ -47,7 +47,7 @@ func (mt metaTuple) decoderAtPart(part uint32) valueDecoder {
 
 func (mt metaTuple) ref() Ref {
 	dec := mt.decoderAtPart(metaTuplePartRef)
-	return dec.readRef()
+	return dec.readRef(mt.format)
 }
 
 func (mt metaTuple) key() orderedKey {
@@ -122,11 +122,10 @@ func (key orderedKey) writeTo(w nomsWriter, f *Format) {
 
 type metaSequence struct {
 	sequenceImpl
-	format *Format
 }
 
 func newMetaSequence(f *Format, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
-	return metaSequence{newSequenceImpl(vrw, buff, offsets, len), f}
+	return metaSequence{newSequenceImpl(vrw, f, buff, offsets, len)}
 }
 
 func newMetaSequenceFromTuples(f *Format, kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
@@ -205,7 +204,7 @@ func (ms metaSequence) readTuple(f *Format, dec *valueDecoder) metaTuple {
 
 func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
 	dec.offset = uint32(ms.getItemOffset(idx))
-	return dec.readRef()
+	return dec.readRef(ms.format)
 }
 
 func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
@@ -230,7 +229,7 @@ func (ms metaSequence) typeOf() *Type {
 	ts := make(typeSlice, 0, count)
 	var lastRef Ref
 	for i := uint64(0); i < count; i++ {
-		ref := dec.readRef()
+		ref := dec.readRef(ms.format)
 		if lastRef.IsZeroValue() || !lastRef.isSameTargetType(ref) {
 			lastRef = ref
 			t := ref.TargetType()

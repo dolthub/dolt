@@ -30,8 +30,8 @@ func newRefWalker(buff []byte) refWalker {
 	return refWalker{typedBinaryNomsReader{nr, false}}
 }
 
-func (r *refWalker) walkRef(cb RefCallback) {
-	cb(readRef(&(r.typedBinaryNomsReader)))
+func (r *refWalker) walkRef(f *Format, cb RefCallback) {
+	cb(readRef(f, &(r.typedBinaryNomsReader)))
 }
 
 func (r *refWalker) walkBlobLeafSequence() {
@@ -95,7 +95,7 @@ func (r *refWalker) walkMapLeafSequence(f *Format, cb RefCallback) {
 func (r *refWalker) walkMetaSequence(f *Format, k NomsKind, level uint64, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkRef(cb) // ref to child sequence
+		r.walkRef(f, cb) // ref to child sequence
 		r.skipOrderedKey(f)
 		r.skipCount() // numLeaves
 	}
@@ -141,7 +141,7 @@ func (r *refWalker) walkValue(f *Format, cb RefCallback) {
 	case MapKind:
 		r.walkMap(f, cb)
 	case RefKind:
-		r.walkRef(cb)
+		r.walkRef(f, cb)
 	case SetKind:
 		r.walkSet(f, cb)
 	case StructKind:

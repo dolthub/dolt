@@ -52,8 +52,8 @@ type sequenceImpl struct {
 	len uint64
 }
 
-func newSequenceImpl(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) sequenceImpl {
-	return sequenceImpl{valueImpl{vrw, buff, offsets}, len}
+func newSequenceImpl(vrw ValueReadWriter, f *Format, buff []byte, offsets []uint32, len uint64) sequenceImpl {
+	return sequenceImpl{valueImpl{vrw, f, buff, offsets}, len}
 }
 
 func (seq sequenceImpl) decoderSkipToValues() (valueDecoder, uint64) {

@@ -26,8 +26,8 @@ func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) val
 	return valueDecoder{typedBinaryNomsReader{nr, true}, vrw}
 }
 
-func (r *valueDecoder) readRef() Ref {
-	return readRef(&(r.typedBinaryNomsReader))
+func (r *valueDecoder) readRef(f *Format) Ref {
+	return readRef(f, &(r.typedBinaryNomsReader))
 }
 
 func (r *valueDecoder) skipRef() {
@@ -203,7 +203,7 @@ func (r *valueDecoder) readValue(f *Format) Value {
 	case MapKind:
 		return newMap(r.readMapSequence(f), f)
 	case RefKind:
-		return r.readRef()
+		return r.readRef(f)
 	case SetKind:
 		return newSet(f, r.readSetSequence(f))
 	case StructKind:
