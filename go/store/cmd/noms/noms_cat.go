@@ -295,7 +295,7 @@ func printValue(ctx context.Context, f *types.Format, w io.Writer, v types.Value
 		}
 	}()
 
-	types.WriteEncodedValue(ctx, f, w, v)
+	types.WriteEncodedValue(ctx, w, v)
 }
 
 func hexStr(bytes []byte) string {

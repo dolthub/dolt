@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
+
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
@@ -23,9 +26,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"path/filepath"
-	"strings"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -61,7 +61,7 @@ var sqlSynopsis = []string{
 }
 
 const (
-	queryFlag = "query"
+	queryFlag  = "query"
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -109,24 +109,24 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	// start the doltsql shell
 	historyFile := filepath.Join(dEnv.GetDoltDir(), ".sqlhistory")
 	rlConf := readline.Config{
-		Prompt: "doltsql> ",
-		Stdout: cli.CliOut,
-		Stderr: cli.CliOut,
-		HistoryFile: historyFile,
-		HistoryLimit: 500,
-		HistorySearchFold: true,
+		Prompt:                 "doltsql> ",
+		Stdout:                 cli.CliOut,
+		Stderr:                 cli.CliOut,
+		HistoryFile:            historyFile,
+		HistoryLimit:           500,
+		HistorySearchFold:      true,
 		DisableAutoSaveHistory: true,
 	}
 	shellConf := ishell.UninterpretedConfig{
 		ReadlineConfig: &rlConf,
-		QuitKeywords: []string {
+		QuitKeywords: []string{
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator: ";",
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
-	shell.SetMultiPrompt( "      -> ")
+	shell.SetMultiPrompt("      -> ")
 	// TODO: update completer on create / drop / alter statements
 	shell.CustomCompleter(newCompleter(dEnv))
 
@@ -196,13 +196,13 @@ func newCompleter(dEnv *env.DoltEnv) *sqlCompleter {
 	completionWords = append(completionWords, dsql.CommonKeywords...)
 
 	return &sqlCompleter{
-		allWords: completionWords,
+		allWords:    completionWords,
 		columnNames: columnNames,
 	}
 }
 
 type sqlCompleter struct {
-	allWords []string
+	allWords    []string
 	columnNames []string
 }
 
@@ -248,7 +248,7 @@ func (c *sqlCompleter) getWords(lastWord string) (s []string) {
 	lastDot := strings.LastIndex(lastWord, ".")
 	if lastDot > 0 && strings.Count(lastWord, ".") == 1 {
 		alias := lastWord[:lastDot]
-		return prepend(alias + ".", c.columnNames)
+		return prepend(alias+".", c.columnNames)
 	}
 
 	return c.allWords
@@ -339,7 +339,7 @@ func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), types.Format_7_18, tff.Row, untypedSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, untypedSch)))
 		return true
 	})
 

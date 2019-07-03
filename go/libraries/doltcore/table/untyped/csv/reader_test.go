@@ -95,7 +95,7 @@ func TestReader(t *testing.T) {
 			for i, r := range rows {
 				expectedRow := test.expectedRows[i]
 				if !row.AreEqual(types.Format_7_18, r, expectedRow, sch) {
-					t.Error(row.Fmt(context.Background(), types.Format_7_18, r, sch), "!=", row.Fmt(context.Background(), types.Format_7_18, expectedRow, sch))
+					t.Error(row.Fmt(context.Background(), r, sch), "!=", row.Fmt(context.Background(), expectedRow, sch))
 				}
 			}
 		}

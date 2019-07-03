@@ -426,7 +426,7 @@ func (w *hrsWriter) writeStructType(t *Type, seenStructs map[*Type]struct{}) {
 	w.write("}")
 }
 
-func encodedValueFormatMaxLines(ctx context.Context, f *Format, v Value, floatFormat byte, maxLines uint32) string {
+func encodedValueFormatMaxLines(ctx context.Context, v Value, floatFormat byte, maxLines uint32) string {
 	var buf bytes.Buffer
 	mlw := &writers.MaxLineWriter{Dest: &buf, MaxLines: maxLines}
 	w := &hrsWriter{w: mlw, floatFormat: floatFormat}
@@ -456,12 +456,12 @@ func EncodedValue(ctx context.Context, v Value) string {
 
 // EncodedValueMaxLines returns a string containing the serialization of a value.
 // The string is truncated at |maxLines|.
-func EncodedValueMaxLines(ctx context.Context, f *Format, v Value, maxLines uint32) string {
-	return encodedValueFormatMaxLines(ctx, f, v, 'g', maxLines)
+func EncodedValueMaxLines(ctx context.Context, v Value, maxLines uint32) string {
+	return encodedValueFormatMaxLines(ctx, v, 'g', maxLines)
 }
 
 // WriteEncodedValue writes the serialization of a value
-func WriteEncodedValue(ctx context.Context, f *Format, w io.Writer, v Value) error {
+func WriteEncodedValue(ctx context.Context, w io.Writer, v Value) error {
 	hrs := &hrsWriter{w: w, floatFormat: 'g'}
 	hrs.Write(ctx, v)
 	return hrs.err
@@ -469,7 +469,7 @@ func WriteEncodedValue(ctx context.Context, f *Format, w io.Writer, v Value) err
 
 // WriteEncodedValueMaxLines writes the serialization of a value. Writing will be
 // stopped and an error returned after |maxLines|.
-func WriteEncodedValueMaxLines(ctx context.Context, f *Format, w io.Writer, v Value, maxLines uint32) error {
+func WriteEncodedValueMaxLines(ctx context.Context, w io.Writer, v Value, maxLines uint32) error {
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: maxLines}
 	hrs := &hrsWriter{w: mlw, floatFormat: 'g'}
 	hrs.Write(ctx, v)

@@ -156,7 +156,7 @@ func field(ctx context.Context, format *types.Format, w io.Writer, op prefixOp, 
 
 func writeEncodedValue(ctx context.Context, format *types.Format, w io.Writer, v types.Value) error {
 	if v.Kind() != types.BlobKind {
-		return types.WriteEncodedValue(ctx, format, w, v)
+		return types.WriteEncodedValue(ctx, w, v)
 	}
 	write(w, []byte("Blob ("))
 	write(w, []byte(humanize.Bytes(v.(types.Blob).Len())))
