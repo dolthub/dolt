@@ -190,22 +190,17 @@ func chooseConjoinees(upstream chunkSources) (toConjoin, toKeep chunkSources) {
 
 	sum := upZero + upOne
 	for partition < len(sortedUpstream) {
-		upOne, err := sortedUpstream[1].count()
+		partCnt, err := sortedUpstream[partition].count()
 
 		// TODO: fix panics
 		d.PanicIfError(err)
 
-		sum += upOne
-		partition++
-
-		cnt, err := sortedUpstream[partition].count()
-
-		// TODO: fix panics
-		d.PanicIfError(err)
-
-		if sum < cnt {
+		if sum <= partCnt {
 			break
 		}
+
+		sum += partCnt
+		partition++
 	}
 
 	return sortedUpstream[:partition], sortedUpstream[partition:]
