@@ -38,7 +38,7 @@ func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq) {
 	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, nil, nil)
 	if s.NoError(err) {
 		expected := s.create(exp)
-		s.True(expected.Equals(types.Format_7_18, merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
 	}
 }
 

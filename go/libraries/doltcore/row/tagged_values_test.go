@@ -141,7 +141,7 @@ func TestTaggedTuple_Iter(t *testing.T) {
 	tt.Iter(func(tag uint64, val types.Value) (stop bool) {
 		sum += tag
 		tagStr := strconv.FormatUint(tag, 10)
-		if !types.String(tagStr).Equals(types.Format_7_18, val) {
+		if !types.String(tagStr).Equals(val) {
 			t.Errorf("Unexpected value for tag %d: %s", sum, string(val.(types.String)))
 		}
 		return false

@@ -90,10 +90,10 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	for i := uint64(0); i < 1e3; i++ { // 1k iterations * 2 concat ops = 2k times
 		// Include some basic sanity checks.
 		l3 = l3.Concat(context.Background(), l1)
-		assert.True(l1Last.Equals(types.Format_7_18, last(l3)))
+		assert.True(l1Last.Equals(last(l3)))
 		assert.Equal(i*(l1Len+l2Len)+l1Len, l3.Len())
 		l3 = l3.Concat(context.Background(), l2)
-		assert.True(l2Last.Equals(types.Format_7_18, last(l3)))
+		assert.True(l2Last.Equals(last(l3)))
 		assert.Equal((i+1)*(l1Len+l2Len), l3.Len())
 	}
 

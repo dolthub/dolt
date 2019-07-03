@@ -80,7 +80,7 @@ func TestConv(t *testing.T) {
 				t.Error("input:", test.input, "expected err:", test.expectErr, "actual err:", err != nil)
 			}
 
-			if !test.expectedOut.Equals(types.Format_7_18, result) {
+			if !test.expectedOut.Equals(result) {
 				t.Error("input:", test.input, "expected result:", test.expectedOut, "actual result:", result)
 			}
 		}

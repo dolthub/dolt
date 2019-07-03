@@ -105,7 +105,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 			spec.CreateValueSpecString(db.Format(), "nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))
 		out := types.DecodeValue(ch, db)
-		s.True(out.Equals(db.Format(), in))
+		s.True(out.Equals(in))
 	}
 
 	// Primitive value with no child chunks

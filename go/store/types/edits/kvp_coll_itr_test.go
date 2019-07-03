@@ -46,7 +46,7 @@ func TestKVPCollItr(t *testing.T) {
 			for _, expRes := range test.itrResults {
 				kvp, buff, done := itr.nextForDestructiveMerge()
 
-				if !kvp.Key.Value(ctx).Equals(types.Format_7_18, types.Uint(expRes.keyVal)) {
+				if !kvp.Key.Value(ctx).Equals(types.Uint(expRes.keyVal)) {
 					t.Error("unexpected result")
 				}
 

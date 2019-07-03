@@ -188,7 +188,7 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 	pk2, val2 := itr2.Next(ctx)
 
 	for pk1 != nil || pk2 != nil {
-		if pk1 == nil || pk2 == nil || !pk1.Equals(root.vrw.Format(), pk2) {
+		if pk1 == nil || pk2 == nil || !pk1.Equals(pk2) {
 			// TODO(binformat)
 			if pk2 == nil || (pk1 != nil && pk1.Less(root.vrw.Format(), pk2)) {
 				added = append(added, string(pk1.(types.String)))
@@ -203,7 +203,7 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 			//tbl1 := Table{root.vrw, tblSt1.(types.Struct)}
 			//tbl2 := Table{root.vrw, tblSt2.(types.Struct)}
 
-			if !val1.Equals(root.vrw.Format(), val2) {
+			if !val1.Equals(val2) {
 				modified = append(modified, string(pk1.(types.String)))
 			}
 

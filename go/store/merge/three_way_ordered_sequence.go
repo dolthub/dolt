@@ -58,7 +58,7 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, format *types
 			bChange = types.ValueChanged{}
 			continue
 		}
-		if !aChange.Key.Equals(format, bChange.Key) {
+		if !aChange.Key.Equals(bChange.Key) {
 			d.Panic("Diffs have skewed!") // Sanity check.
 		}
 
@@ -84,7 +84,7 @@ func (m *merger) mergeChanges(ctx context.Context, format *types.Format, aChange
 		return change, nil, newMergeConflict("Conflict:\n%s\nvs\n%s\n", describeChange(format, aChange), describeChange(format, bChange))
 	}
 
-	if aChange.ChangeType == types.DiffChangeRemoved || aValue.Equals(format, bValue) {
+	if aChange.ChangeType == types.DiffChangeRemoved || aValue.Equals(bValue) {
 		// If both diffs generated a remove, or if the new value is the same in both, merge is fine.
 		return aChange, aValue, nil
 	}
