@@ -663,15 +663,17 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		nbs.mu.Lock()
 		defer nbs.mu.Unlock()
 
-		cnt, err := nbs.mt.count()
+		if nbs.mt != nil {
+			cnt, err := nbs.mt.count()
 
-		if err != nil {
-			return err
-		}
+			if err != nil {
+				return err
+			}
 
-		if nbs.mt != nil && cnt > preflushChunkCount {
-			nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
-			nbs.mt = nil
+			if cnt > preflushChunkCount {
+				nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
+				nbs.mt = nil
+			}
 		}
 
 		return nil
@@ -730,18 +732,21 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return handleOptimisticLockFailure(cached)
 	}
 
-	cnt, err := nbs.mt.count()
+	if nbs.mt != nil {
+		cnt, err := nbs.mt.count()
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
-	if nbs.mt != nil && cnt > 0 {
-		nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
-		nbs.mt = nil
+		if cnt > 0 {
+			nbs.tables = nbs.tables.Prepend(ctx, nbs.mt, nbs.stats)
+			nbs.mt = nil
+		}
 	}
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
+		var err error
 		nbs.upstream, err = nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 
 		if err != nil {
