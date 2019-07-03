@@ -39,7 +39,7 @@ func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
 	typedSch := dr.toTyped.DestSch
 	key := typed.NomsMapKey(types.Format_7_18, typedSch).Value(context.Background())
 
-	if !dr.key.Equals(types.Format_7_18, key) {
+	if !dr.key.Equals(key) {
 		me = me.Remove(dr.key)
 	}
 
@@ -86,7 +86,7 @@ func (dr *DimRow) HasChanged() bool {
 	equal := true
 	dr.currentVals.Iter(func(tag uint64, val types.Value) bool {
 		val2, ok := dr.dbVals.Get(tag)
-		equal = ok && val.Equals(types.Format_7_18, val2)
+		equal = ok && val.Equals(val2)
 
 		return !equal
 	})

@@ -9,7 +9,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io/ioutil"
 	"log"
 	"os"
@@ -96,7 +95,7 @@ func main() {
 	dim := New(ctx, sch, data)
 	updatedRows := dim.Run(ctx)
 
-	if !data.Equals(types.Format_7_18, updatedRows) {
+	if !data.Equals(updatedRows) {
 		updatedTbl := tbl.UpdateRows(ctx, updatedRows)
 		updatedRoot := root.PutTable(ctx, dEnv.DoltDB, tableName, updatedTbl)
 		dEnv.UpdateWorkingRoot(ctx, updatedRoot)

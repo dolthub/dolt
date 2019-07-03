@@ -130,7 +130,7 @@ func TestParseKeyValues(t *testing.T) {
 					currActual = actual[i]
 				}
 
-				if !currActual.Equals(types.Format_7_18, currExpected) {
+				if !currActual.Equals(currExpected) {
 					t.Error("actual:", types.EncodedValue(context.Background(), types.Format_7_18, currActual), "!= expected:", types.EncodedValue(context.Background(), types.Format_7_18, currExpected))
 				}
 			}

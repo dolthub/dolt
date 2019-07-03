@@ -140,12 +140,12 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(c.vrw.Format(), c.commitSt) {
-		if ancestor.commitSt.Equals(c.vrw.Format(), new.commitSt) {
+	} else if ancestor.commitSt.Equals(c.commitSt) {
+		if ancestor.commitSt.Equals(new.commitSt) {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(c.vrw.Format(), new.commitSt) {
+	} else if ancestor.commitSt.Equals(new.commitSt) {
 		return false, ErrIsAhead
 	}
 
@@ -159,12 +159,12 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(c.vrw.Format(), new.commitSt) {
-		if ancestor.commitSt.Equals(c.vrw.Format(), c.commitSt) {
+	} else if ancestor.commitSt.Equals(new.commitSt) {
+		if ancestor.commitSt.Equals(c.commitSt) {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(c.vrw.Format(), c.commitSt) {
+	} else if ancestor.commitSt.Equals(c.commitSt) {
 		return false, ErrIsBehind
 	}
 

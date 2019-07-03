@@ -66,7 +66,7 @@ func TestKVPSliceSort(t *testing.T) {
 		}
 
 		for i := 0; i < len(test.kvps); i++ {
-			if !test.kvps[i].Key.Value(ctx).Equals(types.Format_7_18, test.expSorted[i].Key.Value(ctx)) {
+			if !test.kvps[i].Key.Value(ctx).Equals(test.expSorted[i].Key.Value(ctx)) {
 				t.Error("value at", i, "does not match expected.")
 			}
 		}

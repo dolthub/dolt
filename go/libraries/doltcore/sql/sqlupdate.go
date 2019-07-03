@@ -129,7 +129,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			currVal, _ := r.GetColVal(tag)
 			val := getter.Get(r)
 
-			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(types.Format_7_18, val)) {
+			if (currVal == nil && val != nil) || (currVal != nil && !currVal.Equals(val)) {
 				anyColChanged = true
 			}
 

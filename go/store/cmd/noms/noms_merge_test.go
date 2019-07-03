@@ -114,9 +114,9 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 	if s.NoError(err) {
 		defer sp.Close()
 		commit := sp.GetDataset(context.Background()).Head()
-		s.True(commit.Get(datas.ParentsField).Equals(types.Format_7_18, types.NewSet(context.Background(), db, parents...)))
+		s.True(commit.Get(datas.ParentsField).Equals(types.NewSet(context.Background(), db, parents...)))
 		merged := sp.GetDataset(context.Background()).HeadValue()
-		s.True(expected.Equals(types.Format_7_18, merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
+		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, merged))
 	}
 }
 
@@ -251,7 +251,7 @@ func TestNomsMergeCliResolve(t *testing.T) {
 			assert.False(t, ok)
 		} else if assert.True(t, ok) {
 			assert.Equal(t, c.expectedChange, changeType)
-			assert.True(t, c.expected.Equals(types.Format_7_18, newVal))
+			assert.True(t, c.expected.Equals(newVal))
 		}
 	}
 }

@@ -36,7 +36,7 @@ func (s *testSuite) TestDatabase() {
 	assert := s.NewAssert()
 	val := types.Bool(true)
 	r := s.Database.WriteValue(context.Background(), val)
-	assert.True(s.Database.ReadValue(context.Background(), r.TargetHash()).Equals(types.Format_7_18, val))
+	assert.True(s.Database.ReadValue(context.Background(), r.TargetHash()).Equals(val))
 }
 
 func (s *testSuite) TestTempFile() {

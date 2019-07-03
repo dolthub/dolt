@@ -99,7 +99,7 @@ func canMerge(ctx context.Context, format *types.Format, a, b types.List, aSplic
 	aIter, bIter := a.IteratorAt(ctx, aSplice.SpFrom), b.IteratorAt(ctx, bSplice.SpFrom)
 	for count := uint64(0); count < aSplice.SpAdded; count++ {
 		aVal, bVal := aIter.Next(ctx), bIter.Next(ctx)
-		if aVal == nil || bVal == nil || !aVal.Equals(format, bVal) {
+		if aVal == nil || bVal == nil || !aVal.Equals(bVal) {
 			return false
 		}
 	}

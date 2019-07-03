@@ -344,7 +344,7 @@ func TestMergeCommits(t *testing.T) {
 
 	if merged.HashOf() != expected.HashOf() {
 		mergedRows := merged.GetRowData(context.Background())
-		if !mergedRows.Equals(types.Format_7_18, expectedRows) {
+		if !mergedRows.Equals(expectedRows) {
 			t.Error(types.EncodedValue(context.Background(), types.Format_7_18, mergedRows), "\n!=\n", types.EncodedValue(context.Background(), types.Format_7_18, expectedRows))
 		}
 	}

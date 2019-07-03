@@ -78,7 +78,7 @@ func indexPathCompare(format *types.Format, pp types.IndexPath, o types.PathPart
 	case types.FieldPath:
 		return 1
 	case types.IndexPath:
-		if pp.Index.Equals(format, opp.Index) {
+		if pp.Index.Equals(opp.Index) {
 			if pp.IntoKey == opp.IntoKey {
 				return 0
 			}

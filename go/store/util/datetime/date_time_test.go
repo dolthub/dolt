@@ -91,7 +91,7 @@ func TestMarshal(t *testing.T) {
 
 		assert.True(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
 			"secSinceEpoch": types.Float(expected),
-		}).Equals(types.Format_7_18, v))
+		}).Equals(v))
 	}
 
 	test(DateTime{time.Unix(0, 0)}, 0)

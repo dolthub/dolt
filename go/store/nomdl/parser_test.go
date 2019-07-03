@@ -24,7 +24,7 @@ func assertParseType(t *testing.T, code string, expected *types.Type) {
 	t.Run(code, func(t *testing.T) {
 		actual, err := ParseType(code)
 		assert.NoError(t, err)
-		assert.True(t, expected.Equals(types.Format_7_18, actual), "Expected: %s, Actual: %s", expected.Describe(context.Background(), types.Format_7_18), actual.Describe(context.Background(), types.Format_7_18))
+		assert.True(t, expected.Equals(actual), "Expected: %s, Actual: %s", expected.Describe(context.Background(), types.Format_7_18), actual.Describe(context.Background(), types.Format_7_18))
 	})
 }
 
@@ -34,7 +34,7 @@ func assertParse(t *testing.T, vrw types.ValueReadWriter, code string, expected 
 		if !assert.NoError(t, err) {
 			return
 		}
-		assert.True(t, expected.Equals(types.Format_7_18, actual), "Expected: %s, Actual: %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, actual))
+		assert.True(t, expected.Equals(actual), "Expected: %s, Actual: %s", types.EncodedValue(context.Background(), types.Format_7_18, expected), types.EncodedValue(context.Background(), types.Format_7_18, actual))
 	})
 }
 

@@ -32,7 +32,7 @@ func TestDecode(tt *testing.T) {
 		err := Unmarshal(context.Background(), types.Format_7_18, v, p.Interface())
 		assert.NoError(err)
 		if expectedValue, ok := expected.(types.Value); ok {
-			assert.True(expectedValue.Equals(types.Format_7_18, p.Elem().Interface().(types.Value)))
+			assert.True(expectedValue.Equals(p.Elem().Interface().(types.Value)))
 		} else {
 			assert.Equal(expected, p.Elem().Interface())
 		}
@@ -41,7 +41,7 @@ func TestDecode(tt *testing.T) {
 		var v2 types.Value
 		err = Unmarshal(context.Background(), types.Format_7_18, v, &v2)
 		assert.NoError(err)
-		assert.True(v.Equals(types.Format_7_18, v2))
+		assert.True(v.Equals(v2))
 	}
 
 	for _, n := range []float32{0, 42, 3.14159265359, math.MaxFloat32} {
@@ -241,7 +241,7 @@ func TestDecodeStructWithNomsValue(t *testing.T) {
 	assert.IsType(t, T2{}, t2)
 	assert.Equal(t, TestStruct{false, 1, "bye"}, t2.Abc)
 	// TODO(binformat)
-	assert.True(t, t2.Def.Equals(types.Format_7_18, types.NewList(context.Background(), vs, types.Float(42))))
+	assert.True(t, t2.Def.Equals(types.NewList(context.Background(), vs, types.Float(42))))
 }
 
 func TestDecodeNilPointer(t *testing.T) {
@@ -1132,7 +1132,7 @@ func TestDecodeOriginal(t *testing.T) {
 	var actual S
 	err := Unmarshal(context.Background(), types.Format_7_18, input, &actual)
 	assert.NoError(err)
-	assert.True(expected.Bar.Equals(types.Format_7_18, actual.Bar))
+	assert.True(expected.Bar.Equals(actual.Bar))
 }
 
 func TestDecodeOriginalReceiveTypeError(t *testing.T) {

@@ -16,7 +16,7 @@ import (
 )
 
 func isEmptyStruct(s types.Struct) bool {
-	return s.Equals(types.Format_7_18, types.EmptyStruct(types.Format_7_18))
+	return s.Equals(types.EmptyStruct(types.Format_7_18))
 }
 
 func TestCreateCommitMetaStructBasic(t *testing.T) {

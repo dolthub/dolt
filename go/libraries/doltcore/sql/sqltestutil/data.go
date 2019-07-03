@@ -194,7 +194,7 @@ func FindRowIndex(find row.Row, rows []row.Row) int {
 	for i, updatedRow := range rows {
 		rowId, _ := find.GetColVal(IdTag)
 		updatedId, _ := updatedRow.GetColVal(IdTag)
-		if rowId.Equals(types.Format_7_18, updatedId) {
+		if rowId.Equals(updatedId) {
 			idx = i
 			break
 		}
