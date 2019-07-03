@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 )
 
 const (
@@ -98,11 +99,17 @@ func TestNewInMemFS(t *testing.T) {
 	}, "/")
 
 	expectedDirs := []string{
-		"/r1", "/r1/c1", "/r2", "/r2/c1", "/r2/c1/gc1", "/r3",
+		osutil.PathToNative("/r1"),
+		osutil.PathToNative("/r1/c1"),
+		osutil.PathToNative("/r2"),
+		osutil.PathToNative("/r2/c1"),
+		osutil.PathToNative("/r2/c1/gc1"),
+		osutil.PathToNative("/r3"),
 	}
 
 	expectedFiles := []string{
-		"/r1/c1/file1.txt", "/r3/file2.txt",
+		osutil.PathToNative("/r1/c1/file1.txt"),
+		osutil.PathToNative("/r3/file2.txt"),
 	}
 
 	actualDirs, actualFiles, err := iterate(fs, "/", true, t)

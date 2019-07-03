@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"reflect"
@@ -223,6 +224,9 @@ func (rc *ReaderCollection) Close() error {
 }
 
 func TestReadWithMinThroughput(t *testing.T) {
+	if osutil.IsWindows {
+		t.Skip("Skipping test as it is too inconsistent on Windows and will randomly pass or fail")
+	}
 	tests := []struct {
 		name          string
 		numBytes      int64

@@ -454,6 +454,10 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 			protocol, name = "nbs", spec
 		}
 		return
+	} else if len(parts) == 2 && len(parts[0]) == 1 && parts[0][0] >= 'A' && parts[0][0] <= 'Z' { //check for Windows drive letter, ala C:\Users\Public
+		if _, err := os.Stat(parts[0] + `:\`); !os.IsNotExist(err) {
+			parts = []string{"nbs", spec}
+		}
 	}
 
 	if _, ok := ExternalProtocols[parts[0]]; ok {

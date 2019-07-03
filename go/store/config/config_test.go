@@ -5,6 +5,7 @@
 package config
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -127,7 +128,7 @@ func assertDbSpecsEquiv(assert *assert.Assertions, expected string, actual strin
 		} else {
 			// If the original path is relative, it will return as absolute.
 			// All we do here is ensure that the path suffix is the same.
-			eName := strings.TrimPrefix(e.DatabaseName, ".")
+			eName := filepath.FromSlash(strings.TrimPrefix(e.DatabaseName, "."))
 			assert.True(strings.HasSuffix(a.DatabaseName, eName),
 				"expected: %s; actual: %s", eName, actual)
 		}
@@ -180,6 +181,9 @@ func TestConfig(t *testing.T) {
 }
 
 func TestUnreadableConfig(t *testing.T) {
+	if osutil.IsWindows {
+		t.Skip("Skipping test as it is not applicable on Windows due to FS differences")
+	}
 	assert := assert.New(t)
 	path := getPaths(assert, "home.unreadable")
 	writeConfig(assert, ldbConfig, path.home)

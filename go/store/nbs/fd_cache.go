@@ -110,6 +110,24 @@ func (fc *fdCache) UnrefFile(path string) {
 	}
 }
 
+// ShrinkCache forcefully removes all file handles with a refcount of zero.
+func (fc *fdCache) ShrinkCache() {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	toDrop := make([]string, 0, len(fc.cache))
+	for p, ce := range fc.cache {
+		if ce.refCount != 0 {
+			continue
+		}
+		toDrop = append(toDrop, p)
+		err := ce.f.Close()
+		d.PanicIfError(err)
+	}
+	for _, p := range toDrop {
+		delete(fc.cache, p)
+	}
+}
+
 // Drop dumps the entire cache and closes all currently open files.
 func (fc *fdCache) Drop() {
 	fc.mu.Lock()

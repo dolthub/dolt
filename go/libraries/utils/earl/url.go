@@ -1,6 +1,7 @@
 package earl
 
 import (
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -43,15 +44,26 @@ func Parse(urlStr string) (*url.URL, error) {
 		return nil, err
 	}
 
-	// noramalize some things
-	if len(u.Path) == 0 || u.Path[0] != '/' {
-		u.Path = "/" + u.Path
+	// if Path is e.g. "/C$/" for a network location, it should instead be "C:/"
+	if len(u.Path) >= 3 && u.Path[0] == '/' && u.Path[1] >= 'A' && u.Path[1] <= 'Z' && u.Path[2] == '$' {
+		u.Path = u.Path[1:2] + ":" + u.Path[3:]
+	} else if !osutil.StartsWithWindowsVolume(u.Path) { // normalize some
+		if len(u.Path) == 0 || u.Path[0] != '/' {
+			u.Path = "/" + u.Path
+		}
 	}
+	u.Path = strings.ReplaceAll(u.Path, `\`, "/")
 
 	return u, nil
 }
 
 func parse(urlStr string) (*url.URL, error) {
+	if strIdx := strings.Index(urlStr, ":///"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+4:]) {
+		return &url.URL{
+			Scheme: urlStr[:strIdx],
+			Path: urlStr[strIdx+4:],
+		}, nil
+	}
 	if strings.Index(urlStr, "://") == -1 {
 		u, err := url.Parse("http://" + urlStr)
 

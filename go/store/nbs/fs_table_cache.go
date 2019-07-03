@@ -123,6 +123,7 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) {
 		return temp.Name()
 	}()
 
+	ftc.fd.ShrinkCache()
 	err := os.Rename(tempName, path)
 	d.PanicIfError(err)
 

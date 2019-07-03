@@ -10,6 +10,7 @@ import (
 	"path"
 
 	flag "github.com/juju/gnuflag"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/exit"
 	"github.com/stretchr/testify/suite"
@@ -53,7 +54,10 @@ func (suite *ClientTestSuite) SetupSuite() {
 func (suite *ClientTestSuite) TearDownSuite() {
 	suite.out.Close()
 	suite.err.Close()
-	defer d.Chk.NoError(os.RemoveAll(suite.TempDir))
+	err := os.RemoveAll(suite.TempDir)
+	if !osutil.IsWindows {
+		d.Chk.NoError(err)
+	}
 }
 
 // MustRun is a wrapper around Run that will panic on Exit or Panic

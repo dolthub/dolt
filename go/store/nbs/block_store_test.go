@@ -14,6 +14,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
@@ -49,7 +50,9 @@ func (suite *BlockStoreSuite) TearDownTest() {
 	err := suite.store.Close()
 	suite.NoError(err)
 	err = os.RemoveAll(suite.dir)
-	suite.NoError(err)
+	if !osutil.IsWindowsSharingViolation(err) {
+		suite.NoError(err)
+	}
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {

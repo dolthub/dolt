@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -28,7 +29,10 @@ func TestNomsMerge(t *testing.T) {
 }
 
 func (s *nomsMergeTestSuite) TearDownTest() {
-	s.NoError(os.RemoveAll(s.DBDir))
+	err := os.RemoveAll(s.DBDir)
+	if !osutil.IsWindows {
+		s.NoError(err)
+	}
 }
 
 func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
