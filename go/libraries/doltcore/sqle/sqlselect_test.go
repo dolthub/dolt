@@ -88,6 +88,8 @@ func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 	db := NewDatabase("dolt", root)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
+	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
+	engine.Init()
 	sqlCtx := sql.NewContext(ctx)
 
 	var err error
