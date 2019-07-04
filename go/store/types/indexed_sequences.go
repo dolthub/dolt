@@ -11,12 +11,12 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
-func newListMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueReadWriter) metaSequence {
-	return newMetaSequenceFromTuples(f, ListKind, level, tuples, vrw)
+func newListMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
+	return newMetaSequenceFromTuples(ListKind, level, tuples, vrw)
 }
 
-func newBlobMetaSequence(level uint64, tuples []metaTuple, f *Format, vrw ValueReadWriter) metaSequence {
-	return newMetaSequenceFromTuples(f, BlobKind, level, tuples, vrw)
+func newBlobMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) metaSequence {
+	return newMetaSequenceFromTuples(BlobKind, level, tuples, vrw)
 }
 
 // advanceCursorToOffset advances the cursor as close as possible to idx
@@ -58,7 +58,7 @@ func advanceCursorToOffset(cur *sequenceCursor, idx uint64) uint64 {
 	return uint64(cur.idx)
 }
 
-func newIndexedMetaSequenceChunkFn(f *Format, kind NomsKind, vrw ValueReadWriter) makeChunkFn {
+func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunkFn {
 	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
 		tuples := make([]metaTuple, len(items))
 		numLeaves := uint64(0)
@@ -71,12 +71,12 @@ func newIndexedMetaSequenceChunkFn(f *Format, kind NomsKind, vrw ValueReadWriter
 
 		var col Collection
 		if kind == ListKind {
-			col = newList(newListMetaSequence(level, tuples, f, vrw), f)
+			col = newList(newListMetaSequence(level, tuples, vrw))
 		} else {
 			d.PanicIfFalse(BlobKind == kind)
-			col = newBlob(newBlobMetaSequence(level, tuples, f, vrw), f)
+			col = newBlob(newBlobMetaSequence(level, tuples, vrw))
 		}
-		return col, orderedKeyFromSum(tuples, f), numLeaves
+		return col, orderedKeyFromSum(tuples, vrw.Format()), numLeaves
 	}
 }
 

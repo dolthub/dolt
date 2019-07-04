@@ -92,7 +92,7 @@ func (r Ref) decoderAtPart(part refPart) valueDecoder {
 }
 
 func (r Ref) Format() *Format {
-	return r.format
+	return r.format()
 }
 
 func (r Ref) TargetHash() hash.Hash {

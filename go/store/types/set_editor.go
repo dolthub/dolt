@@ -61,7 +61,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(ctx, se.s.format, seq, edit.value, true, false)
+				cc <- newCursorAtValue(ctx, seq, edit.value, true, false)
 			}()
 
 			editChan <- edit
@@ -92,7 +92,7 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		}
 
 		if ch == nil {
-			ch = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(se.s.format, vrw), newOrderedMetaSequenceChunkFn(SetKind, se.s.format, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(ctx, cur)
 		}
@@ -108,11 +108,11 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 		return se.s // no edits required application
 	}
 
-	return newSet(se.s.format, ch.Done(ctx).(orderedSequence))
+	return newSet(ch.Done(ctx).(orderedSequence))
 }
 
 func (se *SetEditor) Insert(vs ...Value) *SetEditor {
-	sort.Stable(ValueSort{vs, se.s.format})
+	sort.Stable(ValueSort{vs, se.s.format()})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		se.edit(v, true)
@@ -121,7 +121,7 @@ func (se *SetEditor) Insert(vs ...Value) *SetEditor {
 }
 
 func (se *SetEditor) Remove(vs ...Value) *SetEditor {
-	sort.Stable(ValueSort{vs, se.s.format})
+	sort.Stable(ValueSort{vs, se.s.format()})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		se.edit(v, false)
@@ -151,7 +151,7 @@ func (se *SetEditor) edit(v Value, insert bool) {
 
 	se.edits.edits = append(se.edits.edits, setEdit{v, insert})
 
-	if se.normalized && final.value.Less(se.s.format, v) {
+	if se.normalized && final.value.Less(se.s.format(), v) {
 		// fast-path: edits take place in key-order
 		return
 	}
@@ -165,7 +165,7 @@ func (se *SetEditor) findEdit(v Value) (idx int, found bool) {
 	se.normalize()
 
 	idx = sort.Search(len(se.edits.edits), func(i int) bool {
-		return !se.edits.edits[i].value.Less(se.s.format, v)
+		return !se.edits.edits[i].value.Less(se.s.format(), v)
 	})
 
 	if idx == len(se.edits.edits) {

@@ -16,7 +16,7 @@ const (
 	lengthOfNumbersTest = 1000
 )
 
-type diffFn func(ctx context.Context, f *Format, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool
+type diffFn func(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, closeChan <-chan struct{}) bool
 
 type diffTestSuite struct {
 	suite.Suite
@@ -44,7 +44,7 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 	changes := make(chan ValueChanged)
 	closeChan := make(chan struct{})
 	go func() {
-		df(context.Background(), Format_7_18, o1, o2, changes, closeChan)
+		df(context.Background(), o1, o2, changes, closeChan)
 		close(changes)
 	}()
 	for change := range changes {
@@ -170,7 +170,7 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 		stopChan := make(chan struct{})
 
 		go func() {
-			df(context.Background(), vs.Format(), s1, s2, changeChan, closeChan)
+			df(context.Background(), s1, s2, changeChan, closeChan)
 			stopChan <- struct{}{}
 		}()
 
@@ -189,23 +189,23 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	vrw := newTestValueStore()
 
 	newSetSequenceMt := func(v ...Value) metaTuple {
-		seq := newSetLeafSequence(Format_7_18, vrw, v...)
-		set := newSet(Format_7_18, seq)
-		return newMetaTuple(Format_7_18, vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1], Format_7_18), uint64(len(v)))
+		seq := newSetLeafSequence(vrw, v...)
+		set := newSet(seq)
+		return newMetaTuple(vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1], Format_7_18), uint64(len(v)))
 	}
 
 	m1 := newSetSequenceMt(Float(1), Float(2))
 	m2 := newSetSequenceMt(Float(3), Float(4))
 	m3 := newSetSequenceMt(Float(5), Float(6))
-	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, Format_7_18, vrw)
-	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, Format_7_18, vrw)
+	s1 := newSetMetaSequence(1, []metaTuple{m1, m3}, vrw)
+	s2 := newSetMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)
 
 	runTest := func(df diffFn) {
 		changes := make(chan ValueChanged)
 		go func() {
-			df(context.Background(), Format_7_18, s1, s2, changes, nil)
+			df(context.Background(), s1, s2, changes, nil)
 			changes <- ValueChanged{}
-			df(context.Background(), Format_7_18, s2, s1, changes, nil)
+			df(context.Background(), s2, s1, changes, nil)
 			close(changes)
 		}()
 

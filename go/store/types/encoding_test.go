@@ -109,14 +109,13 @@ func TestRoundTrips(t *testing.T) {
 
 	assertRoundTrips(NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)}))
 
-	// TODO(binformat)
-	listLeaf := newList(newListLeafSequence(vs, Format_7_18, Float(4), Float(5), Float(6), Float(7)), Format_7_18)
+	listLeaf := newList(newListLeafSequence(vs, Float(4), Float(5), Float(6), Float(7)))
 	assertRoundTrips(listLeaf)
 
 	assertRoundTrips(newList(newListMetaSequence(1, []metaTuple{
-		newMetaTuple(Format_7_18, NewRef(listLeaf, Format_7_18), orderedKeyFromInt(10, Format_7_18), 10),
-		newMetaTuple(Format_7_18, NewRef(listLeaf, Format_7_18), orderedKeyFromInt(20, Format_7_18), 20),
-	}, Format_7_18, vs), Format_7_18))
+		newMetaTuple(NewRef(listLeaf, Format_7_18), orderedKeyFromInt(10, Format_7_18), 10),
+		newMetaTuple(NewRef(listLeaf, Format_7_18), orderedKeyFromInt(20, Format_7_18), 20),
+	}, vs)))
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
@@ -313,10 +312,10 @@ func TestWriteCompoundBlob(t *testing.T) {
 			RefKind, r3, BlobKind, uint64(33), FloatKind, Float(60), uint64(60),
 		},
 		newBlob(newBlobMetaSequence(1, []metaTuple{
-			newMetaTuple(Format_7_18, constructRef(Format_7_18, r1, BlobType, 11), orderedKeyFromInt(20, Format_7_18), 20),
-			newMetaTuple(Format_7_18, constructRef(Format_7_18, r2, BlobType, 22), orderedKeyFromInt(40, Format_7_18), 40),
-			newMetaTuple(Format_7_18, constructRef(Format_7_18, r3, BlobType, 33), orderedKeyFromInt(60, Format_7_18), 60),
-		}, Format_7_18, newTestValueStore()), Format_7_18),
+			newMetaTuple(constructRef(Format_7_18, r1, BlobType, 11), orderedKeyFromInt(20, Format_7_18), 20),
+			newMetaTuple(constructRef(Format_7_18, r2, BlobType, 22), orderedKeyFromInt(40, Format_7_18), 40),
+			newMetaTuple(constructRef(Format_7_18, r3, BlobType, 33), orderedKeyFromInt(60, Format_7_18), 60),
+		}, newTestValueStore())),
 	)
 }
 
@@ -439,8 +438,8 @@ func TestWriteCompoundList(t *testing.T) {
 	vrw := newTestValueStore()
 
 	// TODO(binformat)
-	list1 := newList(newListLeafSequence(vrw, Format_7_18, Float(0)), Format_7_18)
-	list2 := newList(newListLeafSequence(vrw, Format_7_18, Float(1), Float(2), Float(3)), Format_7_18)
+	list1 := newList(newListLeafSequence(vrw, Float(0)))
+	list2 := newList(newListLeafSequence(vrw, Float(1), Float(2), Float(3)))
 	assertEncoding(t,
 		[]interface{}{
 			ListKind, uint64(1), uint64(2), // len,
@@ -448,17 +447,17 @@ func TestWriteCompoundList(t *testing.T) {
 			RefKind, list2.Hash(Format_7_18), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
 		},
 		newList(newListMetaSequence(1, []metaTuple{
-			newMetaTuple(Format_7_18, NewRef(list1, Format_7_18), orderedKeyFromInt(1, Format_7_18), 1),
-			newMetaTuple(Format_7_18, NewRef(list2, Format_7_18), orderedKeyFromInt(3, Format_7_18), 3),
-		}, Format_7_18, nil), Format_7_18),
+			newMetaTuple(NewRef(list1, Format_7_18), orderedKeyFromInt(1, Format_7_18), 1),
+			newMetaTuple(NewRef(list2, Format_7_18), orderedKeyFromInt(3, Format_7_18), 3),
+		}, vrw)),
 	)
 }
 
 func TestWriteCompoundSet(t *testing.T) {
 	vrw := newTestValueStore()
 
-	set1 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, Float(0), Float(1)))
-	set2 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, Float(2), Float(3), Float(4)))
+	set1 := newSet(newSetLeafSequence(vrw, Float(0), Float(1)))
+	set2 := newSet(newSetLeafSequence(vrw, Float(2), Float(3), Float(4)))
 
 	assertEncoding(t,
 		[]interface{}{
@@ -467,10 +466,10 @@ func TestWriteCompoundSet(t *testing.T) {
 			RefKind, set1.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
 			RefKind, set2.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
 		},
-		newSet(Format_7_18, newSetMetaSequence(1, []metaTuple{
-			newMetaTuple(Format_7_18, NewRef(set1, Format_7_18), orderedKeyFromInt(1, Format_7_18), 2),
-			newMetaTuple(Format_7_18, NewRef(set2, Format_7_18), orderedKeyFromInt(4, Format_7_18), 3),
-		}, Format_7_18, vrw)),
+		newSet(newSetMetaSequence(1, []metaTuple{
+			newMetaTuple(NewRef(set1, Format_7_18), orderedKeyFromInt(1, Format_7_18), 2),
+			newMetaTuple(NewRef(set2, Format_7_18), orderedKeyFromInt(4, Format_7_18), 3),
+		}, vrw)),
 	)
 }
 
@@ -488,8 +487,8 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	blob3 := newBlobOfInt(3)
 	blob4 := newBlobOfInt(4)
 
-	set1 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, blob0, blob1))
-	set2 := newSet(Format_7_18, newSetLeafSequence(Format_7_18, vrw, blob2, blob3, blob4))
+	set1 := newSet(newSetLeafSequence(vrw, blob0, blob1))
+	set2 := newSet(newSetLeafSequence(vrw, blob2, blob3, blob4))
 
 	assertEncoding(t,
 		[]interface{}{
@@ -498,10 +497,10 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 			RefKind, set1.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob1.Hash(Format_7_18), uint64(2),
 			RefKind, set2.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(Format_7_18), uint64(3),
 		},
-		newSet(Format_7_18, newSetMetaSequence(1, []metaTuple{
-			newMetaTuple(Format_7_18, NewRef(set1, Format_7_18), newOrderedKey(blob1, Format_7_18), 2),
-			newMetaTuple(Format_7_18, NewRef(set2, Format_7_18), newOrderedKey(blob4, Format_7_18), 3),
-		}, Format_7_18, vrw)),
+		newSet(newSetMetaSequence(1, []metaTuple{
+			newMetaTuple(NewRef(set1, Format_7_18), newOrderedKey(blob1, Format_7_18), 2),
+			newMetaTuple(NewRef(set2, Format_7_18), newOrderedKey(blob4, Format_7_18), 3),
+		}, vrw)),
 	)
 }
 

@@ -18,15 +18,14 @@ import (
 // Blob represents a list of Blobs.
 type Blob struct {
 	sequence
-	format *Format
 }
 
-func newBlob(seq sequence, f *Format) Blob {
-	return Blob{seq, f}
+func newBlob(seq sequence) Blob {
+	return Blob{seq}
 }
 
 func NewEmptyBlob(vrw ValueReadWriter) Blob {
-	return Blob{newBlobLeafSequence(vrw, vrw.Format(), []byte{}), vrw.Format()}
+	return Blob{newBlobLeafSequence(vrw, []byte{})}
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
@@ -131,15 +130,15 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 // to visit the rightmost prolly tree chunks of this Blob, and the leftmost
 // prolly tree chunks of other, so it's efficient.
 func (b Blob) Concat(ctx context.Context, other Blob) Blob {
-	d.PanicIfFalse(b.format.tag == other.format.tag)
-	seq := concat(ctx, b.format, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-		return b.newChunker(ctx, b.format, cur, vrw)
+	d.PanicIfFalse(b.format().tag == other.format().tag)
+	seq := concat(ctx, b.format(), b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+		return b.newChunker(ctx, b.format(), cur, vrw)
 	})
-	return newBlob(seq, b.format)
+	return newBlob(seq)
 }
 
 func (b Blob) newChunker(ctx context.Context, f *Format, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
-	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(f, BlobKind, vrw), hashValueByte)
+	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 }
 
 func (b Blob) asSequence() sequence {
@@ -202,7 +201,7 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter, f *Format) makeChunkFn {
 }
 
 func chunkBlobLeaf(vrw ValueReadWriter, f *Format, buff []byte) (Collection, orderedKey, uint64) {
-	blob := newBlob(newBlobLeafSequence(vrw, f, buff), f)
+	blob := newBlob(newBlobLeafSequence(vrw, buff))
 	return blob, orderedKeyFromInt(len(buff), f), uint64(len(buff))
 }
 
@@ -243,7 +242,7 @@ func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob 
 }
 
 func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(f, BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
+	sc := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw, f), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
 		rv.HashByte(item.(byte))
 	})
 
@@ -276,7 +275,7 @@ func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) 
 
 		go func(ch chan metaTuple, cp []byte) {
 			col, key, numLeaves := chunkBlobLeaf(vrw, f, cp)
-			ch <- newMetaTuple(f, vrw.WriteValue(ctx, col), key, numLeaves)
+			ch <- newMetaTuple(vrw.WriteValue(ctx, col), key, numLeaves)
 		}(ch, cp)
 
 		offset = 0
@@ -312,5 +311,5 @@ func readBlob(ctx context.Context, f *Format, r io.Reader, vrw ValueReadWriter) 
 		sc.parent.Append(ctx, mt)
 	}
 
-	return newBlob(sc.Done(ctx), f)
+	return newBlob(sc.Done(ctx))
 }

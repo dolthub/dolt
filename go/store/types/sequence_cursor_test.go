@@ -17,7 +17,7 @@ type testSequence struct {
 }
 
 // sequence interface
-func (ts testSequence) getItem(idx int, f *Format) sequenceItem {
+func (ts testSequence) getItem(idx int) sequenceItem {
 	return ts.items[idx]
 }
 
@@ -60,6 +60,10 @@ func (ts testSequence) writeTo(nomsWriter, *Format) {
 	panic("not reached")
 }
 
+func (ts testSequence) format() *Format {
+	return Format_7_18
+}
+
 func (ts testSequence) getChildSequence(ctx context.Context, idx int) sequence {
 	child := ts.items[idx]
 	return testSequence{child.([]interface{})}
@@ -77,7 +81,7 @@ func (ts testSequence) valueBytes(*Format) []byte {
 	panic("not reached")
 }
 
-func (ts testSequence) valuesSlice(f *Format, from, to uint64) []Value {
+func (ts testSequence) valuesSlice(from, to uint64) []Value {
 	panic("not reached")
 }
 
@@ -114,9 +118,9 @@ func (ts testSequence) asValueImpl() valueImpl {
 }
 
 func newTestSequenceCursor(items []interface{}) *sequenceCursor {
-	parent := newSequenceCursor(nil, testSequence{items}, 0, Format_7_18)
+	parent := newSequenceCursor(nil, testSequence{items}, 0)
 	items = items[0].([]interface{})
-	return newSequenceCursor(parent, testSequence{items}, 0, Format_7_18)
+	return newSequenceCursor(parent, testSequence{items}, 0)
 }
 
 func TestTestCursor(t *testing.T) {

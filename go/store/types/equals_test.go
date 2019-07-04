@@ -38,9 +38,9 @@ func TestValueEquals(t *testing.T) {
 			b1 := NewBlob(context.Background(), vrw, bytes.NewBufferString("hi"))
 			b2 := NewBlob(context.Background(), vrw, bytes.NewBufferString("bye"))
 			return newBlob(newBlobMetaSequence(1, []metaTuple{
-				newMetaTuple(Format_7_18, NewRef(b1, Format_7_18), orderedKeyFromInt(2, Format_7_18), 2),
-				newMetaTuple(Format_7_18, NewRef(b2, Format_7_18), orderedKeyFromInt(5, Format_7_18), 5),
-			}, Format_7_18, nil), Format_7_18)
+				newMetaTuple(NewRef(b1, Format_7_18), orderedKeyFromInt(2, Format_7_18), 2),
+				newMetaTuple(NewRef(b2, Format_7_18), orderedKeyFromInt(5, Format_7_18), 5),
+			}, vrw))
 		},
 		// TODO(binformat)
 		func() Value { return NewList(context.Background(), vrw) },

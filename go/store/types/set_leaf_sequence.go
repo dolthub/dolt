@@ -8,11 +8,10 @@ import "sort"
 
 type setLeafSequence struct {
 	leafSequence
-	format *Format
 }
 
-func newSetLeafSequence(f *Format, vrw ValueReadWriter, vs ...Value) orderedSequence {
-	return setLeafSequence{newLeafSequenceFromValues(SetKind, vrw, f, vs...), f}
+func newSetLeafSequence(vrw ValueReadWriter, vs ...Value) orderedSequence {
+	return setLeafSequence{newLeafSequenceFromValues(SetKind, vrw, vs...)}
 }
 
 func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
@@ -22,11 +21,11 @@ func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
 // orderedSequence interface
 
 func (sl setLeafSequence) getKey(idx int) orderedKey {
-	return newOrderedKey(sl.getItem(idx, sl.format).(Value), sl.format)
+	return newOrderedKey(sl.getItem(idx).(Value), sl.format())
 }
 
 func (sl setLeafSequence) search(key orderedKey) int {
 	return sort.Search(int(sl.Len()), func(i int) bool {
-		return !sl.getKey(i).Less(sl.format, key)
+		return !sl.getKey(i).Less(sl.format(), key)
 	})
 }

@@ -91,7 +91,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 		sp := <-<-spliceChan
 
 		if ch == nil {
-			ch = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw, le.f), newIndexedMetaSequenceChunkFn(le.f, ListKind, vrw), hashValueBytes)
+			ch = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 		} else {
 			ch.advanceTo(ctx, cur)
 		}
@@ -111,7 +111,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 		}
 	}
 
-	return newList(ch.Done(ctx), le.f)
+	return newList(ch.Done(ctx))
 }
 
 func collapseListEdit(newEdit, edit *listEdit) bool {
