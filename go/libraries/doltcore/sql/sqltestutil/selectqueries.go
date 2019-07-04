@@ -42,6 +42,12 @@ type SelectTest struct {
 // BasicSelectTests cover basic select statement features and error handling
 var BasicSelectTests = []SelectTest{
 	{
+		Name:           "select * on primary key",
+		Query:          "select * from people where id = 2",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Bart),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
+	},
+	{
 		Name:           "select * ",
 		Query:          "select * from people",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Bart, Lisa, Moe, Barney),

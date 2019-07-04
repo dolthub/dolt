@@ -14,7 +14,7 @@ type Database struct {
 }
 
 // NewDatabase returns a new dolt databae to use in queries.
-func NewDatabase(name string, root *doltdb.RootValue) sql.Database {
+func NewDatabase(name string, root *doltdb.RootValue) *Database {
 	return &Database{
 		name: name,
 		root: root,
