@@ -52,11 +52,11 @@ func (si *setIterator) Next(ctx context.Context) Value {
 func (si *setIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
 	if si.cursor.valid() {
-		if compareValue(si.s.format, v, si.currentValue) <= 0 {
+		if compareValue(si.s.format(), v, si.currentValue) <= 0 {
 			return si.Next(ctx)
 		}
 
-		si.cursor = newCursorAtValue(ctx, si.s.format, si.s.orderedSequence, v, true, false)
+		si.cursor = newCursorAtValue(ctx, si.s.orderedSequence, v, true, false)
 		if si.cursor.valid() {
 			si.currentValue = si.cursor.current().(Value)
 			si.cursor.advance(ctx)

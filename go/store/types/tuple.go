@@ -101,7 +101,7 @@ func (t Tuple) Value(ctx context.Context) Value {
 func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := t.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		cb(dec.readValue(t.format))
+		cb(dec.readValue(t.format()))
 	}
 }
 
@@ -112,13 +112,13 @@ func (t Tuple) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(t.format, lastType) {
+			if dec.isValueSameTypeForSure(t.format(), lastType) {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue(t.format)
+		lastType = dec.readTypeOfValue(t.format())
 		ts = append(ts, lastType)
 	}
 
@@ -146,10 +146,10 @@ func (t Tuple) IteratorAt(pos uint64) *TupleIterator {
 	dec, count := t.decoderSkipToFields()
 
 	for i := uint64(0); i < pos; i++ {
-		dec.skipValue(t.format)
+		dec.skipValue(t.format())
 	}
 
-	return &TupleIterator{dec, count, pos, t.format}
+	return &TupleIterator{dec, count, pos, t.format()}
 }
 
 // IterFields iterates over the fields, calling cb for every field in the tuple until cb returns false
@@ -174,10 +174,10 @@ func (t Tuple) Get(n uint64) Value {
 	}
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue(t.format)
+		dec.skipValue(t.format())
 	}
 
-	v := dec.readValue(t.format)
+	v := dec.readValue(t.format())
 	return v
 }
 
@@ -194,10 +194,10 @@ func (t Tuple) Set(n uint64, v Value) Tuple {
 
 	w.writeCount(count)
 	w.writeRaw(head)
-	v.writeTo(&w, t.format)
+	v.writeTo(&w, t.format())
 	w.writeRaw(tail)
 
-	return Tuple{valueImpl{t.vrw, t.format, w.data(), nil}}
+	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}
 }
 
 func (t Tuple) Append(v Value) Tuple {
@@ -211,9 +211,9 @@ func (t Tuple) Append(v Value) Tuple {
 	w.writeRaw(prolog)
 	w.writeCount(count + 1)
 	w.writeRaw(dec.buff[fieldsOffset:])
-	v.writeTo(&w, t.format)
+	v.writeTo(&w, t.format())
 
-	return Tuple{valueImpl{t.vrw, t.format, w.data(), nil}}
+	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
@@ -232,13 +232,13 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	fieldsOffset := dec.offset
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue(t.format)
+		dec.skipValue(t.format())
 	}
 
 	head = dec.buff[fieldsOffset:dec.offset]
 
 	if n != count-1 {
-		dec.skipValue(t.format)
+		dec.skipValue(t.format())
 		tail = dec.buff[dec.offset:len(dec.buff)]
 	}
 

@@ -20,10 +20,11 @@ type sequence interface {
 	cumulativeNumberOfLeaves(idx int) uint64
 	Empty() bool
 	Equals(other Value) bool
+	format() *Format
 	getChildSequence(ctx context.Context, idx int) sequence
 	getCompareFn(other sequence) compareFn
 	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
-	getItem(idx int, f *Format) sequenceItem
+	getItem(idx int) sequenceItem
 	Hash(*Format) hash.Hash
 	isLeaf() bool
 	Kind() NomsKind
@@ -35,7 +36,7 @@ type sequence interface {
 	typeOf() *Type
 	valueBytes(*Format) []byte
 	valueReadWriter() ValueReadWriter
-	valuesSlice(f *Format, from, to uint64) []Value
+	valuesSlice(from, to uint64) []Value
 	WalkRefs(f *Format, cb RefCallback)
 	writeTo(nomsWriter, *Format)
 }
@@ -52,8 +53,8 @@ type sequenceImpl struct {
 	len uint64
 }
 
-func newSequenceImpl(vrw ValueReadWriter, f *Format, buff []byte, offsets []uint32, len uint64) sequenceImpl {
-	return sequenceImpl{valueImpl{vrw, f, buff, offsets}, len}
+func newSequenceImpl(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) sequenceImpl {
+	return sequenceImpl{valueImpl{vrw, vrw.Format(), buff, offsets}, len}
 }
 
 func (seq sequenceImpl) decoderSkipToValues() (valueDecoder, uint64) {

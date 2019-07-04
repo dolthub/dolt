@@ -276,7 +276,7 @@ func (suite *mapTestSuite) TestStreamingMapOrder() {
 	close(kvChan)
 
 	readInput := func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
-		readMapInput(context.Background(), Format_7_18, vrw, kvs, outChan)
+		readMapInput(context.Background(), vrw, kvs, outChan)
 	}
 
 	testFunc := func() {

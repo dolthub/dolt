@@ -13,19 +13,18 @@ import (
 
 type leafSequence struct {
 	sequenceImpl
-	format *Format
 }
 
-func newLeafSequence(format *Format, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) leafSequence {
-	return leafSequence{newSequenceImpl(vrw, format, buff, offsets, len), format}
+func newLeafSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) leafSequence {
+	return leafSequence{newSequenceImpl(vrw, buff, offsets, len)}
 }
 
-func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *Format, vs ...Value) leafSequence {
+func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) leafSequence {
 	d.PanicIfTrue(vrw == nil)
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(vs)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	kind.writeTo(&w, f)
+	kind.writeTo(&w, vrw.Format())
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -33,17 +32,17 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, f *Format, vs
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, v := range vs {
-		v.writeTo(&w, f)
+		v.writeTo(&w, vrw.Format())
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return newLeafSequence(f, vrw, w.data(), offsets, count)
+	return newLeafSequence(vrw, w.data(), offsets, count)
 }
 
 func (seq leafSequence) values(f *Format) []Value {
-	return seq.valuesSlice(f, 0, math.MaxUint64)
+	return seq.valuesSlice(0, math.MaxUint64)
 }
 
-func (seq leafSequence) valuesSlice(f *Format, from, to uint64) []Value {
+func (seq leafSequence) valuesSlice(from, to uint64) []Value {
 	if len := seq.Len(); to > len {
 		to = len
 	}
@@ -51,7 +50,7 @@ func (seq leafSequence) valuesSlice(f *Format, from, to uint64) []Value {
 	dec := seq.decoderSkipToIndex(int(from))
 	vs := make([]Value, (to-from)*uint64(getValuesPerIdx(seq.Kind())))
 	for i := range vs {
-		vs[i] = dec.readValue(f)
+		vs[i] = dec.readValue(seq.format())
 	}
 	return vs
 }
@@ -63,7 +62,7 @@ func (seq leafSequence) getCompareFnHelper(other leafSequence) compareFn {
 	return func(idx, otherIdx int) bool {
 		dec.offset = uint32(seq.getItemOffset(idx))
 		otherDec.offset = uint32(other.getItemOffset(otherIdx))
-		return dec.readValue(seq.format).Equals(otherDec.readValue(seq.format))
+		return dec.readValue(seq.format()).Equals(otherDec.readValue(seq.format()))
 	}
 }
 
@@ -81,13 +80,13 @@ func (seq leafSequence) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(seq.format, lastType) {
+			if dec.isValueSameTypeForSure(seq.format(), lastType) {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue(seq.format)
+		lastType = dec.readTypeOfValue(seq.format())
 		ts = append(ts, lastType)
 	}
 
@@ -118,9 +117,9 @@ func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uin
 	panic("getCompositeChildSequence called on a leaf sequence")
 }
 
-func (seq leafSequence) getItem(idx int, f *Format) sequenceItem {
+func (seq leafSequence) getItem(idx int) sequenceItem {
 	dec := seq.decoderSkipToIndex(idx)
-	return dec.readValue(f)
+	return dec.readValue(seq.format())
 }
 
 func getValuesPerIdx(kind NomsKind) int {

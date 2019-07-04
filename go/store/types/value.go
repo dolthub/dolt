@@ -114,7 +114,7 @@ type valueReadWriter interface {
 
 type valueImpl struct {
 	vrw     ValueReadWriter
-	format  *Format
+	fmt     *Format
 	buff    []byte
 	offsets []uint32
 }
@@ -142,6 +142,10 @@ func (v valueImpl) Hash(*Format) hash.Hash {
 
 func (v valueImpl) decoder() valueDecoder {
 	return newValueDecoder(v.buff, v.vrw)
+}
+
+func (v valueImpl) format() *Format {
+	return v.fmt
 }
 
 func (v valueImpl) decoderAtOffset(offset int) valueDecoder {

@@ -38,7 +38,7 @@ func sendChange(changes chan<- ValueChanged, stopChan <-chan struct{}, change Va
 // The left-right diff is expected to return results earlier, whereas the top-down approach is faster overall. This "best" algorithm runs both:
 // - early results from left-right are sent to |changes|.
 // - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
-func orderedSequenceDiffBest(ctx context.Context, f *Format, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	lrChanges := make(chan ValueChanged)
 	tdChanges := make(chan ValueChanged)
 	// Give the stop channels a buffer size of 1 so that they won't block (see below).
@@ -58,12 +58,12 @@ func orderedSequenceDiffBest(ctx context.Context, f *Format, last orderedSequenc
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		orderedSequenceDiffLeftRight(ctx, f, last, current, lrChanges, lrStopChan)
+		orderedSequenceDiffLeftRight(ctx, last, current, lrChanges, lrStopChan)
 		close(lrChanges)
 	}()
 	go func() {
 		defer wg.Done()
-		orderedSequenceDiffTopDown(ctx, f, last, current, tdChanges, tdStopChan)
+		orderedSequenceDiffTopDown(ctx, last, current, tdChanges, tdStopChan)
 		close(tdChanges)
 	}()
 
@@ -110,24 +110,24 @@ func orderedSequenceDiffBest(ctx context.Context, f *Format, last orderedSequenc
 
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.
 // Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
-func orderedSequenceDiffTopDown(ctx context.Context, f *Format, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	return orderedSequenceDiffInternalNodes(ctx, f, last, current, changes, stopChan)
+func orderedSequenceDiffTopDown(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+	return orderedSequenceDiffInternalNodes(ctx, last, current, changes, stopChan)
 }
 
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiffInternalNodes(ctx context.Context, f *Format, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	if last.treeLevel() > current.treeLevel() {
 		lastChild := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen())).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(ctx, f, lastChild, current, changes, stopChan)
+		return orderedSequenceDiffInternalNodes(ctx, lastChild, current, changes, stopChan)
 	}
 
 	if current.treeLevel() > last.treeLevel() {
 		currentChild := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen())).(orderedSequence)
-		return orderedSequenceDiffInternalNodes(ctx, f, last, currentChild, changes, stopChan)
+		return orderedSequenceDiffInternalNodes(ctx, last, currentChild, changes, stopChan)
 	}
 
 	if last.isLeaf() && current.isLeaf() {
-		return orderedSequenceDiffLeftRight(ctx, f, last, current, changes, stopChan)
+		return orderedSequenceDiffLeftRight(ctx, last, current, changes, stopChan)
 	}
 
 	compareFn := last.getCompareFn(current)
@@ -144,7 +144,7 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, f *Format, last order
 				currentChild = current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded).(orderedSequence)
 			},
 		)
-		if ok := orderedSequenceDiffInternalNodes(ctx, f, lastChild, currentChild, changes, stopChan); !ok {
+		if ok := orderedSequenceDiffInternalNodes(ctx, lastChild, currentChild, changes, stopChan); !ok {
 			return false
 		}
 	}
@@ -154,9 +154,9 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, f *Format, last order
 
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
-func orderedSequenceDiffLeftRight(ctx context.Context, f *Format, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
-	lastCur := newCursorAt(ctx, f, last, emptyKey, false, false)
-	currentCur := newCursorAt(ctx, f, current, emptyKey, false, false)
+func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+	lastCur := newCursorAt(ctx, last, emptyKey, false, false)
+	currentCur := newCursorAt(ctx, current, emptyKey, false, false)
 
 	for lastCur.valid() && currentCur.valid() {
 		fastForward(ctx, lastCur, currentCur)
@@ -165,12 +165,12 @@ func orderedSequenceDiffLeftRight(ctx context.Context, f *Format, last orderedSe
 			!lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx) {
 			lastKey := getCurrentKey(lastCur)
 			currentKey := getCurrentKey(currentCur)
-			if currentKey.Less(f, lastKey) {
+			if currentKey.Less(last.format(), lastKey) {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeAdded, currentKey.v, nil, getMapValue(currentCur)}) {
 					return false
 				}
 				currentCur.advance(ctx)
-			} else if lastKey.Less(f, currentKey) {
+			} else if lastKey.Less(last.format(), currentKey) {
 				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, getMapValue(lastCur), nil}) {
 					return false
 				}

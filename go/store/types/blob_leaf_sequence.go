@@ -10,12 +10,12 @@ type blobLeafSequence struct {
 	leafSequence
 }
 
-func newBlobLeafSequence(vrw ValueReadWriter, f *Format, data []byte) sequence {
+func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	BlobKind.writeTo(&w, f)
+	BlobKind.writeTo(&w, vrw.Format())
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -23,7 +23,7 @@ func newBlobLeafSequence(vrw ValueReadWriter, f *Format, data []byte) sequence {
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	w.writeBytes(data)
-	return blobLeafSequence{newLeafSequence(f, vrw, w.data(), offsets, count)}
+	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
 func (bl blobLeafSequence) writeTo(w nomsWriter, f *Format) {
@@ -46,7 +46,7 @@ func (bl blobLeafSequence) getCompareFn(other sequence) compareFn {
 	}
 }
 
-func (bl blobLeafSequence) getItem(idx int, f *Format) sequenceItem {
+func (bl blobLeafSequence) getItem(idx int) sequenceItem {
 	offset := bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind] + uint32(idx)
 	return bl.buff[offset]
 }

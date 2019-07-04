@@ -207,7 +207,7 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 		sc.unwrittenCol = col
 	}
 
-	mt := newMetaTuple(sc.vrw.Format(), ref, key, numLeaves)
+	mt := newMetaTuple(ref, key, numLeaves)
 	return col.asSequence(), mt
 }
 
@@ -273,7 +273,7 @@ func (sc *sequenceChunker) Done(ctx context.Context) sequence {
 			return child
 		}
 
-		mt = child.getItem(0, sc.vrw.Format()).(metaTuple)
+		mt = child.getItem(0).(metaTuple)
 	}
 }
 

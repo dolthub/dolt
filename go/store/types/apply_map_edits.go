@@ -106,7 +106,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 
 	// start worker threads
 	for i := 0; i < numWorkers; i++ {
-		go prepWorker(ctx, f, seq, wc)
+		go prepWorker(ctx, seq, wc)
 	}
 
 	// asynchronously add mapWork to be done by the workers
@@ -141,7 +141,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 					}
 
 					if ch == nil {
-						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(f, vrw), newOrderedMetaSequenceChunkFn(MapKind, f, vrw), mapHashValueBytes)
+						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 					} else {
 						ch.advanceTo(ctx, cur)
 					}
@@ -167,13 +167,13 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 		return m, stats // no edits required application
 	}
 
-	return newMap(ch.Done(ctx).(orderedSequence), f), stats
+	return newMap(ch.Done(ctx).(orderedSequence)), stats
 }
 
 // prepWorker will wait for work to be read from a channel, then iterate over all of the edits finding the appropriate
 // cursor where the insertion should happen.  It attempts to reuse cursors when consecutive keys share the same
 // insertion point
-func prepWorker(ctx context.Context, f *Format, seq orderedSequence, wc chan mapWork) {
+func prepWorker(ctx context.Context, seq orderedSequence, wc chan mapWork) {
 	for work := range wc {
 		wRes := mapWorkResult{}
 
@@ -184,10 +184,10 @@ func prepWorker(ctx context.Context, f *Format, seq orderedSequence, wc chan map
 		for ; i < len(work.kvps); i++ {
 			edit := work.kvps[i]
 			key := edit.Key.Value(ctx)
-			ordKey := newOrderedKey(key, f)
+			ordKey := newOrderedKey(key, seq.format())
 
-			if cur == nil || !ordKey.Less(f, curKey) {
-				cur = newCursorAt(ctx, f, seq, ordKey, true, false)
+			if cur == nil || !ordKey.Less(seq.format(), curKey) {
+				cur = newCursorAt(ctx, seq, ordKey, true, false)
 
 				if cur.valid() {
 					curKey = getCurrentKey(cur)

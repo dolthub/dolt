@@ -84,10 +84,10 @@ func (r *valueDecoder) readSequence(f *Format, kind NomsKind, leafSkipper func(f
 	end := r.pos()
 
 	if level > 0 {
-		return newMetaSequence(f, r.vrw, r.byteSlice(start, end), offsets, length)
+		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets, length)
 	}
 
-	return newLeafSequence(f, r.vrw, r.byteSlice(start, end), offsets, length)
+	return newLeafSequence(r.vrw, r.byteSlice(start, end), offsets, length)
 }
 
 func (r *valueDecoder) readBlobSequence(f *Format) sequence {
@@ -109,7 +109,7 @@ func (r *valueDecoder) readListSequence(f *Format) sequence {
 func (r *valueDecoder) readSetSequence(f *Format) orderedSequence {
 	seq := r.readSequence(f, SetKind, r.skipSetLeafSequence)
 	if seq.isLeaf() {
-		return setLeafSequence{seq.(leafSequence), f}
+		return setLeafSequence{seq.(leafSequence)}
 	}
 	return seq.(orderedSequence)
 }
@@ -117,7 +117,7 @@ func (r *valueDecoder) readSetSequence(f *Format) orderedSequence {
 func (r *valueDecoder) readMapSequence(f *Format) orderedSequence {
 	seq := r.readSequence(f, MapKind, r.skipMapLeafSequence)
 	if seq.isLeaf() {
-		return mapLeafSequence{seq.(leafSequence), f}
+		return mapLeafSequence{seq.(leafSequence)}
 	}
 	return seq.(orderedSequence)
 }
@@ -176,7 +176,7 @@ func (r *valueDecoder) readValue(f *Format) Value {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
-		return newBlob(r.readBlobSequence(f), f)
+		return newBlob(r.readBlobSequence(f))
 	case BoolKind:
 		r.skipKind()
 		return Bool(r.readBool())
@@ -199,13 +199,13 @@ func (r *valueDecoder) readValue(f *Format) Value {
 		r.skipKind()
 		return String(r.readString())
 	case ListKind:
-		return newList(r.readListSequence(f), f)
+		return newList(r.readListSequence(f))
 	case MapKind:
-		return newMap(r.readMapSequence(f), f)
+		return newMap(r.readMapSequence(f))
 	case RefKind:
 		return r.readRef(f)
 	case SetKind:
-		return newSet(f, r.readSetSequence(f))
+		return newSet(r.readSetSequence(f))
 	case StructKind:
 		return r.readStruct(f)
 	case TupleKind:

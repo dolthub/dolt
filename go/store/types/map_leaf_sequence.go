@@ -12,7 +12,6 @@ import (
 
 type mapLeafSequence struct {
 	leafSequence
-	f *Format
 }
 
 type mapEntry struct {
@@ -59,12 +58,12 @@ func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	return true
 }
 
-func newMapLeafSequence(f *Format, vrw ValueReadWriter, data ...mapEntry) orderedSequence {
+func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, len(data)+sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	MapKind.writeTo(&w, f)
+	MapKind.writeTo(&w, vrw.Format())
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -72,10 +71,10 @@ func newMapLeafSequence(f *Format, vrw ValueReadWriter, data ...mapEntry) ordere
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, me := range data {
-		me.writeTo(&w, f)
+		me.writeTo(&w, vrw.Format())
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return mapLeafSequence{newLeafSequence(f, vrw, w.data(), offsets, count), f}
+	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
 func (ml mapLeafSequence) writeTo(w nomsWriter, f *Format) {
@@ -84,23 +83,23 @@ func (ml mapLeafSequence) writeTo(w nomsWriter, f *Format) {
 
 // sequence interface
 
-func (ml mapLeafSequence) getItem(idx int, f *Format) sequenceItem {
+func (ml mapLeafSequence) getItem(idx int) sequenceItem {
 	dec := ml.decoderSkipToIndex(idx)
-	return readMapEntry(&dec, f)
+	return readMapEntry(&dec, ml.format())
 }
 
 func (ml mapLeafSequence) WalkRefs(f *Format, cb RefCallback) {
-	walkRefs(ml.valueBytes(ml.f), ml.f, cb)
+	walkRefs(ml.valueBytes(ml.format()), ml.format(), cb)
 }
 
 func (ml mapLeafSequence) entries() mapEntrySlice {
 	dec, count := ml.decoderSkipToValues()
 	entries := mapEntrySlice{
 		make([]mapEntry, count),
-		ml.f,
+		ml.format(),
 	}
 	for i := uint64(0); i < count; i++ {
-		entries.entries[i] = mapEntry{dec.readValue(ml.f), dec.readValue(ml.f)}
+		entries.entries[i] = mapEntry{dec.readValue(ml.format()), dec.readValue(ml.format())}
 	}
 	return entries
 }
@@ -112,13 +111,13 @@ func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
 	return func(idx, otherIdx int) bool {
 		dec1.offset = uint32(ml.getItemOffset(idx))
 		dec2.offset = uint32(ml2.getItemOffset(otherIdx))
-		k1 := dec1.readValue(ml.f)
-		k2 := dec2.readValue(ml2.f)
+		k1 := dec1.readValue(ml.format())
+		k2 := dec2.readValue(ml2.format())
 		if !k1.Equals(k2) {
 			return false
 		}
-		v1 := dec1.readValue(ml.f)
-		v2 := dec2.readValue(ml2.f)
+		v1 := dec1.readValue(ml.format())
+		v2 := dec2.readValue(ml2.format())
 		return v1.Equals(v2)
 	}
 }
@@ -131,16 +130,16 @@ func (ml mapLeafSequence) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastKeyType != nil && lastValueType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(ml.format, lastKeyType) && dec.isValueSameTypeForSure(ml.format, lastValueType) {
+			if dec.isValueSameTypeForSure(ml.format(), lastKeyType) && dec.isValueSameTypeForSure(ml.format(), lastValueType) {
 				continue
 			}
 			dec.offset = offset
 
 		}
 
-		lastKeyType = dec.readTypeOfValue(ml.format)
+		lastKeyType = dec.readTypeOfValue(ml.format())
 		kts = append(kts, lastKeyType)
-		lastValueType = dec.readTypeOfValue(ml.format)
+		lastValueType = dec.readTypeOfValue(ml.format())
 		vts = append(vts, lastValueType)
 	}
 
@@ -156,17 +155,17 @@ func (ml mapLeafSequence) decoderSkipToIndex(idx int) valueDecoder {
 
 func (ml mapLeafSequence) getKey(idx int) orderedKey {
 	dec := ml.decoderSkipToIndex(idx)
-	return newOrderedKey(dec.readValue(ml.f), ml.f)
+	return newOrderedKey(dec.readValue(ml.format()), ml.format())
 }
 
 func (ml mapLeafSequence) search(key orderedKey) int {
 	return sort.Search(int(ml.Len()), func(i int) bool {
-		return !ml.getKey(i).Less(ml.f, key)
+		return !ml.getKey(i).Less(ml.format(), key)
 	})
 }
 
 func (ml mapLeafSequence) getValue(idx int) Value {
 	dec := ml.decoderSkipToIndex(idx)
-	dec.skipValue(ml.f)
-	return dec.readValue(ml.f)
+	dec.skipValue(ml.format())
+	return dec.readValue(ml.format())
 }

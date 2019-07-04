@@ -42,13 +42,13 @@ type MapEditor struct {
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, 0, CreateEditAccForMapEdits(m.format)}
+	return &MapEditor{m, 0, CreateEditAccForMapEdits(m.format())}
 }
 
 // Map applies all edits and returns a newly updated Map
 func (me *MapEditor) Map(ctx context.Context) Map {
 	edits := me.acc.FinishedEditing()
-	m, _ := ApplyEdits(ctx, me.m.format, edits, me.m)
+	m, _ := ApplyEdits(ctx, me.m.format(), edits, me.m)
 	return m
 }
 

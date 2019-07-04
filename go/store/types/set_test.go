@@ -207,7 +207,7 @@ func (suite *setTestSuite) TestStreamingSetOrder() {
 	close(vChan)
 
 	readInput := func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
-		readSetInput(context.Background(), Format_7_18, vrw, vChan, outChan)
+		readSetInput(context.Background(), vrw, vChan, outChan)
 	}
 
 	testFunc := func() {
