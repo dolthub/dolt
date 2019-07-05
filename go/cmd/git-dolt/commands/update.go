@@ -21,6 +21,6 @@ func Update(ptrFname string, revision string) error {
 	if err := config.Write(ptrFname, c.String()); err != nil {
 		return err
 	}
-	fmt.Printf("Updated pointer file %s to revision %s\n", ptrFname, revision)
+	fmt.Printf("Updated pointer file %s to revision %s. You should git commit this change.\n", ptrFname, revision)
 	return nil
 }
