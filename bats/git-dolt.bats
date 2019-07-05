@@ -106,7 +106,7 @@ teardown() {
 	run git dolt update test-repo $NEW_DOLT_HEAD_COMMIT
 
 	[ "$status" -eq 0 ]
-	[ "${lines[0]}" = "Updated pointer file test-repo.git-dolt to revision $NEW_DOLT_HEAD_COMMIT" ]
+	[ "${lines[0]}" = "Updated pointer file test-repo.git-dolt to revision $NEW_DOLT_HEAD_COMMIT. You should git commit this change." ]
 
 	run cat test-repo.git-dolt
 	[[ "${lines[0]}" =~ ^version\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
