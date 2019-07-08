@@ -350,7 +350,7 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 			defer readWg.Done()
 			n, _ := m.srcR.Read(buff[m.dstStart:m.dstEnd])
 			if int64(n) < m.dstEnd-m.dstStart {
-				ae.Set(errors.New("failed to read all the table data"))
+				ae.SetIfError(errors.New("failed to read all the table data"))
 			}
 		}(man)
 	}

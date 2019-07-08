@@ -38,7 +38,7 @@ func buildTable(chunks [][]byte) ([]byte, addr) {
 	return buff[:length], blockHash
 }
 
-func getStringOrAssert(assert *assert.Assertions, ctx context.Context, tr tableReader, data []byte) string {
+func mustGetString(assert *assert.Assertions, ctx context.Context, tr tableReader, data []byte) string {
 	bytes, err := tr.get(ctx, computeAddr(data), &Stats{})
 	assert.NoError(err)
 	return string(bytes)
@@ -60,9 +60,9 @@ func TestSimple(t *testing.T) {
 
 	assertChunksInReader(chunks, tr, assert)
 
-	assert.Equal(string(chunks[0]), getStringOrAssert(assert, context.Background(), tr, chunks[0]))
-	assert.Equal(string(chunks[1]), getStringOrAssert(assert, context.Background(), tr, chunks[1]))
-	assert.Equal(string(chunks[2]), getStringOrAssert(assert, context.Background(), tr, chunks[2]))
+	assert.Equal(string(chunks[0]), mustGetString(assert, context.Background(), tr, chunks[0]))
+	assert.Equal(string(chunks[1]), mustGetString(assert, context.Background(), tr, chunks[1]))
+	assert.Equal(string(chunks[2]), mustGetString(assert, context.Background(), tr, chunks[2]))
 
 	notPresent := [][]byte{
 		[]byte("yo"),
@@ -72,9 +72,9 @@ func TestSimple(t *testing.T) {
 
 	assertChunksNotInReader(notPresent, tr, assert)
 
-	assert.NotEqual(string(notPresent[0]), getStringOrAssert(assert, context.Background(), tr, notPresent[0]))
-	assert.NotEqual(string(notPresent[1]), getStringOrAssert(assert, context.Background(), tr, notPresent[1]))
-	assert.NotEqual(string(notPresent[2]), getStringOrAssert(assert, context.Background(), tr, notPresent[2]))
+	assert.NotEqual(string(notPresent[0]), mustGetString(assert, context.Background(), tr, notPresent[0]))
+	assert.NotEqual(string(notPresent[1]), mustGetString(assert, context.Background(), tr, notPresent[1]))
+	assert.NotEqual(string(notPresent[2]), mustGetString(assert, context.Background(), tr, notPresent[2]))
 }
 
 func assertChunksInReader(chunks [][]byte, r chunkReader, assert *assert.Assertions) {

@@ -203,8 +203,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 		}
 
 		if filterIdx >= filterLen {
-			remaining = true
-			return remaining, nil
+			return true, nil
 		}
 
 		if addr.prefix != tr.prefixes[filterIdx] {
@@ -413,7 +412,7 @@ func (tr tableReader) getManyAtOffsets(
 		go func(batch offsetRecSlice) {
 			defer wg.Done()
 			err := tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, stats)
-			ae.Set(err)
+			ae.SetIfError(err)
 		}(batch)
 		batch = nil
 	}
@@ -424,7 +423,7 @@ func (tr tableReader) getManyAtOffsets(
 			go func(batch offsetRecSlice) {
 				defer wg.Done()
 				err := tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, stats)
-				ae.Set(err)
+				ae.SetIfError(err)
 			}(batch)
 			batch = nil
 		}

@@ -287,23 +287,6 @@ func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister
 	return nbs, nil
 }
 
-/*func newNomsBlockStoreWithContents(ctx context.Context, mm manifestManager, mc manifestContents, p tablePersister, c conjoiner, memTableSize uint64) *NomsBlockStore {
-	if memTableSize == 0 {
-		memTableSize = defaultMemTableSize
-	}
-	stats := NewStats()
-	return &NomsBlockStore{
-		mm:     mm,
-		p:      p,
-		c:      c,
-		mtSize: memTableSize,
-		stats:  stats,
-
-		upstream: mc,
-		tables:   newTableSet(p).Rebase(ctx, mc.specs, stats),
-	}
-}*/
-
 func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 	t1 := time.Now()
 	a := addr(c.Hash())

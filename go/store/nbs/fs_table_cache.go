@@ -100,10 +100,17 @@ func (ftc *fsTableCache) init(concurrency int) error {
 				}
 
 				ftc.cache.Add(info.h, info.size, true)
+				_, err := ftc.fd.RefFile(info.path)
 
-				if _, err := ftc.fd.RefFile(info.path); err == nil {
-					err := ftc.fd.UnrefFile(info.path)
-					ae.Set(err)
+				if err != nil {
+					ae.SetIfError(err)
+					break
+				}
+
+				err = ftc.fd.UnrefFile(info.path)
+
+				if err != nil {
+					ae.SetIfError(err)
 					break
 				}
 			}
