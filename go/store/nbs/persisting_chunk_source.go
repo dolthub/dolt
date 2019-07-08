@@ -26,7 +26,7 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 		cs, err := p.Persist(ctx, mt, haver, stats)
 
 		if err != nil {
-			ccs.err = err
+			ccs.ae.SetIfError(err)
 			return
 		}
 
@@ -38,8 +38,10 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 
 		cnt, err := cs.count()
 
-		// TODO: fix errors
-		d.PanicIfError(err)
+		if err != nil {
+			ccs.ae.SetIfError(err)
+			return
+		}
 
 		if cnt > 0 {
 			stats.PersistLatency.SampleTimeSince(t1)
@@ -50,9 +52,9 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 }
 
 type persistingChunkSource struct {
-	err error
-	mu  sync.RWMutex
-	mt  *memTable
+	ae AtomicError
+	mu sync.RWMutex
+	mt *memTable
 
 	wg sync.WaitGroup
 	cs chunkSource
@@ -101,7 +103,7 @@ func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord,
 
 func (ccs *persistingChunkSource) wait() error {
 	ccs.wg.Wait()
-	return ccs.err
+	return ccs.ae.Get()
 }
 
 func (ccs *persistingChunkSource) count() (uint32, error) {

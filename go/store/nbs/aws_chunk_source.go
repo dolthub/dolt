@@ -76,8 +76,9 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 }
 
 type awsTableReaderAt struct {
-	once sync.Once
-	tra  tableReaderAt
+	once     sync.Once
+	getTRErr error
+	tra      tableReaderAt
 
 	al  awsLimits
 	ddb *ddbTableStore
@@ -88,13 +89,12 @@ type awsTableReaderAt struct {
 }
 
 func (atra *awsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int64, stats *Stats) (int, error) {
-	var err error
 	atra.once.Do(func() {
-		atra.tra, err = atra.getTableReaderAt(ctx, stats)
+		atra.tra, atra.getTRErr = atra.getTableReaderAt(ctx, stats)
 	})
 
-	if err != nil {
-		return 0, err
+	if atra.getTRErr != nil {
+		return 0, atra.getTRErr
 	}
 
 	return atra.tra.ReadAtWithStats(ctx, p, off, stats)

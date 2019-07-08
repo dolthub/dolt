@@ -14,7 +14,7 @@ func NewAtomicError() *AtomicError {
 	return &AtomicError{&sync.Once{}, &atomic.Value{}}
 }
 
-func (ae *AtomicError) Set(err error) {
+func (ae *AtomicError) SetIfError(err error) {
 	if err != nil {
 		ae.once.Do(func() {
 			ae.val.Store(err)

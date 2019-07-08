@@ -114,7 +114,7 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 			var err error
 			sources[idx], err = p.Open(ctx, spec.name, spec.chunkCount, stats)
 
-			ae.Set(err)
+			ae.SetIfError(err)
 		}(i, spec)
 		i++
 	}

@@ -206,7 +206,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	}()
 
 	if err != nil {
-		return manifestContents{}, nil
+		return manifestContents{}, err
 	}
 
 	defer os.Remove(tempManifestPath) // If we rename below, this will be a no-op
@@ -216,7 +216,7 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	err = lck.Lock()
 
 	if err != nil {
-		return manifestContents{}, nil
+		return manifestContents{}, err
 	}
 
 	defer func() {
