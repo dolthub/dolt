@@ -79,7 +79,11 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 	}
 
 	newName := filepath.Join(ftp.dir, name.String())
-	ftp.fc.ShrinkCache()
+	err = ftp.fc.ShrinkCache()
+
+	if err != nil {
+		return nil, err
+	}
 
 	err = os.Rename(tempName, newName)
 

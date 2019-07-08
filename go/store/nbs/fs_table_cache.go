@@ -165,7 +165,11 @@ func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 		return err
 	}
 
-	ftc.fd.ShrinkCache()
+	err = ftc.fd.ShrinkCache()
+
+	if err != nil {
+		return err
+	}
 
 	err = os.Rename(tempName, path)
 
