@@ -95,6 +95,6 @@ func TestAreEqual(t *testing.T) {
 	updatedRow, err := r.SetColVal(lnColTag, types.String("new"), sch)
 	assert.NoError(t, err)
 
-	assert.True(t, AreEqual(types.Format_7_18, r, r, sch))
-	assert.False(t, AreEqual(types.Format_7_18, r, updatedRow, sch))
+	assert.True(t, AreEqual(r, r, sch))
+	assert.False(t, AreEqual(r, updatedRow, sch))
 }

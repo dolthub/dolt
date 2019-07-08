@@ -71,7 +71,7 @@ func TestTables(t *testing.T) {
 
 	if !ok {
 		t.Error("Could not find row 0 in table")
-	} else if !row.AreEqual(types.Format_7_18, readRow0, rows[0], tSchema) {
+	} else if !row.AreEqual(readRow0, rows[0], tSchema) {
 		t.Error(row.Fmt(context.Background(), readRow0, tSchema), "!=", row.Fmt(context.Background(), rows[0], tSchema))
 	}
 
@@ -91,7 +91,7 @@ func TestTables(t *testing.T) {
 	}
 
 	for i, r := range rows {
-		if !row.AreEqual(types.Format_7_18, r, readRows[i], tSchema) {
+		if !row.AreEqual(r, readRows[i], tSchema) {
 			t.Error(row.Fmt(context.Background(), readRows[i], tSchema), "!=", row.Fmt(context.Background(), r, tSchema))
 		}
 	}
