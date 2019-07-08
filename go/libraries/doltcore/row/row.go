@@ -107,7 +107,7 @@ func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstra
 	return badCol, badCnst
 }
 
-func AreEqual(format *types.Format, row1, row2 Row, sch schema.Schema) bool {
+func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 	if row1 == nil && row2 == nil {
 		return true
 	} else if row1 == nil || row2 == nil {
@@ -118,7 +118,7 @@ func AreEqual(format *types.Format, row1, row2 Row, sch schema.Schema) bool {
 		val1, _ := row1.GetColVal(tag)
 		val2, _ := row2.GetColVal(tag)
 
-		if !valutil.NilSafeEqCheck(format, val1, val2) {
+		if !valutil.NilSafeEqCheck(val1, val2) {
 			return false
 		}
 	}

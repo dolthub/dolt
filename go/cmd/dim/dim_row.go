@@ -37,7 +37,7 @@ func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
 	}
 
 	typedSch := dr.toTyped.DestSch
-	key := typed.NomsMapKey(types.Format_7_18, typedSch).Value(context.Background())
+	key := typed.NomsMapKey(me.Format(), typedSch).Value(context.Background())
 
 	if !dr.key.Equals(key) {
 		me = me.Remove(dr.key)
@@ -47,7 +47,7 @@ func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
 	dr.dbVals = dr.currentVals
 	log.Println("stored vals")
 
-	return me.Set(key, typed.NomsMapValue(types.Format_7_18, typedSch))
+	return me.Set(key, typed.NomsMapValue(me.Format(), typedSch))
 }
 
 func (dr *DimRow) UpdateVal(tag uint64, str string) error {
@@ -70,7 +70,7 @@ func (dr *DimRow) KeyChanged() bool {
 		currVal, _ := dr.currentVals[tag]
 		dbVal, _ := dr.dbVals[tag]
 
-		equal = valutil.NilSafeEqCheck(types.Format_7_18, currVal, dbVal)
+		equal = valutil.NilSafeEqCheck(currVal, dbVal)
 
 		return !equal
 	})

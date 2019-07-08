@@ -263,7 +263,7 @@ func TestConvToAndFromTuple(t *testing.T) {
 	fmt.Println(Fmt(context.Background(), r, sch))
 	fmt.Println(Fmt(context.Background(), r2, sch))
 
-	if !AreEqual(types.Format_7_18, r, r2, sch) {
+	if !AreEqual(r, r2, sch) {
 		t.Error("Failed to convert to a noms tuple, and then convert back to the same row")
 	}
 }

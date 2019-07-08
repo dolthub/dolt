@@ -312,7 +312,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	ad.Start(context.TODO(), types.Format_7_18, newRows, oldRows)
 	defer ad.Close()
 
-	src := diff.NewRowDiffSource(types.Format_7_18, ad, oldToUnionConv, newToUnionConv, untypedUnionSch)
+	src := diff.NewRowDiffSource(ad, oldToUnionConv, newToUnionConv, untypedUnionSch)
 	defer src.Close()
 
 	oldColNames := make(map[uint64]string)

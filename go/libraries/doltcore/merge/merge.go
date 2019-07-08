@@ -224,11 +224,11 @@ func rowMerge(ctx context.Context, format *types.Format, sch schema.Schema, r, m
 		val, _ := rowVals.Get(tag)
 		mergeVal, _ := mergeVals.Get(tag)
 
-		if valutil.NilSafeEqCheck(format, val, mergeVal) {
+		if valutil.NilSafeEqCheck(val, mergeVal) {
 			return val, false
 		} else {
-			modified := !valutil.NilSafeEqCheck(format, val, baseVal)
-			mergeModified := !valutil.NilSafeEqCheck(format, mergeVal, baseVal)
+			modified := !valutil.NilSafeEqCheck(val, baseVal)
+			mergeModified := !valutil.NilSafeEqCheck(mergeVal, baseVal)
 			switch {
 			case modified && mergeModified:
 				return nil, true

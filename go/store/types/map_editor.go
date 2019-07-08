@@ -84,3 +84,7 @@ func (me *MapEditor) set(k LesserValuable, v Valuable) {
 func (me *MapEditor) NumEdits() int64 {
 	return me.numEdits
 }
+
+func (me *MapEditor) Format() *Format {
+	return me.m.format()
+}

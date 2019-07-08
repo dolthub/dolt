@@ -41,7 +41,6 @@ func (dr *DiffRow) DiffType() DiffChType {
 }
 
 type RowDiffSource struct {
-	format       *types.Format
 	oldConv      *rowconv.RowConverter
 	newConv      *rowconv.RowConverter
 	ad           *AsyncDiffer
@@ -49,9 +48,8 @@ type RowDiffSource struct {
 	bufferedRows []pipeline.RowWithProps
 }
 
-func NewRowDiffSource(format *types.Format, ad *AsyncDiffer, oldConv, newConv *rowconv.RowConverter, outSch schema.Schema) *RowDiffSource {
+func NewRowDiffSource(ad *AsyncDiffer, oldConv, newConv *rowconv.RowConverter, outSch schema.Schema) *RowDiffSource {
 	return &RowDiffSource{
-		format,
 		oldConv,
 		newConv,
 		ad,
@@ -125,7 +123,7 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 				_, inNew := originalNewSch.GetAllCols().GetByTag(tag)
 
 				if inOld && inNew {
-					if !valutil.NilSafeEqCheck(rdRd.format, oldVal, newVal) {
+					if !valutil.NilSafeEqCheck(oldVal, newVal) {
 						newColDiffs[col.Name] = DiffModifiedNew
 						oldColDiffs[col.Name] = DiffModifiedOld
 					}
