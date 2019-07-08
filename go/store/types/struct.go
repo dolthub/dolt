@@ -25,7 +25,6 @@ type StructData map[string]Value
 
 type Struct struct {
 	valueImpl
-	format *Format
 }
 
 // readStruct reads the data provided by a decoder and moves the decoder forward.
@@ -33,7 +32,7 @@ func readStruct(f *Format, dec *valueDecoder) Struct {
 	start := dec.pos()
 	skipStruct(f, dec)
 	end := dec.pos()
-	return Struct{valueImpl{dec.vrw, f, dec.byteSlice(start, end), nil}, f}
+	return Struct{valueImpl{dec.vrw, f, dec.byteSlice(start, end), nil}}
 }
 
 func skipStruct(f *Format, dec *valueDecoder) {
@@ -94,7 +93,7 @@ func newStruct(f *Format, name string, fieldNames []string, values []Value) Stru
 		}
 		values[i].writeTo(&w, f)
 	}
-	return Struct{valueImpl{vrw, f, w.data(), nil}, f}
+	return Struct{valueImpl{vrw, f, w.data(), nil}}
 }
 
 func NewStruct(format *Format, name string, data StructData) Struct {
@@ -118,7 +117,7 @@ func NewStruct(format *Format, name string, data StructData) Struct {
 }
 
 func (s Struct) Format() *Format {
-	return s.format
+	return s.format()
 }
 
 // StructTemplate allows creating a template for structs with a known shape
@@ -166,13 +165,13 @@ func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		cb(dec.readValue(s.format))
+		cb(dec.readValue(s.format()))
 	}
 }
 
 func (s Struct) typeOf() *Type {
 	dec := s.decoder()
-	return readStructTypeOfValue(s.format, &dec)
+	return readStructTypeOfValue(s.format(), &dec)
 }
 
 func readStructTypeOfValue(format *Format, dec *valueDecoder) *Type {
@@ -216,7 +215,7 @@ func (s Struct) Name() string {
 func (s Struct) IterFields(cb func(name string, value Value)) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		cb(dec.readString(), dec.readValue(s.format))
+		cb(dec.readString(), dec.readValue(s.format()))
 	}
 }
 
@@ -236,7 +235,7 @@ func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) {
 	cbs.count(count)
 	for i := uint64(0); i < count; i++ {
 		cbs.fieldName(dec.readString())
-		cbs.fieldValue(ctx, dec.readValue(s.format))
+		cbs.fieldValue(ctx, dec.readValue(s.format()))
 	}
 	cbs.end()
 }
@@ -249,13 +248,13 @@ func (s Struct) MaybeGet(n string) (v Value, found bool) {
 		name := dec.readString()
 		if name == n {
 			found = true
-			v = dec.readValue(s.format)
+			v = dec.readValue(s.format())
 			return
 		}
 		if name > n {
 			return
 		}
-		dec.skipValue(s.format)
+		dec.skipValue(s.format())
 	}
 
 	return
@@ -288,10 +287,10 @@ func (s Struct) Set(n string, v Value) Struct {
 	w.writeCount(count)
 	w.writeRaw(head)
 	w.writeString(n)
-	v.writeTo(&w, s.format)
+	v.writeTo(&w, s.format())
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, s.format, w.data(), nil}, s.format}
+	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
@@ -307,7 +306,7 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 	for i := uint64(0); i < count; i++ {
 		beforeCurrent := dec.offset
 		fn := dec.readString()
-		dec.skipValue(s.format)
+		dec.skipValue(s.format())
 
 		if fn == name {
 			found = true
@@ -344,7 +343,7 @@ func (s Struct) Delete(n string) Struct {
 	w.writeRaw(head)
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, s.format, w.data(), nil}, s.format}
+	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
@@ -369,7 +368,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		}
 		var change ValueChanged
 		if fn1 == fn2 {
-			v1, v2 := dec1.readValue(s.format), dec2.readValue(s.format)
+			v1, v2 := dec1.readValue(s.format()), dec2.readValue(s.format())
 			if !v1.Equals(v2) {
 				change = ValueChanged{DiffChangeModified, String(fn1), v2, v1}
 			}
@@ -377,12 +376,12 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			i2++
 			fn1, fn2 = "", ""
 		} else if fn1 < fn2 {
-			v1 := dec1.readValue(s.format)
+			v1 := dec1.readValue(s.format())
 			change = ValueChanged{DiffChangeAdded, String(fn1), nil, v1}
 			i1++
 			fn1 = ""
 		} else {
-			v2 := dec2.readValue(s.format)
+			v2 := dec2.readValue(s.format())
 			change = ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}
 			i2++
 			fn2 = ""
@@ -398,7 +397,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			fn1 = dec1.readString()
 			fmt.Println(fn1)
 		}
-		v1 := dec1.readValue(s.format)
+		v1 := dec1.readValue(s.format())
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}) {
 			return
 		}
@@ -408,7 +407,7 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		if fn2 == "" {
 			fn2 = dec2.readString()
 		}
-		v2 := dec2.readValue(s.format)
+		v2 := dec2.readValue(s.format())
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}) {
 			return
 		}
