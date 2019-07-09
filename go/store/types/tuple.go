@@ -93,6 +93,10 @@ func (t Tuple) Empty() bool {
 	return t.Len() == 0
 }
 
+func (t Tuple) Format() *Format {
+	return t.format()
+}
+
 // Value interface
 func (t Tuple) Value(ctx context.Context) Value {
 	return t
