@@ -18,7 +18,7 @@ import (
 func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
 	t1 := time.Now()
 
-	ccs := &persistingChunkSource{mt: mt}
+	ccs := &persistingChunkSource{ae: NewAtomicError(), mt: mt}
 	ccs.wg.Add(1)
 	rl <- struct{}{}
 	go func() {
@@ -52,7 +52,7 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 }
 
 type persistingChunkSource struct {
-	ae AtomicError
+	ae *AtomicError
 	mu sync.RWMutex
 	mt *memTable
 
