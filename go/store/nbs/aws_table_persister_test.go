@@ -7,6 +7,7 @@ package nbs
 import (
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/store/must"
+	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"
 	"sync"
@@ -537,7 +538,7 @@ func bytesToChunkSource(t *testing.T, bs ...[]byte) chunkSource {
 	tableSize, name := tw.finish()
 	data := buff[:tableSize]
 	ti, err := parseTableIndex(data)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	rdr := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	return chunkSourceAdapter{rdr, name}
 }
