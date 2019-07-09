@@ -23,6 +23,10 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 	rl <- struct{}{}
 	go func() {
 		defer ccs.wg.Done()
+		defer func() {
+			<-rl
+		}()
+
 		cs, err := p.Persist(ctx, mt, haver, stats)
 
 		if err != nil {
@@ -34,7 +38,6 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 		defer ccs.mu.Unlock()
 		ccs.cs = cs
 		ccs.mt = nil
-		<-rl
 
 		cnt, err := cs.count()
 
