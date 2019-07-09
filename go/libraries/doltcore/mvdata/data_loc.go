@@ -149,7 +149,7 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 			return rd, false, err
 
 		case JsonFile:
-			rd, err := json.OpenJSONReader(dl.Path, fs, json.NewJSONInfo(), schPath)
+			rd, err := json.OpenJSONReader(dl.Path, fs, json.NewJSONInfo(), root.VRW().Format(), schPath)
 			return rd, false, err
 		}
 	}

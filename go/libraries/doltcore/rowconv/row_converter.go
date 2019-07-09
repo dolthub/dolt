@@ -86,7 +86,7 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 		return nil, err
 	}
 
-	outRow := row.New(types.Format_7_18, rc.DestSch, outTaggedVals)
+	outRow := row.New(inRow.Format(), rc.DestSch, outTaggedVals)
 
 	return outRow, nil
 }

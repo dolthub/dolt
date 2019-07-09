@@ -108,7 +108,7 @@ func TestParseKeyValues(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		actual, err := ParseKeyValues(test.sch, test.args)
+		actual, err := ParseKeyValues(types.Format_7_18, test.sch, test.args)
 
 		if test.expectErr != (err != nil) {
 			t.Error(test.args, "produced an unexpected error")

@@ -157,7 +157,7 @@ func createRow(key types.Tuple, nonKey types.Value, rowConv *rowconv.RowConverte
 		return nil
 	}
 
-	srcData := row.FromNoms(types.Format_7_18, rowConv.SrcSch, key, nonKey.(types.Tuple))
+	srcData := row.FromNoms(key.Format(), rowConv.SrcSch, key, nonKey.(types.Tuple))
 	row, err := rowConv.Convert(srcData)
 
 	if err != nil {
