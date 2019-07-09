@@ -66,7 +66,7 @@ func TestDropColumn(t *testing.T) {
 			rowData := updatedTable.GetRowData(ctx)
 			var foundRows []row.Row
 			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(dtestutils.TypedSchema, key.(types.Tuple), value.(types.Tuple)))
+				foundRows = append(foundRows, row.FromNoms(types.Format_7_18, dtestutils.TypedSchema, key.(types.Tuple), value.(types.Tuple)))
 				return false
 			})
 

@@ -18,18 +18,18 @@ var id3, _ = uuid.NewRandom()
 
 func createTestRowData(vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
 	rows := make([]row.Row, 4)
-	rows[0] = row.New(sch, row.TaggedValues{
+	rows[0] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)})
-	rows[1] = row.New(sch, row.TaggedValues{
+	rows[1] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)})
-	rows[2] = row.New(sch, row.TaggedValues{
+	rows[2] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)})
-	rows[3] = row.New(sch, row.TaggedValues{
+	rows[3] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)})
 
 	ed := types.NewMap(context.Background(), vrw).Edit()
 	for _, r := range rows {
-		ed = ed.Set(r.NomsMapKey(types.Format_7_18, sch), r.NomsMapValue(types.Format_7_18, sch))
+		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
 	}
 
 	return ed.Map(context.Background()), rows

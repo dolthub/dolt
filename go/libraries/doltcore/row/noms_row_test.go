@@ -54,7 +54,7 @@ func newTestRow() Row {
 		titleColTag: titleVal,
 	}
 
-	return New(sch, vals)
+	return New(types.Format_7_18, sch, vals)
 }
 
 func TestItrRowCols(t *testing.T) {
@@ -78,7 +78,7 @@ func TestItrRowCols(t *testing.T) {
 func TestFromNoms(t *testing.T) {
 	// New() will faithfully return null values in the row, but such columns won't ever be set when loaded from Noms.
 	// So we use a row here with no null values set to avoid this inconsistency.
-	expectedRow := New(sch, TaggedValues{
+	expectedRow := New(types.Format_7_18, sch, TaggedValues{
 		fnColTag:   fnVal,
 		lnColTag:   lnVal,
 		addrColTag: addrVal,
@@ -96,7 +96,7 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(titleColTag), titleVal,
 		)
 
-		r := FromNoms(sch, keys, vals)
+		r := FromNoms(types.Format_7_18, sch, keys, vals)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -107,11 +107,11 @@ func TestFromNoms(t *testing.T) {
 		)
 		vals := types.NewTuple(types.Format_7_18)
 
-		expectedRow := New(sch, TaggedValues{
+		expectedRow := New(types.Format_7_18, sch, TaggedValues{
 			fnColTag: fnVal,
 			lnColTag: lnVal,
 		})
-		r := FromNoms(sch, keys, vals)
+		r := FromNoms(types.Format_7_18, sch, keys, vals)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -127,7 +127,7 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(unusedTag), fnVal,
 		)
 
-		r := FromNoms(sch, keys, vals)
+		r := FromNoms(types.Format_7_18, sch, keys, vals)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -142,7 +142,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
+			FromNoms(types.Format_7_18, sch, keys, vals)
 		})
 	})
 
@@ -157,7 +157,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
+			FromNoms(types.Format_7_18, sch, keys, vals)
 		})
 	})
 
@@ -174,7 +174,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
+			FromNoms(types.Format_7_18, sch, keys, vals)
 		})
 	})
 
@@ -190,7 +190,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
+			FromNoms(types.Format_7_18, sch, keys, vals)
 		})
 	})
 }
@@ -207,21 +207,21 @@ func TestSetColVal(t *testing.T) {
 		updatedVal := types.String("sanchez")
 
 		r := newTestRow()
-		assert.Equal(t, r, New(sch, expected))
+		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
 
 		updated, err := r.SetColVal(lnColTag, updatedVal, sch)
 		assert.NoError(t, err)
 
 		// validate calling set does not mutate the original row
-		assert.Equal(t, r, New(sch, expected))
+		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
 		expected[lnColTag] = updatedVal
-		assert.Equal(t, updated, New(sch, expected))
+		assert.Equal(t, updated, New(types.Format_7_18, sch, expected))
 
 		// set to a nil value
 		updated, err = updated.SetColVal(titleColTag, nil, sch)
 		assert.NoError(t, err)
 		delete(expected, titleColTag)
-		assert.Equal(t, updated, New(sch, expected))
+		assert.Equal(t, updated, New(types.Format_7_18, sch, expected))
 	})
 
 	t.Run("invalid update", func(t *testing.T) {
@@ -234,7 +234,7 @@ func TestSetColVal(t *testing.T) {
 
 		r := newTestRow()
 
-		assert.Equal(t, r, New(sch, expected))
+		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
 
 		// SetColVal allows an incorrect type to be set for a column
 		updatedRow, err := r.SetColVal(lnColTag, types.Bool(true), sch)
@@ -246,7 +246,7 @@ func TestSetColVal(t *testing.T) {
 		assert.Equal(t, uint64(lnColTag), invalidCol.Tag)
 
 		// validate calling set does not mutate the original row
-		assert.Equal(t, r, New(sch, expected))
+		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
 	})
 }
 
@@ -255,10 +255,10 @@ func TestConvToAndFromTuple(t *testing.T) {
 
 	r := newTestRow()
 
-	keyTpl := r.NomsMapKey(types.Format_7_18, sch).(TupleVals)
-	valTpl := r.NomsMapValue(types.Format_7_18, sch).(TupleVals)
+	keyTpl := r.NomsMapKey(sch).(TupleVals)
+	valTpl := r.NomsMapValue(sch).(TupleVals)
 
-	r2 := FromNoms(sch, keyTpl.Value(ctx).(types.Tuple), valTpl.Value(ctx).(types.Tuple))
+	r2 := FromNoms(types.Format_7_18, sch, keyTpl.Value(ctx).(types.Tuple), valTpl.Value(ctx).(types.Tuple))
 
 	fmt.Println(Fmt(context.Background(), r, sch))
 	fmt.Println(Fmt(context.Background(), r2, sch))

@@ -411,7 +411,7 @@ func TestAddColumn(t *testing.T) {
 			rowData := updatedTable.GetRowData(ctx)
 			var foundRows []row.Row
 			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
+				foundRows = append(foundRows, row.FromNoms(types.Format_7_18, tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
 				return false
 			})
 
@@ -546,7 +546,7 @@ func TestDropColumn(t *testing.T) {
 			rowData := updatedTable.GetRowData(ctx)
 			var foundRows []row.Row
 			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
+				foundRows = append(foundRows, row.FromNoms(types.Format_7_18, updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
 				return false
 			})
 
@@ -672,7 +672,7 @@ func TestRenameColumn(t *testing.T) {
 			rowData := updatedTable.GetRowData(ctx)
 			var foundRows []row.Row
 			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
+				foundRows = append(foundRows, row.FromNoms(types.Format_7_18, updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
 				return false
 			})
 
@@ -767,7 +767,7 @@ func TestRenameTable(t *testing.T) {
 			rowData := newTable.GetRowData(ctx)
 			var foundRows []row.Row
 			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
+				foundRows = append(foundRows, row.FromNoms(types.Format_7_18, tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
 				return false
 			})
 

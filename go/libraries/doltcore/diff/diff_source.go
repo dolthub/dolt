@@ -101,12 +101,12 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		}
 
 		if d.OldValue != nil {
-			oldRow := row.FromNoms(originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
+			oldRow := row.FromNoms(types.Format_7_18, originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
 			mappedOld, _ = rdRd.oldConv.Convert(oldRow)
 		}
 
 		if d.NewValue != nil {
-			newRow := row.FromNoms(originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
+			newRow := row.FromNoms(types.Format_7_18, originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
 			mappedNew, _ = rdRd.newConv.Convert(newRow)
 		}
 

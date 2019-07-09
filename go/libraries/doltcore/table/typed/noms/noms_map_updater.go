@@ -81,8 +81,8 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 			}
 		}()
 
-		pk := r.NomsMapKey(nmu.vrw.Format(), nmu.sch)
-		fieldVals := r.NomsMapValue(nmu.vrw.Format(), nmu.sch)
+		pk := r.NomsMapKey(nmu.sch)
+		fieldVals := r.NomsMapValue(nmu.sch)
 
 		nmu.acc.AddEdit(pk, fieldVals)
 		nmu.count++

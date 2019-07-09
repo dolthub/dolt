@@ -115,9 +115,9 @@ func init() {
 	fakeSchema = schema.SchemaFromCols(fakeFields)
 
 	imtRows = []row.Row{
-		row.New(fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")}),
-		row.New(fakeSchema, row.TaggedValues{0: types.String("b"), 1: types.String("2")}),
-		row.New(fakeSchema, row.TaggedValues{0: types.String("c"), 1: types.String("3")}),
+		row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")}),
+		row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("b"), 1: types.String("2")}),
+		row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("c"), 1: types.String("3")}),
 	}
 
 	imt = table.NewInMemTableWithData(fakeSchema, imtRows)

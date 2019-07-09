@@ -2,6 +2,8 @@ package merge
 
 import (
 	"context"
+	"io"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
@@ -9,7 +11,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
 )
 
 const (
@@ -156,7 +157,7 @@ func createRow(key types.Tuple, nonKey types.Value, rowConv *rowconv.RowConverte
 		return nil
 	}
 
-	srcData := row.FromNoms(rowConv.SrcSch, key, nonKey.(types.Tuple))
+	srcData := row.FromNoms(types.Format_7_18, rowConv.SrcSch, key, nonKey.(types.Tuple))
 	row, err := rowConv.Convert(srcData)
 
 	if err != nil {

@@ -11,7 +11,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -144,7 +143,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
 		}
 
-		tvs := r.NomsMapKey(types.Format_7_18, tableSch).(row.TupleVals)
+		tvs := r.NomsMapKey(tableSch).(row.TupleVals)
 		key := tvs.Value(ctx)
 
 		if anyColChanged {
@@ -153,7 +152,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			result.NumRowsUnchanged += 1
 		}
 
-		me.Set(key, r.NomsMapValue(types.Format_7_18, tableSch))
+		me.Set(key, r.NomsMapValue(tableSch))
 	}
 	table = table.UpdateRows(ctx, me.Map(ctx))
 

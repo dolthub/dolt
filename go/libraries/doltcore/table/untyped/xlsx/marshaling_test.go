@@ -33,7 +33,7 @@ func TestDecodeXLSXRows(t *testing.T) {
 	taggedVals[uint64(2)], _ = doltcore.StringToValue("otori", types.StringKind)
 	taggedVals[uint64(3)], _ = doltcore.StringToValue("24", types.StringKind)
 
-	newRow := row.New(sch, taggedVals)
+	newRow := row.New(types.Format_7_18, sch, taggedVals)
 
 	if !reflect.DeepEqual(decoded[0], newRow) {
 		t.Log("error!")

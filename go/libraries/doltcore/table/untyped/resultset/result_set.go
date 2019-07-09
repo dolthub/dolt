@@ -3,6 +3,7 @@ package resultset
 import (
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -239,7 +240,7 @@ func (rss *ResultSetSchema) CrossProduct(tables []*TableResult, cb CrossProductR
 		return
 	}
 
-	emptyRow := RowWithSchema{row.New(rss.destSch, row.TaggedValues{}), rss.destSch}
+	emptyRow := RowWithSchema{row.New(types.Format_7_18, rss.destSch, row.TaggedValues{}), rss.destSch}
 	rss.cph(emptyRow, tables, cb)
 }
 

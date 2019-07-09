@@ -2,7 +2,6 @@ package sql
 
 import (
 	"context"
-	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -347,10 +346,10 @@ func TestExecuteUpdate(t *testing.T) {
 					expectedRow = tt.updatedRows[updatedIdx]
 				}
 
-				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(types.Format_7_18, PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
+				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
-				opts := cmp.Options{cmp.AllowUnexported(expectedRow), dtestutils.FloatComparer}
-				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))
+				eq, diff := rowsEqual(expectedRow, foundRow)
+				assert.True(t, eq, "Rows not equals, found diff %v", diff)
 			}
 		})
 	}

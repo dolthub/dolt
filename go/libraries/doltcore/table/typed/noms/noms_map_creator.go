@@ -52,8 +52,8 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 			}
 		}()
 
-		pk := r.NomsMapKey(nmc.vrw.Format(), nmc.sch)
-		fieldVals := r.NomsMapValue(nmc.vrw.Format(), nmc.sch)
+		pk := r.NomsMapKey(nmc.sch)
+		fieldVals := r.NomsMapValue(nmc.sch)
 		if nmc.lastPK == nil || nmc.lastPK.Less(nmc.vrw.Format(), pk) {
 			pkVal := pk.Value(ctx)
 

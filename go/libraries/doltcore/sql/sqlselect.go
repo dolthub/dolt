@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"time"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -11,8 +14,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"strconv"
-	"time"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -647,7 +648,7 @@ func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.Na
 				taggedVals[uint64(i)] = val
 			}
 		}
-		r := row.New(selectStmt.ResultSetSchema, taggedVals)
+		r := row.New(types.Format_7_18, selectStmt.ResultSetSchema, taggedVals)
 		return []*pipeline.TransformedRowResult{{r, nil}}, ""
 	}
 

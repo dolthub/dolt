@@ -55,7 +55,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 		if types.IsNull(updated) {
 			rowEditor.Remove(key)
 		} else {
-			r := row.FromNoms(tblSch, key.(types.Tuple), updated.(types.Tuple))
+			r := row.FromNoms(types.Format_7_18, tblSch, key.(types.Tuple), updated.(types.Tuple))
 
 			if !row.IsValid(r, tblSch) {
 				itrErr = table.NewBadRow(r)

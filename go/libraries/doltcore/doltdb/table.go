@@ -201,7 +201,7 @@ func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (
 		return nil, false
 	}
 
-	return row.FromNoms(sch, pk, fieldsVal.(types.Tuple)), true
+	return row.FromNoms(types.Format_7_18, sch, pk, fieldsVal.(types.Tuple)), true
 }
 
 // GetRows takes in a PKItr which will supply a stream of primary keys to be pulled from the table.  Each key is
@@ -225,7 +225,7 @@ func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema
 		if fieldsVal == nil {
 			missing = append(missing, pk)
 		} else {
-			r := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
+			r := row.FromNoms(types.Format_7_18, sch, pk, fieldsVal.(types.Tuple))
 			rows = append(rows, r)
 		}
 	}

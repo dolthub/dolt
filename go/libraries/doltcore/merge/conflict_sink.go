@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -12,7 +14,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
 )
 
 var WriteBufSize = 256 * 1024
@@ -104,7 +105,7 @@ func (cs *ConflictSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 		return false
 	})
 
-	r = row.New(cs.sch, taggedVals)
+	r = row.New(types.Format_7_18, cs.sch, taggedVals)
 	return cs.ttw.WriteRow(context.TODO(), r)
 }
 

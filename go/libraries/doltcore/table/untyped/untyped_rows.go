@@ -48,7 +48,7 @@ func NewRowFromStrings(sch schema.Schema, valStrs []string) row.Row {
 		taggedVals[tag] = types.String(valStr)
 	}
 
-	return row.New(sch, taggedVals)
+	return row.New(types.Format_7_18, sch, taggedVals)
 }
 
 // NewRowFromTaggedStrings takes an untyped schema and a map of column tag to string value and returns a row
@@ -58,7 +58,7 @@ func NewRowFromTaggedStrings(sch schema.Schema, taggedStrs map[uint64]string) ro
 		taggedVals[tag] = types.String(valStr)
 	}
 
-	return row.New(sch, taggedVals)
+	return row.New(types.Format_7_18, sch, taggedVals)
 }
 
 // UntypeSchema takes a schema and returns a schema with the same columns, but with the types of each of those columns

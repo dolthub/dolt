@@ -63,7 +63,7 @@ func updateTableWithNewSchema(ctx context.Context, db *doltdb.DoltDB, tbl *doltd
 			return true
 		}
 
-		me.Set(newRow.NomsMapKey(vrw.Format(), newSchema), newRow.NomsMapValue(vrw.Format(), newSchema))
+		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
 		return false
 	})
 	if updateErr != nil {

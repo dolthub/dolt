@@ -136,6 +136,10 @@ func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value) {
 	return entry.key, entry.value
 }
 
+func (m Map) Format() *Format {
+	return m.format()
+}
+
 func (m Map) First(ctx context.Context) (Value, Value) {
 	return m.firstOrLast(ctx, false)
 }

@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
@@ -12,8 +15,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"strings"
 )
 
 // ReadBufSize is the size of the buffer used when reading the csv file.  It is set at the package level and all
@@ -145,6 +146,6 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 		}
 	}
 
-	r := row.New(sch, taggedVals)
+	r := row.New(types.Format_7_18, sch, taggedVals)
 	return r, nil
 }

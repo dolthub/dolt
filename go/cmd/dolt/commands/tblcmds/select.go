@@ -315,7 +315,7 @@ var noConfLabel = types.String("   ")
 func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 	return func(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 		ctx := context.TODO()
-		key := inRow.NomsMapKey(types.Format_7_18, inSch)
+		key := inRow.NomsMapKey(inSch)
 
 		var err error
 		if conflicts.Has(ctx, key.Value(ctx)) {
