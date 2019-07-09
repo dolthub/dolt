@@ -105,7 +105,7 @@ func (cs *ConflictSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 		return false
 	})
 
-	r = row.New(types.Format_7_18, cs.sch, taggedVals)
+	r = row.New(r.Format(), cs.sch, taggedVals)
 	return cs.ttw.WriteRow(context.TODO(), r)
 }
 

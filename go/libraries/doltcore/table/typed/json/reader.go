@@ -10,6 +10,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 var ReadBufSize = 256 * 1024
@@ -22,17 +23,17 @@ type JSONReader struct {
 	ind    int
 }
 
-func OpenJSONReader(path string, fs filesys.ReadableFS, info *JSONFileInfo, schPath string) (*JSONReader, error) {
+func OpenJSONReader(path string, fs filesys.ReadableFS, info *JSONFileInfo, format *types.Format, schPath string) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewJSONReader(r, info, fs, schPath, path)
+	return NewJSONReader(r, info, fs, format, schPath, path)
 }
 
-func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, schPath string, tblPath string) (*JSONReader, error) {
+func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, format *types.Format, schPath string, tblPath string) (*JSONReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	if schPath == "" {
 		panic("schema must be provided")
@@ -59,7 +60,7 @@ func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, s
 		return nil, err
 	}
 
-	decodedRows, err := jsonRows.decodeJSONRows(sch)
+	decodedRows, err := jsonRows.decodeJSONRows(format, sch)
 	info.SetRows(decodedRows)
 
 	return &JSONReader{r, br, info, sch, 0}, nil
