@@ -26,6 +26,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -298,7 +299,7 @@ func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
 		return err
 	}
 
-	return runPrintingPipeline(p, sch)
+	return runPrintingPipeline(root.VRW().Format(), p, sch)
 }
 
 // Executes a SQL select statement and prints the result to the CLI.
@@ -317,12 +318,12 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
 	untypedSch, untypingTransform := newUntypingTransformer(resultSchema)
 	p.AddStage(untypingTransform)
 
-	return runPrintingPipeline(p, untypedSch)
+	return runPrintingPipeline(root.VRW().Format(), p, untypedSch)
 }
 
 // Adds some print-handling stages to the pipeline given and runs it, returning any error.
 // Adds null-printing and fixed-width transformers. The schema given is assumed to be untyped (string-typed).
-func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
+func runPrintingPipeline(format *types.Format, p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
@@ -344,7 +345,7 @@ func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	})
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(untypedSch)))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(format, untypedSch, schema.ExtractAllColNames(untypedSch)))
 
 	p.Start()
 	if err := p.Wait(); err != nil {

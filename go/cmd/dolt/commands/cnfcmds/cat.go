@@ -2,6 +2,7 @@ package cnfcmds
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -109,7 +110,7 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 				panic("")
 			})
 
-			p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(cnfRd.GetSchema(), schema.ExtractAllColNames(cnfRd.GetSchema())))
+			p.InjectRow("fwt", untyped.NewRowFromTaggedStrings(tbl.Format(), cnfRd.GetSchema(), schema.ExtractAllColNames(cnfRd.GetSchema())))
 
 			p.Start()
 			p.Wait()

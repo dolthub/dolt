@@ -21,7 +21,7 @@ func TestDecodeXLSXRows(t *testing.T) {
 	first := [][]string{{"id", "first", "last", "age"}, {"1", "osheiza", "otori", "24"}}
 	second = append(second, first)
 
-	decoded, err := decodeXLSXRows(second, sch)
+	decoded, err := decodeXLSXRows(types.Format_7_18, second, sch)
 	if err != nil {
 		fmt.Println(err)
 

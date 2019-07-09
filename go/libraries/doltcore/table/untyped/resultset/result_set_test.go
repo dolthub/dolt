@@ -393,7 +393,7 @@ func getCrossProduct(rss *ResultSetSchema, tables []*TableResult) []row.Row {
 	cb := func(r row.Row) {
 		result = append(result, r)
 	}
-	rss.CrossProduct(tables, cb)
+	rss.CrossProduct(types.Format_7_18, tables, cb)
 	return result
 }
 

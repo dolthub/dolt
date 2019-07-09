@@ -52,6 +52,10 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 	return &Table{vrw, tableStruct}
 }
 
+func (t *Table) Format() *types.Format {
+	return t.vrw.Format()
+}
+
 func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) *Table {
 	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflictData)
 

@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io"
 	"strings"
 	"testing"
@@ -29,13 +30,13 @@ func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
 	_, sch := untyped.NewUntypedSchema(colNames...)
 	goodExpectedRows := []row.Row{
-		untyped.NewRowFromStrings(sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
-		untyped.NewRowFromStrings(sch, []string{"Rob Robertson", "25", "Dufus"}),
-		untyped.NewRowFromStrings(sch, []string{"John Johnson", "21", "Intern Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern Dufus"}),
 	}
 	badExpectedRows := []row.Row{
-		untyped.NewRowFromStrings(sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
-		untyped.NewRowFromStrings(sch, []string{"Rob Robertson", "25", "Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"}),
 	}
 
 	widths := map[string]int{
@@ -93,7 +94,7 @@ func readTestRows(t *testing.T, inputStr string, fwtSch *FWTSchema, sep string) 
 	const path = "/file.csv"
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
-	fwtRd, err := OpenFWTReader(path, fs, fwtSch, sep)
+	fwtRd, err := OpenFWTReader(path, fs, types.Format_7_18, fwtSch, sep)
 	defer fwtRd.Close(context.Background())
 
 	if err != nil {
