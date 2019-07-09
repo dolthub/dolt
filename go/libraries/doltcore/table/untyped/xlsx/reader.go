@@ -10,6 +10,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 var ReadBufSize = 256 * 1024
@@ -22,17 +23,17 @@ type XLSXReader struct {
 	ind    int
 }
 
-func OpenXLSXReader(path string, fs filesys.ReadableFS, info *XLSXFileInfo, tblName string) (*XLSXReader, error) {
+func OpenXLSXReader(path string, fs filesys.ReadableFS, info *XLSXFileInfo, format *types.Format, tblName string) (*XLSXReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewXLSXReader(r, info, fs, path, tblName)
+	return NewXLSXReader(r, info, fs, format, path, tblName)
 }
 
-func NewXLSXReader(r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, path string, tblName string) (*XLSXReader, error) {
+func NewXLSXReader(r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, format *types.Format, path string, tblName string) (*XLSXReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	colStrs, err := getColHeaders(path, tblName)
 
@@ -47,7 +48,7 @@ func NewXLSXReader(r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, p
 
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	decodedRows, err := decodeXLSXRows(data, sch)
+	decodedRows, err := decodeXLSXRows(format, data, sch)
 	if err != nil {
 		return nil, err
 	}

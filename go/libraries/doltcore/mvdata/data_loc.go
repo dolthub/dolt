@@ -137,15 +137,15 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 
 		switch dl.Format {
 		case CsvFile:
-			rd, err := csv.OpenCSVReader(dl.Path, fs, csv.NewCSVInfo())
+			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo())
 			return rd, false, err
 
 		case PsvFile:
-			rd, err := csv.OpenCSVReader(dl.Path, fs, csv.NewCSVInfo().SetDelim('|'))
+			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim('|'))
 			return rd, false, err
 
 		case XlsxFile:
-			rd, err := xlsx.OpenXLSXReader(dl.Path, fs, xlsx.NewXLSXInfo(), tblName)
+			rd, err := xlsx.OpenXLSXReader(dl.Path, fs, xlsx.NewXLSXInfo(), root.VRW().Format(), tblName)
 			return rd, false, err
 
 		case JsonFile:

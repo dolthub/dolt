@@ -47,8 +47,7 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		var totalStats types.AppliedEditStats
 		for edits := range mapChan {
 			var stats types.AppliedEditStats
-			// TODO(binformat)
-			m, stats = types.ApplyEdits(ctx, types.Format_7_18, edits, m)
+			m, stats = types.ApplyEdits(ctx, vrw.Format(), edits, m)
 			totalStats = totalStats.Add(stats)
 
 			if statsCB != nil {
@@ -59,7 +58,7 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		resChan <- updateMapRes{m, nil}
 	}()
 
-	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(types.Format_7_18), mapChan, resChan, nil}
+	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(vrw.Format()), mapChan, resChan, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes

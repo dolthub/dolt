@@ -362,10 +362,10 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src.NextDiff), sinkProcFunc, transforms, badRowCallback)
 
 	if schemasEqual {
-		p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames))
+		p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames))
 	} else {
-		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(untypedUnionSch, oldColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
-		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(untypedUnionSch, newColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
+		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, oldColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
+		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
 	}
 
 	p.Start()

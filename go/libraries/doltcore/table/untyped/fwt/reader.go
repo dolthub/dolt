@@ -5,14 +5,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"io"
-	"strings"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // ReadBufSize is the size of the buffer used when reading the fwt file.  It is set at the package level and all
@@ -26,25 +28,26 @@ type FWTReader struct {
 	fwtSch *FWTSchema
 	isDone bool
 	colSep string
+	format *types.Format
 }
 
 // OpenFWTReader opens a reader at a given path within a given filesys.  The FWTSchema should describe the fwt file
 // being opened and have the correct column widths.
-func OpenFWTReader(path string, fs filesys.ReadableFS, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
+func OpenFWTReader(path string, fs filesys.ReadableFS, format *types.Format, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewFWTReader(r, fwtSch, colSep)
+	return NewFWTReader(format, r, fwtSch, colSep)
 }
 
 //
-func NewFWTReader(r io.ReadCloser, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
+func NewFWTReader(format *types.Format, r io.ReadCloser, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
-	return &FWTReader{r, br, fwtSch, false, colSep}, nil
+	return &FWTReader{r, br, fwtSch, false, colSep, format}, nil
 }
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
@@ -118,5 +121,5 @@ func (fwtRd *FWTReader) parseRow(lineBytes []byte) (row.Row, error) {
 		return false
 	})
 
-	return untyped.NewRowFromStrings(fwtRd.GetSchema(), fields), nil
+	return untyped.NewRowFromStrings(fwtRd.format, fwtRd.GetSchema(), fields), nil
 }

@@ -36,5 +36,5 @@ func (np *NullPrinter) ProcessRow(inRow row.Row, props pipeline.ReadableMap) (ro
 		return false
 	})
 
-	return []*pipeline.TransformedRowResult{{RowData: row.New(types.Format_7_18, np.Sch, taggedVals)}}, ""
+	return []*pipeline.TransformedRowResult{{RowData: row.New(inRow.Format(), np.Sch, taggedVals)}}, ""
 }

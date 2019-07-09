@@ -514,7 +514,7 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 	}
 	go func() {
 		defer close(cpChan)
-		selectStmt.intermediateRss.CrossProduct(results, cb)
+		selectStmt.intermediateRss.CrossProduct(root.VRW().Format(), results, cb)
 	}()
 
 	// TODO: we need to check errors in pipeline execution without blocking

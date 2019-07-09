@@ -26,7 +26,7 @@ func UnmarshalFromXLSX(path string) ([][][]string, error) {
 	return dataSlice, nil
 }
 
-func decodeXLSXRows(xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
+func decodeXLSXRows(format *types.Format, xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
 	var rows []row.Row
 
 	var err error
@@ -52,7 +52,7 @@ func decodeXLSXRows(xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
 					return nil, err
 				}
 			}
-			rows = append(rows, row.New(types.Format_7_18, sch, taggedVals))
+			rows = append(rows, row.New(format, sch, taggedVals))
 			fmt.Println(rows)
 		}
 

@@ -33,7 +33,7 @@ func NewUntypedSchemaWithFirstTag(firstTag uint64, colNames ...string) (map[stri
 
 // NewRowFromStrings is a utility method that takes a schema for an untyped row, and a slice of strings and uses the strings
 // as the field values for the row by converting them to noms type.String
-func NewRowFromStrings(sch schema.Schema, valStrs []string) row.Row {
+func NewRowFromStrings(format *types.Format, sch schema.Schema, valStrs []string) row.Row {
 	allCols := sch.GetAllCols()
 
 	taggedVals := make(row.TaggedValues)
@@ -48,17 +48,17 @@ func NewRowFromStrings(sch schema.Schema, valStrs []string) row.Row {
 		taggedVals[tag] = types.String(valStr)
 	}
 
-	return row.New(types.Format_7_18, sch, taggedVals)
+	return row.New(format, sch, taggedVals)
 }
 
 // NewRowFromTaggedStrings takes an untyped schema and a map of column tag to string value and returns a row
-func NewRowFromTaggedStrings(sch schema.Schema, taggedStrs map[uint64]string) row.Row {
+func NewRowFromTaggedStrings(format *types.Format, sch schema.Schema, taggedStrs map[uint64]string) row.Row {
 	taggedVals := make(row.TaggedValues)
 	for tag, valStr := range taggedStrs {
 		taggedVals[tag] = types.String(valStr)
 	}
 
-	return row.New(types.Format_7_18, sch, taggedVals)
+	return row.New(format, sch, taggedVals)
 }
 
 // UntypeSchema takes a schema and returns a schema with the same columns, but with the types of each of those columns
