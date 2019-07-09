@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -153,7 +154,7 @@ func describeColumn(col schema.Column) row.Row {
 		4: types.String("NULL"), // TODO: when schemas store defaults, use them here
 		5: types.String(""),     // Extra column reserved for future use
 	}
-	return row.New(showColumnsSchema(), taggedVals)
+	return row.New(types.Format_7_18, showColumnsSchema(), taggedVals)
 }
 
 // Takes a single-dimensional array of strings and transposes it to a 2D array, with a single element per row.
@@ -173,7 +174,7 @@ func toRows(ss [][]string, sch schema.Schema) []row.Row {
 		for tag, col := range r {
 			taggedVals[uint64(tag)] = types.String(col)
 		}
-		rows[i] = row.New(sch, taggedVals)
+		rows[i] = row.New(types.Format_7_18, sch, taggedVals)
 	}
 	return rows
 }

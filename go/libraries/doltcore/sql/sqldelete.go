@@ -10,7 +10,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -81,7 +80,7 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		}
 
 		result.NumRowsDeleted++
-		me.Remove(r.NomsMapKey(types.Format_7_18, tableSch))
+		me.Remove(r.NomsMapKey(tableSch))
 	}
 
 	table = table.UpdateRows(ctx, me.Map(ctx))

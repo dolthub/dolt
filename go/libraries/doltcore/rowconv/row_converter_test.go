@@ -32,7 +32,7 @@ func TestRowConverter(t *testing.T) {
 	}
 
 	id, _ := uuid.NewRandom()
-	inRow := row.New(srcSch, row.TaggedValues{
+	inRow := row.New(types.Format_7_18, srcSch, row.TaggedValues{
 		0: types.UUID(id),
 		1: types.Float(1.25),
 		2: types.Uint(12345678),
@@ -46,7 +46,7 @@ func TestRowConverter(t *testing.T) {
 	outData := results[0].RowData
 
 	destSch := mapping.DestSch
-	expected := row.New(destSch, row.TaggedValues{
+	expected := row.New(types.Format_7_18, destSch, row.TaggedValues{
 		0: types.String(id.String()),
 		1: types.String("1.25"),
 		2: types.String("12345678"),

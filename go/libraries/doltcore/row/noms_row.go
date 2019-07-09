@@ -6,8 +6,9 @@ import (
 )
 
 type nomsRow struct {
-	key   TaggedValues
-	value TaggedValues
+	key    TaggedValues
+	value  TaggedValues
+	format *types.Format
 }
 
 func (nr nomsRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool)) bool {
@@ -55,13 +56,17 @@ func (nr nomsRow) SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row
 			rowVal = nr.value.Set(tag, val)
 		}
 
-		return nomsRow{rowKey, rowVal}, nil
+		return nomsRow{rowKey, rowVal, nr.format}, nil
 	}
 
 	panic("can't set a column whose tag isn't in the schema.  verify before calling this function.")
 }
 
-func New(sch schema.Schema, colVals TaggedValues) Row {
+func (nr nomsRow) Format() *types.Format {
+	return nr.format
+}
+
+func New(format *types.Format, sch schema.Schema, colVals TaggedValues) Row {
 	allCols := sch.GetAllCols()
 
 	keyVals := make(TaggedValues)
@@ -80,14 +85,14 @@ func New(sch schema.Schema, colVals TaggedValues) Row {
 		return false
 	})
 
-	return fromTaggedVals(sch, keyVals, nonKeyVals)
+	return fromTaggedVals(format, sch, keyVals, nonKeyVals)
 }
 
 // fromTaggedVals will take a schema, a map of tag to value for the key, and a map of tag to value for non key values,
 // and generates a row.  When a schema adds or removes columns from the non-key portion of the row, the schema will be
 // updated, but the rows will not be touched.  So the non-key portion of the row may contain values that are not in the
 // schema (The keys must match the schema though).
-func fromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
+func fromTaggedVals(format *types.Format, sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
 	allCols := sch.GetAllCols()
 
 	keyVals.Iter(func(tag uint64, val types.Value) (stop bool) {
@@ -122,20 +127,20 @@ func fromTaggedVals(sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
 		return false
 	})
 
-	return nomsRow{keyVals, filteredVals}
+	return nomsRow{keyVals, filteredVals, format}
 }
 
-func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) Row {
+func FromNoms(format *types.Format, sch schema.Schema, nomsKey, nomsVal types.Tuple) Row {
 	key := ParseTaggedValues(nomsKey)
 	val := ParseTaggedValues(nomsVal)
 
-	return fromTaggedVals(sch, key, val)
+	return fromTaggedVals(format, sch, key, val)
 }
 
-func (nr nomsRow) NomsMapKey(format *types.Format, sch schema.Schema) types.LesserValuable {
-	return nr.key.NomsTupleForTags(format, sch.GetPKCols().Tags, true)
+func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {
+	return nr.key.NomsTupleForTags(nr.format, sch.GetPKCols().Tags, true)
 }
 
-func (nr nomsRow) NomsMapValue(format *types.Format, sch schema.Schema) types.Valuable {
-	return nr.value.NomsTupleForTags(format, sch.GetNonPKCols().SortedTags, false)
+func (nr nomsRow) NomsMapValue(sch schema.Schema) types.Valuable {
+	return nr.value.NomsTupleForTags(nr.format, sch.GetNonPKCols().SortedTags, false)
 }

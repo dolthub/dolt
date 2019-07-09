@@ -42,15 +42,15 @@ John Johnson,21,Intern Dufus
 	colColl, _ := schema.NewColCollection(inCols...)
 	rowSch := schema.SchemaFromCols(colColl)
 	rows := []row.Row{
-		row.New(rowSch, row.TaggedValues{
+		row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String("Bill Billerson"),
 			ageColTag:   types.Uint(32),
 			titleColTag: types.String("Senior Dufus")}),
-		row.New(rowSch, row.TaggedValues{
+		row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String("Rob Robertson"),
 			ageColTag:   types.Uint(25),
 			titleColTag: types.String("Dufus")}),
-		row.New(rowSch, row.TaggedValues{
+		row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String("John Johnson"),
 			ageColTag:   types.Uint(21),
 			titleColTag: types.String("Intern Dufus")}),

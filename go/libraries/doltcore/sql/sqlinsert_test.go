@@ -55,7 +55,7 @@ func TestExecuteInsert(t *testing.T) {
 			name: "insert one row, null values",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", null, null, null)`,
-			insertedValues: []row.Row{row.New(PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")})},
+			insertedValues: []row.Row{row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")})},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
@@ -253,8 +253,8 @@ func TestExecuteInsert(t *testing.T) {
 					(7, "Maggie", "Simpson"),
 					(8, "Milhouse", "Van Houten")`,
 			insertedValues: []row.Row{
-				row.New(PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")}),
-				row.New(PeopleTestSchema, row.TaggedValues{IdTag: types.Int(8), FirstTag: types.String("Milhouse"), LastTag: types.String("Van Houten")}),
+				row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")}),
+				row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(8), FirstTag: types.String("Milhouse"), LastTag: types.String("Van Houten")}),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 2},
 		},
@@ -318,11 +318,30 @@ func TestExecuteInsert(t *testing.T) {
 			assert.True(t, ok)
 
 			for _, expectedRow := range tt.insertedValues {
-				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(types.Format_7_18, PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
+				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
-				opts := cmp.Options{cmp.AllowUnexported(expectedRow), dtestutils.FloatComparer}
-				assert.True(t, cmp.Equal(expectedRow, foundRow, opts), "Rows not equals, found diff %v", cmp.Diff(expectedRow, foundRow, opts))
+				eq, diff := rowsEqual(expectedRow, foundRow)
+				assert.True(t, eq, "Rows not equals, found diff %v", diff)
 			}
 		})
 	}
+}
+
+func rowsEqual(expected, actual row.Row) (bool, string) {
+	er, ar := make(map[uint64]types.Value), make(map[uint64]types.Value)
+	expected.IterCols(func (t uint64, v types.Value) bool {
+		er[t] = v
+		return false
+	})
+	actual.IterCols(func (t uint64, v types.Value) bool {
+		ar[t] = v
+		return false
+	})
+	opts := cmp.Options{cmp.AllowUnexported(), dtestutils.FloatComparer}
+	eq := cmp.Equal(er, ar, opts)
+	var diff string
+	if !eq {
+		diff = cmp.Diff(er, ar, opts)
+	}
+	return eq, diff
 }

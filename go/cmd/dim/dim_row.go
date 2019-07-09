@@ -18,7 +18,7 @@ type DimRow struct {
 }
 
 func NewDimRow(r row.Row, toUntyped, toTyped *rowconv.RowConverter) (*DimRow, error) {
-	key := r.NomsMapKey(types.Format_7_18, toUntyped.SrcSch).Value(context.Background())
+	key := r.NomsMapKey(toUntyped.SrcSch).Value(context.Background())
 	untyped, err := toUntyped.Convert(r)
 
 	if err != nil {
@@ -29,7 +29,7 @@ func NewDimRow(r row.Row, toUntyped, toTyped *rowconv.RowConverter) (*DimRow, er
 }
 
 func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
-	r := row.New(dr.toTyped.SrcSch, dr.currentVals)
+	r := row.New(types.Format_7_18, dr.toTyped.SrcSch, dr.currentVals)
 	typed, err := dr.toTyped.Convert(r)
 
 	if err != nil {
@@ -37,7 +37,7 @@ func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
 	}
 
 	typedSch := dr.toTyped.DestSch
-	key := typed.NomsMapKey(me.Format(), typedSch).Value(context.Background())
+	key := typed.NomsMapKey(typedSch).Value(context.Background())
 
 	if !dr.key.Equals(key) {
 		me = me.Remove(dr.key)
@@ -47,7 +47,7 @@ func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
 	dr.dbVals = dr.currentVals
 	log.Println("stored vals")
 
-	return me.Set(key, typed.NomsMapValue(me.Format(), typedSch))
+	return me.Set(key, typed.NomsMapValue(typedSch))
 }
 
 func (dr *DimRow) UpdateVal(tag uint64, str string) error {

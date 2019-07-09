@@ -1,12 +1,12 @@
 package sqle
 
 import (
+	"io"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/src-d/go-mysql-server/sql"
-	"io"
 )
 
 // An iterator over the rows of a table.
@@ -32,7 +32,7 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	doltRow := row.FromNoms(itr.table.sch, key.(types.Tuple), val.(types.Tuple))
+	doltRow := row.FromNoms(types.Format_7_18, itr.table.sch, key.(types.Tuple), val.(types.Tuple))
 	return doltRowToSqlRow(doltRow, itr.table.sch), nil
 }
 
@@ -47,7 +47,7 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) sql.Row {
 
 	i := 0
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-		value, _:= doltRow.GetColVal(tag)
+		value, _ := doltRow.GetColVal(tag)
 		colVals[i] = doltColValToSqlColVal(value)
 		i++
 		return false
@@ -65,7 +65,7 @@ func SqlRowToDoltRow(r sql.Row, doltSchema schema.Schema) row.Row {
 		}
 	}
 
-	return row.New(doltSchema, taggedVals)
+	return row.New(types.Format_7_18, doltSchema, taggedVals)
 }
 
 // Returns the column value for a SQL column

@@ -119,7 +119,7 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 		return false
 	})
 
-	r = row.New(cds.sch, taggedVals)
+	r = row.New(types.Format_7_18, cds.sch, taggedVals)
 	return cds.ttw.WriteRow(context.TODO(), r)
 }
 

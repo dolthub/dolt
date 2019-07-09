@@ -113,7 +113,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	if verr == nil {
 		me := tbl.GetRowData(context.TODO()).Edit()
-		updated := me.Set(row.NomsMapKey(types.Format_7_18, sch), row.NomsMapValue(types.Format_7_18, sch)).Map(context.TODO())
+		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map(context.TODO())
 		tbl = tbl.UpdateRows(context.Background(), updated)
 		root = root.PutTable(context.Background(), dEnv.DoltDB, prArgs.TableName, tbl)
 
@@ -159,7 +159,7 @@ func createRow(sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseE
 		return nil, errhand.BuildDError("failed to create row converter").AddCause(err).Build()
 	}
 
-	untypedRow := row.New(untypedSch, untypedTaggedVals)
+	untypedRow := row.New(types.Format_7_18, untypedSch, untypedTaggedVals)
 	typedRow, err := rconv.Convert(untypedRow)
 
 	if err != nil {

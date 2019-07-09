@@ -72,7 +72,7 @@ func TableFromJSON(ctx context.Context, fp string, vrw types.ValueReadWriter, sc
 	var rowMap types.Map
 	me := types.NewMap(ctx, vrw).Edit()
 	for _, row := range tblRows {
-		me = me.Set(row.NomsMapKey(vrw.Format(), sch), row.NomsMapValue(vrw.Format(), sch))
+		me = me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch))
 	}
 	rowMap = me.Map(ctx)
 
@@ -117,5 +117,5 @@ func convToRow(sch schema.Schema, rowMap map[string]interface{}) (row.Row, error
 		}
 
 	}
-	return row.New(sch, taggedVals), nil
+	return row.New(types.Format_7_18, sch, taggedVals), nil
 }

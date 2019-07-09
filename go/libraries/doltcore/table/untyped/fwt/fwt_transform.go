@@ -93,6 +93,6 @@ func (fwtTr *FWTTransformer) Transform(r row.Row, props pipeline.ReadableMap) ([
 		destFields[tag] = types.String(buf)
 	}
 
-	r = row.New(sch, destFields)
+	r = row.New(types.Format_7_18, sch, destFields)
 	return []*pipeline.TransformedRowResult{{RowData: r}}, ""
 }
