@@ -121,7 +121,13 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
-				go rp.getManyAtOffsets(reqs, offsets, foundChunks, wg, ae, stats)
+
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					rp.getManyAtOffsets(ctx, reqs, offsets, foundChunks, wg, ae, stats)
+				}()
+
 				if !remaining {
 					return false
 				}

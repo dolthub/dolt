@@ -223,13 +223,14 @@ type chunkReader interface {
 type chunkReadPlanner interface {
 	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
 	getManyAtOffsets(
+		ctx context.Context,
 		reqs []getRecord,
 		offsetRecords offsetRecSlice,
 		foundChunks chan *chunks.Chunk,
 		wg *sync.WaitGroup,
 		ae *AtomicError,
 		stats *Stats,
-	) (remaining bool)
+	)
 }
 
 type chunkSource interface {
