@@ -122,7 +122,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processOrderByClause(selectStmt, s.OrderBy); err != nil {
+	if err := processOrderByClause(root.VRW().Format(), selectStmt, s.OrderBy); err != nil {
 		return nil, nil, err
 	}
 
@@ -163,12 +163,12 @@ func createResultSetSchema(selectStmt *SelectStatement) error {
 }
 
 // Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
-func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy) error {
+func processOrderByClause(format *types.Format, statement *SelectStatement, orderBy sqlparser.OrderBy) error {
 	if len(orderBy) == 0 {
 		return nil
 	}
 
-	sorter, err := createRowSorter(statement, orderBy)
+	sorter, err := createRowSorter(format, statement, orderBy)
 	if err != nil {
 		return err
 	}
@@ -537,7 +537,7 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(selectStmt, p)))
 	}
 
-	p.AddStage(createOutputSchemaMappingTransform(selectStmt))
+	p.AddStage(createOutputSchemaMappingTransform(root.VRW().Format(), selectStmt))
 
 	return p, nil
 }
@@ -632,13 +632,13 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 		if statement.limit != noLimit {
 			p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(statement, p)))
 		}
-		p.AddStage(createOutputSchemaMappingTransform(statement))
+		p.AddStage(createOutputSchemaMappingTransform(root.VRW().Format(), statement))
 	}
 
 	return p, nil
 }
 
-func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.NamedTransform {
+func createOutputSchemaMappingTransform(format *types.Format, selectStmt *SelectStatement) pipeline.NamedTransform {
 	var transformFunc pipeline.TransformRowFunc
 	transformFunc = func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 		taggedVals := make(row.TaggedValues)
@@ -648,7 +648,7 @@ func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.Na
 				taggedVals[uint64(i)] = val
 			}
 		}
-		r := row.New(types.Format_7_18, selectStmt.ResultSetSchema, taggedVals)
+		r := row.New(format, selectStmt.ResultSetSchema, taggedVals)
 		return []*pipeline.TransformedRowResult{{r, nil}}, ""
 	}
 

@@ -88,7 +88,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		schemaStr := SchemaAsCreateStmt(tableName, sch)
 
 		resultSch := showCreateTableSchema()
-		rows := toRows(([][]string{{tableName, schemaStr}}), resultSch)
+		rows := toRows(root.VRW().Format(), ([][]string{{tableName, schemaStr}}), resultSch)
 		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 
@@ -103,7 +103,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		table, _ := root.GetTable(ctx, tableName)
 
 		tableSch := table.GetSchema(ctx)
-		rows := schemaAsShowColumnRows(tableSch)
+		rows := schemaAsShowColumnRows(root.VRW().Format(), tableSch)
 
 		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
@@ -112,7 +112,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 	case "tables":
 		tableNames := root.GetTableNames(ctx)
 		sch := showTablesSchema()
-		rows := toRows(transpose(tableNames), sch)
+		rows := toRows(root.VRW().Format(), transpose(tableNames), sch)
 		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 		return p, sch, nil
@@ -124,11 +124,11 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 }
 
 // schemaAsShowColumnRows returns the rows for a `show columns from table` or `describe table` for the schema given.
-func schemaAsShowColumnRows(tableSch schema.Schema) []row.Row {
+func schemaAsShowColumnRows(format *types.Format, tableSch schema.Schema) []row.Row {
 	rs := make([]row.Row, tableSch.GetAllCols().Size())
 	i := 0
 	tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-		rs[i] = describeColumn(col)
+		rs[i] = describeColumn(format, col)
 		i++
 		return false
 	})
@@ -136,7 +136,7 @@ func schemaAsShowColumnRows(tableSch schema.Schema) []row.Row {
 }
 
 // describeColumn returns a row describing the column given, using the schema from showColumnsSchema
-func describeColumn(col schema.Column) row.Row {
+func describeColumn(format *types.Format, col schema.Column) row.Row {
 	nullStr := "NO"
 	if col.IsNullable() {
 		nullStr = "YES"
@@ -154,7 +154,7 @@ func describeColumn(col schema.Column) row.Row {
 		4: types.String("NULL"), // TODO: when schemas store defaults, use them here
 		5: types.String(""),     // Extra column reserved for future use
 	}
-	return row.New(types.Format_7_18, showColumnsSchema(), taggedVals)
+	return row.New(format, showColumnsSchema(), taggedVals)
 }
 
 // Takes a single-dimensional array of strings and transposes it to a 2D array, with a single element per row.
@@ -167,14 +167,14 @@ func transpose(ss []string) [][]string {
 }
 
 // Returns a new result set row with the schema given from the 2D array of row values given.
-func toRows(ss [][]string, sch schema.Schema) []row.Row {
+func toRows(format *types.Format, ss [][]string, sch schema.Schema) []row.Row {
 	rows := make([]row.Row, len(ss))
 	for i, r := range ss {
 		taggedVals := make(row.TaggedValues)
 		for tag, col := range r {
 			taggedVals[uint64(tag)] = types.String(col)
 		}
-		rows[i] = row.New(types.Format_7_18, sch, taggedVals)
+		rows[i] = row.New(format, sch, taggedVals)
 	}
 	return rows
 }
