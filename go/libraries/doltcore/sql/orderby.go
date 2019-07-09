@@ -13,6 +13,7 @@ import (
 // use.
 type RowSorter struct {
 	orderBys []*OrderBy
+	format   *types.Format
 	InitValue
 }
 
@@ -43,10 +44,9 @@ func (rs *RowSorter) Less(rLeft, rRight row.Row) bool {
 			return ob.direction.lessVal(false)
 		}
 
-		// TODO(binformat)
-		if leftVal.Less(types.Format_7_18, rightVal) {
+		if leftVal.Less(rs.format, rightVal) {
 			return ob.direction.lessVal(true)
-		} else if rightVal.Less(types.Format_7_18, leftVal) {
+		} else if rightVal.Less(rs.format, leftVal) {
 			return ob.direction.lessVal(false)
 		}
 	}
@@ -84,7 +84,7 @@ func (ob *OrderBy) Init(resolver TagResolver) error {
 }
 
 // Processes the order by clause and returns a RowSorter that implements it, or returns an error if it cannot.
-func createRowSorter(statement *SelectStatement, orderBy sqlparser.OrderBy) (*RowSorter, error) {
+func createRowSorter(format *types.Format, statement *SelectStatement, orderBy sqlparser.OrderBy) (*RowSorter, error) {
 	if len(orderBy) == 0 {
 		return nil, nil
 	}
@@ -106,7 +106,7 @@ func createRowSorter(statement *SelectStatement, orderBy sqlparser.OrderBy) (*Ro
 		obs[i] = &OrderBy{rowValGetter: getter, direction: dir}
 	}
 
-	return &RowSorter{orderBys: obs}, nil
+	return &RowSorter{orderBys: obs, format: format}, nil
 }
 
 // Boolean lesser function for rows. Returns whether rLeft < rRight

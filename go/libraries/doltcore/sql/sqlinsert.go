@@ -64,7 +64,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	switch queryRows := s.Rows.(type) {
 	case sqlparser.Values:
 		var err error
-		rows, err = prepareInsertVals(cols, &queryRows, tableSch)
+		rows, err = prepareInsertVals(root.VRW().Format(), cols, &queryRows, tableSch)
 		if err != nil {
 			return &InsertResult{}, err
 		}
@@ -98,8 +98,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		key := r.NomsMapKey(tableSch).Value(ctx)
 
 		rowExists := rowData.Get(ctx, key) != nil
-		// TODO(binformat)
-		_, rowInserted := insertedPKHashes[key.Hash(types.Format_7_18)]
+		_, rowInserted := insertedPKHashes[key.Hash(root.VRW().Format())]
 
 		if rowExists || rowInserted {
 			if replace {
@@ -113,8 +112,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		}
 		me.Set(key, r.NomsMapValue(tableSch))
 
-		// TODO(binformat)
-		insertedPKHashes[key.Hash(types.Format_7_18)] = struct{}{}
+		insertedPKHashes[key.Hash(root.VRW().Format())] = struct{}{}
 	}
 	newMap := me.Map(ctx)
 	table = table.UpdateRows(ctx, newMap)
@@ -149,7 +147,7 @@ func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
 }
 
 // Returns rows to insert from the set of values given
-func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch schema.Schema) ([]row.Row, error) {
+func prepareInsertVals(format *types.Format, cols []schema.Column, values *sqlparser.Values, tableSch schema.Schema) ([]row.Row, error) {
 
 	// Lack of primary keys is its own special kind of failure that we can detect before creating any rows
 	allKeysFound := true
@@ -170,7 +168,7 @@ func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch 
 	rows := make([]row.Row, len(*values))
 
 	for i, valTuple := range *values {
-		r, err := makeRow(cols, tableSch, valTuple)
+		r, err := makeRow(format, cols, tableSch, valTuple)
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +178,7 @@ func prepareInsertVals(cols []schema.Column, values *sqlparser.Values, tableSch 
 	return rows, nil
 }
 
-func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.ValTuple) (row.Row, error) {
+func makeRow(format *types.Format, columns []schema.Column, tableSch schema.Schema, tuple sqlparser.ValTuple) (row.Row, error) {
 	if len(columns) != len(tuple) {
 		return errInsertRow("Wrong number of values for tuple %v", nodeToString(tuple))
 	}
@@ -264,7 +262,7 @@ func makeRow(columns []schema.Column, tableSch schema.Schema, tuple sqlparser.Va
 		}
 	}
 
-	return row.New(types.Format_7_18, tableSch, taggedVals), nil
+	return row.New(format, tableSch, taggedVals), nil
 }
 
 // Returns an error result with return type to match ExecuteInsert

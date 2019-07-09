@@ -32,7 +32,7 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	doltRow := row.FromNoms(types.Format_7_18, itr.table.sch, key.(types.Tuple), val.(types.Tuple))
+	doltRow := row.FromNoms(itr.table.table.Format(), itr.table.sch, key.(types.Tuple), val.(types.Tuple))
 	return doltRowToSqlRow(doltRow, itr.table.sch), nil
 }
 
@@ -57,7 +57,7 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) sql.Row {
 }
 
 // Returns a Dolt row representation for SQL row given
-func SqlRowToDoltRow(r sql.Row, doltSchema schema.Schema) row.Row {
+func SqlRowToDoltRow(format *types.Format, r sql.Row, doltSchema schema.Schema) row.Row {
 	taggedVals := make(row.TaggedValues)
 	for i, val := range r {
 		if val != nil {
@@ -65,7 +65,7 @@ func SqlRowToDoltRow(r sql.Row, doltSchema schema.Schema) row.Row {
 		}
 	}
 
-	return row.New(types.Format_7_18, doltSchema, taggedVals)
+	return row.New(format, doltSchema, taggedVals)
 }
 
 // Returns the column value for a SQL column
