@@ -417,7 +417,7 @@ func (tr tableReader) getManyAtOffsets(
 		batch = nil
 	}
 
-	if ae.IsSet() {
+	if !ae.IsSet() {
 		if batch != nil {
 			wg.Add(1)
 			go func(batch offsetRecSlice) {
