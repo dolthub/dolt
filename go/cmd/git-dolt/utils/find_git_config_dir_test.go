@@ -21,12 +21,12 @@ func TestFindGitConfigDir(t *testing.T) {
 		}
 	}()
 
-	nestedExamplePath := filepath.Join(tmpDir, "__deeply", "nested", "example")
-	topLevelExamplePath := filepath.Join(tmpDir, "__top", "level", "example")
-	noGitExamplePath := filepath.Join(tmpDir, "__no", "git", "example")
+	nestedExamplePath := filepath.Join(tmpDir, "deeply", "nested", "example")
+	topLevelExamplePath := filepath.Join(tmpDir, "top", "level", "example")
+	noGitExamplePath := filepath.Join(tmpDir, "no", "git", "example")
 
 	nestedGitPath := filepath.Join(nestedExamplePath, ".git")
-	topLevelGitPath := filepath.Join(tmpDir, "__top", ".git")
+	topLevelGitPath := filepath.Join(tmpDir, "top", ".git")
 
 	if err := os.MkdirAll(nestedGitPath, os.ModePerm); err != nil {
 		t.Errorf("Error creating test directories: %v", err)
