@@ -96,7 +96,7 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(titleColTag), titleVal,
 		)
 
-		r := FromNoms(types.Format_7_18, sch, keys, vals)
+		r := FromNoms(sch, keys, vals)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -111,7 +111,7 @@ func TestFromNoms(t *testing.T) {
 			fnColTag: fnVal,
 			lnColTag: lnVal,
 		})
-		r := FromNoms(types.Format_7_18, sch, keys, vals)
+		r := FromNoms(sch, keys, vals)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -127,7 +127,7 @@ func TestFromNoms(t *testing.T) {
 			types.Uint(unusedTag), fnVal,
 		)
 
-		r := FromNoms(types.Format_7_18, sch, keys, vals)
+		r := FromNoms(sch, keys, vals)
 		assert.Equal(t, expectedRow, r)
 	})
 
@@ -142,7 +142,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(types.Format_7_18, sch, keys, vals)
+			FromNoms(sch, keys, vals)
 		})
 	})
 
@@ -157,7 +157,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(types.Format_7_18, sch, keys, vals)
+			FromNoms(sch, keys, vals)
 		})
 	})
 
@@ -174,7 +174,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(types.Format_7_18, sch, keys, vals)
+			FromNoms(sch, keys, vals)
 		})
 	})
 
@@ -190,7 +190,7 @@ func TestFromNoms(t *testing.T) {
 		)
 
 		assert.Panics(t, func() {
-			FromNoms(types.Format_7_18, sch, keys, vals)
+			FromNoms(sch, keys, vals)
 		})
 	})
 }
@@ -258,7 +258,7 @@ func TestConvToAndFromTuple(t *testing.T) {
 	keyTpl := r.NomsMapKey(sch).(TupleVals)
 	valTpl := r.NomsMapValue(sch).(TupleVals)
 
-	r2 := FromNoms(types.Format_7_18, sch, keyTpl.Value(ctx).(types.Tuple), valTpl.Value(ctx).(types.Tuple))
+	r2 := FromNoms(sch, keyTpl.Value(ctx).(types.Tuple), valTpl.Value(ctx).(types.Tuple))
 
 	fmt.Println(Fmt(context.Background(), r, sch))
 	fmt.Println(Fmt(context.Background(), r2, sch))

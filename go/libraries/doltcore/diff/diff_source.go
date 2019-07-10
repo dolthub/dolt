@@ -100,15 +100,13 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 			originalOldSch = rdRd.oldConv.SrcSch
 		}
 
-		fmt := d.KeyValue.(types.Tuple).Format()
-
 		if d.OldValue != nil {
-			oldRow := row.FromNoms(fmt, originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
+			oldRow := row.FromNoms(originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
 			mappedOld, _ = rdRd.oldConv.Convert(oldRow)
 		}
 
 		if d.NewValue != nil {
-			newRow := row.FromNoms(fmt, originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
+			newRow := row.FromNoms(originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
 			mappedNew, _ = rdRd.newConv.Convert(newRow)
 		}
 

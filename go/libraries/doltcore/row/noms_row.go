@@ -130,11 +130,11 @@ func fromTaggedVals(format *types.Format, sch schema.Schema, keyVals, nonKeyVals
 	return nomsRow{keyVals, filteredVals, format}
 }
 
-func FromNoms(format *types.Format, sch schema.Schema, nomsKey, nomsVal types.Tuple) Row {
+func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) Row {
 	key := ParseTaggedValues(nomsKey)
 	val := ParseTaggedValues(nomsVal)
 
-	return fromTaggedVals(format, sch, key, val)
+	return fromTaggedVals(nomsKey.Format(), sch, key, val)
 }
 
 func (nr nomsRow) NomsMapKey(sch schema.Schema) types.LesserValuable {

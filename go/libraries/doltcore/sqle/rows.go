@@ -32,7 +32,7 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 		return nil, io.EOF
 	}
 
-	doltRow := row.FromNoms(itr.table.table.Format(), itr.table.sch, key.(types.Tuple), val.(types.Tuple))
+	doltRow := row.FromNoms(itr.table.sch, key.(types.Tuple), val.(types.Tuple))
 	return doltRowToSqlRow(doltRow, itr.table.sch), nil
 }
 
