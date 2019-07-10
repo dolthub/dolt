@@ -15,7 +15,7 @@ func Link(remote string) error {
 	if err := doltops.Clone(remote); err != nil {
 		return err
 	}
-	
+
 	dirname := utils.LastSegment(remote)
 	revision, err := utils.CurrentRevision(dirname)
 	if err != nil {
