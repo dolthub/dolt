@@ -174,7 +174,6 @@ func TestNomsDiffPrintSet(t *testing.T) {
   }
 `
 	expectedPaths2 := []string{
-		// TODO(binformat)
 		fmt.Sprintf("[#%s]", mm3.Hash(types.Format_7_18)),
 		fmt.Sprintf("[#%s]", mm3x.Hash(types.Format_7_18)),
 	}
@@ -424,7 +423,6 @@ func TestNomsDiffPrintBlob(t *testing.T) {
 
 	expected := "-   Blob (2.0 kB)\n+   Blob (11 B)\n"
 	expectedPaths1 := []string{``}
-	// TODO(binformat)
 	b1 := types.NewBlob(context.Background(), vs, strings.NewReader(strings.Repeat("x", 2*1024)))
 	b2 := types.NewBlob(context.Background(), vs, strings.NewReader("Hello World"))
 

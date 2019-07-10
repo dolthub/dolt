@@ -241,7 +241,6 @@ func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
 	} else {
 		// if we're encoding hash values, we know the length, so we can leave that out
 		bs = append(bs, uint8(v.Kind()))
-		// TODO(binformat)
 		h := v.Hash(Format_7_18)
 		bs = append(bs, h[:]...)
 	}
@@ -252,7 +251,6 @@ func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
 func encToSlice(v Value, initBuf []byte) []byte {
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter?
 	w := &binaryNomsWriter{initBuf, 0}
-	// TODO(binformat)
 	v.writeTo(w, Format_7_18)
 	return w.data()
 }
@@ -283,11 +281,9 @@ func TestCompareTotalOrdering(t *testing.T) {
 			if i == j {
 				assert.True(vi.Equals(vj))
 			} else if i < j {
-				// TODO(binformat)
 				x := vi.Less(Format_7_18, vj)
 				assert.True(x)
 			} else {
-				// TODO(binformat)
 				x := vi.Less(Format_7_18, vj)
 				assert.False(x)
 			}
@@ -371,7 +367,6 @@ func TestCompareEncodedKeys(t *testing.T) {
 
 func encode(v Value) []byte {
 	w := &binaryNomsWriter{make([]byte, 128), 0}
-	// TODO(binformat)
 	v.writeTo(w, Format_7_18)
 	return w.data()
 }

@@ -18,7 +18,6 @@ func TestValueReadWriteRead(t *testing.T) {
 
 	s := String("hello")
 	vs := newTestValueStore()
-	// TODO(binformat)
 	assert.Nil(vs.ReadValue(context.Background(), s.Hash(Format_7_18))) // nil
 	h := vs.WriteValue(context.Background(), s).TargetHash()
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
@@ -62,18 +61,15 @@ func TestValueReadMany(t *testing.T) {
 	}
 
 	// Get one Value into vs's Value cache
-	// TODO(binformat)
 	vs.ReadValue(context.Background(), vals[0].Hash(Format_7_18))
 
 	// Get one Value into vs's pendingPuts
 	three := Float(3)
 	vals = append(vals, three)
 	vs.WriteValue(context.Background(), three)
-	// TODO(binformat)
 	hashes = append(hashes, three.Hash(Format_7_18))
 
 	// Add one Value to request that's not in vs
-	// TODO(binformat)
 	hashes = append(hashes, Bool(false).Hash(Format_7_18))
 
 	found := map[hash.Hash]Value{}
@@ -87,7 +83,6 @@ func TestValueReadMany(t *testing.T) {
 
 	assert.Len(found, len(vals))
 	for _, v := range vals {
-		// TODO(binformat)
 		assert.True(v.Equals(found[v.Hash(Format_7_18)]))
 	}
 }
@@ -150,7 +145,6 @@ func TestFlushOrder(t *testing.T) {
 	n := Float(42)
 	sr, nr := vs.WriteValue(context.Background(), s), vs.WriteValue(context.Background(), n)
 	ccs.expect(sr, nr)
-	// TODO(binformat)
 	ml := NewList(context.Background(), vs, sr, nr)
 
 	b := NewEmptyBlob(vs)
@@ -181,7 +175,6 @@ func TestFlushOverSize(t *testing.T) {
 	s := String("oy")
 	sr := vs.WriteValue(context.Background(), s)
 	ccs.expect(sr)
-	// TODO(binformat)
 	NewList(context.Background(), vs, sr) // will write the root chunk
 }
 
@@ -200,12 +193,10 @@ func TestTolerateTopDown(t *testing.T) {
 	sr := vs.WriteValue(context.Background(), S)
 	ccs.expect(sr)
 
-	// TODO(binformat)
 	ML := NewList(context.Background(), vs, sr)
 	mlr := vs.WriteValue(context.Background(), ML)
 	ccs.expect(mlr)
 
-	// TODO(binformat)
 	L := NewList(context.Background(), vs, mlr)
 	lr := vs.WriteValue(context.Background(), L)
 	ccs.expect(lr)
@@ -247,7 +238,6 @@ func TestPanicIfDangling(t *testing.T) {
 	vs := newTestValueStore()
 
 	r := NewRef(Bool(true), Format_7_18)
-	// TODO(binformat)
 	l := NewList(context.Background(), vs, r)
 	vs.WriteValue(context.Background(), l)
 
@@ -261,7 +251,6 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	vs.SetEnforceCompleteness(false)
 
 	r := NewRef(Bool(true), Format_7_18)
-	// TODO(binformat)
 	l := NewList(context.Background(), vs, r)
 	vs.WriteValue(context.Background(), l)
 

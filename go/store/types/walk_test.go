@@ -91,7 +91,6 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	for i := 0; i < count; i++ {
 		nums[i] = Float(i)
 	}
-	// TODO(binformat)
 	l := NewList(context.Background(), suite.vs, nums...)
 	suite.True(NewRef(l, Format_7_18).Height() > 1)
 	suite.assertCallbackCount(l, count+1)
@@ -171,7 +170,6 @@ func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
 
 // Skipping a sub-tree must allow other items in the list to be processed.
 func (suite *WalkTestSuite) TestSkipListElement() {
-	// TODO(binformat)
 	wholeList := NewList(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeList)
 	for _, v := range []Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
@@ -210,7 +208,6 @@ func (suite *WalkTestSuite) TestSkipMapKey() {
 }
 
 func (suite *WalkAllTestSuite) NewList(vs ...Value) Ref {
-	// TODO(binformat)
 	v := NewList(context.Background(), suite.vs, vs...)
 	return suite.vs.WriteValue(context.Background(), v)
 }
@@ -259,7 +256,6 @@ func (suite *WalkTestSuite) SetupTest() {
 	suite.ts = storage.NewView()
 	suite.vs = NewValueStore(suite.ts)
 	suite.shouldSeeItem = String("zzz")
-	// TODO(binformat)
 	suite.shouldSee = NewList(context.Background(), suite.vs, suite.shouldSeeItem)
 	suite.deadValue = Float(0xDEADBEEF)
 	suite.mustSkip = NewList(context.Background(), suite.vs, suite.deadValue)

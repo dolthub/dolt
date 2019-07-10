@@ -42,7 +42,6 @@ func TestValueEquals(t *testing.T) {
 				newMetaTuple(NewRef(b2, Format_7_18), orderedKeyFromInt(5, Format_7_18), 5),
 			}, vrw))
 		},
-		// TODO(binformat)
 		func() Value { return NewList(context.Background(), vrw) },
 		func() Value { return NewList(context.Background(), vrw, String("foo")) },
 		func() Value { return NewList(context.Background(), vrw, String("bar")) },

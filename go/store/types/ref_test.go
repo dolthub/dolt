@@ -16,7 +16,6 @@ func TestRefInList(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	// TODO(binformat)
 	l := NewList(context.Background(), vs)
 	r := NewRef(l, Format_7_18)
 	l = l.Edit().Append(r).List(context.Background())
@@ -56,7 +55,6 @@ func TestRefChunks(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	// TODO(binformat)
 	l := NewList(context.Background(), vs)
 	r := NewRef(l, Format_7_18)
 	assert.Len(getChunks(r), 1)

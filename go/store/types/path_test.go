@@ -15,7 +15,6 @@ import (
 )
 
 func hashIdx(v Value) string {
-	// TODO(binformat)
 	return fmt.Sprintf("[#%s]", v.Hash(Format_7_18).String())
 }
 
@@ -99,7 +98,6 @@ func TestPathIndex(t *testing.T) {
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	// TODO(binformat)
 	v = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
 
 	resolvesTo(Float(1), Float(0), "[0]")
@@ -178,7 +176,6 @@ func TestPathHashIndex(t *testing.T) {
 	br := NewRef(b, Format_7_18)
 	i := Float(0)
 	str := String("foo")
-	// TODO(binformat)
 	l := NewList(context.Background(), vs, b, i, str)
 	lr := NewRef(l, Format_7_18)
 	m := NewMap(context.Background(), vs,
@@ -247,7 +244,6 @@ func TestPathMulti(t *testing.T) {
 		m1, String("fire"),
 	)
 
-	// TODO(binformat)
 	l := NewList(context.Background(), vs, m1, m2)
 
 	s := NewStruct(Format_7_18, "", StructData{
@@ -298,7 +294,6 @@ func TestPathParseSuccess(t *testing.T) {
 		assert.Equal(expectStr, p.String(Format_7_18))
 	}
 
-	// TODO(binformat)
 	h := Float(42).Hash(Format_7_18) // arbitrary hash
 
 	test(".foo")
@@ -489,7 +484,6 @@ func TestPathType(t *testing.T) {
 		String("string"), String("foo"),
 		String("bool"), Bool(false),
 		String("number"), Float(42),
-		// TODO(binformat)
 		String("List<number|string>"), NewList(context.Background(), vs, Float(42), String("foo")),
 		String("Map<Bool, Bool>"), NewMap(context.Background(), vs, Bool(true), Bool(false)))
 
@@ -537,7 +531,6 @@ func TestPathAtAnnotation(t *testing.T) {
 		assertResolvesTo(assert, expKey, v, str+"@key")
 	}
 
-	// TODO(binformat)
 	v = NewList(context.Background(), vs, Float(1), Float(3), String("foo"), Bool(false))
 
 	resolvesTo(Float(1), nil, "@at(0)")

@@ -22,7 +22,6 @@ func TestWalkRefs(t *testing.T) {
 		v.WalkRefs(Format_7_18, func(r Ref) {
 			expected = append(expected, r.TargetHash())
 		})
-		// TODO(binformat)
 		WalkRefs(EncodeValue(v, Format_7_18), Format_7_18, func(r Ref) {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
@@ -68,13 +67,11 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			// TODO(binformat)
 			l := NewList(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
 			runTest(l, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			// TODO(binformat)
 			l := NewList(context.Background(), vrw, newValueSlice(r)...)
 			for l.sequence.isLeaf() {
 				l = l.Concat(context.Background(), NewList(context.Background(), vrw, newValueSlice(r)...))

@@ -26,7 +26,6 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 		assert.Equal(str, p.String(types.Format_7_18))
 	}
 
-	// TODO(binformat)
 	h := types.Float(42).Hash(types.Format_7_18) // arbitrary hash
 	test(fmt.Sprintf("foo.bar[#%s]", h.String()))
 	test(fmt.Sprintf("#%s.bar[42]", h.String()))
@@ -68,7 +67,6 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(list, "ds.value")
 	resolvesTo(s0, "ds.value[0]")
 	resolvesTo(s1, "ds.value[1]")
-	// TODO(binformat)
 	resolvesTo(head, "#"+head.Hash(types.Format_7_18).String())
 	resolvesTo(list, "#"+list.Hash(types.Format_7_18).String())
 	resolvesTo(s0, "#"+s0.Hash(types.Format_7_18).String())
@@ -80,7 +78,6 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(nil, "foo.parents")
 	resolvesTo(nil, "foo.value")
 	resolvesTo(nil, "foo.value[0]")
-	// TODO(binformat)
 	resolvesTo(nil, "#"+types.String("baz").Hash(types.Format_7_18).String())
 	resolvesTo(nil, "#"+types.String("baz").Hash(types.Format_7_18).String()+"[0]")
 }

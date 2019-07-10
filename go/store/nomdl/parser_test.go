@@ -271,7 +271,6 @@ func TestValuePrimitives(t *testing.T) {
 
 func TestValueList(t *testing.T) {
 	vs := newTestValueStore()
-	// TODO(binformat)
 	assertParse(t, vs, "[]", types.NewList(context.Background(), vs))
 
 	assertParse(t, vs, "[42]", types.NewList(context.Background(), vs, types.Float(42)))
@@ -283,7 +282,6 @@ func TestValueList(t *testing.T) {
 	assertParseError(t, "[42,", "Unexpected token EOF, example:1:5")
 	assertParseError(t, "[,]", "Unexpected token \",\", example:1:3")
 
-	// TODO(binformat)
 	assertParse(t, vs, `[42,
                 Bool,
         ]`, types.NewList(context.Background(), vs, types.Float(42), types.BoolType))
@@ -378,7 +376,6 @@ func TestValueBlob(t *testing.T) {
 	vs := newTestValueStore()
 
 	test := func(code string, bs ...byte) {
-		// TODO(binformat)
 		assertParse(t, vs, code, types.NewBlob(context.Background(), vs, bytes.NewBuffer(bs)))
 	}
 
@@ -436,11 +433,9 @@ func TestRoundTrips(t *testing.T) {
 	test(types.String("'"))
 	test(types.String("`"))
 
-	// TODO(binformat)
 	test(types.NewEmptyBlob(vs))
 	test(types.NewBlob(context.Background(), vs, bytes.NewBufferString("abc")))
 
-	// TODO(binformat)
 	test(types.NewList(context.Background(), vs))
 	test(types.NewList(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc")))
 

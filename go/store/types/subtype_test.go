@@ -68,7 +68,6 @@ func TestAssertTypeValue(t *testing.T) {
 	assertSubtype(context.Background(), Format_7_18, ValueType, Bool(true))
 	assertSubtype(context.Background(), Format_7_18, ValueType, Float(1))
 	assertSubtype(context.Background(), Format_7_18, ValueType, String("abc"))
-	// TODO(binformat)
 	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(context.Background(), Format_7_18, ValueType, l)
 }
@@ -84,7 +83,6 @@ func TestAssertTypeList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	listOfNumberType := MakeListType(FloaTType)
-	// TODO(binformat)
 	l := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assertSubtype(context.Background(), Format_7_18, listOfNumberType, l)
 	assertAll(tt, listOfNumberType, l)
@@ -138,7 +136,6 @@ func TestAssertTypeUnion(tt *testing.T) {
 	assertSubtype(context.Background(), Format_7_18, MakeUnionType(FloaTType, StringType, BoolType), Bool(true))
 
 	lt := MakeListType(MakeUnionType(FloaTType, StringType))
-	// TODO(binformat)
 	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), vs, Float(1), String("hi"), Float(2), String("bye")))
 
 	st := MakeSetType(StringType)
@@ -189,7 +186,6 @@ func TestAssertTypeEmptyListUnion(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(MakeUnionType())
-	// TODO(binformat)
 	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), vs))
 }
 
@@ -197,11 +193,9 @@ func TestAssertTypeEmptyList(tt *testing.T) {
 	vs := newTestValueStore()
 
 	lt := MakeListType(FloaTType)
-	// TODO(binformat)
 	assertSubtype(context.Background(), Format_7_18, lt, NewList(context.Background(), vs))
 
 	// List<> not a subtype of List<Float>
-	// TODO(binformat)
 	assertInvalid(tt, MakeListType(MakeUnionType()), NewList(context.Background(), vs, Float(1)))
 }
 
@@ -551,7 +545,6 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		assert.False(IsValueSubtypeOf(Format_7_18, v, t))
 	}
 
-	// TODO(binformat)
 	allTypes := []struct {
 		v Value
 		t *Type
@@ -588,7 +581,6 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse(String("abc"), MakeUnionType(BoolType, FloaTType))
 	assertFalse(String("abc"), MakeUnionType())
 
-	// TODO(binformat)
 	assertTrue(NewList(context.Background(), vs), MakeListType(FloaTType))
 	assertTrue(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(FloaTType))
 	assertFalse(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3)), MakeListType(BoolType))
@@ -731,7 +723,6 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertTrue(
 		NewStruct(Format_7_18, "Node", StructData{
 			"value": Float(1),
-			// TODO(binformat)
 			"children": NewList(context.Background(), vs,
 				NewStruct(Format_7_18, "Node", StructData{
 					"value":    Float(2),
@@ -748,7 +739,6 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	assertFalse( // inner Node has wrong type.
 		NewStruct(Format_7_18, "Node", StructData{
 			"value": Float(1),
-			// TODO(binformat)
 			"children": NewList(context.Background(), vs,
 				NewStruct(Format_7_18, "Node", StructData{
 					"value":    Bool(true),

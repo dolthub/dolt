@@ -95,7 +95,6 @@ func main() {
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
-	// TODO(binformat)
 	blob := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
 	db.CommitValue(context.Background(), ds, blob)
 	buildDuration := time.Since(t1)

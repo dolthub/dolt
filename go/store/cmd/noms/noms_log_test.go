@@ -35,7 +35,6 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 
 	commit := sp.GetDataset(context.Background()).Head()
 	res, _ := s.MustRun(main, []string{"log", str})
-	// TODO(binformat)
 	s.Contains(res, commit.Hash(types.Format_7_18).String())
 }
 
@@ -103,7 +102,6 @@ func (s *nomsLogTestSuite) TestNArg() {
 	ds := sp.GetDatabase(context.Background()).GetDataset(context.Background(), dsName)
 
 	ds, err = addCommit(ds, "1")
-	// TODO(binformat)
 	h1 := ds.Head().Hash(types.Format_7_18)
 	s.NoError(err)
 	ds, err = addCommit(ds, "2")

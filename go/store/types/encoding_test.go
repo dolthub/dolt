@@ -48,12 +48,10 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	expectedAsByteSlice := toBinaryNomsReaderData(expect)
 	vs := newTestValueStore()
 	w := newBinaryNomsWriter()
-	// TODO(binformat)
 	v.writeTo(&w, Format_7_18)
 	assert.EqualValues(t, expectedAsByteSlice, w.data())
 
 	dec := newValueDecoder(expectedAsByteSlice, vs)
-	// TODO(binformat)
 	v2 := dec.readValue(Format_7_18)
 	assert.True(t, v.Equals(v2))
 }
@@ -129,7 +127,6 @@ func TestNonFiniteNumbers(tt *testing.T) {
 
 		v := Float(f)
 		err := d.Try(func() {
-			// TODO(binformat)
 			EncodeValue(v, Format_7_18)
 		})
 		assert.Error(tt, err)
@@ -211,7 +208,6 @@ func TestWriteList(t *testing.T) {
 		[]interface{}{
 			ListKind, uint64(0), uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3)),
 	)
 }
@@ -235,7 +231,6 @@ func TestWriteListOfList(t *testing.T) {
 			ListKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
 			ListKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw,
 			NewList(context.Background(), vrw, Float(0)),
 			NewList(context.Background(), vrw, Float(1), Float(2), Float(3))),
@@ -355,7 +350,6 @@ func TestWriteStructTooMuchData(t *testing.T) {
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
-		// TODO(binformat)
 		decodeFromBytes(buff, nil, Format_7_18)
 	})
 }
@@ -369,7 +363,6 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		// TODO(binformat)
 		NewStruct(Format_7_18, "S", StructData{"l": NewList(context.Background(), vrw, String("a"), String("b"))}),
 	)
 
@@ -379,7 +372,6 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(0), /* len */
 		},
-		// TODO(binformat)
 		NewStruct(Format_7_18, "S", StructData{"l": NewList(context.Background(), vrw)}),
 	)
 }
@@ -437,7 +429,6 @@ func TestWriteStructWithBlob(t *testing.T) {
 func TestWriteCompoundList(t *testing.T) {
 	vrw := newTestValueStore()
 
-	// TODO(binformat)
 	list1 := newList(newListLeafSequence(vrw, Float(0)))
 	list2 := newList(newListLeafSequence(vrw, Float(1), Float(2), Float(3)))
 	assertEncoding(t,
@@ -462,7 +453,6 @@ func TestWriteCompoundSet(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			// TODO(binformat)
 			RefKind, set1.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
 			RefKind, set2.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
 		},
@@ -493,7 +483,6 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			// TODO(binformat)
 			RefKind, set1.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob1.Hash(Format_7_18), uint64(2),
 			RefKind, set2.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(Format_7_18), uint64(3),
 		},
@@ -513,7 +502,6 @@ func TestWriteListOfUnion(t *testing.T) {
 			ListKind, uint64(0),
 			uint64(4) /* len */, StringKind, "0", FloatKind, Float(1), StringKind, "2", BoolKind, true,
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw,
 			String("0"),
 			Float(1),
@@ -531,7 +519,6 @@ func TestWriteListOfStruct(t *testing.T) {
 			ListKind, uint64(0), uint64(1), /* len */
 			StructKind, "S", uint64(1) /* len */, "x", FloatKind, Float(42),
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw, NewStruct(Format_7_18, "S", StructData{"x": Float(42)})),
 	)
 }
@@ -549,7 +536,6 @@ func TestWriteListOfUnionWithType(t *testing.T) {
 			TypeKind, TypeKind,
 			TypeKind, StructKind, "S", uint64(1) /* len */, "x", FloatKind, false,
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw,
 			Bool(true),
 			FloaTType,
@@ -578,7 +564,6 @@ func TestWriteListOfTypes(t *testing.T) {
 			ListKind, uint64(0), uint64(2), /* len */
 			TypeKind, BoolKind, TypeKind, StringKind,
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw, BoolType, StringType),
 	)
 }
@@ -591,7 +576,6 @@ func TestWriteUnionList(t *testing.T) {
 			ListKind, uint64(0), uint64(3), /* len */
 			FloatKind, Float(23), StringKind, "hi", FloatKind, Float(42),
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw, Float(23), String("hi"), Float(42)),
 	)
 }
@@ -603,7 +587,6 @@ func TestWriteEmptyUnionList(t *testing.T) {
 		[]interface{}{
 			ListKind, uint64(0), uint64(0), /* len */
 		},
-		// TODO(binformat)
 		NewList(context.Background(), vrw),
 	)
 }
@@ -629,7 +612,6 @@ func (bg bogusType) writeTo(w nomsWriter, f *Format) {
 func TestBogusValueWithUnresolvedCycle(t *testing.T) {
 	g := bogusType(1)
 	assert.Panics(t, func() {
-		// TODO(binformat)
 		EncodeValue(g, Format_7_18)
 	})
 }

@@ -83,7 +83,6 @@ func TestTupleValsLess(t *testing.T) {
 			lesserTplVals := test.lesserTVs.NomsTupleForTags(types.Format_7_18, test.tags, true)
 			greaterTplVals := test.greaterTVs.NomsTupleForTags(types.Format_7_18, test.tags, true)
 
-			// TODO(binformat)
 			lessLTGreater := lesserTplVals.Less(types.Format_7_18, greaterTplVals)
 			greaterLTLess := greaterTplVals.Less(types.Format_7_18, lesserTplVals)
 
@@ -94,7 +93,6 @@ func TestTupleValsLess(t *testing.T) {
 			greaterTpl := greaterTplVals.Value(ctx)
 
 			// needs to match with the types.Tuple Less implementation.
-			// TODO(binformat)
 			assert.True(t, lessLTGreater == lesserTpl.Less(types.Format_7_18, greaterTpl))
 			assert.True(t, greaterLTLess == greaterTpl.Less(types.Format_7_18, lesserTpl))
 		})
