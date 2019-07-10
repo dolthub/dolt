@@ -174,6 +174,6 @@ $ git dolt update im-interested ppbq8n1difju3u02jf8iqmctd1ovbj76
 Updated pointer file im-interested.git-dolt to revision ppbq8n1difju3u02jf8iqmctd1ovbj76. You should git commit this change.
 ```
 
-### Tests
+#### Tests
 
 There are unit tests in Go and CLI tests using [BATS](https://github.com/sstephenson/bats).
