@@ -541,7 +541,6 @@ func listEncoder(f *types.Format, t reflect.Type, seenStructs map[string]reflect
 		for i := 0; i < v.Len(); i++ {
 			values[i] = elemEncoder(ctx, v.Index(i), vrw)
 		}
-		// TODO(binformat)
 		return types.NewList(ctx, vrw, values...)
 	}
 

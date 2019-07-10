@@ -203,12 +203,10 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 				l2.Iter(context.Background(), func(key, value Value) (stop bool) {
 					entry := elems.entries.entries[idx]
 					if !key.Equals(entry.key) {
-						// TODO(binformat)
 						fmt.Printf("%d: %s (%s)\n!=\n%s (%s)\n", idx, EncodedValue(context.Background(), key), key.Hash(Format_7_18), EncodedValue(context.Background(), entry.key), entry.key.Hash(Format_7_18))
 						stop = true
 					}
 					if !value.Equals(entry.value) {
-						// TODO(binformat)
 						fmt.Printf("%s (%s) !=\n%s (%s)\n", EncodedValue(context.Background(), value), value.Hash(Format_7_18), EncodedValue(context.Background(), entry.value), entry.value.Hash(Format_7_18))
 						stop = true
 					}
@@ -1133,7 +1131,6 @@ func TestMapEquals(t *testing.T) {
 	diffMapTest(assert, m3, m1, 0, 0, 0)
 	diffMapTest(assert, m3, m2, 0, 0, 0)
 
-	// TODO(binformat)
 	m1 = NewMap(context.Background(), vrw, String("foo"), Float(0.0), String("bar"), NewList(context.Background(), vrw))
 	m2 = m2.Edit().Set(String("foo"), Float(0.0)).Set(String("bar"), NewList(context.Background(), vrw)).Map(context.Background())
 	assert.True(m1.Equals(m2))
@@ -1153,7 +1150,6 @@ func TestMapNotStringKeys(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	// TODO(binformat)
 	b1 := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob1"))
 	b2 := NewBlob(context.Background(), vrw, bytes.NewBufferString("blob2"))
 	l := []Value{
@@ -1182,7 +1178,6 @@ func testMapOrder(assert *assert.Assertions, vrw ValueReadWriter, keyType, value
 	m := NewMap(context.Background(), vrw, tuples...)
 	i := 0
 	m.IterAll(context.Background(), func(key, value Value) {
-		// TODO(binformat)
 		assert.Equal(expectOrdering[i].Hash(Format_7_18).String(), key.Hash(Format_7_18).String())
 		i++
 	})
@@ -1422,7 +1417,6 @@ func TestMapEmpty(t *testing.T) {
 	me = m.Edit()
 	assert.False(m.Empty())
 
-	// TODO(binformat)
 	me.Set(NewList(ctx, vrw), NewMap(ctx, vrw))
 	m = me.Map(ctx)
 	assert.False(m.Empty())
@@ -1574,7 +1568,6 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		Bool(true), v,
 		Float(0), v,
 		String("hello"), v,
-		// TODO(binformat)
 		NewBlob(context.Background(), vrw, bytes.NewBufferString("buf")), v,
 		NewSet(context.Background(), vrw, Bool(true)), v,
 		NewList(context.Background(), vrw, Bool(true)), v,
@@ -1584,7 +1577,6 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		NewRef(Bool(true), Format_7_18), v,
 		NewRef(Float(0), Format_7_18), v,
 		NewRef(String("hello"), Format_7_18), v,
-		// TODO(binformat)
 		NewRef(NewBlob(context.Background(), vrw, bytes.NewBufferString("buf")), Format_7_18), v,
 		NewRef(NewSet(context.Background(), vrw, Bool(true)), Format_7_18), v,
 		NewRef(NewList(context.Background(), vrw, Bool(true)), Format_7_18), v,
@@ -1654,7 +1646,6 @@ func TestMapIterFrom(t *testing.T) {
 	test := func(m Map, start, end Value) ValueSlice {
 		res := ValueSlice{}
 		m.IterFrom(context.Background(), start, func(k, v Value) bool {
-			// TODO(binformat)
 			if end.Less(Format_7_18, k) {
 				return true
 			}

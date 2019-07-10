@@ -48,7 +48,6 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, format *types
 
 		// Since diff generates changes in key-order, and we never skip over a change without processing it, we can simply compare the keys at which aChange and bChange occurred to determine if either is safe to apply to the merge result without further processing. This is because if, e.g. aChange.V.Less(bChange.V), we know that the diff of b will never generate a change at that key. If it was going to, it would have done so on an earlier iteration of this loop and been processed at that time.
 		// It's also obviously OK to apply a change if only one diff is generating any changes, e.g. aChange.V is non-nil and bChange.V is nil.
-		// TODO(binformat)
 		if aChange.Key != nil && (bChange.Key == nil || aChange.Key.Less(format, bChange.Key)) {
 			merged = apply(merged, aChange, a.get(ctx, format, aChange.Key))
 			aChange = types.ValueChanged{}

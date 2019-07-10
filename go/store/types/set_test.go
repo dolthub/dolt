@@ -746,7 +746,6 @@ func testSetOrder(assert *assert.Assertions, vrw ValueReadWriter, valueType *Typ
 	m := NewSet(context.Background(), vrw, value...)
 	i := 0
 	m.IterAll(context.Background(), func(value Value) {
-		// TODO(binformat)
 		assert.Equal(expectOrdering[i].Hash(Format_7_18).String(), value.Hash(Format_7_18).String())
 		i++
 	})

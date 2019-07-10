@@ -32,7 +32,6 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 	source1 := sourceDB.GetDataset(context.Background(), "src")
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
-	// TODO(binformat)
 	source1HeadRef := source1.Head().Hash(types.Format_7_18)
 	source1.Database().Close()
 	sourceSpecMissingHashSymbol := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, source1HeadRef.String())
@@ -56,7 +55,6 @@ func (s *nomsSyncTestSuite) TestSync() {
 	source1 := sourceDB.GetDataset(context.Background(), "src")
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
-	// TODO(binformat)
 	source1HeadRef := source1.Head().Hash(types.Format_7_18) // Remember first head, so we can sync to it.
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(43))
 	s.NoError(err)

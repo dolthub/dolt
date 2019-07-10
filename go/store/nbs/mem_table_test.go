@@ -21,7 +21,6 @@ import (
 
 func TestWriteChunks(t *testing.T) {
 	chunks := []chunks.Chunk{
-		// TODO(binformat)
 		types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "), types.Format_7_18),
 		types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "), types.Format_7_18),
 		types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the "), types.Format_7_18),

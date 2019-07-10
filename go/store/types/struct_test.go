@@ -79,7 +79,6 @@ func TestGenericStructSet(t *testing.T) {
 	).Equals(TypeOf(s5)))
 
 	// Subtype is not equal.
-	// TODO(binformat)
 	s6 := NewStruct(Format_7_18, "", StructData{"l": NewList(context.Background(), vs, Float(0), Float(1), Bool(false), Bool(true))})
 	s7 := s6.Set("l", NewList(context.Background(), vs, Float(2), Float(3)))
 	t7 := MakeStructTypeFromFields("", FieldMap{
@@ -173,7 +172,6 @@ func TestStructDiff(t *testing.T) {
 		s1, NewStruct(Format_7_18, "NewType", StructData{"a": Bool(true), "c": Float(4), "d": Float(5)}))
 
 	s2 := NewStruct(Format_7_18, "", StructData{
-		// TODO(binformat)
 		"a": NewList(context.Background(), vs, Float(0), Float(1)),
 		"b": NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)),
 		"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
@@ -181,14 +179,12 @@ func TestStructDiff(t *testing.T) {
 
 	assertDiff([]ValueChanged{},
 		s2, NewStruct(Format_7_18, "", StructData{
-			// TODO(binformat)
 			"a": NewList(context.Background(), vs, Float(0), Float(1)),
 			"b": NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		// TODO(binformat)
 		vc(DiffChangeModified, "a",
 			NewList(context.Background(), vs, Float(1), Float(1)),
 			NewList(context.Background(), vs, Float(0), Float(1))),
@@ -197,19 +193,16 @@ func TestStructDiff(t *testing.T) {
 			NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true))),
 	},
 		s2, NewStruct(Format_7_18, "", StructData{
-			// TODO(binformat)
 			"a": NewList(context.Background(), vs, Float(1), Float(1)),
 			"b": NewMap(context.Background(), vs, String("foo"), Bool(true), String("bar"), Bool(true)),
 			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("foo")),
 		}))
 
 	assertDiff([]ValueChanged{
-		// TODO(binformat)
 		vc(DiffChangeModified, "a", NewList(context.Background(), vs, Float(0)), NewList(context.Background(), vs, Float(0), Float(1))),
 		vc(DiffChangeModified, "c", NewSet(context.Background(), vs, Float(0), Float(2), String("foo")), NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
 	},
 		s2, NewStruct(Format_7_18, "", StructData{
-			// TODO(binformat)
 			"a": NewList(context.Background(), vs, Float(0)),
 			"b": NewMap(context.Background(), vs, String("foo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(context.Background(), vs, Float(0), Float(2), String("foo")),
@@ -220,7 +213,6 @@ func TestStructDiff(t *testing.T) {
 		vc(DiffChangeModified, "c", NewSet(context.Background(), vs, Float(0), Float(1), String("bar")), NewSet(context.Background(), vs, Float(0), Float(1), String("foo"))),
 	},
 		s2, NewStruct(Format_7_18, "", StructData{
-			// TODO(binformat)
 			"a": NewList(context.Background(), vs, Float(0), Float(1)),
 			"b": NewMap(context.Background(), vs, String("boo"), Bool(false), String("bar"), Bool(true)),
 			"c": NewSet(context.Background(), vs, Float(0), Float(1), String("bar")),

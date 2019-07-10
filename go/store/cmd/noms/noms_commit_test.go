@@ -69,7 +69,6 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
 	value := commit.Get(datas.ValueField)
-	// TODO(binformat)
 	s.True(value.Hash(types.Format_7_18) == ref.TargetHash(), "commit.value hash == writevalue hash")
 
 	meta := commit.Get(datas.MetaField).(types.Struct)
@@ -93,7 +92,6 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
 	value := commit.Get(datas.ValueField)
-	// TODO(binformat)
 	s.True(value.Hash(types.Format_7_18) == ref.TargetHash(), "commit.value hash == writevalue hash")
 
 	meta := commit.Get(datas.MetaField).(types.Struct)
@@ -135,7 +133,6 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 
 	value, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
 	s.True(ok, "should still have a commit")
-	// TODO(binformat)
 	s.True(value.Hash(types.Format_7_18) == ref.Hash(types.Format_7_18), "commit.value hash == previous commit hash")
 }
 

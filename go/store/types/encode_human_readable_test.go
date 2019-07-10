@@ -63,7 +63,6 @@ func TestWriteHumanReadableRef(t *testing.T) {
 func TestWriteHumanReadableCollections(t *testing.T) {
 	vrw := newTestValueStore()
 
-	// TODO(binformat)
 	l := NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))
 	assertWriteHRSEqual(t, "[  // 4 items\n  0,\n  1,\n  2,\n  3,\n]", l)
 
@@ -73,11 +72,9 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 	m := NewMap(context.Background(), vrw, Float(0), Bool(false), Float(1), Bool(true))
 	assertWriteHRSEqual(t, "map {\n  0: false,\n  1: true,\n}", m)
 
-	// TODO(binformat)
 	l2 := NewList(context.Background(), vrw)
 	assertWriteHRSEqual(t, "[]", l2)
 
-	// TODO(binformat)
 	l3 := NewList(context.Background(), vrw, Float(0))
 	assertWriteHRSEqual(t, "[\n  0,\n]", l3)
 
@@ -85,7 +82,6 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 	for i := range nums {
 		nums[i] = Float(0)
 	}
-	// TODO(binformat)
 	l4 := NewList(context.Background(), vrw, nums...)
 	assertWriteHRSEqual(t, "[  // 2,000 items\n"+strings.Repeat("  0,\n", 2000)+"]", l4)
 }
@@ -93,7 +89,6 @@ func TestWriteHumanReadableCollections(t *testing.T) {
 func TestWriteHumanReadableNested(t *testing.T) {
 	vrw := newTestValueStore()
 
-	// TODO(binformat)
 	l := NewList(context.Background(), vrw, Float(0), Float(1))
 	l2 := NewList(context.Background(), vrw, Float(2), Float(3))
 
@@ -319,7 +314,6 @@ func TestEncodedValueMaxLines(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	// TODO(binformat)
 	l1 := NewList(context.Background(), vrw, generateNumbersAsValues(11)...)
 	expected := strings.Join(strings.SplitAfterN(EncodedValue(context.Background(), l1), "\n", 6)[:5], "")
 	assert.Equal(expected, EncodedValueMaxLines(context.Background(), l1, 5))

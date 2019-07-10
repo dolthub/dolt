@@ -407,7 +407,6 @@ func (sp Spec) Pin(ctx context.Context, format *types.Format) (Spec, bool) {
 	}
 
 	r := sp
-	// TODO(binformat)
 	r.Path.Hash = commit.Hash(format)
 	r.Path.Dataset = ""
 

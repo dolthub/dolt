@@ -40,7 +40,6 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	// TODO(binformat)
 	expected := NewList(context.Background(), vs, getTestVals(vs)...)
 	hash := vs.WriteValue(context.Background(), expected).TargetHash()
 	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
@@ -117,7 +116,6 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	expectedItem := Float(42)
 	ref := vs.WriteValue(context.Background(), expectedItem)
 
-	// TODO(binformat)
 	expected := NewList(context.Background(), vs, ref)
 	ref = vs.WriteValue(context.Background(), expected)
 	actualVar := vs.ReadValue(context.Background(), ref.TargetHash())

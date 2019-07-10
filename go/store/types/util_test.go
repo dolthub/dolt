@@ -84,12 +84,10 @@ func leafDiffCount(c1, c2 Collection) int {
 	leaves2, _ := LoadLeafNodes(context.Background(), []Collection{c2}, 0, c2.Len())
 
 	for _, l := range leaves1 {
-		// TODO(binformat)
 		hashes[l.Hash(Format_7_18)]++
 	}
 
 	for _, l := range leaves2 {
-		// TODO(binformat)
 		if c, ok := hashes[l.Hash(Format_7_18)]; ok {
 			if c == 1 {
 				delete(hashes, l.Hash(Format_7_18))

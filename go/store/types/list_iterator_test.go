@@ -16,7 +16,6 @@ func TestListIterator(t *testing.T) {
 	vrw := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
-	// TODO(binformat)
 	l := NewList(context.Background(), vrw, numbers...)
 	i := l.Iterator(context.Background())
 	vs := iterToSlice(i)
