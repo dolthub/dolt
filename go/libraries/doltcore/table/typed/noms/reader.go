@@ -13,16 +13,15 @@ import (
 // NomsMapReader is a TableReader that reads rows from a noms table which is stored in a types.Map where the key is
 // a types.Value and the value is a types.Tuple of field values.
 type NomsMapReader struct {
-	sch    schema.Schema
-	itr    types.MapIterator
-	format *types.Format
+	sch schema.Schema
+	itr types.MapIterator
 }
 
 // NewNomsMapReader creates a NomsMapReader for a given noms types.Map
 func NewNomsMapReader(ctx context.Context, m types.Map, sch schema.Schema) *NomsMapReader {
 	itr := m.Iterator(ctx)
 
-	return &NomsMapReader{sch, itr, m.Format()}
+	return &NomsMapReader{sch, itr}
 }
 
 // GetSchema gets the schema of the rows that this reader will return
@@ -46,7 +45,7 @@ func (nmr *NomsMapReader) ReadRow(ctx context.Context) (row.Row, error) {
 		return nil, io.EOF
 	}
 
-	return row.FromNoms(nmr.format, nmr.sch, key.(types.Tuple), val.(types.Tuple)), nil
+	return row.FromNoms(nmr.sch, key.(types.Tuple), val.(types.Tuple)), nil
 }
 
 // Close should release resources being held
