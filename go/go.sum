@@ -32,13 +32,11 @@ github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da/go.mod h1:Q73ZrmV
 github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible h1:wd5mq8xSfwCYd1JpQ309s+3tTlP/gifcG2awOA3x5Vk=
 github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible/go.mod h1:Cp18FeDCvsK+cD2QAGkqerGjrgSXLiJWnjHeY2mneBc=
 github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a/go.mod h1:ZRmQr0FajVIyZ4ZzBYKG5P3ZqPz9IHG41ZoMu1ADI3k=
-github.com/aws/aws-sdk-go v1.20.6 h1:kmy4Gvdlyez1fV4kw5RYxZzWKVyuHZHgPWeU/YvRsV4=
-github.com/aws/aws-sdk-go v1.20.6/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
-github.com/aws/aws-sdk-go v1.20.7 h1:fRjZRYJg0wPCA8yaDdb3DeP4rVjjmEiuqYhYoqOaIJg=
-github.com/aws/aws-sdk-go v1.20.7/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/aws/aws-sdk-go v1.20.8 h1:oXnNFH/8PosUvHXqZHYLUn6LCSzHZ/34H52vrB4YhpA=
 github.com/aws/aws-sdk-go v1.20.8/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
-github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
+github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
+github.com/boltdb/bolt v1.3.1 h1:JQmyP4ZBrce+ZQu0dY660FMfatumYDLun9hBCUVIkF4=
+github.com/boltdb/bolt v1.3.1/go.mod h1:clJnj/oiGkjum5o1McbSZDSLxVThjynRyGBgiAx27Ps=
 github.com/cenkalti/backoff v2.1.1+incompatible h1:tKJnvO2kl0zmb/jA5UKAt4VoEVw1qxKWjE/Bpp46npY=
 github.com/cenkalti/backoff v2.1.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/cespare/xxhash v1.1.0 h1:a6HrQnmkObjyL+Gs60czilIUGqrzKutQD6XZog3p+ko=
@@ -175,8 +173,8 @@ github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORN
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
 github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
-github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190625235951-3c7e9c8be527 h1:FOgXme0BSA2ADAt22Pe+VWa09hwy6XZDh+d2oaeEdf8=
-github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190625235951-3c7e9c8be527/go.mod h1:gCx4I5FSVo/VIvvhfHVmCGLTCuTIueDxzVBKthMQDYA=
+github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a h1:Z8uOEqaBW1a0vpu+S9MlWwiyIDrjtn9sZ/CCcs32e9s=
+github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a/go.mod h1:bXirMMsoAKR1OI9GTQJPGSyuwJlOseI9AFNAdpwRY2k=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=
