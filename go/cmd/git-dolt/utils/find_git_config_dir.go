@@ -28,7 +28,7 @@ func FindGitConfigUnderRoot() (string, error) {
 // a directory named .git, returning its path if found, and an error if not.
 //
 // Both currentPath and terminalPath are assumed to be absolute paths. An error is returned
-// if currentPath is not a descendent of terminalPath.
+// if currentPath is not a descendant of terminalPath.
 func FindGitConfigDir(currentPath, terminalPath string) (string, error) {
 	if !strings.HasPrefix(currentPath, terminalPath) {
 		return "", fmt.Errorf("current path %s is not a descendent of terminal path %s", currentPath, terminalPath)
