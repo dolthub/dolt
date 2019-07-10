@@ -44,6 +44,29 @@ teardown() {
 	[[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
 }
 
+@test "git dolt install works in subdirectories of the git repository" {
+	init_git_repo
+	mkdir -p deeply/nested/directory
+	pushd deeply/nested/directory
+	run git dolt install
+	[ "$status" -eq 0 ]
+
+	popd
+	run cat .gitattributes
+	[ "${lines[0]}" = "*.git-dolt filter=git-dolt" ]
+
+	run cat .git/config
+	len=${#lines[@]}
+	[ "${lines[len-2]}" = "[filter \"git-dolt\"]" ]
+	[[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
+}
+
+@test "git dolt install fails with a helpful error when executed outside of a git repo" {
+	run git dolt install
+	[ "$status" -eq 1 ]
+	[[ "$output" =~ "couldn't find a .git directory" ]] || false
+}
+
 @test "git dolt link takes a remote url (and an optional revspec and destination directory), clones the repo, and outputs a pointer file" {
 	init_git_repo
 	run git dolt link $REMOTE
