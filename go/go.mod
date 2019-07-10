@@ -55,7 +55,7 @@ require (
 
 replace github.com/attic-labs/noms => github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4
 
-replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190625235951-3c7e9c8be527
+replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a
 
 //replace github.com/src-d/go-mysql-server => ../../../../liquidata-inc/go-mysql-server
 
