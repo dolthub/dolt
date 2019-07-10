@@ -1,13 +1,14 @@
 module github.com/liquidata-inc/ld/dolt/go
 
 require (
-	cloud.google.com/go v0.40.0
+	cloud.google.com/go v0.41.0
 	github.com/BurntSushi/toml v0.3.1
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
 	github.com/attic-labs/noms v0.0.0-20190508041645-614eb763b982
-	github.com/aws/aws-sdk-go v1.20.8
+	github.com/aws/aws-sdk-go v1.20.17
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/cenkalti/backoff v2.1.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
@@ -39,15 +40,15 @@ require (
 	github.com/prometheus/procfs v0.0.0-20180725123919-05ee40e3a273 // indirect
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
 	github.com/shirou/gopsutil v2.18.12+incompatible
-	github.com/skratchdot/open-golang v0.0.0-20190104022628-a2dfa6d0dab6
+	github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e
 	github.com/src-d/go-mysql-server v0.4.1-0.20190624170509-8702d43af506
 	github.com/stretchr/testify v1.3.0
 	github.com/tealeg/xlsx v1.0.3
-	golang.org/x/crypto v0.0.0-20190506204251-e1dfcc566284
-	golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c
-	golang.org/x/sys v0.0.0-20190507160741-ecd444e8653b
+	golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
+	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
+	golang.org/x/sys v0.0.0-20190624142023-c5567b49c5d0
 	google.golang.org/api v0.7.0
-	google.golang.org/grpc v1.21.1
+	google.golang.org/grpc v1.22.0
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible

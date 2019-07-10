@@ -6,12 +6,13 @@ package nbs
 
 import (
 	"context"
+	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 type conjoiner interface {
@@ -27,7 +28,7 @@ type conjoiner interface {
 	// process actor has already landed a conjoin of its own. Callers must
 	// handle this, likely by rebasing against upstream and re-evaluating the
 	// situation.
-	Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents
+	Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error)
 }
 
 type inlineConjoiner struct {
@@ -38,17 +39,22 @@ func (c inlineConjoiner) ConjoinRequired(ts tableSet) bool {
 	return ts.Size() > c.maxTables
 }
 
-func (c inlineConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
+func (c inlineConjoiner) Conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
 	return conjoin(ctx, upstream, mm, p, stats)
 }
 
-func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) manifestContents {
+func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater, p tablePersister, stats *Stats) (manifestContents, error) {
 	var conjoined tableSpec
 	var conjoinees, keepers []tableSpec
 
 	for {
 		if conjoinees == nil {
-			conjoined, conjoinees, keepers = conjoinTables(ctx, p, upstream.specs, stats)
+			var err error
+			conjoined, conjoinees, keepers, err = conjoinTables(ctx, p, upstream.specs, stats)
+
+			if err != nil {
+				return manifestContents{}, err
+			}
 		}
 
 		specs := append(make([]tableSpec, 0, len(keepers)+1), conjoined)
@@ -64,11 +70,12 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		var err error
 		upstream, err = mm.Update(ctx, upstream.lock, newContents, stats, nil)
 
-		// TODO: fix panics.
-		d.PanicIfError(err)
+		if err != nil {
+			return manifestContents{}, err
+		}
 
 		if newContents.lock == upstream.lock {
-			return upstream // Success!
+			return upstream, nil
 		}
 		// Optimistic lock failure. Someone else moved to the root, the set of tables, or both out from under us.
 		// If we can re-use the conjoin we already performed, we want to try again. Currently, we will only do so if ALL conjoinees are still present upstream. If we can't re-use...then someone else almost certainly landed a conjoin upstream. In this case, bail and let clients ask again if they think they still can't proceed.
@@ -79,7 +86,7 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		}
 		for _, c := range conjoinees {
 			if _, present := upstreamNames[c.name]; !present {
-				return upstream // Bail!
+				return upstream, nil // Bail!
 			}
 			conjoineeSet[c.name] = struct{}{}
 		}
@@ -94,30 +101,74 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 	}
 }
 
-func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, stats *Stats) (conjoined tableSpec, conjoinees, keepers []tableSpec) {
+func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, stats *Stats) (conjoined tableSpec, conjoinees, keepers []tableSpec, err error) {
 	// Open all the upstream tables concurrently
 	sources := make(chunkSources, len(upstream))
+
+	ae := NewAtomicError()
 	wg := sync.WaitGroup{}
 	for i, spec := range upstream {
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
-			sources[idx] = p.Open(ctx, spec.name, spec.chunkCount, stats)
-			wg.Done()
+			defer wg.Done()
+			var err error
+			sources[idx], err = p.Open(ctx, spec.name, spec.chunkCount, stats)
+
+			ae.SetIfError(err)
 		}(i, spec)
 		i++
 	}
 	wg.Wait()
 
+	if err := ae.Get(); err != nil {
+		return tableSpec{}, nil, nil, err
+	}
+
 	t1 := time.Now()
 
 	toConjoin, toKeep := chooseConjoinees(sources)
-	conjoinedSrc := p.ConjoinAll(ctx, toConjoin, stats)
+	conjoinedSrc, err := p.ConjoinAll(ctx, toConjoin, stats)
+
+	if err != nil {
+		return tableSpec{}, nil, nil, err
+	}
 
 	stats.ConjoinLatency.SampleTimeSince(t1)
 	stats.TablesPerConjoin.SampleLen(len(toConjoin))
-	stats.ChunksPerConjoin.Sample(uint64(conjoinedSrc.count()))
 
-	return tableSpec{conjoinedSrc.hash(), conjoinedSrc.count()}, toSpecs(toConjoin), toSpecs(toKeep)
+	cnt, err := conjoinedSrc.count()
+
+	if err != nil {
+		return tableSpec{}, nil, nil, err
+	}
+
+	stats.ChunksPerConjoin.Sample(uint64(cnt))
+
+	conjoinees, err = toSpecs(toConjoin)
+
+	if err != nil {
+		return tableSpec{}, nil, nil, err
+	}
+
+	keepers, err = toSpecs(toKeep)
+
+	if err != nil {
+		return tableSpec{}, nil, nil, err
+	}
+
+	h, err := conjoinedSrc.hash()
+
+	if err != nil {
+		return tableSpec{}, nil, nil, err
+	}
+
+	cnt, err = conjoinedSrc.count()
+
+	if err != nil {
+		return tableSpec{}, nil, nil, err
+	}
+
+	return tableSpec{h, cnt}, conjoinees, keepers, nil
 }
 
 // Current approach is to choose the smallest N tables which, when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
@@ -127,20 +178,61 @@ func chooseConjoinees(upstream chunkSources) (toConjoin, toKeep chunkSources) {
 	sort.Sort(chunkSourcesByAscendingCount(sortedUpstream))
 
 	partition := 2
-	sum := sortedUpstream[0].count() + sortedUpstream[1].count()
-	for partition < len(sortedUpstream) && sum > sortedUpstream[partition].count() {
-		sum += sortedUpstream[partition].count()
+	upZero, err := sortedUpstream[0].count()
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	upOne, err := sortedUpstream[1].count()
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	sum := upZero + upOne
+	for partition < len(sortedUpstream) {
+		partCnt, err := sortedUpstream[partition].count()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		if sum <= partCnt {
+			break
+		}
+
+		sum += partCnt
 		partition++
 	}
 
 	return sortedUpstream[:partition], sortedUpstream[partition:]
 }
 
-func toSpecs(srcs chunkSources) []tableSpec {
+func toSpecs(srcs chunkSources) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(srcs))
 	for i, src := range srcs {
-		d.PanicIfFalse(src.count() > 0)
-		specs[i] = tableSpec{src.hash(), src.count()}
+		cnt, err := src.count()
+
+		if err != nil {
+			return nil, err
+		}
+
+		if cnt <= 0 {
+			return nil, errors.New("invalid table spec has no sources")
+		}
+
+		h, err := src.hash()
+
+		if err != nil {
+			return nil, err
+		}
+
+		cnt, err = src.count()
+
+		if err != nil {
+			return nil, err
+		}
+
+		specs[i] = tableSpec{h, cnt}
 	}
-	return specs
+
+	return specs, nil
 }

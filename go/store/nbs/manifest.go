@@ -16,7 +16,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
-var ErrCorruptManifest = errors.New("Corrupt manifest")
+var ErrCorruptManifest = errors.New("corrupt manifest")
 
 type manifest interface {
 	// Name returns a stable, unique identifier for the store this manifest describes.
@@ -117,16 +117,16 @@ func (ml *manifestLocks) lockForFetch(db string) {
 	lockByName(db, ml.cond, ml.fetching)
 }
 
-func (ml *manifestLocks) unlockForFetch(db string) {
-	unlockByName(db, ml.cond, ml.fetching)
+func (ml *manifestLocks) unlockForFetch(db string) error {
+	return unlockByName(db, ml.cond, ml.fetching)
 }
 
 func (ml *manifestLocks) lockForUpdate(db string) {
 	lockByName(db, ml.cond, ml.updating)
 }
 
-func (ml *manifestLocks) unlockForUpdate(db string) {
-	unlockByName(db, ml.cond, ml.updating)
+func (ml *manifestLocks) unlockForUpdate(db string) error {
+	return unlockByName(db, ml.cond, ml.updating)
 }
 
 func lockByName(db string, c *sync.Cond, locks map[string]struct{}) {
@@ -142,15 +142,19 @@ func lockByName(db string, c *sync.Cond, locks map[string]struct{}) {
 	}
 }
 
-func unlockByName(db string, c *sync.Cond, locks map[string]struct{}) {
+func unlockByName(db string, c *sync.Cond, locks map[string]struct{}) error {
 	c.L.Lock()
 	defer c.L.Unlock()
 
-	_, ok := locks[db]
-	d.PanicIfFalse(ok)
+	if _, ok := locks[db]; !ok {
+		return errors.New("unlock failed")
+	}
+
 	delete(locks, db)
 
 	c.Broadcast()
+
+	return nil
 }
 
 type manifestManager struct {
@@ -163,16 +167,16 @@ func (mm manifestManager) lockOutFetch() {
 	mm.locks.lockForFetch(mm.Name())
 }
 
-func (mm manifestManager) allowFetch() {
-	mm.locks.unlockForFetch(mm.Name())
+func (mm manifestManager) allowFetch() error {
+	return mm.locks.unlockForFetch(mm.Name())
 }
 
 func (mm manifestManager) LockForUpdate() {
 	mm.locks.lockForUpdate(mm.Name())
 }
 
-func (mm manifestManager) UnlockForUpdate() {
-	mm.locks.unlockForUpdate(mm.Name())
+func (mm manifestManager) UnlockForUpdate() error {
+	return mm.locks.unlockForUpdate(mm.Name())
 }
 
 func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents, doomed bool) {
@@ -188,7 +192,12 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (bool, manife
 	entryTime := time.Now()
 
 	mm.lockOutFetch()
-	defer mm.allowFetch()
+	defer func() {
+		err := mm.allowFetch()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+	}()
 
 	cached, t, hit := mm.cache.Get(mm.Name())
 
@@ -205,7 +214,11 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (bool, manife
 		return false, manifestContents{}, err
 	}
 
-	mm.cache.Put(mm.Name(), contents, t)
+	err = mm.cache.Put(mm.Name(), contents, t)
+
+	if err != nil {
+		return false, manifestContents{}, err
+	}
 
 	return exists, contents, nil
 }
@@ -222,7 +235,12 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 	t := time.Now()
 
 	mm.lockOutFetch()
-	defer mm.allowFetch()
+	defer func() {
+		err := mm.allowFetch()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+	}()
 
 	contents, err := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
 
@@ -230,7 +248,11 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 		return contents, err
 	}
 
-	mm.cache.Put(mm.Name(), contents, t)
+	err = mm.cache.Put(mm.Name(), contents, t)
+
+	if err != nil {
+		return manifestContents{}, err
+	}
 
 	return contents, nil
 }
@@ -262,7 +284,7 @@ func parseSpecs(tableInfo []string) ([]tableSpec, error) {
 	specs := make([]tableSpec, len(tableInfo)/2)
 	for i := range specs {
 		var err error
-		specs[i].name, err = ParseAddr([]byte(tableInfo[2*i]))
+		specs[i].name, err = parseAddr([]byte(tableInfo[2*i]))
 
 		if err != nil {
 			return nil, err

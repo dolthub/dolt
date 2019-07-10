@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
@@ -111,10 +111,12 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		s := types.String("string")
 
 		// Existing database in the database are read from the spec.
-		store1 := path.Join(tmpDir, "store1")
+		store1 := filepath.Join(tmpDir, "store1")
 		os.Mkdir(store1, 0777)
 		func() {
-			db := datas.NewDatabase(nbs.NewLocalStore(context.Background(), store1, 8*(1<<20)))
+			cs, err := nbs.NewLocalStore(context.Background(), store1, 8*(1<<20))
+			assert.NoError(err)
+			db := datas.NewDatabase(cs)
 			defer db.Close()
 			r := db.WriteValue(context.Background(), s)
 			_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
@@ -131,7 +133,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		assert.Equal(s, spec1.GetDatabase(context.Background()).ReadValue(context.Background(), s.Hash()))
 
 		// New databases can be created and read/written from.
-		store2 := path.Join(tmpDir, "store2")
+		store2 := filepath.Join(tmpDir, "store2")
 		os.Mkdir(store2, 0777)
 		spec2, err := ForDatabase(prefix + store2)
 		assert.NoError(err)
@@ -479,8 +481,11 @@ func TestExternalProtocol(t *testing.T) {
 	cs := sp.NewChunkStore(context.Background())
 	assert.Equal("foo", tp.name)
 	c := chunks.NewChunk([]byte("hi!"))
-	cs.Put(context.Background(), c)
-	assert.True(cs.Has(context.Background(), c.Hash()))
+	err = cs.Put(context.Background(), c)
+	assert.NoError(err)
+	ok, err := cs.Has(context.Background(), c.Hash())
+	assert.NoError(err)
+	assert.True(ok)
 
 	tp.name = ""
 	ds := sp.GetDataset(context.Background())

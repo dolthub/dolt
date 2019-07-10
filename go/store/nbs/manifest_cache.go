@@ -6,11 +6,10 @@ package nbs
 
 import (
 	"container/list"
+	"fmt"
 	"time"
 
 	"sync"
-
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 func newManifestCache(maxSize uint64) *manifestCache {
@@ -67,7 +66,7 @@ func (mc *manifestCache) entry(key string) (manifestCacheEntry, bool) {
 // necessary entries at the front of the queue will be deleted in order to
 // keep the total cache size below maxSize. |t| must be *prior* to initiating
 // the call which read/wrote |contents|.
-func (mc *manifestCache) Put(db string, contents manifestContents, t time.Time) {
+func (mc *manifestCache) Put(db string, contents manifestContents, t time.Time) error {
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
 
@@ -86,7 +85,7 @@ func (mc *manifestCache) Put(db string, contents manifestContents, t time.Time) 
 			key1 := el.Value.(string)
 			ce, ok := mc.cache[key1]
 			if !ok {
-				d.Panic("manifestCache is missing expected value")
+				return fmt.Errorf("manifestCache is missing expected value for %s", key1)
 			}
 			next := el.Next()
 			delete(mc.cache, key1)
@@ -95,4 +94,6 @@ func (mc *manifestCache) Put(db string, contents manifestContents, t time.Time) 
 			el = next
 		}
 	}
+
+	return nil
 }

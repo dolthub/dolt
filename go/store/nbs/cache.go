@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"io/ioutil"
 	"os"
 
@@ -18,12 +19,20 @@ const (
 	defaultCacheMemTableSize uint64 = 1 << 27 // 128MiB
 )
 
-func NewCache(ctx context.Context) *NomsBlockCache {
+func NewCache(ctx context.Context) (*NomsBlockCache, error) {
 	dir, err := ioutil.TempDir("", "")
-	d.PanicIfError(err)
-	store := NewLocalStore(ctx, dir, defaultCacheMemTableSize)
-	d.Chk.NoError(err, "opening put cache in %s", dir)
-	return &NomsBlockCache{store, dir}
+
+	if err != nil {
+		return nil, err
+	}
+
+	store, err := NewLocalStore(ctx, dir, defaultCacheMemTableSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &NomsBlockCache{store, dir}, nil
 }
 
 // NomsBlockCache holds Chunks, allowing them to be retrieved by hash or enumerated in hash order.
@@ -33,18 +42,24 @@ type NomsBlockCache struct {
 }
 
 // Insert stores c in the cache.
-func (nbc *NomsBlockCache) Insert(ctx context.Context, c chunks.Chunk) {
-	d.PanicIfFalse(nbc.chunks.addChunk(ctx, addr(c.Hash()), c.Data()))
+func (nbc *NomsBlockCache) Insert(ctx context.Context, c chunks.Chunk) error {
+	success := nbc.chunks.addChunk(ctx, addr(c.Hash()), c.Data())
+
+	if !success {
+		return errors.New("failed to add chunk")
+	}
+
+	return nil
 }
 
 // Has checks if the chunk referenced by hash is in the cache.
-func (nbc *NomsBlockCache) Has(ctx context.Context, hash hash.Hash) bool {
+func (nbc *NomsBlockCache) Has(ctx context.Context, hash hash.Hash) (bool, error) {
 	return nbc.chunks.Has(ctx, hash)
 }
 
 // HasMany returns a set containing the members of hashes present in the
 // cache.
-func (nbc *NomsBlockCache) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
+func (nbc *NomsBlockCache) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	return nbc.chunks.HasMany(ctx, hashes)
 }
 
@@ -68,7 +83,7 @@ func (nbc *NomsBlockCache) ExtractChunks(ctx context.Context, chunkChan chan *ch
 }
 
 // Count returns the number of items in the cache.
-func (nbc *NomsBlockCache) Count() uint32 {
+func (nbc *NomsBlockCache) Count() (uint32, error) {
 	return nbc.chunks.Count()
 }
 

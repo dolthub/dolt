@@ -30,19 +30,24 @@ func TestFSTableCache(t *testing.T) {
 			sum += len(s)
 		}
 
-		tc := newFSTableCache(dir, uint64(sum), len(datas))
+		tc, err := newFSTableCache(dir, uint64(sum), len(datas))
+		assert.NoError(t, err)
 		for _, d := range datas {
-			tc.store(computeAddr(d), bytes.NewReader(d), uint64(len(d)))
+			err := tc.store(computeAddr(d), bytes.NewReader(d), uint64(len(d)))
+			assert.NoError(t, err)
 		}
 
 		expiredName := computeAddr(datas[0])
-		assert.Nil(t, tc.checkout(expiredName))
+		r, err := tc.checkout(expiredName)
+		assert.NoError(t, err)
+		assert.Nil(t, r)
 		_, fserr := os.Stat(filepath.Join(dir, expiredName.String()))
 		assert.True(t, os.IsNotExist(fserr))
 
 		for _, d := range datas[1:] {
 			name := computeAddr(d)
-			r := tc.checkout(name)
+			r, err := tc.checkout(name)
+			assert.NoError(t, err)
 			assert.NotNil(t, r)
 			assertDataInReaderAt(t, d, r)
 			_, fserr := os.Stat(filepath.Join(dir, name.String()))
@@ -57,14 +62,15 @@ func TestFSTableCache(t *testing.T) {
 			defer os.RemoveAll(dir)
 			assert := assert.New(t)
 
-			names := []addr{}
+			var names []addr
 			for i := byte(0); i < 4; i++ {
 				name := computeAddr([]byte{i})
 				assert.NoError(ioutil.WriteFile(filepath.Join(dir, name.String()), nil, 0666))
 				names = append(names, name)
 			}
-			var ftc *fsTableCache
-			assert.NotPanics(func() { ftc = newFSTableCache(dir, 1024, 4) })
+
+			ftc, err := newFSTableCache(dir, 1024, 4)
+			assert.NoError(err)
 			assert.NotNil(ftc)
 
 			for _, name := range names {
@@ -78,7 +84,8 @@ func TestFSTableCache(t *testing.T) {
 			defer os.RemoveAll(dir)
 
 			assert.NoError(t, ioutil.WriteFile(filepath.Join(dir, "boo"), nil, 0666))
-			assert.Panics(t, func() { newFSTableCache(dir, 1024, 4) })
+			_, err := newFSTableCache(dir, 1024, 4)
+			assert.Error(t, err)
 		})
 
 		t.Run("ClearTempFile", func(t *testing.T) {
@@ -88,7 +95,8 @@ func TestFSTableCache(t *testing.T) {
 
 			tempFile := filepath.Join(dir, tempTablePrefix+"boo")
 			assert.NoError(t, ioutil.WriteFile(tempFile, nil, 0666))
-			assert.NotPanics(t, func() { newFSTableCache(dir, 1024, 4) })
+			_, err := newFSTableCache(dir, 1024, 4)
+			assert.NoError(t, err)
 			_, fserr := os.Stat(tempFile)
 			assert.True(t, os.IsNotExist(fserr))
 		})
@@ -98,7 +106,8 @@ func TestFSTableCache(t *testing.T) {
 			dir := makeTempDir(t)
 			defer os.RemoveAll(dir)
 			assert.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0777))
-			assert.Panics(t, func() { newFSTableCache(dir, 1024, 4) })
+			_, err := newFSTableCache(dir, 1024, 4)
+			assert.Error(t, err)
 		})
 	})
 }

@@ -3,7 +3,6 @@ package dbfactory
 import (
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"net/url"
@@ -38,13 +37,12 @@ func (fact FileFactory) CreateDB(ctx context.Context, urlObj *url.URL, params ma
 		return nil, filesys.ErrIsFile
 	}
 
-	var db datas.Database
-	err = pantoerr.PanicToError("failed to create database", func() error {
-		nbs := nbs.NewLocalStore(ctx, path, defaultMemTableSize)
-		db = datas.NewDatabase(nbs)
+	st, err := nbs.NewLocalStore(ctx, path, defaultMemTableSize)
 
-		return nil
-	})
+	if err != nil {
+		return nil, err
+	}
 
-	return db, err
+	return datas.NewDatabase(st), nil
+
 }

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/stretchr/testify/assert"
 )
@@ -82,6 +83,9 @@ func assertPathSpecsEquiv(assert *assert.Assertions, expected string, actual str
 }
 
 func TestResolveDatabaseWithConfig(t *testing.T) {
+	if osutil.IsWindows {
+		t.Skip("Skipping test as it is specific to Unix")
+	}
 	r := withConfig(t)
 	assert := assert.New(t)
 	for _, d := range append(dbTestsNoAliases, dbTestsWithAliases...) {
@@ -110,6 +114,9 @@ func TestPathResolutionWhenSeparatorMissing(t *testing.T) {
 }
 
 func TestResolveDestPathWithDot(t *testing.T) {
+	if osutil.IsWindows {
+		t.Skip("Skipping test as it is specific to Unix")
+	}
 	r := withConfig(t)
 	assert := assert.New(t)
 

@@ -2,11 +2,11 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 type blobstorePersister struct {
@@ -17,14 +17,17 @@ type blobstorePersister struct {
 
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
-func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	name, data, chunkCount := mt.write(haver, stats)
 	if chunkCount == 0 {
-		return emptyChunkSource{}
+		return emptyChunkSource{}, nil
 	}
 
 	_, err := blobstore.PutBytes(ctx, bsp.bs, name.String(), data)
-	d.PanicIfError(err)
+
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
 	return newReaderFromIndexData(bsp.indexCache, data, name, bsTRA, bsp.blockSize)
@@ -32,12 +35,12 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
 // new chunkSource.
-func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
-	return emptyChunkSource{}
+func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
+	return emptyChunkSource{}, nil
 }
 
 // Open a table named |name|, containing |chunkCount| chunks.
-func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
+func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.blockSize, bsp.indexCache, stats)
 }
 
@@ -74,31 +77,49 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, indexCache *indexCache, stats *Stats) chunkSource {
+func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, indexCache *indexCache, stats *Stats) (chunkSource, error) {
 	if indexCache != nil {
 		indexCache.lockEntry(name)
 		defer indexCache.unlockEntry(name)
 		if index, found := indexCache.get(name); found {
 			bsTRA := &bsTableReaderAt{name.String(), bs}
-			return &chunkSourceAdapter{newTableReader(index, bsTRA, blockSize), name}
+			return &chunkSourceAdapter{newTableReader(index, bsTRA, blockSize), name}, nil
 		}
 	}
 
 	t1 := time.Now()
-	indexBytes, tra := func() ([]byte, tableReaderAt) {
+	indexBytes, tra, err := func() ([]byte, tableReaderAt, error) {
 		size := int64(indexSize(chunkCount) + footerSize)
 		key := name.String()
 		buff, _, err := blobstore.GetBytes(ctx, bs, key, blobstore.NewBlobRange(-size, 0))
-		d.PanicIfError(err)
-		d.PanicIfFalse(size == int64(len(buff)))
-		return buff, &bsTableReaderAt{key, bs}
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if size != int64(len(buff)) {
+			return nil, nil, errors.New("failed to read all data")
+		}
+
+		return buff, &bsTableReaderAt{key, bs}, nil
 	}()
+
+	if err != nil {
+		return nil, err
+	}
+
 	stats.IndexBytesPerRead.Sample(uint64(len(indexBytes)))
 	stats.IndexReadLatency.SampleTimeSince(t1)
 
-	index := parseTableIndex(indexBytes)
+	index, err := parseTableIndex(indexBytes)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if indexCache != nil {
 		indexCache.put(name, index)
 	}
-	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}
+
+	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
 }

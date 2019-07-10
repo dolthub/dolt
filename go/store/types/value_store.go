@@ -59,7 +59,11 @@ type ValueStore struct {
 }
 
 func PanicIfDangling(ctx context.Context, unresolved hash.HashSet, cs chunks.ChunkStore) {
-	absent := cs.HasMany(ctx, unresolved)
+	absent, err := cs.HasMany(ctx, unresolved)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
 	if len(absent) != 0 {
 		d.Panic("Found dangling references to %v", absent)
 	}
@@ -252,29 +256,56 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		lvs.bufferedChunkSize += uint64(len(c.Data()))
 	}
 
-	put := func(h hash.Hash, c chunks.Chunk) {
-		lvs.cs.Put(ctx, c)
+	put := func(h hash.Hash, c chunks.Chunk) error {
+		err := lvs.cs.Put(ctx, c)
+
+		if err != nil {
+			return err
+		}
+
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		delete(lvs.bufferedChunks, h)
+
+		return nil
 	}
 
-	putChildren := func(parent hash.Hash) {
+	putChildren := func(parent hash.Hash) error {
 		pending, isBuffered := lvs.bufferedChunks[parent]
 		if !isBuffered {
-			return
+			return nil
 		}
+
+		var err error
 		WalkRefs(pending, func(grandchildRef Ref) {
+			if err != nil {
+				// as soon as an error occurs ignore the rest of the refs
+				return
+			}
+
 			gch := grandchildRef.TargetHash()
 			if pending, present := lvs.bufferedChunks[gch]; present {
-				put(gch, pending)
+				err = put(gch, pending)
 			}
 		})
+
+		if err != nil {
+			return err
+		}
+
 		delete(lvs.withBufferedChildren, parent)
+
+		return nil
 	}
 
 	// Enforce invariant (1)
 	if height > 1 {
+		var err error
 		v.WalkRefs(func(childRef Ref) {
+			if err != nil {
+				// as soon as an error occurs ignore the rest of the refs
+				return
+			}
+
 			childHash := childRef.TargetHash()
 			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
 				lvs.withBufferedChildren[h] = height
@@ -283,10 +314,14 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 				// unresolved ref.
 				lvs.unresolvedRefs.Insert(childHash)
 			}
+
 			if _, hasBufferedChildren := lvs.withBufferedChildren[childHash]; hasBufferedChildren {
-				putChildren(childHash)
+				err = putChildren(childHash)
 			}
 		})
+
+		// TODO: fix panics
+		d.PanicIfError(err)
 	}
 
 	// Enforce invariant (2)
@@ -305,20 +340,36 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 				// Any pendingPut is as good as another in this case, so take the first one
 				break
 			}
-			put(tallest, chunk)
+
+			err := put(tallest, chunk)
+
+			// TODO: fix panics
+			d.PanicIfError(err)
+
 			continue
 		}
 
-		putChildren(tallest)
+		err := putChildren(tallest)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
 	}
 }
 
 func (lvs *ValueStore) Root(ctx context.Context) hash.Hash {
-	return lvs.cs.Root(ctx)
+	root, err := lvs.cs.Root(ctx)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	return root
 }
 
 func (lvs *ValueStore) Rebase(ctx context.Context) {
-	lvs.cs.Rebase(ctx)
+	err := lvs.cs.Rebase(ctx)
+
+	//TODO: fix panics
+	d.PanicIfError(err)
 }
 
 // Commit() flushes all bufferedChunks into the ChunkStore, with best-effort
@@ -332,27 +383,54 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		lvs.bufferMu.Lock()
 		defer lvs.bufferMu.Unlock()
 
-		put := func(h hash.Hash, chunk chunks.Chunk) {
-			lvs.cs.Put(ctx, chunk)
+		put := func(h hash.Hash, chunk chunks.Chunk) error {
+			err := lvs.cs.Put(ctx, chunk)
+
+			if err != nil {
+				return err
+			}
+
 			delete(lvs.bufferedChunks, h)
 			lvs.bufferedChunkSize -= uint64(len(chunk.Data()))
+			return nil
 		}
 
 		for parent := range lvs.withBufferedChildren {
 			if pending, present := lvs.bufferedChunks[parent]; present {
+				var err error
 				WalkRefs(pending, func(reachable Ref) {
+					if err != nil {
+						// as soon as an error occurs ignore the rest of the refs
+						return
+					}
+
 					if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
-						put(reachable.TargetHash(), pending)
+						err = put(reachable.TargetHash(), pending)
 					}
 				})
-				put(parent, pending)
+
+				if err != nil {
+					return false, err
+				}
+
+				err = put(parent, pending)
+
+				if err != nil {
+					return false, err
+				}
 			}
 		}
 		for _, c := range lvs.bufferedChunks {
 			// Can't use put() because it's wrong to delete from a lvs.bufferedChunks while iterating it.
-			lvs.cs.Put(ctx, c)
+			err := lvs.cs.Put(ctx, c)
+
+			if err != nil {
+				return false, err
+			}
+
 			lvs.bufferedChunkSize -= uint64(len(c.Data()))
 		}
+
 		d.PanicIfFalse(lvs.bufferedChunkSize == 0)
 		lvs.withBufferedChildren = map[hash.Hash]uint64{}
 		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}

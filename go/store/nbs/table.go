@@ -10,6 +10,7 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"hash/crc32"
 	"io"
 	"sync"
@@ -104,19 +105,19 @@ import (
 */
 
 const (
-	addrSize        uint64 = 20
-	addrPrefixSize  uint64 = 8
-	addrSuffixSize         = addrSize - addrPrefixSize
-	uint64Size      uint64 = 8
-	uint32Size      uint64 = 4
-	ordinalSize     uint64 = uint32Size
-	lengthSize      uint64 = uint32Size
-	magicNumber            = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
-	magicNumberSize uint64 = uint64(len(magicNumber))
-	footerSize             = uint32Size + uint64Size + magicNumberSize
-	prefixTupleSize        = addrPrefixSize + ordinalSize
-	checksumSize    uint64 = uint32Size
-	maxChunkSize    uint64 = 0xffffffff // Snappy won't compress slices bigger than this
+	addrSize        = 20
+	addrPrefixSize  = 8
+	addrSuffixSize  = addrSize - addrPrefixSize
+	uint64Size      = 8
+	uint32Size      = 4
+	ordinalSize     = uint32Size
+	lengthSize      = uint32Size
+	magicNumber     = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
+	magicNumberSize = 8 //len(magicNumber)
+	footerSize      = uint32Size + uint64Size + magicNumberSize
+	prefixTupleSize = addrPrefixSize + ordinalSize
+	checksumSize    = uint32Size
+	maxChunkSize    = 0xffffffff // Snappy won't compress slices bigger than this
 )
 
 var crcTable = crc32.MakeTable(crc32.Castagnoli)
@@ -150,7 +151,7 @@ func (a addr) Checksum() uint32 {
 	return binary.BigEndian.Uint32(a[addrSize-checksumSize:])
 }
 
-func ParseAddr(b []byte) (addr, error) {
+func parseAddr(b []byte) (addr, error) {
 	var h addr
 	_, err := encoding.Decode(h[:], b)
 	return h, err
@@ -159,6 +160,11 @@ func ParseAddr(b []byte) (addr, error) {
 func ValidateAddr(s string) bool {
 	_, err := encoding.DecodeString(s)
 	return err == nil
+}
+
+func mustAddr(h addr, err error) addr {
+	d.PanicIfError(err)
+	return h
 }
 
 type addrSlice []addr
@@ -201,38 +207,40 @@ func (hs getRecordByPrefix) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 type extractRecord struct {
 	a    addr
 	data []byte
-	err  interface{} // only set when there was a panic during extraction.
+	err  error
 }
 
 type chunkReader interface {
-	has(h addr) bool
-	hasMany(addrs []hasRecord) bool
-	get(ctx context.Context, h addr, stats *Stats) []byte
-	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) bool
-	count() uint32
-	uncompressedLen() uint64
-	extract(ctx context.Context, chunks chan<- extractRecord)
+	has(h addr) (bool, error)
+	hasMany(addrs []hasRecord) (bool, error)
+	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
+	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool
+	extract(ctx context.Context, chunks chan<- extractRecord) error
+	count() (uint32, error)
+	uncompressedLen() (uint64, error)
 }
 
 type chunkReadPlanner interface {
 	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
 	getManyAtOffsets(
+		ctx context.Context,
 		reqs []getRecord,
 		offsetRecords offsetRecSlice,
 		foundChunks chan *chunks.Chunk,
 		wg *sync.WaitGroup,
+		ae *AtomicError,
 		stats *Stats,
-	) (remaining bool)
+	)
 }
 
 type chunkSource interface {
 	chunkReader
-	hash() addr
-	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool)
+	hash() (addr, error)
+	calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error)
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
-	reader(context.Context) io.Reader
-	index() tableIndex
+	reader(context.Context) (io.Reader, error)
+	index() (tableIndex, error)
 }
 
 type chunkSources []chunkSource

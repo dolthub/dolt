@@ -24,7 +24,8 @@ func TestStats(t *testing.T) {
 
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
-	store := NewLocalStore(context.Background(), dir, testMemTableSize)
+	store, err := NewLocalStore(context.Background(), dir, testMemTableSize)
+	assert.NoError(err)
 
 	assert.EqualValues(1, stats(store).OpenLatency.Samples())
 
@@ -36,9 +37,12 @@ func TestStats(t *testing.T) {
 	c1, c2, c3, c4, c5 := chunks.NewChunk(i1), chunks.NewChunk(i2), chunks.NewChunk(i3), chunks.NewChunk(i4), chunks.NewChunk(i5)
 
 	// These just go to mem table, only operation stats
-	store.Put(context.Background(), c1)
-	store.Put(context.Background(), c2)
-	store.Put(context.Background(), c3)
+	err = store.Put(context.Background(), c1)
+	assert.NoError(err)
+	err = store.Put(context.Background(), c2)
+	assert.NoError(err)
+	err = store.Put(context.Background(), c3)
+	assert.NoError(err)
 	assert.Equal(uint64(3), stats(store).PutLatency.Samples())
 	assert.Equal(uint64(0), stats(store).PersistLatency.Samples())
 
@@ -61,7 +65,9 @@ func TestStats(t *testing.T) {
 	assert.Equal(uint64(0), stats(store).FileReadLatency.Samples())
 	assert.Equal(uint64(3), stats(store).ChunksPerGet.Sum())
 
-	_, err = store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	h, err := store.Root(context.Background())
+	assert.NoError(err)
+	_, err = store.Commit(context.Background(), h, h)
 	assert.NoError(err)
 
 	// Commit will update the manifest
@@ -100,11 +106,18 @@ func TestStats(t *testing.T) {
 
 	// Force a conjoin
 	store.c = inlineConjoiner{2}
-	store.Put(context.Background(), c4)
-	_, err = store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	err = store.Put(context.Background(), c4)
 	assert.NoError(err)
-	store.Put(context.Background(), c5)
-	_, err = store.Commit(context.Background(), store.Root(context.Background()), store.Root(context.Background()))
+	h, err = store.Root(context.Background())
+	assert.NoError(err)
+	_, err = store.Commit(context.Background(), h, h)
+	assert.NoError(err)
+
+	err = store.Put(context.Background(), c5)
+	assert.NoError(err)
+	h, err = store.Root(context.Background())
+	assert.NoError(err)
+	_, err = store.Commit(context.Background(), h, h)
 	assert.NoError(err)
 
 	assert.Equal(uint64(1), stats(store).ConjoinLatency.Samples())

@@ -8,8 +8,6 @@ import (
 	"os"
 	"sort"
 	"sync"
-
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 func newFDCache(targetSize int) *fdCache {
@@ -81,7 +79,7 @@ func (fc *fdCache) RefFile(path string) (f *os.File, err error) {
 // entries with a zero refcount. If there aren't enough zero refcount entries
 // to drop to get the cache back to |fc.targetSize|, the cache will remain
 // over |fc.targetSize| until the next call to UnrefFile().
-func (fc *fdCache) UnrefFile(path string) {
+func (fc *fdCache) UnrefFile(path string) error {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	if ce, present := fc.cache[path]; present {
@@ -98,7 +96,11 @@ func (fc *fdCache) UnrefFile(path string) {
 			}
 			toDrop = append(toDrop, p)
 			err := ce.f.Close()
-			d.PanicIfError(err)
+
+			if err != nil {
+				return err
+			}
+
 			needed--
 			if needed == 0 {
 				break
@@ -108,6 +110,32 @@ func (fc *fdCache) UnrefFile(path string) {
 			delete(fc.cache, p)
 		}
 	}
+
+	return nil
+}
+
+// ShrinkCache forcefully removes all file handles with a refcount of zero.
+func (fc *fdCache) ShrinkCache() error {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	toDrop := make([]string, 0, len(fc.cache))
+	for p, ce := range fc.cache {
+		if ce.refCount != 0 {
+			continue
+		}
+		toDrop = append(toDrop, p)
+		err := ce.f.Close()
+
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, p := range toDrop {
+		delete(fc.cache, p)
+	}
+
+	return nil
 }
 
 // Drop dumps the entire cache and closes all currently open files.

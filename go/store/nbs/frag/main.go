@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"log"
 	"os"
 	"sync"
@@ -49,11 +50,17 @@ func main() {
 
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
-		store = nbs.NewLocalStore(context.Background(), *dir, memTableSize)
+		var err error
+		store, err = nbs.NewLocalStore(context.Background(), *dir, memTableSize)
+		d.PanicIfError(err)
+
 		*dbName = *dir
 	} else if *table != "" && *bucket != "" && *dbName != "" {
 		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
-		store = nbs.NewAWSStore(context.Background(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
+
+		var err error
+		store, err = nbs.NewAWSStore(context.Background(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
+		d.PanicIfError(err)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")
 	}
@@ -72,7 +79,14 @@ func main() {
 	var optimal, sum int
 	visited := map[hash.Hash]bool{}
 
-	current := hash.HashSlice{store.Root(context.Background())}
+	root, err := store.Root(context.Background())
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: failed to get root")
+		os.Exit(1)
+	}
+
+	current := hash.HashSlice{root}
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))

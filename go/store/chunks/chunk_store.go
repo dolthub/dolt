@@ -25,28 +25,28 @@ type ChunkStore interface {
 
 	// Returns true iff the value at the address |h| is contained in the
 	// store
-	Has(ctx context.Context, h hash.Hash) bool
+	Has(ctx context.Context, h hash.Hash) (bool, error)
 
 	// Returns a new HashSet containing any members of |hashes| that are
 	// absent from the store.
-	HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet)
+	HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error)
 
 	// Put caches c in the ChunkSource. Upon return, c must be visible to
 	// subsequent Get and Has calls, but must not be persistent until a call
 	// to Flush(). Put may be called concurrently with other calls to Put(),
 	// Get(), GetMany(), Has() and HasMany().
-	Put(ctx context.Context, c Chunk)
+	Put(ctx context.Context, c Chunk) error
 
 	// Returns the NomsVersion with which this ChunkSource is compatible.
 	Version() string
 
 	// Rebase brings this ChunkStore into sync with the persistent storage's
 	// current root.
-	Rebase(ctx context.Context)
+	Rebase(ctx context.Context) error
 
 	// Root returns the root of the database as of the time the ChunkStore
 	// was opened or the most recent call to Rebase.
-	Root(ctx context.Context) hash.Hash
+	Root(ctx context.Context) (hash.Hash, error)
 
 	// Commit atomically attempts to persist all novel Chunks and update the
 	// persisted root hash from last to current (or keeps it the same).

@@ -271,7 +271,9 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	case "gs":
 		return parseGCSSpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		return nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
+		cs, err := nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
+		d.PanicIfError(err)
+		return cs
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return storage.NewView()
@@ -319,7 +321,11 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	}
 
 	sess := session.Must(session.NewSession(awsConfig))
-	return nbs.NewAWSStore(ctx, parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+	cs, err := nbs.NewAWSStore(ctx, parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+
+	d.PanicIfError(err)
+
+	return cs
 }
 
 func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunks.ChunkStore {
@@ -337,7 +343,11 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 		panic("Could not create GCSBlobstore")
 	}
 
-	return nbs.NewGCSStore(ctx, bucket, path, gcs, 1<<28)
+	cs, err := nbs.NewGCSStore(ctx, bucket, path, gcs, 1<<28)
+
+	d.PanicIfError(err)
+
+	return cs
 }
 
 // GetDataset returns the current Dataset instance for this Spec's Database.
@@ -421,7 +431,9 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
-		return datas.NewDatabase(nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28))
+		cs, err := nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
+		d.PanicIfError(err)
+		return datas.NewDatabase(cs)
 	case "mem":
 		storage := &chunks.MemoryStorage{}
 		return datas.NewDatabase(storage.NewView())
@@ -454,6 +466,10 @@ func parseDatabaseSpec(spec string) (protocol, name string, err error) {
 			protocol, name = "nbs", spec
 		}
 		return
+	} else if len(parts) == 2 && len(parts[0]) == 1 && parts[0][0] >= 'A' && parts[0][0] <= 'Z' { //check for Windows drive letter, ala C:\Users\Public
+		if _, err := os.Stat(parts[0] + `:\`); !os.IsNotExist(err) {
+			parts = []string{"nbs", spec}
+		}
 	}
 
 	if _, ok := ExternalProtocols[parts[0]]; ok {

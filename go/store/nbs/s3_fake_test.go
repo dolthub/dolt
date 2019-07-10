@@ -55,16 +55,21 @@ type fakeS3Multipart struct {
 	etags    []string
 }
 
-func (m *fakeS3) readerForTable(name addr) chunkReader {
+func (m *fakeS3) readerForTable(name addr) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if buff, present := m.data[name.String()]; present {
-		return newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), s3BlockSize)
+		ti, err := parseTableIndex(buff)
+
+		if err != nil {
+			return nil, err
+		}
+		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
 	}
-	return nil
+	return nil, nil
 }
 
-func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) chunkReader {
+func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	key := name.String()
@@ -72,9 +77,15 @@ func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) chunkReader {
 		key = ns + "/" + key
 	}
 	if buff, present := m.data[key]; present {
-		return newTableReader(parseTableIndex(buff), tableReaderAtFromBytes(buff), s3BlockSize)
+		ti, err := parseTableIndex(buff)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
 	}
-	return nil
+	return nil, nil
 }
 
 func (m *fakeS3) AbortMultipartUploadWithContext(ctx aws.Context, input *s3.AbortMultipartUploadInput, opts ...request.Option) (*s3.AbortMultipartUploadOutput, error) {
@@ -234,7 +245,8 @@ func (m *fakeS3) PutObjectWithContext(ctx aws.Context, input *s3.PutObjectInput,
 	m.assert.NotNil(input.Key, "Key is a required field")
 
 	buff := &bytes.Buffer{}
-	io.Copy(buff, input.Body)
+	_, err := io.Copy(buff, input.Body)
+	m.assert.NoError(err)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.data[*input.Key] = buff.Bytes()

@@ -6,6 +6,8 @@ package nbs
 
 import (
 	"context"
+	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"sync"
 
@@ -23,7 +25,7 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 
 	for _, chunk := range chunks {
 		if !mt.addChunk(addr(chunk.Hash()), chunk.Data()) {
-			panic("Didn't create this memory table with enough space to add all the chunks.")
+			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")
 		}
 	}
 
@@ -31,7 +33,7 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 	name, data, count := mt.write(nil, &stats)
 
 	if count != uint32(len(chunks)) {
-		panic("Didn't write everything.")
+		return "", nil, errors.New("didn't write everything")
 	}
 
 	return name.String(), data, nil
@@ -71,39 +73,47 @@ func (mt *memTable) addChunk(h addr, data []byte) bool {
 	return true
 }
 
-func (mt *memTable) count() uint32 {
-	return uint32(len(mt.order))
+func (mt *memTable) count() (uint32, error) {
+	return uint32(len(mt.order)), nil
 }
 
-func (mt *memTable) uncompressedLen() uint64 {
-	return mt.totalData
+func (mt *memTable) uncompressedLen() (uint64, error) {
+	return mt.totalData, nil
 }
 
-func (mt *memTable) has(h addr) (has bool) {
-	_, has = mt.chunks[h]
-	return
+func (mt *memTable) has(h addr) (bool, error) {
+	_, has := mt.chunks[h]
+	return has, nil
 }
 
-func (mt *memTable) hasMany(addrs []hasRecord) (remaining bool) {
+func (mt *memTable) hasMany(addrs []hasRecord) (bool, error) {
+	var remaining bool
 	for i, addr := range addrs {
 		if addr.has {
 			continue
 		}
 
-		if mt.has(*addr.a) {
+		ok, err := mt.has(*addr.a)
+
+		if err != nil {
+			return false, err
+		}
+
+		if ok {
 			addrs[i].has = true
 		} else {
 			remaining = true
 		}
 	}
-	return
+	return remaining, nil
 }
 
-func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) []byte {
-	return mt.chunks[h]
+func (mt *memTable) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
+	return mt.chunks[h], nil
 }
 
-func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
+func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+	var remaining bool
 	for _, r := range reqs {
 		data := mt.chunks[*r.a]
 		if data != nil {
@@ -113,13 +123,16 @@ func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks c
 			remaining = true
 		}
 	}
-	return
+
+	return remaining
 }
 
-func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) {
+func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) error {
 	for _, hrec := range mt.order {
-		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a]}
+		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a], err: nil}
 	}
+
+	return nil
 }
 
 func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []byte, count uint32) {
@@ -129,7 +142,11 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 
 	if haver != nil {
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
-		haver.hasMany(mt.order)
+		_, err := haver.hasMany(mt.order)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
 	}
 

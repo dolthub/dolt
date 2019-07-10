@@ -7,6 +7,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"io/ioutil"
 	"net"
 	"os"
@@ -50,18 +51,20 @@ func TestS3TableReaderAt(t *testing.T) {
 		defer os.RemoveAll(dir)
 		stats := &Stats{}
 
-		tc := newFSTableCache(dir, uint64(2*len(tableData)), 4)
+		tc, err := newFSTableCache(dir, uint64(2*len(tableData)), 4)
+		assert.NoError(err)
 		tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, tc, ""}, h}
 
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData))
 		baseline := s3.getCount
-		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
+		_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
 		assert.NoError(err)
 		assert.True(s3.getCount > baseline)
 
 		// Cache the table and read again
-		tc.store(h, bytes.NewReader(tableData), uint64(len(tableData)))
+		err = tc.store(h, bytes.NewReader(tableData), uint64(len(tableData)))
+		assert.NoError(err)
 		baseline = s3.getCount
 		_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
 		assert.NoError(err)
@@ -103,6 +106,7 @@ func makeFlakyS3(svc s3svc) *flakyS3 {
 
 func (fs3 *flakyS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (output *s3.GetObjectOutput, err error) {
 	output, err = fs3.s3svc.GetObjectWithContext(ctx, input)
+	d.PanicIfError(err)
 	if _, ok := fs3.alreadyFailed[*input.Key]; !ok {
 		fs3.alreadyFailed[*input.Key] = struct{}{}
 		output.Body = ioutil.NopCloser(resettingReader{})
