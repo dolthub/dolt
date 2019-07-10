@@ -74,6 +74,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"io"
 	"io/ioutil"
 	"os"
@@ -199,15 +200,16 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 	}
 
 	id, _ := uuid.NewUUID()
-	suite.AtticLabs = path.Join(os.TempDir(), "attic-labs", "noms", "suite", id.String())
+	suite.AtticLabs = filepath.Join(os.TempDir(), "attic-labs", "noms", "suite", id.String())
 	suite.Testdata = *perfTestdataFlag
 	if suite.Testdata == "" {
-		suite.Testdata = path.Join(suite.AtticLabs, "testdata")
+		suite.Testdata = filepath.Join(suite.AtticLabs, "testdata")
 	}
 
 	// Clean up temporary directories/files last.
 	defer func() {
 		for _, f := range suite.tempFiles {
+			f.Close()
 			os.Remove(f.Name())
 		}
 		for _, d := range suite.tempDirs {
@@ -320,6 +322,10 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 				fmt.Println(err)
 			}
 
+			if osutil.IsWindows && elapsed == 0 {
+				elapsed = 1
+				total = 1
+			}
 			testReps[repIdx][recordName] = timeInfo{elapsed, suite.paused, total}
 
 			if t, ok := suiteT.(testifySuite.TearDownTestSuite); ok {

@@ -46,7 +46,12 @@ func runRoot(ctx context.Context, args []string) int {
 	cs, err := cfg.GetChunkStore(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 
-	currRoot := cs.Root(ctx)
+	currRoot, err := cs.Root(ctx)
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error getting root.", err)
+		return 1
+	}
 
 	if updateRoot == "" {
 		fmt.Println(currRoot)

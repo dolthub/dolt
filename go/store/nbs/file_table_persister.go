@@ -7,6 +7,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"io/ioutil"
 	"os"
@@ -18,6 +19,7 @@ import (
 const tempTablePrefix = "nbs_table_"
 
 func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
+	// TODO: fix panics
 	d.PanicIfTrue(fc == nil)
 	return &fsTablePersister{dir, fc, indexCache}
 }
@@ -28,68 +30,133 @@ type fsTablePersister struct {
 	indexCache *indexCache
 }
 
-func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache, ftp.fc)
 }
 
-func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	name, data, chunkCount := mt.write(haver, stats)
 	return ftp.persistTable(ctx, name, data, chunkCount, stats)
 }
 
-func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data []byte, chunkCount uint32, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data []byte, chunkCount uint32, stats *Stats) (chunkSource, error) {
 	if chunkCount == 0 {
-		return emptyChunkSource{}
+		return emptyChunkSource{}, nil
 	}
-	tempName := func() string {
+
+	tempName, err := func() (string, error) {
 		temp, err := ioutil.TempFile(ftp.dir, tempTablePrefix)
-		d.PanicIfError(err)
-		defer checkClose(temp)
-		io.Copy(temp, bytes.NewReader(data))
-		index := parseTableIndex(data)
+
+		if err != nil {
+			return "", err
+		}
+
+		defer mustClose(temp)
+
+		_, err = io.Copy(temp, bytes.NewReader(data))
+
+		if err != nil {
+			return "", err
+		}
+
+		index, err := parseTableIndex(data)
+
+		if err != nil {
+			return "", err
+		}
+
 		if ftp.indexCache != nil {
 			ftp.indexCache.lockEntry(name)
 			defer ftp.indexCache.unlockEntry(name)
 			ftp.indexCache.put(name, index)
 		}
-		return temp.Name()
+
+		return temp.Name(), nil
 	}()
-	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
-	d.PanicIfError(err)
+
+	if err != nil {
+		return nil, err
+	}
+
+	newName := filepath.Join(ftp.dir, name.String())
+	err = ftp.fc.ShrinkCache()
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = os.Rename(tempName, newName)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return ftp.Open(ctx, name, chunkCount, stats)
 }
 
-func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource {
+func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
 	plan := planConjoin(sources, stats)
 
 	if plan.chunkCount == 0 {
-		return emptyChunkSource{}
+		return emptyChunkSource{}, nil
 	}
 
 	name := nameFromSuffixes(plan.suffixes())
-	tempName := func() string {
+	tempName, err := func() (string, error) {
 		temp, err := ioutil.TempFile(ftp.dir, tempTablePrefix)
-		d.PanicIfError(err)
-		defer checkClose(temp)
+
+		if err != nil {
+			return "", err
+		}
+
+		defer mustClose(temp)
 
 		for _, sws := range plan.sources {
-			r := sws.source.reader(ctx)
-			n, err := io.CopyN(temp, r, int64(sws.dataLen))
-			d.PanicIfError(err)
-			d.PanicIfFalse(uint64(n) == sws.dataLen)
-		}
-		_, err = temp.Write(plan.mergedIndex)
-		d.PanicIfError(err)
+			r, err := sws.source.reader(ctx)
 
-		index := parseTableIndex(plan.mergedIndex)
+			if err != nil {
+				return "", err
+			}
+
+			n, err := io.CopyN(temp, r, int64(sws.dataLen))
+
+			if err != nil {
+				return "", err
+			}
+
+			if uint64(n) != sws.dataLen {
+				return "", errors.New("failed to copy all data")
+			}
+		}
+
+		_, err = temp.Write(plan.mergedIndex)
+
+		if err != nil {
+			return "", err
+		}
+
+		index, err := parseTableIndex(plan.mergedIndex)
+
+		if err != nil {
+			return "", err
+		}
+
 		if ftp.indexCache != nil {
 			ftp.indexCache.put(name, index)
 		}
-		return temp.Name()
+
+		return temp.Name(), nil
 	}()
 
-	err := os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
-	d.PanicIfError(err)
+	if err != nil {
+		return nil, err
+	}
+
+	err = os.Rename(tempName, filepath.Join(ftp.dir, name.String()))
+
+	if err != nil {
+		return nil, err
+	}
 
 	return ftp.Open(ctx, name, plan.chunkCount, stats)
 }

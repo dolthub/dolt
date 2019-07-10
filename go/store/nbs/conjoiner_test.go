@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"sort"
 	"testing"
 
@@ -28,7 +29,7 @@ func (ts tableSpecsByAscendingCount) Less(i, j int) bool {
 }
 func (ts tableSpecsByAscendingCount) Swap(i, j int) { ts[i], ts[j] = ts[j], ts[i] }
 
-func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
+func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 	count := uint32(0)
 	nextChunk := func() (chunk []byte) {
 		chunk = make([]byte, 4)
@@ -43,7 +44,9 @@ func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 			c := nextChunk()
 			mt.addChunk(computeAddr(c), c)
 		}
-		srcs = append(srcs, p.Persist(context.Background(), mt, nil, &Stats{}))
+		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		assert.NoError(t, err)
+		srcs = append(srcs, cs)
 	}
 	return
 }
@@ -51,8 +54,8 @@ func makeTestSrcs(tableSizes []uint32, p tablePersister) (srcs chunkSources) {
 func TestConjoin(t *testing.T) {
 	// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
 	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
-		for _, src := range makeTestSrcs(tableSizes, p) {
-			specs = append(specs, tableSpec{src.hash(), src.count()})
+		for _, src := range makeTestSrcs(t, tableSizes, p) {
+			specs = append(specs, tableSpec{mustAddr(src.hash()), must.Uint32(src.count())})
 		}
 		return
 	}
@@ -70,17 +73,26 @@ func TestConjoin(t *testing.T) {
 	assertContainAll := func(t *testing.T, p tablePersister, expect, actual []tableSpec) {
 		open := func(specs []tableSpec) (srcs chunkReaderGroup) {
 			for _, sp := range specs {
-				srcs = append(srcs, p.Open(context.Background(), sp.name, sp.chunkCount, nil))
+				cs, err := p.Open(context.Background(), sp.name, sp.chunkCount, nil)
+
+				if err != nil {
+					assert.NoError(t, err)
+				}
+
+				srcs = append(srcs, cs)
 			}
 			return
 		}
 		expectSrcs, actualSrcs := open(expect), open(actual)
-		chunkChan := make(chan extractRecord, expectSrcs.count())
-		expectSrcs.extract(context.Background(), chunkChan)
+		chunkChan := make(chan extractRecord, must.Uint32(expectSrcs.count()))
+		err := expectSrcs.extract(context.Background(), chunkChan)
+		assert.NoError(t, err)
 		close(chunkChan)
 
 		for rec := range chunkChan {
-			assert.True(t, actualSrcs.has(rec.a))
+			has, err := actualSrcs.has(rec.a)
+			assert.NoError(t, err)
+			assert.True(t, has)
 		}
 	}
 
@@ -117,7 +129,8 @@ func TestConjoin(t *testing.T) {
 			t.Run(c.name, func(t *testing.T) {
 				fm, p, upstream := setup(startLock, startRoot, c.precompact)
 
-				conjoin(context.Background(), upstream, fm, p, stats)
+				_, err := conjoin(context.Background(), upstream, fm, p, stats)
+				assert.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				assert.NoError(t, err)
 				assert.True(t, exists)
@@ -133,8 +146,9 @@ func TestConjoin(t *testing.T) {
 			mt := newMemTable(testMemTableSize)
 			data := []byte{0xde, 0xad}
 			mt.addChunk(computeAddr(data), data)
-			src := p.Persist(context.Background(), mt, nil, &Stats{})
-			return tableSpec{src.hash(), src.count()}
+			src, err := p.Persist(context.Background(), mt, nil, &Stats{})
+			assert.NoError(t, err)
+			return tableSpec{mustAddr(src.hash()), must.Uint32(src.count())}
 		}
 		for _, c := range tc {
 			t.Run(c.name, func(t *testing.T) {
@@ -145,7 +159,8 @@ func TestConjoin(t *testing.T) {
 					specs := append([]tableSpec{}, upstream.specs...)
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, append(specs, newTable))
 				}}
-				conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				assert.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				assert.NoError(t, err)
 				assert.True(t, exists)
@@ -164,7 +179,8 @@ func TestConjoin(t *testing.T) {
 				u := updatePreemptManifest{fm, func() {
 					fm.set(constants.NomsVersion, computeAddr([]byte("lock2")), startRoot, upstream.specs[1:])
 				}}
-				conjoin(context.Background(), upstream, u, p, stats)
+				_, err := conjoin(context.Background(), upstream, u, p, stats)
+				assert.NoError(t, err)
 				exists, newUpstream, err := fm.ParseIfExists(context.Background(), stats, nil)
 				assert.NoError(t, err)
 				assert.True(t, exists)

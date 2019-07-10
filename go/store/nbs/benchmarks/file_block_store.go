@@ -20,8 +20,8 @@ type fileBlockStore struct {
 	w  io.WriteCloser
 }
 
-func newFileBlockStore(w io.WriteCloser) chunks.ChunkStore {
-	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}
+func newFileBlockStore(w io.WriteCloser) (chunks.ChunkStore, error) {
+	return fileBlockStore{bufio.NewWriterSize(w, humanize.MiByte), w}, nil
 }
 
 func (fb fileBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, error) {
@@ -32,16 +32,17 @@ func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Has(ctx context.Context, h hash.Hash) bool {
+func (fb fileBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (present hash.HashSet) {
+func (fb fileBlockStore) HasMany(ctx context.Context, hashes hash.HashSet) (present hash.HashSet, err error) {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk) {
-	io.Copy(fb.bw, bytes.NewReader(c.Data()))
+func (fb fileBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
+	_, err := io.Copy(fb.bw, bytes.NewReader(c.Data()))
+	return err
 }
 
 func (fb fileBlockStore) Version() string {
@@ -53,7 +54,9 @@ func (fb fileBlockStore) Close() error {
 	return nil
 }
 
-func (fb fileBlockStore) Rebase(ctx context.Context) {}
+func (fb fileBlockStore) Rebase(ctx context.Context) error {
+	return nil
+}
 
 func (fb fileBlockStore) Stats() interface{} {
 	return nil
@@ -63,11 +66,11 @@ func (fb fileBlockStore) StatsSummary() string {
 	return "Unsupported"
 }
 
-func (fb fileBlockStore) Root(ctx context.Context) hash.Hash {
-	return hash.Hash{}
+func (fb fileBlockStore) Root(ctx context.Context) (hash.Hash, error) {
+	return hash.Hash{}, nil
 }
 
 func (fb fileBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
-	fb.bw.Flush()
-	return true, nil
+	err := fb.bw.Flush()
+	return true, err
 }

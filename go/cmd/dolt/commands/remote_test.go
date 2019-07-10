@@ -5,15 +5,19 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
 )
 
 func TestGetAbsRemoteUrl(t *testing.T) {
-	cwd := "/User/name/datasets"
+	cwd := osutil.PathToNative("/User/name/datasets")
 	testRepoDir := filepath.Join(cwd, "test-repo")
 	fs := filesys.NewInMemFS([]string{cwd, testRepoDir}, nil, cwd)
+	if osutil.IsWindows {
+		cwd = "/" + filepath.ToSlash(cwd)
+	}
 
 	tests := []struct {
 		str            string
@@ -36,7 +40,8 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 			"https",
 			false,
 		},
-		{"ts/emp",
+		{
+			"ts/emp",
 			config.NewMapConfig(map[string]string{
 				env.RemotesApiHostKey: "host.dom",
 			}),

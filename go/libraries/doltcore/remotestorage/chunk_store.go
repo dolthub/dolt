@@ -277,30 +277,36 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 
 // Returns true iff the value at the address |h| is contained in the
 // store
-func (dcs *DoltChunkStore) Has(ctx context.Context, h hash.Hash) bool {
+func (dcs *DoltChunkStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	hashes := hash.HashSet{h: struct{}{}}
-	absent := dcs.HasMany(ctx, hashes)
+	absent, err := dcs.HasMany(ctx, hashes)
 
-	return len(absent) == 0
+	if err != nil {
+		return false, err
+	}
+
+	return len(absent) == 0, nil
 }
 
 const maxHasManyBatchSize = 16 * 1024
 
 // Returns a new HashSet containing any members of |hashes| that are
 // absent from the store.
-func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet) {
+func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	// get the set of hashes that isn't already in the cache
 	notCached := dcs.cache.Has(hashes)
 
 	if len(notCached) == 0 {
-		return notCached
+		return notCached, nil
 	}
 
 	// convert the set to a slice of hashes and a corresponding slice of the byte encoding for those hashes
 	hashSl, byteSl := HashSetToSlices(notCached)
 
-	absent = make(hash.HashSet)
+	absent := make(hash.HashSet)
 	var found []chunks.Chunk
+	var err error
+
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
 		// slice the slices into a batch of hashes
 		currHashSl := hashSl[st:end]
@@ -311,9 +317,8 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 		resp, err := dcs.csClient.HasChunks(ctx, &req)
 
 		if err != nil {
-			rpcErr := NewRpcError(err, "HasMany", dcs.host, req)
-			//follow noms convention
-			panic(rpcErr)
+			err = NewRpcError(err, "HasMany", dcs.host, req)
+			return true
 		}
 
 		numAbsent := len(resp.Absent)
@@ -343,6 +348,10 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 		return false
 	})
 
+	if err != nil {
+		return nil, err
+	}
+
 	if len(found)+len(absent) != len(notCached) {
 		panic("not all chunks were accounted for")
 	}
@@ -351,15 +360,16 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ab
 		dcs.cache.Put(found)
 	}
 
-	return absent
+	return absent, nil
 }
 
 // Put caches c. Upon return, c must be visible to
 // subsequent Get and Has calls, but must not be persistent until a call
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
-func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) {
+func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 	dcs.cache.Put([]chunks.Chunk{c})
+	return nil
 }
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
@@ -369,32 +379,28 @@ func (dcs *DoltChunkStore) Version() string {
 
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
-func (dcs *DoltChunkStore) Rebase(ctx context.Context) {
+func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 	req := &remotesapi.RebaseRequest{RepoId: dcs.getRepoId()}
 	_, err := dcs.csClient.Rebase(ctx, req)
 
 	if err != nil {
-		rpcErr := NewRpcError(err, "Rebase", dcs.host, req)
-
-		// follow noms convention
-		panic(rpcErr)
+		return NewRpcError(err, "Rebase", dcs.host, req)
 	}
+
+	return nil
 }
 
 // Root returns the root of the database as of the time the ChunkStore
 // was opened or the most recent call to Rebase.
-func (dcs *DoltChunkStore) Root(ctx context.Context) hash.Hash {
+func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
 	req := &remotesapi.RootRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.Root(ctx, req)
 
 	if err != nil {
-		rpcErr := NewRpcError(err, "Root", dcs.host, req)
-
-		// follow noms convention
-		panic(rpcErr)
+		return hash.Hash{}, NewRpcError(err, "Root", dcs.host, req)
 	}
 
-	return hash.New(resp.RootHash)
+	return hash.New(resp.RootHash), nil
 }
 
 // Commit atomically attempts to persist all novel Chunks and update the

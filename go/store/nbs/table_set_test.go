@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -96,7 +97,12 @@ func TestTableSetExtract(t *testing.T) {
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	chunkChan := make(chan extractRecord)
-	go func() { defer close(chunkChan); ts.extract(context.Background(), chunkChan) }()
+	go func() {
+		defer close(chunkChan)
+		err := ts.extract(context.Background(), chunkChan)
+
+		assert.NoError(err)
+	}()
 	i := 0
 	for rec := range chunkChan {
 		a := computeAddr(testChunks[i])
@@ -147,5 +153,5 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
-	assert.True(ts.physicalLen() > indexSize(ts.count()))
+	assert.True(must.Uint64(ts.physicalLen()) > indexSize(must.Uint32(ts.count())))
 }

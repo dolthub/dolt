@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 )
 
 type memObj interface {
@@ -63,14 +64,15 @@ func EmptyInMemFS(workingDir string) *InMemFS {
 // NewInMemFS creates an InMemFS with directories and folders provided.
 func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 	if cwd == "" {
-		cwd = "/"
+		cwd = osutil.FileSystemRoot
 	}
+	cwd = osutil.PathToNative(cwd)
 
-	if cwd[0] != byte(filepath.Separator) {
+	if !filepath.IsAbs(cwd) {
 		panic("cwd for InMemFilesys must be absolute path.")
 	}
 
-	fs := &InMemFS{cwd, map[string]memObj{"/": newEmptyDir("/", nil)}}
+	fs := &InMemFS{cwd, map[string]memObj{osutil.FileSystemRoot: newEmptyDir(osutil.FileSystemRoot, nil)}}
 
 	if dirs != nil {
 		for _, dir := range dirs {
@@ -101,7 +103,8 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 }
 
 func (fs *InMemFS) getAbsPath(path string) string {
-	if path[0] == byte(filepath.Separator) {
+	path = fs.pathToNative(path)
+	if strings.HasPrefix(path, osutil.FileSystemRoot) {
 		return filepath.Clean(path)
 	}
 
@@ -256,13 +259,11 @@ func (fs *InMemFS) MkDirs(path string) error {
 	return err
 }
 
-var pathDelim = string(filepath.Separator)
-
 func (fs *InMemFS) mkDirs(path string) (*memDir, error) {
 	path = fs.getAbsPath(path)
-	elements := strings.Split(path, pathDelim)
+	elements := strings.Split(path, osutil.PathDelimiter)
 
-	currPath := "/"
+	currPath := osutil.FileSystemRoot
 	parentObj, ok := fs.objs[currPath]
 
 	if !ok {
@@ -270,7 +271,13 @@ func (fs *InMemFS) mkDirs(path string) (*memDir, error) {
 	}
 
 	parentDir := parentObj.(*memDir)
-	for _, element := range elements {
+	for i, element := range elements {
+		// When iterating Windows-style paths, the first slash is after the volume, e.g. C:/
+		// We check if the first element (like "C:") plus the delimiter is the same as the system root
+		// If so, we skip it as we add the system root when creating the InMemFS
+		if i == 0 && osutil.IsWindows && element + osutil.PathDelimiter == osutil.FileSystemRoot {
+			continue
+		}
 		currPath = filepath.Join(currPath, element)
 
 		if obj, ok := fs.objs[currPath]; !ok {
@@ -353,9 +360,27 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 func (fs *InMemFS) Abs(path string) (string, error) {
+	path = fs.pathToNative(path)
 	if filepath.IsAbs(path) {
 		return path, nil
 	}
 
 	return filepath.Join(fs.cwd, path), nil
+}
+
+func (fs *InMemFS) pathToNative(path string) string {
+	if len(path) >= 1 {
+		if path[0] == '.' {
+			if len(path) == 1 {
+				return fs.cwd
+			}
+			if len(path) >= 2 && (path[1] == '/' || path[1] == '\\') {
+				return filepath.Join(fs.cwd, path[2:])
+			}
+			return filepath.Join(fs.cwd, path)
+		} else if !osutil.StartsWithWindowsVolume(path) && path[0] != '/' && path[0] != '\\' {
+			return filepath.Join(fs.cwd, path)
+		}
+	}
+	return osutil.PathToNative(path)
 }

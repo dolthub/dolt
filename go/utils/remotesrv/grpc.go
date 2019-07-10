@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"google.golang.org/grpc/codes"
@@ -42,7 +41,12 @@ func (rs RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChu
 
 	hashes, hashToIndex := remotestorage.ParseByteSlices(req.Hashes)
 
-	absent := cs.HasMany(ctx, hashes)
+	absent, err := cs.HasMany(ctx, hashes)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, "HasMany failure:"+err.Error())
+	}
+
 	indices := make([]int32, len(absent))
 
 	logger(fmt.Sprintf("missing chunks: %v", indices))
@@ -117,7 +121,11 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
 	hashes, _ := remotestorage.ParseByteSlices(req.Hashes)
-	absent := cs.HasMany(ctx, hashes)
+	absent, err := cs.HasMany(ctx, hashes)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, "HasMany failure:"+err.Error())
+	}
 
 	var locs []*remotesapi.UploadLoc
 	for h := range hashes {
@@ -156,14 +164,10 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 
 	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
 
-	err := pantoerr.PanicToError("Rebase failed", func() error {
-		cs.Rebase(ctx)
-		return nil
-	})
+	err := cs.Rebase(ctx)
 
 	if err != nil {
-		cause := pantoerr.GetRecoveredPanicCause(err).(error)
-		logger(fmt.Sprintf("panic occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, cause))
+		logger(fmt.Sprintf("error occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err))
 		return nil, status.Error(codes.Internal, "Failed to rebase")
 	}
 
@@ -180,15 +184,10 @@ func (rs *RemoteChunkStore) Root(ctx context.Context, req *remotesapi.RootReques
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
 
-	var h hash.Hash
-	err := pantoerr.PanicToError("Root failed", func() error {
-		h = cs.Root(ctx)
-		return nil
-	})
+	h, err := cs.Root(ctx)
 
 	if err != nil {
-		cause := pantoerr.GetRecoveredPanicCause(err)
-		logger(fmt.Sprintf("panic occurred during processing of Root rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, cause))
+		logger(fmt.Sprintf("error occurred during processing of Root rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err))
 		return nil, status.Error(codes.Internal, "Failed to get root")
 	}
 

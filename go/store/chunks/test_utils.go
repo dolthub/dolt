@@ -49,19 +49,19 @@ func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundC
 	return s.ChunkStore.GetMany(ctx, hashes, foundChunks)
 }
 
-func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) bool {
+func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	s.Hases++
 	return s.ChunkStore.Has(ctx, h)
 }
 
-func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) hash.HashSet {
+func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
 	s.Hases += len(hashes)
 	return s.ChunkStore.HasMany(ctx, hashes)
 }
 
-func (s *TestStoreView) Put(ctx context.Context, c Chunk) {
+func (s *TestStoreView) Put(ctx context.Context, c Chunk) error {
 	s.Writes++
-	s.ChunkStore.Put(ctx, c)
+	return s.ChunkStore.Put(ctx, c)
 }
 
 type TestStoreFactory struct {

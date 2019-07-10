@@ -66,6 +66,7 @@ func TestDynamoManifestUpdateWontClobberOldVersion(t *testing.T) {
 	badRoot := hash.Of([]byte("bad root"))
 	ddb.putRecord(db, lock[:], badRoot[:], "0", "")
 
+	// TODO: fix panics
 	assert.Panics(func() {
 		mm.Update(context.Background(), lock, manifestContents{vers: constants.NomsVersion}, stats, nil)
 	})

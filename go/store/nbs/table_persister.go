@@ -24,14 +24,14 @@ import (
 type tablePersister interface {
 	// Persist makes the contents of mt durable. Chunks already present in
 	// |haver| may be dropped in the process.
-	Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) chunkSource
+	Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error)
 
 	// ConjoinAll conjoins all chunks in |sources| into a single, new
 	// chunkSource.
-	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) chunkSource
+	ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error)
 
 	// Open a table named |name|, containing |chunkCount| chunks.
-	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) chunkSource
+	Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error)
 }
 
 // indexCache provides sized storage for table indices. While getting and/or
@@ -91,12 +91,33 @@ type chunkSourcesByAscendingCount chunkSources
 func (csbc chunkSourcesByAscendingCount) Len() int { return len(csbc) }
 func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
 	srcI, srcJ := csbc[i], csbc[j]
-	if srcI.count() == srcJ.count() {
-		hi, hj := srcI.hash(), srcJ.hash()
+	cntI, err := srcI.count()
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	cntJ, err := srcJ.count()
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	if cntI == cntJ {
+		hi, err := srcI.hash()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		hj, err := srcJ.hash()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
-	return srcI.count() < srcJ.count()
+
+	return cntI < cntJ
 }
+
 func (csbc chunkSourcesByAscendingCount) Swap(i, j int) { csbc[i], csbc[j] = csbc[j], csbc[i] }
 
 type chunkSourcesByDescendingDataSize []sourceWithSize
@@ -105,7 +126,16 @@ func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds) }
 func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
 	swsI, swsJ := csbds[i], csbds[j]
 	if swsI.dataLen == swsJ.dataLen {
-		hi, hj := swsI.source.hash(), swsJ.source.hash()
+		hi, err := swsI.source.hash()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		hj, err := swsJ.source.hash()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 	return swsI.dataLen > swsJ.dataLen
@@ -132,8 +162,17 @@ func (cp compactionPlan) suffixes() []byte {
 func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan) {
 	var totalUncompressedData uint64
 	for _, src := range sources {
-		totalUncompressedData += src.uncompressedLen()
-		index := src.index()
+		uncmp, err := src.uncompressedLen()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		totalUncompressedData += uncmp
+		index, err := src.index()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		plan.chunkCount += index.chunkCount
 
 		// Calculate the amount of chunk data in |src|
@@ -150,14 +189,23 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan) {
 	prefixIndexRecs := make(prefixIndexSlice, 0, plan.chunkCount)
 	var ordinalOffset uint32
 	for _, sws := range plan.sources {
-		index := sws.source.index()
+		index, err := sws.source.index()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range index.prefixes {
 			rec := prefixIndexRec{prefix: prefix, order: ordinalOffset + index.ordinals[j]}
 			prefixIndexRecs = append(prefixIndexRecs, rec)
 		}
-		ordinalOffset += sws.source.count()
+
+		cnt, err := sws.source.count()
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
+		ordinalOffset += cnt
 
 		// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
 		// Bring over the lengths block, in order

@@ -7,6 +7,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io/ioutil"
 	"os"
@@ -63,7 +64,9 @@ func TestMemTableAddHasGetChunk(t *testing.T) {
 	assertChunksInReader(chunks, mt, assert)
 
 	for _, c := range chunks {
-		assert.Equal(bytes.Compare(c, mt.get(context.Background(), computeAddr(c), &Stats{})), 0)
+		data, err := mt.get(context.Background(), computeAddr(c), &Stats{})
+		assert.NoError(err)
+		assert.Equal(bytes.Compare(c, data), 0)
 	}
 
 	notPresent := []byte("nope")
@@ -115,16 +118,23 @@ func TestMemTableWrite(t *testing.T) {
 	}
 
 	td1, _ := buildTable(chunks[1:2])
-	td2, _ := buildTable(chunks[2:])
-	tr1 := newTableReader(parseTableIndex(td1), tableReaderAtFromBytes(td1), fileBlockSize)
-	tr2 := newTableReader(parseTableIndex(td2), tableReaderAtFromBytes(td2), fileBlockSize)
+	ti1, err := parseTableIndex(td1)
+	assert.NoError(err)
+	tr1 := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	assert.True(tr1.has(computeAddr(chunks[1])))
+
+	td2, _ := buildTable(chunks[2:])
+	ti2, err := parseTableIndex(td2)
+	assert.NoError(err)
+	tr2 := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
 	assert.True(tr2.has(computeAddr(chunks[2])))
 
 	_, data, count := mt.write(chunkReaderGroup{tr1, tr2}, &Stats{})
 	assert.Equal(uint32(1), count)
 
-	outReader := newTableReader(parseTableIndex(data), tableReaderAtFromBytes(data), fileBlockSize)
+	ti, err := parseTableIndex(data)
+	assert.NoError(err)
+	outReader := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	assert.True(outReader.has(computeAddr(chunks[0])))
 	assert.False(outReader.has(computeAddr(chunks[1])))
 	assert.False(outReader.has(computeAddr(chunks[2])))
@@ -178,58 +188,82 @@ func (o *outOfLineSnappy) Encode(dst, src []byte) []byte {
 
 type chunkReaderGroup []chunkReader
 
-func (crg chunkReaderGroup) has(h addr) bool {
+func (crg chunkReaderGroup) has(h addr) (bool, error) {
 	for _, haver := range crg {
-		if haver.has(h) {
-			return true
+		ok, err := haver.has(h)
+
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
 		}
 	}
-	return false
+
+	return false, nil
 }
 
-func (crg chunkReaderGroup) get(ctx context.Context, h addr, stats *Stats) []byte {
+func (crg chunkReaderGroup) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
 	for _, haver := range crg {
-		if data := haver.get(ctx, h, stats); data != nil {
-			return data
+		if data, err := haver.get(ctx, h, stats); err != nil {
+			return nil, err
+		} else if data != nil {
+			return data, nil
 		}
 	}
+
+	return nil, nil
+}
+
+func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
+	for _, haver := range crg {
+		remaining, err := haver.hasMany(addrs)
+
+		if err != nil {
+			return false, err
+		}
+
+		if !remaining {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+	for _, haver := range crg {
+		remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
+
+		if !remaining {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (crg chunkReaderGroup) count() (count uint32, err error) {
+	for _, haver := range crg {
+		count += must.Uint32(haver.count())
+	}
+	return
+}
+
+func (crg chunkReaderGroup) uncompressedLen() (data uint64, err error) {
+	for _, haver := range crg {
+		data += must.Uint64(haver.uncompressedLen())
+	}
+	return
+}
+
+func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRecord) error {
+	for _, haver := range crg {
+		err := haver.extract(ctx, chunks)
+
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
-}
-
-func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (remaining bool) {
-	for _, haver := range crg {
-		if !haver.hasMany(addrs) {
-			return false
-		}
-	}
-	return true
-}
-
-func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, stats *Stats) (remaining bool) {
-	for _, haver := range crg {
-		if !haver.getMany(ctx, reqs, foundChunks, wg, stats) {
-			return false
-		}
-	}
-	return true
-}
-
-func (crg chunkReaderGroup) count() (count uint32) {
-	for _, haver := range crg {
-		count += haver.count()
-	}
-	return
-}
-
-func (crg chunkReaderGroup) uncompressedLen() (data uint64) {
-	for _, haver := range crg {
-		data += haver.uncompressedLen()
-	}
-	return
-}
-
-func (crg chunkReaderGroup) extract(ctx context.Context, chunks chan<- extractRecord) {
-	for _, haver := range crg {
-		haver.extract(ctx, chunks)
-	}
 }

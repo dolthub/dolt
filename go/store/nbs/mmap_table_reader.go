@@ -6,9 +6,12 @@ package nbs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/edsrzf/mmap-go"
 	"io"
 	"math"
+	"os"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -36,7 +39,7 @@ func init() {
 	}
 }
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) chunkSource {
+func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) (chunkSource, error) {
 	path := filepath.Join(dir, h.String())
 
 	var index tableIndex
@@ -48,40 +51,94 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 	}
 
 	if !found {
-		f, err := fc.RefFile(path)
-		d.PanicIfError(err)
-		defer fc.UnrefFile(path)
+		f := func() (ti tableIndex, err error) {
+			var f *os.File
+			f, err = fc.RefFile(path)
 
-		fi, err := f.Stat()
-		d.PanicIfError(err)
-		d.PanicIfTrue(fi.Size() < 0)
-		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
-		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
-		aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
-		d.PanicIfTrue(fi.Size()-aligned > maxInt)
+			if err != nil {
+				return
+			}
 
-		mm, err := mmap.MapRegion(f, int(fi.Size()-aligned), mmap.RDONLY, 0, aligned)
-		d.PanicIfError(err)
-		buff := []byte(mm)
-		index = parseTableIndex(buff[indexOffset-aligned:])
+			defer func() {
+				unrefErr := fc.UnrefFile(path)
 
-		if indexCache != nil {
-			indexCache.put(h, index)
+				if unrefErr != nil {
+					err = unrefErr
+				}
+			}()
+
+			var fi os.FileInfo
+			fi, err = f.Stat()
+
+			if err != nil {
+				return
+			}
+
+			if fi.Size() < 0 {
+				// Size returns the number of bytes for regular files and is system dependant for others (Some of which can be negative).
+				err = fmt.Errorf("%s has invalid size: %d", path, fi.Size())
+				return
+			}
+
+			// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
+			indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
+			aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
+
+			if fi.Size()-aligned > maxInt {
+				err = fmt.Errorf("%s - size: %d alignment: %d> maxInt: %d", path, fi.Size(), aligned, maxInt)
+				return
+			}
+
+			var mm mmap.MMap
+			mm, err = mmap.MapRegion(f, int(fi.Size()-aligned), mmap.RDONLY, 0, aligned)
+
+			if err != nil {
+				return
+			}
+
+			defer func() {
+				unmapErr := mm.Unmap()
+
+				if unmapErr != nil {
+					err = unmapErr
+				}
+			}()
+
+			buff := []byte(mm)
+			ti, err = parseTableIndex(buff[indexOffset-aligned:])
+
+			if err != nil {
+				return
+			}
+
+			if indexCache != nil {
+				indexCache.put(h, ti)
+			}
+
+			return
 		}
-		err = mm.Unmap()
-		d.PanicIfError(err)
+
+		var err error
+		index, err = f()
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	d.PanicIfFalse(chunkCount == index.chunkCount)
+	if chunkCount != index.chunkCount {
+		return nil, errors.New("unexpected chunk count")
+	}
+
 	return &mmapTableReader{
 		newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize),
 		fc,
 		h,
-	}
+	}, nil
 }
 
-func (mmtr *mmapTableReader) hash() addr {
-	return mmtr.h
+func (mmtr *mmapTableReader) hash() (addr, error) {
+	return mmtr.h, nil
 }
 
 type cacheReaderAt struct {
@@ -101,7 +158,10 @@ func (cra *cacheReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int
 		stats.FileReadLatency.SampleTimeSince(t1)
 	}()
 
-	defer cra.fc.UnrefFile(cra.path)
+	defer func() {
+		err := cra.fc.UnrefFile(cra.path)
+		d.PanicIfError(err)
+	}()
 
 	return r.ReadAt(p, off)
 }
