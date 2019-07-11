@@ -2,6 +2,7 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
@@ -25,7 +26,8 @@ import (
 
 var sqlShortDesc = "Runs a SQL query"
 var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
-results. With the -q option, runs the given query and prints any results, then exits.
+results. With the -q option, runs the given query and prints any results, then exits. With the -s
+option, a MySQL-compatible server is started which can be connected to by MySQL clients.
 
 THIS FUNCTIONALITY IS EXPERIMENTAL and being intensively developed. Feedback is welcome: 
 dolt-interest@liquidata.co
@@ -52,21 +54,41 @@ Known limitations:
 var sqlSynopsis = []string{
 	"",
 	"-q <query>",
+	"-s [-a <host>] [-p <port>] [-u <user>] [-w <password>] [-t <timeout>] [-l <loglevel>] [-r]",
 }
 
-// TODO: add a port flag and other things needed to support the serve command.
 const (
 	queryFlag = "query"
 	serveFlag = "serve"
+	hostFlag  = "host"
+	portFlag  = "port"
+	userFlag = "user"
+	passwordFlag = "password"
+	timeoutFlag = "timeout"
+	readonlyFlag = "readonly"
+	logLevelFlag = "loglevel"
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
 func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	return sqlImpl(commandStr, args, dEnv, nil)
+}
+
+func sqlImpl(commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+	serverConfig := DefaultServerConfig()
+
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
 	ap.SupportsFlag(serveFlag, "s", "Start a SQL server")
+	ap.SupportsString(hostFlag, "a", "Host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host))
+	ap.SupportsUint(portFlag, "p", "Port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port))
+	ap.SupportsString(userFlag, "u", "User", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User))
+	ap.SupportsString(passwordFlag, "w", "Password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password))
+	ap.SupportsInt(timeoutFlag, "t", "Connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections (default `%v`)", serverConfig.Timeout))
+	ap.SupportsFlag(readonlyFlag, "r", "Disables modification of the database")
+	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel))
 	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
 
 	apr := cli.ParseArgs(ap, args, help)
@@ -78,7 +100,38 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if _, ok := apr.GetValue(serveFlag); ok {
-		return serve(dEnv, root)
+		if host, ok := apr.GetValue(hostFlag); ok {
+			serverConfig.Host = host
+		}
+		if port, ok := apr.GetInt(portFlag); ok {
+			serverConfig.Port = port
+		}
+		if user, ok := apr.GetValue(userFlag); ok {
+			serverConfig.User = user
+		}
+		if password, ok := apr.GetValue(passwordFlag); ok {
+			serverConfig.Password = password
+		}
+		if timeout, ok := apr.GetInt(timeoutFlag); ok {
+			serverConfig.Timeout = timeout
+		}
+		if _, ok := apr.GetValue(readonlyFlag); ok {
+			serverConfig.ReadOnly = true
+		}
+		if logLevel, ok := apr.GetValue(logLevelFlag); ok {
+			serverConfig.LogLevel = LogLevel(logLevel)
+		}
+		if startError, closeError := serve(serverConfig, root, serverController); startError != nil || closeError != nil {
+			if startError != nil {
+				cli.PrintErrln(startError)
+			}
+			if closeError != nil {
+				cli.PrintErrln(closeError)
+			}
+			return 1
+		} else {
+			return 0
+		}
 	}
 
 	// run a single command and exit
@@ -100,12 +153,6 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return commands.HandleVErrAndExitCode(commands.UpdateWorkingWithVErr(dEnv, root), usage)
 	}
 
-	return 0
-}
-
-// TODO: implement me
-func serve(doltEnv *env.DoltEnv, value *doltdb.RootValue) int {
-	cli.Println("Started dolt SQL server (not really)")
 	return 0
 }
 
