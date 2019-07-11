@@ -28,7 +28,8 @@ func TestMmapTableReader(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, h := buildTable(chunks)
+	tableData, h, err := buildTable(chunks)
+	assert.NoError(err)
 	err = ioutil.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
 	assert.NoError(err)
 

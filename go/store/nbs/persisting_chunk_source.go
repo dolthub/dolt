@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 var ErrNoReader = errors.New("could not get reader")
@@ -183,7 +182,11 @@ func (ccs *persistingChunkSource) reader(ctx context.Context) (io.Reader, error)
 	if err != nil {
 		return nil, err
 	}
-	d.Chk.True(ccs.cs != nil)
+
+	if ccs.cs == nil {
+		return nil, ErrNoChunkSource
+	}
+
 	return ccs.cs.reader(ctx)
 }
 
@@ -194,7 +197,10 @@ func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) 
 		return 0, false, err
 	}
 
-	d.Chk.True(ccs.cs != nil)
+	if ccs.cs == nil {
+		return 0, false, ErrNoChunkSource
+	}
+
 	return ccs.cs.calcReads(reqs, blockSize)
 }
 
@@ -205,7 +211,10 @@ func (ccs *persistingChunkSource) extract(ctx context.Context, chunks chan<- ext
 		return err
 	}
 
-	d.Chk.True(ccs.cs != nil)
+	if ccs.cs == nil {
+		return ErrNoChunkSource
+	}
+
 	return ccs.cs.extract(ctx, chunks)
 }
 

@@ -161,7 +161,11 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 			count++
 		}
 	}
-	tableSize, name := tw.finish()
+	tableSize, name, err := tw.finish()
+
+	if err != nil {
+		return addr{}, nil, 0, err
+	}
 
 	if count > 0 {
 		stats.BytesPerPersist.Sample(uint64(tableSize))

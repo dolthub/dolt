@@ -7,14 +7,15 @@ package main
 import (
 	"bufio"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"io"
 	"os"
 
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs/benchmarks/gen"
 )
@@ -70,38 +71,69 @@ type offsetTuple struct {
 	l uint64
 }
 
-func (src *dataSource) PrimeFilesystemCache() {
+func (src *dataSource) PrimeFilesystemCache() error {
 	bufData := bufio.NewReaderSize(src.data, 10*humanize.MiByte)
 	tuples := make(chan offsetTuple, 16)
+
+	ae := nbs.NewAtomicError()
 	go func() {
-		src.readTuples(tuples)
+		err := src.readTuples(tuples)
+		ae.SetIfError(err)
 		close(tuples)
 	}()
 
 	for ot := range tuples {
+		if ae.IsSet() {
+			break
+		}
+
 		buff := make([]byte, ot.l)
 		n, err := io.ReadFull(bufData, buff)
-		d.Chk.NoError(err)
-		d.Chk.True(uint64(n) == ot.l)
+
+		if err != nil {
+			return err
+		}
+
+		if uint64(n) != ot.l {
+			return errors.New("failed to read all data")
+		}
 	}
+
+	return ae.Get()
 }
 
-func (src *dataSource) ReadChunks(chunkChan chan<- *chunks.Chunk) {
+func (src *dataSource) ReadChunks(chunkChan chan<- *chunks.Chunk) error {
 	bufData := bufio.NewReaderSize(src.data, humanize.MiByte)
 	tuples := make(chan offsetTuple, 1024)
+
+	ae := nbs.NewAtomicError()
 	go func() {
-		src.readTuples(tuples)
+		err := src.readTuples(tuples)
+		ae.SetIfError(err)
 		close(tuples)
 	}()
 
 	for ot := range tuples {
+		if ae.IsSet() {
+			break
+		}
+
 		buff := make([]byte, ot.l)
 		n, err := io.ReadFull(bufData, buff)
-		d.Chk.NoError(err)
-		d.Chk.True(uint64(n) == ot.l)
+
+		if err != nil {
+			return err
+		}
+
+		if uint64(n) != ot.l {
+			return errors.New("failed to read the entire chunk")
+		}
+
 		c := chunks.NewChunkWithHash(ot.h, buff)
 		chunkChan <- &c
 	}
+
+	return ae.Get()
 }
 
 func (src *dataSource) GetHashes() hashSlice {
@@ -110,8 +142,12 @@ func (src *dataSource) GetHashes() hashSlice {
 	return out
 }
 
-func (src *dataSource) readTuples(tuples chan<- offsetTuple) {
-	src.reset()
+func (src *dataSource) readTuples(tuples chan<- offsetTuple) error {
+	err := src.reset()
+
+	if err != nil {
+		return err
+	}
 
 	otBuf := [gen.OffsetTupleLen]byte{}
 	cm := bufio.NewReaderSize(src.cm, humanize.MiByte)
@@ -120,26 +156,55 @@ func (src *dataSource) readTuples(tuples chan<- offsetTuple) {
 	for src.dataRead < src.totalData {
 		n, err := io.ReadFull(cm, otBuf[:])
 		if err != nil {
-			d.Chk.True(err == io.EOF)
-			return
+			if err != io.EOF {
+				return err
+			}
+
+			return nil
 		}
-		d.Chk.True(n == gen.OffsetTupleLen)
+
+		if n != gen.OffsetTupleLen {
+			return errors.New("failed to read all data")
+		}
+
 		ot.h = hash.New(otBuf[:20])
 		ot.l = uint64(binary.BigEndian.Uint32(otBuf[20:]))
 		src.dataRead += ot.l
 		tuples <- ot
 	}
+
+	return nil
 }
 
-func (src *dataSource) reset() {
+func (src *dataSource) reset() error {
 	_, err := src.data.Seek(0, io.SeekStart)
-	d.Chk.NoError(err)
+
+	if err != nil {
+		return err
+	}
+
 	_, err = src.cm.Seek(0, io.SeekStart)
-	d.Chk.NoError(err)
+
+	if err != nil {
+		return err
+	}
+
 	src.dataRead = 0
+
+	return nil
 }
 
-func (src *dataSource) Close() {
-	d.Chk.NoError(src.data.Close())
-	d.Chk.NoError(src.cm.Close())
+func (src *dataSource) Close() error {
+	dataErr := src.data.Close()
+	cmErr := src.cm.Close()
+
+	if dataErr != nil {
+		return dataErr
+	}
+
+	if cmErr != nil {
+		return cmErr
+	}
+
+	return nil
 }

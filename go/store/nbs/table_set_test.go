@@ -6,7 +6,6 @@ package nbs
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -174,5 +173,5 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
-	assert.True(must.Uint64(ts.physicalLen()) > indexSize(must.Uint32(ts.count())))
+	assert.True(mustUint64(ts.physicalLen()) > indexSize(mustUint32(ts.count())))
 }

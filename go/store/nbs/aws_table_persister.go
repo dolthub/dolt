@@ -16,7 +16,6 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
 
@@ -107,10 +106,8 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 
 	if s3p.tc != nil {
 		go func() {
-			err := s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
-
-			// TODO: fix panics
-			d.PanicIfError(err)
+			// Ignore errors.  Will be reloaded on read if needed, or error will occur at that time.
+			_ = s3p.tc.store(name, bytes.NewReader(data), uint64(len(data)))
 		}()
 	}
 
@@ -297,11 +294,9 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 	if s3p.tc != nil {
 		go func() {
-			// load conjoined table to the cache
-			err := s3p.loadIntoCache(ctx, name)
-
-			// TODO: fix panics
-			d.PanicIfError(err)
+			// load conjoined table to the cache.  Ignore errors.  Will be reloaded on read if needed, or error will occur
+			// at that time.
+			_ = s3p.loadIntoCache(ctx, name)
 		}()
 	}
 

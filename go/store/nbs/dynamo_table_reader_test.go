@@ -24,7 +24,8 @@ func TestDynamoTableReaderAt(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, h := buildTable(chunks)
+	tableData, h, err := buildTable(chunks)
+	assert.NoError(t, err)
 	ddb.putData(fmtTableName(h), tableData)
 
 	t.Run("ddbTableStore", func(t *testing.T) {

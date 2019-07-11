@@ -10,7 +10,6 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"hash/crc32"
 	"io"
 	"sync"
@@ -160,11 +159,6 @@ func parseAddr(b []byte) (addr, error) {
 func ValidateAddr(s string) bool {
 	_, err := encoding.DecodeString(s)
 	return err == nil
-}
-
-func mustAddr(h addr, err error) addr {
-	d.PanicIfError(err)
-	return h
 }
 
 type addrSlice []addr

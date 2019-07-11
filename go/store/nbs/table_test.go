@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func buildTable(chunks [][]byte) ([]byte, addr) {
+func buildTable(chunks [][]byte) ([]byte, addr, error) {
 	totalData := uint64(0)
 	for _, chunk := range chunks {
 		totalData += uint64(len(chunk))
@@ -33,8 +33,13 @@ func buildTable(chunks [][]byte) ([]byte, addr) {
 		tw.addChunk(computeAddr(chunk), chunk)
 	}
 
-	length, blockHash := tw.finish()
-	return buff[:length], blockHash
+	length, blockHash, err := tw.finish()
+
+	if err != nil {
+		return nil, addr{}, err
+	}
+
+	return buff[:length], blockHash, nil
 }
 
 func mustGetString(assert *assert.Assertions, ctx context.Context, tr tableReader, data []byte) string {
@@ -52,7 +57,8 @@ func TestSimple(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, _ := buildTable(chunks)
+	tableData, _, err := buildTable(chunks)
+	assert.NoError(err)
 	ti, err := parseTableIndex(tableData)
 	assert.NoError(err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
@@ -97,7 +103,8 @@ func TestHasMany(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, _ := buildTable(chunks)
+	tableData, _, err := buildTable(chunks)
+	assert.NoError(err)
 	ti, err := parseTableIndex(tableData)
 	assert.NoError(err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
@@ -144,7 +151,8 @@ func TestHasManySequentialPrefix(t *testing.T) {
 		tw.addChunk(a, bogusData)
 	}
 
-	length, _ := tw.finish()
+	length, _, err := tw.finish()
+	assert.NoError(err)
 	buff = buff[:length]
 
 	ti, err := parseTableIndex(buff)
@@ -173,7 +181,8 @@ func TestGetMany(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, _ := buildTable(data)
+	tableData, _, err := buildTable(data)
+	assert.NoError(err)
 	ti, err := parseTableIndex(tableData)
 	assert.NoError(err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
@@ -213,7 +222,8 @@ func TestCalcReads(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, _ := buildTable(chunks)
+	tableData, _, err := buildTable(chunks)
+	assert.NoError(err)
 	ti, err := parseTableIndex(tableData)
 	assert.NoError(err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
@@ -248,7 +258,8 @@ func TestExtract(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, _ := buildTable(chunks)
+	tableData, _, err := buildTable(chunks)
+	assert.NoError(err)
 	ti, err := parseTableIndex(tableData)
 	assert.NoError(err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
@@ -285,7 +296,8 @@ func Test65k(t *testing.T) {
 		chunks[i] = dataFn(i)
 	}
 
-	tableData, _ := buildTable(chunks)
+	tableData, _, err := buildTable(chunks)
+	assert.NoError(err)
 	ti, err := parseTableIndex(tableData)
 	assert.NoError(err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
@@ -336,7 +348,8 @@ func doTestNGetMany(t *testing.T, count int) {
 		data[i] = dataFn(i)
 	}
 
-	tableData, _ := buildTable(data)
+	tableData, _, err := buildTable(data)
+	assert.NoError(err)
 	ti, err := parseTableIndex(tableData)
 	assert.NoError(err)
 	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
@@ -384,6 +397,7 @@ func TestEmpty(t *testing.T) {
 
 	buff := make([]byte, footerSize)
 	tw := newTableWriter(buff, nil)
-	length, _ := tw.finish()
+	length, _, err := tw.finish()
+	assert.NoError(err)
 	assert.True(length == footerSize)
 }

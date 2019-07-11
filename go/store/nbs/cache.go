@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -83,6 +82,12 @@ func (nbc *NomsBlockCache) Count() (uint32, error) {
 
 // Destroy drops the cache and deletes any backing storage.
 func (nbc *NomsBlockCache) Destroy() error {
-	d.Chk.NoError(nbc.chunks.Close())
-	return os.RemoveAll(nbc.dbDir)
+	chunkErr := nbc.chunks.Close()
+	remErr := os.RemoveAll(nbc.dbDir)
+
+	if chunkErr != nil {
+		return chunkErr
+	}
+
+	return remErr
 }
