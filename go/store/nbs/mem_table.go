@@ -7,7 +7,6 @@ package nbs
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"sync"
 
@@ -30,7 +29,11 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 	}
 
 	var stats Stats
-	name, data, count := mt.write(nil, &stats)
+	name, data, count, err := mt.write(nil, &stats)
+
+	if err != nil {
+		return "", nil, err
+	}
 
 	if count != uint32(len(chunks)) {
 		return "", nil, errors.New("didn't write everything")
@@ -135,7 +138,7 @@ func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) er
 	return nil
 }
 
-func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []byte, count uint32) {
+func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []byte, count uint32, err error) {
 	maxSize := maxTableSize(uint64(len(mt.order)), mt.totalData)
 	buff := make([]byte, maxSize)
 	tw := newTableWriter(buff, mt.snapper)
@@ -144,8 +147,9 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 		sort.Sort(hasRecordByPrefix(mt.order)) // hasMany() requires addresses to be sorted.
 		_, err := haver.hasMany(mt.order)
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return addr{}, nil, 0, err
+		}
 
 		sort.Sort(hasRecordByOrder(mt.order)) // restore "insertion" order for write
 	}
@@ -166,5 +170,5 @@ func (mt *memTable) write(haver chunkReader, stats *Stats) (name addr, data []by
 		stats.ChunksPerPersist.Sample(uint64(count))
 	}
 
-	return name, buff[:tableSize], count
+	return name, buff[:tableSize], count, nil
 }

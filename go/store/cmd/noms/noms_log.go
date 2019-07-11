@@ -264,22 +264,36 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 		meta := m.(types.Struct)
 		mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 		pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-		err := d.Try(func() {
-			types.TypeOf(meta).Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
-				v := meta.Get(fieldName)
-				fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
-				// Encode dates as formatted string if this is a top-level meta
-				// field of type datetime.DateTimeType
-				if types.TypeOf(v).Equals(datetime.DateTimeType) {
-					var dt datetime.DateTime
-					dt.UnmarshalNoms(ctx, v)
-					fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
-				} else {
-					types.WriteEncodedValue(ctx, pw, v)
+
+		var err error
+		types.TypeOf(meta).Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
+			if err != nil {
+				return
+			}
+
+			v := meta.Get(fieldName)
+			fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
+			// Encode dates as formatted string if this is a top-level meta
+			// field of type datetime.DateTimeType
+			if types.TypeOf(v).Equals(datetime.DateTimeType) {
+				var dt datetime.DateTime
+				err = dt.UnmarshalNoms(ctx, v)
+
+				if err != nil {
+					return
 				}
-				fmt.Fprintln(pw)
-			})
+
+				fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
+			} else {
+				err = types.WriteEncodedValue(ctx, pw, v)
+
+				if err != nil {
+					return
+				}
+			}
+			fmt.Fprintln(pw)
 		})
+
 		return int(pw.NumLines), err
 	}
 	return lineno, nil

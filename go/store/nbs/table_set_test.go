@@ -16,18 +16,23 @@ var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2"
 
 func TestTableSetPrependEmpty(t *testing.T) {
 	ts := newFakeTableSet().Prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
-	assert.Empty(t, ts.ToSpecs())
+	specs, err := ts.ToSpecs()
+	assert.NoError(t, err)
+	assert.Empty(t, specs)
 }
 
 func TestTableSetPrepend(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
-	assert.Empty(ts.ToSpecs())
+	specs, err := ts.ToSpecs()
+	assert.NoError(err)
+	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
-	firstSpecs := ts.ToSpecs()
+	firstSpecs, err := ts.ToSpecs()
+	assert.NoError(err)
 	assert.Len(firstSpecs, 1)
 
 	mt = newMemTable(testMemTableSize)
@@ -35,7 +40,8 @@ func TestTableSetPrepend(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
-	secondSpecs := ts.ToSpecs()
+	secondSpecs, err := ts.ToSpecs()
+	assert.NoError(err)
 	assert.Len(secondSpecs, 2)
 	assert.Equal(firstSpecs, secondSpecs[1:])
 }
@@ -43,7 +49,8 @@ func TestTableSetPrepend(t *testing.T) {
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
-	assert.Empty(ts.ToSpecs())
+	specs, err := ts.ToSpecs()
+	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
@@ -56,14 +63,17 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
-	specs := ts.ToSpecs()
+	specs, err = ts.ToSpecs()
+	assert.NoError(err)
 	assert.Len(specs, 2)
 }
 
 func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
-	assert.Empty(ts.ToSpecs())
+	specs, err := ts.ToSpecs()
+	assert.NoError(err)
+	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
@@ -76,14 +86,17 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
-	ts = ts.Flatten()
+	ts, err = ts.Flatten()
+	assert.NoError(err)
 	assert.EqualValues(ts.Size(), 2)
 }
 
 func TestTableSetExtract(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
-	assert.Empty(ts.ToSpecs())
+	specs, err := ts.ToSpecs()
+	assert.NoError(err)
+	assert.Empty(specs)
 
 	// Put in one table
 	mt := newMemTable(testMemTableSize)
@@ -126,24 +139,32 @@ func TestTableSetRebase(t *testing.T) {
 		return ts
 	}
 	fullTS := newTableSet(persister)
-	assert.Empty(fullTS.ToSpecs())
+	specs, err := fullTS.ToSpecs()
+	assert.NoError(err)
+	assert.Empty(specs)
 	fullTS = insert(fullTS, testChunks...)
-	fullTS = fullTS.Flatten()
+	fullTS, err = fullTS.Flatten()
+	assert.NoError(err)
 
 	ts := newTableSet(persister)
 	ts = insert(ts, testChunks[0])
 	assert.Equal(1, ts.Size())
-	ts = ts.Flatten()
+	ts, err = ts.Flatten()
+	assert.NoError(err)
 	ts = insert(ts, []byte("novel"))
 
-	ts = ts.Rebase(context.Background(), fullTS.ToSpecs(), nil)
+	specs, err = fullTS.ToSpecs()
+	ts, err = ts.Rebase(context.Background(), specs, nil)
+	assert.NoError(err)
 	assert.Equal(4, ts.Size())
 }
 
 func TestTableSetPhysicalLen(t *testing.T) {
 	assert := assert.New(t)
 	ts := newFakeTableSet()
-	assert.Empty(ts.ToSpecs())
+	specs, err := ts.ToSpecs()
+	assert.NoError(err)
+	assert.Empty(specs)
 	mt := newMemTable(testMemTableSize)
 	mt.addChunk(computeAddr(testChunks[0]), testChunks[0])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})

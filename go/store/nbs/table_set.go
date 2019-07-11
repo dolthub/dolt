@@ -6,10 +6,10 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 const concurrentCompactions = 5
@@ -327,29 +327,32 @@ func (ts tableSet) extract(ctx context.Context, chunks chan<- extractRecord) err
 
 // Flatten returns a new tableSet with |upstream| set to the union of ts.novel
 // and ts.upstream.
-func (ts tableSet) Flatten() (flattened tableSet) {
-	flattened = tableSet{
+func (ts tableSet) Flatten() (tableSet, error) {
+	flattened := tableSet{
 		upstream: make(chunkSources, 0, ts.Size()),
 		p:        ts.p,
 		rl:       ts.rl,
 	}
+
 	for _, src := range ts.novel {
 		cnt, err := src.count()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return tableSet{}, err
+		}
 
 		if cnt > 0 {
 			flattened.upstream = append(flattened.upstream, src)
 		}
 	}
+
 	flattened.upstream = append(flattened.upstream, ts.upstream...)
-	return
+	return flattened, nil
 }
 
 // Rebase returns a new tableSet holding the novel tables managed by |ts| and
 // those specified by |specs|.
-func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) tableSet {
+func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
 	merged := tableSet{
 		novel:    make(chunkSources, 0, len(ts.novel)),
 		upstream: make(chunkSources, 0, len(specs)),
@@ -361,8 +364,9 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	for _, t := range ts.novel {
 		cnt, err := t.count()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return tableSet{}, err
+		}
 
 		if cnt > 0 {
 			merged.novel = append(merged.novel, t)
@@ -397,25 +401,28 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	}
 	wg.Wait()
 
-	// TODO: fix panics
-	d.PanicIfError(ae.Get())
+	if err := ae.Get(); err != nil {
+		return tableSet{}, err
+	}
 
-	return merged
+	return merged, nil
 }
 
-func (ts tableSet) ToSpecs() []tableSpec {
+func (ts tableSet) ToSpecs() ([]tableSpec, error) {
 	tableSpecs := make([]tableSpec, 0, ts.Size())
 	for _, src := range ts.novel {
 		cnt, err := src.count()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 
 		if cnt > 0 {
 			h, err := src.hash()
 
-			// TODO: fix panics
-			d.PanicIfError(err)
+			if err != nil {
+				return nil, err
+			}
 
 			tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 		}
@@ -423,16 +430,21 @@ func (ts tableSet) ToSpecs() []tableSpec {
 	for _, src := range ts.upstream {
 		cnt, err := src.count()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
-		d.Chk.True(cnt > 0)
+		if err != nil {
+			return nil, err
+		}
+
+		if cnt <= 0 {
+			return nil, errors.New("no upstream chunks")
+		}
 
 		h, err := src.hash()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 
 		tableSpecs = append(tableSpecs, tableSpec{h, cnt})
 	}
-	return tableSpecs
+	return tableSpecs, nil
 }

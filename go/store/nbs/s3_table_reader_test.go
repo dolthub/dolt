@@ -7,7 +7,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"io/ioutil"
 	"net"
 	"os"
@@ -104,14 +103,19 @@ func makeFlakyS3(svc s3svc) *flakyS3 {
 	return &flakyS3{svc, map[string]struct{}{}}
 }
 
-func (fs3 *flakyS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (output *s3.GetObjectOutput, err error) {
-	output, err = fs3.s3svc.GetObjectWithContext(ctx, input)
-	d.PanicIfError(err)
+func (fs3 *flakyS3) GetObjectWithContext(ctx aws.Context, input *s3.GetObjectInput, opts ...request.Option) (*s3.GetObjectOutput, error) {
+	output, err := fs3.s3svc.GetObjectWithContext(ctx, input)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if _, ok := fs3.alreadyFailed[*input.Key]; !ok {
 		fs3.alreadyFailed[*input.Key] = struct{}{}
 		output.Body = ioutil.NopCloser(resettingReader{})
 	}
-	return
+
+	return output, nil
 }
 
 type resettingReader struct{}

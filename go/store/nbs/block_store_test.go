@@ -176,7 +176,9 @@ func (suite *BlockStoreSuite) TestChunkStorePutMoreThanMemTable() {
 	if suite.putCountFn != nil {
 		suite.Equal(2, suite.putCountFn())
 	}
-	suite.Len(suite.store.tables.ToSpecs(), 2)
+	specs, err := suite.store.tables.ToSpecs()
+	suite.NoError(err)
+	suite.Len(specs, 2)
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreGetMany() {
@@ -243,28 +245,6 @@ func (suite *BlockStoreSuite) TestChunkStoreHasMany() {
 		suite.False(absent.Has(c.Hash()), "%s present in %v", c.Hash(), absent)
 	}
 	suite.True(absent.Has(notPresent))
-}
-
-func (suite *BlockStoreSuite) TestChunkStoreExtractChunks() {
-	input1, input2 := make([]byte, testMemTableSize/2+1), make([]byte, testMemTableSize/2+1)
-	_, err := rand.Read(input1)
-	suite.NoError(err)
-	_, err = rand.Read(input2)
-	suite.NoError(err)
-	chnx := []chunks.Chunk{chunks.NewChunk(input1), chunks.NewChunk(input2)}
-	for _, c := range chnx {
-		err := suite.store.Put(context.Background(), c)
-		suite.NoError(err)
-	}
-
-	chunkChan := make(chan *chunks.Chunk)
-	go func() { suite.store.extractChunks(context.Background(), chunkChan); close(chunkChan) }()
-	i := 0
-	for c := range chunkChan {
-		suite.Equal(chnx[i].Data(), c.Data())
-		suite.Equal(chnx[i].Hash(), c.Hash())
-		i++
-	}
 }
 
 func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {

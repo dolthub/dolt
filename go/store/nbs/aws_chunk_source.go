@@ -11,10 +11,17 @@ import (
 	"time"
 )
 
-func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats) (chunkSource, error) {
+func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats) (cs chunkSource, err error) {
 	if indexCache != nil {
 		indexCache.lockEntry(name)
-		defer indexCache.unlockEntry(name)
+		defer func() {
+			unlockErr := indexCache.unlockEntry(name)
+
+			if err == nil {
+				err = unlockErr
+			}
+		}()
+
 		if index, found := indexCache.get(name); found {
 			tra := &awsTableReaderAt{al: al, ddb: ddb, s3: s3, name: name, chunkCount: chunkCount}
 			return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil

@@ -15,8 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 type mmapTableReader struct {
@@ -39,14 +37,20 @@ func init() {
 	}
 }
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) (chunkSource, error) {
+func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
 	var index tableIndex
 	found := false
 	if indexCache != nil {
 		indexCache.lockEntry(h)
-		defer indexCache.unlockEntry(h)
+		defer func() {
+			unlockErr := indexCache.unlockEntry(h)
+
+			if err != nil {
+				err = unlockErr
+			}
+		}()
 		index, found = indexCache.get(h)
 	}
 
@@ -153,14 +157,18 @@ func (cra *cacheReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off int
 	if r, err = cra.fc.RefFile(cra.path); err != nil {
 		return
 	}
+
 	defer func() {
 		stats.FileBytesPerRead.Sample(uint64(len(p)))
 		stats.FileReadLatency.SampleTimeSince(t1)
 	}()
 
 	defer func() {
-		err := cra.fc.UnrefFile(cra.path)
-		d.PanicIfError(err)
+		unrefErr := cra.fc.UnrefFile(cra.path)
+
+		if err == nil {
+			err = unrefErr
+		}
 	}()
 
 	return r.ReadAt(p, off)

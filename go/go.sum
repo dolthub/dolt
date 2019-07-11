@@ -218,6 +218,7 @@ github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClM
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/ld v0.0.0-20190703172908-73a5081bfb26 h1:1h8IBvsyC+pIJL24sK9OQFHxOCCeiFB9f5bhcwmlIks=
 github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
+github.com/liquidata-inc/noms v0.9.3/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796/go.mod h1:Au9ry8xH1Bp0PbsWvLzQPPDo7H9YGDOWoms2W7yqNs0=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=

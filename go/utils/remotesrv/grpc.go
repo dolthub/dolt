@@ -78,7 +78,11 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
 	hashes, _ := remotestorage.ParseByteSlices(req.Hashes)
-	locations := cs.GetChunkLocations(hashes)
+	locations, err := cs.GetChunkLocations(hashes)
+
+	if err != nil {
+		return nil, err
+	}
 
 	var locs []*remotesapi.DownloadLoc
 	for loc, hashToRange := range locations {
