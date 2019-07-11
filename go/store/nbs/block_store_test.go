@@ -9,7 +9,6 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -397,7 +396,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		for i, src := range srcs {
 			rdrs[i] = src
 		}
-		chunkChan := make(chan extractRecord, must.Uint32(rdrs.count()))
+		chunkChan := make(chan extractRecord, mustUint32(rdrs.count()))
 		err := rdrs.extract(context.Background(), chunkChan)
 		assert.NoError(t, err)
 		close(chunkChan)
@@ -445,7 +444,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		}
 		conjoined, err := p.ConjoinAll(context.Background(), srcs, stats)
 		assert.NoError(t, err)
-		cannedSpecs := []tableSpec{{mustAddr(conjoined.hash()), must.Uint32(conjoined.count())}}
+		cannedSpecs := []tableSpec{{mustAddr(conjoined.hash()), mustUint32(conjoined.count())}}
 		return cannedConjoin{true, append(cannedSpecs, keepers...)}
 	}
 

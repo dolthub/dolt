@@ -8,7 +8,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -68,11 +67,20 @@ func makeTempDir(t *testing.T) string {
 	return dir
 }
 
-func writeTableData(dir string, chunx ...[]byte) (name addr, err error) {
-	var tableData []byte
-	tableData, name = buildTable(chunx)
+func writeTableData(dir string, chunx ...[]byte) (addr, error) {
+	tableData, name, err := buildTable(chunx)
+
+	if err != nil {
+		return addr{}, err
+	}
+
 	err = ioutil.WriteFile(filepath.Join(dir, name.String()), tableData, 0666)
-	return
+
+	if err != nil {
+		return addr{}, err
+	}
+
+	return name, err
 }
 
 func removeTables(dir string, names ...addr) error {
@@ -94,7 +102,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 
 	src, err := persistTableData(fts, testChunks...)
 	assert.NoError(err)
-	if assert.True(must.Uint32(src.count()) > 0) {
+	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		assert.NoError(err)
 		ti, err := parseTableIndex(buff)
@@ -132,7 +140,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 
 	src, err := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	assert.NoError(err)
-	assert.True(must.Uint32(src.count()) == 0)
+	assert.True(mustUint32(src.count()) == 0)
 
 	_, err = os.Stat(filepath.Join(dir, mustAddr(src.hash()).String()))
 	assert.True(os.IsNotExist(err), "%v", err)
@@ -193,7 +201,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
 	assert.NoError(err)
 
-	if assert.True(must.Uint32(src.count()) > 0) {
+	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		assert.NoError(err)
 		ti, err := parseTableIndex(buff)
@@ -231,13 +239,13 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	src, err := fts.ConjoinAll(context.Background(), sources, &Stats{})
 	assert.NoError(err)
 
-	if assert.True(must.Uint32(src.count()) > 0) {
+	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := ioutil.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		assert.NoError(err)
 		ti, err := parseTableIndex(buff)
 		assert.NoError(err)
 		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		assertChunksInReader(testChunks, tr, assert)
-		assert.EqualValues(reps*len(testChunks), must.Uint32(tr.count()))
+		assert.EqualValues(reps*len(testChunks), mustUint32(tr.count()))
 	}
 }

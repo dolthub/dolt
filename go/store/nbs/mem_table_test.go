@@ -7,7 +7,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io/ioutil"
 	"os"
@@ -117,13 +116,15 @@ func TestMemTableWrite(t *testing.T) {
 		assert.True(mt.addChunk(computeAddr(c), c))
 	}
 
-	td1, _ := buildTable(chunks[1:2])
+	td1, _, err := buildTable(chunks[1:2])
+	assert.NoError(err)
 	ti1, err := parseTableIndex(td1)
 	assert.NoError(err)
 	tr1 := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	assert.True(tr1.has(computeAddr(chunks[1])))
 
-	td2, _ := buildTable(chunks[2:])
+	td2, _, err := buildTable(chunks[2:])
+	assert.NoError(err)
 	ti2, err := parseTableIndex(td2)
 	assert.NoError(err)
 	tr2 := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
@@ -245,14 +246,14 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, found
 
 func (crg chunkReaderGroup) count() (count uint32, err error) {
 	for _, haver := range crg {
-		count += must.Uint32(haver.count())
+		count += mustUint32(haver.count())
 	}
 	return
 }
 
 func (crg chunkReaderGroup) uncompressedLen() (data uint64, err error) {
 	for _, haver := range crg {
-		data += must.Uint64(haver.uncompressedLen())
+		data += mustUint64(haver.uncompressedLen())
 	}
 	return
 }

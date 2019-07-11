@@ -7,6 +7,7 @@ package nbs
 import (
 	"crypto/sha512"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash"
 	"sort"
@@ -105,8 +106,13 @@ func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	return true
 }
 
-func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr addr) {
-	tw.writeIndex()
+func (tw *tableWriter) finish() (uncompressedLength uint64, blockAddr addr, err error) {
+	err = tw.writeIndex()
+
+	if err != nil {
+		return 0, addr{}, err
+	}
+
 	tw.writeFooter()
 	uncompressedLength = tw.pos
 
@@ -128,7 +134,7 @@ func (hs prefixIndexSlice) Len() int           { return len(hs) }
 func (hs prefixIndexSlice) Less(i, j int) bool { return hs[i].prefix < hs[j].prefix }
 func (hs prefixIndexSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
-func (tw *tableWriter) writeIndex() {
+func (tw *tableWriter) writeIndex() error {
 	sort.Sort(tw.prefixes)
 
 	pfxScratch := [addrPrefixSize]byte{}
@@ -141,7 +147,10 @@ func (tw *tableWriter) writeIndex() {
 
 		// hash prefix
 		n := uint64(copy(tw.buff[tw.pos:], pfxScratch[:]))
-		d.Chk.True(n == addrPrefixSize)
+		if n != addrPrefixSize {
+			return errors.New("failed to copy all data")
+		}
+
 		tw.pos += n
 
 		// order
@@ -155,11 +164,16 @@ func (tw *tableWriter) writeIndex() {
 		// hash suffix
 		offset = suffixesOffset + uint64(pi.order)*addrSuffixSize
 		n = uint64(copy(tw.buff[offset:], pi.suffix))
-		d.Chk.True(n == addrSuffixSize)
+
+		if n != addrSuffixSize {
+			return errors.New("failed to copy all bytes")
+		}
 	}
 	suffixesLen := uint64(numRecords) * addrSuffixSize
 	tw.blockHash.Write(tw.buff[suffixesOffset : suffixesOffset+suffixesLen])
 	tw.pos = suffixesOffset + suffixesLen
+
+	return nil
 }
 
 func (tw *tableWriter) writeFooter() {

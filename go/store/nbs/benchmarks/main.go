@@ -69,7 +69,10 @@ func main() {
 
 	src, err := getInput((*dataSize) * humanize.MiByte)
 	d.PanicIfError(err)
-	defer src.Close()
+	defer func() {
+		err := src.Close()
+		d.PanicIfError(err)
+	}()
 
 	bufSize := (*mtMiB) * humanize.MiByte
 
@@ -81,19 +84,35 @@ func main() {
 		var reset func()
 		if *toNBS != "" {
 			dir := makeTempDir(*toNBS, pb)
-			defer os.RemoveAll(dir)
+			defer func() {
+				err := os.RemoveAll(dir)
+				d.PanicIfError(err)
+			}()
 			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), dir, bufSize) }
-			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
+			reset = func() {
+				err := os.RemoveAll(dir)
+				d.PanicIfError(err)
+				err = os.MkdirAll(dir, 0777)
+				d.PanicIfError(err)
+			}
 
 		} else if *toFile != "" {
 			dir := makeTempDir(*toFile, pb)
-			defer os.RemoveAll(dir)
+			defer func() {
+				err := os.RemoveAll(dir)
+				d.PanicIfError(err)
+			}()
 			open = func() (chunks.ChunkStore, error) {
 				f, err := ioutil.TempFile(dir, "")
 				d.Chk.NoError(err)
 				return newFileBlockStore(f)
 			}
-			reset = func() { os.RemoveAll(dir); os.MkdirAll(dir, 0777) }
+			reset = func() {
+				err := os.RemoveAll(dir)
+				d.PanicIfError(err)
+				err = os.MkdirAll(dir, 0777)
+				d.PanicIfError(err)
+			}
 
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))

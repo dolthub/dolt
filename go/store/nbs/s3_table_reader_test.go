@@ -28,7 +28,8 @@ func TestS3TableReaderAt(t *testing.T) {
 		[]byte("badbye2"),
 	}
 
-	tableData, h := buildTable(chunks)
+	tableData, h, err := buildTable(chunks)
+	assert.NoError(t, err)
 	s3.data[h.String()] = tableData
 
 	t.Run("TolerateFailingReads", func(t *testing.T) {
@@ -84,12 +85,13 @@ func TestS3TableReaderAtNamespace(t *testing.T) {
 
 	ns := "a-prefix-here"
 
-	tableData, h := buildTable(chunks)
+	tableData, h, err := buildTable(chunks)
+	assert.NoError(err)
 	s3.data["a-prefix-here/"+h.String()] = tableData
 
 	tra := &s3TableReaderAt{&s3ObjectReader{s3, "bucket", nil, nil, ns}, h}
 	scratch := make([]byte, len(tableData))
-	_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
+	_, err = tra.ReadAtWithStats(context.Background(), scratch, 0, &Stats{})
 	assert.NoError(err)
 	assert.Equal(tableData, scratch)
 }
