@@ -1,4 +1,4 @@
-package sqle
+package sqlserver
 
 import (
 	"fmt"

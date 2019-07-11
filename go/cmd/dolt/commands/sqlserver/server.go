@@ -1,4 +1,4 @@
-package sqle
+package sqlserver
 
 import (
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
