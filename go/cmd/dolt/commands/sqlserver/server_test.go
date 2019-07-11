@@ -1,9 +1,13 @@
-package sqle
+package sqlserver
 
 import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
@@ -27,8 +31,7 @@ var (
 func TestServerArgs(t *testing.T) {
 	serverController := CreateServerController()
 	go func() {
-		sqlImpl("dolt sqle", []string{
-			"-s",
+		sqlServerImpl("dolt sql-server", []string{
 			"-a", "localhost",
 			"-p", "15200",
 			"-u", "username",
@@ -64,10 +67,9 @@ func TestServerBadArgs(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
-			test = append([]string{"-s"}, test...)
 			serverController := CreateServerController()
 			go func(serverController *ServerController){
-				sqlImpl("dolt sqle", test, env, serverController)
+				sqlServerImpl("dolt sql-server", test, env, serverController)
 			}(serverController)
 			// In the event that a test fails, we need to prevent a test from hanging due to a running server
 			err := serverController.WaitForStart()
@@ -166,4 +168,28 @@ func TestServerSelect(t *testing.T) {
 			assert.ElementsMatch(t, peoples, test.expectedRes)
 		})
 	}
+}
+
+func createEnvWithSeedData(t *testing.T) *env.DoltEnv {
+	dEnv := dtestutils.CreateTestEnv()
+	imt, sch := dtestutils.CreateTestDataTable(true)
+
+	rd := table.NewInMemTableReader(imt)
+	wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
+
+	_, _, err := table.PipeRows(context.Background(), rd, wr, false)
+	rd.Close(context.Background())
+	wr.Close(context.Background())
+
+	if err != nil {
+		t.Error("Failed to seed initial data", err)
+	}
+
+	err = dEnv.PutTableToWorking(context.Background(), *wr.GetMap(), wr.GetSchema(), "people")
+
+	if err != nil {
+		t.Error("Unable to put initial value of table in in mem noms db", err)
+	}
+
+	return dEnv
 }
