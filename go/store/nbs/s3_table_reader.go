@@ -77,7 +77,11 @@ func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off
 			}()
 
 			defer func() {
-				err = s3or.tc.checkin(name)
+				checkinErr := s3or.tc.checkin(name)
+
+				if err == nil {
+					err = checkinErr
+				}
 			}()
 
 			n, err = r.ReadAt(p, off)

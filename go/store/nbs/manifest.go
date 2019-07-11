@@ -193,7 +193,11 @@ func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool,
 
 	mm.lockOutFetch()
 	defer func() {
-		err = mm.allowFetch()
+		afErr := mm.allowFetch()
+
+		if err == nil {
+			err = afErr
+		}
 	}()
 
 	f := func() (bool, manifestContents, error) {
@@ -238,7 +242,11 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 
 	mm.lockOutFetch()
 	defer func() {
-		err = mm.allowFetch()
+		afErr := mm.allowFetch()
+
+		if err == nil {
+			err = afErr
+		}
 	}()
 
 	f := func() (manifestContents, error) {

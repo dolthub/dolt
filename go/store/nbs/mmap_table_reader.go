@@ -47,7 +47,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		defer func() {
 			unlockErr := indexCache.unlockEntry(h)
 
-			if err != nil {
+			if err == nil {
 				err = unlockErr
 			}
 		}()
