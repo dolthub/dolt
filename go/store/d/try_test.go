@@ -29,89 +29,6 @@ type testError2 struct {
 
 func (e testError2) Error() string { return e.s }
 
-func TestTry2(t *testing.T) {
-	assert := assert.New(t)
-
-	assert.Panics(func() {
-		Try(func() {
-			panic(te)
-		})
-	})
-
-	assert.Panics(func() {
-		Try(func() {
-			PanicIfError(te)
-		}, te2)
-	})
-
-	assert.Error(func() error {
-		return Try(func() {
-			PanicIfError(te)
-		})
-	}())
-
-	assert.Error(func() error {
-		return Try(func() {
-			PanicIfError(te)
-		}, testError{})
-	}())
-
-	assert.Nil(func() error {
-		return Try(func() {
-			PanicIfError(nil)
-		})
-	}())
-}
-
-func TestTryCatch(t *testing.T) {
-	assert := assert.New(t)
-
-	assert.Panics(func() {
-		TryCatch(func() {
-			panic(Wrap(te))
-		},
-			func(err error) error {
-				if !causeInTypes(err, testError2{}) {
-					panic(err)
-				}
-				return Unwrap(err)
-			})
-	})
-
-	assert.Panics(func() {
-		TryCatch(func() {
-			panic(te)
-		},
-			func(err error) error {
-				if !causeInTypes(err, testError{}) {
-					panic(err)
-				}
-				return Unwrap(err)
-			})
-	})
-
-	assert.IsType(wrappedError{}, func() error {
-		return TryCatch(func() {
-			panic(Wrap(te))
-		},
-			func(err error) error {
-				return err
-			})
-	}())
-
-	assert.Error(func() error {
-		return TryCatch(func() {
-			panic(Wrap(te))
-		},
-			func(err error) error {
-				if !causeInTypes(err, testError2{}, testError{}) {
-					panic(err)
-				}
-				return Unwrap(err)
-			})
-	}())
-}
-
 func TestUnwrap(t *testing.T) {
 	assert := assert.New(t)
 
@@ -124,10 +41,6 @@ func TestUnwrap(t *testing.T) {
 func TestPanicIfTrue(t *testing.T) {
 	assert := assert.New(t)
 
-	arg := "arg value"
-	format := "could be a format: %s"
-	formatted := fmt.Sprintf(format, arg)
-
 	assert.Panics(func() {
 		PanicIfTrue(true)
 	})
@@ -139,24 +52,10 @@ func TestPanicIfTrue(t *testing.T) {
 	assert.NotPanics(func() {
 		PanicIfTrue(false)
 	})
-
-	err := Try(func() {
-		Panic(format)
-	})
-	assert.Equal(errors.New(format), Unwrap(err))
-
-	err = Try(func() {
-		Panic(format, arg)
-	})
-	assert.Equal(errors.New(formatted), Unwrap(err))
 }
 
 func TestPanicIfFalse(t *testing.T) {
 	assert := assert.New(t)
-
-	arg := "arg value"
-	format := "could be a format: %s"
-	formatted := fmt.Sprintf(format, arg)
 
 	assert.Panics(func() {
 		PanicIfFalse(false)
@@ -169,16 +68,6 @@ func TestPanicIfFalse(t *testing.T) {
 	assert.NotPanics(func() {
 		PanicIfFalse(true)
 	})
-
-	err := Try(func() {
-		Panic(format)
-	})
-	assert.Equal(errors.New(format), Unwrap(err))
-
-	err = Try(func() {
-		Panic(format, arg)
-	})
-	assert.Equal(errors.New(formatted), Unwrap(err))
 }
 
 func TestPanicIfNotType(t *testing.T) {

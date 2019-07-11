@@ -20,7 +20,6 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -79,11 +78,11 @@ type Range struct {
 	Length uint32
 }
 
-func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) map[hash.Hash]map[hash.Hash]Range {
+func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash]map[hash.Hash]Range, error) {
 	gr := toGetRecords(hashes)
 
 	ranges := make(map[hash.Hash]map[hash.Hash]Range)
-	f := func(css chunkSources) {
+	f := func(css chunkSources) error {
 		for _, cs := range css {
 			switch tr := cs.(type) {
 			case *mmapTableReader:
@@ -119,8 +118,9 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) map[hash.Hash]
 
 				tableIndex, err := tr.index()
 
-				// TODO: fix panics
-				d.PanicIfError(err)
+				if err != nil {
+					return err
+				}
 
 				var foundHashes []hash.Hash
 				for h := range hashes {
@@ -141,29 +141,44 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) map[hash.Hash]
 			default:
 				panic(reflect.TypeOf(cs))
 			}
+
 		}
+
+		return nil
 	}
 
-	f(nbs.tables.upstream)
-	f(nbs.tables.novel)
+	err := f(nbs.tables.upstream)
 
-	return ranges
+	if err != nil {
+		return nil, err
+	}
+
+	err = f(nbs.tables.novel)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ranges, nil
 }
 
-func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (ManifestInfo, error) {
+func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
 	nbs.mm.LockForUpdate()
 	defer func() {
-		err := nbs.mm.UnlockForUpdate()
+		unlockErr := nbs.mm.UnlockForUpdate()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err == nil {
+			err = unlockErr
+		}
 	}()
 
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
 	var stats Stats
-	ok, contents, err := nbs.mm.Fetch(ctx, &stats)
+	var ok bool
+	var contents manifestContents
+	ok, contents, err = nbs.mm.Fetch(ctx, &stats)
 
 	if err != nil {
 		return manifestContents{}, err
@@ -190,14 +205,15 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		return contents, nil
 	}
 
-	updatedContents, err := nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
+	var updatedContents manifestContents
+	updatedContents, err = nbs.mm.Update(ctx, contents.lock, contents, &stats, nil)
 
 	if err != nil {
 		return manifestContents{}, err
 	}
 
 	nbs.upstream = updatedContents
-	nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+	nbs.tables, err = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 
 	return updatedContents, nil
 }
@@ -281,7 +297,11 @@ func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister
 
 	if exists {
 		nbs.upstream = contents
-		nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+		nbs.tables, err = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nbs, nil
@@ -293,7 +313,6 @@ func (nbs *NomsBlockStore) Put(ctx context.Context, c chunks.Chunk) error {
 	success := nbs.addChunk(ctx, a, c.Data())
 
 	if !success {
-		// TODO: fix panics - should thread the error from memTable::addChunk
 		return errors.New("failed to add chunk")
 	}
 
@@ -416,7 +435,7 @@ func toGetRecords(hashes hash.HashSet) []getRecord {
 	return reqs
 }
 
-func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (reads int, split bool) {
+func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (reads int, split bool, err error) {
 	reqs := toGetRecords(hashes)
 	tables := func() (tables tableSet) {
 		nbs.mu.RLock()
@@ -428,36 +447,15 @@ func (nbs *NomsBlockStore) CalcReads(hashes hash.HashSet, blockSize uint64) (rea
 
 	reads, split, remaining, err := tables.calcReads(reqs, blockSize)
 
-	//TODO: fix panics
-	d.PanicIfError(err)
-
-	d.Chk.False(remaining)
-	return
-}
-
-func (nbs *NomsBlockStore) extractChunks(ctx context.Context, chunkChan chan<- *chunks.Chunk) {
-	ch := make(chan extractRecord, 1)
-	go func() {
-		defer close(ch)
-		nbs.mu.RLock()
-		defer nbs.mu.RUnlock()
-		// Chunks in nbs.tables were inserted before those in nbs.mt, so extract chunks there _first_
-		err := nbs.tables.extract(ctx, ch)
-
-		// TODO: fix panics
-		d.PanicIfError(err)
-
-		if nbs.mt != nil {
-			err = nbs.mt.extract(ctx, ch)
-
-			// TODO: fix panics
-			d.PanicIfError(err)
-		}
-	}()
-	for rec := range ch {
-		c := chunks.NewChunkWithHash(hash.Hash(rec.a), rec.data)
-		chunkChan <- &c
+	if err != nil {
+		return 0, false, err
 	}
+
+	if remaining {
+		return 0, false, errors.New("failed to find all chunks")
+	}
+
+	return
 }
 
 func (nbs *NomsBlockStore) Count() (uint32, error) {
@@ -604,7 +602,11 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 
 	if exists {
 		nbs.upstream = contents
-		nbs.tables = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+		nbs.tables, err = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -616,7 +618,7 @@ func (nbs *NomsBlockStore) Root(ctx context.Context) (hash.Hash, error) {
 	return nbs.upstream.root, nil
 }
 
-func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) (success bool, err error) {
 	t1 := time.Now()
 	defer nbs.stats.CommitLatency.SampleTimeSince(t1)
 
@@ -636,7 +638,7 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 		return true, nil
 	}
 
-	err := func() error {
+	err = func() error {
 		// This is unfortunate. We want to serialize commits to the same store
 		// so that we avoid writing a bunch of unreachable small tables which result
 		// from optismistic lock failures. However, this means that the time to
@@ -668,10 +670,11 @@ func (nbs *NomsBlockStore) Commit(ctx context.Context, current, last hash.Hash) 
 
 	nbs.mm.LockForUpdate()
 	defer func() {
-		err := nbs.mm.UnlockForUpdate()
+		unlockErr := nbs.mm.UnlockForUpdate()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err == nil {
+			err = unlockErr
+		}
 	}()
 
 	for {
@@ -701,12 +704,18 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
+		var err error
 		nbs.upstream = upstream
-		nbs.tables = nbs.tables.Rebase(ctx, upstream.specs, nbs.stats)
+		nbs.tables, err = nbs.tables.Rebase(ctx, upstream.specs, nbs.stats)
+
+		if err != nil {
+			return err
+		}
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
 		}
+
 		return errOptimisticLockFailedTables
 	}
 
@@ -736,11 +745,21 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 			return err
 		}
 
-		nbs.tables = nbs.tables.Rebase(ctx, nbs.upstream.specs, nbs.stats)
+		nbs.tables, err = nbs.tables.Rebase(ctx, nbs.upstream.specs, nbs.stats)
+
+		if err != nil {
+			return err
+		}
+
 		return errOptimisticLockFailedTables
 	}
 
-	specs := nbs.tables.ToSpecs()
+	specs, err := nbs.tables.ToSpecs()
+
+	if err != nil {
+		return err
+	}
+
 	newContents := manifestContents{
 		vers:  constants.NomsVersion,
 		root:  current,
@@ -759,7 +778,12 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	nbs.upstream = newContents
-	nbs.tables = nbs.tables.Flatten()
+	nbs.tables, err = nbs.tables.Flatten()
+
+	if err != nil {
+		return nil
+	}
+
 	return nil
 }
 

@@ -18,12 +18,17 @@ type blobstorePersister struct {
 // Persist makes the contents of mt durable. Chunks already present in
 // |haver| may be dropped in the process.
 func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount := mt.write(haver, stats)
+	name, data, chunkCount, err := mt.write(haver, stats)
+
+	if err != nil {
+		return emptyChunkSource{}, nil
+	}
+
 	if chunkCount == 0 {
 		return emptyChunkSource{}, nil
 	}
 
-	_, err := blobstore.PutBytes(ctx, bsp.bs, name.String(), data)
+	_, err = blobstore.PutBytes(ctx, bsp.bs, name.String(), data)
 
 	if err != nil {
 		return emptyChunkSource{}, err
@@ -77,10 +82,17 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, indexCache *indexCache, stats *Stats) (chunkSource, error) {
+func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, indexCache *indexCache, stats *Stats) (cs chunkSource, err error) {
 	if indexCache != nil {
 		indexCache.lockEntry(name)
-		defer indexCache.unlockEntry(name)
+		defer func() {
+			unlockErr := indexCache.unlockEntry(name)
+
+			if err != nil {
+				err = unlockErr
+			}
+		}()
+
 		if index, found := indexCache.get(name); found {
 			bsTRA := &bsTableReaderAt{name.String(), bs}
 			return &chunkSourceAdapter{newTableReader(index, bsTRA, blockSize), name}, nil

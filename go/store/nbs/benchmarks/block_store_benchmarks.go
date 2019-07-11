@@ -118,7 +118,6 @@ func benchmarkReadMany(openStore storeOpenFn, hashes hashSlice, src *dataSource,
 				chunkChan := make(chan *chunks.Chunk, len(hashes))
 				err := store.GetMany(context.Background(), hashes.HashSet(), chunkChan)
 
-				// TODO: fix panics
 				d.PanicIfError(err)
 
 				close(chunkChan)

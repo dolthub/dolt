@@ -6,6 +6,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -149,8 +150,14 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 				return manifestContents{}, err
 			}
 
-			d.Chk.True(exists)
-			d.Chk.True(upstream.vers == constants.NomsVersion)
+			if !exists {
+				return manifestContents{}, errors.New("manifest not found")
+			}
+
+			if upstream.vers != constants.NomsVersion {
+				return manifestContents{}, errors.New("version mismatch")
+			}
+
 			return upstream, nil
 		}
 

@@ -10,11 +10,10 @@ import (
 	"log"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
@@ -82,7 +81,7 @@ func runSync(ctx context.Context, args []string) int {
 	sourceRef := types.NewRef(sourceObj)
 	sinkRef, sinkExists := sinkDataset.MaybeHeadRef()
 	nonFF := false
-	err = d.Try(func() {
+	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
 		datas.Pull(ctx, sourceStore, sinkDB, sourceRef, progressCh)
 
@@ -92,8 +91,11 @@ func runSync(ctx context.Context, args []string) int {
 			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, sourceRef)
 			nonFF = true
 		}
-		d.PanicIfError(err)
-	})
+
+		return err
+	}
+
+	err = f()
 
 	if err != nil {
 		log.Fatal(err)

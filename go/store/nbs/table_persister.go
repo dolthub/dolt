@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/binary"
+	"fmt"
 	"sort"
 	"sync"
 
@@ -63,15 +64,21 @@ func (sic *indexCache) lockEntry(name addr) {
 	}
 }
 
-func (sic *indexCache) unlockEntry(name addr) {
+func (sic *indexCache) unlockEntry(name addr) error {
 	sic.cond.L.Lock()
 	defer sic.cond.L.Unlock()
 
 	_, ok := sic.locked[name]
-	d.PanicIfFalse(ok)
+
+	if !ok {
+		return fmt.Errorf("failed to unlock %s", name.String())
+	}
+
 	delete(sic.locked, name)
 
 	sic.cond.Broadcast()
+
+	return nil
 }
 
 func (sic *indexCache) get(name addr) (tableIndex, bool) {
@@ -86,31 +93,42 @@ func (sic *indexCache) put(name addr, idx tableIndex) {
 	sic.cache.Add(name, indexSize, idx)
 }
 
-type chunkSourcesByAscendingCount chunkSources
+type chunkSourcesByAscendingCount struct {
+	sources chunkSources
+	err     error
+}
 
-func (csbc chunkSourcesByAscendingCount) Len() int { return len(csbc) }
+func (csbc chunkSourcesByAscendingCount) Len() int { return len(csbc.sources) }
 func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
-	srcI, srcJ := csbc[i], csbc[j]
+	srcI, srcJ := csbc.sources[i], csbc.sources[j]
 	cntI, err := srcI.count()
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		csbc.err = err
+		return false
+	}
 
 	cntJ, err := srcJ.count()
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		csbc.err = err
+		return false
+	}
 
 	if cntI == cntJ {
 		hi, err := srcI.hash()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			csbc.err = err
+			return false
+		}
 
 		hj, err := srcJ.hash()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			csbc.err = err
+			return false
+		}
 
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
@@ -118,29 +136,44 @@ func (csbc chunkSourcesByAscendingCount) Less(i, j int) bool {
 	return cntI < cntJ
 }
 
-func (csbc chunkSourcesByAscendingCount) Swap(i, j int) { csbc[i], csbc[j] = csbc[j], csbc[i] }
+func (csbc chunkSourcesByAscendingCount) Swap(i, j int) {
+	csbc.sources[i], csbc.sources[j] = csbc.sources[j], csbc.sources[i]
+}
 
-type chunkSourcesByDescendingDataSize []sourceWithSize
+type chunkSourcesByDescendingDataSize struct {
+	sws []sourceWithSize
+	err error
+}
 
-func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds) }
+func newChunkSourcesByDescendingDataSize(sws []sourceWithSize) chunkSourcesByDescendingDataSize {
+	return chunkSourcesByDescendingDataSize{sws, nil}
+}
+
+func (csbds chunkSourcesByDescendingDataSize) Len() int { return len(csbds.sws) }
 func (csbds chunkSourcesByDescendingDataSize) Less(i, j int) bool {
-	swsI, swsJ := csbds[i], csbds[j]
+	swsI, swsJ := csbds.sws[i], csbds.sws[j]
 	if swsI.dataLen == swsJ.dataLen {
 		hi, err := swsI.source.hash()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			csbds.err = err
+			return false
+		}
 
 		hj, err := swsJ.source.hash()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			csbds.err = err
+			return false
+		}
 
 		return bytes.Compare(hi[:], hj[:]) < 0
 	}
 	return swsI.dataLen > swsJ.dataLen
 }
-func (csbds chunkSourcesByDescendingDataSize) Swap(i, j int) { csbds[i], csbds[j] = csbds[j], csbds[i] }
+func (csbds chunkSourcesByDescendingDataSize) Swap(i, j int) {
+	csbds.sws[i], csbds.sws[j] = csbds.sws[j], csbds.sws[i]
+}
 
 type sourceWithSize struct {
 	source  chunkSource
@@ -159,28 +192,35 @@ func (cp compactionPlan) suffixes() []byte {
 	return cp.mergedIndex[suffixesStart : suffixesStart+uint64(cp.chunkCount)*addrSuffixSize]
 }
 
-func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan) {
+func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err error) {
 	var totalUncompressedData uint64
 	for _, src := range sources {
-		uncmp, err := src.uncompressedLen()
+		var uncmp uint64
+		uncmp, err = src.uncompressedLen()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return compactionPlan{}, err
+		}
 
 		totalUncompressedData += uncmp
 		index, err := src.index()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return compactionPlan{}, err
+		}
 
 		plan.chunkCount += index.chunkCount
 
 		// Calculate the amount of chunk data in |src|
 		chunkDataLen := calcChunkDataLen(index)
-		plan.sources = append(plan.sources, sourceWithSize{src, chunkDataLen})
+		plan.sources.sws = append(plan.sources.sws, sourceWithSize{src, chunkDataLen})
 		plan.totalCompressedData += chunkDataLen
 	}
 	sort.Sort(plan.sources)
+
+	if plan.sources.err != nil {
+		return compactionPlan{}, plan.sources.err
+	}
 
 	lengthsPos := lengthsOffset(plan.chunkCount)
 	suffixesPos := suffixesOffset(plan.chunkCount)
@@ -188,11 +228,13 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan) {
 
 	prefixIndexRecs := make(prefixIndexSlice, 0, plan.chunkCount)
 	var ordinalOffset uint32
-	for _, sws := range plan.sources {
-		index, err := sws.source.index()
+	for _, sws := range plan.sources.sws {
+		var index tableIndex
+		index, err = sws.source.index()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return compactionPlan{}, err
+		}
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range index.prefixes {
@@ -200,10 +242,12 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan) {
 			prefixIndexRecs = append(prefixIndexRecs, rec)
 		}
 
-		cnt, err := sws.source.count()
+		var cnt uint32
+		cnt, err = sws.source.count()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return compactionPlan{}, err
+		}
 
 		ordinalOffset += cnt
 
@@ -233,7 +277,7 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan) {
 	writeFooter(plan.mergedIndex[uint64(len(plan.mergedIndex))-footerSize:], plan.chunkCount, totalUncompressedData)
 
 	stats.BytesPerConjoin.Sample(uint64(plan.totalCompressedData) + uint64(len(plan.mergedIndex)))
-	return plan
+	return plan, nil
 }
 
 func nameFromSuffixes(suffixes []byte) (name addr) {

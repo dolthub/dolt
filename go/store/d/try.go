@@ -59,26 +59,6 @@ func PanicIfFalse(b bool) {
 	}
 }
 
-// If 'f' panics with a WrappedError then recover that error.
-// If types is empty, return the WrappedError.
-// if types is not empty and cause is not one of the listed types, re-panic.
-// if types is not empty and cause is one of the types, return 'cause'
-func Try(f func(), types ...interface{}) (err error) {
-	defer recoverWrappedTypes(&err, types)
-	f()
-	return
-}
-
-// If 'f' panics with a WrappedError then recover that error and return it.
-// If types is empty, return the WrappedError.
-// if types is not empty and cause is not one of the listed types, re-panic.
-// if types is not empty and cause is one of the types, return 'cause'
-func TryCatch(f func(), catch func(err error) error) (err error) {
-	defer recoverWrapped(&err, catch)
-	f()
-	return
-}
-
 type WrappedError interface {
 	Error() string
 	Cause() error
