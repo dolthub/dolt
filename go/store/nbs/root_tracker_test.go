@@ -7,7 +7,6 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"sync"
 	"testing"
@@ -143,7 +142,8 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	p := newFakeTablePersister()
 
 	// Simulate another process writing a manifest behind store's back.
-	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	assert.NoError(err)
 
 	store, err := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	assert.NoError(err)
@@ -162,7 +162,8 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	defer store.Close()
 
 	// Simulate another process writing a manifest behind store's back.
-	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	assert.NoError(err)
 
 	newRoot2 := hash.Of([]byte("new root 2"))
 	success, err := store.Commit(context.Background(), newRoot2, hash.Hash{})
