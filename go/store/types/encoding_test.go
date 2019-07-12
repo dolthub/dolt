@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 )
@@ -118,17 +117,31 @@ func TestRoundTrips(t *testing.T) {
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
-	t := func(f float64, s string) {
+	t := func(f float64) (err error) {
+		// TODO: fix panics
+		defer func() {
+			if r := recover(); r != nil {
+				err = r.(error)
+			}
+		}()
+
 		v := Float(f)
-		err := d.Try(func() {
-			EncodeValue(v)
-		})
-		assert.Error(tt, err)
-		assert.Contains(tt, err.Error(), s)
+
+		EncodeValue(v)
+		return
 	}
-	t(math.NaN(), "NaN is not a supported number")
-	t(math.Inf(1), "+Inf is not a supported number")
-	t(math.Inf(-1), "-Inf is not a supported number")
+
+	err := t(math.NaN())
+	assert.Error(tt, err)
+	assert.Contains(tt, err.Error(), "NaN is not a supported number")
+
+	err = t(math.Inf(1))
+	assert.Error(tt, err)
+	assert.Contains(tt, err.Error(), "+Inf is not a supported number")
+
+	err = t(math.Inf(-1))
+	assert.Error(tt, err)
+	assert.Contains(tt, err.Error(), "-Inf is not a supported number")
 }
 
 func TestWritePrimitives(t *testing.T) {

@@ -7,6 +7,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"sync"
 	"time"
@@ -14,6 +15,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
+
+var ErrNoReader = errors.New("could not get reader")
+var ErrNoChunkSource = errors.New("no chunk source")
 
 func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
 	t1 := time.Now()
@@ -75,32 +79,40 @@ func (ccs *persistingChunkSource) getReader() chunkReader {
 func (ccs *persistingChunkSource) has(h addr) (bool, error) {
 	cr := ccs.getReader()
 
-	// TODO: fix panics
-	d.Chk.True(cr != nil)
+	if cr == nil {
+		return false, ErrNoReader
+	}
+
 	return cr.has(h)
 }
 
 func (ccs *persistingChunkSource) hasMany(addrs []hasRecord) (bool, error) {
 	cr := ccs.getReader()
 
-	// TODO: fix panics
-	d.Chk.True(cr != nil)
+	if cr == nil {
+		return false, ErrNoReader
+	}
 	return cr.hasMany(addrs)
 }
 
 func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
 	cr := ccs.getReader()
 
-	// TODO: fix panics
-	d.Chk.True(cr != nil)
+	if cr == nil {
+		return nil, ErrNoReader
+	}
+
 	return cr.get(ctx, h, stats)
 }
 
 func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
 	cr := ccs.getReader()
 
-	// TODO: fix panics
-	d.Chk.True(cr != nil)
+	if cr == nil {
+		ae.SetIfError(ErrNoReader)
+		return false
+	}
+
 	return cr.getMany(ctx, reqs, foundChunks, wg, ae, stats)
 }
 
@@ -116,7 +128,10 @@ func (ccs *persistingChunkSource) count() (uint32, error) {
 		return 0, err
 	}
 
-	d.Chk.True(ccs.cs != nil)
+	if ccs.cs == nil {
+		return 0, ErrNoChunkSource
+	}
+
 	return ccs.cs.count()
 }
 
@@ -126,7 +141,11 @@ func (ccs *persistingChunkSource) uncompressedLen() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	d.Chk.True(ccs.cs != nil)
+
+	if ccs.cs == nil {
+		return 0, ErrNoChunkSource
+	}
+
 	return ccs.cs.uncompressedLen()
 }
 
@@ -137,7 +156,10 @@ func (ccs *persistingChunkSource) hash() (addr, error) {
 		return addr{}, err
 	}
 
-	d.Chk.True(ccs.cs != nil)
+	if ccs.cs == nil {
+		return addr{}, ErrNoChunkSource
+	}
+
 	return ccs.cs.hash()
 }
 
@@ -148,7 +170,10 @@ func (ccs *persistingChunkSource) index() (tableIndex, error) {
 		return tableIndex{}, err
 	}
 
-	d.Chk.True(ccs.cs != nil)
+	if ccs.cs == nil {
+		return tableIndex{}, ErrNoChunkSource
+	}
+
 	return ccs.cs.index()
 }
 

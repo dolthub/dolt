@@ -88,7 +88,6 @@ import (
 	"time"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/marshal"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
@@ -412,14 +411,20 @@ func (suite *PerfSuite) CloseGlob(files []io.Reader) {
 	}
 }
 
-func callSafe(name string, fun reflect.Value, args ...interface{}) error {
+func callSafe(name string, fun reflect.Value, args ...interface{}) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
 	funArgs := make([]reflect.Value, len(args))
 	for i, arg := range args {
 		funArgs[i] = reflect.ValueOf(arg)
 	}
-	return d.Try(func() {
-		fun.Call(funArgs)
-	})
+
+	fun.Call(funArgs)
+	return
 }
 
 func (suite *PerfSuite) getEnvironment(vrw types.ValueReadWriter) types.Value {

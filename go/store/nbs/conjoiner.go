@@ -7,7 +7,6 @@ package nbs
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sort"
 	"sync"
 	"time"
@@ -126,7 +125,12 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 
 	t1 := time.Now()
 
-	toConjoin, toKeep := chooseConjoinees(sources)
+	toConjoin, toKeep, err := chooseConjoinees(sources)
+
+	if err != nil {
+		return tableSpec{}, nil, nil, err
+	}
+
 	conjoinedSrc, err := p.ConjoinAll(ctx, toConjoin, stats)
 
 	if err != nil {
@@ -172,28 +176,37 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 }
 
 // Current approach is to choose the smallest N tables which, when removed and replaced with the conjoinment, will leave the conjoinment as the smallest table.
-func chooseConjoinees(upstream chunkSources) (toConjoin, toKeep chunkSources) {
+func chooseConjoinees(upstream chunkSources) (toConjoin, toKeep chunkSources, err error) {
 	sortedUpstream := make(chunkSources, len(upstream))
 	copy(sortedUpstream, upstream)
-	sort.Sort(chunkSourcesByAscendingCount(sortedUpstream))
+
+	csbac := chunkSourcesByAscendingCount{sortedUpstream, nil}
+	sort.Sort(csbac)
+
+	if csbac.err != nil {
+		return nil, nil, csbac.err
+	}
 
 	partition := 2
 	upZero, err := sortedUpstream[0].count()
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	upOne, err := sortedUpstream[1].count()
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	sum := upZero + upOne
 	for partition < len(sortedUpstream) {
 		partCnt, err := sortedUpstream[partition].count()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		if sum <= partCnt {
 			break
@@ -203,7 +216,7 @@ func chooseConjoinees(upstream chunkSources) (toConjoin, toKeep chunkSources) {
 		partition++
 	}
 
-	return sortedUpstream[:partition], sortedUpstream[partition:]
+	return sortedUpstream[:partition], sortedUpstream[partition:], nil
 }
 
 func toSpecs(srcs chunkSources) ([]tableSpec, error) {

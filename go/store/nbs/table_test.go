@@ -14,7 +14,6 @@ import (
 	"sync"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 )
@@ -387,6 +386,4 @@ func TestEmpty(t *testing.T) {
 	tw := newTableWriter(buff, nil)
 	length, _ := tw.finish()
 	assert.True(length == footerSize)
-
-	d.PanicIfError(nil)
 }

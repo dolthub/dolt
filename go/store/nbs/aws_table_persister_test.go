@@ -274,7 +274,8 @@ func TestAWSTablePersisterDividePlan(t *testing.T) {
 	tooBig := bytesToChunkSource(t, bigUns...)
 
 	sources := chunkSources{justRight, tooBig, tooSmall}
-	plan := planConjoin(sources, &Stats{})
+	plan, err := planConjoin(sources, &Stats{})
+	assert.NoError(err)
 	copies, manuals, _, err := dividePlan(context.Background(), plan, minPartSize, maxPartSize)
 	assert.NoError(err)
 

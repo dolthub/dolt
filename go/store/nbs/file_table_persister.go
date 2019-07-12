@@ -19,7 +19,6 @@ import (
 const tempTablePrefix = "nbs_table_"
 
 func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
-	// TODO: fix panics
 	d.PanicIfTrue(fc == nil)
 	return &fsTablePersister{dir, fc, indexCache}
 }
@@ -35,39 +34,57 @@ func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uin
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount := mt.write(haver, stats)
+	name, data, chunkCount, err := mt.write(haver, stats)
+
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+
 	return ftp.persistTable(ctx, name, data, chunkCount, stats)
 }
 
-func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data []byte, chunkCount uint32, stats *Stats) (chunkSource, error) {
+func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data []byte, chunkCount uint32, stats *Stats) (cs chunkSource, err error) {
 	if chunkCount == 0 {
 		return emptyChunkSource{}, nil
 	}
 
-	tempName, err := func() (string, error) {
-		temp, err := ioutil.TempFile(ftp.dir, tempTablePrefix)
+	tempName, err := func() (tempName string, ferr error) {
+		var temp *os.File
+		temp, ferr = ioutil.TempFile(ftp.dir, tempTablePrefix)
 
-		if err != nil {
-			return "", err
+		if ferr != nil {
+			return "", ferr
 		}
 
-		defer mustClose(temp)
+		defer func() {
+			closeErr := temp.Close()
 
-		_, err = io.Copy(temp, bytes.NewReader(data))
+			if ferr == nil {
+				ferr = closeErr
+			}
+		}()
 
-		if err != nil {
-			return "", err
+		_, ferr = io.Copy(temp, bytes.NewReader(data))
+
+		if ferr != nil {
+			return "", ferr
 		}
 
-		index, err := parseTableIndex(data)
+		index, ferr := parseTableIndex(data)
 
-		if err != nil {
-			return "", err
+		if ferr != nil {
+			return "", ferr
 		}
 
 		if ftp.indexCache != nil {
 			ftp.indexCache.lockEntry(name)
-			defer ftp.indexCache.unlockEntry(name)
+			defer func() {
+				unlockErr := ftp.indexCache.unlockEntry(name)
+
+				if ferr == nil {
+					ferr = unlockErr
+				}
+			}()
 			ftp.indexCache.put(name, index)
 		}
 
@@ -95,33 +112,45 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 }
 
 func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	plan := planConjoin(sources, stats)
+	plan, err := planConjoin(sources, stats)
+
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
 
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}, nil
 	}
 
 	name := nameFromSuffixes(plan.suffixes())
-	tempName, err := func() (string, error) {
-		temp, err := ioutil.TempFile(ftp.dir, tempTablePrefix)
+	tempName, err := func() (tempName string, ferr error) {
+		var temp *os.File
+		temp, ferr = ioutil.TempFile(ftp.dir, tempTablePrefix)
 
-		if err != nil {
-			return "", err
+		if ferr != nil {
+			return "", ferr
 		}
 
-		defer mustClose(temp)
+		defer func() {
+			closeErr := temp.Close()
 
-		for _, sws := range plan.sources {
-			r, err := sws.source.reader(ctx)
+			if ferr == nil {
+				ferr = closeErr
+			}
+		}()
 
-			if err != nil {
-				return "", err
+		for _, sws := range plan.sources.sws {
+			var r io.Reader
+			r, ferr = sws.source.reader(ctx)
+
+			if ferr != nil {
+				return "", ferr
 			}
 
-			n, err := io.CopyN(temp, r, int64(sws.dataLen))
+			n, ferr := io.CopyN(temp, r, int64(sws.dataLen))
 
-			if err != nil {
-				return "", err
+			if ferr != nil {
+				return "", ferr
 			}
 
 			if uint64(n) != sws.dataLen {
@@ -129,16 +158,17 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 			}
 		}
 
-		_, err = temp.Write(plan.mergedIndex)
+		_, ferr = temp.Write(plan.mergedIndex)
 
-		if err != nil {
-			return "", err
+		if ferr != nil {
+			return "", ferr
 		}
 
-		index, err := parseTableIndex(plan.mergedIndex)
+		var index tableIndex
+		index, ferr = parseTableIndex(plan.mergedIndex)
 
-		if err != nil {
-			return "", err
+		if ferr != nil {
+			return "", ferr
 		}
 
 		if ftp.indexCache != nil {

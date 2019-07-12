@@ -225,6 +225,7 @@ github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a/go
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
+github.com/liquidata-inc/noms v0.9.3/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796/go.mod h1:Au9ry8xH1Bp0PbsWvLzQPPDo7H9YGDOWoms2W7yqNs0=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=

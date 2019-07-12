@@ -34,11 +34,12 @@ func TestPlanCompaction(t *testing.T) {
 		sources = append(sources, src)
 	}
 
-	plan := planConjoin(sources, &Stats{})
+	plan, err := planConjoin(sources, &Stats{})
+	assert.NoError(err)
 
 	var totalChunks uint32
 	for i, src := range sources {
-		assert.Equal(dataLens[i], plan.sources[i].dataLen)
+		assert.Equal(dataLens[i], plan.sources.sws[i].dataLen)
 		totalChunks += must.Uint32(src.count())
 	}
 
