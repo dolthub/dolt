@@ -85,7 +85,12 @@ func (s3p awsTablePersister) key(k string) string {
 }
 
 func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount := mt.write(haver, stats)
+	name, data, chunkCount, err := mt.write(haver, stats)
+
+	if err != nil {
+		return emptyChunkSource{}, err
+	}
+
 	if chunkCount == 0 {
 		return emptyChunkSource{}, nil
 	}
@@ -109,7 +114,7 @@ func (s3p awsTablePersister) Persist(ctx context.Context, mt *memTable, haver ch
 		}()
 	}
 
-	err := s3p.multipartUpload(ctx, data, name.String())
+	err = s3p.multipartUpload(ctx, data, name.String())
 
 	if err != nil {
 		return emptyChunkSource{}, err
@@ -271,13 +276,18 @@ func (s partsByPartNum) Swap(i, j int) {
 }
 
 func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	plan := planConjoin(sources, stats)
+	plan, err := planConjoin(sources, stats)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if plan.chunkCount == 0 {
 		return emptyChunkSource{}, nil
 	}
 	t1 := time.Now()
 	name := nameFromSuffixes(plan.suffixes())
-	err := s3p.executeCompactionPlan(ctx, plan, name.String())
+	err = s3p.executeCompactionPlan(ctx, plan, name.String())
 
 	if err != nil {
 		return nil, err
@@ -330,7 +340,7 @@ func (s3p awsTablePersister) executeCompactionPlan(ctx context.Context, plan com
 }
 
 func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionPlan, key, uploadID string) (*s3.CompletedMultipartUpload, error) {
-	if len(plan.sources) > maxS3Parts {
+	if len(plan.sources.sws) > maxS3Parts {
 		return nil, errors.New("exceeded maximum parts")
 	}
 
@@ -476,8 +486,8 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 
 	buffSize := uint64(len(plan.mergedIndex))
 	i := 0
-	for ; i < len(plan.sources); i++ {
-		sws := plan.sources[i]
+	for ; i < len(plan.sources.sws); i++ {
+		sws := plan.sources.sws[i]
 		if sws.dataLen < minPartSize {
 			// since plan.sources is sorted in descending chunk-data-length order, we know that sws and all members after it are too small to copy.
 			break
@@ -509,8 +519,8 @@ func dividePlan(ctx context.Context, plan compactionPlan, minPartSize, maxPartSi
 		}
 	}
 	var offset int64
-	for ; i < len(plan.sources); i++ {
-		sws := plan.sources[i]
+	for ; i < len(plan.sources.sws); i++ {
+		sws := plan.sources.sws[i]
 		rdr, err := sws.source.reader(ctx)
 
 		if err != nil {

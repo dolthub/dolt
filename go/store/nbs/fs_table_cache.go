@@ -151,18 +151,26 @@ func (ftc *fsTableCache) checkin(h addr) error {
 
 func (ftc *fsTableCache) store(h addr, data io.Reader, size uint64) error {
 	path := filepath.Join(ftc.dir, h.String())
-	tempName, err := func() (string, error) {
-		temp, err := ioutil.TempFile(ftc.dir, tempTablePrefix)
+	tempName, err := func() (name string, ferr error) {
+		var temp *os.File
+		temp, ferr = ioutil.TempFile(ftc.dir, tempTablePrefix)
 
-		if err != nil {
-			return "", err
+		if ferr != nil {
+			return "", ferr
 		}
 
-		defer mustClose(temp)
-		_, err = io.Copy(temp, data)
+		defer func() {
+			closeErr := temp.Close()
 
-		if err != nil {
-			return "", err
+			if ferr == nil {
+				ferr = closeErr
+			}
+		}()
+
+		_, ferr = io.Copy(temp, data)
+
+		if ferr != nil {
+			return "", ferr
 		}
 
 		return temp.Name(), nil

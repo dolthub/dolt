@@ -7,7 +7,6 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"sync"
 	"testing"
@@ -53,7 +52,8 @@ func TestChunkStoreRebase(t *testing.T) {
 	assert.Equal(constants.NomsVersion, store.Version())
 
 	// Simulate another process writing a manifest behind store's back.
-	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	assert.NoError(err)
 
 	// state in store shouldn't change
 	h, err = store.Root(context.Background())
@@ -142,7 +142,8 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	p := newFakeTablePersister()
 
 	// Simulate another process writing a manifest behind store's back.
-	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	assert.NoError(err)
 
 	store, err := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	assert.NoError(err)
@@ -161,7 +162,8 @@ func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	defer store.Close()
 
 	// Simulate another process writing a manifest behind store's back.
-	newRoot, chunks := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
+	assert.NoError(err)
 
 	newRoot2 := hash.Of([]byte("new root 2"))
 	success, err := store.Commit(context.Background(), newRoot2, hash.Hash{})
@@ -324,13 +326,16 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 }
 
 // Simulate another process writing a manifest behind store's back.
-func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunks ...[]byte) (newRoot hash.Hash, persisted [][]byte) {
+func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunks ...[]byte) (newRoot hash.Hash, persisted [][]byte, err error) {
 	newLock, newRoot := computeAddr([]byte("locker")), hash.Of(rootChunk)
 	persisted = append(chunks, rootChunk)
-	src, err := p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	var src chunkSource
+	src, err = p.Persist(context.Background(), createMemTable(persisted), nil, &Stats{})
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
 
 	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks))}})
 	return
@@ -408,7 +413,12 @@ type fakeTablePersister struct {
 
 func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
 	if must.Uint32(mt.count()) > 0 {
-		name, data, chunkCount := mt.write(haver, stats)
+		name, data, chunkCount, err := mt.write(haver, stats)
+
+		if err != nil {
+			return emptyChunkSource{}, err
+		}
+
 		if chunkCount > 0 {
 			ftp.mu.Lock()
 			defer ftp.mu.Unlock()
@@ -426,7 +436,12 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 }
 
 func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
-	name, data, chunkCount := compactSourcesToBuffer(sources)
+	name, data, chunkCount, err := compactSourcesToBuffer(sources)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if chunkCount > 0 {
 		ftp.mu.Lock()
 		defer ftp.mu.Unlock()
@@ -442,7 +457,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 	return emptyChunkSource{}, nil
 }
 
-func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32) {
+func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32, err error) {
 	totalData := uint64(0)
 	for _, src := range sources {
 		chunkCount += must.Uint32(src.count())
@@ -477,13 +492,12 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 		}
 	}
 
-	// TODO: fix panics
 	if errString != "" {
-		panic(fmt.Errorf(errString))
+		return addr{}, nil, 0, fmt.Errorf(errString)
 	}
 
 	tableSize, name := tw.finish()
-	return name, buff[:tableSize], chunkCount
+	return name, buff[:tableSize], chunkCount, nil
 }
 
 func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {

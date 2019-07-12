@@ -76,12 +76,6 @@ func (nbc *NomsBlockCache) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	return nbc.chunks.GetMany(ctx, hashes, foundChunks)
 }
 
-// ExtractChunks writes the entire contents of the cache to chunkChan. The
-// chunks are extracted in insertion order.
-func (nbc *NomsBlockCache) ExtractChunks(ctx context.Context, chunkChan chan *chunks.Chunk) {
-	nbc.chunks.extractChunks(ctx, chunkChan)
-}
-
 // Count returns the number of items in the cache.
 func (nbc *NomsBlockCache) Count() (uint32, error) {
 	return nbc.chunks.Count()

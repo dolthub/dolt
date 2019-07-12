@@ -7,7 +7,6 @@ package hash
 import (
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,9 +14,9 @@ func TestParseError(t *testing.T) {
 	assert := assert.New(t)
 
 	assertParseError := func(s string) {
-		e := d.Try(func() { Parse(s) })
-		_, ok := e.(d.WrappedError)
-		assert.True(ok)
+		assert.Panics(func() {
+			Parse(s)
+		})
 	}
 
 	assertParseError("foo")

@@ -66,14 +66,14 @@ func (fm fileManifest) Name() string {
 // that case, the other return values are undefined. If |readHook| is non-nil,
 // it will be executed while ParseIfExists() holds the manifest file lock.
 // This is to allow for race condition testing.
-func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (bool, manifestContents, error) {
+func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
 	t1 := time.Now()
-	defer func() { stats.ReadManifestLatency.SampleTimeSince(t1) }()
+	defer func() {
+		stats.ReadManifestLatency.SampleTimeSince(t1)
+	}()
 
-	var exists bool
-	var contents manifestContents
-
-	locked, err := lockFileExists(fm.dir)
+	var locked bool
+	locked, err = lockFileExists(fm.dir)
 
 	if err != nil {
 		return false, manifestContents{}, err
@@ -82,28 +82,34 @@ func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook
 	// !exists(lockFileName) => unitialized store
 	if locked {
 		var f io.ReadCloser
-		err := func() error {
+		err = func() (ferr error) {
 			lck := newLock(fm.dir)
-			err := lck.Lock()
+			ferr = lck.Lock()
 
-			if err != nil {
-				return err
+			if ferr != nil {
+				return ferr
 			}
 
-			defer lck.Unlock()
+			defer func() {
+				unlockErr := lck.Unlock()
+
+				if ferr == nil {
+					ferr = unlockErr
+				}
+			}()
 
 			if readHook != nil {
-				err := readHook()
+				ferr = readHook()
 
-				if err != nil {
-					return err
+				if ferr != nil {
+					return ferr
 				}
 			}
 
-			f, err = openIfExists(filepath.Join(fm.dir, manifestFileName))
+			f, ferr = openIfExists(filepath.Join(fm.dir, manifestFileName))
 
-			if err != nil {
-				return err
+			if ferr != nil {
+				return ferr
 			}
 
 			return nil
@@ -114,10 +120,16 @@ func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook
 		}
 
 		if f != nil {
-			defer mustClose(f)
+			defer func() {
+				closeErr := f.Close()
+
+				if err == nil {
+					err = closeErr
+				}
+			}()
+
 			exists = true
 
-			var err error
 			contents, err = parseManifest(f)
 
 			if err != nil {
@@ -182,24 +194,34 @@ func parseManifest(r io.Reader) (manifestContents, error) {
 	}, nil
 }
 
-func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (mc manifestContents, err error) {
 	t1 := time.Now()
 	defer func() { stats.WriteManifestLatency.SampleTimeSince(t1) }()
 
+	var tempManifestPath string
+
 	// Write a temporary manifest file, to be renamed over manifestFileName upon success.
 	// The closure here ensures this file is closed before moving on.
-	tempManifestPath, err := func() (string, error) {
-		temp, err := ioutil.TempFile(fm.dir, "nbs_manifest_")
+	tempManifestPath, err = func() (name string, ferr error) {
+		var temp *os.File
+		temp, ferr = ioutil.TempFile(fm.dir, "nbs_manifest_")
 
-		if err != nil {
-			return "", err
+		if ferr != nil {
+			return "", ferr
 		}
 
-		defer mustClose(temp)
-		err = writeManifest(temp, newContents)
+		defer func() {
+			closeErr := temp.Close()
 
-		if err != nil {
-			return "", err
+			if ferr == nil {
+				ferr = closeErr
+			}
+		}()
+
+		ferr = writeManifest(temp, newContents)
+
+		if ferr != nil {
+			return "", ferr
 		}
 
 		return temp.Name(), nil
@@ -220,31 +242,39 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 	}
 
 	defer func() {
-		err := lck.Unlock()
+		unlockErr := lck.Unlock()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err == nil {
+			err = unlockErr
+		}
 	}()
 
 	// writeHook is for testing, allowing other code to slip in and try to do stuff while we hold the lock.
 	if writeHook != nil {
-		err := writeHook()
+		err = writeHook()
 
 		if err != nil {
 			return manifestContents{}, err
 		}
 	}
 
+	var upstream manifestContents
 	// Read current manifest (if it exists). The closure ensures that the file is closed before moving on, so we can rename over it later if need be.
 	manifestPath := filepath.Join(fm.dir, manifestFileName)
-	upstream, err := func() (manifestContents, error) {
-		if f, err := openIfExists(manifestPath); err == nil && f != nil {
-			defer mustClose(f)
+	upstream, err = func() (upstream manifestContents, ferr error) {
+		if f, ferr := openIfExists(manifestPath); ferr == nil && f != nil {
+			defer func() {
+				closeErr := f.Close()
 
-			upstream, err := parseManifest(f)
+				if ferr != nil {
+					ferr = closeErr
+				}
+			}()
 
-			if err != nil {
-				return manifestContents{}, err
+			upstream, ferr = parseManifest(f)
+
+			if ferr != nil {
+				return manifestContents{}, ferr
 			}
 
 			if constants.NomsVersion != upstream.vers {
@@ -252,8 +282,8 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 			}
 
 			return upstream, nil
-		} else if err != nil {
-			return manifestContents{}, err
+		} else if ferr != nil {
+			return manifestContents{}, ferr
 		}
 
 		d.Chk.True(lastLock == addr{})
@@ -268,9 +298,9 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 		return upstream, nil
 	}
 
-	rerr := os.Rename(tempManifestPath, manifestPath)
+	err = os.Rename(tempManifestPath, manifestPath)
 
-	if rerr != nil {
+	if err != nil {
 		return manifestContents{}, err
 	}
 
@@ -285,8 +315,4 @@ func writeManifest(temp io.Writer, contents manifestContents) error {
 	_, err := io.WriteString(temp, strings.Join(strs, ":"))
 
 	return err
-}
-
-func mustClose(c io.Closer) {
-	d.PanicIfError(c.Close())
 }

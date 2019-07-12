@@ -13,7 +13,7 @@ func (csa chunkSourceAdapter) index() (tableIndex, error) {
 	return csa.tableIndex, nil
 }
 
-func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (chunkSource, error) {
+func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, tra tableReaderAt, blockSize uint64) (cs chunkSource, err error) {
 	index, err := parseTableIndex(idxData)
 
 	if err != nil {
@@ -22,7 +22,13 @@ func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, t
 
 	if indexCache != nil {
 		indexCache.lockEntry(name)
-		defer indexCache.unlockEntry(name)
+		defer func() {
+			unlockErr := indexCache.unlockEntry(name)
+
+			if err == nil {
+				err = unlockErr
+			}
+		}()
 		indexCache.put(name, index)
 	}
 

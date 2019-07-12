@@ -188,45 +188,51 @@ func (mm manifestManager) updateWillFail(lastLock addr) (cached manifestContents
 	return
 }
 
-func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (bool, manifestContents, error) {
+func (mm manifestManager) Fetch(ctx context.Context, stats *Stats) (exists bool, contents manifestContents, err error) {
 	entryTime := time.Now()
 
 	mm.lockOutFetch()
 	defer func() {
-		err := mm.allowFetch()
+		afErr := mm.allowFetch()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err == nil {
+			err = afErr
+		}
 	}()
 
-	cached, t, hit := mm.cache.Get(mm.Name())
+	f := func() (bool, manifestContents, error) {
+		cached, t, hit := mm.cache.Get(mm.Name())
 
-	if hit && t.After(entryTime) {
-		// Cache contains a manifest which is newer than entry time.
-		return true, cached, nil
+		if hit && t.After(entryTime) {
+			// Cache contains a manifest which is newer than entry time.
+			return true, cached, nil
+		}
+
+		t = time.Now()
+
+		exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
+
+		if err != nil {
+			return false, manifestContents{}, err
+		}
+
+		err = mm.cache.Put(mm.Name(), contents, t)
+
+		if err != nil {
+			return false, manifestContents{}, err
+		}
+
+		return exists, contents, nil
 	}
 
-	t = time.Now()
-
-	exists, contents, err := mm.m.ParseIfExists(ctx, stats, nil)
-
-	if err != nil {
-		return false, manifestContents{}, err
-	}
-
-	err = mm.cache.Put(mm.Name(), contents, t)
-
-	if err != nil {
-		return false, manifestContents{}, err
-	}
-
-	return exists, contents, nil
+	exists, contents, err = f()
+	return
 }
 
 // Callers MUST protect uses of Update with Lock/UnlockForUpdate.
 // Update does not call Lock/UnlockForUpdate() on its own because it is
 // intended to be used in a larger critical section along with updateWillFail.
-func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (manifestContents, error) {
+func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents manifestContents, stats *Stats, writeHook func() error) (contents manifestContents, err error) {
 	if upstream, _, hit := mm.cache.Get(mm.Name()); hit {
 		if lastLock != upstream.lock {
 			return upstream, nil
@@ -236,25 +242,31 @@ func (mm manifestManager) Update(ctx context.Context, lastLock addr, newContents
 
 	mm.lockOutFetch()
 	defer func() {
-		err := mm.allowFetch()
+		afErr := mm.allowFetch()
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err == nil {
+			err = afErr
+		}
 	}()
 
-	contents, err := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
+	f := func() (manifestContents, error) {
+		contents, err := mm.m.Update(ctx, lastLock, newContents, stats, writeHook)
 
-	if err != nil {
-		return contents, err
+		if err != nil {
+			return contents, err
+		}
+
+		err = mm.cache.Put(mm.Name(), contents, t)
+
+		if err != nil {
+			return manifestContents{}, err
+		}
+
+		return contents, nil
 	}
 
-	err = mm.cache.Put(mm.Name(), contents, t)
-
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	return contents, nil
+	contents, err = f()
+	return
 }
 
 func (mm manifestManager) Name() string {

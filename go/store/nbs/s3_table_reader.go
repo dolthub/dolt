@@ -17,7 +17,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/jpillora/backoff"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 const (
@@ -64,7 +63,8 @@ func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off
 	t1 := time.Now()
 
 	if s3or.tc != nil {
-		r, err := s3or.tc.checkout(name)
+		var r io.ReaderAt
+		r, err = s3or.tc.checkout(name)
 
 		if err != nil {
 			return 0, err
@@ -75,14 +75,17 @@ func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off
 				stats.FileBytesPerRead.Sample(uint64(len(p)))
 				stats.FileReadLatency.SampleTimeSince(t1)
 			}()
-			defer func() {
-				err := s3or.tc.checkin(name)
 
-				// TODO: fix panics
-				d.PanicIfError(err)
+			defer func() {
+				checkinErr := s3or.tc.checkin(name)
+
+				if err == nil {
+					err = checkinErr
+				}
 			}()
 
-			return r.ReadAt(p, off)
+			n, err = r.ReadAt(p, off)
+			return
 		}
 	}
 
@@ -90,7 +93,9 @@ func (s3or *s3ObjectReader) ReadAt(ctx context.Context, name addr, p []byte, off
 		stats.S3BytesPerRead.Sample(uint64(len(p)))
 		stats.S3ReadLatency.SampleTimeSince(t1)
 	}()
-	return s3or.readRange(ctx, name, p, s3RangeHeader(off, int64(len(p))))
+
+	n, err = s3or.readRange(ctx, name, p, s3RangeHeader(off, int64(len(p))))
+	return
 }
 
 func s3RangeHeader(off, length int64) string {
@@ -121,14 +126,18 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, 
 			Key:    aws.String(s3or.key(name.String())),
 			Range:  aws.String(rangeHeader),
 		}
-		result, err := s3or.s3.GetObjectWithContext(ctx, input)
-		d.PanicIfError(err)
-		d.PanicIfFalse(*result.ContentLength == int64(len(p)))
 
-		n, err := io.ReadFull(result.Body, p)
+		result, err := s3or.s3.GetObjectWithContext(ctx, input)
+
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed ranged read from S3\n%s\nerr type: %T\nerror: %v\n", input.GoString(), err, err)
+			return 0, err
 		}
+
+		if *result.ContentLength != int64(len(p)) {
+			return 0, fmt.Errorf("failed to read get entire range")
+		}
+
+		n, err = io.ReadFull(result.Body, p)
 		return n, err
 	}
 
@@ -144,11 +153,11 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, 
 		}
 		for ; isConnReset(err); n, err = read() {
 			dur := b.Duration()
-			fmt.Fprintf(os.Stderr, "Retrying S3 read in %s\n", dur.String())
 			time.Sleep(dur)
 		}
 	}
-	return
+
+	return n, err
 }
 
 func isConnReset(err error) bool {
