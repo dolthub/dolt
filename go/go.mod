@@ -47,7 +47,7 @@ require (
 	github.com/prometheus/procfs v0.0.0-20180725123919-05ee40e3a273 // indirect
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
 	github.com/shirou/gopsutil v2.18.12+incompatible
-	github.com/sirupsen/logrus v1.3.0
+	github.com/sirupsen/logrus v1.4.2
 	github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e
 	github.com/src-d/go-mysql-server v0.4.1-0.20190624170509-8702d43af506
 	github.com/stretchr/testify v1.3.0
