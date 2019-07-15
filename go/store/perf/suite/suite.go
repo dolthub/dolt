@@ -73,8 +73,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"io"
 	"io/ioutil"
 	"os"
@@ -88,6 +86,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"

@@ -118,7 +118,6 @@ func TestRoundTrips(t *testing.T) {
 
 func TestNonFiniteNumbers(tt *testing.T) {
 	t := func(f float64) (err error) {
-		// TODO: fix panics
 		defer func() {
 			if r := recover(); r != nil {
 				err = r.(error)
@@ -126,11 +125,8 @@ func TestNonFiniteNumbers(tt *testing.T) {
 		}()
 
 		v := Float(f)
-		err := d.Try(func() {
-			EncodeValue(v, Format_7_18)
-		})
-		assert.Error(tt, err)
-		assert.Contains(tt, err.Error(), s)
+		EncodeValue(v, Format_7_18)
+		return
 	}
 
 	err := t(math.NaN())
