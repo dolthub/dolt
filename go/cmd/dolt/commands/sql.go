@@ -274,11 +274,7 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Show:
-		sqlSch, rowIter, err := sqlNewEngine(query, root)
-		if err == nil {
-			err = prettyPrintResults(sqlSch, rowIter)
-		}
-		return nil, err
+		return nil, sqlShow(root, s)
 	case *sqlparser.Select:
 		sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
@@ -309,6 +305,16 @@ func sqlNewEngine(query string, root *doltdb.RootValue) (sql.Schema, sql.RowIter
 	engine.AddDatabase(db)
 	ctx := sql.NewEmptyContext()
 	return engine.Query(ctx, query)
+}
+
+// Executes a SQL show statement and prints the result to the CLI.
+func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
+	p, sch, err := dsql.BuildShowPipeline(context.TODO(), root, show)
+	if err != nil {
+		return err
+	}
+
+	return runPrintingPipeline(p, sch)
 }
 
 // Pretty prints the output of the new SQL engine
@@ -363,6 +369,40 @@ func prettyPrintResults(sqlSch sql.Schema, rowIter sql.RowIter) error {
 	}
 	if chanErr != io.EOF {
 		return errFmt("error processing results: %v", chanErr)
+	}
+
+	return nil
+}
+
+// Adds some print-handling stages to the pipeline given and runs it, returning any error.
+// Adds null-printing and fixed-width transformers. The schema given is assumed to be untyped (string-typed).
+func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
+	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
+	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
+
+	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
+	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+
+	// Redirect output to the CLI
+	cliWr := iohelp.NopWrCloser(cli.CliOut)
+
+	wr := tabular.NewTextTableWriter(cliWr, untypedSch)
+	p.RunAfter(func() { wr.Close(context.TODO()) })
+
+	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
+	p.SetOutput(cliSink)
+
+	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, untypedSch)))
+		return true
+	})
+
+	// Insert the table header row at the appropriate stage
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(untypedSch)))
+
+	p.Start()
+	if err := p.Wait(); err != nil {
+		return errFmt("error processing results: %v", err)
 	}
 
 	return nil
