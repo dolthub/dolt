@@ -12,7 +12,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"strconv"
-	"time"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -527,7 +526,7 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		return nil, err
 	}
 
-	p := pipeline.NewPartialPipeline(inFuncForChannel(cpChan))
+	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(cpChan))
 	p.AddStage(pipeline.NewNamedTransform("where", createWhereFn(selectStmt)))
 	if selectStmt.orderBy != nil {
 		p.AddStage(pipeline.NamedTransform{Name: "order by", Func: newSortingTransform(selectStmt.orderBy.Less)})
@@ -539,38 +538,6 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 	p.AddStage(createOutputSchemaMappingTransform(selectStmt))
 
 	return p, nil
-}
-
-// inFuncForChannel returns an InFunc that reads off the channel given. Probably belongs in the pipeline package
-// eventually.
-func inFuncForChannel(cpChan <-chan row.Row) pipeline.InFunc {
-	return func(p *pipeline.Pipeline, ch chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, noMoreChan <-chan struct{}) {
-		defer close(ch)
-
-		for {
-			select {
-			case <-noMoreChan:
-				return
-			default:
-				break
-			}
-
-			if p.IsStopping() {
-				return
-			}
-
-			select {
-			case r, ok := <-cpChan:
-				if ok {
-					ch <- pipeline.RowWithProps{Row: r, Props: pipeline.NoProps}
-				} else {
-					return
-				}
-			case <-time.After(100 * time.Millisecond):
-				// wake up and check stop condition
-			}
-		}
-	}
 }
 
 // Returns a transform function to limit the set of rows to the value specified by the statement. Must only be applied
