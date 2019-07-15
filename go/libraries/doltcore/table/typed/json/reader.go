@@ -23,17 +23,17 @@ type JSONReader struct {
 	ind    int
 }
 
-func OpenJSONReader(path string, fs filesys.ReadableFS, info *JSONFileInfo, format *types.Format, schPath string) (*JSONReader, error) {
+func OpenJSONReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *JSONFileInfo, schPath string) (*JSONReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewJSONReader(r, info, fs, format, schPath, path)
+	return NewJSONReader(nbf, r, info, fs, schPath, path)
 }
 
-func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, format *types.Format, schPath string, tblPath string) (*JSONReader, error) {
+func NewJSONReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, schPath string, tblPath string) (*JSONReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	if schPath == "" {
 		panic("schema must be provided")
@@ -60,7 +60,7 @@ func NewJSONReader(r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, f
 		return nil, err
 	}
 
-	decodedRows, err := jsonRows.decodeJSONRows(format, sch)
+	decodedRows, err := jsonRows.decodeJSONRows(nbf, sch)
 	info.SetRows(decodedRows)
 
 	return &JSONReader{r, br, info, sch, 0}, nil

@@ -8,20 +8,20 @@ type KVPCollection struct {
 	numSlices int
 	totalSize int64
 	slices    []types.KVPSlice
-	format    *types.Format
+	nbf       *types.NomsBinFormat
 }
 
 // NewKVPCollection creates a new KVPCollection from a sorted KVPSlice
-func NewKVPCollection(f *types.Format, sl types.KVPSlice) *KVPCollection {
-	return newKVPColl(f, cap(sl), 1, int64(len(sl)), []types.KVPSlice{sl})
+func NewKVPCollection(nbf *types.NomsBinFormat, sl types.KVPSlice) *KVPCollection {
+	return newKVPColl(nbf, cap(sl), 1, int64(len(sl)), []types.KVPSlice{sl})
 }
 
-func newKVPColl(f *types.Format, maxSize, numSlices int, totalSize int64, slices []types.KVPSlice) *KVPCollection {
+func newKVPColl(nbf *types.NomsBinFormat, maxSize, numSlices int, totalSize int64, slices []types.KVPSlice) *KVPCollection {
 	if slices == nil {
 		panic("invalid params")
 	}
 
-	return &KVPCollection{maxSize, numSlices, totalSize, slices, f}
+	return &KVPCollection{maxSize, numSlices, totalSize, slices, nbf}
 }
 
 // Size returns the total number of elements in the collection
@@ -31,7 +31,7 @@ func (coll *KVPCollection) Size() int64 {
 
 // Iterator returns an iterator that will iterate over the KVPs in the collection in order.
 func (coll *KVPCollection) Iterator() *KVPCollItr {
-	return NewItr(coll.format, coll)
+	return NewItr(coll.nbf, coll)
 }
 
 // DestructiveMerge merges two KVPCollections into a new collection.  This KVPCollection and the

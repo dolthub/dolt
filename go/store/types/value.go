@@ -29,7 +29,7 @@ type LesserValuable interface {
 	// String) then the natural ordering is used. For other Noms values the Hash of the value is
 	// used. When comparing Noms values of different type the following ordering is used:
 	// Bool < Float < String < everything else.
-	Less(f *Format, other LesserValuable) bool
+	Less(nbf *NomsBinFormat, other LesserValuable) bool
 }
 
 // Emptyable is an interface for Values which may or may not be empty
@@ -46,7 +46,7 @@ type Value interface {
 
 	// Hash is the hash of the value. All Noms values have a unique hash and if two values have the
 	// same hash they must be equal.
-	Hash(*Format) hash.Hash
+	Hash(*NomsBinFormat) hash.Hash
 
 	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	// Type()
@@ -54,7 +54,7 @@ type Value interface {
 
 	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
-	WalkRefs(*Format, RefCallback)
+	WalkRefs(*NomsBinFormat, RefCallback)
 
 	// typeOf is the internal implementation of types.TypeOf. It is not normalized
 	// and unions might have a single element, duplicates and be in the wrong
@@ -62,7 +62,7 @@ type Value interface {
 	typeOf() *Type
 
 	// writeTo writes the encoded version of the value to a nomsWriter.
-	writeTo(nomsWriter, *Format)
+	writeTo(nomsWriter, *NomsBinFormat)
 }
 
 type ValueSlice []Value
@@ -81,7 +81,7 @@ func (vs ValueSlice) Equals(other ValueSlice) bool {
 	return true
 }
 
-func (vs ValueSlice) Contains(format *Format, v Value) bool {
+func (vs ValueSlice) Contains(nbf *NomsBinFormat, v Value) bool {
 	for _, v := range vs {
 		if v.Equals(v) {
 			return true
@@ -92,20 +92,20 @@ func (vs ValueSlice) Contains(format *Format, v Value) bool {
 
 type ValueSort struct {
 	values []Value
-	format *Format
+	nbf    *NomsBinFormat
 }
 
 func (vs ValueSort) Len() int      { return len(vs.values) }
 func (vs ValueSort) Swap(i, j int) { vs.values[i], vs.values[j] = vs.values[j], vs.values[i] }
 func (vs ValueSort) Less(i, j int) bool {
-	return vs.values[i].Less(vs.format, vs.values[j])
+	return vs.values[i].Less(vs.nbf, vs.values[j])
 }
 func (vs ValueSort) Equals(other ValueSort) bool {
 	return ValueSlice(vs.values).Equals(ValueSlice(other.values))
 }
 
 func (vs ValueSort) Contains(v Value) bool {
-	return ValueSlice(vs.values).Contains(vs.format, v)
+	return ValueSlice(vs.values).Contains(vs.nbf, v)
 }
 
 type valueReadWriter interface {
@@ -114,7 +114,7 @@ type valueReadWriter interface {
 
 type valueImpl struct {
 	vrw     ValueReadWriter
-	fmt     *Format
+	nbf     *NomsBinFormat
 	buff    []byte
 	offsets []uint32
 }
@@ -123,11 +123,11 @@ func (v valueImpl) valueReadWriter() ValueReadWriter {
 	return v.vrw
 }
 
-func (v valueImpl) writeTo(enc nomsWriter, f *Format) {
+func (v valueImpl) writeTo(enc nomsWriter, nbf *NomsBinFormat) {
 	enc.writeRaw(v.buff)
 }
 
-func (v valueImpl) valueBytes(f *Format) []byte {
+func (v valueImpl) valueBytes(nbf *NomsBinFormat) []byte {
 	return v.buff
 }
 
@@ -136,7 +136,7 @@ func (v valueImpl) IsZeroValue() bool {
 	return v.buff == nil
 }
 
-func (v valueImpl) Hash(*Format) hash.Hash {
+func (v valueImpl) Hash(*NomsBinFormat) hash.Hash {
 	return hash.Of(v.buff)
 }
 
@@ -144,8 +144,8 @@ func (v valueImpl) decoder() valueDecoder {
 	return newValueDecoder(v.buff, v.vrw)
 }
 
-func (v valueImpl) format() *Format {
-	return v.fmt
+func (v valueImpl) format() *NomsBinFormat {
+	return v.nbf
 }
 
 func (v valueImpl) decoderAtOffset(offset int) valueDecoder {
@@ -163,12 +163,12 @@ func (v valueImpl) Equals(other Value) bool {
 	return false
 }
 
-func (v valueImpl) Less(f *Format, other LesserValuable) bool {
-	return valueLess(f, v, other.(Value))
+func (v valueImpl) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+	return valueLess(nbf, v, other.(Value))
 }
 
-func (v valueImpl) WalkRefs(f *Format, cb RefCallback) {
-	walkRefs(v.valueBytes(f), f, cb)
+func (v valueImpl) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+	walkRefs(v.valueBytes(nbf), nbf, cb)
 }
 
 type asValueImpl interface {

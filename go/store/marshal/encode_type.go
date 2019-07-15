@@ -22,12 +22,12 @@ import (
 //
 // If a Go struct contains a noms tag with original the field is skipped since
 // the Noms type depends on the original Noms value which is not available.
-func MarshalType(format *types.Format, v interface{}) (nt *types.Type, err error) {
-	return MarshalTypeOpt(format, v, Opt{})
+func MarshalType(nbf *types.NomsBinFormat, v interface{}) (nt *types.Type, err error) {
+	return MarshalTypeOpt(nbf, v, Opt{})
 }
 
 // MarshalTypeOpt is like MarshalType but with additional options.
-func MarshalTypeOpt(format *types.Format, v interface{}, opt Opt) (nt *types.Type, err error) {
+func MarshalTypeOpt(nbf *types.NomsBinFormat, v interface{}, opt Opt) (nt *types.Type, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -40,23 +40,23 @@ func MarshalTypeOpt(format *types.Format, v interface{}, opt Opt) (nt *types.Typ
 			}
 		}
 	}()
-	nt = MustMarshalTypeOpt(format, v, opt)
+	nt = MustMarshalTypeOpt(nbf, v, opt)
 	return
 }
 
 // MustMarshalType computes a Noms type from a Go type or panics if there is an
 // error.
-func MustMarshalType(format *types.Format, v interface{}) (nt *types.Type) {
-	return MustMarshalTypeOpt(format, v, Opt{})
+func MustMarshalType(nbf *types.NomsBinFormat, v interface{}) (nt *types.Type) {
+	return MustMarshalTypeOpt(nbf, v, Opt{})
 }
 
 // MustMarshalTypeOpt is like MustMarshalType but provides additional options.
-func MustMarshalTypeOpt(format *types.Format, v interface{}, opt Opt) (nt *types.Type) {
+func MustMarshalTypeOpt(nbf *types.NomsBinFormat, v interface{}, opt Opt) (nt *types.Type) {
 	rv := reflect.ValueOf(v)
 	tags := nomsTags{
 		set: opt.Set,
 	}
-	nt = encodeType(format, rv.Type(), map[string]reflect.Type{}, tags)
+	nt = encodeType(nbf, rv.Type(), map[string]reflect.Type{}, tags)
 
 	if nt == nil {
 		panic(&UnsupportedTypeError{Type: rv.Type()})
@@ -77,7 +77,7 @@ type TypeMarshaler interface {
 var typeOfTypesType = reflect.TypeOf((*types.Type)(nil))
 var typeMarshalerInterface = reflect.TypeOf((*TypeMarshaler)(nil)).Elem()
 
-func encodeType(format *types.Format, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) *types.Type {
+func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) *types.Type {
 	if t.Implements(typeMarshalerInterface) {
 		v := reflect.Zero(t)
 		typ, err := v.Interface().(TypeMarshaler).MarshalNomsType()
@@ -137,9 +137,9 @@ func encodeType(format *types.Format, t reflect.Type, seenStructs map[string]ref
 	case reflect.String:
 		return types.StringType
 	case reflect.Struct:
-		return structEncodeType(format, t, seenStructs)
+		return structEncodeType(nbf, t, seenStructs)
 	case reflect.Array, reflect.Slice:
-		elemType := encodeType(format, t.Elem(), seenStructs, nomsTags{})
+		elemType := encodeType(nbf, t.Elem(), seenStructs, nomsTags{})
 		if elemType == nil {
 			break
 		}
@@ -148,7 +148,7 @@ func encodeType(format *types.Format, t reflect.Type, seenStructs map[string]ref
 		}
 		return types.MakeListType(elemType)
 	case reflect.Map:
-		keyType := encodeType(format, t.Key(), seenStructs, nomsTags{})
+		keyType := encodeType(nbf, t.Key(), seenStructs, nomsTags{})
 		if keyType == nil {
 			break
 		}
@@ -157,7 +157,7 @@ func encodeType(format *types.Format, t reflect.Type, seenStructs map[string]ref
 			return types.MakeSetType(keyType)
 		}
 
-		valueType := encodeType(format, t.Elem(), seenStructs, nomsTags{})
+		valueType := encodeType(nbf, t.Elem(), seenStructs, nomsTags{})
 		if valueType != nil {
 			return types.MakeMapType(keyType, valueType)
 		}
@@ -172,7 +172,7 @@ func encodeType(format *types.Format, t reflect.Type, seenStructs map[string]ref
 // the type but we also need to look at the value. In these cases this returns
 // nil and we have to wait until we have a value to be able to determine the
 // type.
-func structEncodeType(format *types.Format, t reflect.Type, seenStructs map[string]reflect.Type) *types.Type {
+func structEncodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) *types.Type {
 	name := getStructName(t)
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
@@ -181,7 +181,7 @@ func structEncodeType(format *types.Format, t reflect.Type, seenStructs map[stri
 		seenStructs[name] = t
 	}
 
-	fields, knownShape, _ := typeFields(format, t, seenStructs, true, false)
+	fields, knownShape, _ := typeFields(nbf, t, seenStructs, true, false)
 
 	var structType *types.Type
 	if knownShape {

@@ -21,7 +21,7 @@ func (v UUID) Equals(other Value) bool {
 	return v == other
 }
 
-func (v UUID) Less(f *Format, other LesserValuable) bool {
+func (v UUID) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	if v2, ok := other.(UUID); ok {
 		for i := 0; i < uuidNumBytes; i++ {
 			b1 := v[i]
@@ -37,14 +37,14 @@ func (v UUID) Less(f *Format, other LesserValuable) bool {
 	return UUIDKind < other.Kind()
 }
 
-func (v UUID) Hash(f *Format) hash.Hash {
-	return getHash(v, f)
+func (v UUID) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(v, nbf)
 }
 
 func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (v UUID) WalkRefs(f *Format, cb RefCallback) {
+func (v UUID) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (v UUID) typeOf() *Type {
@@ -59,14 +59,14 @@ func (v UUID) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v UUID) writeTo(w nomsWriter, f *Format) {
+func (v UUID) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	id := UUID(v)
 	byteSl := id[:]
-	UUIDKind.writeTo(w, f)
+	UUIDKind.writeTo(w, nbf)
 	w.writeBytes(byteSl)
 }
 
-func (v UUID) valueBytes(f *Format) []byte {
+func (v UUID) valueBytes(nbf *NomsBinFormat) []byte {
 	return v[:]
 }
 

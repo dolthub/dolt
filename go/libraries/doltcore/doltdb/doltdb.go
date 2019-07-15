@@ -20,8 +20,8 @@ import (
 )
 
 func init() {
-	types.CreateEditAccForMapEdits = func(f *types.Format) types.EditAccumulator {
-		return edits.NewAsyncSortedEdits(f, 16*1024, 4, 2)
+	types.CreateEditAccForMapEdits = func(nbf *types.NomsBinFormat) types.EditAccumulator {
+		return edits.NewAsyncSortedEdits(nbf, 16*1024, 4, 2)
 	}
 }
 
@@ -133,7 +133,7 @@ func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types
 		prefixed = "#" + c
 	}
 
-	ap, err := spec.NewAbsolutePath(db.Format(), prefixed)
+	ap, err := spec.NewAbsolutePath(prefixed)
 
 	if err != nil {
 		return types.EmptyStruct(db.Format()), err

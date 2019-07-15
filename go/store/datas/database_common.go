@@ -128,7 +128,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadRef ty
 	}
 
 	commit := db.validateRefAsCommit(ctx, newHeadRef)
-	return db.doCommit(ctx, db.Format(), ds.ID(), commit, nil)
+	return db.doCommit(ctx, ds.ID(), commit, nil)
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
@@ -136,7 +136,7 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			return db.doCommit(ctx, db.Format(), ds.ID(), buildNewCommit(ctx, db.Format(), ds, v, opts), opts.Policy)
+			return db.doCommit(ctx, ds.ID(), buildNewCommit(ctx, ds, v, opts), opts.Policy)
 		},
 	)
 }
@@ -146,8 +146,8 @@ func (db *database) CommitValue(ctx context.Context, ds Dataset, v types.Value) 
 }
 
 // doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (db *database) doCommit(ctx context.Context, format *types.Format, datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
-	if !IsCommit(db.Format(), commit) {
+func (db *database) doCommit(ctx context.Context, datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
+	if !IsCommit(commit) {
 		d.Panic("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
 
@@ -165,7 +165,7 @@ func (db *database) doCommit(ctx context.Context, format *types.Format, datasetI
 			if hasHead {
 				head := r.(types.Ref).TargetValue(ctx, db)
 				currentHeadRef := types.NewRef(head, db.Format())
-				ancestorRef, found := FindCommonAncestor(ctx, db.Format(), commitRef, currentHeadRef, db)
+				ancestorRef, found := FindCommonAncestor(ctx, commitRef, currentHeadRef, db)
 				if !found {
 					return ErrMergeNeeded
 				}
@@ -183,7 +183,7 @@ func (db *database) doCommit(ctx context.Context, format *types.Format, datasetI
 					if err != nil {
 						return err
 					}
-					commitRef = db.WriteValue(ctx, NewCommit(format, merged, types.NewSet(ctx, db, commitRef, currentHeadRef), types.EmptyStruct(db.Format())))
+					commitRef = db.WriteValue(ctx, NewCommit(merged, types.NewSet(ctx, db, commitRef, currentHeadRef), types.EmptyStruct(db.Format())))
 				}
 			}
 		}
@@ -244,13 +244,13 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) types.
 	if v == nil {
 		panic(r.TargetHash().String() + " not found")
 	}
-	if !IsCommit(db.Format(), v) {
+	if !IsCommit(v) {
 		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, v, 10) + "  ...\n")
 	}
 	return v.(types.Struct)
 }
 
-func buildNewCommit(ctx context.Context, format *types.Format, ds Dataset, v types.Value, opts CommitOptions) types.Struct {
+func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) types.Struct {
 	parents := opts.Parents
 	if (parents == types.Set{}) {
 		parents = types.NewSet(ctx, ds.Database())
@@ -261,9 +261,9 @@ func buildNewCommit(ctx context.Context, format *types.Format, ds Dataset, v typ
 
 	meta := opts.Meta
 	if meta.IsZeroValue() {
-		meta = types.EmptyStruct(format)
+		meta = types.EmptyStruct(ds.Database().Format())
 	}
-	return NewCommit(format, v, parents, meta)
+	return NewCommit(v, parents, meta)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

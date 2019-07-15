@@ -32,14 +32,14 @@ func (tm testMap) SetValue(i int, v Value) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries.entries))
 	entries = append(entries, tm.entries.entries...)
 	entries[i].value = v
-	return testMap{mapEntrySlice{entries, tm.entries.f}, tm.knownBadKey}
+	return testMap{mapEntrySlice{entries, tm.entries.nbf}, tm.knownBadKey}
 }
 
 func (tm testMap) Remove(from, to int) testMap {
 	entries := make([]mapEntry, 0, len(tm.entries.entries)-(to-from))
 	entries = append(entries, tm.entries.entries[:from]...)
 	entries = append(entries, tm.entries.entries[to:]...)
-	return testMap{mapEntrySlice{entries, tm.entries.f}, tm.knownBadKey}
+	return testMap{mapEntrySlice{entries, tm.entries.nbf}, tm.knownBadKey}
 }
 
 func (tm testMap) MaybeGet(key Value) (v Value, ok bool) {

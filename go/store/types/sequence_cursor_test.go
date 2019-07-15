@@ -56,11 +56,11 @@ func (ts testSequence) valueReadWriter() ValueReadWriter {
 	panic("not reached")
 }
 
-func (ts testSequence) writeTo(nomsWriter, *Format) {
+func (ts testSequence) writeTo(nomsWriter, *NomsBinFormat) {
 	panic("not reached")
 }
 
-func (ts testSequence) format() *Format {
+func (ts testSequence) format() *NomsBinFormat {
 	return Format_7_18
 }
 
@@ -77,7 +77,7 @@ func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) valueBytes(*Format) []byte {
+func (ts testSequence) valueBytes(*NomsBinFormat) []byte {
 	panic("not reached")
 }
 
@@ -85,11 +85,11 @@ func (ts testSequence) valuesSlice(from, to uint64) []Value {
 	panic("not reached")
 }
 
-func (ts testSequence) Less(f *Format, other LesserValuable) bool {
+func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) Hash(*Format) hash.Hash {
+func (ts testSequence) Hash(*NomsBinFormat) hash.Hash {
 	panic("not reached")
 }
 
@@ -97,7 +97,7 @@ func (ts testSequence) WalkValues(cb ValueCallback) {
 	panic("not reached")
 }
 
-func (ts testSequence) WalkRefs(f *Format, cb RefCallback) {
+func (ts testSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 	panic("not reached")
 }
 

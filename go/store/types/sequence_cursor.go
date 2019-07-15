@@ -155,7 +155,7 @@ func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) {
 // Implemented by searching down the tree to the leaf sequence containing idx. Each
 // sequence cursor includes a back pointer to its parent so that it can follow the path
 // to the next leaf chunk when the cursor exhausts the entries in the current chunk.
-func newCursorAtIndex(ctx context.Context, seq sequence, idx uint64, f *Format) *sequenceCursor {
+func newCursorAtIndex(ctx context.Context, seq sequence, idx uint64) *sequenceCursor {
 	var cur *sequenceCursor
 	for {
 		cur = newSequenceCursor(cur, seq, 0)

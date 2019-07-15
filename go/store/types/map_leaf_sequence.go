@@ -19,22 +19,22 @@ type mapEntry struct {
 	value Value
 }
 
-func (entry mapEntry) writeTo(w nomsWriter, f *Format) {
-	entry.key.writeTo(w, f)
-	entry.value.writeTo(w, f)
+func (entry mapEntry) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	entry.key.writeTo(w, nbf)
+	entry.value.writeTo(w, nbf)
 }
 
-func readMapEntry(r *valueDecoder, f *Format) mapEntry {
-	return mapEntry{r.readValue(f), r.readValue(f)}
+func readMapEntry(r *valueDecoder, nbf *NomsBinFormat) mapEntry {
+	return mapEntry{r.readValue(nbf), r.readValue(nbf)}
 }
 
-func (entry mapEntry) equals(f *Format, other mapEntry) bool {
+func (entry mapEntry) equals(other mapEntry) bool {
 	return entry.key.Equals(other.key) && entry.value.Equals(other.value)
 }
 
 type mapEntrySlice struct {
 	entries []mapEntry
-	f       *Format
+	nbf     *NomsBinFormat
 }
 
 func (mes mapEntrySlice) Len() int { return len(mes.entries) }
@@ -42,7 +42,7 @@ func (mes mapEntrySlice) Swap(i, j int) {
 	mes.entries[i], mes.entries[j] = mes.entries[j], mes.entries[i]
 }
 func (mes mapEntrySlice) Less(i, j int) bool {
-	return mes.entries[i].key.Less(mes.f, mes.entries[j].key)
+	return mes.entries[i].key.Less(mes.nbf, mes.entries[j].key)
 }
 func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	if mes.Len() != other.Len() {
@@ -50,7 +50,7 @@ func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	}
 
 	for i, v := range mes.entries {
-		if !v.equals(mes.f, other.entries[i]) {
+		if !v.equals(other.entries[i]) {
 			return false
 		}
 	}
@@ -77,7 +77,7 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
-func (ml mapLeafSequence) writeTo(w nomsWriter, f *Format) {
+func (ml mapLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	w.writeRaw(ml.buff)
 }
 
@@ -88,7 +88,7 @@ func (ml mapLeafSequence) getItem(idx int) sequenceItem {
 	return readMapEntry(&dec, ml.format())
 }
 
-func (ml mapLeafSequence) WalkRefs(f *Format, cb RefCallback) {
+func (ml mapLeafSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 	walkRefs(ml.valueBytes(ml.format()), ml.format(), cb)
 }
 

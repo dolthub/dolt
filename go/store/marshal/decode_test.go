@@ -1140,7 +1140,7 @@ func TestDecodeCanSkipUnexportedField(t *testing.T) {
 	assert.Equal(S{42, false}, s)
 }
 
-func (u *primitiveType) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u *primitiveType) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	*u = primitiveType(v.(types.Float) - 1)
 	return nil
 }
@@ -1154,7 +1154,7 @@ func TestUnmarshalerPrimitiveType(t *testing.T) {
 	assert.Equal(primitiveType(42), u)
 }
 
-func (u *primitiveSliceType) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u *primitiveSliceType) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	sv := string(v.(types.String))
 	spl := strings.Split(sv, ",")
 	*u = make(primitiveSliceType, len(spl))
@@ -1173,7 +1173,7 @@ func TestUnmarshalerPrimitiveSliceType(t *testing.T) {
 	assert.Equal(primitiveSliceType{"a", "b", "c"}, u)
 }
 
-func (u *primitiveMapType) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u *primitiveMapType) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	*u = primitiveMapType{}
 	v.(types.Set).IterAll(context.Background(), func(v types.Value) {
 		sv := v.(types.String)
@@ -1199,7 +1199,7 @@ func TestUnmarshalerPrimitiveMapType(t *testing.T) {
 	}), u)
 }
 
-func (u *primitiveStructType) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u *primitiveStructType) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	n := int(v.(types.Float))
 	u.x = n / 3
 	u.y = n % 3
@@ -1215,7 +1215,7 @@ func TestUnmarshalerPrimitiveStructType(t *testing.T) {
 	assert.Equal(primitiveStructType{3, 1}, u)
 }
 
-func (u *builtinType) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u *builtinType) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	sv := v.(types.String)
 	*u = builtinType(*regexp.MustCompile(string(sv)))
 	return nil
@@ -1232,7 +1232,7 @@ func TestUnmarshalerBuiltinType(t *testing.T) {
 	assert.Equal(s, r.String())
 }
 
-func (u *wrappedMarshalerType) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u *wrappedMarshalerType) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	n := v.(types.Float)
 	*u = wrappedMarshalerType(int(n) - 2)
 	return nil
@@ -1283,13 +1283,13 @@ func TestUnmarshalerComplexStructType(t *testing.T) {
 	}, u)
 }
 
-func (u *returnsMarshalerError) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u *returnsMarshalerError) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	// Can't use u.err because an empty returnsMarshalerError is created for each
 	// call to UnmarshalNoms.
 	return errors.New("foo bar baz")
 }
 
-func (u panicsMarshaler) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u panicsMarshaler) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	panic("panic")
 }
 
@@ -1308,7 +1308,7 @@ type notPointer struct {
 	x int
 }
 
-func (u notPointer) UnmarshalNoms(ctx context.Context, f *types.Format, v types.Value) error {
+func (u notPointer) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	u.x++
 	return nil
 }

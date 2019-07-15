@@ -234,13 +234,13 @@ type CrossProductRowCallback func(r row.Row)
 // CrossProduct computes the cross-product of the table results given, calling the given callback once for each row in
 // the result set. The resultant rows will have the schema of this result set, and will have (N * M * ... X) rows, one
 // for every possible combination of entries in the table results given.
-func (rss *ResultSetSchema) CrossProduct(format *types.Format, tables []*TableResult, cb CrossProductRowCallback) {
+func (rss *ResultSetSchema) CrossProduct(nbf *types.NomsBinFormat, tables []*TableResult, cb CrossProductRowCallback) {
 	// special case: no tables means no rows
 	if len(tables) == 0 {
 		return
 	}
 
-	emptyRow := RowWithSchema{row.New(format, rss.destSch, row.TaggedValues{}), rss.destSch}
+	emptyRow := RowWithSchema{row.New(nbf, rss.destSch, row.TaggedValues{}), rss.destSch}
 	rss.cph(emptyRow, tables, cb)
 }
 

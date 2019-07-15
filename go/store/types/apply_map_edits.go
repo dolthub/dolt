@@ -85,7 +85,7 @@ func (stats AppliedEditStats) Add(other AppliedEditStats) AppliedEditStats {
 
 // ApplyEdits applies all the edits to a given Map and returns the resulting map, and some statistics about the edits
 // that were applied.
-func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map, AppliedEditStats) {
+func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats) {
 	var stats AppliedEditStats
 
 	if edits.NumEdits() == 0 {
@@ -110,7 +110,7 @@ func ApplyEdits(ctx context.Context, f *Format, edits EditProvider, m Map) (Map,
 	}
 
 	// asynchronously add mapWork to be done by the workers
-	go buildBatches(f, rc, wc, edits)
+	go buildBatches(m.Format(), rc, wc, edits)
 
 	// wait for workers to return results and then process them
 	var ch *sequenceChunker
@@ -211,7 +211,7 @@ func prepWorker(ctx context.Context, seq orderedSequence, wc chan mapWork) {
 }
 
 // buildBatches iterates over the sorted edits building batches of work to be completed by the worker threads.
-func buildBatches(f *Format, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
+func buildBatches(nbf *NomsBinFormat, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
 
 	batchSize := batchSizeStart
 	nextEdit := edits.Next()
@@ -228,7 +228,7 @@ func buildBatches(f *Format, rc chan chan mapWorkResult, wc chan mapWork, edits 
 
 			nextEdit = edits.Next()
 
-			if nextEdit != nil && !edit.Key.Less(f, nextEdit.Key) {
+			if nextEdit != nil && !edit.Key.Less(nbf, nextEdit.Key) {
 				// keys are sorted, so if this key is not less than the next key then they are equal and the next
 				// value will take precedence
 				continue

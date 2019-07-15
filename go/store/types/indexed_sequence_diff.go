@@ -15,15 +15,15 @@ func sendSpliceChange(changes chan<- Splice, closeChan <-chan struct{}, splice S
 	return true
 }
 
-func indexedSequenceDiff(ctx context.Context, f *Format, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
+func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
 	if last.treeLevel() > current.treeLevel() {
 		lastChild := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
-		return indexedSequenceDiff(ctx, f, lastChild, lastOffset, current, currentOffset, changes, closeChan, maxSpliceMatrixSize)
+		return indexedSequenceDiff(ctx, lastChild, lastOffset, current, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	if current.treeLevel() > last.treeLevel() {
 		currentChild := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
-		return indexedSequenceDiff(ctx, f, last, lastOffset, currentChild, currentOffset, changes, closeChan, maxSpliceMatrixSize)
+		return indexedSequenceDiff(ctx, last, lastOffset, currentChild, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	compareFn := last.getCompareFn(current)
@@ -88,7 +88,7 @@ func indexedSequenceDiff(ctx context.Context, f *Format, last sequence, lastOffs
 		if splice.SpFrom > 0 {
 			currentChildOffset += current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
 		}
-		if ok := indexedSequenceDiff(ctx, f, lastChild, lastChildOffset, currentChild, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
+		if ok := indexedSequenceDiff(ctx, lastChild, lastChildOffset, currentChild, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
 			return false
 		}
 	}

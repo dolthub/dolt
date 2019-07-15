@@ -147,7 +147,7 @@ func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
 }
 
 // Returns rows to insert from the set of values given
-func prepareInsertVals(format *types.Format, cols []schema.Column, values *sqlparser.Values, tableSch schema.Schema) ([]row.Row, error) {
+func prepareInsertVals(nbf *types.NomsBinFormat, cols []schema.Column, values *sqlparser.Values, tableSch schema.Schema) ([]row.Row, error) {
 
 	// Lack of primary keys is its own special kind of failure that we can detect before creating any rows
 	allKeysFound := true
@@ -168,7 +168,7 @@ func prepareInsertVals(format *types.Format, cols []schema.Column, values *sqlpa
 	rows := make([]row.Row, len(*values))
 
 	for i, valTuple := range *values {
-		r, err := makeRow(format, cols, tableSch, valTuple)
+		r, err := makeRow(nbf, cols, tableSch, valTuple)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +178,7 @@ func prepareInsertVals(format *types.Format, cols []schema.Column, values *sqlpa
 	return rows, nil
 }
 
-func makeRow(format *types.Format, columns []schema.Column, tableSch schema.Schema, tuple sqlparser.ValTuple) (row.Row, error) {
+func makeRow(nbf *types.NomsBinFormat, columns []schema.Column, tableSch schema.Schema, tuple sqlparser.ValTuple) (row.Row, error) {
 	if len(columns) != len(tuple) {
 		return errInsertRow("Wrong number of values for tuple %v", nodeToString(tuple))
 	}
@@ -262,7 +262,7 @@ func makeRow(format *types.Format, columns []schema.Column, tableSch schema.Sche
 		}
 	}
 
-	return row.New(format, tableSch, taggedVals), nil
+	return row.New(nbf, tableSch, taggedVals), nil
 }
 
 // Returns an error result with return type to match ExecuteInsert

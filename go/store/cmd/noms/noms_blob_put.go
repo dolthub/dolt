@@ -46,7 +46,7 @@ func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrenc
 	}
 
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(ctx, types.Format_7_18, dsPath)
+	db, ds, err := cfg.GetDataset(ctx, dsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return 1

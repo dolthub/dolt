@@ -7,19 +7,18 @@ package spec
 import (
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
-func CreateDatabaseSpecString(format *types.Format, protocol, db string) string {
-	return Spec{Protocol: protocol, DatabaseName: db}.String(format)
+func CreateDatabaseSpecString(protocol, db string) string {
+	return Spec{Protocol: protocol, DatabaseName: db}.String()
 }
 
-func CreateValueSpecString(format *types.Format, protocol, db, path string) string {
-	p, err := NewAbsolutePath(format, path)
+func CreateValueSpecString(protocol, db, path string) string {
+	p, err := NewAbsolutePath(path)
 	d.Chk.NoError(err)
-	return Spec{Protocol: protocol, DatabaseName: db, Path: p}.String(format)
+	return Spec{Protocol: protocol, DatabaseName: db, Path: p}.String()
 }
 
-func CreateHashSpecString(format *types.Format, protocol, db string, h hash.Hash) string {
-	return Spec{Protocol: protocol, DatabaseName: db, Path: AbsolutePath{Hash: h}}.String(format)
+func CreateHashSpecString(protocol, db string, h hash.Hash) string {
+	return Spec{Protocol: protocol, DatabaseName: db, Path: AbsolutePath{Hash: h}}.String()
 }

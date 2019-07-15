@@ -32,21 +32,21 @@ var annotationRe = regexp.MustCompile(`^([a-z]+)(\(([\w\-"']*)\))?`)
 type Path []PathPart
 
 type PathPart interface {
-	Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) Value
-	String(f *Format) string
+	Resolve(ctx context.Context, v Value, vr ValueReader) Value
+	String() string
 }
 
 // ParsePath parses str into a Path, or returns an error if parsing failed.
-func ParsePath(str string, f *Format) (Path, error) {
+func ParsePath(str string) (Path, error) {
 	if str == "" {
 		return Path{}, errors.New("empty path")
 	}
-	return constructPath(f, Path{}, str)
+	return constructPath(Path{}, str)
 }
 
 // MustParsePath parses str into a Path, or panics if parsing failed.
-func MustParsePath(str string, f *Format) Path {
-	p, err := ParsePath(str, f)
+func MustParsePath(str string) Path {
+	p, err := ParsePath(str)
 	if err != nil {
 		panic(err)
 	}
@@ -57,7 +57,7 @@ type keyIndexable interface {
 	setIntoKey(v bool) keyIndexable
 }
 
-func constructPath(f *Format, p Path, str string) (Path, error) {
+func constructPath(p Path, str string) (Path, error) {
 	if len(str) == 0 {
 		return p, nil
 	}
@@ -71,7 +71,7 @@ func constructPath(f *Format, p Path, str string) (Path, error) {
 			return Path{}, errors.New("invalid field: " + tail)
 		}
 		p = append(p, FieldPath{tail[:idx[1]]})
-		return constructPath(f, p, tail[idx[1]:])
+		return constructPath(p, tail[idx[1]:])
 
 	case '[':
 		if len(tail) == 0 {
@@ -93,7 +93,7 @@ func constructPath(f *Format, p Path, str string) (Path, error) {
 		} else {
 			p = append(p, NewHashIndexPath(h))
 		}
-		return constructPath(f, p, rem[1:])
+		return constructPath(p, rem[1:])
 
 	case '@':
 		ann, hasArg, arg, rem := getAnnotation(tail)
@@ -107,7 +107,7 @@ func constructPath(f *Format, p Path, str string) (Path, error) {
 			if err != nil {
 				return Path{}, fmt.Errorf("invalid position: %s", arg)
 			}
-			return constructPath(f, append(p, NewAtAnnotation(idx)), rem)
+			return constructPath(append(p, NewAtAnnotation(idx)), rem)
 
 		case "key":
 			if hasArg {
@@ -119,21 +119,21 @@ func constructPath(f *Format, p Path, str string) (Path, error) {
 			lastPart := p[len(p)-1]
 			if ki, ok := lastPart.(keyIndexable); ok {
 				p[len(p)-1] = ki.setIntoKey(true).(PathPart)
-				return constructPath(f, p, rem)
+				return constructPath(p, rem)
 			}
-			return Path{}, fmt.Errorf("cannot use @key annotation on: %s", lastPart.String(f))
+			return Path{}, fmt.Errorf("cannot use @key annotation on: %s", lastPart.String())
 
 		case "target":
 			if hasArg {
 				return Path{}, fmt.Errorf("@target annotation does not support arguments")
 			}
-			return constructPath(f, append(p, TargetAnnotation{}), rem)
+			return constructPath(append(p, TargetAnnotation{}), rem)
 
 		case "type":
 			if hasArg {
 				return Path{}, fmt.Errorf("@type annotation does not support arguments")
 			}
-			return constructPath(f, append(p, TypeAnnotation{}), rem)
+			return constructPath(append(p, TypeAnnotation{}), rem)
 
 		default:
 			return Path{}, fmt.Errorf("unsupported annotation: @%s", ann)
@@ -149,13 +149,13 @@ func constructPath(f *Format, p Path, str string) (Path, error) {
 
 // Resolve resolves a path relative to some value.
 // A ValueReader is required to resolve paths that contain the @target annotation.
-func (p Path) Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) (resolved Value) {
+func (p Path) Resolve(ctx context.Context, v Value, vr ValueReader) (resolved Value) {
 	resolved = v
 	for _, part := range p {
 		if resolved == nil {
 			break
 		}
-		resolved = part.Resolve(ctx, f, resolved, vr)
+		resolved = part.Resolve(ctx, resolved, vr)
 	}
 
 	return
@@ -180,10 +180,10 @@ func (p Path) Append(pp PathPart) Path {
 	return append(p1, pp)
 }
 
-func (p Path) String(f *Format) string {
+func (p Path) String() string {
 	strs := make([]string, 0, len(p))
 	for _, part := range p {
-		strs = append(strs, part.String(f))
+		strs = append(strs, part.String())
 	}
 	return strings.Join(strs, "")
 }
@@ -202,7 +202,7 @@ func NewFieldPath(name string) FieldPath {
 	return FieldPath{name}
 }
 
-func (fp FieldPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) Value {
+func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	switch v := v.(type) {
 	case Struct:
 		if sv, ok := v.MaybeGet(fp.Name); ok {
@@ -218,7 +218,7 @@ func (fp FieldPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueRea
 	return nil
 }
 
-func (fp FieldPath) String(f *Format) string {
+func (fp FieldPath) String() string {
 	return fmt.Sprintf(".%s", fp.Name)
 }
 
@@ -254,7 +254,7 @@ func newIndexPath(idx Value, intoKey bool) IndexPath {
 	return IndexPath{idx, intoKey}
 }
 
-func (ip IndexPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) Value {
+func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	seqIndex := func(getter func(i uint64) Value) Value {
 		n, ok := ip.Index.(Float)
 		if !ok {
@@ -293,7 +293,7 @@ func (ip IndexPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueRea
 	return nil
 }
 
-func (ip IndexPath) String(f *Format) (str string) {
+func (ip IndexPath) String() (str string) {
 	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), ip.Index))
 	if ip.IntoKey {
 		str += "@key"
@@ -333,7 +333,7 @@ func newHashIndexPath(h hash.Hash, intoKey bool) HashIndexPath {
 	return HashIndexPath{h, intoKey}
 }
 
-func (hip HashIndexPath) Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) (res Value) {
+func (hip HashIndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (res Value) {
 	var seq orderedSequence
 	var getCurrentValue func(cur *sequenceCursor) Value
 
@@ -365,7 +365,7 @@ func (hip HashIndexPath) Resolve(ctx context.Context, f *Format, v Value, vr Val
 	return getCurrentValue(cur)
 }
 
-func (hip HashIndexPath) String(f *Format) (str string) {
+func (hip HashIndexPath) String() (str string) {
 	str = fmt.Sprintf("[#%s]", hip.Hash.String())
 	if hip.IntoKey {
 		str += "@key"
@@ -446,11 +446,11 @@ Switch:
 type TypeAnnotation struct {
 }
 
-func (ann TypeAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) Value {
+func (ann TypeAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	return TypeOf(v)
 }
 
-func (ann TypeAnnotation) String(f *Format) string {
+func (ann TypeAnnotation) String() string {
 	return "@type"
 }
 
@@ -458,7 +458,7 @@ func (ann TypeAnnotation) String(f *Format) string {
 type TargetAnnotation struct {
 }
 
-func (ann TargetAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) Value {
+func (ann TargetAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	if vr == nil {
 		d.Panic("@target annotation requires a database to resolve against")
 	}
@@ -469,7 +469,7 @@ func (ann TargetAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr 
 	}
 }
 
-func (ann TargetAnnotation) String(f *Format) string {
+func (ann TargetAnnotation) String() string {
 	return "@target"
 }
 
@@ -488,7 +488,7 @@ func NewAtAnnotation(idx int64) AtAnnotation {
 	return AtAnnotation{idx, false}
 }
 
-func (ann AtAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr ValueReader) Value {
+func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
 	ai, ok := getAbsoluteIndex(v, ann.Index)
 	if !ok {
 		return nil
@@ -516,7 +516,7 @@ func (ann AtAnnotation) Resolve(ctx context.Context, f *Format, v Value, vr Valu
 	return nil
 }
 
-func (ann AtAnnotation) String(f *Format) (str string) {
+func (ann AtAnnotation) String() (str string) {
 	str = fmt.Sprintf("@at(%d)", ann.Index)
 	if ann.IntoKey {
 		str += "@key"

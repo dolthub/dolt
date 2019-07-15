@@ -11,11 +11,10 @@ import (
 
 type ValidatingDecoder struct {
 	vs     *ValueStore
-	format *Format
 }
 
 func NewValidatingDecoder(cs chunks.ChunkStore) *ValidatingDecoder {
-	return &ValidatingDecoder{NewValueStore(cs), getFormatForVersionString(cs.Version())}
+	return &ValidatingDecoder{NewValueStore(cs)}
 }
 
 // DecodedChunk holds a pointer to a Chunk and the Value that results from
@@ -30,9 +29,9 @@ type DecodedChunk struct {
 // the decoded Value.
 func (vbs *ValidatingDecoder) Decode(c *chunks.Chunk) DecodedChunk {
 	h := c.Hash()
-	v := decodeFromBytesWithValidation(c.Data(), vbs.vs, vbs.format)
+	v := decodeFromBytesWithValidation(c.Data(), vbs.vs)
 
-	if getHash(v, vbs.format) != h {
+	if getHash(v, vbs.vs.Format()) != h {
 		d.Panic("Invalid hash found")
 	}
 	return DecodedChunk{c, &v}

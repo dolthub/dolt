@@ -265,7 +265,7 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 			if !ok {
 				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but key %s maps to a %s", change.Key.(types.String), types.TypeOf(val).Describe(ctx))
 			}
-			if targetValue := ref.TargetValue(ctx, vr); !IsCommit(types.Format_7_18, targetValue) {
+			if targetValue := ref.TargetValue(ctx, vr); !IsCommit(targetValue) {
 				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but the ref at key %s points to a %s", change.Key.(types.String), types.TypeOf(targetValue).Describe(ctx))
 			}
 		}

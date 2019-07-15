@@ -23,7 +23,7 @@ type valueRec struct {
 const maxRefCount = 1 << 12 // ~16MB of data
 
 // WalkValues recursively walks over all types.Values reachable from r and calls cb on them.
-func WalkValues(ctx context.Context, format *Format, target Value, vr ValueReader, cb SkipValueCallback) {
+func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueReader, cb SkipValueCallback) {
 	visited := hash.HashSet{}
 	refs := map[hash.Hash]bool{}
 	values := []valueRec{{target, true}}
@@ -48,7 +48,7 @@ func WalkValues(ctx context.Context, format *Format, target Value, vr ValueReade
 			}
 
 			if col, ok := v.(Collection); ok && !col.asSequence().isLeaf() {
-				col.WalkRefs(format, func(r Ref) {
+				col.WalkRefs(nbf, func(r Ref) {
 					refs[r.TargetHash()] = false
 				})
 				continue

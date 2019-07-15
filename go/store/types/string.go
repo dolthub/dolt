@@ -23,21 +23,21 @@ func (s String) Equals(other Value) bool {
 	return s == other
 }
 
-func (s String) Less(f *Format, other LesserValuable) bool {
+func (s String) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	if s2, ok := other.(String); ok {
 		return s < s2
 	}
 	return StringKind < other.Kind()
 }
 
-func (s String) Hash(f *Format) hash.Hash {
-	return getHash(s, f)
+func (s String) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(s, nbf)
 }
 
 func (s String) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (s String) WalkRefs(f *Format, cb RefCallback) {
+func (s String) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (s String) typeOf() *Type {
@@ -52,16 +52,16 @@ func (s String) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (s String) writeTo(w nomsWriter, f *Format) {
-	StringKind.writeTo(w, f)
+func (s String) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	StringKind.writeTo(w, nbf)
 	w.writeString(string(s))
 }
 
-func (s String) valueBytes(f *Format) []byte {
+func (s String) valueBytes(nbf *NomsBinFormat) []byte {
 	// We know the size of the buffer here so allocate it once.
 	// StringKind, Length (UVarint), UTF-8 encoded string
 	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))
 	w := binaryNomsWriter{buff, 0}
-	s.writeTo(&w, f)
+	s.writeTo(&w, nbf)
 	return buff[:w.offset]
 }

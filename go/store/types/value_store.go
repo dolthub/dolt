@@ -19,7 +19,7 @@ import (
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value reading.
 type ValueReader interface {
-	Format() *Format
+	Format() *NomsBinFormat
 	ReadValue(ctx context.Context, h hash.Hash) Value
 	ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice
 }
@@ -55,7 +55,7 @@ type ValueStore struct {
 	unresolvedRefs       hash.HashSet
 	enforceCompleteness  bool
 	decodedChunks        *sizecache.SizeCache
-	format               *Format
+	nbf                  *NomsBinFormat
 
 	versOnce sync.Once
 }
@@ -110,7 +110,7 @@ func (lvs *ValueStore) expectVersion() {
 	if constants.NomsVersion != dataVersion {
 		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
 	}
-	lvs.format = getFormatForVersionString(dataVersion)
+	lvs.nbf = getFormatForVersionString(dataVersion)
 }
 
 func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
@@ -121,9 +121,9 @@ func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 	return lvs.cs
 }
 
-func (lvs *ValueStore) Format() *Format {
+func (lvs *ValueStore) Format() *NomsBinFormat {
 	lvs.versOnce.Do(lvs.expectVersion)
-	return lvs.format
+	return lvs.nbf
 }
 
 // ReadValue reads and decodes a value from lvs. It is not considered an error
@@ -234,11 +234,11 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) Ref {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 
-	c := EncodeValue(v, lvs.format)
+	c := EncodeValue(v, lvs.nbf)
 	d.PanicIfTrue(c.IsEmpty())
 	h := c.Hash()
-	height := maxChunkHeight(lvs.format, v) + 1
-	r := constructRef(lvs.format, h, TypeOf(v), height)
+	height := maxChunkHeight(lvs.nbf, v) + 1
+	r := constructRef(lvs.nbf, h, TypeOf(v), height)
 	lvs.bufferChunk(ctx, v, c, height)
 	return r
 }
@@ -284,7 +284,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		}
 
 		var err error
-		WalkRefs(pending, lvs.format, func(grandchildRef Ref) {
+		WalkRefs(pending, lvs.nbf, func(grandchildRef Ref) {
 			if err != nil {
 				// as soon as an error occurs ignore the rest of the refs
 				return
@@ -308,7 +308,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 	// Enforce invariant (1)
 	if height > 1 {
 		var err error
-		v.WalkRefs(lvs.format, func(childRef Ref) {
+		v.WalkRefs(lvs.nbf, func(childRef Ref) {
 			if err != nil {
 				// as soon as an error occurs ignore the rest of the refs
 				return
@@ -406,7 +406,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		for parent := range lvs.withBufferedChildren {
 			if pending, present := lvs.bufferedChunks[parent]; present {
 				var err error
-				WalkRefs(pending, lvs.format, func(reachable Ref) {
+				WalkRefs(pending, lvs.nbf, func(reachable Ref) {
 					if err != nil {
 						// as soon as an error occurs ignore the rest of the refs
 						return

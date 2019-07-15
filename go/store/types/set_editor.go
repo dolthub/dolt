@@ -203,11 +203,11 @@ type setEdit struct {
 
 type setEditSlice struct {
 	edits  []setEdit
-	format *Format
+	nbf    *NomsBinFormat
 }
 
 func (ses setEditSlice) Len() int      { return len(ses.edits) }
 func (ses setEditSlice) Swap(i, j int) { ses.edits[i], ses.edits[j] = ses.edits[j], ses.edits[i] }
 func (ses setEditSlice) Less(i, j int) bool {
-	return ses.edits[i].value.Less(ses.format, ses.edits[j].value)
+	return ses.edits[i].value.Less(ses.nbf, ses.edits[j].value)
 }

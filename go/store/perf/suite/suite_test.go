@@ -185,7 +185,7 @@ func runTestSuite(t *testing.T, mem bool) {
 	assert.Equal(*perfRepeatFlag*len(expectedTests), s.tearDownTest)
 
 	// The results should have been written to the "ds" dataset.
-	sp, err := spec.ForDataset(types.Format_7_18, ldbDir + "::ds")
+	sp, err := spec.ForDataset(ldbDir + "::ds")
 	assert.NoError(err)
 	defer sp.Close()
 	head := sp.GetDataset(context.Background()).HeadValue().(types.Struct)
@@ -263,13 +263,13 @@ func TestPrefixFlag(t *testing.T) {
 	Run("my-prefix/test", t, &PerfSuite{})
 
 	// The results should have been written to "foo/my-prefix/test" not "my-prefix/test".
-	sp, err := spec.ForDataset(types.Format_7_18, ldbDir + "::my-prefix/test")
+	sp, err := spec.ForDataset(ldbDir + "::my-prefix/test")
 	assert.NoError(err)
 	defer sp.Close()
 	_, ok := sp.GetDataset(context.Background()).MaybeHead()
 	assert.False(ok)
 
-	sp, err = spec.ForDataset(types.Format_7_18, ldbDir + "::foo/my-prefix/test")
+	sp, err = spec.ForDataset(ldbDir + "::foo/my-prefix/test")
 	assert.NoError(err)
 	defer sp.Close()
 	_, ok = sp.GetDataset(context.Background()).HeadValue().(types.Struct)

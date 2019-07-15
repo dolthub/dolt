@@ -323,7 +323,7 @@ func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
 
 // Adds some print-handling stages to the pipeline given and runs it, returning any error.
 // Adds null-printing and fixed-width transformers. The schema given is assumed to be untyped (string-typed).
-func runPrintingPipeline(format *types.Format, p *pipeline.Pipeline, untypedSch schema.Schema) error {
+func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
@@ -345,7 +345,7 @@ func runPrintingPipeline(format *types.Format, p *pipeline.Pipeline, untypedSch 
 	})
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(format, untypedSch, schema.ExtractAllColNames(untypedSch)))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(nbf, untypedSch, schema.ExtractAllColNames(untypedSch)))
 
 	p.Start()
 	if err := p.Wait(); err != nil {

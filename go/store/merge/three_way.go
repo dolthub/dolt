@@ -152,7 +152,7 @@ func ThreeWay(ctx context.Context, a, b, parent types.Value, vrw types.ValueRead
 		resolve = None
 	}
 	m := &merger{vrw, resolve, progress}
-	return m.threeWay(ctx, vrw.Format(), a, b, parent, types.Path{})
+	return m.threeWay(ctx, a, b, parent, types.Path{})
 }
 
 // a and b cannot be merged if they are of different NomsKind, or if at least one of the two is nil, or if either is a Noms primitive.
@@ -177,7 +177,7 @@ func updateProgress(progress chan<- struct{}) {
 	}
 }
 
-func (m *merger) threeWay(ctx context.Context, format *types.Format, a, b, parent types.Value, path types.Path) (merged types.Value, err error) {
+func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path types.Path) (merged types.Value, err error) {
 	defer updateProgress(m.progress)
 	if a == nil || b == nil {
 		d.Panic("Merge candidates cannont be nil: a = %v, b = %v", a, b)
@@ -186,17 +186,17 @@ func (m *merger) threeWay(ctx context.Context, format *types.Format, a, b, paren
 	switch a.Kind() {
 	case types.ListKind:
 		if aList, bList, pList, ok := listAssert(ctx, m.vrw, a, b, parent); ok {
-			return threeWayListMerge(ctx, format, aList, bList, pList)
+			return threeWayListMerge(ctx, aList, bList, pList)
 		}
 
 	case types.MapKind:
 		if aMap, bMap, pMap, ok := mapAssert(ctx, m.vrw, a, b, parent); ok {
-			return m.threeWayMapMerge(ctx, format, aMap, bMap, pMap, path)
+			return m.threeWayMapMerge(ctx, aMap, bMap, pMap, path)
 		}
 
 	case types.RefKind:
 		if aValue, bValue, pValue, ok := refAssert(ctx, a, b, parent, m.vrw); ok {
-			merged, err := m.threeWay(ctx, format, aValue, bValue, pValue, path)
+			merged, err := m.threeWay(ctx, aValue, bValue, pValue, path)
 			if err != nil {
 				return parent, err
 			}
@@ -205,12 +205,12 @@ func (m *merger) threeWay(ctx context.Context, format *types.Format, a, b, paren
 
 	case types.SetKind:
 		if aSet, bSet, pSet, ok := setAssert(ctx, m.vrw, a, b, parent); ok {
-			return m.threeWaySetMerge(ctx, format, aSet, bSet, pSet, path)
+			return m.threeWaySetMerge(ctx, aSet, bSet, pSet, path)
 		}
 
 	case types.StructKind:
-		if aStruct, bStruct, pStruct, ok := structAssert(format, a, b, parent); ok {
-			return m.threeWayStructMerge(ctx, format, aStruct, bStruct, pStruct, path)
+		if aStruct, bStruct, pStruct, ok := structAssert(a, b, parent); ok {
+			return m.threeWayStructMerge(ctx, aStruct, bStruct, pStruct, path)
 		}
 	}
 
@@ -221,7 +221,7 @@ func (m *merger) threeWay(ctx context.Context, format *types.Format, a, b, paren
 	return parent, newMergeConflict("Cannot merge %s and %s on top of %s.", types.TypeOf(a).Describe(ctx), types.TypeOf(b).Describe(ctx), pDescription)
 }
 
-func (m *merger) threeWayMapMerge(ctx context.Context, format *types.Format, a, b, parent types.Map, path types.Path) (merged types.Value, err error) {
+func (m *merger) threeWayMapMerge(ctx context.Context, a, b, parent types.Map, path types.Path) (merged types.Value, err error) {
 	apply := func(target candidate, change types.ValueChanged, newVal types.Value) candidate {
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
@@ -233,10 +233,10 @@ func (m *merger) threeWayMapMerge(ctx context.Context, format *types.Format, a, 
 			panic("Not Reached")
 		}
 	}
-	return m.threeWayOrderedSequenceMerge(ctx, format, mapCandidate{a}, mapCandidate{b}, mapCandidate{parent}, apply, path)
+	return m.threeWayOrderedSequenceMerge(ctx, mapCandidate{a}, mapCandidate{b}, mapCandidate{parent}, apply, path)
 }
 
-func (m *merger) threeWaySetMerge(ctx context.Context, format *types.Format, a, b, parent types.Set, path types.Path) (merged types.Value, err error) {
+func (m *merger) threeWaySetMerge(ctx context.Context, a, b, parent types.Set, path types.Path) (merged types.Value, err error) {
 	apply := func(target candidate, change types.ValueChanged, newVal types.Value) candidate {
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
@@ -248,10 +248,10 @@ func (m *merger) threeWaySetMerge(ctx context.Context, format *types.Format, a, 
 			panic("Not Reached")
 		}
 	}
-	return m.threeWayOrderedSequenceMerge(ctx, format, setCandidate{a}, setCandidate{b}, setCandidate{parent}, apply, path)
+	return m.threeWayOrderedSequenceMerge(ctx, setCandidate{a}, setCandidate{b}, setCandidate{parent}, apply, path)
 }
 
-func (m *merger) threeWayStructMerge(ctx context.Context, format *types.Format, a, b, parent types.Struct, path types.Path) (merged types.Value, err error) {
+func (m *merger) threeWayStructMerge(ctx context.Context, a, b, parent types.Struct, path types.Path) (merged types.Value, err error) {
 	apply := func(target candidate, change types.ValueChanged, newVal types.Value) candidate {
 		defer updateProgress(m.progress)
 		// Right now, this always iterates over all fields to create a new Struct, because there's no API for adding/removing a field from an existing struct type.
@@ -267,11 +267,11 @@ func (m *merger) threeWayStructMerge(ctx context.Context, format *types.Format, 
 			if change.ChangeType == types.DiffChangeAdded || change.ChangeType == types.DiffChangeModified {
 				data[field] = newVal
 			}
-			return structCandidate{types.NewStruct(format, targetVal.Name(), data)}
+			return structCandidate{types.NewStruct(m.vrw.Format(), targetVal.Name(), data)}
 		}
 		panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(change.Key).Describe(ctx)))
 	}
-	return m.threeWayOrderedSequenceMerge(ctx, format, structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
+	return m.threeWayOrderedSequenceMerge(ctx, structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
 }
 
 func listAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aList, bList, pList types.List, ok bool) {
@@ -331,7 +331,7 @@ func setAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent type
 	return aSet, bSet, pSet, aOk && bOk && pOk
 }
 
-func structAssert(format *types.Format, a, b, parent types.Value) (aStruct, bStruct, pStruct types.Struct, ok bool) {
+func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Struct, ok bool) {
 	var aOk, bOk, pOk bool
 	aStruct, aOk = a.(types.Struct)
 	bStruct, bOk = b.(types.Struct)
@@ -340,7 +340,7 @@ func structAssert(format *types.Format, a, b, parent types.Value) (aStruct, bStr
 			if parent != nil {
 				pStruct, pOk = parent.(types.Struct)
 			} else {
-				pStruct, pOk = types.NewStruct(format, aStruct.Name(), nil), true
+				pStruct, pOk = types.NewStruct(aStruct.Format(), aStruct.Name(), nil), true
 			}
 			return aStruct, bStruct, pStruct, pOk
 		}

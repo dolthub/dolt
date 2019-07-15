@@ -80,12 +80,12 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 	}
 }
 
-func orderedKeyFromSum(msd []metaTuple, f *Format) orderedKey {
+func orderedKeyFromSum(msd []metaTuple, nbf *NomsBinFormat) orderedKey {
 	sum := uint64(0)
 	for _, mt := range msd {
 		sum += mt.numLeaves()
 	}
-	return orderedKeyFromUint64(sum, f)
+	return orderedKeyFromUint64(sum, nbf)
 }
 
 // LoadLeafNodes loads the set of leaf nodes which contain the items

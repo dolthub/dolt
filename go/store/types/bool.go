@@ -22,21 +22,21 @@ func (b Bool) Equals(other Value) bool {
 	return b == other
 }
 
-func (b Bool) Less(f *Format, other LesserValuable) bool {
+func (b Bool) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	if b2, ok := other.(Bool); ok {
 		return !bool(b) && bool(b2)
 	}
 	return true
 }
 
-func (b Bool) Hash(f *Format) hash.Hash {
-	return getHash(b, f)
+func (b Bool) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(b, nbf)
 }
 
 func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (b Bool) WalkRefs(f *Format, cb RefCallback) {
+func (b Bool) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (b Bool) typeOf() *Type {
@@ -51,12 +51,12 @@ func (b Bool) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (b Bool) writeTo(w nomsWriter, f *Format) {
-	BoolKind.writeTo(w, f)
+func (b Bool) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	BoolKind.writeTo(w, nbf)
 	w.writeBool(bool(b))
 }
 
-func (b Bool) valueBytes(f *Format) []byte {
+func (b Bool) valueBytes(nbf *NomsBinFormat) []byte {
 	if bool(b) {
 		return []byte{byte(BoolKind), 1}
 	}

@@ -20,25 +20,25 @@ type sequence interface {
 	cumulativeNumberOfLeaves(idx int) uint64
 	Empty() bool
 	Equals(other Value) bool
-	format() *Format
+	format() *NomsBinFormat
 	getChildSequence(ctx context.Context, idx int) sequence
 	getCompareFn(other sequence) compareFn
 	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
 	getItem(idx int) sequenceItem
-	Hash(*Format) hash.Hash
+	Hash(*NomsBinFormat) hash.Hash
 	isLeaf() bool
 	Kind() NomsKind
 	Len() uint64
-	Less(f *Format, other LesserValuable) bool
+	Less(nbf *NomsBinFormat, other LesserValuable) bool
 	numLeaves() uint64
 	seqLen() int
 	treeLevel() uint64
 	typeOf() *Type
-	valueBytes(*Format) []byte
+	valueBytes(*NomsBinFormat) []byte
 	valueReadWriter() ValueReadWriter
 	valuesSlice(from, to uint64) []Value
-	WalkRefs(f *Format, cb RefCallback)
-	writeTo(nomsWriter, *Format)
+	WalkRefs(nbf *NomsBinFormat, cb RefCallback)
+	writeTo(nomsWriter, *NomsBinFormat)
 }
 
 const (

@@ -33,7 +33,7 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 
 	ds.Close()
 
-	dbSpec := spec.CreateDatabaseSpecString(types.Format_7_18, "nbs", dir)
+	dbSpec := spec.CreateDatabaseSpecString("nbs", dir)
 	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})
 	s.Equal("", rtnVal)
 }
@@ -58,9 +58,9 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	err = db.Close()
 	s.NoError(err)
 
-	dbSpec := spec.CreateDatabaseSpecString(types.Format_7_18, "nbs", dir)
-	datasetName := spec.CreateValueSpecString(types.Format_7_18, "nbs", dir, id)
-	dataset2Name := spec.CreateValueSpecString(types.Format_7_18, "nbs", dir, id2)
+	dbSpec := spec.CreateDatabaseSpecString("nbs", dir)
+	datasetName := spec.CreateValueSpecString("nbs", dir, id)
+	dataset2Name := spec.CreateValueSpecString("nbs", dir, id2)
 
 	// both datasets show up
 	rtnVal, _ := s.MustRun(main, []string{"ds", dbSpec})

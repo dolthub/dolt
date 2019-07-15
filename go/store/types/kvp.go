@@ -14,7 +14,7 @@ type KVPSlice []KVP
 
 type KVPSort struct {
 	Values []KVP
-	Format *Format
+	NBF    *NomsBinFormat
 }
 
 // Len returns the size of the slice
@@ -24,7 +24,7 @@ func (kvps KVPSort) Len() int {
 
 // Less returns a bool representing whether the key at index i is less than the key at index j
 func (kvps KVPSort) Less(i, j int) bool {
-	return kvps.Values[i].Key.Less(kvps.Format, kvps.Values[j].Key)
+	return kvps.Values[i].Key.Less(kvps.NBF, kvps.Values[j].Key)
 }
 
 // Swap swaps the KVP at index i with the KVP at index j

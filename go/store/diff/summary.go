@@ -16,8 +16,8 @@ import (
 )
 
 // Summary prints a summary of the diff between two values to stdout.
-func Summary(ctx context.Context, format *types.Format, value1, value2 types.Value) {
-	if datas.IsCommit(format, value1) && datas.IsCommit(format, value2) {
+func Summary(ctx context.Context, value1, value2 types.Value) {
+	if datas.IsCommit(value1) && datas.IsCommit(value2) {
 		fmt.Println("Comparing commit values")
 		value1 = value1.(types.Struct).Get(datas.ValueField)
 		value2 = value2.(types.Struct).Get(datas.ValueField)
@@ -47,7 +47,7 @@ func Summary(ctx context.Context, format *types.Format, value1, value2 types.Val
 				rp.Store(r)
 			}
 		}()
-		diffSummary(ctx, format, ch, value1, value2)
+		diffSummary(ctx, ch, value1, value2)
 	}()
 
 	acc := diffSummaryProgress{}
@@ -74,7 +74,7 @@ type diffSummaryProgress struct {
 	Adds, Removes, Changes, NewSize, OldSize uint64
 }
 
-func diffSummary(ctx context.Context, format *types.Format, ch chan diffSummaryProgress, v1, v2 types.Value) {
+func diffSummary(ctx context.Context, ch chan diffSummaryProgress, v1, v2 types.Value) {
 	if !v1.Equals(v2) {
 		if ShouldDescend(v1, v2) {
 			switch v1.Kind() {

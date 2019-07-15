@@ -16,7 +16,7 @@ import (
 type binaryNomsOperation func(left, right types.Value) types.Value
 
 // predicate function for two noms values, e.g. <
-type binaryNomsPredicate func(format *types.Format, left, right types.Value) bool
+type binaryNomsPredicate func(nbf *types.NomsBinFormat, left, right types.Value) bool
 
 // unaryNomsOperation knows how to turn a single noms value into another one, e.g. negation
 type unaryNomsOperation func(val types.Value) types.Value
@@ -257,36 +257,36 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		var predicate binaryNomsPredicate
 		switch e.Operator {
 		case sqlparser.EqualStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				return left.Equals(right)
 			}
 		case sqlparser.LessThanStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
-				return left.Less(format, right)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return left.Less(nbf, right)
 			}
 		case sqlparser.GreaterThanStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
-				return right.Less(format, left)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return right.Less(nbf, left)
 			}
 		case sqlparser.LessEqualStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
-				return left.Less(format, right) || left.Equals(right)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return left.Less(nbf, right) || left.Equals(right)
 			}
 		case sqlparser.GreaterEqualStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
-				return right.Less(format, left) || right.Equals(left)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return right.Less(nbf, left) || right.Equals(left)
 			}
 		case sqlparser.NotEqualStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				return !left.Equals(right)
 			}
 		case sqlparser.InStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				set := right.(types.Set)
 				return set.Has(context.Background(), left)
 			}
 		case sqlparser.NotInStr:
-			predicate = func(format *types.Format, left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				set := right.(types.Set)
 				return !set.Has(context.Background(), left)
 			}
@@ -321,7 +321,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 
 		getter := RowValGetterForKind(types.BoolKind)
-		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(format *types.Format, left, right types.Value) bool {
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 			return bool(left.(types.Bool) && right.(types.Bool))
 		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)
@@ -338,7 +338,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 
 		getter := RowValGetterForKind(types.BoolKind)
-		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(format *types.Format, left, right types.Value) bool {
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 			return bool(left.(types.Bool) || right.(types.Bool))
 		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)

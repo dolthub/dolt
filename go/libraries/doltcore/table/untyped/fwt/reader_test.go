@@ -94,7 +94,7 @@ func readTestRows(t *testing.T, inputStr string, fwtSch *FWTSchema, sep string) 
 	const path = "/file.csv"
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
-	fwtRd, err := OpenFWTReader(path, fs, types.Format_7_18, fwtSch, sep)
+	fwtRd, err := OpenFWTReader(types.Format_7_18, path, fs, fwtSch, sep)
 	defer fwtRd.Close(context.Background())
 
 	if err != nil {

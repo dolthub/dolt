@@ -84,13 +84,13 @@ func pathsFromDiff(v1, v2 types.Value, leftRight bool) []string {
 	sChan := make(chan struct{})
 
 	go func() {
-		Diff(context.Background(), types.Format_7_18, v1, v2, dChan, sChan, leftRight, nil)
+		Diff(context.Background(), v1, v2, dChan, sChan, leftRight, nil)
 		close(dChan)
 	}()
 
 	var paths []string
 	for d := range dChan {
-		paths = append(paths, d.Path.String(types.Format_7_18))
+		paths = append(paths, d.Path.String())
 	}
 	return paths
 }
@@ -99,7 +99,7 @@ func mustParsePath(assert *assert.Assertions, s string) types.Path {
 	if s == "" {
 		return nil
 	}
-	p, err := types.ParsePath(s, types.Format_7_18)
+	p, err := types.ParsePath(s)
 	assert.NoError(err)
 	return p
 }
@@ -124,7 +124,7 @@ func TestNomsDiffPrintMap(t *testing.T) {
 		m1 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
 		m2 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, m1, m2, leftRight)
+		PrintDiff(context.Background(), buf, m1, m2, leftRight)
 		assert.Equal(expected, buf.String())
 
 		paths := pathsFromDiff(m1, m2, leftRight)
@@ -185,14 +185,14 @@ func TestNomsDiffPrintSet(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, s1, s2, leftRight)
+		PrintDiff(context.Background(), buf, s1, s2, leftRight)
 		assert.Equal(expected1, buf.String())
 
 		paths := pathsFromDiff(s1, s2, leftRight)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, s3, s4, leftRight)
+		PrintDiff(context.Background(), buf, s3, s4, leftRight)
 		assert.Equal(expected2, buf.String())
 
 		paths = pathsFromDiff(s3, s4, leftRight)
@@ -223,12 +223,12 @@ func TestNomsDiffPrintStop(t *testing.T) {
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
 		mlw := &writers.MaxLineWriter{Dest: buf, MaxLines: 2}
-		PrintDiff(context.Background(), types.Format_7_18, mlw, s1, s2, leftRight)
+		PrintDiff(context.Background(), mlw, s1, s2, leftRight)
 		assert.Equal(expected1, buf.String())
 
 		buf = &bytes.Buffer{}
 		mlw = &writers.MaxLineWriter{Dest: buf, MaxLines: 2}
-		PrintDiff(context.Background(), types.Format_7_18, mlw, s3, s4, leftRight)
+		PrintDiff(context.Background(), mlw, s3, s4, leftRight)
 		assert.Equal(expected2, buf.String())
 	}
 
@@ -294,14 +294,14 @@ func TestNomsDiffPrintStruct(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, m1, m2, leftRight)
+		PrintDiff(context.Background(), buf, m1, m2, leftRight)
 		assert.Equal(expected1, buf.String())
 
 		paths := pathsFromDiff(m1, m2, leftRight)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, s3, s4, leftRight)
+		PrintDiff(context.Background(), buf, s3, s4, leftRight)
 		assert.Equal(expected2, buf.String())
 
 		paths = pathsFromDiff(s3, s4, leftRight)
@@ -336,7 +336,7 @@ func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
 	m2 := types.NewMap(context.Background(), vs, k1, types.Bool(false))
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, m1, m2, leftRight)
+		PrintDiff(context.Background(), buf, m1, m2, leftRight)
 		a.Equal(expected1, buf.String())
 	}
 	tf(true)
@@ -390,21 +390,21 @@ func TestNomsDiffPrintList(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, l1, l2, leftRight)
+		PrintDiff(context.Background(), buf, l1, l2, leftRight)
 		assert.Equal(expected1, buf.String())
 
 		paths := pathsFromDiff(l1, l2, leftRight)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, l3, l4, leftRight)
+		PrintDiff(context.Background(), buf, l3, l4, leftRight)
 		assert.Equal(expected2, buf.String())
 
 		paths = pathsFromDiff(l3, l4, leftRight)
 		assert.Equal(expectedPaths2, paths)
 
 		buf = &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, l5, l6, leftRight)
+		PrintDiff(context.Background(), buf, l5, l6, leftRight)
 		assert.Equal(expected3, buf.String())
 
 		paths = pathsFromDiff(l5, l6, leftRight)
@@ -428,7 +428,7 @@ func TestNomsDiffPrintBlob(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, b1, b2, leftRight)
+		PrintDiff(context.Background(), buf, b1, b2, leftRight)
 		assert.Equal(expected, buf.String())
 
 		paths := pathsFromDiff(b1, b2, leftRight)
@@ -454,14 +454,14 @@ func TestNomsDiffPrintType(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, t1, t2, leftRight)
+		PrintDiff(context.Background(), buf, t1, t2, leftRight)
 		assert.Equal(expected1, buf.String())
 
 		paths := pathsFromDiff(t1, t2, leftRight)
 		assert.Equal(expectedPaths1, paths)
 
 		buf = &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, t3, t4, leftRight)
+		PrintDiff(context.Background(), buf, t3, t4, leftRight)
 		assert.Equal(expected2, buf.String())
 
 		paths = pathsFromDiff(t3, t4, leftRight)
@@ -484,7 +484,7 @@ func TestNomsDiffPrintRef(t *testing.T) {
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
-		PrintDiff(context.Background(), types.Format_7_18, buf, r1, r2, leftRight)
+		PrintDiff(context.Background(), buf, r1, r2, leftRight)
 		test.EqualsIgnoreHashes(t, expected, buf.String())
 
 		paths := pathsFromDiff(r1, r2, leftRight)

@@ -26,7 +26,7 @@ func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
 	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
 }
 
-func (bl blobLeafSequence) writeTo(w nomsWriter, f *Format) {
+func (bl blobLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	w.writeRaw(bl.buff)
 }
 

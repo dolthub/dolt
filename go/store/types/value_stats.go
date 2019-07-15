@@ -18,24 +18,24 @@ type ValueStats interface {
 	String() string
 }
 
-func WriteValueStats(ctx context.Context, format *Format, w io.Writer, v Value, vr ValueReader) {
+func WriteValueStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) {
 	switch v.Kind() {
 	case BoolKind, FloatKind, StringKind, RefKind, StructKind, TypeKind, TupleKind:
-		writeUnchunkedValueStats(format, w, v, vr)
+		writeUnchunkedValueStats(w, v, vr)
 	case BlobKind, ListKind, MapKind, SetKind:
-		writePtreeStats(ctx, format, w, v, vr)
+		writePtreeStats(ctx, w, v, vr)
 	}
 }
 
-func writeUnchunkedValueStats(f *Format, w io.Writer, v Value, vr ValueReader) {
-	fmt.Fprintf(w, "Kind: %s\nCompressedSize: %s\n", v.Kind().String(), humanize.Bytes(compressedSize(f, v)))
+func writeUnchunkedValueStats(w io.Writer, v Value, vr ValueReader) {
+	fmt.Fprintf(w, "Kind: %s\nCompressedSize: %s\n", v.Kind().String(), humanize.Bytes(compressedSize(vr.Format(), v)))
 }
 
 const treeRowFormat = "%5s%20s%20s%20s\n"
 
 var treeLevelHeader = fmt.Sprintf(treeRowFormat, "Level", "Nodes", "Values/Node", "Size/Node")
 
-func writePtreeStats(ctx context.Context, format *Format, w io.Writer, v Value, vr ValueReader) {
+func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) {
 	totalCompressedSize := uint64(0)
 	totalChunks := uint64(0)
 
@@ -54,7 +54,7 @@ func writePtreeStats(ctx context.Context, format *Format, w io.Writer, v Value, 
 		for _, n := range nodes {
 			chunkCount++
 			if level > 0 {
-				n.WalkRefs(format, func(r Ref) {
+				n.WalkRefs(vr.Format(), func(r Ref) {
 					children = append(children, r)
 				})
 			}
@@ -62,10 +62,10 @@ func writePtreeStats(ctx context.Context, format *Format, w io.Writer, v Value, 
 			s := n.(Collection).asSequence()
 			valueCount += uint64(s.seqLen())
 
-			h := n.Hash(format)
+			h := n.Hash(vr.Format())
 			if !visited.Has(h) {
 				// Indexed Ptrees can share nodes within the same tree level. Only count each unique value once
-				byteSize += compressedSize(format, n)
+				byteSize += compressedSize(vr.Format(), n)
 				visited.Insert(h)
 			}
 		}
@@ -90,8 +90,8 @@ func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) {
 		humanize.Bytes(avgSize))
 }
 
-func compressedSize(f *Format, v Value) uint64 {
-	chunk := EncodeValue(v, f)
+func compressedSize(nbf *NomsBinFormat, v Value) uint64 {
+	chunk := EncodeValue(v, nbf)
 	compressed := snappy.Encode(nil, chunk.Data())
 	return uint64(len(compressed))
 }

@@ -41,7 +41,7 @@ func TestCommonPrefixCount(t *testing.T) {
 
 	for i, tc := range testCases {
 		path, expected := tc[0].(string), tc[1].(int)
-		p, err := types.ParsePath(path, types.Format_7_18)
+		p, err := types.ParsePath(path)
 		assert.NoError(err)
 		assert.Equal(expected, commonPrefixCount(lastPath, p), "failed for paths[%d]: %s", i, path)
 		lastPath = p
@@ -124,7 +124,7 @@ func getPatch(g1, g2 types.Value) Patch {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(context.Background(), types.Format_7_18, g1, g2, dChan, sChan, true, nil)
+		Diff(context.Background(), g1, g2, dChan, sChan, true, nil)
 		close(dChan)
 	}()
 
@@ -183,7 +183,7 @@ func TestUpdateNode(t *testing.T) {
 	doTest := func(pp types.PathPart, parent, ov, nv, exp types.Value, f testFunc) {
 		stack := &patchStack{}
 		se := &stackElem{path: []types.PathPart{pp}, pathPart: pp, changeType: types.DiffChangeModified, oldValue: ov, newValue: nv}
-		updated := stack.updateNode(context.Background(), types.Format_7_18, se, parent)
+		updated := stack.updateNode(context.Background(), se, parent)
 		testVal := f(updated)
 		assert.True(exp.Equals(testVal), "%s != %s", nv, testVal)
 	}
@@ -238,7 +238,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 	dChan := make(chan Difference)
 	sChan := make(chan struct{})
 	go func() {
-		Diff(context.Background(), types.Format_7_18, n1, n2, dChan, sChan, leftRight, nil)
+		Diff(context.Background(), n1, n2, dChan, sChan, leftRight, nil)
 		close(dChan)
 	}()
 

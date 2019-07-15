@@ -26,14 +26,14 @@ import (
 // one is applied in order. When done in combination with the stack, this enables
 // all Differences that change a particular node to be applied to that node
 // before it gets assigned back to it's parent.
-func Apply(ctx context.Context, format *types.Format, root types.Value, patch Patch) types.Value {
+func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patch Patch) types.Value {
 	if len(patch) == 0 {
 		return root
 	}
 
 	var lastPath types.Path
 	stack := patchStack{}
-	sort.Sort(PatchSort{patch, format})
+	sort.Sort(PatchSort{patch, nbf})
 
 	// Push the element on the stack that corresponds to the root
 	// node.
@@ -53,7 +53,7 @@ func Apply(ctx context.Context, format *types.Format, root types.Value, patch Pa
 		// stack early and set the idx to be the len(p) - 1.
 		// Otherwise, if the paths are different we can call commonPrefixCount()
 		if len(p) > 0 && p.Equals(lastPath) {
-			stack.pop(ctx, format)
+			stack.pop(ctx)
 			idx = len(p) - 1
 		} else {
 			idx = commonPrefixCount(lastPath, p)
@@ -65,7 +65,7 @@ func Apply(ctx context.Context, format *types.Format, root types.Value, patch Pa
 		// referenced by this p. Popping an element on the stack, folds that
 		// value into it's parent.
 		for idx < stack.Len()-1 {
-			stack.pop(ctx, format)
+			stack.pop(ctx)
 		}
 
 		// tail is the part of the current path that has not yet been pushed
@@ -75,7 +75,7 @@ func Apply(ctx context.Context, format *types.Format, root types.Value, patch Pa
 		for i, pp := range tail {
 			top := stack.top()
 			parent := top.newestValue()
-			oldValue := pp.Resolve(ctx, format, parent, nil)
+			oldValue := pp.Resolve(ctx, parent, nil)
 			var newValue types.Value
 			if i == len(tail)-1 { // last pathPart in this path
 				newValue = oldValue
@@ -98,7 +98,7 @@ func Apply(ctx context.Context, format *types.Format, root types.Value, patch Pa
 	// stack and return the new root.
 	var newRoot stackElem
 	for stack.Len() > 0 {
-		newRoot = stack.pop(ctx, format)
+		newRoot = stack.pop(ctx)
 	}
 	return newRoot.newValue
 }
@@ -107,7 +107,7 @@ func Apply(ctx context.Context, format *types.Format, root types.Value, patch Pa
 // information that it needs to update 'parent' with 'newVal'. 'oldVal' is also
 // passed in so that Sets can be updated correctly. This function is used by
 // the patchStack Pop() function to merge values into a new graph.
-func (stack *patchStack) updateNode(ctx context.Context, format *types.Format, top *stackElem, parent types.Value) types.Value {
+func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent types.Value) types.Value {
 	d.PanicIfTrue(parent == nil)
 	switch part := top.pathPart.(type) {
 	case types.FieldPath:
@@ -148,7 +148,7 @@ func (stack *patchStack) updateNode(ctx context.Context, format *types.Format, t
 			case types.DiffChangeModified:
 				if part.IntoKey {
 					newPart := types.IndexPath{Index: part.Index}
-					ov := newPart.Resolve(ctx, format, parent, nil)
+					ov := newPart.Resolve(ctx, parent, nil)
 					return el.Edit().Remove(part.Index).Set(top.newValue, ov).Map(ctx)
 				}
 				return el.Edit().Set(part.Index, top.newValue).Map(ctx)
@@ -175,7 +175,7 @@ func (stack *patchStack) updateNode(ctx context.Context, format *types.Format, t
 			}
 		case types.Map:
 			keyPart := types.HashIndexPath{Hash: part.Hash, IntoKey: true}
-			k := keyPart.Resolve(ctx, format, parent, nil)
+			k := keyPart.Resolve(ctx, parent, nil)
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				k := top.newKeyValue
@@ -250,13 +250,13 @@ func (stack *patchStack) top() *stackElem {
 
 // pop applies the change to the graph. When an element is 'pop'ed from the stack,
 // this function uses the pathPart to merge that value into it's parent.
-func (stack *patchStack) pop(ctx context.Context, format *types.Format) stackElem {
+func (stack *patchStack) pop(ctx context.Context) stackElem {
 	top := stack.top()
 	stack.vals = stack.vals[:len(stack.vals)-1]
 	if stack.Len() > 0 {
 		newTop := stack.top()
 		parent := newTop.newestValue()
-		newTop.newValue = stack.updateNode(ctx, format, top, parent)
+		newTop.newValue = stack.updateNode(ctx, top, parent)
 	}
 	return *top
 }

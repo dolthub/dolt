@@ -6,9 +6,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
-func sorter(f *types.Format, in, out chan types.KVPSlice) {
+func sorter(nbf *types.NomsBinFormat, in, out chan types.KVPSlice) {
 	for kvps := range in {
-		sort.Stable(types.KVPSort{kvps, f})
+		sort.Stable(types.KVPSort{kvps, nbf})
 		out <- kvps
 	}
 }
@@ -47,13 +47,13 @@ type AsyncSortedEdits struct {
 	accumulating []types.KVP
 	sortedColls  []*KVPCollection
 
-	format *types.Format
+	nbf *types.NomsBinFormat
 }
 
 // NewAsyncSortedEdits creates an AsyncSortedEdits object that creates batches of size 'sliceSize' and kicks off
 // 'asyncConcurrency' go routines for background sorting of batches.  The final Sort call is processed with
 // 'sortConcurrency' go routines
-func NewAsyncSortedEdits(f *types.Format, sliceSize, asyncConcurrency, sortConcurrency int) *AsyncSortedEdits {
+func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, sortConcurrency int) *AsyncSortedEdits {
 	sortChan := make(chan types.KVPSlice, asyncConcurrency*8)
 	resChan := make(chan types.KVPSlice, asyncConcurrency*8)
 	doneChan := make(chan bool, asyncConcurrency)
@@ -64,7 +64,7 @@ func NewAsyncSortedEdits(f *types.Format, sliceSize, asyncConcurrency, sortConcu
 				doneChan <- true
 			}()
 
-			sorter(f, sortChan, resChan)
+			sorter(nbf, sortChan, resChan)
 		}()
 	}
 
@@ -77,7 +77,7 @@ func NewAsyncSortedEdits(f *types.Format, sliceSize, asyncConcurrency, sortConcu
 		doneChan:         doneChan,
 		accumulating:     make([]types.KVP, 0, sliceSize),
 		sortedColls:      nil,
-		format:           f,
+		nbf:              nbf,
 	}
 }
 
@@ -100,7 +100,7 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 	for {
 		select {
 		case val := <-ase.resultChan:
-			coll := NewKVPCollection(ase.format, val)
+			coll := NewKVPCollection(ase.nbf, val)
 			ase.sortedColls = append(ase.sortedColls, coll)
 
 		default:
@@ -116,7 +116,7 @@ func (ase *AsyncSortedEdits) FinishedEditing() types.EditProvider {
 
 	if len(ase.accumulating) > 0 {
 		sl := types.KVPSlice(ase.accumulating)
-		sort.Stable(types.KVPSort{sl, ase.format})
+		sort.Stable(types.KVPSort{sl, ase.nbf})
 
 		ase.resultChan <- sl
 	}
@@ -134,7 +134,7 @@ func (ase *AsyncSortedEdits) wait() {
 	for running > 0 {
 		select {
 		case val := <-ase.resultChan:
-			coll := NewKVPCollection(ase.format, val)
+			coll := NewKVPCollection(ase.nbf, val)
 			ase.sortedColls = append(ase.sortedColls, coll)
 
 		case <-ase.doneChan:
@@ -145,7 +145,7 @@ func (ase *AsyncSortedEdits) wait() {
 	for {
 		select {
 		case val := <-ase.resultChan:
-			coll := NewKVPCollection(ase.format, val)
+			coll := NewKVPCollection(ase.nbf, val)
 			ase.sortedColls = append(ase.sortedColls, coll)
 		default:
 			close(ase.resultChan)
@@ -238,9 +238,9 @@ func (ase *AsyncSortedEdits) Iterator() types.EditProvider {
 	case 0:
 		return types.EmptyEditProvider{}
 	case 1:
-		return NewItr(ase.format, ase.sortedColls[0])
+		return NewItr(ase.nbf, ase.sortedColls[0])
 	case 2:
-		return NewSortedEditItr(ase.format, ase.sortedColls[0], ase.sortedColls[1])
+		return NewSortedEditItr(ase.nbf, ase.sortedColls[0], ase.sortedColls[1])
 	}
 
 	panic("Sort needs to be called prior to getting an Iterator.")
