@@ -173,7 +173,7 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 	table, _ := i.indexLookup.idx.db.root.GetTable(i.ctx.Context, i.indexLookup.idx.tableName)
 	r, ok := table.GetRowByPKVals(i.ctx.Context, i.indexLookup.key, i.indexLookup.idx.sch)
 	if !ok {
-		return nil, nil
+		return nil, io.EOF
 	}
 
 	return doltRowToSqlRow(r, i.indexLookup.idx.sch), nil
