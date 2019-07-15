@@ -27,7 +27,7 @@ type Dataset struct {
 }
 
 func newDataset(db Database, id string, head types.Value) Dataset {
-	d.PanicIfFalse(head == nil || IsCommit(db.Format(), head))
+	d.PanicIfFalse(head == nil || IsCommit(head))
 	return Dataset{db, id, head}
 }
 

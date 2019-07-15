@@ -16,8 +16,8 @@ import (
 type Patch []Difference
 
 type PatchSort struct {
-	patch  Patch
-	format *types.Format
+	patch Patch
+	nbf   *types.NomsBinFormat
 }
 
 func (ps PatchSort) Swap(i, j int) {
@@ -34,17 +34,17 @@ func (ps PatchSort) Less(i, j int) bool {
 	if ps.patch[i].Path.Equals(ps.patch[j].Path) {
 		return vals[ps.patch[i].ChangeType] < vals[ps.patch[j].ChangeType]
 	}
-	return pathIsLess(ps.format, ps.patch[i].Path, ps.patch[j].Path)
+	return pathIsLess(ps.nbf, ps.patch[i].Path, ps.patch[j].Path)
 }
 
 // Utility methods on path
 // TODO: Should these be on types.Path & types.PathPart?
-func pathIsLess(format *types.Format, p1, p2 types.Path) bool {
+func pathIsLess(nbf *types.NomsBinFormat, p1, p2 types.Path) bool {
 	for i, pp1 := range p1 {
 		if len(p2) == i {
 			return false // p1 > p2
 		}
-		switch pathPartCompare(format, pp1, p2[i]) {
+		switch pathPartCompare(nbf, pp1, p2[i]) {
 		case -1:
 			return true // p1 < p2
 		case 1:
@@ -73,7 +73,7 @@ func fieldPathCompare(pp types.FieldPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func indexPathCompare(format *types.Format, pp types.IndexPath, o types.PathPart) int {
+func indexPathCompare(nbf *types.NomsBinFormat, pp types.IndexPath, o types.PathPart) int {
 	switch opp := o.(type) {
 	case types.FieldPath:
 		return 1
@@ -87,7 +87,7 @@ func indexPathCompare(format *types.Format, pp types.IndexPath, o types.PathPart
 			}
 			return 1
 		}
-		if pp.Index.Less(format, opp.Index) {
+		if pp.Index.Less(nbf, opp.Index) {
 			return -1
 		}
 		return 1
@@ -122,12 +122,12 @@ func hashIndexPathCompare(pp types.HashIndexPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func pathPartCompare(format *types.Format, pp, pp2 types.PathPart) int {
+func pathPartCompare(nbf *types.NomsBinFormat, pp, pp2 types.PathPart) int {
 	switch pp1 := pp.(type) {
 	case types.FieldPath:
 		return fieldPathCompare(pp1, pp2)
 	case types.IndexPath:
-		return indexPathCompare(format, pp1, pp2)
+		return indexPathCompare(nbf, pp1, pp2)
 	case types.HashIndexPath:
 		return hashIndexPathCompare(pp1, pp2)
 	}

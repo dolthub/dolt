@@ -11,9 +11,9 @@ type SortedEditItr struct {
 
 // NewSortedEditItr creates an iterator from two KVPCollection references.  As the iterator iterates it
 // merges the collections and iterates in order
-func NewSortedEditItr(format *types.Format, left, right *KVPCollection) *SortedEditItr {
-	leftItr := NewItr(format, left)
-	rightItr := NewItr(format, right)
+func NewSortedEditItr(nbf *types.NomsBinFormat, left, right *KVPCollection) *SortedEditItr {
+	leftItr := NewItr(nbf, left)
+	rightItr := NewItr(nbf, right)
 
 	return &SortedEditItr{leftItr, rightItr, false}
 }

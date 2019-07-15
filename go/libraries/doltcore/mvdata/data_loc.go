@@ -145,11 +145,11 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 			return rd, false, err
 
 		case XlsxFile:
-			rd, err := xlsx.OpenXLSXReader(dl.Path, fs, xlsx.NewXLSXInfo(), root.VRW().Format(), tblName)
+			rd, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, xlsx.NewXLSXInfo(), tblName)
 			return rd, false, err
 
 		case JsonFile:
-			rd, err := json.OpenJSONReader(dl.Path, fs, json.NewJSONInfo(), root.VRW().Format(), schPath)
+			rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), schPath)
 			return rd, false, err
 		}
 	}

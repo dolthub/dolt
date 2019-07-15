@@ -125,7 +125,7 @@ func (s Set) At(ctx context.Context, idx uint64) Value {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur := newCursorAtIndex(ctx, s.orderedSequence, idx, s.format())
+	cur := newCursorAtIndex(ctx, s.orderedSequence, idx)
 	return cur.current().(Value)
 }
 
@@ -157,7 +157,7 @@ func (s Set) Iterator(ctx context.Context) SetIterator {
 
 func (s Set) IteratorAt(ctx context.Context, idx uint64) SetIterator {
 	return &setIterator{
-		cursor: newCursorAtIndex(ctx, s.orderedSequence, idx, s.format()),
+		cursor: newCursorAtIndex(ctx, s.orderedSequence, idx),
 		s:      s,
 	}
 }
@@ -169,16 +169,20 @@ func (s Set) IteratorFrom(ctx context.Context, val Value) SetIterator {
 	}
 }
 
+func (s Set) Format() *NomsBinFormat {
+	return s.format()
+}
+
 func (s Set) Edit() *SetEditor {
 	return NewSetEditor(s)
 }
 
-func buildSetData(f *Format, values ValueSlice) ValueSlice {
+func buildSetData(nbf *NomsBinFormat, values ValueSlice) ValueSlice {
 	if len(values) == 0 {
 		return ValueSlice{}
 	}
 
-	sort.Stable(ValueSort{values, f})
+	sort.Stable(ValueSort{values, nbf})
 
 	uniqueSorted := make(ValueSlice, 0, len(values))
 	last := values[0]

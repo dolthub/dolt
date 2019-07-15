@@ -28,26 +28,25 @@ type FWTReader struct {
 	fwtSch *FWTSchema
 	isDone bool
 	colSep string
-	format *types.Format
+	nbf    *types.NomsBinFormat
 }
 
 // OpenFWTReader opens a reader at a given path within a given filesys.  The FWTSchema should describe the fwt file
 // being opened and have the correct column widths.
-func OpenFWTReader(path string, fs filesys.ReadableFS, format *types.Format, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
+func OpenFWTReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewFWTReader(format, r, fwtSch, colSep)
+	return NewFWTReader(nbf, r, fwtSch, colSep)
 }
 
-//
-func NewFWTReader(format *types.Format, r io.ReadCloser, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
+func NewFWTReader(nbf *types.NomsBinFormat, r io.ReadCloser, fwtSch *FWTSchema, colSep string) (*FWTReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
-	return &FWTReader{r, br, fwtSch, false, colSep, format}, nil
+	return &FWTReader{r, br, fwtSch, false, colSep, nbf}, nil
 }
 
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
@@ -121,5 +120,5 @@ func (fwtRd *FWTReader) parseRow(lineBytes []byte) (row.Row, error) {
 		return false
 	})
 
-	return untyped.NewRowFromStrings(fwtRd.format, fwtRd.GetSchema(), fields), nil
+	return untyped.NewRowFromStrings(fwtRd.nbf, fwtRd.GetSchema(), fields), nil
 }

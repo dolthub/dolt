@@ -13,12 +13,11 @@ import (
 
 type ListEditor struct {
 	l     List
-	f     *Format
 	edits *listEdit
 }
 
-func NewListEditor(l List, f *Format) *ListEditor {
-	return &ListEditor{l, f, nil}
+func NewListEditor(l List) *ListEditor {
+	return &ListEditor{l, nil}
 }
 
 func (le *ListEditor) Kind() NomsKind {
@@ -49,7 +48,7 @@ func (le *ListEditor) List(ctx context.Context) List {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtIndex(ctx, seq, edit.idx, le.f)
+				cc <- newCursorAtIndex(ctx, seq, edit.idx)
 			}()
 
 			sc := make(chan listEdit, 1)

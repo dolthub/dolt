@@ -98,20 +98,20 @@ func (st *iterState) SkipTo(ctx context.Context, v Value) Value {
 type UnionIterator struct {
 	aState iterState
 	bState iterState
-	format *Format
+	nbf    *NomsBinFormat
 }
 
 // NewUnionIterator creates a union iterator from two other SetIterators.
-func NewUnionIterator(ctx context.Context, f *Format, iterA, iterB SetIterator) SetIterator {
+func NewUnionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) SetIterator {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
 	a := iterState{i: iterA, v: iterA.Next(ctx)}
 	b := iterState{i: iterB, v: iterB.Next(ctx)}
-	return &UnionIterator{aState: a, bState: b, format: f}
+	return &UnionIterator{aState: a, bState: b, nbf: nbf}
 }
 
 func (u *UnionIterator) Next(ctx context.Context) Value {
-	switch compareValue(u.format, u.aState.v, u.bState.v) {
+	switch compareValue(u.nbf, u.aState.v, u.bState.v) {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
@@ -126,18 +126,18 @@ func (u *UnionIterator) Next(ctx context.Context) Value {
 func (u *UnionIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
 	didAdvance := false
-	if compareValue(u.format, u.aState.v, v) < 0 {
+	if compareValue(u.nbf, u.aState.v, v) < 0 {
 		didAdvance = true
 		u.aState.SkipTo(ctx, v)
 	}
-	if compareValue(u.format, u.bState.v, v) < 0 {
+	if compareValue(u.nbf, u.bState.v, v) < 0 {
 		didAdvance = true
 		u.bState.SkipTo(ctx, v)
 	}
 	if !didAdvance {
 		return u.Next(ctx)
 	}
-	switch compareValue(u.format, u.aState.v, u.bState.v) {
+	switch compareValue(u.nbf, u.aState.v, u.bState.v) {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
@@ -154,21 +154,21 @@ func (u *UnionIterator) SkipTo(ctx context.Context, v Value) Value {
 type IntersectionIterator struct {
 	aState iterState
 	bState iterState
-	format *Format
+	nbf    *NomsBinFormat
 }
 
 // NewIntersectionIterator creates a intersect iterator from two other SetIterators.
-func NewIntersectionIterator(ctx context.Context, f *Format, iterA, iterB SetIterator) SetIterator {
+func NewIntersectionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) SetIterator {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
 	a := iterState{i: iterA, v: iterA.Next(ctx)}
 	b := iterState{i: iterB, v: iterB.Next(ctx)}
-	return &IntersectionIterator{aState: a, bState: b, format: f}
+	return &IntersectionIterator{aState: a, bState: b, nbf: nbf}
 }
 
 func (i *IntersectionIterator) Next(ctx context.Context) Value {
 	for cont := true; cont; {
-		switch compareValue(i.format, i.aState.v, i.bState.v) {
+		switch compareValue(i.nbf, i.aState.v, i.bState.v) {
 		case -1:
 			i.aState.SkipTo(ctx, i.bState.v)
 		case 0:
@@ -186,24 +186,24 @@ func (i *IntersectionIterator) Next(ctx context.Context) Value {
 
 func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) Value {
 	d.PanicIfTrue(v == nil)
-	if compareValue(i.format, v, i.aState.v) >= 0 {
+	if compareValue(i.nbf, v, i.aState.v) >= 0 {
 		i.aState.SkipTo(ctx, v)
 	}
-	if compareValue(i.format, v, i.bState.v) >= 0 {
+	if compareValue(i.nbf, v, i.bState.v) >= 0 {
 		i.bState.SkipTo(ctx, v)
 	}
 	return i.Next(ctx)
 }
 
 // considers nil max value, return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-func compareValue(f *Format, v1, v2 Value) int {
+func compareValue(nbf *NomsBinFormat, v1, v2 Value) int {
 	if v1 == nil && v2 == nil {
 		return 0
 	}
-	if v2 == nil || (v1 != nil && v1.Less(f, v2)) {
+	if v2 == nil || (v1 != nil && v1.Less(nbf, v2)) {
 		return -1
 	}
-	if v1 == nil || (v2 != nil && v2.Less(f, v1)) {
+	if v1 == nil || (v2 != nil && v2.Less(nbf, v1)) {
 		return 1
 	}
 	return 0

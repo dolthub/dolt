@@ -11,21 +11,21 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
-func EmptyTuple(f *Format) Tuple {
-	return NewTuple(f)
+func EmptyTuple(nbf *NomsBinFormat) Tuple {
+	return NewTuple(nbf)
 }
 
 type TupleIterator struct {
-	dec    valueDecoder
-	count  uint64
-	pos    uint64
-	format *Format
+	dec   valueDecoder
+	count uint64
+	pos   uint64
+	nbf   *NomsBinFormat
 }
 
 func (itr *TupleIterator) Next() (uint64, Value) {
 	if itr.pos < itr.count {
 		valPos := itr.pos
-		val := itr.dec.readValue(itr.format)
+		val := itr.dec.readValue(itr.nbf)
 
 		itr.pos++
 		return valPos, val
@@ -51,49 +51,49 @@ type Tuple struct {
 }
 
 // readTuple reads the data provided by a decoder and moves the decoder forward.
-func readTuple(f *Format, dec *valueDecoder) Tuple {
+func readTuple(nbf *NomsBinFormat, dec *valueDecoder) Tuple {
 	start := dec.pos()
-	skipTuple(f, dec)
+	skipTuple(nbf, dec)
 	end := dec.pos()
-	return Tuple{valueImpl{dec.vrw, f, dec.byteSlice(start, end), nil}}
+	return Tuple{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}
 }
 
-func skipTuple(f *Format, dec *valueDecoder) {
+func skipTuple(nbf *NomsBinFormat, dec *valueDecoder) {
 	dec.skipKind()
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
-		dec.skipValue(f)
+		dec.skipValue(nbf)
 	}
 }
 
-func walkTuple(f *Format, r *refWalker, cb RefCallback) {
+func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) {
 	r.skipKind()
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkValue(f, cb)
+		r.walkValue(nbf, cb)
 	}
 }
 
-func NewTuple(f *Format, values ...Value) Tuple {
+func NewTuple(nbf *NomsBinFormat, values ...Value) Tuple {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	TupleKind.writeTo(&w, f)
+	TupleKind.writeTo(&w, nbf)
 	numVals := len(values)
 	w.writeCount(uint64(numVals))
 	for i := 0; i < numVals; i++ {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(&w, f)
+		values[i].writeTo(&w, nbf)
 	}
-	return Tuple{valueImpl{vrw, f, w.data(), nil}}
+	return Tuple{valueImpl{vrw, nbf, w.data(), nil}}
 }
 
 func (t Tuple) Empty() bool {
 	return t.Len() == 0
 }
 
-func (t Tuple) Format() *Format {
+func (t Tuple) Format() *NomsBinFormat {
 	return t.format()
 }
 
@@ -273,7 +273,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return false
 }*/
 
-func (t Tuple) Less(f *Format, other LesserValuable) bool {
+func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	if otherTuple, ok := other.(Tuple); ok {
 		itr := t.Iterator()
 		otherItr := otherTuple.Iterator()
@@ -287,7 +287,7 @@ func (t Tuple) Less(f *Format, other LesserValuable) bool {
 			_, currOthVal := otherItr.Next()
 
 			if !currVal.Equals(currOthVal) {
-				return currVal.Less(f, currOthVal)
+				return currVal.Less(nbf, currOthVal)
 			}
 		}
 

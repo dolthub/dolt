@@ -41,18 +41,18 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 // }
 // ```
 // where M is a struct type and T is any type.
-func NewCommit(format *types.Format, value types.Value, parents types.Set, meta types.Struct) types.Struct {
-	return commitTemplate.NewStruct(format, []types.Value{meta, parents, value})
+func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.Struct {
+	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parents, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false.
-func FindCommonAncestor(ctx context.Context, format *types.Format, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
-	if !IsRefOfCommitType(format, types.TypeOf(c1)) {
+func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
+	if !IsRefOfCommitType(c1.Format(), types.TypeOf(c1)) {
 		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx))
 	}
-	if !IsRefOfCommitType(format, types.TypeOf(c2)) {
+	if !IsRefOfCommitType(c2.Format(), types.TypeOf(c1)) {
 		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe(ctx))
 	}
 
@@ -126,14 +126,18 @@ func getRefElementType(t *types.Type) *types.Type {
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
-func IsCommitType(format *types.Format, t *types.Type) bool {
-	return types.IsSubtype(format, valueCommitType, t)
+func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
+	return types.IsSubtype(nbf, valueCommitType, t)
 }
 
-func IsCommit(format *types.Format, v types.Value) bool {
-	return types.IsValueSubtypeOf(format, v, valueCommitType)
+func IsCommit(v types.Value) bool {
+	if s, ok := v.(types.Struct); !ok {
+		return false
+	} else {
+		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
+	}
 }
 
-func IsRefOfCommitType(format *types.Format, t *types.Type) bool {
-	return t.TargetKind() == types.RefKind && IsCommitType(format, getRefElementType(t))
+func IsRefOfCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
+	return t.TargetKind() == types.RefKind && IsCommitType(nbf, getRefElementType(t))
 }

@@ -163,12 +163,12 @@ func createResultSetSchema(selectStmt *SelectStatement) error {
 }
 
 // Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
-func processOrderByClause(format *types.Format, statement *SelectStatement, orderBy sqlparser.OrderBy) error {
+func processOrderByClause(nbf *types.NomsBinFormat, statement *SelectStatement, orderBy sqlparser.OrderBy) error {
 	if len(orderBy) == 0 {
 		return nil
 	}
 
-	sorter, err := createRowSorter(format, statement, orderBy)
+	sorter, err := createRowSorter(nbf, statement, orderBy)
 	if err != nil {
 		return err
 	}
@@ -638,7 +638,7 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 	return p, nil
 }
 
-func createOutputSchemaMappingTransform(format *types.Format, selectStmt *SelectStatement) pipeline.NamedTransform {
+func createOutputSchemaMappingTransform(nbf *types.NomsBinFormat, selectStmt *SelectStatement) pipeline.NamedTransform {
 	var transformFunc pipeline.TransformRowFunc
 	transformFunc = func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 		taggedVals := make(row.TaggedValues)
@@ -648,7 +648,7 @@ func createOutputSchemaMappingTransform(format *types.Format, selectStmt *Select
 				taggedVals[uint64(i)] = val
 			}
 		}
-		r := row.New(format, selectStmt.ResultSetSchema, taggedVals)
+		r := row.New(nbf, selectStmt.ResultSetSchema, taggedVals)
 		return []*pipeline.TransformedRowResult{{r, nil}}, ""
 	}
 

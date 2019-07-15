@@ -23,17 +23,17 @@ type XLSXReader struct {
 	ind    int
 }
 
-func OpenXLSXReader(path string, fs filesys.ReadableFS, info *XLSXFileInfo, format *types.Format, tblName string) (*XLSXReader, error) {
+func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo, tblName string) (*XLSXReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewXLSXReader(r, info, fs, format, path, tblName)
+	return NewXLSXReader(nbf, r, info, fs, path, tblName)
 }
 
-func NewXLSXReader(r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, format *types.Format, path string, tblName string) (*XLSXReader, error) {
+func NewXLSXReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, path string, tblName string) (*XLSXReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	colStrs, err := getColHeaders(path, tblName)
 
@@ -48,7 +48,7 @@ func NewXLSXReader(r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, f
 
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	decodedRows, err := decodeXLSXRows(format, data, sch)
+	decodedRows, err := decodeXLSXRows(nbf, data, sch)
 	if err != nil {
 		return nil, err
 	}

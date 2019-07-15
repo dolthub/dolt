@@ -57,7 +57,7 @@ func nomsStructNew(ctx context.Context, dbStr string, name string, args []string
 }
 
 func nomsStructSet(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(types.Format_7_18, specStr)
+	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
 	rootVal, basePath := splitPath(ctx, db, sp)
@@ -66,7 +66,7 @@ func nomsStructSet(ctx context.Context, specStr string, args []string) int {
 }
 
 func nomsStructDel(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(types.Format_7_18, specStr)
+	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
 	rootVal, basePath := splitPath(ctx, db, sp)
@@ -90,7 +90,7 @@ func splitPath(ctx context.Context, db datas.Database, sp spec.Spec) (rootVal ty
 	rootPath.Path = types.Path{}
 	rootVal = rootPath.Resolve(ctx, db)
 	if rootVal == nil {
-		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String(db.Format())))
+		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
 		return
 	}
 	basePath = sp.Path.Path
@@ -102,7 +102,7 @@ func applyStructEdits(ctx context.Context, db datas.Database, sp spec.Spec, root
 		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
 	if rootVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(db.Format())))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
 	patch := diff.Patch{}
@@ -124,9 +124,9 @@ func applyStructEdits(ctx context.Context, db datas.Database, sp spec.Spec, root
 }
 
 func appplyPatch(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
-	baseVal := basePath.Resolve(ctx, db.Format(), rootVal, db)
+	baseVal := basePath.Resolve(ctx, rootVal, db)
 	if baseVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(db.Format())))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 	}
 
 	newRootVal := diff.Apply(ctx, db.Format(), rootVal, patch)
@@ -139,5 +139,5 @@ func appplyPatch(ctx context.Context, db datas.Database, sp spec.Spec, rootVal t
 	}
 	newSpec := sp
 	newSpec.Path = newAbsPath
-	fmt.Println(newSpec.String(db.Format()))
+	fmt.Println(newSpec.String())
 }

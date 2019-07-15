@@ -199,7 +199,7 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(ctx context.Context, format *types.Format, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
+func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
 		if r.Equals(mergeRow) {
@@ -256,7 +256,7 @@ func rowMerge(ctx context.Context, format *types.Format, sch schema.Schema, r, m
 		return nil, true
 	}
 
-	tpl := resultVals.NomsTupleForTags(format, sch.GetNonPKCols().SortedTags, false)
+	tpl := resultVals.NomsTupleForTags(nbf, sch.GetNonPKCols().SortedTags, false)
 
 	return tpl.Value(ctx), false
 }

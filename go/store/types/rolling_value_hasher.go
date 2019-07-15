@@ -51,7 +51,7 @@ type rollingValueHasher struct {
 	pattern, window uint32
 	salt            byte
 	sl              *sloppy.Sloppy
-	format          *Format
+	nbf             *NomsBinFormat
 }
 
 func hashValueBytes(item sequenceItem, rv *rollingValueHasher) {
@@ -62,7 +62,7 @@ func hashValueByte(item sequenceItem, rv *rollingValueHasher) {
 	rv.HashByte(item.(byte))
 }
 
-func newRollingValueHasher(f *Format, salt byte) *rollingValueHasher {
+func newRollingValueHasher(nbf *NomsBinFormat, salt byte) *rollingValueHasher {
 	pattern, window := chunkingConfig()
 	w := newBinaryNomsWriter()
 
@@ -72,7 +72,7 @@ func newRollingValueHasher(f *Format, salt byte) *rollingValueHasher {
 		pattern: pattern,
 		window:  window,
 		salt:    salt,
-		format:  f,
+		nbf:     nbf,
 	}
 
 	rv.sl = sloppy.New(rv.HashByte)
@@ -99,7 +99,7 @@ func (rv *rollingValueHasher) Reset() {
 }
 
 func (rv *rollingValueHasher) HashValue(v Value) {
-	v.writeTo(&rv.bw, rv.format)
+	v.writeTo(&rv.bw, rv.nbf)
 	rv.sl.Update(rv.bw.data())
 }
 

@@ -57,7 +57,7 @@ func NewStreamingList(ctx context.Context, vrw ValueReadWriter, values <-chan Va
 }
 
 func (l List) Edit() *ListEditor {
-	return NewListEditor(l, l.format())
+	return NewListEditor(l)
 }
 
 // Collection interface
@@ -81,7 +81,7 @@ func (l List) WalkValues(ctx context.Context, cb ValueCallback) {
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(ctx context.Context, idx uint64) Value {
 	d.PanicIfFalse(idx < l.Len())
-	cur := newCursorAtIndex(ctx, l.sequence, idx, l.format())
+	cur := newCursorAtIndex(ctx, l.sequence, idx)
 	return cur.current().(Value)
 }
 
@@ -89,7 +89,7 @@ func (l List) Get(ctx context.Context, idx uint64) Value {
 // to visit the rightmost prolly tree chunks of this List, and the leftmost
 // prolly tree chunks of other, so it's efficient.
 func (l List) Concat(ctx context.Context, other List) List {
-	seq := concat(ctx, l.format(), l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+	seq := concat(ctx, l.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
 		return l.newChunker(ctx, cur, vrw)
 	})
 	return newList(seq)
@@ -99,7 +99,7 @@ func (l List) Concat(ctx context.Context, other List) List {
 // iteration stops.
 func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool)) {
 	idx := uint64(0)
-	cur := newCursorAtIndex(ctx, l.sequence, idx, l.format())
+	cur := newCursorAtIndex(ctx, l.sequence, idx)
 	cur.iter(ctx, func(v interface{}) bool {
 		if f(v.(Value), uint64(idx)) {
 			return true
@@ -219,8 +219,12 @@ func (l List) Iterator(ctx context.Context) ListIterator {
 // have reached its end on creation.
 func (l List) IteratorAt(ctx context.Context, index uint64) ListIterator {
 	return ListIterator{
-		newCursorAtIndex(ctx, l.sequence, index, l.format()),
+		newCursorAtIndex(ctx, l.sequence, index),
 	}
+}
+
+func (l List) Format() *NomsBinFormat {
+	return l.format()
 }
 
 // Diff streams the diff from last to the current list to the changes channel. Caller can close
@@ -247,7 +251,7 @@ func (l List) DiffWithLimit(ctx context.Context, last List, changes chan<- Splic
 		return
 	}
 
-	indexedSequenceDiff(ctx, l.format(), last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
+	indexedSequenceDiff(ctx, last.sequence, 0, l.sequence, 0, changes, closeChan, maxSpliceMatrixSize)
 }
 
 func (l List) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {

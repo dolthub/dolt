@@ -52,7 +52,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 	return &Table{vrw, tableStruct}
 }
 
-func (t *Table) Format() *types.Format {
+func (t *Table) Format() *types.NomsBinFormat {
 	return t.vrw.Format()
 }
 

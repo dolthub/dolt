@@ -25,7 +25,7 @@ func TestNewCommit(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	commit := NewCommit(types.Format_7_18, types.Float(1), types.NewSet(context.Background(), db), types.EmptyStruct(types.Format_7_18))
+	commit := NewCommit(types.Float(1), types.NewSet(context.Background(), db), types.EmptyStruct(types.Format_7_18))
 	at := types.TypeOf(commit)
 	et := makeCommitStructType(
 		types.EmptyStructType,
@@ -35,7 +35,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et, at)
 
 	// Committing another Float
-	commit2 := NewCommit(types.Format_7_18, types.Float(2), types.NewSet(context.Background(), db, types.NewRef(commit, types.Format_7_18)), types.EmptyStruct(types.Format_7_18))
+	commit2 := NewCommit(types.Float(2), types.NewSet(context.Background(), db, types.NewRef(commit, types.Format_7_18)), types.EmptyStruct(types.Format_7_18))
 	at2 := types.TypeOf(commit2)
 	et2 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
@@ -45,7 +45,7 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
-	commit3 := NewCommit(types.Format_7_18, types.String("Hi"), types.NewSet(context.Background(), db, types.NewRef(commit2, types.Format_7_18)), types.EmptyStruct(types.Format_7_18))
+	commit3 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), db, types.NewRef(commit2, types.Format_7_18)), types.EmptyStruct(types.Format_7_18))
 	at3 := types.TypeOf(commit3)
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},
@@ -61,7 +61,7 @@ func TestNewCommit(t *testing.T) {
                 number: Float,
 	}`)
 	assertTypeEquals(metaType, types.TypeOf(meta))
-	commit4 := NewCommit(types.Format_7_18, types.String("Hi"), types.NewSet(context.Background(), db, types.NewRef(commit2, types.Format_7_18)), meta)
+	commit4 := NewCommit(types.String("Hi"), types.NewSet(context.Background(), db, types.NewRef(commit2, types.Format_7_18)), meta)
 	at4 := types.TypeOf(commit4)
 	et4 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {} | Struct Meta {
@@ -75,7 +75,6 @@ func TestNewCommit(t *testing.T) {
 
 	// Merge-commit with different parent types
 	commit5 := NewCommit(
-		types.Format_7_18,
 		types.String("Hi"),
 		types.NewSet(context.Background(), db,
 			types.NewRef(commit2, types.Format_7_18),
@@ -102,15 +101,13 @@ func TestCommitWithoutMetaField(t *testing.T) {
 		"parents": types.NewSet(context.Background(), db),
 		"meta":    types.EmptyStruct(types.Format_7_18),
 	})
-	assert.True(IsCommit(types.Format_7_18, metaCommit))
-	assert.True(IsCommitType(types.Format_7_18, types.TypeOf(metaCommit)))
+	assert.True(IsCommit(metaCommit))
 
 	noMetaCommit := types.NewStruct(types.Format_7_18, "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": types.NewSet(context.Background(), db),
 	})
-	assert.False(IsCommit(types.Format_7_18, noMetaCommit))
-	assert.False(IsCommitType(types.Format_7_18, types.TypeOf(noMetaCommit)))
+	assert.False(IsCommit(noMetaCommit))
 }
 
 // Convert list of Struct's to Set<Ref>
@@ -139,7 +136,7 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	// Assert that c is the common ancestor of a and b
 	assertCommonAncestor := func(expected, a, b types.Struct) {
-		if found, ok := FindCommonAncestor(context.Background(), types.Format_7_18, types.NewRef(a, types.Format_7_18), types.NewRef(b, types.Format_7_18), db); assert.True(ok) {
+		if found, ok := FindCommonAncestor(context.Background(), types.NewRef(a, types.Format_7_18), types.NewRef(b, types.Format_7_18), db); assert.True(ok) {
 			ancestor := found.TargetValue(context.Background(), db).(types.Struct)
 			assert.True(
 				expected.Equals(ancestor),
@@ -189,7 +186,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	assertCommonAncestor(a1, a6, c3) // Traversing multiple parents on both sides
 
 	// No common ancestor
-	if found, ok := FindCommonAncestor(context.Background(), types.Format_7_18, types.NewRef(d2, types.Format_7_18), types.NewRef(a6, types.Format_7_18), db); !assert.False(ok) {
+	if found, ok := FindCommonAncestor(context.Background(), types.NewRef(d2, types.Format_7_18), types.NewRef(a6, types.Format_7_18), db); !assert.False(ok) {
 		assert.Fail(
 			"Unexpected common ancestor!",
 			"Should be no common ancestor of %s, %s. Got %s",
@@ -205,8 +202,8 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	db := NewDatabase(storage.NewView())
 	defer db.Close()
 
-	c1 := NewCommit(types.Format_7_18, types.String("one"), types.NewSet(context.Background(), db), types.EmptyStruct(types.Format_7_18))
-	cx := NewCommit(types.Format_7_18, types.Bool(true), types.NewSet(context.Background(), db), types.EmptyStruct(types.Format_7_18))
+	c1 := NewCommit(types.String("one"), types.NewSet(context.Background(), db), types.EmptyStruct(types.Format_7_18))
+	cx := NewCommit(types.Bool(true), types.NewSet(context.Background(), db), types.EmptyStruct(types.Format_7_18))
 	value := types.String("two")
 	parents := types.NewSet(context.Background(), db, types.NewRef(c1, types.Format_7_18))
 	meta := types.NewStruct(types.Format_7_18, "", types.StructData{
@@ -214,5 +211,5 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	})
 
 	// Used to fail
-	NewCommit(types.Format_7_18, value, parents, meta)
+	NewCommit(value, parents, meta)
 }

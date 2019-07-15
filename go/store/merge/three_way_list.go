@@ -12,7 +12,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
-func threeWayListMerge(ctx context.Context, format *types.Format, a, b, parent types.List) (merged types.List, err error) {
+func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged types.List, err error) {
 	aSpliceChan, bSpliceChan := make(chan types.Splice), make(chan types.Splice)
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
@@ -60,7 +60,7 @@ func threeWayListMerge(ctx context.Context, format *types.Format, a, b, parent t
 			break
 		}
 		if overlap(aSplice, bSplice) {
-			if canMerge(ctx, format, a, b, aSplice, bSplice) {
+			if canMerge(ctx, a, b, aSplice, bSplice) {
 				splice := merge(aSplice, bSplice)
 				merged = apply(ctx, a, merged, offset, splice)
 				offset += splice.SpAdded - splice.SpRemoved
@@ -92,7 +92,7 @@ func overlap(s1, s2 types.Splice) bool {
 }
 
 // canMerge returns whether aSplice and bSplice can be merged into a single splice that can be applied to parent. Currently, we're only willing to do this if the two splices do _precisely_ the same thing -- that is, remove the same number of elements from the same starting index and insert the exact same list of new elements.
-func canMerge(ctx context.Context, format *types.Format, a, b types.List, aSplice, bSplice types.Splice) bool {
+func canMerge(ctx context.Context, a, b types.List, aSplice, bSplice types.Splice) bool {
 	if aSplice != bSplice {
 		return false
 	}

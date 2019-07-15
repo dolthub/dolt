@@ -10,8 +10,8 @@ import (
 type TaggedValues map[uint64]types.Value
 
 type TupleVals struct {
-	vs     []types.Value
-	format *types.Format
+	vs  []types.Value
+	nbf *types.NomsBinFormat
 }
 
 func (tvs TupleVals) Kind() types.NomsKind {
@@ -19,10 +19,10 @@ func (tvs TupleVals) Kind() types.NomsKind {
 }
 
 func (tvs TupleVals) Value(ctx context.Context) types.Value {
-	return types.NewTuple(tvs.format, tvs.vs...)
+	return types.NewTuple(tvs.nbf, tvs.vs...)
 }
 
-func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
+func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) bool {
 	if other.Kind() == types.TupleKind {
 		if otherTVs, ok := other.(TupleVals); ok {
 			for i, val := range tvs.vs {
@@ -34,7 +34,7 @@ func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
 				otherVal := otherTVs.vs[i]
 
 				if !val.Equals(otherVal) {
-					return val.Less(f, otherVal)
+					return val.Less(nbf, otherVal)
 				}
 			}
 
@@ -47,7 +47,7 @@ func (tvs TupleVals) Less(f *types.Format, other types.LesserValuable) bool {
 	return types.TupleKind < other.Kind()
 }
 
-func (tt TaggedValues) NomsTupleForTags(format *types.Format, tags []uint64, encodeNulls bool) TupleVals {
+func (tt TaggedValues) NomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64, encodeNulls bool) TupleVals {
 	numVals := 0
 	for _, tag := range tags {
 		val := tt[tag]
@@ -73,7 +73,7 @@ func (tt TaggedValues) NomsTupleForTags(format *types.Format, tags []uint64, enc
 		}
 	}
 
-	return TupleVals{vals, format}
+	return TupleVals{vals, nbf}
 }
 
 func (tt TaggedValues) Iter(cb func(tag uint64, val types.Value) (stop bool)) bool {

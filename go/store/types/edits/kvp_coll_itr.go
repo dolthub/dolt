@@ -11,21 +11,21 @@ type KVPCollItr struct {
 	currSl     types.KVPSlice
 	currSlSize int
 	currKey    types.LesserValuable
-	format     *types.Format
+	nbf        *types.NomsBinFormat
 }
 
 // NewItr creates a new KVPCollItr from a KVPCollection
-func NewItr(f *types.Format, coll *KVPCollection) *KVPCollItr {
+func NewItr(nbf *types.NomsBinFormat, coll *KVPCollection) *KVPCollItr {
 	firstSl := coll.slices[0]
 	firstKey := firstSl[0].Key
 	slSize := len(firstSl)
 
-	return &KVPCollItr{coll, false, 0, 0, firstSl, slSize, firstKey, f}
+	return &KVPCollItr{coll, false, 0, 0, firstSl, slSize, firstKey, nbf}
 }
 
 // Less returns whether the current key this iterator is less than the current key for another iterator
 func (itr *KVPCollItr) Less(other *KVPCollItr) bool {
-	return other.currKey == nil || itr.currKey != nil && itr.currKey.Less(itr.format, other.currKey)
+	return other.currKey == nil || itr.currKey != nil && itr.currKey.Less(itr.nbf, other.currKey)
 }
 
 // returns the next kvp, the slice it was read from when that slice is empty, and whether or not iteration is complete.

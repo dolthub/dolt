@@ -12,7 +12,7 @@ import (
 // and true until all the values in the collection are exhausted.  At that time nil and false will be returned.
 type PKItr func() (val types.Tuple, ok bool)
 
-func SingleColPKItr(format *types.Format, pkTag uint64, vals []types.Value) func() (types.Tuple, bool) {
+func SingleColPKItr(nbf *types.NomsBinFormat, pkTag uint64, vals []types.Value) func() (types.Tuple, bool) {
 	next := 0
 	size := len(vals)
 	return func() (types.Tuple, bool) {
@@ -20,15 +20,15 @@ func SingleColPKItr(format *types.Format, pkTag uint64, vals []types.Value) func
 		next++
 
 		if current < size {
-			tpl := types.NewTuple(format, types.Uint(pkTag), vals[current])
+			tpl := types.NewTuple(nbf, types.Uint(pkTag), vals[current])
 			return tpl, true
 		}
 
-		return types.EmptyTuple(format), false
+		return types.EmptyTuple(nbf), false
 	}
 }
 
-func TaggedValueSliceItr(format *types.Format, sch schema.Schema, vals []row.TaggedValues) func() (types.Tuple, bool) {
+func TaggedValueSliceItr(nbf *types.NomsBinFormat, sch schema.Schema, vals []row.TaggedValues) func() (types.Tuple, bool) {
 	pkTags := sch.GetPKCols().Tags
 	next := 0
 	size := len(vals)
@@ -37,16 +37,16 @@ func TaggedValueSliceItr(format *types.Format, sch schema.Schema, vals []row.Tag
 		next++
 
 		if current < size {
-			tpl := vals[current].NomsTupleForTags(format, pkTags, true)
+			tpl := vals[current].NomsTupleForTags(nbf, pkTags, true)
 			return tpl.Value(context.TODO()).(types.Tuple), true
 		}
 
-		return types.EmptyTuple(format), false
+		return types.EmptyTuple(nbf), false
 	}
 }
 
 // TupleSliceItr returns a closure that has the signature of a PKItr and can be used to iterate over a slice of values
-func TupleSliceItr(format *types.Format, vals []types.Tuple) func() (types.Tuple, bool) {
+func TupleSliceItr(nbf *types.NomsBinFormat, vals []types.Tuple) func() (types.Tuple, bool) {
 	next := 0
 	size := len(vals)
 	return func() (types.Tuple, bool) {
@@ -57,7 +57,7 @@ func TupleSliceItr(format *types.Format, vals []types.Tuple) func() (types.Tuple
 			return vals[current], true
 		}
 
-		return types.EmptyTuple(format), false
+		return types.EmptyTuple(nbf), false
 	}
 }
 

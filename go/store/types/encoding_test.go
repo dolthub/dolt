@@ -346,7 +346,7 @@ func TestWriteStructTooMuchData(t *testing.T) {
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
-		decodeFromBytes(buff, nil, Format_7_18)
+		decodeFromBytes(buff, newTestValueStore())
 	})
 }
 
@@ -589,19 +589,19 @@ func TestWriteEmptyUnionList(t *testing.T) {
 
 type bogusType int
 
-func (bg bogusType) Value(ctx context.Context) Value                  { return bg }
-func (bg bogusType) Equals(other Value) bool                          { return false }
-func (bg bogusType) Less(f *Format, other LesserValuable) bool        { return false }
-func (bg bogusType) Hash(*Format) hash.Hash                           { return hash.Hash{} }
-func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) {}
-func (bg bogusType) WalkRefs(f *Format, cb RefCallback)               {}
+func (bg bogusType) Value(ctx context.Context) Value                    { return bg }
+func (bg bogusType) Equals(other Value) bool                            { return false }
+func (bg bogusType) Less(nbf *NomsBinFormat, other LesserValuable) bool { return false }
+func (bg bogusType) Hash(*NomsBinFormat) hash.Hash                      { return hash.Hash{} }
+func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback)   {}
+func (bg bogusType) WalkRefs(nbf *NomsBinFormat, cb RefCallback)        {}
 func (bg bogusType) Kind() NomsKind {
 	return CycleKind
 }
 func (bg bogusType) typeOf() *Type {
 	return MakeCycleType("ABC")
 }
-func (bg bogusType) writeTo(w nomsWriter, f *Format) {
+func (bg bogusType) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	panic("abc")
 }
 

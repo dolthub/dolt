@@ -21,7 +21,7 @@ func listOfInts(vrw ValueReadWriter, vals ...int) List {
 }
 
 func testEditor(vrw ValueReadWriter, vals ...int) *ListEditor {
-	return NewListEditor(listOfInts(vrw, vals...), Format_7_18)
+	return NewListEditor(listOfInts(vrw, vals...))
 }
 
 func edit(le *ListEditor, idx, remove int, insert ...int) {

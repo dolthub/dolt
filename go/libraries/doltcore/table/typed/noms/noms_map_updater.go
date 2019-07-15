@@ -47,7 +47,7 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		var totalStats types.AppliedEditStats
 		for edits := range mapChan {
 			var stats types.AppliedEditStats
-			m, stats = types.ApplyEdits(ctx, vrw.Format(), edits, m)
+			m, stats = types.ApplyEdits(ctx, edits, m)
 			totalStats = totalStats.Add(stats)
 
 			if statsCB != nil {

@@ -103,7 +103,7 @@ func parseTuples(args []string, pkCols *schema.ColCollection) ([]map[uint64]stri
 	return results, nil
 }
 
-func ParseKeyValues(format *types.Format, sch schema.Schema, args []string) ([]types.Value, error) {
+func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) ([]types.Value, error) {
 	pkCols := sch.GetPKCols()
 
 	var pkMaps []map[uint64]string
@@ -157,7 +157,7 @@ func ParseKeyValues(format *types.Format, sch schema.Schema, args []string) ([]t
 			taggedVals[k] = val
 		}
 
-		pkVals = append(pkVals, taggedVals.NomsTupleForTags(format, pkCols.Tags, true).Value(context.TODO()))
+		pkVals = append(pkVals, taggedVals.NomsTupleForTags(nbf, pkCols.Tags, true).Value(context.TODO()))
 	}
 
 	return pkVals, nil

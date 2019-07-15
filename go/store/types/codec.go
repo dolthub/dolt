@@ -16,33 +16,33 @@ import (
 const initialBufferSize = 2048
 
 type valueBytes interface {
-	valueBytes(*Format) []byte
+	valueBytes(*NomsBinFormat) []byte
 }
 
-func EncodeValue(v Value, f *Format) chunks.Chunk {
+func EncodeValue(v Value, nbf *NomsBinFormat) chunks.Chunk {
 	switch v := v.(type) {
 	case valueBytes:
-		return chunks.NewChunk(v.valueBytes(f))
+		return chunks.NewChunk(v.valueBytes(nbf))
 	case *Type:
 		w := newBinaryNomsWriter()
-		v.writeTo(&w, f)
+		v.writeTo(&w, nbf)
 		return chunks.NewChunk(w.data())
 	}
 
 	panic("unreachable")
 }
 
-func decodeFromBytes(data []byte, vrw ValueReadWriter, f *Format) Value {
+func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
 	dec := newValueDecoder(data, vrw)
-	v := dec.readValue(f)
+	v := dec.readValue(vrw.Format())
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
 
-func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter, f *Format) Value {
+func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) Value {
 	r := binaryNomsReader{data, 0}
 	dec := newValueDecoderWithValidation(r, vrw)
-	v := dec.readValue(f)
+	v := dec.readValue(vrw.Format())
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
@@ -50,7 +50,7 @@ func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter, f *Format) 
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
 func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) Value {
 	d.PanicIfTrue(c.IsEmpty())
-	return decodeFromBytes(c.Data(), vrw, vrw.Format())
+	return decodeFromBytes(c.Data(), vrw)
 }
 
 type nomsWriter interface {
@@ -58,7 +58,7 @@ type nomsWriter interface {
 	writeBytes(v []byte)
 	writeCount(count uint64)
 	writeHash(h hash.Hash)
-	writeFloat(v Float, f *Format)
+	writeFloat(v Float, nbf *NomsBinFormat)
 	writeInt(v Int)
 	writeUint(v Uint)
 	writeString(v string)
@@ -113,8 +113,8 @@ func (b *binaryNomsReader) skipCount() {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsReader) readFloat(f *Format) Float {
-	if isFormat_7_18(f) {
+func (b *binaryNomsReader) readFloat(nbf *NomsBinFormat) Float {
+	if isFormat_7_18(nbf) {
 		// b.assertCanRead(binary.MaxVarintLen64 * 2)
 		i, count := binary.Varint(b.buff[b.offset:])
 		b.offset += uint32(count)
@@ -128,8 +128,8 @@ func (b *binaryNomsReader) readFloat(f *Format) Float {
 	}
 }
 
-func (b *binaryNomsReader) skipFloat(f *Format) {
-	if isFormat_7_18(f) {
+func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
+	if isFormat_7_18(nbf) {
 		_, count := binary.Varint(b.buff[b.offset:])
 		b.offset += uint32(count)
 		_, count2 := binary.Varint(b.buff[b.offset:])
@@ -273,8 +273,8 @@ func (b *binaryNomsWriter) writeUint(v Uint) {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsWriter) writeFloat(v Float, f *Format) {
-	if isFormat_7_18(f) {
+func (b *binaryNomsWriter) writeFloat(v Float, nbf *NomsBinFormat) {
+	if isFormat_7_18(nbf) {
 		b.ensureCapacity(binary.MaxVarintLen64 * 2)
 		i, exp := float64ToIntExp(float64(v))
 		count := binary.PutVarint(b.buff[b.offset:], i)

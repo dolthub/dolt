@@ -17,8 +17,8 @@ import (
 
 var EmptyStructType = MakeStructType("")
 
-func EmptyStruct(f *Format) Struct {
-	return newStruct(f, "", nil, nil)
+func EmptyStruct(nbf *NomsBinFormat) Struct {
+	return newStruct(nbf, "", nil, nil)
 }
 
 type StructData map[string]Value
@@ -28,24 +28,24 @@ type Struct struct {
 }
 
 // readStruct reads the data provided by a decoder and moves the decoder forward.
-func readStruct(f *Format, dec *valueDecoder) Struct {
+func readStruct(nbf *NomsBinFormat, dec *valueDecoder) Struct {
 	start := dec.pos()
-	skipStruct(f, dec)
+	skipStruct(nbf, dec)
 	end := dec.pos()
-	return Struct{valueImpl{dec.vrw, f, dec.byteSlice(start, end), nil}}
+	return Struct{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}
 }
 
-func skipStruct(f *Format, dec *valueDecoder) {
+func skipStruct(nbf *NomsBinFormat, dec *valueDecoder) {
 	dec.skipKind()
 	dec.skipString() // name
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		dec.skipValue(f)
+		dec.skipValue(nbf)
 	}
 }
 
-func isStructSameTypeForSure(format *Format, dec *valueDecoder, t *Type) bool {
+func isStructSameTypeForSure(nbf *NomsBinFormat, dec *valueDecoder, t *Type) bool {
 	desc := t.Desc.(StructDesc)
 	dec.skipKind()
 	if !dec.isStringSame(desc.Name) {
@@ -63,27 +63,27 @@ func isStructSameTypeForSure(format *Format, dec *valueDecoder, t *Type) bool {
 			return false
 		}
 
-		if !dec.isValueSameTypeForSure(format, desc.fields[i].Type) {
+		if !dec.isValueSameTypeForSure(nbf, desc.fields[i].Type) {
 			return false
 		}
 	}
 	return true
 }
 
-func walkStruct(f *Format, r *refWalker, cb RefCallback) {
+func walkStruct(nbf *NomsBinFormat, r *refWalker, cb RefCallback) {
 	r.skipKind()
 	r.skipString() // name
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
 		r.skipString()
-		r.walkValue(f, cb)
+		r.walkValue(nbf, cb)
 	}
 }
 
-func newStruct(f *Format, name string, fieldNames []string, values []Value) Struct {
+func newStruct(nbf *NomsBinFormat, name string, fieldNames []string, values []Value) Struct {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	StructKind.writeTo(&w, f)
+	StructKind.writeTo(&w, nbf)
 	w.writeString(name)
 	w.writeCount(uint64(len(fieldNames)))
 	for i := 0; i < len(fieldNames); i++ {
@@ -91,12 +91,12 @@ func newStruct(f *Format, name string, fieldNames []string, values []Value) Stru
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(&w, f)
+		values[i].writeTo(&w, nbf)
 	}
-	return Struct{valueImpl{vrw, f, w.data(), nil}}
+	return Struct{valueImpl{vrw, nbf, w.data(), nil}}
 }
 
-func NewStruct(format *Format, name string, data StructData) Struct {
+func NewStruct(nbf *NomsBinFormat, name string, data StructData) Struct {
 	verifyStructName(name)
 	fieldNames := make([]string, len(data))
 	values := make([]Value, len(data))
@@ -113,10 +113,10 @@ func NewStruct(format *Format, name string, data StructData) Struct {
 		values[i] = data[fieldNames[i]]
 	}
 
-	return newStruct(format, name, fieldNames, values)
+	return newStruct(nbf, name, fieldNames, values)
 }
 
-func (s Struct) Format() *Format {
+func (s Struct) Format() *NomsBinFormat {
 	return s.format()
 }
 
@@ -147,9 +147,9 @@ func MakeStructTemplate(name string, fieldNames []string) (t StructTemplate) {
 
 // NewStruct creates a new Struct from the StructTemplate. The order of the
 // values must match the order of the field names of the StructTemplate.
-func (st StructTemplate) NewStruct(format *Format, values []Value) Struct {
+func (st StructTemplate) NewStruct(nbf *NomsBinFormat, values []Value) Struct {
 	d.PanicIfFalse(len(st.fieldNames) == len(values))
-	return newStruct(format, st.name, st.fieldNames, values)
+	return newStruct(nbf, st.name, st.fieldNames, values)
 }
 
 func (s Struct) Empty() bool {
@@ -174,7 +174,7 @@ func (s Struct) typeOf() *Type {
 	return readStructTypeOfValue(s.format(), &dec)
 }
 
-func readStructTypeOfValue(format *Format, dec *valueDecoder) *Type {
+func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) *Type {
 	dec.skipKind()
 	name := dec.readString()
 	count := dec.readCount()
@@ -183,7 +183,7 @@ func readStructTypeOfValue(format *Format, dec *valueDecoder) *Type {
 		typeFields[i] = StructField{
 			Name:     dec.readString(),
 			Optional: false,
-			Type:     dec.readTypeOfValue(format),
+			Type:     dec.readTypeOfValue(nbf),
 		}
 	}
 	return makeStructTypeQuickly(name, typeFields)

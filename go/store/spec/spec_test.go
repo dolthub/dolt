@@ -40,7 +40,7 @@ func TestMemDatabaseSpec(t *testing.T) {
 func TestMemDatasetSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	spec, err := ForDataset(types.Format_7_18, "mem::test")
+	spec, err := ForDataset("mem::test")
 	assert.NoError(err)
 	defer spec.Close()
 
@@ -64,7 +64,7 @@ func TestMemHashPathSpec(t *testing.T) {
 
 	s := types.String("hello")
 
-	spec, err := ForPath(types.Format_7_18, "mem::#" + s.Hash(types.Format_7_18).String())
+	spec, err := ForPath("mem::#" + s.Hash(types.Format_7_18).String())
 	assert.NoError(err)
 	defer spec.Close()
 
@@ -82,7 +82,7 @@ func TestMemHashPathSpec(t *testing.T) {
 func TestMemDatasetPathSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	spec, err := ForPath(types.Format_7_18, "mem::test.value[0]")
+	spec, err := ForPath("mem::test.value[0]")
 	assert.NoError(err)
 	defer spec.Close()
 
@@ -169,12 +169,12 @@ func TestHref(t *testing.T) {
 
 	sp, _ := ForDatabase("aws://table/foo/bar/baz")
 	assert.Equal("aws://table/foo/bar/baz", sp.Href())
-	sp, _ = ForDataset(types.Format_7_18, "aws://table:bucket/foo/bar/baz::myds")
+	sp, _ = ForDataset("aws://table:bucket/foo/bar/baz::myds")
 	assert.Equal("aws://table:bucket/foo/bar/baz", sp.Href())
-	sp, _ = ForPath(types.Format_7_18, "aws://table:bucket/foo/bar/baz::myds.my.path")
+	sp, _ = ForPath("aws://table:bucket/foo/bar/baz::myds.my.path")
 	assert.Equal("aws://table:bucket/foo/bar/baz", sp.Href())
 
-	sp, err := ForPath(types.Format_7_18, "mem::myds.my.path")
+	sp, err := ForPath("mem::myds.my.path")
 	assert.NoError(err)
 	assert.Equal("", sp.Href())
 }
@@ -224,9 +224,9 @@ func TestForDatabase(t *testing.T) {
 		assert.True(spec.Path.IsEmpty())
 
 		if tc.canonicalSpecIfAny == "" {
-			assert.Equal(tc.spec, spec.String(types.Format_7_18))
+			assert.Equal(tc.spec, spec.String())
 		} else {
-			assert.Equal(tc.canonicalSpecIfAny, spec.String(types.Format_7_18))
+			assert.Equal(tc.canonicalSpecIfAny, spec.String())
 		}
 	}
 }
@@ -248,19 +248,19 @@ func TestForDataset(t *testing.T) {
 	}
 
 	for _, spec := range badSpecs {
-		_, err := ForDataset(types.Format_7_18, spec)
+		_, err := ForDataset(spec)
 		assert.Error(err, spec)
 	}
 
 	invalidDatasetNames := []string{" ", "", "$", "#", ":", "\n", "💩"}
 	for _, s := range invalidDatasetNames {
-		_, err := ForDataset(types.Format_7_18, "mem::" + s)
+		_, err := ForDataset("mem::" + s)
 		assert.Error(err)
 	}
 
 	validDatasetNames := []string{"a", "Z", "0", "/", "-", "_"}
 	for _, s := range validDatasetNames {
-		_, err := ForDataset(types.Format_7_18, "mem::" + s)
+		_, err := ForDataset("mem::" + s)
 		assert.NoError(err)
 	}
 
@@ -278,7 +278,7 @@ func TestForDataset(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		spec, err := ForDataset(types.Format_7_18, tc.spec)
+		spec, err := ForDataset(tc.spec)
 		assert.NoError(err, tc.spec)
 		defer spec.Close()
 
@@ -287,9 +287,9 @@ func TestForDataset(t *testing.T) {
 		assert.Equal(tc.datasetName, spec.Path.Dataset)
 
 		if tc.canonicalSpecIfAny == "" {
-			assert.Equal(tc.spec, spec.String(types.Format_7_18))
+			assert.Equal(tc.spec, spec.String())
 		} else {
-			assert.Equal(tc.canonicalSpecIfAny, spec.String(types.Format_7_18))
+			assert.Equal(tc.canonicalSpecIfAny, spec.String())
 		}
 	}
 }
@@ -305,7 +305,7 @@ func TestForPath(t *testing.T) {
 	}
 
 	for _, bs := range badSpecs {
-		_, err := ForPath(types.Format_7_18, bs)
+		_, err := ForPath(bs)
 		assert.Error(err)
 	}
 
@@ -324,18 +324,18 @@ func TestForPath(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		spec, err := ForPath(types.Format_7_18, tc.spec)
+		spec, err := ForPath(tc.spec)
 		assert.NoError(err)
 		defer spec.Close()
 
 		assert.Equal(tc.protocol, spec.Protocol)
 		assert.Equal(tc.databaseName, spec.DatabaseName)
-		assert.Equal(tc.pathString, spec.Path.String(types.Format_7_18))
+		assert.Equal(tc.pathString, spec.Path.String())
 
 		if tc.canonicalSpecIfAny == "" {
-			assert.Equal(tc.spec, spec.String(types.Format_7_18))
+			assert.Equal(tc.spec, spec.String())
 		} else {
-			assert.Equal(tc.canonicalSpecIfAny, spec.String(types.Format_7_18))
+			assert.Equal(tc.canonicalSpecIfAny, spec.String())
 		}
 	}
 }
@@ -343,21 +343,21 @@ func TestForPath(t *testing.T) {
 func TestPinPathSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	unpinned, err := ForPath(types.Format_7_18, "mem::foo.value")
+	unpinned, err := ForPath("mem::foo.value")
 	assert.NoError(err)
 	defer unpinned.Close()
 
 	db := unpinned.GetDatabase(context.Background())
 	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(42))
 
-	pinned, ok := unpinned.Pin(context.Background(), types.Format_7_18)
+	pinned, ok := unpinned.Pin(context.Background())
 	assert.True(ok)
 	defer pinned.Close()
 
 	head := db.GetDataset(context.Background(), "foo").Head()
 
 	assert.Equal(head.Hash(types.Format_7_18), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash(types.Format_7_18).String()), pinned.String(types.Format_7_18))
+	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash(types.Format_7_18).String()), pinned.String())
 	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
 	assert.Equal(types.Float(42), unpinned.GetValue(context.Background()))
 
@@ -369,14 +369,14 @@ func TestPinPathSpec(t *testing.T) {
 func TestPinDatasetSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	unpinned, err := ForDataset(types.Format_7_18, "mem::foo")
+	unpinned, err := ForDataset("mem::foo")
 	assert.NoError(err)
 	defer unpinned.Close()
 
 	db := unpinned.GetDatabase(context.Background())
 	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(42))
 
-	pinned, ok := unpinned.Pin(context.Background(), types.Format_7_18)
+	pinned, ok := unpinned.Pin(context.Background())
 	assert.True(ok)
 	defer pinned.Close()
 
@@ -387,7 +387,7 @@ func TestPinDatasetSpec(t *testing.T) {
 	}
 
 	assert.Equal(head.Hash(types.Format_7_18), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash(types.Format_7_18).String()), pinned.String(types.Format_7_18))
+	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash(types.Format_7_18).String()), pinned.String())
 	assert.Equal(types.Float(42), commitValue(pinned.GetValue(context.Background())))
 	assert.Equal(types.Float(42), unpinned.GetDataset(context.Background()).HeadValue())
 
@@ -399,9 +399,9 @@ func TestPinDatasetSpec(t *testing.T) {
 func TestAlreadyPinnedPathSpec(t *testing.T) {
 	assert := assert.New(t)
 
-	unpinned, err := ForPath(types.Format_7_18, "mem::#imgp9mp1h3b9nv0gna6mri53dlj9f4ql.value")
+	unpinned, err := ForPath("mem::#imgp9mp1h3b9nv0gna6mri53dlj9f4ql.value")
 	assert.NoError(err)
-	pinned, ok := unpinned.Pin(context.Background(), types.Format_7_18)
+	pinned, ok := unpinned.Pin(context.Background())
 	assert.True(ok)
 	assert.Equal(unpinned, pinned)
 }
@@ -442,7 +442,7 @@ func TestAcccessingInvalidSpec(t *testing.T) {
 		assert.Panics(func() { sp.Close() })
 		// Spec was created with ForDatabase, so dataset/path related functions
 		// should just fail not panic.
-		_, ok := sp.Pin(context.Background(), types.Format_7_18)
+		_, ok := sp.Pin(context.Background())
 		assert.False(ok)
 		assert.Equal(datas.Dataset{}, sp.GetDataset(context.Background()))
 		assert.Nil(sp.GetValue(context.Background()))
@@ -473,7 +473,7 @@ func TestExternalProtocol(t *testing.T) {
 	tp := testProtocol{}
 	ExternalProtocols["test"] = &tp
 
-	sp, err := ForDataset(types.Format_7_18, "test:foo::bar")
+	sp, err := ForDataset("test:foo::bar")
 	assert.NoError(err)
 	assert.Equal("test", sp.Protocol)
 	assert.Equal("foo", sp.DatabaseName)

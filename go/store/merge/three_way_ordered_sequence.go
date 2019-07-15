@@ -14,7 +14,7 @@ import (
 
 type applyFunc func(candidate, types.ValueChanged, types.Value) candidate
 
-func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, format *types.Format, a, b, parent candidate, apply applyFunc, path types.Path) (types.Value, error) {
+func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, a, b, parent candidate, apply applyFunc, path types.Path) (types.Value, error) {
 	aChangeChan, bChangeChan := make(chan types.ValueChanged), make(chan types.ValueChanged)
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
@@ -48,12 +48,12 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, format *types
 
 		// Since diff generates changes in key-order, and we never skip over a change without processing it, we can simply compare the keys at which aChange and bChange occurred to determine if either is safe to apply to the merge result without further processing. This is because if, e.g. aChange.V.Less(bChange.V), we know that the diff of b will never generate a change at that key. If it was going to, it would have done so on an earlier iteration of this loop and been processed at that time.
 		// It's also obviously OK to apply a change if only one diff is generating any changes, e.g. aChange.V is non-nil and bChange.V is nil.
-		if aChange.Key != nil && (bChange.Key == nil || aChange.Key.Less(format, bChange.Key)) {
-			merged = apply(merged, aChange, a.get(ctx, format, aChange.Key))
+		if aChange.Key != nil && (bChange.Key == nil || aChange.Key.Less(m.vrw.Format(), bChange.Key)) {
+			merged = apply(merged, aChange, a.get(ctx, aChange.Key))
 			aChange = types.ValueChanged{}
 			continue
-		} else if bChange.Key != nil && (aChange.Key == nil || bChange.Key.Less(format, aChange.Key)) {
-			merged = apply(merged, bChange, b.get(ctx, format, bChange.Key))
+		} else if bChange.Key != nil && (aChange.Key == nil || bChange.Key.Less(m.vrw.Format(), aChange.Key)) {
+			merged = apply(merged, bChange, b.get(ctx, bChange.Key))
 			bChange = types.ValueChanged{}
 			continue
 		}
@@ -61,7 +61,7 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, format *types
 			d.Panic("Diffs have skewed!") // Sanity check.
 		}
 
-		change, mergedVal, err := m.mergeChanges(ctx, format, aChange, bChange, a, b, parent, apply, path)
+		change, mergedVal, err := m.mergeChanges(ctx, aChange, bChange, a, b, parent, apply, path)
 		if err != nil {
 			return parent.getValue(), err
 		}
@@ -71,16 +71,16 @@ func (m *merger) threeWayOrderedSequenceMerge(ctx context.Context, format *types
 	return merged.getValue(), nil
 }
 
-func (m *merger) mergeChanges(ctx context.Context, format *types.Format, aChange, bChange types.ValueChanged, a, b, p candidate, apply applyFunc, path types.Path) (change types.ValueChanged, mergedVal types.Value, err error) {
-	path = a.pathConcat(ctx, format, aChange, path)
-	aValue, bValue := a.get(ctx, format, aChange.Key), b.get(ctx, format, bChange.Key)
+func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueChanged, a, b, p candidate, apply applyFunc, path types.Path) (change types.ValueChanged, mergedVal types.Value, err error) {
+	path = a.pathConcat(ctx, aChange, path)
+	aValue, bValue := a.get(ctx, aChange.Key), b.get(ctx, bChange.Key)
 	// If the two diffs generate different kinds of changes at the same key, conflict.
 	if aChange.ChangeType != bChange.ChangeType {
 		if change, mergedVal, ok := m.resolve(aChange.ChangeType, bChange.ChangeType, aValue, bValue, path); ok {
 			// TODO: Correctly encode Old/NewValue with this change report. https://github.com/attic-labs/noms/issues/3467
 			return types.ValueChanged{change, aChange.Key, nil, nil}, mergedVal, nil
 		}
-		return change, nil, newMergeConflict("Conflict:\n%s\nvs\n%s\n", describeChange(format, aChange), describeChange(format, bChange))
+		return change, nil, newMergeConflict("Conflict:\n%s\nvs\n%s\n", describeChange(aChange), describeChange(bChange))
 	}
 
 	if aChange.ChangeType == types.DiffChangeRemoved || aValue.Equals(bValue) {
@@ -92,7 +92,7 @@ func (m *merger) mergeChanges(ctx context.Context, format *types.Format, aChange
 	if !unmergeable(aValue, bValue) {
 		// TODO: Add concurrency.
 		var err error
-		if mergedVal, err = m.threeWay(ctx, format, aValue, bValue, p.get(ctx, format, aChange.Key), path); err == nil {
+		if mergedVal, err = m.threeWay(ctx, aValue, bValue, p.get(ctx, aChange.Key), path); err == nil {
 			return aChange, mergedVal, nil
 		}
 		return change, nil, err
@@ -102,7 +102,7 @@ func (m *merger) mergeChanges(ctx context.Context, format *types.Format, aChange
 		// TODO: Correctly encode Old/NewValue with this change report. https://github.com/attic-labs/noms/issues/3467
 		return types.ValueChanged{change, aChange.Key, nil, nil}, mergedVal, nil
 	}
-	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(format, aChange), types.EncodedValue(ctx, aValue), describeChange(format, bChange), types.EncodedValue(ctx, bValue))
+	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(ctx, aValue), describeChange(bChange), types.EncodedValue(ctx, bValue))
 }
 
 func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
@@ -111,7 +111,7 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 	}
 }
 
-func describeChange(format *types.Format, change types.ValueChanged) string {
+func describeChange(change types.ValueChanged) string {
 	op := ""
 	switch change.ChangeType {
 	case types.DiffChangeAdded:

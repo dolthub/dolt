@@ -130,7 +130,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func createRow(format *types.Format, sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseError) {
+func createRow(nbf *types.NomsBinFormat, sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseError) {
 	var unknownFields []string
 	untypedTaggedVals := make(row.TaggedValues)
 	for k, v := range prArgs.KVPs {
@@ -160,7 +160,7 @@ func createRow(format *types.Format, sch schema.Schema, prArgs *putRowArgs) (row
 		return nil, errhand.BuildDError("failed to create row converter").AddCause(err).Build()
 	}
 
-	untypedRow := row.New(format, untypedSch, untypedTaggedVals)
+	untypedRow := row.New(nbf, untypedSch, untypedTaggedVals)
 	typedRow, err := rconv.Convert(untypedRow)
 
 	if err != nil {

@@ -26,7 +26,7 @@ func TestNomsCommit(t *testing.T) {
 
 func (s *nomsCommitTestSuite) setupDataset(name string, doCommit bool) (sp spec.Spec, ref types.Ref) {
 	var err error
-	sp, err = spec.ForDataset(types.Format_7_18, spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, name))
+	sp, err = spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
 	s.NoError(err)
 
 	v := types.String("testcommit")
@@ -59,11 +59,11 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 		stdinWriter.Write([]byte("#" + ref.TargetHash().String() + "\n"))
 		stdinWriter.Close()
 	}()
-	stdoutString, stderrString := s.MustRun(main, []string{"commit", sp.String(types.Format_7_18)})
+	stdoutString, stderrString := s.MustRun(main, []string{"commit", sp.String()})
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 
-	sp, _ = spec.ForDataset(types.Format_7_18, sp.String(types.Format_7_18))
+	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
@@ -82,11 +82,11 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	_, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.False(ok, "should not have a commit")
 
-	stdoutString, stderrString := s.MustRun(main, []string{"commit", "#" + ref.TargetHash().String(), sp.String(types.Format_7_18)})
+	stdoutString, stderrString := s.MustRun(main, []string{"commit", "#" + ref.TargetHash().String(), sp.String()})
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 
-	sp, _ = spec.ForDataset(types.Format_7_18, sp.String(types.Format_7_18))
+	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
@@ -116,7 +116,7 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 	if allowDuplicate {
 		cliOptions = append(cliOptions, "--allow-dupe=1")
 	}
-	cliOptions = append(cliOptions, dsName+".value", sp.String(types.Format_7_18))
+	cliOptions = append(cliOptions, dsName+".value", sp.String())
 
 	stdoutString, stderrString, err := s.Run(main, cliOptions)
 	s.Nil(err)
@@ -128,7 +128,7 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 		s.Contains(stdoutString, "Commit aborted")
 	}
 
-	sp, _ = spec.ForDataset(types.Format_7_18, sp.String(types.Format_7_18))
+	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
 	value, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
@@ -148,12 +148,12 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	metaOld := sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
 
-	stdoutString, stderrString, err := s.Run(main, []string{"commit", "--allow-dupe=1", "--message=foo", dsName + ".value", sp.String(types.Format_7_18)})
+	stdoutString, stderrString, err := s.Run(main, []string{"commit", "--allow-dupe=1", "--message=foo", dsName + ".value", sp.String()})
 	s.Nil(err)
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 
-	sp, _ = spec.ForDataset(types.Format_7_18, sp.String(types.Format_7_18))
+	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
 	metaNew := sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
@@ -165,11 +165,11 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	metaOld = metaNew
 
-	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=message=bar", "--date=" + spec.CommitMetaDateFormat[:20], dsName + ".value", sp.String(types.Format_7_18)})
+	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=message=bar", "--date=" + spec.CommitMetaDateFormat[:20], dsName + ".value", sp.String()})
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 
-	sp, _ = spec.ForDataset(types.Format_7_18, sp.String(types.Format_7_18))
+	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
 	metaNew = sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
@@ -185,7 +185,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitHashNotFound() {
 	defer sp.Close()
 
 	s.Panics(func() {
-		s.MustRun(main, []string{"commit", "#9ei6fbrs0ujo51vifd3f2eebufo4lgdu", sp.String(types.Format_7_18)})
+		s.MustRun(main, []string{"commit", "#9ei6fbrs0ujo51vifd3f2eebufo4lgdu", sp.String()})
 	})
 }
 
@@ -194,7 +194,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadataBadDateFormat() {
 	defer sp.Close()
 
 	s.Panics(func() {
-		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--date=a", "#" + ref.TargetHash().String(), sp.String(types.Format_7_18)})
+		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--date=a", "#" + ref.TargetHash().String(), sp.String()})
 	})
 }
 
@@ -203,7 +203,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitInvalidMetadataPaths() {
 	defer sp.Close()
 
 	s.Panics(func() {
-		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta-p=#beef", "#" + ref.TargetHash().String(), sp.String(types.Format_7_18)})
+		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta-p=#beef", "#" + ref.TargetHash().String(), sp.String()})
 	})
 }
 
@@ -212,6 +212,6 @@ func (s *nomsCommitTestSuite) TestNomsCommitInvalidMetadataFieldName() {
 	defer sp.Close()
 
 	s.Panics(func() {
-		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=_foo=bar", "#" + ref.TargetHash().String(), sp.String(types.Format_7_18)})
+		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=_foo=bar", "#" + ref.TargetHash().String(), sp.String()})
 	})
 }

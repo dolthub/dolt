@@ -57,7 +57,7 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) sql.Row {
 }
 
 // Returns a Dolt row representation for SQL row given
-func SqlRowToDoltRow(format *types.Format, r sql.Row, doltSchema schema.Schema) row.Row {
+func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Schema) row.Row {
 	taggedVals := make(row.TaggedValues)
 	for i, val := range r {
 		if val != nil {
@@ -65,7 +65,7 @@ func SqlRowToDoltRow(format *types.Format, r sql.Row, doltSchema schema.Schema) 
 		}
 	}
 
-	return row.New(format, doltSchema, taggedVals)
+	return row.New(nbf, doltSchema, taggedVals)
 }
 
 // Returns the column value for a SQL column

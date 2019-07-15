@@ -64,7 +64,7 @@ func nomsListNew(ctx context.Context, dbStr string, args []string) int {
 }
 
 func nomsListAppend(ctx context.Context, specStr string, args []string) int {
-	sp, err := spec.ForPath(types.Format_7_18, specStr)
+	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
 	rootVal, basePath := splitPath(ctx, db, sp)
@@ -77,7 +77,7 @@ func nomsListAppend(ctx context.Context, specStr string, args []string) int {
 }
 
 func nomsListInsert(ctx context.Context, specStr string, pos uint64, args []string) int {
-	sp, err := spec.ForPath(types.Format_7_18, specStr)
+	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
 	rootVal, basePath := splitPath(ctx, db, sp)
@@ -86,7 +86,7 @@ func nomsListInsert(ctx context.Context, specStr string, pos uint64, args []stri
 }
 
 func nomsListDel(ctx context.Context, specStr string, pos uint64, len uint64) int {
-	sp, err := spec.ForPath(types.Format_7_18, specStr)
+	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 
 	db := sp.GetDatabase(ctx)
@@ -106,7 +106,7 @@ func nomsListDel(ctx context.Context, specStr string, pos uint64, len uint64) in
 
 func applyListInserts(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, pos uint64, args []string) {
 	if rootVal == nil {
-		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String(db.Format())))
+		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
 	patch := diff.Patch{}

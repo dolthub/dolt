@@ -16,7 +16,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
 
@@ -41,7 +40,7 @@ func setupCommitFlags() *flag.FlagSet {
 
 func runCommit(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(ctx, types.Format_7_18, args[len(args)-1])
+	db, ds, err := cfg.GetDataset(ctx, args[len(args)-1])
 	util.CheckError(err)
 	defer db.Close()
 
@@ -53,7 +52,7 @@ func runCommit(ctx context.Context, args []string) int {
 		util.CheckError(err)
 		path = string(readPath)
 	}
-	absPath, err := spec.NewAbsolutePath(db.Format(), path)
+	absPath, err := spec.NewAbsolutePath(path)
 	util.CheckError(err)
 
 	value := absPath.Resolve(ctx, db)
@@ -70,7 +69,7 @@ func runCommit(ctx context.Context, args []string) int {
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(ctx, db.Format(), db, "", "", nil, nil)
+	meta, err := spec.CreateCommitMetaStruct(ctx, db, "", "", nil, nil)
 	util.CheckErrorNoUsage(err)
 
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})

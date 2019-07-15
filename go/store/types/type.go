@@ -55,28 +55,28 @@ func (t *Type) Equals(other Value) (res bool) {
 	return false
 }
 
-func (t *Type) Less(f *Format, other LesserValuable) (res bool) {
-	return valueLess(f, t, other.(Value))
+func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (res bool) {
+	return valueLess(nbf, t, other.(Value))
 }
 
-func (t *Type) Hash(f *Format) hash.Hash {
-	return getHash(t, f)
+func (t *Type) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(t, nbf)
 }
 
-func (t *Type) writeTo(w nomsWriter, f *Format) {
-	TypeKind.writeTo(w, f)
-	t.writeToAsType(w, map[string]*Type{}, f)
+func (t *Type) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	TypeKind.writeTo(w, nbf)
+	t.writeToAsType(w, map[string]*Type{}, nbf)
 }
 
-func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type, f *Format) {
-	t.Desc.writeTo(w, f, t, seensStructs)
+func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type, nbf *NomsBinFormat) {
+	t.Desc.writeTo(w, nbf, t, seensStructs)
 }
 
 func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
 	t.Desc.walkValues(cb)
 }
 
-func (t *Type) WalkRefs(f *Format, cb RefCallback) {
+func (t *Type) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (t *Type) typeOf() *Type {

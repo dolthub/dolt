@@ -124,7 +124,7 @@ func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) 
 }
 
 func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
-	ancestorRef, ok := datas.FindCommonAncestor(ctx, vrw.Format(), ref1, ref2, vrw)
+	ancestorRef, ok := datas.FindCommonAncestor(ctx, ref1, ref2, vrw)
 
 	if !ok {
 		return types.Ref{}, ErrNoCommonAnscestor

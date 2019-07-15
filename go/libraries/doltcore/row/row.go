@@ -31,7 +31,7 @@ type Row interface {
 	// Sets a value for the column with the tag given, returning a new row with the update.
 	SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row, error)
 
-	Format() *types.Format
+	Format() *types.NomsBinFormat
 }
 
 func GetFieldByName(colName string, r Row, sch schema.Schema) (types.Value, bool) {

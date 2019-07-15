@@ -78,6 +78,6 @@ func isKindOrderedByValue(k NomsKind) bool {
 	return k <= StringKind || k >= UUIDKind
 }
 
-func (k NomsKind) writeTo(w nomsWriter, f *Format) {
+func (k NomsKind) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	w.writeUint8(uint8(k))
 }

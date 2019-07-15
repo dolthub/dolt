@@ -34,7 +34,7 @@ const (
 )
 
 func (s *nomsShowTestSuite) spec(str string) spec.Spec {
-	sp, err := spec.ForDataset(types.Format_7_18, str)
+	sp, err := spec.ForDataset(str)
 	s.NoError(err)
 	return sp
 }
@@ -52,14 +52,14 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 
 func (s *nomsShowTestSuite) TestNomsShow() {
 	datasetName := "dsTest"
-	str := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, datasetName)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
 	s1 := types.String("test string")
 	r := s.writeTestData(str, s1)
 	res, _ := s.MustRun(main, []string{"show", str})
 	s.Equal(res1, res)
 
-	str1 := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "#"+r.TargetHash().String())
+	str1 := spec.CreateValueSpecString("nbs", s.DBDir, "#"+r.TargetHash().String())
 	res, _ = s.MustRun(main, []string{"show", str1})
 	s.Equal(res2, res)
 
@@ -70,7 +70,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
 
-	str1 = spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "#"+r.TargetHash().String())
+	str1 = spec.CreateValueSpecString("nbs", s.DBDir, "#"+r.TargetHash().String())
 	res, _ = s.MustRun(main, []string{"show", str1})
 	s.Equal(res4, res)
 
@@ -80,7 +80,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 }
 
 func (s *nomsShowTestSuite) TestNomsShowNotFound() {
-	str := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, "not-there")
+	str := spec.CreateValueSpecString("nbs", s.DBDir, "not-there")
 	stdout, stderr, err := s.Run(main, []string{"show", str})
 	s.Equal("", stdout)
 	s.Equal(fmt.Sprintf("Object not found: %s\n", str), stderr)
@@ -89,8 +89,8 @@ func (s *nomsShowTestSuite) TestNomsShowNotFound() {
 
 func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	datasetName := "showRaw"
-	str := spec.CreateValueSpecString(types.Format_7_18, "nbs", s.DBDir, datasetName)
-	sp, err := spec.ForDataset(types.Format_7_18, str)
+	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
+	sp, err := spec.ForDataset(str)
 	s.NoError(err)
 	defer sp.Close()
 
@@ -102,7 +102,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 		r1 := db.WriteValue(context.Background(), in)
 		db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
-			spec.CreateValueSpecString(db.Format(), "nbs", s.DBDir, "#"+r1.TargetHash().String())})
+			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))
 		out := types.DecodeValue(ch, db)
 		s.True(out.Equals(in))

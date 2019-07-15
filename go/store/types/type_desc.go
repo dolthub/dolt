@@ -12,7 +12,7 @@ import (
 type TypeDesc interface {
 	Kind() NomsKind
 	walkValues(cb ValueCallback)
-	writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type)
+	writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type)
 
 	// isSimplifiedForSure is used to determine if the type should be
 	// simplified. It may contain false negatives.
@@ -39,8 +39,8 @@ func (p PrimitiveDesc) Kind() NomsKind {
 func (p PrimitiveDesc) walkValues(cb ValueCallback) {
 }
 
-func (p PrimitiveDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type) {
-	NomsKind(p).writeTo(w, f)
+func (p PrimitiveDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) {
+	NomsKind(p).writeTo(w, nbf)
 }
 
 func (p PrimitiveDesc) isSimplifiedForSure() bool {
@@ -68,13 +68,13 @@ func (c CompoundDesc) walkValues(cb ValueCallback) {
 	}
 }
 
-func (c CompoundDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type) {
-	c.kind.writeTo(w, f)
+func (c CompoundDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) {
+	c.kind.writeTo(w, nbf)
 	if c.kind == UnionKind {
 		w.writeCount(uint64(len(c.ElemTypes)))
 	}
 	for _, t := range c.ElemTypes {
-		t.writeToAsType(w, seenStructs, f)
+		t.writeToAsType(w, seenStructs, nbf)
 	}
 }
 
@@ -111,19 +111,19 @@ func (s StructDesc) walkValues(cb ValueCallback) {
 	}
 }
 
-func (s StructDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[string]*Type) {
+func (s StructDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) {
 	name := s.Name
 
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
-			CycleKind.writeTo(w, f)
+			CycleKind.writeTo(w, nbf)
 			w.writeString(name)
 			return
 		}
 		seenStructs[name] = t
 	}
 
-	StructKind.writeTo(w, f)
+	StructKind.writeTo(w, nbf)
 	w.writeString(name)
 	w.writeCount(uint64(s.Len()))
 
@@ -132,7 +132,7 @@ func (s StructDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStructs map[st
 		w.writeString(field.Name)
 	}
 	for _, field := range s.fields {
-		field.Type.writeToAsType(w, seenStructs, f)
+		field.Type.writeToAsType(w, seenStructs, nbf)
 	}
 	for _, field := range s.fields {
 		w.writeBool(field.Optional)
@@ -189,7 +189,7 @@ func (c CycleDesc) Kind() NomsKind {
 func (c CycleDesc) walkValues(cb ValueCallback) {
 }
 
-func (c CycleDesc) writeTo(w nomsWriter, f *Format, t *Type, seenStruct map[string]*Type) {
+func (c CycleDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStruct map[string]*Type) {
 	panic("Should not write cycle types")
 }
 

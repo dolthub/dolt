@@ -107,15 +107,15 @@ Continue?`)
 	return 0
 }
 
-func validate(ctx context.Context, f *types.Format, r types.Value) bool {
+func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool {
 	rootType := types.MakeMapType(types.StringType, types.MakeRefType(types.ValueType))
-	if !types.IsValueSubtypeOf(f, r, rootType) {
+	if !types.IsValueSubtypeOf(nbf, r, rootType) {
 		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(ctx), types.TypeOf(r).Describe(ctx))
 		return false
 	}
 
 	return r.(types.Map).Any(ctx, func(k, v types.Value) bool {
-		if !datas.IsRefOfCommitType(f, types.TypeOf(v)) {
+		if !datas.IsRefOfCommitType(nbf, types.TypeOf(v)) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false
 		}

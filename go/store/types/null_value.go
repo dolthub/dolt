@@ -29,18 +29,18 @@ func (v Null) Equals(other Value) bool {
 	return other.Kind() == NullKind
 }
 
-func (v Null) Less(f *Format, other LesserValuable) bool {
+func (v Null) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	return NullKind < other.Kind()
 }
 
-func (v Null) Hash(f *Format) hash.Hash {
-	return getHash(NullValue, f)
+func (v Null) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(NullValue, nbf)
 }
 
 func (v Null) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (v Null) WalkRefs(f *Format, cb RefCallback) {
+func (v Null) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (v Null) typeOf() *Type {
@@ -55,13 +55,13 @@ func (v Null) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Null) writeTo(w nomsWriter, f *Format) {
-	NullKind.writeTo(w, f)
+func (v Null) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	NullKind.writeTo(w, nbf)
 }
 
-func (v Null) valueBytes(f *Format) []byte {
+func (v Null) valueBytes(nbf *NomsBinFormat) []byte {
 	buff := make([]byte, 1)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w, f)
+	v.writeTo(&w, nbf)
 	return buff
 }

@@ -135,9 +135,9 @@ func (r *Resolver) GetChunkStore(ctx context.Context, str string) (chunks.ChunkS
 // Resolve string to a dataset. If a config is present,
 //  - if no db prefix is present, assume the default db
 //  - if the db prefix is an alias, replace it
-func (r *Resolver) GetDataset(ctx context.Context, format *types.Format, str string) (datas.Database, datas.Dataset, error) {
+func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, datas.Dataset, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForDatasetOpts(format, r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForDatasetOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, datas.Dataset{}, err
 	}
@@ -147,9 +147,9 @@ func (r *Resolver) GetDataset(ctx context.Context, format *types.Format, str str
 // Resolve string to a value path. If a config is present,
 //  - if no db spec is present, assume the default db
 //  - if the db spec is an alias, replace it
-func (r *Resolver) GetPath(ctx context.Context, format *types.Format, str string) (datas.Database, types.Value, error) {
+func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, types.Value, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForPathOpts(format, r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForPathOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, nil, err
 	}

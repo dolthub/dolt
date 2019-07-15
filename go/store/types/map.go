@@ -136,7 +136,7 @@ func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value) {
 	return entry.key, entry.value
 }
 
-func (m Map) Format() *Format {
+func (m Map) Format() *NomsBinFormat {
 	return m.format()
 }
 
@@ -153,7 +153,7 @@ func (m Map) At(ctx context.Context, idx uint64) (key, value Value) {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(ctx, m.orderedSequence, idx, m.format())
+	cur := newCursorAtIndex(ctx, m.orderedSequence, idx)
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
 }
@@ -213,7 +213,7 @@ func (m Map) Iterator(ctx context.Context) MapIterator {
 
 func (m Map) IteratorAt(ctx context.Context, pos uint64) MapIterator {
 	return &mapIterator{
-		cursor: newCursorAtIndex(ctx, m.orderedSequence, pos, m.format()),
+		cursor: newCursorAtIndex(ctx, m.orderedSequence, pos),
 	}
 }
 
@@ -250,7 +250,7 @@ func (m Map) Edit() *MapEditor {
 	return NewMapEditor(m)
 }
 
-func buildMapData(f *Format, values []Value) mapEntrySlice {
+func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
 	if len(values) == 0 {
 		return mapEntrySlice{}
 	}
@@ -260,7 +260,7 @@ func buildMapData(f *Format, values []Value) mapEntrySlice {
 	}
 	kvs := mapEntrySlice{
 		make([]mapEntry, len(values)/2),
-		f,
+		nbf,
 	}
 
 	for i := 0; i < len(values); i += 2 {
@@ -272,7 +272,7 @@ func buildMapData(f *Format, values []Value) mapEntrySlice {
 
 	uniqueSorted := mapEntrySlice{
 		make([]mapEntry, 0, len(kvs.entries)),
-		f,
+		nbf,
 	}
 
 	sort.Stable(kvs)
@@ -288,7 +288,7 @@ func buildMapData(f *Format, values []Value) mapEntrySlice {
 
 	return mapEntrySlice{
 		append(uniqueSorted.entries, last),
-		uniqueSorted.f,
+		uniqueSorted.nbf,
 	}
 }
 

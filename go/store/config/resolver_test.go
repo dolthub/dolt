@@ -12,7 +12,6 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -70,9 +69,9 @@ func withoutConfig(t *testing.T) *Resolver {
 }
 
 func assertPathSpecsEquiv(assert *assert.Assertions, expected string, actual string) {
-	e, err := spec.ForPath(types.Format_7_18, expected)
+	e, err := spec.ForPath(expected)
 	assert.NoError(err)
-	a, err := spec.ForPath(types.Format_7_18, actual)
+	a, err := spec.ForPath(actual)
 	assert.NoError(err)
 
 	databaseSpec := func(sp spec.Spec) string {
@@ -80,7 +79,7 @@ func assertPathSpecsEquiv(assert *assert.Assertions, expected string, actual str
 	}
 
 	assertDbSpecsEquiv(assert, databaseSpec(e), databaseSpec(a))
-	assert.Equal(e.Path.String(types.Format_7_18), a.Path.String(types.Format_7_18))
+	assert.Equal(e.Path.String(), a.Path.String())
 }
 
 func TestResolveDatabaseWithConfig(t *testing.T) {
