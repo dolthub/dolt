@@ -125,3 +125,34 @@ func ProcFuncForWriter(ctx context.Context, wr table.TableWriter) OutFunc {
 		return wr.WriteRow(ctx, r)
 	})
 }
+
+// InFuncForChannel returns an InFunc that reads off the channel given.
+func InFuncForChannel(rowChan <-chan row.Row) InFunc {
+	return func(p *Pipeline, ch chan<- RowWithProps, badRowChan chan<- *TransformRowFailure, noMoreChan <-chan struct{}) {
+		defer close(ch)
+
+		for {
+			select {
+			case <-noMoreChan:
+				return
+			default:
+				break
+			}
+
+			if p.IsStopping() {
+				return
+			}
+
+			select {
+			case r, ok := <-rowChan:
+				if ok {
+					ch <- RowWithProps{Row: r, Props: NoProps}
+				} else {
+					return
+				}
+			case <-time.After(100 * time.Millisecond):
+				// wake up and check stop condition
+			}
+		}
+	}
+}

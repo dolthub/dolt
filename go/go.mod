@@ -11,7 +11,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/alexkohler/nargs v0.0.0-20190601183533-5ef696e27c16 // indirect
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
-	github.com/aws/aws-sdk-go v1.20.19
+	github.com/aws/aws-sdk-go v1.20.20
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/cenkalti/backoff v2.1.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
@@ -20,7 +20,7 @@ require (
 	github.com/fatih/color v1.7.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
 	github.com/ghodss/yaml v1.0.0 // indirect
-	github.com/gizak/termui/v3 v3.0.0
+	github.com/gizak/termui/v3 v3.1.0
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gocraft/dbr v0.0.0-20190708200302-a54124dfc613
 	github.com/golang/protobuf v1.3.2
@@ -48,7 +48,7 @@ require (
 	github.com/prometheus/procfs v0.0.0-20180725123919-05ee40e3a273 // indirect
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
 	github.com/shirou/gopsutil v2.18.12+incompatible
-	github.com/sirupsen/logrus v1.3.0
+	github.com/sirupsen/logrus v1.4.2
 	github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e
 	github.com/src-d/go-mysql-server v0.4.1-0.20190624170509-8702d43af506
 	github.com/stretchr/testify v1.3.0
