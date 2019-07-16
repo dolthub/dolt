@@ -1122,15 +1122,21 @@ var JoinTests = []SelectTest{
 	},
 	{
 		Name:  "Join from table with two key columns to table with one key column",
-		Query: "select a.episode_id as aid, p.id as pid, p.first from appearances a join people p on a.character_id = p.id order by 1",
+		Query: `select a.episode_id as eid, p.id as pid, p.first
+						from appearances a join people p on a.character_id = p.id order by eid, pid`,
 		ExpectedRows: Rs(
-			NewResultSetRow(types.Int(0), types.Int(0), types.String("Homer")),
+			NewResultSetRow(types.Int(1), types.Int(0), types.String("Homer")),
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Marge")),
+			NewResultSetRow(types.Int(2), types.Int(0), types.String("Homer")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart")),
+			NewResultSetRow(types.Int(2), types.Int(3), types.String("Lisa")),
+			NewResultSetRow(types.Int(2), types.Int(4), types.String("Moe")),
+			NewResultSetRow(types.Int(3), types.Int(0), types.String("Homer")),
+			NewResultSetRow(types.Int(3), types.Int(1), types.String("Marge")),
 			NewResultSetRow(types.Int(3), types.Int(3), types.String("Lisa")),
-			NewResultSetRow(types.Int(4), types.Int(4), types.String("Moe")),
+			NewResultSetRow(types.Int(3), types.Int(5), types.String("Barney")),
 		),
-		ExpectedSchema: NewResultSetSchema("aid", types.IntKind, "pid", types.IntKind,
+		ExpectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
 			"first", types.StringKind),
 	},
 }
