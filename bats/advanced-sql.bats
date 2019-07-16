@@ -170,7 +170,7 @@ teardown() {
     [[ "$output" =~ "unsupported syntax: \"LIMIT must be >= 0\"" ]] || false
     run dolt sql -q "select * from one_pk order by pk limit -1,1"
     [ $status -eq 1 ]
-    [[ "$output" =~ "unsupported syntax: "OFFSET must be >= 0"" ]] || false
+    [[ "$output" =~ "unsupported syntax: \"OFFSET must be >= 0\"" ]] || false
 }
 
 @test "addition on both left and right sides of comparison operator" {
