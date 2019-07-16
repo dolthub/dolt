@@ -197,7 +197,7 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select c10 from test where pk=1"
     [ "$status" -eq 1 ]
-    [ "$output" = "Unknown column: 'c10'" ]
+    [ "$output" = "column \"c10\" could not be found in any table in scope" ]
     run dolt sql -q "select * from test where c2=147"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
