@@ -140,13 +140,13 @@ func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS 
 	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, db)
 	checkIfTrue(!ok, "Datasets %s and %s have no common ancestor", leftDS.ID(), rightDS.ID())
 
-	leftHead, ok := leftDS.MaybeHead()
+	leftHead, ok := leftDS.MaybeHeadValue()
 
 	if !ok {
 		return nil, nil, nil, err
 	}
 
-	rightHead, ok := rightDS.MaybeHead()
+	rightHead, ok := rightDS.MaybeHeadValue()
 
 	if !ok {
 		return nil, nil, nil, err
