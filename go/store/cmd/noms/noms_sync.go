@@ -83,10 +83,13 @@ func runSync(ctx context.Context, args []string) int {
 	nonFF := false
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
-		datas.Pull(ctx, sourceStore, sinkDB, sourceRef, progressCh)
+		err := datas.Pull(ctx, sourceStore, sinkDB, sourceRef, progressCh)
 
-		var err error
-		sinkDataset, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
+		if err != nil {
+			return err
+		}
+
+		_, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
 		if err == datas.ErrMergeNeeded {
 			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, sourceRef)
 			nonFF = true

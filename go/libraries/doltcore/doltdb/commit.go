@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -103,22 +102,13 @@ var ErrNoCommonAnscestor = errors.New("no common anscestor")
 
 func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	ref1, ref2 := types.NewRef(cm1.commitSt, cm1.vrw.Format()), types.NewRef(cm2.commitSt, cm2.vrw.Format())
-
-	var ancestorSt types.Struct
-	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		ref, err := getCommitAncestorRef(ctx, ref1, ref2, cm1.vrw)
-
-		if err != nil {
-			return err
-		}
-
-		ancestorSt, _ = ref.TargetValue(ctx, cm1.vrw).(types.Struct)
-		return nil
-	})
+	ref, err := getCommitAncestorRef(ctx, ref1, ref2, cm1.vrw)
 
 	if err != nil {
 		return nil, err
 	}
+
+	ancestorSt, _ := ref.TargetValue(ctx, cm1.vrw).(types.Struct)
 
 	return &Commit{cm1.vrw, ancestorSt}, nil
 }
