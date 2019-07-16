@@ -49,6 +49,7 @@ func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.St
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false.
 func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
+	// precondition checks
 	if !IsRefOfCommitType(c1.Format(), types.TypeOf(c1)) {
 		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx))
 	}
@@ -122,7 +123,9 @@ func makeCommitStructType(metaType, parentsType, valueType *types.Type) *types.T
 }
 
 func getRefElementType(t *types.Type) *types.Type {
+	// precondition checks
 	d.PanicIfFalse(t.TargetKind() == types.RefKind)
+
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 

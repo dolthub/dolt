@@ -425,7 +425,10 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	}
 	m := me.Map(context.Background())
 	r := vs.WriteValue(context.Background(), m)
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err := vs.Root(context.Background())
+	assert.NoError(t, err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(t, err)
 	m = r.TargetValue(context.Background(), vs).(Map)
 
 	every := 100
@@ -446,7 +449,10 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 
 	m = me.Map(context.Background())
 
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err = vs.Root(context.Background())
+	assert.NoError(t, err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(t, err)
 
 	assert.Equal(t, uint64(3), NewRef(m, Format_7_18).Height())
 	assert.Equal(t, 105, cs.Reads)

@@ -360,20 +360,18 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 	}
 }
 
-func (lvs *ValueStore) Root(ctx context.Context) hash.Hash {
+func (lvs *ValueStore) Root(ctx context.Context) (hash.Hash, error) {
 	root, err := lvs.cs.Root(ctx)
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return hash.Hash{}, err
+	}
 
-	return root
+	return root, nil
 }
 
-func (lvs *ValueStore) Rebase(ctx context.Context) {
-	err := lvs.cs.Rebase(ctx)
-
-	//TODO: fix panics
-	d.PanicIfError(err)
+func (lvs *ValueStore) Rebase(ctx context.Context) error {
+	return lvs.cs.Rebase(ctx)
 }
 
 // Commit() flushes all bufferedChunks into the ChunkStore, with best-effort
@@ -440,7 +438,13 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		lvs.bufferedChunks = map[hash.Hash]chunks.Chunk{}
 
 		if lvs.enforceCompleteness {
-			if (current != hash.Hash{} && current != lvs.Root(ctx)) {
+			root, err := lvs.Root(ctx)
+
+			if err != nil {
+				return false, err
+			}
+
+			if (current != hash.Hash{} && current != root) {
 				if _, ok := lvs.bufferedChunks[current]; !ok {
 					// If the client is attempting to move the root and the referenced
 					// value isn't still buffered, we need to ensure that it is contained

@@ -245,6 +245,7 @@ github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1
 github.com/liquidata-inc/ld v0.0.0-20190717175747-17efac059a62 h1:lcNZv5VZYpJy/w7acOWXlnFTmAR/HDLDuCD+YO/egYU=
 github.com/liquidata-inc/ld v0.0.0-20190703172908-73a5081bfb26 h1:1h8IBvsyC+pIJL24sK9OQFHxOCCeiFB9f5bhcwmlIks=
 github.com/liquidata-inc/ld v0.0.0-20190711170108-690f93461e3c h1:QYJzHSr/5bu97HELog+sax37xou4EnedV8BSV8ez62M=
+github.com/liquidata-inc/ld v0.0.0-20190715210953-3a68e353a038 h1:bQakRL91gtxU0g6Zwsrec5YIB5gF9qCI1or/dKAqJYc=
 github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/noms v0.9.3/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=

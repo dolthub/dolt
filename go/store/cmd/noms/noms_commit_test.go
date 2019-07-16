@@ -146,7 +146,9 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	sp, _ := s.setupDataset(dsName, true)
 	defer sp.Close()
 
-	metaOld := sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
+	dsHead, ok := sp.GetDataset(context.Background()).MaybeHead()
+	s.True(ok)
+	metaOld := dsHead.Get(datas.MetaField).(types.Struct)
 
 	stdoutString, stderrString, err := s.Run(main, []string{"commit", "--allow-dupe=1", "--message=foo", dsName + ".value", sp.String()})
 	s.Nil(err)
@@ -156,7 +158,9 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	metaNew := sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
+	dsHead, ok = sp.GetDataset(context.Background()).MaybeHead()
+	s.True(ok)
+	metaNew := dsHead.Get(datas.MetaField).(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
@@ -172,7 +176,9 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	metaNew = sp.GetDataset(context.Background()).Head().Get(datas.MetaField).(types.Struct)
+	dsHead, ok = sp.GetDataset(context.Background()).MaybeHead()
+	s.True(ok)
+	metaNew = dsHead.Get(datas.MetaField).(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")

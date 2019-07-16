@@ -62,7 +62,13 @@ func runCommit(ctx context.Context, args []string) int {
 
 	oldCommitRef, oldCommitExists := ds.MaybeHeadRef()
 	if oldCommitExists {
-		head := ds.HeadValue()
+		head, ok := ds.MaybeHeadValue()
+
+		if !ok {
+			fmt.Fprintln(os.Stdout, "Commit has no head value.")
+			return 1
+		}
+
 		if head.Hash(db.Format()) == value.Hash(db.Format()) && !allowDupe {
 			fmt.Fprintf(os.Stdout, "Commit aborted - allow-dupe is set to off and this commit would create a duplicate\n")
 			return 0
@@ -75,10 +81,19 @@ func runCommit(ctx context.Context, args []string) int {
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})
 	util.CheckErrorNoUsage(err)
 
+	headRef, ok := ds.MaybeHeadRef()
+
+	if !ok {
+		panic("commit succeeded, but dataset has no head ref")
+	}
+
 	if oldCommitExists {
-		fmt.Fprintf(os.Stdout, "New head #%v (was #%v)\n", ds.HeadRef().TargetHash().String(), oldCommitRef.TargetHash().String())
+
+		if ok {
+			fmt.Fprintf(os.Stdout, "New head #%v (was #%v)\n", headRef.TargetHash().String(), oldCommitRef.TargetHash().String())
+		}
 	} else {
-		fmt.Fprintf(os.Stdout, "New head #%v\n", ds.HeadRef().TargetHash().String())
+		fmt.Fprintf(os.Stdout, "New head #%v\n", headRef.TargetHash().String())
 	}
 	return 0
 }

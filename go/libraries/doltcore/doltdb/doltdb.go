@@ -81,10 +81,7 @@ func LoadDoltDBWithParams(ctx context.Context, urlStr string, params map[string]
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {
-	if ddb.db.GetDataset(ctx, creationBranch).HasHead() {
-		return errors.New("database already exists")
-	}
-
+	// precondition checks
 	name = strings.TrimSpace(name)
 	email = strings.TrimSpace(email)
 
@@ -92,35 +89,64 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 		panic("Passed bad name or email.  Both should be valid")
 	}
 
-	err := pantoerr.PanicToError("Failed to write empty repo", func() error {
-		rv := emptyRootValue(ctx, ddb.db)
-		_, err := ddb.WriteRootValue(ctx, rv)
+	ds, err := ddb.db.GetDataset(ctx, creationBranch)
 
-		cm, _ := NewCommitMeta(name, email, "Data repository created.")
-
-		commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
-
-		dref := ref.NewInternalRef(creationBranch)
-		firstCommit, err := ddb.db.Commit(ctx, ddb.db.GetDataset(ctx, dref.String()), rv.valueSt, commitOpts)
-
-		if err != nil {
-			return err
-		}
-
-		dref = ref.NewBranchRef(MasterBranch)
-		_, err = ddb.db.SetHead(ctx, ddb.db.GetDataset(ctx, dref.String()), firstCommit.HeadRef())
-
+	if err != nil {
 		return err
-	})
+	}
+
+	if ds.HasHead() {
+		return errors.New("database already exists")
+	}
+
+	rv := emptyRootValue(ctx, ddb.db)
+	_, err = ddb.WriteRootValue(ctx, rv)
+
+	cm, _ := NewCommitMeta(name, email, "Data repository created.")
+
+	commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
+
+	dref := ref.NewInternalRef(creationBranch)
+	ds, err = ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return err
+	}
+
+	firstCommit, err := ddb.db.Commit(ctx, ds, rv.valueSt, commitOpts)
+
+	if err != nil {
+		return err
+	}
+
+	dref = ref.NewBranchRef(MasterBranch)
+	ds, err = ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return err
+	}
+
+	headRef, ok := firstCommit.MaybeHeadRef()
+
+	if !ok {
+		return errors.New("commit without head")
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, headRef)
 
 	return err
 }
 
 func getCommitStForRef(ctx context.Context, db datas.Database, dref ref.DoltRef) (types.Struct, error) {
-	ds := db.GetDataset(ctx, dref.String())
+	ds, err := db.GetDataset(ctx, dref.String())
 
-	if ds.HasHead() {
-		return ds.Head(), nil
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	dsHead, hasHead := ds.MaybeHead()
+	if hasHead {
+		return dsHead, nil
 	}
 
 	return types.EmptyStruct(db.Format()), ErrBranchNotFound
@@ -211,13 +237,14 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error)
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
-	var valHash hash.Hash
-	err := pantoerr.PanicToErrorNil("failed to write value", func() {
-		ref := ddb.db.WriteValue(ctx, rv.valueSt)
-		ddb.db.Flush(ctx)
+	valRef := ddb.db.WriteValue(ctx, rv.valueSt)
+	err := ddb.db.Flush(ctx)
 
-		valHash = ref.TargetHash()
-	})
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	valHash := valRef.TargetHash()
 
 	return valHash, err
 }
@@ -287,11 +314,17 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 			return errors.New("can't commit a value that is not a valid root value")
 		}
 
-		ds := ddb.db.GetDataset(ctx, dref.String())
+		ds, err := ddb.db.GetDataset(ctx, dref.String())
+
+		if err != nil {
+			return err
+		}
+
 		parentEditor := types.NewSet(ctx, ddb.db).Edit()
 
-		if ds.HasHead() {
-			parentEditor.Insert(ds.HeadRef())
+		headRef, hasHead := ds.MaybeHeadRef()
+		if hasHead {
+			parentEditor.Insert(headRef)
 		}
 
 		for _, parentCmSpec := range parentCmSpecs {
@@ -306,11 +339,17 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 
 		parents := parentEditor.Set(ctx)
 		commitOpts := datas.CommitOptions{Parents: parents, Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
-		ds, err := ddb.db.Commit(ctx, ddb.db.GetDataset(ctx, dref.String()), val, commitOpts)
+		ds, err = ddb.db.GetDataset(ctx, dref.String())
 
-		if ds.HasHead() {
-			commitSt = ds.Head()
-		} else if err == nil {
+		if err != nil {
+			return err
+		}
+
+		ds, err = ddb.db.Commit(ctx, ds, val, commitOpts)
+
+		var ok bool
+		commitSt, ok = ds.MaybeHead()
+		if !ok {
 			return errors.New("commit has no head but commit succeeded (How?!?!?)")
 		}
 
