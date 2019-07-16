@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -100,7 +101,9 @@ func (suite *diffTestSuite) TestDiff() {
 
 	rw := func(col Collection) Collection {
 		h := vs.WriteValue(context.Background(), col).TargetHash()
-		vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+		rt, err := vs.Root(context.Background())
+		d.PanicIfError(err)
+		vs.Commit(context.Background(), rt, rt)
 		return vs.ReadValue(context.Background(), h).(Collection)
 	}
 	newSetAsColRw := func(vs []Value) Collection { return rw(newSetAsCol(vs)) }

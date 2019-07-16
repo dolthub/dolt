@@ -46,12 +46,14 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	db := datas.NewDatabase(cs)
 
 	id := "testdataset"
-	set := db.GetDataset(context.Background(), id)
+	set, err := db.GetDataset(context.Background(), id)
+	s.NoError(err)
 	set, err = db.CommitValue(context.Background(), set, types.String("Commit Value"))
 	s.NoError(err)
 
 	id2 := "testdataset2"
-	set2 := db.GetDataset(context.Background(), id2)
+	set2, err := db.GetDataset(context.Background(), id2)
+	s.NoError(err)
 	set2, err = db.CommitValue(context.Background(), set2, types.String("Commit Value2"))
 	s.NoError(err)
 

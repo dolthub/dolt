@@ -14,6 +14,33 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func mustHead(ds Dataset) types.Struct {
+	s, ok := ds.MaybeHead()
+	if !ok {
+		panic("no head")
+	}
+
+	return s
+}
+
+func mustHeadRef(ds Dataset) types.Ref {
+	hr, ok := ds.MaybeHeadRef()
+	if !ok {
+		panic("no head")
+	}
+
+	return hr
+}
+
+func mustHeadValue(ds Dataset) types.Value {
+	val, ok := ds.MaybeHeadValue()
+	if !ok {
+		panic("no head")
+	}
+
+	return val
+}
+
 func TestNewCommit(t *testing.T) {
 	assert := assert.New(t)
 
@@ -127,11 +154,11 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	// Add a commit and return it
 	addCommit := func(datasetID string, val string, parents ...types.Struct) types.Struct {
-		ds := db.GetDataset(context.Background(), datasetID)
-		var err error
+		ds, err := db.GetDataset(context.Background(), datasetID)
+		assert.NoError(err)
 		ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: toRefSet(db, parents...)})
 		assert.NoError(err)
-		return ds.Head()
+		return mustHead(ds)
 	}
 
 	// Assert that c is the common ancestor of a and b

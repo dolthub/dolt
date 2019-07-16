@@ -6,42 +6,67 @@ package datas
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
-func serializeHashes(w io.Writer, batch chunks.ReadBatch) {
+func serializeHashes(w io.Writer, batch chunks.ReadBatch) error {
 	err := binary.Write(w, binary.BigEndian, uint32(len(batch))) // 4 billion hashes is probably absurd. Maybe this should be smaller?
-	d.PanicIfError(err)
-	for h := range batch {
-		serializeHash(w, h)
+
+	if err != nil {
+		return err
 	}
+
+	for h := range batch {
+		err = serializeHash(w, h)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-func serializeHash(w io.Writer, h hash.Hash) {
+func serializeHash(w io.Writer, h hash.Hash) error {
 	_, err := w.Write(h[:])
-	d.PanicIfError(err)
+
+	return err
 }
 
-func deserializeHashes(reader io.Reader) hash.HashSlice {
+func deserializeHashes(reader io.Reader) (hash.HashSlice, error) {
 	count := uint32(0)
 	err := binary.Read(reader, binary.BigEndian, &count)
-	d.PanicIfError(err)
+
+	if err != nil {
+		return hash.HashSlice{}, err
+	}
 
 	hashes := make(hash.HashSlice, count)
 	for i := range hashes {
-		hashes[i] = deserializeHash(reader)
+		hashes[i], err = deserializeHash(reader)
+
+		if err != nil {
+			return hash.HashSlice{}, err
+		}
 	}
-	return hashes
+	return hashes, nil
 }
 
-func deserializeHash(reader io.Reader) hash.Hash {
+func deserializeHash(reader io.Reader) (hash.Hash, error) {
 	h := hash.Hash{}
 	n, err := io.ReadFull(reader, h[:])
-	d.PanicIfError(err)
-	d.PanicIfFalse(int(hash.ByteLen) == n)
-	return h
+
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	if int(hash.ByteLen) != n {
+		return hash.Hash{}, errors.New("failed to read all data")
+	}
+
+	return h, nil
 }

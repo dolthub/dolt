@@ -153,7 +153,8 @@ func (suite *PullSuite) TestPullEverything() {
 	sourceRef := suite.commitToSource(l, types.NewSet(context.Background(), suite.source))
 	pt := startProgressTracker()
 
-	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	suite.NoError(err)
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
@@ -195,7 +196,8 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	pt := startProgressTracker()
 
-	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
@@ -241,7 +243,8 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 
 	pt := startProgressTracker()
 
-	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	suite.NoError(err)
 
 	suite.True(preReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
@@ -283,7 +286,8 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	pt := startProgressTracker()
 
-	Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
@@ -294,17 +298,19 @@ func (suite *PullSuite) TestPullUpdates() {
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p types.Set) types.Ref {
-	ds := suite.source.GetDataset(context.Background(), datasetID)
-	ds, err := suite.source.Commit(context.Background(), ds, v, CommitOptions{Parents: p})
+	ds, err := suite.source.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	return ds.HeadRef()
+	ds, err = suite.source.Commit(context.Background(), ds, v, CommitOptions{Parents: p})
+	suite.NoError(err)
+	return mustHeadRef(ds)
 }
 
 func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
-	ds := suite.sink.GetDataset(context.Background(), datasetID)
-	ds, err := suite.sink.Commit(context.Background(), ds, v, CommitOptions{Parents: p})
+	ds, err := suite.sink.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	return ds.HeadRef()
+	ds, err = suite.sink.Commit(context.Background(), ds, v, CommitOptions{Parents: p})
+	suite.NoError(err)
+	return mustHeadRef(ds)
 }
 
 func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {

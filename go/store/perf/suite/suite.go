@@ -259,8 +259,9 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			"reps":             types.NewList(context.Background(), db, reps...),
 		})
 
-		ds := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)
-		_, err := db.CommitValue(context.Background(), ds, record)
+		ds, err := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)
+		assert.NoError(err)
+		_, err = db.CommitValue(context.Background(), ds, record)
 		assert.NoError(err)
 	}()
 

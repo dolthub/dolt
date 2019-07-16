@@ -188,7 +188,9 @@ func runTestSuite(t *testing.T, mem bool) {
 	sp, err := spec.ForDataset(ldbDir + "::ds")
 	assert.NoError(err)
 	defer sp.Close()
-	head := sp.GetDataset(context.Background()).HeadValue().(types.Struct)
+	headVal, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
+	assert.True(ok)
+	head := headVal.(types.Struct)
 
 	// These tests mostly assert that the structure of the results is correct. Specific values are hard.
 
@@ -272,7 +274,7 @@ func TestPrefixFlag(t *testing.T) {
 	sp, err = spec.ForDataset(ldbDir + "::foo/my-prefix/test")
 	assert.NoError(err)
 	defer sp.Close()
-	_, ok = sp.GetDataset(context.Background()).HeadValue().(types.Struct)
+	_, ok = sp.GetDataset(context.Background()).MaybeHeadValue()
 	assert.True(ok)
 }
 

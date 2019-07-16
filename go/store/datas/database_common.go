@@ -30,8 +30,8 @@ var (
 // TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
 type rootTracker interface {
-	Rebase(ctx context.Context)
-	Root(ctx context.Context) hash.Hash
+	Rebase(ctx context.Context) error
+	Root(ctx context.Context) (hash.Hash, error)
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 
@@ -56,40 +56,63 @@ func (db *database) StatsSummary() string {
 	return db.ChunkStore().StatsSummary()
 }
 
-func (db *database) Flush(ctx context.Context) {
+func (db *database) Flush(ctx context.Context) error {
 	// TODO: This is a pretty ghetto hack - do better.
 	// See: https://github.com/attic-labs/noms/issues/3530
-	ds := db.GetDataset(ctx, fmt.Sprintf("-/flush/%s", random.Id()))
-	r := db.WriteValue(ctx, types.Bool(true))
-	ds, err := db.CommitValue(ctx, ds, r)
-	d.PanicIfError(err)
-	_, err = db.Delete(ctx, ds)
-	d.PanicIfError(err)
-}
+	ds, err := db.GetDataset(ctx, fmt.Sprintf("-/flush/%s", random.Id()))
 
-func (db *database) Datasets(ctx context.Context) types.Map {
-	rootHash := db.rt.Root(ctx)
-	if rootHash.IsEmpty() {
-		return types.NewMap(ctx, db)
+	if err != nil {
+		return err
 	}
 
-	return db.ReadValue(ctx, rootHash).(types.Map)
+	r := db.WriteValue(ctx, types.Bool(true))
+	ds, err = db.CommitValue(ctx, ds, r)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Delete(ctx, ds)
+
+	return err
 }
 
-func (db *database) GetDataset(ctx context.Context, datasetID string) Dataset {
+func (db *database) Datasets(ctx context.Context) (types.Map, error) {
+	rootHash, err := db.rt.Root(ctx)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	if rootHash.IsEmpty() {
+		return types.NewMap(ctx, db), nil
+	}
+
+	return db.ReadValue(ctx, rootHash).(types.Map), nil
+}
+
+func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, error) {
+	// precondition checks
 	if !DatasetFullRe.MatchString(datasetID) {
 		d.Panic("Invalid dataset ID: %s", datasetID)
 	}
+
+	datasets, err := db.Datasets(ctx)
+
+	if err != nil {
+		return Dataset{}, err
+	}
+
 	var head types.Value
-	if r, ok := db.Datasets(ctx).MaybeGet(ctx, types.String(datasetID)); ok {
+	if r, ok := datasets.MaybeGet(ctx, types.String(datasetID)); ok {
 		head = r.(types.Ref).TargetValue(ctx, db)
 	}
 
-	return newDataset(db, datasetID, head)
+	return newDataset(db, datasetID, head), nil
 }
 
-func (db *database) Rebase(ctx context.Context) {
-	db.rt.Rebase(ctx)
+func (db *database) Rebase(ctx context.Context) error {
+	return db.rt.Rebase(ctx)
 }
 
 func (db *database) Close() error {
@@ -106,7 +129,18 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 	}
 	commit := db.validateRefAsCommit(ctx, newHeadRef)
 
-	currentRootHash, currentDatasets := db.rt.Root(ctx), db.Datasets(ctx)
+	currentRootHash, err := db.rt.Root(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	currentDatasets, err := db.Datasets(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	commitRef := db.WriteValue(ctx, commit) // will be orphaned if the tryCommitChunks() below fails
 
 	currentDatasets = currentDatasets.Edit().Set(types.String(ds.ID()), types.ToRefOfValue(commitRef, db.Format())).Map(ctx)
@@ -152,9 +186,20 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 	}
 
 	// This could loop forever, given enough simultaneous committers. BUG 2565
-	var err error
-	for err = ErrOptimisticLockFailed; err == ErrOptimisticLockFailed; {
-		currentRootHash, currentDatasets := db.rt.Root(ctx), db.Datasets(ctx)
+	var tryCommitErr error
+	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
+		currentRootHash, err := db.rt.Root(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		currentDatasets, err := db.Datasets(ctx)
+
+		if err != nil {
+			return err
+		}
+
 		commitRef := db.WriteValue(ctx, commit) // will be orphaned if the tryCommitChunks() below fails
 
 		// If there's nothing in the DB yet, skip all this logic.
@@ -188,9 +233,10 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 			}
 		}
 		currentDatasets = currentDatasets.Edit().Set(types.String(datasetID), types.ToRefOfValue(commitRef, db.Format())).Map(ctx)
-		err = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+		tryCommitErr = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 	}
-	return err
+
+	return tryCommitErr
 }
 
 func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
@@ -200,7 +246,18 @@ func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 // doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g. because of a race with another writer) and the entire algorithm must be tried again.
 func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 	datasetID := types.String(datasetIDstr)
-	currentRootHash, currentDatasets := db.rt.Root(ctx), db.Datasets(ctx)
+	currentRootHash, err := db.rt.Root(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	currentDatasets, err := db.Datasets(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	var initialHead types.Ref
 	if r, hasHead := currentDatasets.MaybeGet(ctx, datasetID); !hasHead {
 		return nil
@@ -208,15 +265,26 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 		initialHead = r.(types.Ref)
 	}
 
-	var err error
 	for {
 		currentDatasets = currentDatasets.Edit().Remove(datasetID).Map(ctx)
 		err = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
 		if err != ErrOptimisticLockFailed {
 			break
 		}
+
 		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it failed because someone changed a different Dataset, we should try again.
-		currentRootHash, currentDatasets = db.rt.Root(ctx), db.Datasets(ctx)
+		currentRootHash, err = db.rt.Root(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		currentDatasets, err = db.Datasets(ctx)
+
+		if err != nil {
+			return err
+		}
+
 		if r, hasHead := currentDatasets.MaybeGet(ctx, datasetID); !hasHead || (hasHead && !initialHead.Equals(r)) {
 			err = ErrMergeNeeded
 			break
@@ -229,8 +297,7 @@ func (db *database) tryCommitChunks(ctx context.Context, currentDatasets types.M
 	newRootHash := db.WriteValue(ctx, currentDatasets).TargetHash()
 
 	if success, err := db.rt.Commit(ctx, newRootHash, currentRootHash); err != nil {
-		// TODO: fix panics
-		d.PanicIfError(err)
+		return err
 	} else if !success {
 		return ErrOptimisticLockFailed
 	}
@@ -268,5 +335,10 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {
 	err := updateFunc(ds)
-	return db.GetDataset(ctx, ds.ID()), err
+
+	if err != nil {
+		return Dataset{}, err
+	}
+
+	return db.GetDataset(ctx, ds.ID())
 }

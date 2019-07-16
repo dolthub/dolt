@@ -21,45 +21,47 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	store := NewDatabase(stg.NewView())
 	defer store.Close()
 
-	ds1 := store.GetDataset(context.Background(), id1)
+	ds1, err := store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
 
 	// ds1: |a|
 	a := types.String("a")
-	ds1, err := store.CommitValue(context.Background(), ds1, a)
+	ds1, err = store.CommitValue(context.Background(), ds1, a)
 	assert.NoError(err)
-	assert.True(ds1.Head().Get(ValueField).Equals(a))
+	assert.True(mustHead(ds1).Get(ValueField).Equals(a))
 
 	// ds1: |a|
 	//        \ds2
-	ds2 := store.GetDataset(context.Background(), id2)
-	ds2, err = store.Commit(context.Background(), ds2, ds1.HeadValue(), CommitOptions{Parents: types.NewSet(context.Background(), store, ds1.HeadRef())})
+	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	assert.True(ds2.Head().Get(ValueField).Equals(a))
+	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: types.NewSet(context.Background(), store, mustHeadRef(ds1))})
+	assert.NoError(err)
+	assert.True(mustHead(ds2).Get(ValueField).Equals(a))
 
 	// ds1: |a| <- |b|
 	b := types.String("b")
 	ds1, err = store.CommitValue(context.Background(), ds1, b)
 	assert.NoError(err)
-	assert.True(ds1.Head().Get(ValueField).Equals(b))
+	assert.True(mustHead(ds1).Get(ValueField).Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
 	c := types.String("c")
 	ds2, err = store.CommitValue(context.Background(), ds2, c)
 	assert.NoError(err)
-	assert.True(ds2.Head().Get(ValueField).Equals(c))
+	assert.True(mustHead(ds2).Get(ValueField).Equals(c))
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents := types.NewSet(context.Background(), store, types.NewRef(ds1.Head(), types.Format_7_18), types.NewRef(ds2.Head(), types.Format_7_18))
+	mergeParents := types.NewSet(context.Background(), store, types.NewRef(mustHead(ds1), types.Format_7_18), types.NewRef(mustHead(ds2), types.Format_7_18))
 	d := types.String("d")
 	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: mergeParents})
 	assert.NoError(err)
-	assert.True(ds2.Head().Get(ValueField).Equals(d))
+	assert.True(mustHead(ds2).Get(ValueField).Equals(d))
 
 	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: mergeParents})
 	assert.NoError(err)
-	assert.True(ds1.Head().Get(ValueField).Equals(d))
+	assert.True(mustHead(ds1).Get(ValueField).Equals(d))
 }
 
 func TestTwoClientsWithEmptyDataset(t *testing.T) {
@@ -69,26 +71,32 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	store := NewDatabase(stg.NewView())
 	defer store.Close()
 
-	dsx := store.GetDataset(context.Background(), id1)
-	dsy := store.GetDataset(context.Background(), id1)
+	dsx, err := store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
+	dsy, err := store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
 
 	// dsx: || -> |a|
 	a := types.String("a")
-	dsx, err := store.CommitValue(context.Background(), dsx, a)
+	dsx, err = store.CommitValue(context.Background(), dsx, a)
 	assert.NoError(err)
-	assert.True(dsx.Head().Get(ValueField).Equals(a))
+	assert.True(mustHead(dsx).Get(ValueField).Equals(a))
 
 	// dsy: || -> |b|
 	_, ok := dsy.MaybeHead()
 	assert.False(ok)
 	b := types.String("b")
-	dsy, err = store.CommitValue(context.Background(), dsy, b)
+	_, err = store.CommitValue(context.Background(), dsy, b)
 	assert.Error(err)
+
 	// Commit failed, but dsy now has latest head, so we should be able to just try again.
 	// dsy: |a| -> |b|
+	dsy, err = store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
 	dsy, err = store.CommitValue(context.Background(), dsy, b)
 	assert.NoError(err)
-	assert.True(dsy.Head().Get(ValueField).Equals(b))
+	headVal := mustHeadValue(dsy)
+	assert.True(headVal.Equals(b))
 }
 
 func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
@@ -101,33 +109,37 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	a := types.String("a")
 	{
 		// ds1: || -> |a|
-		ds1 := store.GetDataset(context.Background(), id1)
-		ds1, err := store.CommitValue(context.Background(), ds1, a)
+		ds1, err := store.GetDataset(context.Background(), id1)
 		assert.NoError(err)
-		assert.True(ds1.Head().Get(ValueField).Equals(a))
+		ds1, err = store.CommitValue(context.Background(), ds1, a)
+		assert.NoError(err)
+		assert.True(mustHead(ds1).Get(ValueField).Equals(a))
 	}
 
-	dsx := store.GetDataset(context.Background(), id1)
-	dsy := store.GetDataset(context.Background(), id1)
+	dsx, err := store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
+	dsy, err := store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
 
 	// dsx: |a| -> |b|
-	assert.True(dsx.Head().Get(ValueField).Equals(a))
+	assert.True(mustHead(dsx).Get(ValueField).Equals(a))
 	b := types.String("b")
-	dsx, err := store.CommitValue(context.Background(), dsx, b)
+	dsx, err = store.CommitValue(context.Background(), dsx, b)
 	assert.NoError(err)
-	assert.True(dsx.Head().Get(ValueField).Equals(b))
+	assert.True(mustHead(dsx).Get(ValueField).Equals(b))
 
 	// dsy: |a| -> |c|
-	assert.True(dsy.Head().Get(ValueField).Equals(a))
+	assert.True(mustHead(dsy).Get(ValueField).Equals(a))
 	c := types.String("c")
-	dsy, err = store.CommitValue(context.Background(), dsy, c)
+	_, err = store.CommitValue(context.Background(), dsy, c)
 	assert.Error(err)
-	assert.True(dsy.Head().Get(ValueField).Equals(b))
 	// Commit failed, but dsy now has latest head, so we should be able to just try again.
 	// dsy: |b| -> |c|
+	dsy, err = store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
 	dsy, err = store.CommitValue(context.Background(), dsy, c)
 	assert.NoError(err)
-	assert.True(dsy.Head().Get(ValueField).Equals(c))
+	assert.True(mustHead(dsy).Get(ValueField).Equals(c))
 }
 
 func TestIdValidation(t *testing.T) {
@@ -152,27 +164,26 @@ func TestHeadValueFunctions(t *testing.T) {
 	store := NewDatabase(stg.NewView())
 	defer store.Close()
 
-	ds1 := store.GetDataset(context.Background(), id1)
+	ds1, err := store.GetDataset(context.Background(), id1)
+	assert.NoError(err)
 	assert.False(ds1.HasHead())
 
 	// ds1: |a|
 	a := types.String("a")
-	ds1, err := store.CommitValue(context.Background(), ds1, a)
+	ds1, err = store.CommitValue(context.Background(), ds1, a)
 	assert.NoError(err)
 	assert.True(ds1.HasHead())
 
-	hv := ds1.Head().Get(ValueField)
+	hv := mustHead(ds1).Get(ValueField)
 	assert.Equal(a, hv)
-	assert.Equal(a, ds1.HeadValue())
+	assert.Equal(a, mustHeadValue(ds1))
 
 	hv, ok := ds1.MaybeHeadValue()
 	assert.True(ok)
 	assert.Equal(a, hv)
 
-	ds2 := store.GetDataset(context.Background(), id2)
-	assert.Panics(func() {
-		ds2.HeadValue()
-	})
+	ds2, err := store.GetDataset(context.Background(), id2)
+	assert.NoError(err)
 	_, ok = ds2.MaybeHeadValue()
 	assert.False(ok)
 }
