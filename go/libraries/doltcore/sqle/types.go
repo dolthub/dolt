@@ -70,8 +70,30 @@ func SqlValToNomsVal(val interface{}) types.Value {
 	}
 
 	switch e := val.(type) {
+	case bool:
+		return types.Bool(e)
+	case int:
+		return types.Int(e)
+	case int8:
+		return types.Int(e)
+	case int16:
+		return types.Int(e)
+	case int32:
+		return types.Int(e)
 	case int64:
 		return types.Int(e)
+	case uint:
+		return types.Uint(e)
+	case uint8:
+		return types.Uint(e)
+	case uint16:
+		return types.Uint(e)
+	case uint32:
+		return types.Uint(e)
+	case uint64:
+		return types.Uint(e)
+	case float32:
+		return types.Float(e)
 	case float64:
 		return types.Float(e)
 	case string:
@@ -79,12 +101,8 @@ func SqlValToNomsVal(val interface{}) types.Value {
 			return types.UUID(u)
 		}
 		return types.String(e)
-	case uint64:
-		return types.Uint(e)
-	case bool:
-		return types.Bool(e)
 	default:
-		panic(fmt.Sprintf("Unexpected type %v", val))
+		panic(fmt.Sprintf("Unexpected type <%T> val <%v>", val, val))
 	}
 }
 

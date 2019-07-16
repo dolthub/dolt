@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
@@ -16,9 +17,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	dsql "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
+	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -27,6 +28,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -274,7 +277,11 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	case *sqlparser.Show:
 		return nil, sqlShow(root, s)
 	case *sqlparser.Select:
-		return nil, sqlSelect(root, s)
+		sqlSch, rowIter, err := sqlNewEngine(query, root)
+		if err == nil {
+			err = prettyPrintResults(root.VRW().Format(), sqlSch, rowIter)
+		}
+		return nil, err
 	case *sqlparser.Insert:
 		return sqlInsert(dEnv, root, s, query)
 	case *sqlparser.Update:
@@ -292,6 +299,15 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	}
 }
 
+// Executes a SQL statement of either SHOW or SELECT and returns values for printing if applicable.
+func sqlNewEngine(query string, root *doltdb.RootValue) (sql.Schema, sql.RowIter, error) {
+	db := dsqle.NewDatabase("dolt", root)
+	engine := sqle.NewDefault()
+	engine.AddDatabase(db)
+	ctx := sql.NewEmptyContext()
+	return engine.Query(ctx, query)
+}
+
 // Executes a SQL show statement and prints the result to the CLI.
 func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
 	p, sch, err := dsql.BuildShowPipeline(context.TODO(), root, show)
@@ -302,23 +318,61 @@ func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
 	return runPrintingPipeline(root.VRW().Format(), p, sch)
 }
 
-// Executes a SQL select statement and prints the result to the CLI.
-func sqlSelect(root *doltdb.RootValue, s *sqlparser.Select) error {
+// Pretty prints the output of the new SQL engine
+func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
+	var chanErr error
+	doltSch := dsqle.SqlSchemaToDoltSchema(sqlSch)
+	untypedSch := untyped.UntypeUnkeySchema(doltSch)
 
-	p, statement, err := dsql.BuildSelectQueryPipeline(context.TODO(), root, s)
-	if err != nil {
-		return err
+	rowChannel := make(chan row.Row)
+	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
+
+	go func() {
+		defer close(rowChannel)
+		var sqlRow sql.Row
+		for sqlRow, chanErr = rowIter.Next(); chanErr == nil; sqlRow, chanErr = rowIter.Next() {
+			taggedVals := make(row.TaggedValues)
+			for i, col := range sqlRow {
+				if col != nil {
+					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
+				}
+			}
+			rowChannel <- row.New(nbf, untypedSch, taggedVals)
+		}
+	}()
+
+	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
+	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
+
+	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
+	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+
+	// Redirect output to the CLI
+	cliWr := iohelp.NopWrCloser(cli.CliOut)
+
+	wr := tabular.NewTextTableWriter(cliWr, untypedSch)
+	p.RunAfter(func() { wr.Close(context.TODO()) })
+
+	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
+	p.SetOutput(cliSink)
+
+	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, untypedSch)))
+		return true
+	})
+
+	// Insert the table header row at the appropriate stage
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(nbf, untypedSch, schema.ExtractAllColNames(untypedSch)))
+
+	p.Start()
+	if err := p.Wait(); err != nil {
+		return errFmt("error processing results: %v", err)
+	}
+	if chanErr != io.EOF {
+		return errFmt("error processing results: %v", chanErr)
 	}
 
-	// Now that we have the output schema, we add three additional steps to the pipeline:
-	// 1) Coerce all the values in each row into strings
-	// 2) Convert null values to printed values
-	// 3) Run them through a fixed width transformer to make them print pretty
-	resultSchema := statement.ResultSetSchema
-	untypedSch, untypingTransform := newUntypingTransformer(resultSchema)
-	p.AddStage(untypingTransform)
-
-	return runPrintingPipeline(root.VRW().Format(), p, untypedSch)
+	return nil
 }
 
 // Adds some print-handling stages to the pipeline given and runs it, returning any error.
@@ -430,18 +484,4 @@ func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query
 
 func errFmt(fmtMsg string, args ...interface{}) error {
 	return errors.New(fmt.Sprintf(fmtMsg, args...))
-}
-
-// Returns a new untyping transformer for the schema given.
-// TODO: move this somewhere more appropriate. Import cycles currently make this difficult.
-func newUntypingTransformer(sch schema.Schema) (schema.Schema, pipeline.NamedTransform) {
-	untypedSch := untyped.UntypeUnkeySchema(sch)
-	mapping, err := rowconv.TagMapping(sch, untypedSch)
-
-	if err != nil {
-		panic(err)
-	}
-
-	rConv, _ := rowconv.NewRowConverter(mapping)
-	return untypedSch, pipeline.NewNamedTransform("untype", rowconv.GetRowConvTransformFunc(rConv))
 }

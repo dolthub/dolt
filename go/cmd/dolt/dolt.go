@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/credcmds"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/sqle"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/pkg/profile"
 	"os"
@@ -21,7 +20,7 @@ import (
 )
 
 const (
-	Version = "0.9.5"
+	Version = "0.9.6"
 )
 
 var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
@@ -31,7 +30,6 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "reset", Desc: "Remove table changes from the list of staged table changes.", Func: commands.Reset, ReqRepo: true},
 	{Name: "commit", Desc: "Record changes to the repository.", Func: commands.Commit, ReqRepo: true},
 	{Name: "sql", Desc: "Run a SQL query against tables in repository.", Func: commands.Sql, ReqRepo: true},
-	{Name: "sqle", Desc: "Run a SQL query against tables in repository.", Func: sqle.Sql, ReqRepo: true, HideFromHelp: true},
 	{Name: "sql-server", Desc: "Starts a MySQL-compatible server.", Func: sqlserver.SqlServer, ReqRepo: true},
 	{Name: "log", Desc: "Show commit logs.", Func: commands.Log, ReqRepo: true},
 	{Name: "diff", Desc: "Diff a table.", Func: commands.Diff, ReqRepo: true},

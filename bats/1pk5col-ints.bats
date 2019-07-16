@@ -58,10 +58,13 @@ teardown() {
     [[ "$output" =~ "new table:" ]] || false
     run dolt commit -m "test commit"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    local commitOutput="$output"
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
+
+    skip "successful commits should produce output but don't; see issue #1744"
+    [[ "$commitOutput" =~ "test commit" ]] || false
 }
 
 @test "dolt log with -n specified" {
@@ -194,7 +197,7 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select c10 from test where pk=1"
     [ "$status" -eq 1 ]
-    [ "$output" = "Unknown column: 'c10'" ]
+    [ "$output" = "column \"c10\" could not be found in any table in scope" ]
     run dolt sql -q "select * from test where c2=147"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
