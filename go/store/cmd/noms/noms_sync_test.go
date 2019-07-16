@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
@@ -25,7 +24,7 @@ type nomsSyncTestSuite struct {
 	clienttest.ClientTestSuite
 }
 
-func (s *nomsSyncTestSuite) TestSyncValidation() {
+/*func (s *nomsSyncTestSuite) TestSyncValidation() {
 	cs, err := nbs.NewLocalStore(context.Background(), s.DBDir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
@@ -154,7 +153,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("up to date", sout)
-}
+}*/
 
 func (s *nomsSyncTestSuite) TestRewind() {
 	var err error

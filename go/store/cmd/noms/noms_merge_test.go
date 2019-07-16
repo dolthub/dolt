@@ -5,8 +5,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/stretchr/testify/assert"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
@@ -23,7 +28,7 @@ func TestNomsMerge(t *testing.T) {
 	suite.Run(t, &nomsMergeTestSuite{})
 }
 
-/*func (s *nomsMergeTestSuite) TearDownTest() {
+func (s *nomsMergeTestSuite) TearDownTest() {
 	err := os.RemoveAll(s.DBDir)
 	if !osutil.IsWindows {
 		s.NoError(err)
@@ -89,7 +94,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 		s.Fail("Run failed", "err: %v\nstdout: %s\nstderr: %s\n", err, stdout, stderr)
 	}
 }
-*/
+
 func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
 	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
 	s.NoError(err)
@@ -181,7 +186,6 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 	s.Panics(func() { s.MustRun(main, []string{"merge", s.DBDir, left, right, "output"}) })
 }
 
-/*
 func (s *nomsMergeTestSuite) TestBadInput() {
 	sp, err := spec.ForDatabase(spec.CreateDatabaseSpecString("nbs", s.DBDir))
 	s.NoError(err)
@@ -253,4 +257,3 @@ func TestNomsMergeCliResolve(t *testing.T) {
 		}
 	}
 }
-*/
