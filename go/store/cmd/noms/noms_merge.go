@@ -73,7 +73,7 @@ func runMerge(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	policy := decidePolicy(db.Format(), resolver)
+	policy := decidePolicy(resolver)
 	pc := newMergeProgressChan()
 	merged, err := policy(ctx, left, right, ancestor, db, pc)
 	util.CheckErrorNoUsage(err)
@@ -93,7 +93,7 @@ func runMerge(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(db.Format(), merged, types.NewSet(ctx, db, leftHeadRef, rightHeadRef), types.EmptyStruct(db.Format()))))
+	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(merged, types.NewSet(ctx, db, leftHeadRef, rightHeadRef), types.EmptyStruct(db.Format()))))
 	d.PanicIfError(err)
 
 	if !verbose.Quiet() {
