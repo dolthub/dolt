@@ -44,9 +44,22 @@ func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 func CopyBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
-	if !ddb.HasRef(ctx, oldRef) {
+
+	hasOld, oldErr := ddb.HasRef(ctx, oldRef)
+
+	if oldErr != nil {
+		return oldErr
+	}
+
+	hasNew, newErr := ddb.HasRef(ctx, newRef)
+
+	if newErr != nil {
+		return newErr
+	}
+
+	if !hasOld {
 		return doltdb.ErrBranchNotFound
-	} else if !force && ddb.HasRef(ctx, newRef) {
+	} else if !force && hasNew {
 		return ErrAlreadyExists
 	} else if !doltdb.IsValidUserBranchName(newBranch) {
 		return doltdb.ErrInvBranchName
@@ -73,7 +86,11 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force b
 }
 
 func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef, force bool) error {
-	if !ddb.HasRef(ctx, dref) {
+	hasRef, err := ddb.HasRef(ctx, dref)
+
+	if err != nil {
+		return err
+	} else if !hasRef {
 		return doltdb.ErrBranchNotFound
 	}
 
@@ -113,7 +130,13 @@ func DeleteBranchOnDB(ctx context.Context, ddb *doltdb.DoltDB, dref ref.DoltRef,
 func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoint string, force bool) error {
 	newRef := ref.NewBranchRef(newBranch)
 
-	if !force && dEnv.DoltDB.HasRef(ctx, newRef) {
+	hasRef, err := dEnv.DoltDB.HasRef(ctx, newRef)
+
+	if err != nil {
+		return err
+	}
+
+	if !force && hasRef {
 		return ErrAlreadyExists
 	}
 
@@ -139,7 +162,8 @@ func CreateBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startingPoi
 func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
 	dref := ref.NewBranchRef(brName)
 
-	if !dEnv.DoltDB.HasRef(ctx, dref) {
+	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
+	if !hasRef {
 		return doltdb.ErrBranchNotFound
 	}
 
@@ -189,9 +213,10 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 	dEnv.RepoState.Head = ref.MarshalableRef{dref}
 	dEnv.RepoState.Working = wrkHash.String()
 	dEnv.RepoState.Staged = stgHash.String()
-	dEnv.RepoState.Save()
 
-	return nil
+	err = dEnv.RepoState.Save()
+
+	return err
 }
 
 var emptyHash = hash.Hash{}
@@ -249,21 +274,6 @@ func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash
 	return dEnv.DoltDB.WriteRootValue(ctx, root)
 }
 
-func getDifferingTables(ctx context.Context, root1, root2 *doltdb.RootValue) []string {
-	tbls := root1.GetTableNames(ctx)
-	differing := make([]string, 0, len(tbls))
-	for _, tbl := range tbls {
-		hsh1, _ := root1.GetTableHash(ctx, tbl)
-		hsh2, _ := root2.GetTableHash(ctx, tbl)
-
-		if hsh1 != hsh2 {
-			differing = append(differing, tbl)
-		}
-	}
-
-	return differing
-}
-
 func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
 	roots, err := getRoots(ctx, dEnv, ActiveRoots...)
 
@@ -289,7 +299,13 @@ func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, Ro
 	}
 
 	dref := ref.NewBranchRef(str)
-	return dEnv.DoltDB.HasRef(ctx, dref), rootsWithTbl, nil
+	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
+
+	if err != nil {
+		return false, nil, err
+	}
+
+	return hasRef, rootsWithTbl, nil
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {

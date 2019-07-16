@@ -6,7 +6,6 @@ package d
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -104,6 +103,6 @@ func TestWrap(t *testing.T) {
 	assert.Equal(te, we.Cause())
 	assert.IsType(wrappedError{}, we)
 	assert.Equal(we, Wrap(we))
-	fmt.Printf("st: %s, cause: %s\n", we.Error(), we.Cause())
+	//fmt.Printf("st: %s, cause: %s\n", we.Error(), we.Cause())
 	assert.Nil(Wrap(nil))
 }

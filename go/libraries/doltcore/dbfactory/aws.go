@@ -8,7 +8,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
@@ -93,17 +92,13 @@ type AWSFactory struct {
 // CreateDB creates an AWS backed database
 func (fact AWSFactory) CreateDB(ctx context.Context, urlObj *url.URL, params map[string]string) (datas.Database, error) {
 	var db datas.Database
-	err := pantoerr.PanicToError("failed to create database", func() error {
-		cs, err := fact.newChunkStore(ctx, urlObj, params)
+	cs, err := fact.newChunkStore(ctx, urlObj, params)
 
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return nil, err
+	}
 
-		db = datas.NewDatabase(cs)
-
-		return nil
-	})
+	db = datas.NewDatabase(cs)
 
 	return db, err
 }

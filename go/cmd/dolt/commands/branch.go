@@ -92,7 +92,12 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 	verbose := apr.Contains(verboseFlag)
 	printAll := apr.Contains(allParam)
 
-	branches := dEnv.DoltDB.GetRefs(context.TODO())
+	branches, err := dEnv.DoltDB.GetRefs(context.TODO())
+
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
+	}
+
 	currentBranch := dEnv.RepoState.Head.Ref
 	sort.Slice(branches, func(i, j int) bool {
 		return branches[i].String() < branches[j].String()

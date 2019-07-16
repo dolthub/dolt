@@ -62,7 +62,6 @@ var remoteSynopsis = []string{
 
 const (
 	addRemoteId    = "add"
-	renameRemoteId = "rename"
 	removeRemoteId = "remove"
 
 	DolthubHostName = "dolthub.com"
@@ -119,7 +118,11 @@ func removeRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return errhand.BuildDError("error: unknown remote " + old).Build()
 	}
 
-	refs := dEnv.DoltDB.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
+	refs, err := dEnv.DoltDB.GetRefsOfType(ctx, map[ref.RefType]struct{}{ref.RemoteRefType: {}})
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+	}
 
 	for _, r := range refs {
 		rr := r.(ref.RemoteRef)

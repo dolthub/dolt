@@ -18,7 +18,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"runtime/debug"
 )
 
 const (
@@ -171,40 +170,36 @@ func createRemote(remoteName, remoteUrl string, params map[string]string) (env.R
 	return r, ddb, nil
 }
 
-func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) (verr errhand.VerboseError) {
-	defer func() {
-		if r := recover(); r != nil {
-			stack := debug.Stack()
-			verr = remotePanicRecover(r, stack)
-		}
-	}()
+func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) errhand.VerboseError {
+	var branches []ref.DoltRef
+	if len(branch) > 0 {
+		branches = []ref.DoltRef{ref.NewBranchRef(branch)}
+	} else {
+		var err error
+		branches, err = srcDB.GetBranches(ctx)
 
-	if verr == nil {
-
-		if verr == nil {
-			var branches []ref.DoltRef
-			if len(branch) > 0 {
-				branches = []ref.DoltRef{ref.NewBranchRef(branch)}
-			} else {
-				branches = srcDB.GetBranches(ctx)
-			}
-
-			verr = cloneAllBranchRefs(branches, verr, srcDB, ctx, remoteName, dEnv)
+		if err != nil {
+			return errhand.BuildDError("error: failed to read branches").AddCause(err).Build()
 		}
 	}
 
-	return
+	return cloneAllBranchRefs(branches, srcDB, ctx, remoteName, dEnv)
 }
 
-func cloneAllBranchRefs(branches []ref.DoltRef, verr errhand.VerboseError, srcDB *doltdb.DoltDB, ctx context.Context, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
+func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx context.Context, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
 	var dref ref.DoltRef
 	var masterHash hash.Hash
 	var h hash.Hash
-	for i := 0; i < len(branches) && verr == nil; i++ {
+	for i := 0; i < len(branches); i++ {
 		dref = branches[i]
 		branch := dref.GetPath()
+		hasRef, err := srcDB.HasRef(ctx, dref)
 
-		if !srcDB.HasRef(ctx, dref) {
+		if err != nil {
+			return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+		}
+
+		if !hasRef {
 			return errhand.BuildDError("fatal: unknown branch " + branch).Build()
 		}
 
@@ -275,15 +270,4 @@ func (vw RpcErrVerbWrap) ShouldPrintUsage() bool {
 
 func (vw RpcErrVerbWrap) Verbose() string {
 	return vw.FullDetails()
-}
-
-func remotePanicRecover(r interface{}, stack []byte) errhand.VerboseError {
-	switch val := r.(type) {
-	case *remotestorage.RpcError:
-		return &RpcErrVerbWrap{val}
-	case error:
-		return errhand.BuildDError("clone failed").AddCause(val).Build()
-	}
-
-	panic(r)
 }
