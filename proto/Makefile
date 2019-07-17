@@ -1,7 +1,9 @@
-GOOGLEAPIS := ${HOME}/src/3p/googleapis
-PROTOBUF := ${HOME}/src/3p/protobuf/src
+THIRD_PARTY_ROOT := ../../proto/third_party
 
-PROTOC = protoc
+GOOGLEAPIS := $(THIRD_PARTY_ROOT)/googleapis
+PROTOBUF := $(THIRD_PARTY_ROOT)/protobuf/src
+
+PROTOC := $(THIRD_PARTY_ROOT)/protobuf/bazel-bin/protoc
 PROTOC_FLAGS = -I . -I $(GOOGLEAPIS) -I $(PROTOBUF)
 
 pbgo_out := ../go/gen/proto
@@ -14,6 +16,11 @@ REMOTESAPI_pbgo_pkg_path := dolt/services/remotesapi_v1alpha1
 PBGO_pkgs := REMOTESAPI
 
 all:
+
+$(PROTOC):
+	@echo "ERROR: Could not find $(PROTOC)"
+	@echo "ERROR: Run "'`'"bazel build //:protoc"'`'" in $(THIRD_PARTY_ROOT)/protobuf to build protoc."
+	@exit 1
 
 .PHONY: clean
 
