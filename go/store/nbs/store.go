@@ -7,19 +7,20 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"github.com/pkg/errors"
 	"os"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
 
+	"github.com/pkg/errors"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -183,7 +184,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	if err != nil {
 		return manifestContents{}, err
 	} else if !ok {
-		contents = manifestContents{vers: constants.NomsVersion}
+		contents = manifestContents{vers: nbs.upstream.vers}
 	}
 
 	currSpecs := make(map[addr]bool)
@@ -281,7 +282,7 @@ func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister
 		p:        p,
 		c:        c,
 		tables:   newTableSet(p),
-		upstream: manifestContents{vers: constants.NomsVersion},
+		upstream: manifestContents{vers: constants.DefaultNomsBinFormat},
 		mtSize:   memTableSize,
 		stats:    NewStats(),
 	}
@@ -761,7 +762,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	newContents := manifestContents{
-		vers:  constants.NomsVersion,
+		vers:  nbs.upstream.vers,
 		root:  current,
 		lock:  generateLockHash(current, specs),
 		specs: specs,

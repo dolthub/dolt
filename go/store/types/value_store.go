@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
@@ -107,9 +106,6 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 
 func (lvs *ValueStore) expectVersion() {
 	dataVersion := lvs.cs.Version()
-	if constants.NomsVersion != dataVersion {
-		d.Panic("SDK version %s incompatible with data of version %s", constants.NomsVersion, dataVersion)
-	}
 	lvs.nbf = getFormatForVersionString(dataVersion)
 }
 
