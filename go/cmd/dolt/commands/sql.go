@@ -46,13 +46,14 @@ Reasonably well supported functionality:
 * ALTER TABLE / DROP TABLE statements
 * UPDATE and DELETE statements
 * Table and column aliases
+* Column functions, e.g. CONCAT
 * ORDER BY and LIMIT clauses
+* GROUP BY
+* Aggregate functions, e.g. SUM 
 
 Known limitations:
 * Some expressions in SELECT statements
-* GROUP BY or aggregate functions
 * Subqueries
-* Column functions, e.g. CONCAT
 * Non-primary indexes
 * Foreign keys
 * Column constraints besides NOT NULL
@@ -276,7 +277,7 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Show:
 		return nil, sqlShow(root, s)
-	case *sqlparser.Select:
+	case *sqlparser.Select, *sqlparser.OtherRead:
 		sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
 			err = prettyPrintResults(root.VRW().Format(), sqlSch, rowIter)
