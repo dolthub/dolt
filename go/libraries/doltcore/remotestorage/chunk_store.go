@@ -58,6 +58,7 @@ type DoltChunkStore struct {
 	host        string
 	csClient    remotesapi.ChunkStoreServiceClient
 	cache       chunkCache
+	metadata    *remotesapi.GetRepoMetadataResponse
 	httpFetcher HTTPFetcher
 }
 
@@ -75,19 +76,29 @@ func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStore
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
-	return NewDoltChunkStore(org, repoName, host, RetryingChunkStoreServiceClient{csClient}), nil
+	return NewDoltChunkStore(org, repoName, host, RetryingChunkStoreServiceClient{csClient})
 }
 
-func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
+func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher}
+	metadata, err := csClient.GetRepoMetadata(context.TODO(), &remotesapi.GetRepoMetadataRequest{
+		RepoId: &remotesapi.RepoId{
+			Org:      org,
+			RepoName: repoName,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, globalHttpFetcher}, nil
 }
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, fetcher}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, fetcher}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -374,11 +385,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
 func (dcs *DoltChunkStore) Version() string {
-	resp, err := dcs.csClient.GetRepoMetadata(context.TODO(), &remotesapi.GetRepoMetadataRequest{RepoId: dcs.getRepoId()})
-	if err != nil {
-		panic(err)
-	}
-	return resp.NbfVersion
+	return dcs.metadata.NbfVersion
 }
 
 // Rebase brings this ChunkStore into sync with the persistent storage's
