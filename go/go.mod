@@ -13,7 +13,7 @@ require (
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
 	github.com/aws/aws-sdk-go v1.20.20
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
-	github.com/cenkalti/backoff v2.1.1+incompatible
+	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/dustin/go-humanize v1.0.0
 	github.com/edsrzf/mmap-go v1.0.0-20181222142022-904c4ced31cd
