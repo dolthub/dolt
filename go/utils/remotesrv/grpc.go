@@ -27,7 +27,7 @@ func NewHttpFSBackedChunkStore(httpHost string, csCache *DBCache) *RemoteChunkSt
 	}
 }
 
-func (rs RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChunksRequest) (*remotesapi.HasChunksResponse, error) {
+func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasChunksRequest) (*remotesapi.HasChunksResponse, error) {
 	logger := getReqLogger("GRPC", "HasChunks")
 	defer func() { logger("finished") }()
 
@@ -237,6 +237,22 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 	logger(fmt.Sprintf("committed %s/%s moved from %s -> %s", req.RepoId.Org, req.RepoId.RepoName, currHash.String(), lastHash.String()))
 	return &remotesapi.CommitResponse{Success: ok}, nil
 }
+
+func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi.GetRepoMetadataRequest) (*remotesapi.GetRepoMetadataResponse, error) {
+	logger := getReqLogger("GRPC", "GetRepoMetadata")
+	defer func() { logger("finished") }()
+
+	cs := rs.getStore(req.RepoId, "GetRepoMetadata")
+	if cs == nil {
+		return nil, status.Error(codes.Internal, "Could not get chunkstore")
+	}
+
+	return &remotesapi.GetRepoMetadataResponse{
+		NbfVersion: cs.Version(),
+		NbsVersion: nbs.StorageVersion,
+	}, nil
+}
+
 
 func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) *nbs.NomsBlockStore {
 	org := repoId.Org
