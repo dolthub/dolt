@@ -961,13 +961,11 @@ var JoinTests = []SelectTest{
 		Name:  "ambiguous column in select",
 		Query: `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
 		ExpectedErr: "Ambiguous column: 'id'",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:  "ambiguous column in where",
 		Query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
 		ExpectedErr: "Ambiguous column: 'id'",
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name:  "Natural join with where clause, select subset of columns",

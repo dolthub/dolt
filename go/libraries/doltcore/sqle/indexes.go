@@ -17,6 +17,10 @@ type DoltIndexDriver struct {
 	db *Database
 }
 
+func NewDoltIndexDriver(database *Database) *DoltIndexDriver {
+	return &DoltIndexDriver{database}
+}
+
 func (*DoltIndexDriver) ID() string {
 	return "doltDbIndexDriver"
 }
