@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cenkalti/backoff"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"net/http"
 	"net/url"
 	"sort"
@@ -14,10 +12,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+
 	"github.com/golang/snappy"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 )
@@ -374,7 +374,11 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
 func (dcs *DoltChunkStore) Version() string {
-	return constants.NomsVersion
+	resp, err := dcs.csClient.GetRepoMetadata(context.TODO(), &remotesapi.GetRepoMetadataRequest{RepoId: dcs.getRepoId()})
+	if err != nil {
+		panic(err)
+	}
+	return resp.NbfVersion
 }
 
 // Rebase brings this ChunkStore into sync with the persistent storage's

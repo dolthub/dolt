@@ -2,6 +2,7 @@ package remotestorage
 
 import (
 	"context"
+
 	"github.com/cenkalti/backoff"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"google.golang.org/grpc"
@@ -48,6 +49,19 @@ func (c RetryingChunkStoreServiceClient) GetUploadLocations(ctx context.Context,
 	op := func() error {
 		var err error
 		resp, err = c.client.GetUploadLocations(ctx, in, opts...)
+		return processGrpcErr(err)
+	}
+
+	err := backoff.Retry(op, backoff.WithMaxRetries(csRetryParams, csClientRetries))
+
+	return resp, err
+}
+
+func (c RetryingChunkStoreServiceClient) GetRepoMetadata(ctx context.Context, in *remotesapi.GetRepoMetadataRequest, opts ...grpc.CallOption) (*remotesapi.GetRepoMetadataResponse, error) {
+	var resp *remotesapi.GetRepoMetadataResponse
+	op := func() error {
+		var err error
+		resp, err = c.client.GetRepoMetadata(ctx, in, opts...)
 		return processGrpcErr(err)
 	}
 
