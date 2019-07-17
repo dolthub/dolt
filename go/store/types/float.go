@@ -7,9 +7,7 @@ package types
 import (
 	"context"
 	"encoding/binary"
-	"math"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -56,10 +54,6 @@ func (v Float) valueReadWriter() ValueReadWriter {
 
 func (v Float) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	FloatKind.writeTo(w, nbf)
-	fl := float64(v)
-	if math.IsNaN(fl) || math.IsInf(fl, 0) {
-		d.Panic("%f is not a supported number", fl)
-	}
 	w.writeFloat(v, nbf)
 }
 
