@@ -9,6 +9,7 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"io"
 	"testing"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -16,7 +17,7 @@ import (
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
-const singleQueryTest = ""
+const singleQueryTest = ""//"Natural join with join clause"
 
 // Set to false to run tests known to be broken
 const skipBroken = true
@@ -43,7 +44,8 @@ func TestCaseSensitivity(t *testing.T) {
 		t.Run(tt.Name, func(t *testing.T) {
 			testSelectQuery(t, tt)
 		})
-	}}
+	}
+}
 
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
@@ -106,6 +108,9 @@ func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 	var r sql.Row
 	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
 		doltRows = append(doltRows, SqlRowToDoltRow(r, targetSch))
+	}
+	if err !=  io.EOF {
+		return nil, nil, err
 	}
 
 	return doltRows, targetSch, nil
