@@ -16,8 +16,6 @@ import (
 
 	"github.com/juju/fslock"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
