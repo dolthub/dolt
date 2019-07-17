@@ -62,7 +62,7 @@ type DoltChunkStore struct {
 	httpFetcher HTTPFetcher
 }
 
-func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+func NewDoltChunkStoreFromPath(ctx context.Context, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	tokens := strings.Split(strings.Trim(path, "/"), "/")
 	if len(tokens) != 2 {
 		return nil, ErrInvalidDoltSpecPath
@@ -76,15 +76,15 @@ func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStore
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
-	return NewDoltChunkStore(org, repoName, host, RetryingChunkStoreServiceClient{csClient})
+	return NewDoltChunkStore(ctx, org, repoName, host, RetryingChunkStoreServiceClient{csClient})
 }
 
-func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+func NewDoltChunkStore(ctx context.Context, org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
-	metadata, err := csClient.GetRepoMetadata(context.TODO(), &remotesapi.GetRepoMetadataRequest{
+	metadata, err := csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
 		RepoId: &remotesapi.RepoId{
 			Org:      org,
 			RepoName: repoName,
