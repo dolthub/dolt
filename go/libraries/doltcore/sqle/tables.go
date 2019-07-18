@@ -3,6 +3,7 @@ package sqle
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/src-d/go-mysql-server/sql"
@@ -11,29 +12,32 @@ import (
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	sql.IndexableTable
 	name  string
 	table *doltdb.Table
 	sch   schema.Schema
-	indexLookup *doltIndexLookup
 }
 
+// Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	dil := lookup.(*doltIndexLookup)
-	return &DoltTable{
-		name:        t.name,
-		table:       t.table,
-		sch:         t.sch,
+	dil, ok := lookup.(*doltIndexLookup)
+	if !ok {
+		panic(fmt.Sprintf("Unrecognized indexLookup %T", lookup))
+	}
+
+	return &IndexedDoltTable{
+		table:       t,
 		indexLookup: dil,
 	}
 }
 
-func (t *DoltTable) IndexLookup() sql.IndexLookup {
-	return t.indexLookup
-}
-
+// Implements sql.IndexableTable
 func (t *DoltTable) IndexKeyValues(*sql.Context, []string) (sql.PartitionIndexKeyValueIter, error) {
 	return nil, errors.New("creating new indexes not supported")
+}
+
+// Implements sql.IndexableTable
+func (t *DoltTable) IndexLookup() sql.IndexLookup {
+	panic("IndexLookup called on DoltTable, should be on IndexedDoltTable")
 }
 
 // Name returns the name of the table.
@@ -59,12 +63,8 @@ func (t *DoltTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 // Returns the table rows for the partition given (all rows of the table).
-func (t *DoltTable) PartitionRows(ctx *sql.Context, p sql.Partition) (sql.RowIter, error) {
-	if t.indexLookup == nil {
-		return newRowIterator(t, ctx), nil
-	} else {
-		return t.indexLookup.RowIter(ctx)
-	}
+func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return newRowIterator(t, ctx), nil
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.

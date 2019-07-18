@@ -141,6 +141,46 @@ func (di *doltIndex) Driver() string {
 	return di.driver.ID()
 }
 
+// IndexedDoltTable is a wrapper for a DoltTable and a doltIndexLookup. It implements the sql.Table interface like
+// DoltTable, but its RowIter function returns values that match the indexLookup, instead of all rows. It's returned by
+// the DoltTable WithIndexLookup function.
+type IndexedDoltTable struct {
+	table       *DoltTable
+	indexLookup *doltIndexLookup
+}
+
+func (idt *IndexedDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	return idt.table.WithIndexLookup(lookup)
+}
+
+func (idt *IndexedDoltTable) IndexKeyValues(*sql.Context, []string) (sql.PartitionIndexKeyValueIter, error) {
+	return idt.table.IndexKeyValues(nil, nil)
+}
+
+func (idt *IndexedDoltTable) Name() string {
+	return idt.table.Name()
+}
+
+func (idt *IndexedDoltTable) String() string {
+	return idt.table.String()
+}
+
+func (idt *IndexedDoltTable) Schema() sql.Schema {
+	return idt.table.Schema()
+}
+
+func (idt *IndexedDoltTable) IndexLookup() sql.IndexLookup {
+	return idt.indexLookup
+}
+
+func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	return idt.table.Partitions(ctx)
+}
+
+func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return idt.indexLookup.RowIter(ctx)
+}
+
 type doltIndexLookup struct {
 	idx *doltIndex
 	key row.TaggedValues

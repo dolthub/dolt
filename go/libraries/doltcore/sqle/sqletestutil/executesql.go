@@ -32,7 +32,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		switch s := sqlStatement.(type) {
 		case *sqlparser.Show:
 			return nil, errors.New("Show statements aren't handled")
-		case *sqlparser.Select:
+		case *sqlparser.Select, *sqlparser.OtherRead:
 			return nil, errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
 			var result *dsql.InsertResult
@@ -86,6 +86,7 @@ func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query
 }
 
 // Executes the select statement given and returns the resulting rows, or an error if one is encountered.
+// This uses the index functionality, which is not ready for prime time. Use with caution.
 func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
 	db := dsqle.NewDatabase("dolt", root)
 	engine := sqle.NewDefault()
