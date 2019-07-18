@@ -104,7 +104,7 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 
 	cm, _ := NewCommitMeta(name, email, "Data repository created.")
 
-	commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
+	commitOpts := datas.CommitOptions{Parents: types.NewSet(ctx, ddb.db), Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
 
 	dref := ref.NewInternalRef(creationBranch)
 	ds, err = ddb.db.GetDataset(ctx, dref.String())
@@ -141,7 +141,7 @@ func getCommitStForRef(ctx context.Context, db datas.Database, dref ref.DoltRef)
 	ds, err := db.GetDataset(ctx, dref.String())
 
 	if err != nil {
-		return types.Struct{}, err
+		return types.EmptyStruct(db.Format()), err
 	}
 
 	dsHead, hasHead := ds.MaybeHead()

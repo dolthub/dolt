@@ -151,6 +151,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		db.WriteValue(context.Background(), s)
 		r := db.WriteValue(context.Background(), s)
 		ds, err := db.GetDataset(context.Background(), "datasetID")
+		assert.NoError(err)
 		_, err = db.CommitValue(context.Background(), ds, r)
 		assert.NoError(err)
 		assert.Equal(s, db.ReadValue(context.Background(), s.Hash(types.Format_7_18)))
@@ -356,7 +357,8 @@ func TestPinPathSpec(t *testing.T) {
 	db := unpinned.GetDatabase(context.Background())
 	ds, err := db.GetDataset(context.Background(), "foo")
 	assert.NoError(err)
-	db.CommitValue(context.Background(), ds, types.Float(42))
+	_, err = db.CommitValue(context.Background(), ds, types.Float(42))
+	assert.NoError(err)
 
 	pinned, ok := unpinned.Pin(context.Background())
 	assert.True(ok)
@@ -374,7 +376,8 @@ func TestPinPathSpec(t *testing.T) {
 
 	ds, err = db.GetDataset(context.Background(), "foo")
 	assert.NoError(err)
-	db.CommitValue(context.Background(), ds, types.Float(43))
+	_, err = db.CommitValue(context.Background(), ds, types.Float(43))
+	assert.NoError(err)
 	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
 	assert.Equal(types.Float(43), unpinned.GetValue(context.Background()))
 }
@@ -389,7 +392,8 @@ func TestPinDatasetSpec(t *testing.T) {
 	db := unpinned.GetDatabase(context.Background())
 	ds, err := db.GetDataset(context.Background(), "foo")
 	assert.NoError(err)
-	db.CommitValue(context.Background(), ds, types.Float(42))
+	_, err = db.CommitValue(context.Background(), ds, types.Float(42))
+	assert.NoError(err)
 
 	pinned, ok := unpinned.Pin(context.Background())
 	assert.True(ok)

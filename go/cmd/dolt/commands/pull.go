@@ -68,9 +68,9 @@ func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltR
 
 	verr := fetchRemoteBranch(r, srcDB, dEnv.DoltDB, srcRef, destRef)
 
-	if verr == nil {
-		return mergeBranch(dEnv, destRef)
+	if verr != nil {
+		return verr
 	}
 
-	return nil
+	return mergeBranch(dEnv, destRef)
 }
