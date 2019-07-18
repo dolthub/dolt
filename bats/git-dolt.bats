@@ -7,6 +7,24 @@ setup() {
 		export BATS_TMPDIR=$HOME/batstmp/
 		mkdir $BATS_TMPDIR
 	fi
+	
+	skiponwindows() { :; }
+	
+	unameOut="$(uname -s)"
+	case "${unameOut}" in
+		CYGWIN*)    machine=Windows;;
+		MINGW*)     machine=Windows;;
+		*)          machine=Unix;;
+	esac
+	
+	if [ ${machine} = "Windows" ]; then
+		pkill() {
+			taskkill -fi "IMAGENAME eq $2*" -f
+		}
+		skiponwindows() {
+			skip "$1"
+		}
+	fi
 
 	export PATH=$PATH:$GOPATH/bin
 	export NOMS_VERSION_NEXT=1
@@ -89,6 +107,7 @@ teardown() {
 }
 
 @test "git dolt's smudge filter automatically clones dolt repositories referenced in checked out git-dolt pointer files" {
+	skiponwindows "This test works on Windows command prompt but not the bash terminal: GitHub Issue #1809"
 	init_git_repo
 	git dolt install
 	git dolt link $REMOTE
@@ -138,6 +157,7 @@ teardown() {
 }
 
 @test "git dolt fails helpfully when dolt is not installed" {
+	skiponwindows "This test does not work on Windows: GitHub Issue #1801"
 	mkdir TMP_PATH
 	pushd TMP_PATH
 	which git | xargs ln -sf
