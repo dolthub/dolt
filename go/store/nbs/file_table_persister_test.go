@@ -27,7 +27,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	defer fc.Drop()
 	fts := newFSTablePersister(dir, fc, nil)
 
-	// Create some tables manually, load them into the cache, and then blow them away
+	// Create some tables manually, load them into the cache
 	func() {
 		for i := 0; i < cacheSize; i++ {
 			name, err := writeTableData(dir, []byte{byte(i)})
@@ -38,11 +38,9 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 			_, err := fts.Open(context.Background(), name, 1, nil)
 			assert.NoError(err)
 		}
-		err := removeTables(dir, names...)
-		assert.NoError(err)
 	}()
 
-	// Tables should still be cached, even though they're gone from disk
+	// Tables should still be cached and on disk
 	for i, name := range names {
 		src, err := fts.Open(context.Background(), name, 1, nil)
 		assert.NoError(err)
@@ -59,6 +57,11 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	present := fc.reportEntries()
 	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
 	assert.Len(present, cacheSize)
+
+	err = fc.ShrinkCache()
+	assert.NoError(err)
+	err = removeTables(dir, names...)
+	assert.NoError(err)
 }
 
 func makeTempDir(t *testing.T) string {
@@ -159,11 +162,9 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 		src, err := persistTableData(fts, testChunks...)
 		assert.NoError(err)
 		name = mustAddr(src.hash())
-		err = removeTables(dir, name)
-		assert.NoError(err)
 	}()
 
-	// Table should still be cached, even though it's gone from disk
+	// Table should still be cached
 	src, err := fts.Open(context.Background(), name, uint32(len(testChunks)), nil)
 	assert.NoError(err)
 	assertChunksInReader(testChunks, src, assert)
@@ -175,6 +176,9 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	present := fc.reportEntries()
 	// Since 0 refcount entries are evicted randomly, the only thing we can validate is that fc remains at its target size
 	assert.Len(present, 1)
+
+	err = removeTables(dir, name)
+	assert.NoError(err)
 }
 
 func TestFSTablePersisterConjoinAll(t *testing.T) {

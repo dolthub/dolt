@@ -18,8 +18,8 @@ const (
 	logLevelFlag = "loglevel"
 )
 
-var sqlServerShortDesc = "Starts a MySQL-compatible server."
-var sqlServerLongDesc = `Starts a MySQL-compatible server which can be connected to by MySQL clients.
+var sqlServerShortDesc = "Start a MySQL-compatible server."
+var sqlServerLongDesc = `Start a MySQL-compatible server which can be connected to by MySQL clients.
 
 Currently, only SELECT statements are operational, as support for other statements is
 still being developed.
