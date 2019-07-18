@@ -69,15 +69,17 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			var srcDB *doltdb.DoltDB
 			r, srcDB, verr = createRemote(remoteName, remoteUrl, params)
 
-			dEnv, verr = envForClone(r, dir, dEnv.FS)
-
 			if verr == nil {
-				verr = cloneRemote(context.Background(), srcDB, remoteName, branch, dEnv)
+				dEnv, verr = envForClone(r, dir, dEnv.FS)
 
-				// Make best effort to delete the directory we created.
-				if verr != nil {
-					_ = os.Chdir("../")
-					_ = dEnv.FS.Delete(dir, true)
+				if verr == nil {
+					verr = cloneRemote(context.Background(), srcDB, remoteName, branch, dEnv)
+
+					// Make best effort to delete the directory we created.
+					if verr != nil {
+						_ = os.Chdir("../")
+						_ = dEnv.FS.Delete(dir, true)
+					}
 				}
 			}
 		}
