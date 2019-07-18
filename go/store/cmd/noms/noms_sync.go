@@ -94,7 +94,7 @@ func runSync(ctx context.Context, args []string) int {
 		if err == datas.ErrMergeNeeded {
 			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, sourceRef)
 			nonFF = true
-		} else {
+		} else if err == nil {
 			sinkDataset = tempDS
 		}
 
