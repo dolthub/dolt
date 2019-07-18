@@ -5,7 +5,7 @@ setup() {
         export BATS_TMPDIR=$HOME/batstmp/
         mkdir $BATS_TMPDIR
     fi
-	load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
