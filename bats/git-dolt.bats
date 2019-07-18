@@ -7,25 +7,7 @@ setup() {
 		export BATS_TMPDIR=$HOME/batstmp/
 		mkdir $BATS_TMPDIR
 	fi
-	
-	skiponwindows() { :; }
-	
-	unameOut="$(uname -s)"
-	case "${unameOut}" in
-		CYGWIN*)    machine=Windows;;
-		MINGW*)     machine=Windows;;
-		*)          machine=Unix;;
-	esac
-	
-	if [ ${machine} = "Windows" ]; then
-		pkill() {
-			taskkill -fi "IMAGENAME eq $2*" -f
-		}
-		skiponwindows() {
-			skip "$1"
-		}
-	fi
-
+	load $BATS_TEST_DIRNAME/helper/windows-compat.bash
 	export PATH=$PATH:$GOPATH/bin
 	export NOMS_VERSION_NEXT=1
 	cd $BATS_TMPDIR
