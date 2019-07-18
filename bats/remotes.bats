@@ -5,6 +5,22 @@ setup() {
         export BATS_TMPDIR=$HOME/batstmp/
         mkdir $BATS_TMPDIR
     fi
+	
+	unameOut="$(uname -s)"
+	case "${unameOut}" in
+		CYGWIN*)    machine=Windows;;
+		MINGW*)     machine=Windows;;
+		*)          machine=Unix;;
+	esac
+	
+	if [ ${machine} = "Windows" ]; then
+		pkill() {
+			taskkill -fi "IMAGENAME eq $2*" -f
+		}
+		pgrep() {
+			tasklist -fi "IMAGENAME eq $1*"
+		}
+	fi
 
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1

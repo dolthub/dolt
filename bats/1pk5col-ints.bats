@@ -569,7 +569,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully exported data." ]
     [ -f export.sql ]
-    diff $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
+    diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 }
 
 @test "dolt schema" {
@@ -608,7 +608,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
-    run diff $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema export.schema
+    run diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
