@@ -27,10 +27,14 @@ import (
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
+
+// An environment variable to set to get indexed join behavior, currently experimental
+const UseIndexedJoinsEnv = "DOLT_USE_INDEXED_JOINS"
 
 var sqlShortDesc = "Runs a SQL query"
 var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
@@ -305,6 +309,16 @@ func sqlNewEngine(query string, root *doltdb.RootValue) (sql.Schema, sql.RowIter
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	ctx := sql.NewEmptyContext()
+
+	// Indexes are not well tested enough to use in production yet.
+	if _, ok := os.LookupEnv(UseIndexedJoinsEnv); ok {
+		engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
+		err := engine.Init()
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	return engine.Query(ctx, query)
 }
 
