@@ -62,6 +62,8 @@ github.com/aws/aws-sdk-go v1.20.19 h1:RQDLGGlcffQzAceEXGdMu+uGGPGhNu+vNG3BrUZAMP
 github.com/aws/aws-sdk-go v1.20.19/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/aws/aws-sdk-go v1.20.20 h1:OAR/GtjMOhenkp1NNKr1N1FgIP3mQXHeGbRhvVIAQp0=
 github.com/aws/aws-sdk-go v1.20.20/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
+github.com/aws/aws-sdk-go v1.20.21 h1:22vHWL9rur+SRTYPHAXlxJMFIA9OSYsYDIAHFDhQ7Z0=
+github.com/aws/aws-sdk-go v1.20.21/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
 github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
@@ -244,10 +246,10 @@ github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a h1
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a/go.mod h1:bXirMMsoAKR1OI9GTQJPGSyuwJlOseI9AFNAdpwRY2k=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
-github.com/liquidata-inc/ld v0.0.0-20190717175747-17efac059a62 h1:lcNZv5VZYpJy/w7acOWXlnFTmAR/HDLDuCD+YO/egYU=
 github.com/liquidata-inc/ld v0.0.0-20190703172908-73a5081bfb26 h1:1h8IBvsyC+pIJL24sK9OQFHxOCCeiFB9f5bhcwmlIks=
 github.com/liquidata-inc/ld v0.0.0-20190711170108-690f93461e3c h1:QYJzHSr/5bu97HELog+sax37xou4EnedV8BSV8ez62M=
 github.com/liquidata-inc/ld v0.0.0-20190715210953-3a68e353a038 h1:bQakRL91gtxU0g6Zwsrec5YIB5gF9qCI1or/dKAqJYc=
+github.com/liquidata-inc/ld v0.0.0-20190717175747-17efac059a62 h1:lcNZv5VZYpJy/w7acOWXlnFTmAR/HDLDuCD+YO/egYU=
 github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/noms v0.9.3/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=
