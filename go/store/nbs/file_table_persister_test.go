@@ -80,7 +80,7 @@ func writeTableData(dir string, chunx ...[]byte) (addr, error) {
 		return addr{}, err
 	}
 
-	return name, err
+	return name, nil
 }
 
 func removeTables(dir string, names ...addr) error {

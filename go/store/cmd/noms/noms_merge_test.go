@@ -120,7 +120,6 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 	}
 }
 
-/*
 func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 	left, right := "left", "right"
 	parentSpec := s.spec("parent")
@@ -169,7 +168,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
 	} else {
 		s.Fail("Run failed", "err: %v\nstdout: %s\nstderr: %s\n", err, stdout, stderr)
 	}
-}*/
+}
 
 func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 	left, right := "left", "right"

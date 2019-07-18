@@ -6,7 +6,6 @@ package perf
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"io"
 	"io/ioutil"
 	"math/rand"
@@ -166,10 +165,11 @@ func (s *perfSuite) randomBytes(seed int64, size int) []byte {
 }
 
 func (s *perfSuite) headList(dsName string) types.List {
+	ass := s.NewAssert()
 	ds, err := s.Database.GetDataset(context.Background(), dsName)
-	d.PanicIfError(err)
+	ass.NoError(err)
 	headVal, ok := ds.MaybeHeadValue()
-	d.Chk.True(ok)
+	ass.True(ok)
 	return headVal.(types.List)
 }
 

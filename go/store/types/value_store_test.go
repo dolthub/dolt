@@ -22,7 +22,8 @@ func TestValueReadWriteRead(t *testing.T) {
 	h := vs.WriteValue(context.Background(), s).TargetHash()
 	rt, err := vs.Root(context.Background())
 	assert.NoError(err)
-	vs.Commit(context.Background(), rt, rt)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 	v := vs.ReadValue(context.Background(), h) // non-nil
 	if assert.NotNil(v) {
 		assert.True(s.Equals(v), "%s != %s", EncodedValue(context.Background(), s), EncodedValue(context.Background(), v))
@@ -40,7 +41,8 @@ func TestReadWriteCache(t *testing.T) {
 	assert.NotEqual(hash.Hash{}, r.TargetHash())
 	rt, err := vs.Root(context.Background())
 	assert.NoError(err)
-	vs.Commit(context.Background(), rt, rt)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 	assert.Equal(1, ts.Writes)
 
 	v = vs.ReadValue(context.Background(), r.TargetHash())
@@ -63,7 +65,8 @@ func TestValueReadMany(t *testing.T) {
 		hashes = append(hashes, h)
 		rt, err := vs.Root(context.Background())
 		assert.NoError(err)
-		vs.Commit(context.Background(), rt, rt)
+		_, err = vs.Commit(context.Background(), rt, rt)
+		assert.NoError(err)
 	}
 
 	// Get one Value into vs's Value cache
@@ -106,7 +109,8 @@ func TestValueWriteFlush(t *testing.T) {
 
 	rt, err := vs.Root(context.Background())
 	assert.NoError(err)
-	vs.Commit(context.Background(), rt, rt)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 	assert.Zero(vs.bufferedChunkSize)
 }
 
@@ -173,7 +177,8 @@ func TestFlushOrder(t *testing.T) {
 	ccs.expect(r)
 	rt, err := vs.Root(context.Background())
 	assert.NoError(err)
-	vs.Commit(context.Background(), rt, rt)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 }
 
 func TestFlushOverSize(t *testing.T) {
@@ -213,7 +218,8 @@ func TestTolerateTopDown(t *testing.T) {
 
 	rt, err := vs.Root(context.Background())
 	assert.NoError(err)
-	vs.Commit(context.Background(), rt, rt)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 
 	assert.Zero(len(vs.bufferedChunks))
 
@@ -227,7 +233,8 @@ func TestTolerateTopDown(t *testing.T) {
 	ccs.expect(sr, mlr, str)
 	rt, err = vs.Root(context.Background())
 	assert.NoError(err)
-	vs.Commit(context.Background(), rt, rt)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 }
 
 func TestPanicOnBadVersion(t *testing.T) {
@@ -245,7 +252,8 @@ func TestPanicOnBadVersion(t *testing.T) {
 
 			rt, err := cvs.Root(context.Background())
 			assert.NoError(t, err)
-			cvs.Commit(context.Background(), rt, rt)
+			_, err = cvs.Commit(context.Background(), rt, rt)
+			assert.NoError(t, err)
 		})
 	})
 }
@@ -261,7 +269,8 @@ func TestPanicIfDangling(t *testing.T) {
 	assert.Panics(func() {
 		rt, err := vs.Root(context.Background())
 		assert.NoError(err)
-		vs.Commit(context.Background(), rt, rt)
+		_, err = vs.Commit(context.Background(), rt, rt)
+		assert.NoError(err)
 	})
 }
 
@@ -275,7 +284,8 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 
 	rt, err := vs.Root(context.Background())
 	assert.NoError(t, err)
-	vs.Commit(context.Background(), rt, rt)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(t, err)
 }
 
 type badVersionStore struct {
