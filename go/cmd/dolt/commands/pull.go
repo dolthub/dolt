@@ -2,12 +2,10 @@ package commands
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"runtime/debug"
-
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 )
 
@@ -61,25 +59,18 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
+func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
 	srcDB, err := r.GetRemoteDB(context.TODO())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
 	}
 
-	verr = fetchRemoteBranch(r, srcDB, dEnv.DoltDB, srcRef, destRef)
+	verr := fetchRemoteBranch(r, srcDB, dEnv.DoltDB, srcRef, destRef)
 
-	if verr == nil {
-		defer func() {
-			if r := recover(); r != nil {
-				stack := debug.Stack()
-				verr = remotePanicRecover(r, stack)
-			}
-		}()
-
-		mergeBranch(dEnv, destRef)
+	if verr != nil {
+		return verr
 	}
 
-	return
+	return mergeBranch(dEnv, destRef)
 }

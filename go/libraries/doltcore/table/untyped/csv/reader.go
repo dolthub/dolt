@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
@@ -12,8 +15,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"strings"
 )
 
 // ReadBufSize is the size of the buffer used when reading the csv file.  It is set at the package level and all
@@ -27,22 +28,23 @@ type CSVReader struct {
 	info   *CSVFileInfo
 	sch    schema.Schema
 	isDone bool
+	nbf    *types.NomsBinFormat
 }
 
 // OpenCSVReader opens a reader at a given path within a given filesys.  The CSVFileInfo should describe the csv file
 // being opened.
-func OpenCSVReader(path string, fs filesys.ReadableFS, info *CSVFileInfo) (*CSVReader, error) {
+func OpenCSVReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *CSVFileInfo) (*CSVReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewCSVReader(r, info)
+	return NewCSVReader(nbf, r, info)
 }
 
 // NewCSVReader creates a CSVReader from a given ReadCloser.  The CSVFileInfo should describe the csv file being read.
-func NewCSVReader(r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
+func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	colStrs, err := getColHeaders(br, info)
 
@@ -53,7 +55,7 @@ func NewCSVReader(r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
 
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	return &CSVReader{r, br, info, sch, false}, nil
+	return &CSVReader{r, br, info, sch, false, nbf}, nil
 }
 
 func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
@@ -145,6 +147,6 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 		}
 	}
 
-	r := row.New(sch, taggedVals)
+	r := row.New(csvr.nbf, sch, taggedVals)
 	return r, nil
 }

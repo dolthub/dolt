@@ -35,14 +35,14 @@ type Database interface {
 
 	// Datasets returns the root of the database which is a
 	// Map<String, Ref<Commit>> where string is a datasetID.
-	Datasets(ctx context.Context) types.Map
+	Datasets(ctx context.Context) (types.Map, error)
 
 	// GetDataset returns a Dataset struct containing the current mapping of
 	// datasetID in the above Datasets Map.
-	GetDataset(ctx context.Context, datasetID string) Dataset
+	GetDataset(ctx context.Context, datasetID string) (Dataset, error)
 
 	// Rebase brings this Database's view of the world inline with upstream.
-	Rebase(ctx context.Context)
+	Rebase(ctx context.Context) error
 
 	// Commit updates the Commit that ds.ID() in this database points at. All
 	// Values that have been written to this Database are guaranteed to be
@@ -110,7 +110,7 @@ type Database interface {
 	// if this operation is not supported.
 	StatsSummary() string
 
-	Flush(ctx context.Context)
+	Flush(ctx context.Context) error
 
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-

@@ -2,6 +2,7 @@ package tblcmds
 
 import (
 	"context"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -57,7 +58,7 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	root, tbl, verr := getRootAndTable(dEnv, rmArgs.TableName)
 
 	if verr == nil {
-		pkVals, err := cli.ParseKeyValues(tbl.GetSchema(context.TODO()), rmArgs.PKs)
+		pkVals, err := cli.ParseKeyValues(root.VRW().Format(), tbl.GetSchema(context.TODO()), rmArgs.PKs)
 
 		if err != nil {
 			verr = errhand.BuildDError("error parsing keys to delete").AddCause(err).Build()

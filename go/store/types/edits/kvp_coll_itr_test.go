@@ -39,8 +39,8 @@ func TestKVPCollItr(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		coll := &KVPCollection{test.buffSize, len(test.slices), test.totalSize, test.slices}
-		itr := NewItr(coll)
+		coll := &KVPCollection{test.buffSize, len(test.slices), test.totalSize, test.slices, types.Format_7_18}
+		itr := NewItr(types.Format_7_18, coll)
 
 		for i := 0; i < 2; i++ {
 			for _, expRes := range test.itrResults {

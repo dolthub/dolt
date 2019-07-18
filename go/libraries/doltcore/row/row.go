@@ -2,6 +2,7 @@ package row
 
 import (
 	"errors"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -29,6 +30,8 @@ type Row interface {
 
 	// Sets a value for the column with the tag given, returning a new row with the update.
 	SetColVal(tag uint64, val types.Value, sch schema.Schema) (Row, error)
+
+	Format() *types.NomsBinFormat
 }
 
 func GetFieldByName(colName string, r Row, sch schema.Schema) (types.Value, bool) {

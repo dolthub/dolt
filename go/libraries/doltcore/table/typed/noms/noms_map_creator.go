@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -53,7 +54,7 @@ func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 
 		pk := r.NomsMapKey(nmc.sch)
 		fieldVals := r.NomsMapValue(nmc.sch)
-		if nmc.lastPK == nil || nmc.lastPK.Less(pk) {
+		if nmc.lastPK == nil || nmc.lastPK.Less(nmc.vrw.Format(), pk) {
 			pkVal := pk.Value(ctx)
 
 			nmc.kvsChan <- pkVal

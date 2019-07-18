@@ -6,6 +6,8 @@ package types
 
 import (
 	"encoding/binary"
+	"math"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
@@ -14,16 +16,16 @@ import (
 const initialBufferSize = 2048
 
 type valueBytes interface {
-	valueBytes() []byte
+	valueBytes(*NomsBinFormat) []byte
 }
 
-func EncodeValue(v Value) chunks.Chunk {
+func EncodeValue(v Value, nbf *NomsBinFormat) chunks.Chunk {
 	switch v := v.(type) {
 	case valueBytes:
-		return chunks.NewChunk(v.valueBytes())
+		return chunks.NewChunk(v.valueBytes(nbf))
 	case *Type:
 		w := newBinaryNomsWriter()
-		v.writeTo(&w)
+		v.writeTo(&w, nbf)
 		return chunks.NewChunk(w.data())
 	}
 
@@ -32,7 +34,7 @@ func EncodeValue(v Value) chunks.Chunk {
 
 func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
 	dec := newValueDecoder(data, vrw)
-	v := dec.readValue()
+	v := dec.readValue(vrw.Format())
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
@@ -40,7 +42,7 @@ func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
 func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) Value {
 	r := binaryNomsReader{data, 0}
 	dec := newValueDecoderWithValidation(r, vrw)
-	v := dec.readValue()
+	v := dec.readValue(vrw.Format())
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
 	return v
 }
@@ -56,7 +58,7 @@ type nomsWriter interface {
 	writeBytes(v []byte)
 	writeCount(count uint64)
 	writeHash(h hash.Hash)
-	writeFloat(v Float)
+	writeFloat(v Float, nbf *NomsBinFormat)
 	writeInt(v Int)
 	writeUint(v Uint)
 	writeString(v string)
@@ -111,20 +113,30 @@ func (b *binaryNomsReader) skipCount() {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsReader) readFloat() Float {
-	// b.assertCanRead(binary.MaxVarintLen64 * 2)
-	i, count := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count)
-	exp, count2 := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count2)
-	return Float(fracExpToFloat(i, int(exp)))
+func (b *binaryNomsReader) readFloat(nbf *NomsBinFormat) Float {
+	if isFormat_7_18(nbf) {
+		// b.assertCanRead(binary.MaxVarintLen64 * 2)
+		i, count := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count)
+		exp, count2 := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count2)
+		return Float(fracExpToFloat(i, int(exp)))
+	} else {
+		floatbits := binary.BigEndian.Uint64(b.buff[b.offset:])
+		b.offset += 8
+		return Float(math.Float64frombits(floatbits))
+	}
 }
 
-func (b *binaryNomsReader) skipFloat() {
-	_, count := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count)
-	_, count2 := binary.Varint(b.buff[b.offset:])
-	b.offset += uint32(count2)
+func (b *binaryNomsReader) skipFloat(nbf *NomsBinFormat) {
+	if isFormat_7_18(nbf) {
+		_, count := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count)
+		_, count2 := binary.Varint(b.buff[b.offset:])
+		b.offset += uint32(count2)
+	} else {
+		b.offset += 8
+	}
 }
 
 func (b *binaryNomsReader) skipInt() {
@@ -261,13 +273,19 @@ func (b *binaryNomsWriter) writeUint(v Uint) {
 	b.offset += uint32(count)
 }
 
-func (b *binaryNomsWriter) writeFloat(v Float) {
-	b.ensureCapacity(binary.MaxVarintLen64 * 2)
-	i, exp := float64ToIntExp(float64(v))
-	count := binary.PutVarint(b.buff[b.offset:], i)
-	b.offset += uint32(count)
-	count = binary.PutVarint(b.buff[b.offset:], int64(exp))
-	b.offset += uint32(count)
+func (b *binaryNomsWriter) writeFloat(v Float, nbf *NomsBinFormat) {
+	if isFormat_7_18(nbf) {
+		b.ensureCapacity(binary.MaxVarintLen64 * 2)
+		i, exp := float64ToIntExp(float64(v))
+		count := binary.PutVarint(b.buff[b.offset:], i)
+		b.offset += uint32(count)
+		count = binary.PutVarint(b.buff[b.offset:], int64(exp))
+		b.offset += uint32(count)
+	} else {
+		b.ensureCapacity(8)
+		binary.BigEndian.PutUint64(b.buff[b.offset:], math.Float64bits(float64(v)))
+		b.offset += 8
+	}
 }
 
 func (b *binaryNomsWriter) writeBool(v bool) {

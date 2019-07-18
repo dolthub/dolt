@@ -1,6 +1,9 @@
 package dtestutils
 
 import (
+	"strconv"
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -8,8 +11,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/require"
-	"strconv"
-	"testing"
 )
 
 var UUIDS = []uuid.UUID{
@@ -59,7 +60,7 @@ func init() {
 			marriedStr = "false"
 		}
 
-		TypedRows = append(TypedRows, row.New(TypedSchema, taggedVals))
+		TypedRows = append(TypedRows, row.New(types.Format_7_18, TypedSchema, taggedVals))
 
 		taggedVals = row.TaggedValues{
 			IdTag:        types.String(UUIDS[i].String()),
@@ -69,7 +70,7 @@ func init() {
 			IsMarriedTag: types.String(marriedStr),
 		}
 
-		UntypedRows = append(UntypedRows, row.New(UntypedSchema, taggedVals))
+		UntypedRows = append(UntypedRows, row.New(types.Format_7_18, UntypedSchema, taggedVals))
 	}
 }
 
@@ -87,7 +88,7 @@ func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *str
 		TitleTag:     titleVal,
 	}
 
-	return row.New(TypedSchema, taggedVals)
+	return row.New(types.Format_7_18, TypedSchema, taggedVals)
 }
 
 func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
@@ -140,7 +141,7 @@ func ConvertToSchema(sch schema.Schema, rs ...row.Row) []row.Row {
 			}
 			return false
 		})
-		newRows[i] = row.New(sch, taggedVals)
+		newRows[i] = row.New(types.Format_7_18, sch, taggedVals)
 	}
 	return newRows
 }

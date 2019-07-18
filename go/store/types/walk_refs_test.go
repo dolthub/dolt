@@ -19,10 +19,10 @@ func TestWalkRefs(t *testing.T) {
 	runTest := func(v Value, t *testing.T) {
 		assert := assert.New(t)
 		expected := hash.HashSlice{}
-		v.WalkRefs(func(r Ref) {
+		v.WalkRefs(Format_7_18, func(r Ref) {
 			expected = append(expected, r.TargetHash())
 		})
-		WalkRefs(EncodeValue(v), func(r Ref) {
+		WalkRefs(EncodeValue(v, Format_7_18), Format_7_18, func(r Ref) {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
 				expected = expected[1:]
@@ -35,28 +35,28 @@ func TestWalkRefs(t *testing.T) {
 		t.Parallel()
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
-			s := NewStruct("", StructData{"n": Float(1)})
-			runTest(NewRef(NewMap(context.Background(), vrw, s, Float(2))), t)
+			s := NewStruct(Format_7_18, "", StructData{"n": Float(1)})
+			runTest(NewRef(NewMap(context.Background(), vrw, s, Float(2)), Format_7_18), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
-			runTest(ToRefOfValue(NewRef(Bool(false))), t)
+			runTest(ToRefOfValue(NewRef(Bool(false), Format_7_18), Format_7_18), t)
 		})
 	})
 
 	t.Run("Struct", func(t *testing.T) {
 		t.Parallel()
 		data := StructData{
-			"ref": NewRef(Bool(false)),
+			"ref": NewRef(Bool(false), Format_7_18),
 			"num": Float(42),
 		}
-		runTest(NewStruct("nom", data), t)
+		runTest(NewStruct(Format_7_18, "nom", data), t)
 	})
 
 	// must return a slice with an even number of elements
 	newValueSlice := func(r *rand.Rand) ValueSlice {
 		vs := make(ValueSlice, 256)
 		for i := range vs {
-			vs[i] = NewStruct("", StructData{"n": Float(r.Uint64())})
+			vs[i] = NewStruct(Format_7_18, "", StructData{"n": Float(r.Uint64())})
 		}
 		return vs
 	}

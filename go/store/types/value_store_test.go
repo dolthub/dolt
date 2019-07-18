@@ -18,9 +18,12 @@ func TestValueReadWriteRead(t *testing.T) {
 
 	s := String("hello")
 	vs := newTestValueStore()
-	assert.Nil(vs.ReadValue(context.Background(), s.Hash())) // nil
+	assert.Nil(vs.ReadValue(context.Background(), s.Hash(Format_7_18))) // nil
 	h := vs.WriteValue(context.Background(), s).TargetHash()
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err := vs.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 	v := vs.ReadValue(context.Background(), h) // non-nil
 	if assert.NotNil(v) {
 		assert.True(s.Equals(v), "%s != %s", EncodedValue(context.Background(), s), EncodedValue(context.Background(), v))
@@ -36,7 +39,10 @@ func TestReadWriteCache(t *testing.T) {
 	var v Value = Bool(true)
 	r := vs.WriteValue(context.Background(), v)
 	assert.NotEqual(hash.Hash{}, r.TargetHash())
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err := vs.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 	assert.Equal(1, ts.Writes)
 
 	v = vs.ReadValue(context.Background(), r.TargetHash())
@@ -57,20 +63,23 @@ func TestValueReadMany(t *testing.T) {
 	for _, v := range vals {
 		h := vs.WriteValue(context.Background(), v).TargetHash()
 		hashes = append(hashes, h)
-		vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+		rt, err := vs.Root(context.Background())
+		assert.NoError(err)
+		_, err = vs.Commit(context.Background(), rt, rt)
+		assert.NoError(err)
 	}
 
 	// Get one Value into vs's Value cache
-	vs.ReadValue(context.Background(), vals[0].Hash())
+	vs.ReadValue(context.Background(), vals[0].Hash(Format_7_18))
 
 	// Get one Value into vs's pendingPuts
 	three := Float(3)
 	vals = append(vals, three)
 	vs.WriteValue(context.Background(), three)
-	hashes = append(hashes, three.Hash())
+	hashes = append(hashes, three.Hash(Format_7_18))
 
 	// Add one Value to request that's not in vs
-	hashes = append(hashes, Bool(false).Hash())
+	hashes = append(hashes, Bool(false).Hash(Format_7_18))
 
 	found := map[hash.Hash]Value{}
 	readValues := vs.ReadManyValues(context.Background(), hashes)
@@ -83,7 +92,7 @@ func TestValueReadMany(t *testing.T) {
 
 	assert.Len(found, len(vals))
 	for _, v := range vals {
-		assert.True(v.Equals(found[v.Hash()]))
+		assert.True(v.Equals(found[v.Hash(Format_7_18)]))
 	}
 }
 
@@ -98,7 +107,10 @@ func TestValueWriteFlush(t *testing.T) {
 	}
 	assert.NotZero(vs.bufferedChunkSize)
 
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err := vs.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 	assert.Zero(vs.bufferedChunkSize)
 }
 
@@ -163,7 +175,10 @@ func TestFlushOrder(t *testing.T) {
 
 	r := vs.WriteValue(context.Background(), l)
 	ccs.expect(r)
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err := vs.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 }
 
 func TestFlushOverSize(t *testing.T) {
@@ -201,11 +216,14 @@ func TestTolerateTopDown(t *testing.T) {
 	lr := vs.WriteValue(context.Background(), L)
 	ccs.expect(lr)
 
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err := vs.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 
 	assert.Zero(len(vs.bufferedChunks))
 
-	ST := NewStruct("", StructData{"r": mlr})
+	ST := NewStruct(Format_7_18, "", StructData{"r": mlr})
 	str := vs.WriteValue(context.Background(), ST) // ST into bufferedChunks
 	vs.WriteValue(context.Background(), S)         // S into bufferedChunks
 	vs.WriteValue(context.Background(), ML)        // ML into bufferedChunks AND withBufferedChunks
@@ -213,20 +231,29 @@ func TestTolerateTopDown(t *testing.T) {
 	// At this point, ValueStore believes ST is a standalone chunk, and that ML -> S
 	// So, it'll look at ML, the one parent it knows about, first and write its child (S). Then, it'll write ML, and then it'll flush the remaining buffered chunks, which is just ST.
 	ccs.expect(sr, mlr, str)
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err = vs.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 }
 
 func TestPanicOnBadVersion(t *testing.T) {
 	storage := &chunks.MemoryStorage{}
 	t.Run("Read", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
-		assert.Panics(t, func() { cvs.ReadValue(context.Background(), hash.Hash{}) })
+		assert.Panics(t, func() {
+			cvs.ReadValue(context.Background(), hash.Hash{})
+		})
 	})
 	t.Run("Write", func(t *testing.T) {
 		cvs := NewValueStore(&badVersionStore{ChunkStore: storage.NewView()})
 		assert.Panics(t, func() {
 			cvs.WriteValue(context.Background(), NewEmptyBlob(cvs))
-			cvs.Commit(context.Background(), cvs.Root(context.Background()), cvs.Root(context.Background()))
+
+			rt, err := cvs.Root(context.Background())
+			assert.NoError(t, err)
+			_, err = cvs.Commit(context.Background(), rt, rt)
+			assert.NoError(t, err)
 		})
 	})
 }
@@ -235,12 +262,15 @@ func TestPanicIfDangling(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	r := NewRef(Bool(true))
+	r := NewRef(Bool(true), Format_7_18)
 	l := NewList(context.Background(), vs, r)
 	vs.WriteValue(context.Background(), l)
 
 	assert.Panics(func() {
-		vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+		rt, err := vs.Root(context.Background())
+		assert.NoError(err)
+		_, err = vs.Commit(context.Background(), rt, rt)
+		assert.NoError(err)
 	})
 }
 
@@ -248,11 +278,14 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	vs := newTestValueStore()
 	vs.SetEnforceCompleteness(false)
 
-	r := NewRef(Bool(true))
+	r := NewRef(Bool(true), Format_7_18)
 	l := NewList(context.Background(), vs, r)
 	vs.WriteValue(context.Background(), l)
 
-	vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+	rt, err := vs.Root(context.Background())
+	assert.NoError(t, err)
+	_, err = vs.Commit(context.Background(), rt, rt)
+	assert.NoError(t, err)
 }
 
 type badVersionStore struct {

@@ -87,10 +87,10 @@ func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 			"l4":      mustMarshal([]string{"two", "three", "four"}),
 			"l5":      mustMarshal([]string{"one", "two", "three", "four", "five"}),
 			"l6":      mustMarshal([]string{"one", "four"}),
-			"struct1": types.NewStruct("test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2)}),
-			"struct2": types.NewStruct("test1", types.StructData{"f1": types.Float(11111), "f2": types.Float(2)}),
-			"struct3": types.NewStruct("test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2), "f3": types.Float(3)}),
-			"struct4": types.NewStruct("test1", types.StructData{"f2": types.Float(2)}),
+			"struct1": types.NewStruct(types.Format_7_18, "test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2)}),
+			"struct2": types.NewStruct(types.Format_7_18, "test1", types.StructData{"f1": types.Float(11111), "f2": types.Float(2)}),
+			"struct3": types.NewStruct(types.Format_7_18, "test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2), "f3": types.Float(3)}),
+			"struct4": types.NewStruct(types.Format_7_18, "test1", types.StructData{"f2": types.Float(2)}),
 			"m1":      mustMarshal(map[string]int{}),
 			"m2":      mustMarshal(map[string]int{"k1": 1, "k2": 2, "k3": 3}),
 			"m3":      mustMarshal(map[string]int{"k2": 2, "k3": 3, "k4": 4}),
@@ -137,7 +137,7 @@ func getPatch(g1, g2 types.Value) Patch {
 
 func checkApplyPatch(assert *assert.Assertions, g1, expectedG2 types.Value, k1, k2 string) {
 	patch := getPatch(g1, expectedG2)
-	g2 := Apply(context.Background(), g1, patch)
+	g2 := Apply(context.Background(), types.Format_7_18, g1, patch)
 	assert.True(expectedG2.Equals(g2), "failed to apply diffs for k1: %s and k2: %s", k1, k2)
 }
 
@@ -192,7 +192,7 @@ func TestUpdateNode(t *testing.T) {
 	oldVal := types.String("Yo")
 	newVal := types.String("YooHoo")
 
-	s1 := types.NewStruct("TestStruct", types.StructData{"f1": types.Float(1), "f2": oldVal})
+	s1 := types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{"f1": types.Float(1), "f2": oldVal})
 	pp = types.FieldPath{Name: "f2"}
 	doTest(pp, s1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.Struct).Get("f2")
@@ -210,10 +210,10 @@ func TestUpdateNode(t *testing.T) {
 		return parent.(types.Map).Get(context.Background(), types.String("k2"))
 	})
 
-	k1 := types.NewStruct("Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
+	k1 := types.NewStruct(types.Format_7_18, "Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
 	vs.WriteValue(context.Background(), k1)
 	m1 = types.NewMap(context.Background(), vs, k1, oldVal)
-	pp = types.HashIndexPath{Hash: k1.Hash()}
+	pp = types.HashIndexPath{Hash: k1.Hash(types.Format_7_18)}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
 		return parent.(types.Map).Get(context.Background(), k1)
 	})
@@ -225,9 +225,9 @@ func TestUpdateNode(t *testing.T) {
 		return parent
 	})
 
-	k2 := types.NewStruct("Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
+	k2 := types.NewStruct(types.Format_7_18, "Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
 	set1 = types.NewSet(context.Background(), vs, oldVal, k1)
-	pp = types.HashIndexPath{Hash: k1.Hash()}
+	pp = types.HashIndexPath{Hash: k1.Hash(types.Format_7_18)}
 	exp = types.NewSet(context.Background(), vs, oldVal, k2)
 	doTest(pp, set1, k1, k2, exp, func(parent types.Value) types.Value {
 		return parent
@@ -247,7 +247,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 		difs = append(difs, dif)
 	}
 
-	res := Apply(context.Background(), n1, difs)
+	res := Apply(context.Background(), types.Format_7_18, n1, difs)
 	a.True(n2.Equals(res))
 }
 
@@ -322,12 +322,12 @@ func TestUpdateMap(t *testing.T) {
 func TestUpdateStruct(t *testing.T) {
 	a := assert.New(t)
 
-	a1 := types.NewStruct("tStruct", types.StructData{
+	a1 := types.NewStruct(types.Format_7_18, "tStruct", types.StructData{
 		"f1": types.Float(1),
 		"f2": types.String("two"),
 		"f3": mustMarshal([]string{"one", "two", "three"}),
 	})
-	a2 := types.NewStruct("tStruct", types.StructData{
+	a2 := types.NewStruct(types.Format_7_18, "tStruct", types.StructData{
 		"f1": types.Float(2),
 		"f2": types.String("twotwo"),
 		"f3": mustMarshal([]interface{}{0, "one", 1, "two", 2, "three", 3}),
@@ -335,7 +335,7 @@ func TestUpdateStruct(t *testing.T) {
 	checkApplyDiffs(a, a1, a2, true)
 	checkApplyDiffs(a, a1, a2, false)
 
-	a2 = types.NewStruct("tStruct", types.StructData{
+	a2 = types.NewStruct(types.Format_7_18, "tStruct", types.StructData{
 		"f1": types.Float(2),
 		"f2": types.String("two"),
 		"f3": mustMarshal([]interface{}{0, "one", 1, "two", 2, "three", 3}),

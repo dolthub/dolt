@@ -78,18 +78,24 @@ func runSync(ctx context.Context, args []string) int {
 		lastProgressCh <- last
 	}()
 
-	sourceRef := types.NewRef(sourceObj)
+	sourceRef := types.NewRef(sourceObj, sourceStore.Format())
 	sinkRef, sinkExists := sinkDataset.MaybeHeadRef()
 	nonFF := false
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
-		datas.Pull(ctx, sourceStore, sinkDB, sourceRef, progressCh)
+		err := datas.Pull(ctx, sourceStore, sinkDB, sourceRef, progressCh)
 
-		var err error
-		sinkDataset, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
+		if err != nil {
+			return err
+		}
+
+		var tempDS datas.Dataset
+		tempDS, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
 		if err == datas.ErrMergeNeeded {
 			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, sourceRef)
 			nonFF = true
+		} else if err == nil {
+			sinkDataset = tempDS
 		}
 
 		return err

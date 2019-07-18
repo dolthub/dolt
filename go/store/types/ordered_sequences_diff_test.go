@@ -100,7 +100,10 @@ func (suite *diffTestSuite) TestDiff() {
 
 	rw := func(col Collection) Collection {
 		h := vs.WriteValue(context.Background(), col).TargetHash()
-		vs.Commit(context.Background(), vs.Root(context.Background()), vs.Root(context.Background()))
+		rt, err := vs.Root(context.Background())
+		suite.NoError(err)
+		_, err = vs.Commit(context.Background(), rt, rt)
+		suite.NoError(err)
 		return vs.ReadValue(context.Background(), h).(Collection)
 	}
 	newSetAsColRw := func(vs []Value) Collection { return rw(newSetAsCol(vs)) }
@@ -191,7 +194,7 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 	newSetSequenceMt := func(v ...Value) metaTuple {
 		seq := newSetLeafSequence(vrw, v...)
 		set := newSet(seq)
-		return newMetaTuple(vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1]), uint64(len(v)))
+		return newMetaTuple(vrw.WriteValue(context.Background(), set), newOrderedKey(v[len(v)-1], Format_7_18), uint64(len(v)))
 	}
 
 	m1 := newSetSequenceMt(Float(1), Float(2))

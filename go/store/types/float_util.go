@@ -4,7 +4,10 @@
 
 package types
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 func float64IsInt(f float64) bool {
 	return math.Trunc(f) == f
@@ -12,6 +15,10 @@ func float64IsInt(f float64) bool {
 
 // convert float64 to int64 where f == i * 2^exp
 func float64ToIntExp(f float64) (int64, int) {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		panic(fmt.Errorf("%v is not a supported number", f))
+	}
+
 	if f == 0 {
 		return 0, 0
 	}

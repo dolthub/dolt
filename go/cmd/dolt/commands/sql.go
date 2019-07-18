@@ -4,6 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/abiosoft/readline"
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
@@ -26,10 +31,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
-	"io"
-	"os"
-	"path/filepath"
-	"strings"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -69,7 +70,7 @@ var sqlSynopsis = []string{
 }
 
 const (
-	queryFlag = "query"
+	queryFlag  = "query"
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -117,24 +118,24 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	// start the doltsql shell
 	historyFile := filepath.Join(dEnv.GetDoltDir(), ".sqlhistory")
 	rlConf := readline.Config{
-		Prompt: "doltsql> ",
-		Stdout: cli.CliOut,
-		Stderr: cli.CliOut,
-		HistoryFile: historyFile,
-		HistoryLimit: 500,
-		HistorySearchFold: true,
+		Prompt:                 "doltsql> ",
+		Stdout:                 cli.CliOut,
+		Stderr:                 cli.CliOut,
+		HistoryFile:            historyFile,
+		HistoryLimit:           500,
+		HistorySearchFold:      true,
 		DisableAutoSaveHistory: true,
 	}
 	shellConf := ishell.UninterpretedConfig{
 		ReadlineConfig: &rlConf,
-		QuitKeywords: []string {
+		QuitKeywords: []string{
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator: ";",
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
-	shell.SetMultiPrompt( "      -> ")
+	shell.SetMultiPrompt("      -> ")
 	// TODO: update completer on create / drop / alter statements
 	shell.CustomCompleter(newCompleter(dEnv))
 
@@ -204,13 +205,13 @@ func newCompleter(dEnv *env.DoltEnv) *sqlCompleter {
 	completionWords = append(completionWords, dsql.CommonKeywords...)
 
 	return &sqlCompleter{
-		allWords: completionWords,
+		allWords:    completionWords,
 		columnNames: columnNames,
 	}
 }
 
 type sqlCompleter struct {
-	allWords []string
+	allWords    []string
 	columnNames []string
 }
 
@@ -256,7 +257,7 @@ func (c *sqlCompleter) getWords(lastWord string) (s []string) {
 	lastDot := strings.LastIndex(lastWord, ".")
 	if lastDot > 0 && strings.Count(lastWord, ".") == 1 {
 		alias := lastWord[:lastDot]
-		return prepend(alias + ".", c.columnNames)
+		return prepend(alias+".", c.columnNames)
 	}
 
 	return c.allWords
@@ -283,7 +284,7 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	case *sqlparser.Select, *sqlparser.OtherRead:
 		sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
-			err = prettyPrintResults(sqlSch, rowIter)
+			err = prettyPrintResults(root.VRW().Format(), sqlSch, rowIter)
 		}
 		return nil, err
 	case *sqlparser.Insert:
@@ -329,11 +330,11 @@ func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
 		return err
 	}
 
-	return runPrintingPipeline(p, sch)
+	return runPrintingPipeline(root.VRW().Format(), p, sch)
 }
 
 // Pretty prints the output of the new SQL engine
-func prettyPrintResults(sqlSch sql.Schema, rowIter sql.RowIter) error {
+func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	var chanErr error
 	doltSch := dsqle.SqlSchemaToDoltSchema(sqlSch)
 	untypedSch := untyped.UntypeUnkeySchema(doltSch)
@@ -351,7 +352,7 @@ func prettyPrintResults(sqlSch sql.Schema, rowIter sql.RowIter) error {
 					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
 				}
 			}
-			rowChannel <- row.New(untypedSch, taggedVals)
+			rowChannel <- row.New(nbf, untypedSch, taggedVals)
 		}
 	}()
 
@@ -376,7 +377,7 @@ func prettyPrintResults(sqlSch sql.Schema, rowIter sql.RowIter) error {
 	})
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(untypedSch)))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(nbf, untypedSch, schema.ExtractAllColNames(untypedSch)))
 
 	p.Start()
 	if err := p.Wait(); err != nil {
@@ -391,7 +392,7 @@ func prettyPrintResults(sqlSch sql.Schema, rowIter sql.RowIter) error {
 
 // Adds some print-handling stages to the pipeline given and runs it, returning any error.
 // Adds null-printing and fixed-width transformers. The schema given is assumed to be untyped (string-typed).
-func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
+func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
@@ -413,7 +414,7 @@ func runPrintingPipeline(p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	})
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(untypedSch, schema.ExtractAllColNames(untypedSch)))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(nbf, untypedSch, schema.ExtractAllColNames(untypedSch)))
 
 	p.Start()
 	if err := p.Wait(); err != nil {

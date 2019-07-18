@@ -56,7 +56,7 @@ func createRows(onlyUpdated, updatedAge bool) []row.Row {
 				ageColTag:   types.Uint(age),
 				titleColTag: types.String(titles[i]),
 			}
-			rows = append(rows, row.New(sch, rowVals))
+			rows = append(rows, row.New(types.Format_7_18, sch, rowVals))
 		}
 	}
 

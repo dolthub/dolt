@@ -26,14 +26,14 @@ import (
 // one is applied in order. When done in combination with the stack, this enables
 // all Differences that change a particular node to be applied to that node
 // before it gets assigned back to it's parent.
-func Apply(ctx context.Context, root types.Value, patch Patch) types.Value {
+func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patch Patch) types.Value {
 	if len(patch) == 0 {
 		return root
 	}
 
 	var lastPath types.Path
 	stack := patchStack{}
-	sort.Sort(patch)
+	sort.Sort(PatchSort{patch, nbf})
 
 	// Push the element on the stack that corresponds to the root
 	// node.

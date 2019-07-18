@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -26,7 +27,7 @@ func newMapMetaSequence(level uint64, tuples []metaTuple, vrw ValueReadWriter) m
 func newCursorAtValue(ctx context.Context, seq orderedSequence, val Value, forInsertion bool, last bool) *sequenceCursor {
 	var key orderedKey
 	if val != nil {
-		key = newOrderedKey(val)
+		key = newOrderedKey(val, seq.format())
 	}
 	return newCursorAt(ctx, seq, key, forInsertion, last)
 }
@@ -97,7 +98,7 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 		for i, v := range items {
 			mt := v.(metaTuple)
 			key := mt.key()
-			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(key))
+			d.PanicIfFalse(lastKey == emptyKey || lastKey.Less(vrw.Format(), key))
 			lastKey = key
 			tuples[i] = mt // chunk is written when the root sequence is written
 			numLeaves += mt.numLeaves()

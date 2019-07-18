@@ -76,7 +76,7 @@ func createStruct(name string, kv ...interface{}) types.Struct {
 	for i := 0; i < len(kv); i += 2 {
 		fields[kv[i].(string)] = valToTypesValue(kv[i+1])
 	}
-	return types.NewStruct(name, fields)
+	return types.NewStruct(types.Format_7_18, name, fields)
 }
 
 func pathsFromDiff(v1, v2 types.Value, leftRight bool) []string {
@@ -174,8 +174,8 @@ func TestNomsDiffPrintSet(t *testing.T) {
   }
 `
 	expectedPaths2 := []string{
-		fmt.Sprintf("[#%s]", mm3.Hash()),
-		fmt.Sprintf("[#%s]", mm3x.Hash()),
+		fmt.Sprintf("[#%s]", mm3.Hash(types.Format_7_18)),
+		fmt.Sprintf("[#%s]", mm3x.Hash(types.Format_7_18)),
 	}
 
 	s1 := createSet("one", "three", "five", "seven", "nine")
@@ -479,8 +479,8 @@ func TestNomsDiffPrintRef(t *testing.T) {
 	expectedPaths1 := []string{``}
 	l1 := createList(1)
 	l2 := createList(2)
-	r1 := types.NewRef(l1)
-	r2 := types.NewRef(l2)
+	r1 := types.NewRef(l1, types.Format_7_18)
+	r2 := types.NewRef(l2, types.Format_7_18)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}

@@ -7,16 +7,16 @@ package main
 import (
 	"bytes"
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -77,7 +77,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 		},
 		types.NewSet(context.Background(), rightSpec.GetDatabase(context.Background()), p))
 
-	expected := types.NewStruct("", types.StructData{
+	expected := types.NewStruct(types.Format_7_18, "", types.StructData{
 		"num": types.Float(42),
 		"str": types.String("foobaz"),
 		"lst": types.NewList(context.Background(), parentSpec.GetDatabase(context.Background()), types.Float(1), types.String("foo")),
@@ -103,9 +103,9 @@ func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
 
 func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructData, p types.Set) types.Ref {
 	ds := sp.GetDataset(context.Background())
-	ds, err := sp.GetDatabase(context.Background()).Commit(context.Background(), ds, types.NewStruct("", data), datas.CommitOptions{Parents: p})
+	ds, err := sp.GetDatabase(context.Background()).Commit(context.Background(), ds, types.NewStruct(types.Format_7_18, "", data), datas.CommitOptions{Parents: p})
 	s.NoError(err)
-	return ds.HeadRef()
+	return mustHeadRef(ds)
 }
 
 func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...types.Value) {
@@ -113,9 +113,9 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 	db := sp.GetDatabase(context.Background())
 	if s.NoError(err) {
 		defer sp.Close()
-		commit := sp.GetDataset(context.Background()).Head()
+		commit := mustHead(sp.GetDataset(context.Background()))
 		s.True(commit.Get(datas.ParentsField).Equals(types.NewSet(context.Background(), db, parents...)))
-		merged := sp.GetDataset(context.Background()).HeadValue()
+		merged := mustHeadValue(sp.GetDataset(context.Background()))
 		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
 	}
 }
@@ -133,7 +133,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(context.Background(), leftSpec.GetDatabase(context.Background()), p))
 	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(context.Background(), rightSpec.GetDatabase(context.Background()), p))
 
-	expected := types.NewStruct("", types.StructData{"num": types.Float(43)})
+	expected := types.NewStruct(types.Format_7_18, "", types.StructData{"num": types.Float(43)})
 
 	output := "output"
 	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=l", s.DBDir, left, right, output})
@@ -158,7 +158,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
 	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, types.NewSet(context.Background(), leftSpec.GetDatabase(context.Background()), p))
 	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, types.NewSet(context.Background(), rightSpec.GetDatabase(context.Background()), p))
 
-	expected := types.NewStruct("", types.StructData{"num": types.Float(44)})
+	expected := types.NewStruct(types.Format_7_18, "", types.StructData{"num": types.Float(44)})
 
 	output := "output"
 	stdout, stderr, err := s.Run(main, []string{"merge", "--policy=r", s.DBDir, left, right, output})
@@ -205,7 +205,8 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 	db := sp.GetDatabase(context.Background())
 
 	prep := func(dsName string) {
-		ds := db.GetDataset(context.Background(), dsName)
+		ds, err := db.GetDataset(context.Background(), dsName)
+		s.NoError(err)
 		db.CommitValue(context.Background(), ds, types.NewMap(context.Background(), db, types.String("foo"), types.String("bar")))
 	}
 	prep(l)

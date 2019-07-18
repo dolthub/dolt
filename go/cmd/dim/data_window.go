@@ -25,7 +25,8 @@ type DataWindow struct {
 
 func appendRow(drs []*DimRow, toUntyped, toTyped *rowconv.RowConverter, k, v types.Value) ([]*DimRow, bool) {
 	if !types.IsNull(k) && !types.IsNull(v) {
-		r := row.FromNoms(toUntyped.SrcSch, k.(types.Tuple), v.(types.Tuple))
+		kt := k.(types.Tuple)
+		r := row.FromNoms(toUntyped.SrcSch, kt, v.(types.Tuple))
 		dr, err := NewDimRow(r, toUntyped, toTyped)
 
 		if err != nil {

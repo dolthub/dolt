@@ -7,6 +7,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/tealeg/xlsx"
 )
 
@@ -25,7 +26,7 @@ func UnmarshalFromXLSX(path string) ([][][]string, error) {
 	return dataSlice, nil
 }
 
-func decodeXLSXRows(xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
+func decodeXLSXRows(nbf *types.NomsBinFormat, xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
 	var rows []row.Row
 
 	var err error
@@ -51,7 +52,7 @@ func decodeXLSXRows(xlData [][][]string, sch schema.Schema) ([]row.Row, error) {
 					return nil, err
 				}
 			}
-			rows = append(rows, row.New(sch, taggedVals))
+			rows = append(rows, row.New(nbf, sch, taggedVals))
 			fmt.Println(rows)
 		}
 

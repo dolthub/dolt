@@ -40,7 +40,7 @@ func (mc mapCandidate) pathConcat(ctx context.Context, change types.ValueChanged
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
 	} else {
-		out = append(out, types.NewHashIndexPath(change.Key.Hash()))
+		out = append(out, types.NewHashIndexPath(change.Key.Hash(mc.m.Format())))
 	}
 	return
 }
@@ -66,7 +66,7 @@ func (sc setCandidate) pathConcat(ctx context.Context, change types.ValueChanged
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
 	} else {
-		out = append(out, types.NewHashIndexPath(change.Key.Hash()))
+		out = append(out, types.NewHashIndexPath(change.Key.Hash(sc.s.Format())))
 	}
 	return
 }

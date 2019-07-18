@@ -2,6 +2,9 @@ package tblcmds
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -10,8 +13,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io/ioutil"
-	"os"
 )
 
 var tblCreateShortDesc = "Creates or overwrite existing table(s) with an empty table(s)."

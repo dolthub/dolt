@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/marshal"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -117,20 +118,20 @@ func MarshalAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch sche
 	val, err := marshal.Marshal(ctx, vrw, sd)
 
 	if err != nil {
-		return types.EmptyStruct, err
+		return types.EmptyStruct(vrw.Format()), err
 	}
 
 	if _, ok := val.(types.Struct); ok {
 		return val, nil
 	}
 
-	return types.EmptyStruct, errors.New("Table Schema could not be converted to types.Struct")
+	return types.EmptyStruct(vrw.Format()), errors.New("Table Schema could not be converted to types.Struct")
 }
 
 // UnmarshalNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
-func UnmarshalNomsValue(ctx context.Context, schemaVal types.Value) (schema.Schema, error) {
+func UnmarshalNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
 	var sd schemaData
-	err := marshal.Unmarshal(ctx, schemaVal, &sd)
+	err := marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
 
 	if err != nil {
 		return nil, err

@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types/edits"
-	"strings"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
@@ -19,8 +20,8 @@ import (
 )
 
 func init() {
-	types.CreateEditAccForMapEdits = func() types.EditAccumulator {
-		return edits.NewAsyncSortedEdits(16*1024, 4, 2)
+	types.CreateEditAccForMapEdits = func(nbf *types.NomsBinFormat) types.EditAccumulator {
+		return edits.NewAsyncSortedEdits(nbf, 16*1024, 4, 2)
 	}
 }
 
@@ -80,10 +81,7 @@ func LoadDoltDBWithParams(ctx context.Context, urlStr string, params map[string]
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {
-	if ddb.db.GetDataset(ctx, creationBranch).HasHead() {
-		return errors.New("database already exists")
-	}
-
+	// precondition checks
 	name = strings.TrimSpace(name)
 	email = strings.TrimSpace(email)
 
@@ -91,38 +89,67 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 		panic("Passed bad name or email.  Both should be valid")
 	}
 
-	err := pantoerr.PanicToError("Failed to write empty repo", func() error {
-		rv := emptyRootValue(ctx, ddb.db)
-		_, err := ddb.WriteRootValue(ctx, rv)
+	ds, err := ddb.db.GetDataset(ctx, creationBranch)
 
-		cm, _ := NewCommitMeta(name, email, "Data repository created.")
-
-		commitOpts := datas.CommitOptions{Parents: types.Set{}, Meta: cm.toNomsStruct(), Policy: nil}
-
-		dref := ref.NewInternalRef(creationBranch)
-		firstCommit, err := ddb.db.Commit(ctx, ddb.db.GetDataset(ctx, dref.String()), rv.valueSt, commitOpts)
-
-		if err != nil {
-			return err
-		}
-
-		dref = ref.NewBranchRef(MasterBranch)
-		_, err = ddb.db.SetHead(ctx, ddb.db.GetDataset(ctx, dref.String()), firstCommit.HeadRef())
-
+	if err != nil {
 		return err
-	})
+	}
+
+	if ds.HasHead() {
+		return errors.New("database already exists")
+	}
+
+	rv := emptyRootValue(ctx, ddb.db)
+	_, err = ddb.WriteRootValue(ctx, rv)
+
+	cm, _ := NewCommitMeta(name, email, "Data repository created.")
+
+	commitOpts := datas.CommitOptions{Parents: types.NewSet(ctx, ddb.db), Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
+
+	dref := ref.NewInternalRef(creationBranch)
+	ds, err = ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return err
+	}
+
+	firstCommit, err := ddb.db.Commit(ctx, ds, rv.valueSt, commitOpts)
+
+	if err != nil {
+		return err
+	}
+
+	dref = ref.NewBranchRef(MasterBranch)
+	ds, err = ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return err
+	}
+
+	headRef, ok := firstCommit.MaybeHeadRef()
+
+	if !ok {
+		return errors.New("commit without head")
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, headRef)
 
 	return err
 }
 
 func getCommitStForRef(ctx context.Context, db datas.Database, dref ref.DoltRef) (types.Struct, error) {
-	ds := db.GetDataset(ctx, dref.String())
+	ds, err := db.GetDataset(ctx, dref.String())
 
-	if ds.HasHead() {
-		return ds.Head(), nil
+	if err != nil {
+		return types.EmptyStruct(db.Format()), err
 	}
 
-	return types.EmptyStruct, ErrBranchNotFound
+	dsHead, hasHead := ds.MaybeHead()
+	if hasHead {
+		return dsHead, nil
+	}
+
+	return types.EmptyStruct(db.Format()), ErrBranchNotFound
 }
 
 func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types.Struct, error) {
@@ -135,19 +162,19 @@ func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types
 	ap, err := spec.NewAbsolutePath(prefixed)
 
 	if err != nil {
-		return types.EmptyStruct, err
+		return types.EmptyStruct(db.Format()), err
 	}
 
 	val := ap.Resolve(ctx, db)
 
 	if val == nil {
-		return types.EmptyStruct, ErrHashNotFound
+		return types.EmptyStruct(db.Format()), ErrHashNotFound
 	}
 
 	valSt, ok := val.(types.Struct)
 
 	if !ok || valSt.Name() != CommitStructName {
-		return types.EmptyStruct, ErrFoundHashNotACommit
+		return types.EmptyStruct(db.Format()), ErrFoundHashNotACommit
 	}
 
 	return valSt, nil
@@ -166,11 +193,11 @@ func walkAncestorSpec(ctx context.Context, db datas.Database, commitSt types.Str
 			commitStPtr := cm.getParent(ctx, inst)
 
 			if commitStPtr == nil {
-				return types.EmptyStruct, ErrInvalidAnscestorSpec
+				return types.EmptyStruct(db.Format()), ErrInvalidAnscestorSpec
 			}
 			commitSt = *commitStPtr
 		} else {
-			return types.EmptyStruct, ErrInvalidAnscestorSpec
+			return types.EmptyStruct(db.Format()), ErrInvalidAnscestorSpec
 		}
 	}
 
@@ -184,21 +211,18 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error)
 	}
 
 	var commitSt types.Struct
-	err := pantoerr.PanicToError("unable to resolve commit "+cs.CommitStringer.String(), func() error {
-		var err error
-		if cs.CSType == HashCommitSpec {
-			commitSt, err = getCommitStForHash(ctx, ddb.db, cs.CommitStringer.String())
-		} else if cs.CSType == RefCommitSpec {
-			commitSt, err = getCommitStForRef(ctx, ddb.db, cs.CommitStringer.(ref.DoltRef))
-		}
+	var err error
+	if cs.CSType == HashCommitSpec {
+		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.CommitStringer.String())
+	} else if cs.CSType == RefCommitSpec {
+		commitSt, err = getCommitStForRef(ctx, ddb.db, cs.CommitStringer.(ref.DoltRef))
+	}
 
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return nil, err
+	}
 
-		commitSt, err = walkAncestorSpec(ctx, ddb.db, commitSt, cs.ASpec)
-		return err
-	})
+	commitSt, err = walkAncestorSpec(ctx, ddb.db, commitSt, cs.ASpec)
 
 	if err != nil {
 		return nil, err
@@ -210,13 +234,14 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec) (*Commit, error)
 // WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
 // and can be committed by hash at a later time.  Returns the hash of the value written.
 func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
-	var valHash hash.Hash
-	err := pantoerr.PanicToErrorNil("failed to write value", func() {
-		ref := ddb.db.WriteValue(ctx, rv.valueSt)
-		ddb.db.Flush(ctx)
+	valRef := ddb.db.WriteValue(ctx, rv.valueSt)
+	err := ddb.db.Flush(ctx)
 
-		valHash = ref.TargetHash()
-	})
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	valHash := valRef.TargetHash()
 
 	return valHash, err
 }
@@ -253,8 +278,13 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 
 // FastForward fast-forwards the branch given to the commit given.
 func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *Commit) error {
-	ds := ddb.db.GetDataset(ctx, branch.String())
-	_, err := ddb.db.FastForward(ctx, ds, types.NewRef(commit.commitSt))
+	ds, err := ddb.db.GetDataset(ctx, branch.String())
+
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.FastForward(ctx, ds, types.NewRef(commit.commitSt, ddb.db.Format()))
 
 	return err
 }
@@ -286,11 +316,17 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 			return errors.New("can't commit a value that is not a valid root value")
 		}
 
-		ds := ddb.db.GetDataset(ctx, dref.String())
+		ds, err := ddb.db.GetDataset(ctx, dref.String())
+
+		if err != nil {
+			return err
+		}
+
 		parentEditor := types.NewSet(ctx, ddb.db).Edit()
 
-		if ds.HasHead() {
-			parentEditor.Insert(ds.HeadRef())
+		headRef, hasHead := ds.MaybeHeadRef()
+		if hasHead {
+			parentEditor.Insert(headRef)
 		}
 
 		for _, parentCmSpec := range parentCmSpecs {
@@ -300,16 +336,26 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 				return err
 			}
 
-			parentEditor.Insert(types.NewRef(cs.commitSt))
+			parentEditor.Insert(types.NewRef(cs.commitSt, ddb.db.Format()))
 		}
 
 		parents := parentEditor.Set(ctx)
-		commitOpts := datas.CommitOptions{Parents: parents, Meta: cm.toNomsStruct(), Policy: nil}
-		ds, err := ddb.db.Commit(ctx, ddb.db.GetDataset(ctx, dref.String()), val, commitOpts)
+		commitOpts := datas.CommitOptions{Parents: parents, Meta: cm.toNomsStruct(ddb.db.Format()), Policy: nil}
+		ds, err = ddb.db.GetDataset(ctx, dref.String())
 
-		if ds.HasHead() {
-			commitSt = ds.Head()
-		} else if err == nil {
+		if err != nil {
+			return err
+		}
+
+		ds, err = ddb.db.Commit(ctx, ds, val, commitOpts)
+
+		if err != nil {
+			return err
+		}
+
+		var ok bool
+		commitSt, ok = ds.MaybeHead()
+		if !ok {
 			return errors.New("commit has no head but commit succeeded (How?!?!?)")
 		}
 
@@ -329,7 +375,7 @@ func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 }
 
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) types.Ref {
-	valRef := types.NewRef(val)
+	valRef := types.NewRef(val, vrw.Format())
 
 	targetVal := valRef.TargetValue(ctx, vrw)
 
@@ -363,24 +409,36 @@ func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx 
 }
 
 // HasBranch returns whether the branch given exists in this database.
-func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) bool {
-	return ddb.db.Datasets(ctx).Has(ctx, types.String(doltRef.String()))
+func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) (bool, error) {
+	dss, err := ddb.db.Datasets(ctx)
+
+	if err != nil {
+		return false, err
+	}
+
+	return dss.Has(ctx, types.String(doltRef.String())), nil
 }
 
 var branchRefFilter = map[ref.RefType]struct{}{ref.BranchRefType: {}}
 
 // GetBranches returns a list of all branches in the database.
-func (ddb *DoltDB) GetBranches(ctx context.Context) []ref.DoltRef {
+func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
-func (ddb *DoltDB) GetRefs(ctx context.Context) []ref.DoltRef {
+func (ddb *DoltDB) GetRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.RefTypes)
 }
 
-func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) []ref.DoltRef {
+func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
 	var branches []ref.DoltRef
-	ddb.db.Datasets(ctx).IterAll(ctx, func(key, _ types.Value) {
+	dss, err := ddb.db.Datasets(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	dss.IterAll(ctx, func(key, _ types.Value) {
 		keyStr := string(key.(types.String))
 
 		var dref ref.DoltRef
@@ -393,7 +451,7 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 		}
 	})
 
-	return branches
+	return branches, nil
 }
 
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
@@ -402,33 +460,41 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, dref ref.DoltRef, comm
 		panic(fmt.Sprintf("invalid branch name %s, use IsValidUserBranchName check", dref.String()))
 	}
 
-	ds := ddb.db.GetDataset(ctx, dref.String())
-	_, err := ddb.db.SetHead(ctx, ds, types.NewRef(commit.commitSt))
+	ds, err := ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return err
+	}
+
+	_, err = ddb.db.SetHead(ctx, ds, types.NewRef(commit.commitSt, ddb.db.Format()))
+
 	return err
 }
 
 // DeleteBranch deletes the branch given, returning an error if it doesn't exist.
 func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
-	ds := ddb.db.GetDataset(ctx, dref.String())
+	ds, err := ddb.db.GetDataset(ctx, dref.String())
+
+	if err != nil {
+		return err
+	}
 
 	if !ds.HasHead() {
 		return ErrBranchNotFound
 	}
 
-	_, err := ddb.db.Delete(ctx, ds)
+	_, err = ddb.db.Delete(ctx, ds)
 	return err
 }
 
 // PushChunks initiates a push into a database from the source database given, at the commit given. Pull progress is
 // communicated over the provided channel.
 func (ddb *DoltDB) PushChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
-	datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
-	return nil
+	return datas.Pull(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, ddb.db.Format()), progChan)
 }
 
 // PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
 // communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
-	datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt), progChan)
-	return nil
+	return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, types.NewRef(cm.commitSt, ddb.db.Format()), progChan)
 }

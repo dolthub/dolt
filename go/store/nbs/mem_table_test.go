@@ -7,7 +7,6 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io/ioutil"
 	"os"
@@ -21,14 +20,14 @@ import (
 
 func TestWriteChunks(t *testing.T) {
 	chunks := []chunks.Chunk{
-		types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, ")),
-		types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery ")),
-		types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the ")),
-		types.EncodeValue(types.String("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly ")),
-		types.EncodeValue(types.String("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing ")),
-		types.EncodeValue(types.String("funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires ")),
-		types.EncodeValue(types.String("a strong moral principle to prevent me from deliberately stepping into the street, and methodically ")),
-		types.EncodeValue(types.String("knocking people’s hats off—then, I account it high time to get to sea as soon as I can.")),
+		types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "), types.Format_7_18),
+		types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "), types.Format_7_18),
+		types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the "), types.Format_7_18),
+		types.EncodeValue(types.String("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly "), types.Format_7_18),
+		types.EncodeValue(types.String("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing "), types.Format_7_18),
+		types.EncodeValue(types.String("funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires "), types.Format_7_18),
+		types.EncodeValue(types.String("a strong moral principle to prevent me from deliberately stepping into the street, and methodically "), types.Format_7_18),
+		types.EncodeValue(types.String("knocking people’s hats off—then, I account it high time to get to sea as soon as I can."), types.Format_7_18),
 	}
 
 	name, data, err := WriteChunks(chunks)
@@ -117,13 +116,15 @@ func TestMemTableWrite(t *testing.T) {
 		assert.True(mt.addChunk(computeAddr(c), c))
 	}
 
-	td1, _ := buildTable(chunks[1:2])
+	td1, _, err := buildTable(chunks[1:2])
+	assert.NoError(err)
 	ti1, err := parseTableIndex(td1)
 	assert.NoError(err)
 	tr1 := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	assert.True(tr1.has(computeAddr(chunks[1])))
 
-	td2, _ := buildTable(chunks[2:])
+	td2, _, err := buildTable(chunks[2:])
+	assert.NoError(err)
 	ti2, err := parseTableIndex(td2)
 	assert.NoError(err)
 	tr2 := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
@@ -245,14 +246,14 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, found
 
 func (crg chunkReaderGroup) count() (count uint32, err error) {
 	for _, haver := range crg {
-		count += must.Uint32(haver.count())
+		count += mustUint32(haver.count())
 	}
 	return
 }
 
 func (crg chunkReaderGroup) uncompressedLen() (data uint64, err error) {
 	for _, haver := range crg {
-		data += must.Uint64(haver.uncompressedLen())
+		data += mustUint64(haver.uncompressedLen())
 	}
 	return
 }

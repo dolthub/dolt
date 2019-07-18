@@ -2,6 +2,9 @@ package dtestutils
 
 import (
 	"context"
+	"math"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
@@ -10,8 +13,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/require"
-	"math"
-	"testing"
 )
 
 // CreateSchema returns a schema from the columns given, panicking on any errors.
@@ -26,7 +27,7 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 	for i := range values {
 		taggedVals[uint64(i)] = values[i]
 	}
-	return row.New(sch, taggedVals)
+	return row.New(types.Format_7_18, sch, taggedVals)
 }
 
 // AddColumnToSchema returns a new schema by adding the given column to the given schema. Will panic on an invalid

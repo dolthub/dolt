@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -57,7 +58,7 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		resChan <- updateMapRes{m, nil}
 	}()
 
-	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(), mapChan, resChan, nil}
+	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(vrw.Format()), mapChan, resChan, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -87,7 +88,7 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 
 		if nmu.count%maxEdits == 0 {
 			nmu.mapChan <- nmu.acc.FinishedEditing()
-			nmu.acc = types.CreateEditAccForMapEdits()
+			nmu.acc = types.CreateEditAccForMapEdits(nmu.vrw.Format())
 		}
 	}()
 

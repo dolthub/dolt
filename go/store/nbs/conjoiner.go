@@ -10,8 +10,6 @@ import (
 	"sort"
 	"sync"
 	"time"
-
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 )
 
 type conjoiner interface {
@@ -60,7 +58,7 @@ func conjoin(ctx context.Context, upstream manifestContents, mm manifestUpdater,
 		specs = append(specs, keepers...)
 
 		newContents := manifestContents{
-			vers:  constants.NomsVersion,
+			vers:  upstream.vers,
 			root:  upstream.root,
 			lock:  generateLockHash(upstream.root, specs),
 			specs: specs,

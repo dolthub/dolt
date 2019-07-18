@@ -42,9 +42,9 @@ func TestPatchPathPartCompare(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		assert.Equal(-1, pathPartCompare(tc[0], tc[1]), "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
-		assert.Equal(0, pathPartCompare(tc[0], tc[0]), "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
-		assert.Equal(1, pathPartCompare(tc[1], tc[0]), "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
+		assert.Equal(-1, pathPartCompare(types.Format_7_18, tc[0], tc[1]), "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
+		assert.Equal(0, pathPartCompare(types.Format_7_18, tc[0], tc[0]), "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
+		assert.Equal(1, pathPartCompare(types.Format_7_18, tc[1], tc[0]), "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
 	}
 }
 
@@ -63,9 +63,9 @@ func TestPatchPathIsLess(t *testing.T) {
 	for i, tc := range testCases {
 		p0 := mustParsePath(assert, tc[0])
 		p1 := mustParsePath(assert, tc[1])
-		assert.True(pathIsLess(p0, p1), "test case %d failed", i)
-		assert.False(pathIsLess(p0, p0), "test case %d failed", i)
-		assert.False(pathIsLess(p1, p0), "test case %d failed", i)
+		assert.True(pathIsLess(types.Format_7_18, p0, p1), "test case %d failed", i)
+		assert.False(pathIsLess(types.Format_7_18, p0, p0), "test case %d failed", i)
+		assert.False(pathIsLess(types.Format_7_18, p1, p0), "test case %d failed", i)
 	}
 	//p := mustParsePath(assert, `#0123456789abcdef0123456789abcdef.value`)
 	//fmt.Printf("p[0]: %s, type: %T\n", p[0], p[0])
@@ -90,6 +90,6 @@ func TestPatchSort(t *testing.T) {
 		shuffledPaths = append(shuffledPaths, sortedPaths[idx])
 	}
 
-	sort.Sort(shuffledPaths)
+	sort.Sort(PatchSort{shuffledPaths, types.Format_7_18})
 	assert.Equal(sortedPaths, shuffledPaths)
 }

@@ -6,7 +6,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
-	"runtime/debug"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -126,8 +125,11 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr == nil {
+		hasRef, err := dEnv.DoltDB.HasRef(context.TODO(), currentBranch)
 
-		if !dEnv.DoltDB.HasRef(context.TODO(), currentBranch) {
+		if err != nil {
+			verr = errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
+		} else if !hasRef {
 			verr = errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
 		} else {
 			ctx := context.Background()
@@ -173,7 +175,11 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 					Remote: remoteName,
 				}
 
-				dEnv.RepoState.Save()
+				err := dEnv.RepoState.Save()
+
+				if err != nil {
+					verr = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()
+				}
 			}
 		}
 	}
@@ -209,19 +215,12 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	return nil
 }
 
-func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) (verr errhand.VerboseError) {
-	defer func() {
-		if r := recover(); r != nil {
-			stack := debug.Stack()
-			verr = remotePanicRecover(r, stack)
-		}
-	}()
-
+func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.GetPath())
 	cm, err := localDB.Resolve(ctx, cs)
 
 	if err != nil {
-		verr = errhand.BuildDError("error: unable to find %v", srcRef.GetPath()).Build()
+		return errhand.BuildDError("error: unable to find %v", srcRef.GetPath()).Build()
 	} else {
 		progChan := make(chan datas.PullProgress, 16)
 		stopChan := make(chan struct{})
@@ -243,12 +242,12 @@ func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.Dolt
 				cli.Println("hint: its remote counterpart. Integrate the remote changes (e.g.")
 				cli.Println("hint: 'dolt pull ...') before pushing again.")
 			} else {
-				verr = errhand.BuildDError("error: push failed").AddCause(err).Build()
+				return errhand.BuildDError("error: push failed").AddCause(err).Build()
 			}
 		}
 	}
 
-	return
+	return nil
 }
 
 func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}) {

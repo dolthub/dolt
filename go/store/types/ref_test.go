@@ -17,7 +17,7 @@ func TestRefInList(t *testing.T) {
 	vs := newTestValueStore()
 
 	l := NewList(context.Background(), vs)
-	r := NewRef(l)
+	r := NewRef(l, Format_7_18)
 	l = l.Edit().Append(r).List(context.Background())
 	r2 := l.Get(context.Background(), 0)
 	assert.True(r.Equals(r2))
@@ -29,7 +29,7 @@ func TestRefInSet(t *testing.T) {
 	vs := newTestValueStore()
 
 	s := NewSet(context.Background(), vs)
-	r := NewRef(s)
+	r := NewRef(s, Format_7_18)
 	s = s.Edit().Insert(r).Set(context.Background())
 	r2 := s.First(context.Background())
 	assert.True(r.Equals(r2))
@@ -41,7 +41,7 @@ func TestRefInMap(t *testing.T) {
 	vs := newTestValueStore()
 
 	m := NewMap(context.Background(), vs)
-	r := NewRef(m)
+	r := NewRef(m, Format_7_18)
 	m = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
 	r2 := m.Get(context.Background(), Float(0))
 	assert.True(r.Equals(r2))
@@ -56,7 +56,7 @@ func TestRefChunks(t *testing.T) {
 	vs := newTestValueStore()
 
 	l := NewList(context.Background(), vs)
-	r := NewRef(l)
+	r := NewRef(l, Format_7_18)
 	assert.Len(getChunks(r), 1)
 	assert.Equal(r, getChunks(r)[0])
 }

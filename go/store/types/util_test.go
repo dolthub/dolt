@@ -57,7 +57,7 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 	d.Chk.True(by > 0, "must be an integer greater than zero")
 	nums := []Value{}
 	for i := from; i < to; i += by {
-		nums = append(nums, NewStruct("num", StructData{"n": Float(i)}))
+		nums = append(nums, NewStruct(Format_7_18, "num", StructData{"n": Float(i)}))
 	}
 	return nums
 }
@@ -65,7 +65,7 @@ func generateNumbersAsStructsFromToBy(from, to, by int) ValueSlice {
 func generateNumbersAsRefOfStructs(vrw ValueReadWriter, n int) []Value {
 	nums := []Value{}
 	for i := 0; i < n; i++ {
-		r := vrw.WriteValue(context.Background(), NewStruct("num", StructData{"n": Float(i)}))
+		r := vrw.WriteValue(context.Background(), NewStruct(Format_7_18, "num", StructData{"n": Float(i)}))
 		nums = append(nums, r)
 	}
 	return nums
@@ -84,15 +84,15 @@ func leafDiffCount(c1, c2 Collection) int {
 	leaves2, _ := LoadLeafNodes(context.Background(), []Collection{c2}, 0, c2.Len())
 
 	for _, l := range leaves1 {
-		hashes[l.Hash()]++
+		hashes[l.Hash(Format_7_18)]++
 	}
 
 	for _, l := range leaves2 {
-		if c, ok := hashes[l.Hash()]; ok {
+		if c, ok := hashes[l.Hash(Format_7_18)]; ok {
 			if c == 1 {
-				delete(hashes, l.Hash())
+				delete(hashes, l.Hash(Format_7_18))
 			} else {
-				hashes[l.Hash()] = c - 1
+				hashes[l.Hash(Format_7_18)] = c - 1
 			}
 		} else {
 			count++

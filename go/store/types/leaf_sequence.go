@@ -24,7 +24,7 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) 
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(vs)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	kind.writeTo(&w)
+	kind.writeTo(&w, vrw.Format())
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -32,7 +32,7 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) 
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, v := range vs {
-		v.writeTo(&w)
+		v.writeTo(&w, vrw.Format())
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return newLeafSequence(vrw, w.data(), offsets, count)
@@ -50,7 +50,7 @@ func (seq leafSequence) valuesSlice(from, to uint64) []Value {
 	dec := seq.decoderSkipToIndex(int(from))
 	vs := make([]Value, (to-from)*uint64(getValuesPerIdx(seq.Kind())))
 	for i := range vs {
-		vs[i] = dec.readValue()
+		vs[i] = dec.readValue(seq.format())
 	}
 	return vs
 }
@@ -62,7 +62,7 @@ func (seq leafSequence) getCompareFnHelper(other leafSequence) compareFn {
 	return func(idx, otherIdx int) bool {
 		dec.offset = uint32(seq.getItemOffset(idx))
 		otherDec.offset = uint32(other.getItemOffset(otherIdx))
-		return dec.readValue().Equals(otherDec.readValue())
+		return dec.readValue(seq.format()).Equals(otherDec.readValue(seq.format()))
 	}
 }
 
@@ -80,13 +80,13 @@ func (seq leafSequence) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(lastType) {
+			if dec.isValueSameTypeForSure(seq.format(), lastType) {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue()
+		lastType = dec.readTypeOfValue(seq.format())
 		ts = append(ts, lastType)
 	}
 
@@ -119,7 +119,7 @@ func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uin
 
 func (seq leafSequence) getItem(idx int) sequenceItem {
 	dec := seq.decoderSkipToIndex(idx)
-	return dec.readValue()
+	return dec.readValue(seq.format())
 }
 
 func getValuesPerIdx(kind NomsKind) int {

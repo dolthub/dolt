@@ -15,7 +15,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
@@ -154,7 +153,7 @@ func (dm dynamoManifest) Update(ctx context.Context, lastLock addr, newContents 
 				return manifestContents{}, errors.New("manifest not found")
 			}
 
-			if upstream.vers != constants.NomsVersion {
+			if upstream.vers != newContents.vers {
 				return manifestContents{}, errors.New("version mismatch")
 			}
 

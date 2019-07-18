@@ -71,7 +71,7 @@ func runRoot(ctx context.Context, args []string) int {
 	db, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 	defer db.Close()
-	if !validate(ctx, db.ReadValue(ctx, h)) {
+	if !validate(ctx, db.Format(), db.ReadValue(ctx, h)) {
 		return 1
 	}
 
@@ -107,15 +107,15 @@ Continue?`)
 	return 0
 }
 
-func validate(ctx context.Context, r types.Value) bool {
+func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool {
 	rootType := types.MakeMapType(types.StringType, types.MakeRefType(types.ValueType))
-	if !types.IsValueSubtypeOf(r, rootType) {
+	if !types.IsValueSubtypeOf(nbf, r, rootType) {
 		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(ctx), types.TypeOf(r).Describe(ctx))
 		return false
 	}
 
 	return r.(types.Map).Any(ctx, func(k, v types.Value) bool {
-		if !datas.IsRefOfCommitType(types.TypeOf(v)) {
+		if !datas.IsRefOfCommitType(nbf, types.TypeOf(v)) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false
 		}

@@ -205,7 +205,7 @@ func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb 
 
 		endIdx = endIdx - uint64(len(values))/valuesPerIdx - startIdx
 		startIdx = 0
-		numBytes += uint64(len(seq.valueBytes())) // note: should really only include |values|
+		numBytes += uint64(len(seq.valueBytes(seq.format()))) // note: should really only include |values|
 	}
 	return
 }
@@ -221,6 +221,10 @@ func (l List) IteratorAt(ctx context.Context, index uint64) ListIterator {
 	return ListIterator{
 		newCursorAtIndex(ctx, l.sequence, index),
 	}
+}
+
+func (l List) Format() *NomsBinFormat {
+	return l.format()
 }
 
 // Diff streams the diff from last to the current list to the changes channel. Caller can close
@@ -264,7 +268,7 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		}
 
 		list := newList(newListLeafSequence(vrw, values...))
-		return list, orderedKeyFromInt(len(values)), uint64(len(values))
+		return list, orderedKeyFromInt(len(values), vrw.Format()), uint64(len(values))
 	}
 }
 

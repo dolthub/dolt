@@ -40,7 +40,7 @@ func (suite *collectionTestSuite) TestEquals() {
 func (suite *collectionTestSuite) TestChunkCountAndType() {
 	suite.Equal(suite.expectChunkCount, leafCount(suite.col), "chunk count")
 	refType := MakeRefType(suite.expectType)
-	suite.col.WalkRefs(func(r Ref) {
+	suite.col.WalkRefs(Format_7_18, func(r Ref) {
 		suite.True(refType.Equals(TypeOf(r)))
 	})
 }

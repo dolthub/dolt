@@ -70,7 +70,14 @@ func main() {
 
 	defer profile.MaybeStartProfile().Stop()
 
-	height := types.NewRef(db.Datasets(context.Background())).Height()
+	dss, err := db.Datasets(context.Background())
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "error: failed to get datasets")
+		os.Exit(1)
+	}
+
+	height := types.NewRef(dss, types.Format_7_18).Height()
 	fmt.Println("Store is of height", height)
 	fmt.Println("| Height |   Nodes | Children | Branching | Groups | Reads | Pruned |")
 	fmt.Println("+--------+---------+----------+-----------+--------+-------+--------+")
@@ -104,7 +111,7 @@ func main() {
 		orderedChildren := hash.HashSlice{}
 		nextLevel := hash.HashSlice{}
 		for _, h := range current {
-			currentValues[h].WalkRefs(func(r types.Ref) {
+			currentValues[h].WalkRefs(types.Format_7_18, func(r types.Ref) {
 				target := r.TargetHash()
 				orderedChildren = append(orderedChildren, target)
 				if !visited[target] && r.Height() > 1 {

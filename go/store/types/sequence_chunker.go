@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
@@ -49,7 +50,7 @@ func newSequenceChunker(ctx context.Context, cur *sequenceCursor, level uint64, 
 		makeChunk, parentMakeChunk,
 		true,
 		hashValueBytes,
-		newRollingValueHasher(byte(level % 256)),
+		newRollingValueHasher(vrw.Format(), byte(level%256)),
 		false,
 		nil,
 	}
@@ -202,7 +203,7 @@ func (sc *sequenceChunker) createSequence(ctx context.Context, write bool) (sequ
 	if write {
 		ref = sc.vrw.WriteValue(ctx, col)
 	} else {
-		ref = NewRef(col)
+		ref = NewRef(col, sc.vrw.Format())
 		sc.unwrittenCol = col
 	}
 

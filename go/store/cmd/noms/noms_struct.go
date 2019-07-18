@@ -12,6 +12,7 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/diff"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -50,24 +51,25 @@ func nomsStruct(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdCla
 func nomsStructNew(ctx context.Context, dbStr string, name string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyStructEdits(ctx, sp, types.NewStruct(name, nil), nil, args)
+	db := sp.GetDatabase(ctx)
+	applyStructEdits(ctx, db, sp, types.NewStruct(db.Format(), name, nil), nil, args)
 	return 0
 }
 
 func nomsStructSet(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-
-	rootVal, basePath := splitPath(ctx, sp)
-	applyStructEdits(ctx, sp, rootVal, basePath, args)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
+	applyStructEdits(ctx, db, sp, rootVal, basePath, args)
 	return 0
 }
 
 func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		if !types.IsValidStructFieldName(args[i]) {
@@ -79,12 +81,11 @@ func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 		})
 	}
 
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 	return 0
 }
 
-func splitPath(ctx context.Context, sp spec.Spec) (rootVal types.Value, basePath types.Path) {
-	db := sp.GetDatabase(ctx)
+func splitPath(ctx context.Context, db datas.Database, sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 	rootPath := sp.Path
 	rootPath.Path = types.Path{}
 	rootVal = rootPath.Resolve(ctx, db)
@@ -96,7 +97,7 @@ func splitPath(ctx context.Context, sp spec.Spec) (rootVal types.Value, basePath
 	return
 }
 
-func applyStructEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
+func applyStructEdits(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
 	if len(args)%2 != 0 {
 		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
@@ -104,7 +105,6 @@ func applyStructEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, ba
 		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		if !types.IsValidStructFieldName(args[i]) {
@@ -120,17 +120,16 @@ func applyStructEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, ba
 			NewValue:   nv,
 		})
 	}
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 }
 
-func appplyPatch(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
-	db := sp.GetDatabase(ctx)
+func appplyPatch(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
 	baseVal := basePath.Resolve(ctx, rootVal, db)
 	if baseVal == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 	}
 
-	newRootVal := diff.Apply(ctx, rootVal, patch)
+	newRootVal := diff.Apply(ctx, db.Format(), rootVal, patch)
 	d.Chk.NotNil(newRootVal)
 	r := db.WriteValue(ctx, newRootVal)
 	db.Flush(ctx)

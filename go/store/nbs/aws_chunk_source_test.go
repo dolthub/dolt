@@ -17,7 +17,8 @@ func TestAWSChunkSource(t *testing.T) {
 		[]byte("goodbye2"),
 		[]byte("badbye2"),
 	}
-	tableData, h := buildTable(chunks)
+	tableData, h, err := buildTable(chunks)
+	assert.NoError(t, err)
 
 	s3 := makeFakeS3(t)
 	ddb := makeFakeDDB(t)

@@ -29,10 +29,11 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 	cs, err := nbs.NewLocalStore(context.Background(), s.DBDir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
-	source1 := sourceDB.GetDataset(context.Background(), "src")
+	source1, err := sourceDB.GetDataset(context.Background(), "src")
+	s.NoError(err)
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
-	source1HeadRef := source1.Head().Hash()
+	source1HeadRef := mustHead(source1).Hash(types.Format_7_18)
 	source1.Database().Close()
 	sourceSpecMissingHashSymbol := spec.CreateValueSpecString("nbs", s.DBDir, source1HeadRef.String())
 
@@ -52,10 +53,11 @@ func (s *nomsSyncTestSuite) TestSync() {
 	cs, err := nbs.NewLocalStore(context.Background(), s.DBDir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
-	source1 := sourceDB.GetDataset(context.Background(), "src")
+	source1, err := sourceDB.GetDataset(context.Background(), "src")
+	s.NoError(err)
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
-	source1HeadRef := source1.Head().Hash() // Remember first head, so we can sync to it.
+	source1HeadRef := mustHead(source1).Hash(types.Format_7_18) // Remember first head, so we can sync to it.
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(43))
 	s.NoError(err)
 	sourceDB.Close()
@@ -69,8 +71,9 @@ func (s *nomsSyncTestSuite) TestSync() {
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
-	dest := db.GetDataset(context.Background(), "dest")
-	s.True(types.Float(42).Equals(dest.HeadValue()))
+	dest, err := db.GetDataset(context.Background(), "dest")
+	s.NoError(err)
+	s.True(types.Float(42).Equals(mustHeadValue(dest)))
 	db.Close()
 
 	// Pull from a dataset in one DB to an existing dataset in another
@@ -81,8 +84,9 @@ func (s *nomsSyncTestSuite) TestSync() {
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
-	dest = db.GetDataset(context.Background(), "dest")
-	s.True(types.Float(43).Equals(dest.HeadValue()))
+	dest, err = db.GetDataset(context.Background(), "dest")
+	s.NoError(err)
+	s.True(types.Float(43).Equals(mustHeadValue(dest)))
 	db.Close()
 
 	// Pull when sink dataset is already up to date
@@ -97,8 +101,9 @@ func (s *nomsSyncTestSuite) TestSync() {
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
-	dest = db.GetDataset(context.Background(), "dest2")
-	s.True(types.Float(43).Equals(dest.HeadValue()))
+	dest, err = db.GetDataset(context.Background(), "dest2")
+	s.NoError(err)
+	s.True(types.Float(43).Equals(mustHeadValue(dest)))
 	db.Close()
 }
 
@@ -109,14 +114,16 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
 	// Create dataset "src1", which has a lineage of two commits.
-	source1 := sourceDB.GetDataset(context.Background(), "src1")
+	source1, err := sourceDB.GetDataset(context.Background(), "src1")
+	s.NoError(err)
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
 	s.NoError(err)
 	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(43))
 	s.NoError(err)
 
 	// Create dataset "src2", with a lineage of one commit.
-	source2 := sourceDB.GetDataset(context.Background(), "src2")
+	source2, err := sourceDB.GetDataset(context.Background(), "src2")
+	s.NoError(err)
 	source2, err = sourceDB.CommitValue(context.Background(), source2, types.Float(1))
 	s.NoError(err)
 
@@ -128,8 +135,9 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	sout, _ := s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	db := datas.NewDatabase(cs)
-	dest := db.GetDataset(context.Background(), "dest")
-	s.True(types.Float(43).Equals(dest.HeadValue()))
+	dest, err := db.GetDataset(context.Background(), "dest")
+	s.NoError(err)
+	s.True(types.Float(43).Equals(mustHeadValue(dest)))
 	db.Close()
 
 	// Now, try syncing a second dataset. This crashed in issue #2598
@@ -139,8 +147,9 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir2, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
-	dest = db.GetDataset(context.Background(), "dest2")
-	s.True(types.Float(1).Equals(dest.HeadValue()))
+	dest, err = db.GetDataset(context.Background(), "dest2")
+	s.NoError(err)
+	s.True(types.Float(1).Equals(mustHeadValue(dest)))
 	db.Close()
 
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
@@ -152,10 +161,11 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	cs, err := nbs.NewLocalStore(context.Background(), s.DBDir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
-	src := sourceDB.GetDataset(context.Background(), "foo")
+	src, err := sourceDB.GetDataset(context.Background(), "foo")
+	s.NoError(err)
 	src, err = sourceDB.CommitValue(context.Background(), src, types.Float(42))
 	s.NoError(err)
-	rewindRef := src.HeadRef().TargetHash()
+	rewindRef := mustHeadRef(src).TargetHash()
 	src, err = sourceDB.CommitValue(context.Background(), src, types.Float(43))
 	s.NoError(err)
 	sourceDB.Close() // Close Database backing both Datasets
@@ -167,7 +177,8 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	cs, err = nbs.NewLocalStore(context.Background(), s.DBDir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
-	dest := db.GetDataset(context.Background(), "foo")
-	s.True(types.Float(42).Equals(dest.HeadValue()))
+	dest, err := db.GetDataset(context.Background(), "foo")
+	s.NoError(err)
+	s.True(types.Float(42).Equals(mustHeadValue(dest)))
 	db.Close()
 }

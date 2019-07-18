@@ -3,6 +3,7 @@ package merge
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -149,15 +150,15 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 			break
 		}
 
-		if key != nil && (mergeKey == nil || key.Less(mergeKey)) {
+		if key != nil && (mergeKey == nil || key.Less(vrw.Format(), mergeKey)) {
 			// change will already be in the map
 			change = types.ValueChanged{}
-		} else if mergeKey != nil && (key == nil || mergeKey.Less(key)) {
+		} else if mergeKey != nil && (key == nil || mergeKey.Less(vrw.Format(), key)) {
 			applyChange(mapEditor, stats, mergeChange)
 			mergeChange = types.ValueChanged{}
 		} else {
 			r, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
-			mergedRow, isConflict := rowMerge(ctx, sch, r, mergeRow, ancRow)
+			mergedRow, isConflict := rowMerge(ctx, vrw.Format(), sch, r, mergeRow, ancRow)
 
 			if isConflict {
 				stats.Conflicts++
@@ -198,7 +199,7 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(ctx context.Context, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
+func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
 		if r.Equals(mergeRow) {
@@ -255,7 +256,7 @@ func rowMerge(ctx context.Context, sch schema.Schema, r, mergeRow, baseRow types
 		return nil, true
 	}
 
-	tpl := resultVals.NomsTupleForTags(sch.GetNonPKCols().SortedTags, false)
+	tpl := resultVals.NomsTupleForTags(nbf, sch.GetNonPKCols().SortedTags, false)
 
 	return tpl.Value(ctx), false
 }

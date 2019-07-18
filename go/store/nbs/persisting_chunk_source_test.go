@@ -6,7 +6,6 @@ package nbs
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +18,7 @@ func TestPersistingChunkStoreEmpty(t *testing.T) {
 	h, err := ccs.hash()
 	assert.NoError(t, err)
 	assert.Equal(t, addr{}, h)
-	assert.Zero(t, must.Uint32(ccs.count()))
+	assert.Zero(t, mustUint32(ccs.count()))
 }
 
 type pausingFakeTablePersister struct {
@@ -44,19 +43,19 @@ func TestPersistingChunkStore(t *testing.T) {
 	ccs := newPersistingChunkSource(context.Background(), mt, nil, pausingFakeTablePersister{newFakeTablePersister(), trigger}, make(chan struct{}, 1), &Stats{})
 
 	assertChunksInReader(testChunks, ccs, assert)
-	assert.EqualValues(must.Uint32(mt.count()), must.Uint32(ccs.getReader().count()))
+	assert.EqualValues(mustUint32(mt.count()), mustUint32(ccs.getReader().count()))
 	close(trigger)
 
 	h, err := ccs.hash()
 	assert.NoError(err)
 	assert.NotEqual(addr{}, h)
-	assert.EqualValues(len(testChunks), must.Uint32(ccs.count()))
+	assert.EqualValues(len(testChunks), mustUint32(ccs.count()))
 	assertChunksInReader(testChunks, ccs, assert)
 
 	assert.Nil(ccs.mt)
 
 	newChunk := []byte("additional")
 	mt.addChunk(computeAddr(newChunk), newChunk)
-	assert.NotEqual(must.Uint32(mt.count()), must.Uint32(ccs.count()))
+	assert.NotEqual(mustUint32(mt.count()), mustUint32(ccs.count()))
 	assert.False(ccs.has(computeAddr(newChunk)))
 }

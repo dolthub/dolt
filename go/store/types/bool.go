@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -21,21 +22,21 @@ func (b Bool) Equals(other Value) bool {
 	return b == other
 }
 
-func (b Bool) Less(other LesserValuable) bool {
+func (b Bool) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	if b2, ok := other.(Bool); ok {
 		return !bool(b) && bool(b2)
 	}
 	return true
 }
 
-func (b Bool) Hash() hash.Hash {
-	return getHash(b)
+func (b Bool) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(b, nbf)
 }
 
 func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (b Bool) WalkRefs(cb RefCallback) {
+func (b Bool) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (b Bool) typeOf() *Type {
@@ -50,12 +51,12 @@ func (b Bool) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (b Bool) writeTo(w nomsWriter) {
-	BoolKind.writeTo(w)
+func (b Bool) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	BoolKind.writeTo(w, nbf)
 	w.writeBool(bool(b))
 }
 
-func (b Bool) valueBytes() []byte {
+func (b Bool) valueBytes(nbf *NomsBinFormat) []byte {
 	if bool(b) {
 		return []byte{byte(BoolKind), 1}
 	}

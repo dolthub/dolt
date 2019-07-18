@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 
 	flag "github.com/juju/gnuflag"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
@@ -58,7 +59,14 @@ func runDs(ctx context.Context, args []string) int {
 		util.CheckError(err)
 		defer store.Close()
 
-		store.Datasets(ctx).IterAll(ctx, func(k, v types.Value) {
+		dss, err := store.Datasets(ctx)
+
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "failed to get datasets")
+			return 1
+		}
+
+		dss.IterAll(ctx, func(k, v types.Value) {
 			fmt.Println(k)
 		})
 	}

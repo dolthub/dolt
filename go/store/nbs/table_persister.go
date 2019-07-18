@@ -9,11 +9,11 @@ import (
 	"context"
 	"crypto/sha512"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"sort"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
 )
 
@@ -260,7 +260,11 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 
 		// Bring over the suffixes block, in order
 		n := copy(plan.mergedIndex[suffixesPos:], index.suffixes)
-		d.Chk.True(n == len(index.suffixes))
+
+		if n != len(index.suffixes) {
+			return compactionPlan{}, errors.New("failed to copy all data")
+		}
+
 		suffixesPos += uint64(n)
 	}
 

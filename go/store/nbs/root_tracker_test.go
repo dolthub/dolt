@@ -7,7 +7,6 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"sync"
 	"testing"
 
@@ -412,7 +411,7 @@ type fakeTablePersister struct {
 }
 
 func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
-	if must.Uint32(mt.count()) > 0 {
+	if mustUint32(mt.count()) > 0 {
 		name, data, chunkCount, err := mt.write(haver, stats)
 
 		if err != nil {
@@ -460,8 +459,8 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunkCount uint32, err error) {
 	totalData := uint64(0)
 	for _, src := range sources {
-		chunkCount += must.Uint32(src.count())
-		totalData += must.Uint64(src.uncompressedLen())
+		chunkCount += mustUint32(src.count())
+		totalData += mustUint64(src.uncompressedLen())
 	}
 	if chunkCount == 0 {
 		return
@@ -496,7 +495,12 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 		return addr{}, nil, 0, fmt.Errorf(errString)
 	}
 
-	tableSize, name := tw.finish()
+	tableSize, name, err := tw.finish()
+
+	if err != nil {
+		return addr{}, nil, 0, err
+	}
+
 	return name, buff[:tableSize], chunkCount, nil
 }
 

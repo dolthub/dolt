@@ -2,14 +2,12 @@ package commands
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"runtime/debug"
-
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 )
@@ -124,7 +122,12 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSp
 			return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
 		}
 
-		branchRefs := srcDB.GetRefs(ctx)
+		branchRefs, err := srcDB.GetRefs(ctx)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to read from ").AddCause(err).Build()
+		}
+
 		for _, branchRef := range branchRefs {
 			remoteTrackRef := rs.DestRef(branchRef)
 
@@ -141,19 +144,12 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSp
 	return nil
 }
 
-func fetchRemoteBranch(rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) (verr errhand.VerboseError) {
-	defer func() {
-		if r := recover(); r != nil {
-			stack := debug.Stack()
-			verr = remotePanicRecover(r, stack)
-		}
-	}()
-
+func fetchRemoteBranch(rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
 	cm, err := srcDB.Resolve(context.TODO(), cs)
 
 	if err != nil {
-		verr = errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
+		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
 		progChan := make(chan datas.PullProgress)
 		stopChan := make(chan struct{})
@@ -165,9 +161,9 @@ func fetchRemoteBranch(rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, des
 		<-stopChan
 
 		if err != nil {
-			verr = errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
 		}
 	}
 
-	return
+	return nil
 }

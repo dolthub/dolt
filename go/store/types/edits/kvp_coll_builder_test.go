@@ -31,6 +31,7 @@ func TestMoveRemaining(t *testing.T) {
 		2,
 		3,
 		[]types.KVPSlice{sl1, sl2[:1]},
+		types.Format_7_18,
 	}
 
 	builder := NewKVPCollBuilder(2)
@@ -50,7 +51,7 @@ func TestMoveRemaining(t *testing.T) {
 
 func TestAddKVPAndMoveRemaining(t *testing.T) {
 	sl := types.KVPSlice{{types.Uint(1), types.NullValue}, {types.Uint(2), types.NullValue}}
-	coll := NewKVPCollection(sl)
+	coll := NewKVPCollection(types.Format_7_18, sl)
 
 	builder := NewKVPCollBuilder(2)
 	builder.AddKVP(types.KVP{types.Uint(0), types.NullValue})

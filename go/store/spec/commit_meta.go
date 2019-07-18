@@ -74,21 +74,21 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 	}
 
 	if err := parseMetaStrings(commitMetaKeyValueStrings, false); err != nil {
-		return types.EmptyStruct, err
+		return types.EmptyStruct(db.Format()), err
 	}
 	if err := parseMetaStrings(commitMetaKeyValuePaths, true); err != nil {
-		return types.EmptyStruct, err
+		return types.EmptyStruct(db.Format()), err
 	}
 
 	for k, v := range keyValueStrings {
 		if !types.IsValidStructFieldName(k) {
-			return types.EmptyStruct, fmt.Errorf("invalid meta key: %s", k)
+			return types.EmptyStruct(db.Format()), fmt.Errorf("invalid meta key: %s", k)
 		}
 		metaValues[k] = types.String(v)
 	}
 	for k, v := range keyValuePaths {
 		if !types.IsValidStructFieldName(k) {
-			return types.EmptyStruct, fmt.Errorf("invalid meta key: %s", k)
+			return types.EmptyStruct(db.Format()), fmt.Errorf("invalid meta key: %s", k)
 		}
 		metaValues[k] = v
 	}
@@ -101,7 +101,7 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 	} else {
 		_, err := time.Parse(CommitMetaDateFormat, date)
 		if err != nil {
-			return types.EmptyStruct, fmt.Errorf("unable to parse date: %s, error: %s", date, err)
+			return types.EmptyStruct(db.Format()), fmt.Errorf("unable to parse date: %s, error: %s", date, err)
 		}
 	}
 	metaValues["date"] = types.String(date)
@@ -111,5 +111,5 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 	} else if commitMetaMessage != "" {
 		metaValues["message"] = types.String(commitMetaMessage)
 	}
-	return types.NewStruct("Meta", metaValues), nil
+	return types.NewStruct(db.Format(), "Meta", metaValues), nil
 }

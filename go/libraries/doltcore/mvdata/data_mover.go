@@ -140,10 +140,10 @@ func (imp *DataMover) Move(ctx context.Context) error {
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
 			rowErr = trf
-			return false
+			return true
 		}
 
-		return true
+		return false
 	}
 
 	p := pipeline.NewAsyncPipeline(

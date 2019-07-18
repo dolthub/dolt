@@ -12,6 +12,7 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/diff"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -49,15 +50,17 @@ func nomsMap(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause
 func nomsMapNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applyMapEdits(ctx, sp, types.NewMap(ctx, sp.GetDatabase(ctx)), nil, args)
+	db := sp.GetDatabase(ctx)
+	applyMapEdits(ctx, db, sp, types.NewMap(ctx, db), nil, args)
 	return 0
 }
 
 func nomsMapSet(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
-	applyMapEdits(ctx, sp, rootVal, basePath, args)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
+	applyMapEdits(ctx, db, sp, rootVal, basePath, args)
 	return 0
 }
 
@@ -65,7 +68,8 @@ func nomsMapDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
 
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
 		kp := parseKeyPart(args, i)
@@ -75,11 +79,11 @@ func nomsMapDel(ctx context.Context, specStr string, args []string) int {
 		})
 	}
 
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 	return 0
 }
 
-func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
+func applyMapEdits(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, args []string) {
 	if len(args)%2 != 0 {
 		util.CheckError(fmt.Errorf("Must be an even number of key/value pairs"))
 	}
@@ -87,7 +91,6 @@ func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 		return
 	}
-	db := sp.GetDatabase(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		kp := parseKeyPart(args, i)
@@ -101,7 +104,7 @@ func applyMapEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 			NewValue:   vv,
 		})
 	}
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 }
 
 func parseKeyPart(args []string, i int) (res types.PathPart) {

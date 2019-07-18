@@ -18,13 +18,13 @@ var id3, _ = uuid.NewRandom()
 
 func createTestRowData(vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
 	rows := make([]row.Row, 4)
-	rows[0] = row.New(sch, row.TaggedValues{
+	rows[0] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)})
-	rows[1] = row.New(sch, row.TaggedValues{
+	rows[1] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)})
-	rows[2] = row.New(sch, row.TaggedValues{
+	rows[2] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)})
-	rows[3] = row.New(sch, row.TaggedValues{
+	rows[3] = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)})
 
 	ed := types.NewMap(context.Background(), vrw).Edit()
@@ -81,7 +81,7 @@ func TestTables(t *testing.T) {
 		t.Error("GetRow should have returned false.")
 	}
 
-	idItr := SingleColPKItr(idTag, ids)
+	idItr := SingleColPKItr(types.Format_7_18, idTag, ids)
 	readRows, missing := tbl.GetRows(context.Background(), idItr, -1, tSchema)
 
 	if len(readRows) != len(rows) {

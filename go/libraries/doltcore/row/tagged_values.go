@@ -3,38 +3,42 @@ package row
 import (
 	"context"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type TaggedValues map[uint64]types.Value
 
-type TupleVals []types.Value
+type TupleVals struct {
+	vs  []types.Value
+	nbf *types.NomsBinFormat
+}
 
 func (tvs TupleVals) Kind() types.NomsKind {
 	return types.TupleKind
 }
 
 func (tvs TupleVals) Value(ctx context.Context) types.Value {
-	return types.NewTuple(tvs...)
+	return types.NewTuple(tvs.nbf, tvs.vs...)
 }
 
-func (tvs TupleVals) Less(other types.LesserValuable) bool {
+func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) bool {
 	if other.Kind() == types.TupleKind {
 		if otherTVs, ok := other.(TupleVals); ok {
-			for i, val := range tvs {
-				if i == len(otherTVs) {
+			for i, val := range tvs.vs {
+				if i == len(otherTVs.vs) {
 					// equal up til the end of other. other is shorter, therefore it is less
 					return false
 				}
 
-				otherVal := otherTVs[i]
+				otherVal := otherTVs.vs[i]
 
 				if !val.Equals(otherVal) {
-					return val.Less(otherVal)
+					return val.Less(nbf, otherVal)
 				}
 			}
 
-			return len(tvs) < len(otherTVs)
+			return len(tvs.vs) < len(otherTVs.vs)
 		} else {
 			panic("not supported")
 		}
@@ -43,7 +47,7 @@ func (tvs TupleVals) Less(other types.LesserValuable) bool {
 	return types.TupleKind < other.Kind()
 }
 
-func (tt TaggedValues) NomsTupleForTags(tags []uint64, encodeNulls bool) TupleVals {
+func (tt TaggedValues) NomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64, encodeNulls bool) TupleVals {
 	numVals := 0
 	for _, tag := range tags {
 		val := tt[tag]
@@ -69,7 +73,7 @@ func (tt TaggedValues) NomsTupleForTags(tags []uint64, encodeNulls bool) TupleVa
 		}
 	}
 
-	return TupleVals(vals)
+	return TupleVals{vals, nbf}
 }
 
 func (tt TaggedValues) Iter(cb func(tag uint64, val types.Value) (stop bool)) bool {

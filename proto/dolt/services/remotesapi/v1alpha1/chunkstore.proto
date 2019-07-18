@@ -5,6 +5,7 @@ package dolt.services.remotesapi.v1alpha1;
 option go_package = "dolt/services/remotesapi_v1alpha1;remotesapi";
 
 service ChunkStoreService {
+  rpc GetRepoMetadata(GetRepoMetadataRequest) returns (GetRepoMetadataResponse);
   rpc HasChunks(HasChunksRequest) returns (HasChunksResponse);
   rpc GetDownloadLocations(GetDownloadLocsRequest) returns (GetDownloadLocsResponse);
   rpc GetUploadLocations(GetUploadLocsRequest) returns (GetUploadLocsResponse);
@@ -109,4 +110,17 @@ message CommitRequest {
 
 message CommitResponse {
   bool success = 1;
+}
+
+message GetRepoMetadataRequest {
+  RepoId repo_id = 1;
+}
+
+message GetRepoMetadataResponse {
+  // Version string of the noms binary format for this repository.
+  // See types.NomsBinFormat.
+  string nbf_version = 1;
+  // Version string of the nbs format of this repository.
+  // See nbs.StorageVersion.
+  string nbs_version = 2;
 }

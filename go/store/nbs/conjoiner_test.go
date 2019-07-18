@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/liquidata-inc/ld/dolt/go/store/must"
 	"sort"
 	"testing"
 
@@ -55,7 +54,7 @@ func TestConjoin(t *testing.T) {
 	// Makes a tableSet with len(tableSizes) upstream tables containing tableSizes[N] unique chunks
 	makeTestTableSpecs := func(tableSizes []uint32, p tablePersister) (specs []tableSpec) {
 		for _, src := range makeTestSrcs(t, tableSizes, p) {
-			specs = append(specs, tableSpec{mustAddr(src.hash()), must.Uint32(src.count())})
+			specs = append(specs, tableSpec{mustAddr(src.hash()), mustUint32(src.count())})
 		}
 		return
 	}
@@ -84,7 +83,7 @@ func TestConjoin(t *testing.T) {
 			return
 		}
 		expectSrcs, actualSrcs := open(expect), open(actual)
-		chunkChan := make(chan extractRecord, must.Uint32(expectSrcs.count()))
+		chunkChan := make(chan extractRecord, mustUint32(expectSrcs.count()))
 		err := expectSrcs.extract(context.Background(), chunkChan)
 		assert.NoError(t, err)
 		close(chunkChan)
@@ -148,7 +147,7 @@ func TestConjoin(t *testing.T) {
 			mt.addChunk(computeAddr(data), data)
 			src, err := p.Persist(context.Background(), mt, nil, &Stats{})
 			assert.NoError(t, err)
-			return tableSpec{mustAddr(src.hash()), must.Uint32(src.count())}
+			return tableSpec{mustAddr(src.hash()), mustUint32(src.count())}
 		}
 		for _, c := range tc {
 			t.Run(c.name, func(t *testing.T) {

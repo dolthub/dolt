@@ -36,7 +36,9 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	blob := types.NewBlob(context.Background(), db, bytes.NewBuffer(blobBytes))
 
 	ref := db.WriteValue(context.Background(), blob)
-	_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), ref)
+	ds, err := db.GetDataset(context.Background(), "datasetID")
+	s.NoError(err)
+	_, err = db.CommitValue(context.Background(), ds, ref)
 	s.NoError(err)
 
 	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, ref.TargetHash().String())

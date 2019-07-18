@@ -6,11 +6,12 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 // CreateEditAcc defines a factory method for EditAccumulator creation
-type CreateEditAcc func() EditAccumulator
+type CreateEditAcc func(nbf *NomsBinFormat) EditAccumulator
 
 // CreateEditAccForMapEdits allows users to define the EditAccumulator that should be used when creating a MapEditor via
 // the Map.Edit method.  In most cases you should call:
@@ -41,14 +42,13 @@ type MapEditor struct {
 }
 
 func NewMapEditor(m Map) *MapEditor {
-	return &MapEditor{m, 0, CreateEditAccForMapEdits()}
+	return &MapEditor{m, 0, CreateEditAccForMapEdits(m.format())}
 }
 
 // Map applies all edits and returns a newly updated Map
 func (me *MapEditor) Map(ctx context.Context) Map {
 	edits := me.acc.FinishedEditing()
 	m, _ := ApplyEdits(ctx, edits, me.m)
-
 	return m
 }
 
@@ -83,4 +83,8 @@ func (me *MapEditor) set(k LesserValuable, v Valuable) {
 // NumEdits returns the number of edits that have been added.
 func (me *MapEditor) NumEdits() int64 {
 	return me.numEdits
+}
+
+func (me *MapEditor) Format() *NomsBinFormat {
+	return me.m.format()
 }

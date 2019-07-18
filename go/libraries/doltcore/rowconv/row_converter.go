@@ -2,6 +2,7 @@ package rowconv
 
 import (
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -85,7 +86,7 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 		return nil, err
 	}
 
-	outRow := row.New(rc.DestSch, outTaggedVals)
+	outRow := row.New(inRow.Format(), rc.DestSch, outTaggedVals)
 
 	return outRow, nil
 }

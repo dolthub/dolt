@@ -55,23 +55,27 @@ func main() {
 			// Build One-Time
 			storage := &chunks.MemoryStorage{}
 			db := datas.NewDatabase(storage.NewView())
-			ds := db.GetDataset(context.Background(), "test")
+			ds, err := db.GetDataset(context.Background(), "test")
+			d.Chk.NoError(err)
 			t1 := time.Now()
 			col := buildFns[i](db, buildCount, valueFn)
-			ds, err := db.CommitValue(context.Background(), ds, col)
+			ds, err = db.CommitValue(context.Background(), ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
 			// Read
 			t1 = time.Now()
-			col = ds.HeadValue().(types.Collection)
+			val, ok := ds.MaybeHeadValue()
+			d.Chk.True(ok)
+			col = val.(types.Collection)
 			readFns[i](col)
 			readDuration := time.Since(t1)
 
 			// Build Incrementally
 			storage = &chunks.MemoryStorage{}
 			db = datas.NewDatabase(storage.NewView())
-			ds = db.GetDataset(context.Background(), "test")
+			ds, err = db.GetDataset(context.Background(), "test")
+			d.Chk.NoError(err)
 			t1 = time.Now()
 			col = buildIncrFns[i](db, insertCount, valueFn)
 			ds, err = db.CommitValue(context.Background(), ds, col)
@@ -91,18 +95,23 @@ func main() {
 
 	storage := &chunks.MemoryStorage{}
 	db := datas.NewDatabase(storage.NewView())
-	ds := db.GetDataset(context.Background(), "test")
+	ds, err := db.GetDataset(context.Background(), "test")
+	d.Chk.NoError(err)
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
 	blob := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
-	db.CommitValue(context.Background(), ds, blob)
+	_, err = db.CommitValue(context.Background(), ds, blob)
+	d.Chk.NoError(err)
 	buildDuration := time.Since(t1)
 
 	db = datas.NewDatabase(storage.NewView())
-	ds = db.GetDataset(context.Background(), "test")
+	ds, err = db.GetDataset(context.Background(), "test")
+	d.Chk.NoError(err)
 	t1 = time.Now()
-	blob = ds.HeadValue().(types.Blob)
+	blobVal, ok := ds.MaybeHeadValue()
+	d.Chk.True(ok)
+	blob = blobVal.(types.Blob)
 	buff := &bytes.Buffer{}
 	blob.Copy(context.Background(), buff)
 	outBytes := buff.Bytes()
@@ -123,7 +132,8 @@ func makeBlobBytes(byteLength uint64) []byte {
 	buff := &bytes.Buffer{}
 	counter := uint64(0)
 	for uint64(buff.Len()) < byteLength {
-		binary.Write(buff, binary.BigEndian, counter)
+		err := binary.Write(buff, binary.BigEndian, counter)
+		d.Chk.NoError(err)
 		counter++
 	}
 	return buff.Bytes()
@@ -140,7 +150,7 @@ func createNumber(i uint64) types.Value {
 var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str"})
 
 func createStruct(i uint64) types.Value {
-	return structTemplate.NewStruct([]types.Value{
+	return structTemplate.NewStruct(types.Format_7_18, []types.Value{
 		types.Bool(i%2 == 0), // "bool"
 		types.Float(i),       // "num"
 		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)), // "str"

@@ -26,7 +26,7 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 		assert.Equal(str, p.String())
 	}
 
-	h := types.Float(42).Hash() // arbitrary hash
+	h := types.Float(42).Hash(types.Format_7_18) // arbitrary hash
 	test(fmt.Sprintf("foo.bar[#%s]", h.String()))
 	test(fmt.Sprintf("#%s.bar[42]", h.String()))
 }
@@ -46,10 +46,12 @@ func TestAbsolutePaths(t *testing.T) {
 	db.WriteValue(context.Background(), emptySet)
 
 	var err error
-	ds := db.GetDataset(context.Background(), "ds")
+	ds, err := db.GetDataset(context.Background(), "ds")
+	assert.NoError(err)
 	ds, err = db.CommitValue(context.Background(), ds, list)
 	assert.NoError(err)
-	head := ds.Head()
+	head, hasHead := ds.MaybeHead()
+	assert.True(hasHead)
 
 	resolvesTo := func(exp types.Value, str string) {
 		p, err := NewAbsolutePath(str)
@@ -67,19 +69,19 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(list, "ds.value")
 	resolvesTo(s0, "ds.value[0]")
 	resolvesTo(s1, "ds.value[1]")
-	resolvesTo(head, "#"+head.Hash().String())
-	resolvesTo(list, "#"+list.Hash().String())
-	resolvesTo(s0, "#"+s0.Hash().String())
-	resolvesTo(s1, "#"+s1.Hash().String())
-	resolvesTo(s0, "#"+list.Hash().String()+"[0]")
-	resolvesTo(s1, "#"+list.Hash().String()+"[1]")
+	resolvesTo(head, "#"+head.Hash(types.Format_7_18).String())
+	resolvesTo(list, "#"+list.Hash(types.Format_7_18).String())
+	resolvesTo(s0, "#"+s0.Hash(types.Format_7_18).String())
+	resolvesTo(s1, "#"+s1.Hash(types.Format_7_18).String())
+	resolvesTo(s0, "#"+list.Hash(types.Format_7_18).String()+"[0]")
+	resolvesTo(s1, "#"+list.Hash(types.Format_7_18).String()+"[1]")
 
 	resolvesTo(nil, "foo")
 	resolvesTo(nil, "foo.parents")
 	resolvesTo(nil, "foo.value")
 	resolvesTo(nil, "foo.value[0]")
-	resolvesTo(nil, "#"+types.String("baz").Hash().String())
-	resolvesTo(nil, "#"+types.String("baz").Hash().String()+"[0]")
+	resolvesTo(nil, "#"+types.String("baz").Hash(types.Format_7_18).String())
+	resolvesTo(nil, "#"+types.String("baz").Hash(types.Format_7_18).String()+"[0]")
 }
 
 func TestReadAbsolutePaths(t *testing.T) {
@@ -90,8 +92,9 @@ func TestReadAbsolutePaths(t *testing.T) {
 	s0, s1 := types.String("foo"), types.String("bar")
 	list := types.NewList(context.Background(), db, s0, s1)
 
-	ds := db.GetDataset(context.Background(), "ds")
-	_, err := db.CommitValue(context.Background(), ds, list)
+	ds, err := db.GetDataset(context.Background(), "ds")
+	assert.NoError(err)
+	_, err = db.CommitValue(context.Background(), ds, list)
 	assert.NoError(err)
 
 	vals, err := ReadAbsolutePaths(context.Background(), db, "ds.value[0]", "ds.value[1]")

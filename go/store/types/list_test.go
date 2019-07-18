@@ -996,7 +996,10 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	nums1 := generateNumbersAsValues(4000)
 	l1 := NewList(context.Background(), vs1, nums1...)
 	hash1 := vs1.WriteValue(context.Background(), l1).TargetHash()
-	vs1.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
+	rt, err := vs1.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs1.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 
 	refList1 := vs1.ReadValue(context.Background(), hash1).(List)
 
@@ -1005,7 +1008,10 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
 	l2 := NewList(context.Background(), vs2, nums2...)
 	hash2 := vs2.WriteValue(context.Background(), l2).TargetHash()
-	vs2.Commit(context.Background(), vs1.Root(context.Background()), vs1.Root(context.Background()))
+	rt, err = vs1.Root(context.Background())
+	assert.NoError(err)
+	_, err = vs2.Commit(context.Background(), rt, rt)
+	assert.NoError(err)
 	refList2 := vs2.ReadValue(context.Background(), hash2).(List)
 
 	// diff lists without value store
@@ -1034,7 +1040,7 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 	newSequenceMetaTuple := func(vs ...Value) metaTuple {
 		seq := newListLeafSequence(vrw, vs...)
 		list := newList(seq)
-		return newMetaTuple(vrw.WriteValue(context.Background(), list), orderedKeyFromInt(len(vs)), uint64(len(vs)))
+		return newMetaTuple(vrw.WriteValue(context.Background(), list), orderedKeyFromInt(len(vs), Format_7_18), uint64(len(vs)))
 	}
 
 	m1 := newSequenceMetaTuple(Float(1), Float(2), Float(3))
@@ -1172,10 +1178,10 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 	vrw := newTestValueStore()
 
 	list := NewList(context.Background(), vrw,
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(1),
 		}),
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		}),
@@ -1207,11 +1213,11 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	l2 := NewList(context.Background(), vrw, String("c"), String("d"))
 	l3 := NewList(context.Background(), vrw, l1, l2)
 
-	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash()))
-	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash()))
-	assert.Nil(vrw.ReadValue(context.Background(), l3.Hash()))
+	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash(Format_7_18)))
+	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash(Format_7_18)))
+	assert.Nil(vrw.ReadValue(context.Background(), l3.Hash(Format_7_18)))
 
 	vrw.WriteValue(context.Background(), l3)
-	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash()))
-	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash()))
+	assert.Nil(vrw.ReadValue(context.Background(), l1.Hash(Format_7_18)))
+	assert.Nil(vrw.ReadValue(context.Background(), l2.Hash(Format_7_18)))
 }

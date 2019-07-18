@@ -8,11 +8,12 @@ import "sort"
 type DumbEditAccumulator struct {
 	pos   int
 	edits KVPSlice
+	nbf   *NomsBinFormat
 }
 
 // NewDumbEditAccumulator is a factory method for creation of DumbEditAccumulators
-func NewDumbEditAccumulator() EditAccumulator {
-	return &DumbEditAccumulator{}
+func NewDumbEditAccumulator(nbf *NomsBinFormat) EditAccumulator {
+	return &DumbEditAccumulator{0, nil, nbf}
 }
 
 // AddEdit adds an edit to the list of edits
@@ -23,7 +24,7 @@ func (dumb *DumbEditAccumulator) AddEdit(k LesserValuable, v Valuable) {
 // FinishEditing should be called when all edits have been added to get an EditProvider which provides the
 // edits in sorted order.  Adding more edits after calling FinishedEditing is an error
 func (dumb *DumbEditAccumulator) FinishedEditing() EditProvider {
-	sort.Stable(dumb.edits)
+	sort.Stable(KVPSort{dumb.edits, dumb.nbf})
 	return dumb
 }
 

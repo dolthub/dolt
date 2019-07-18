@@ -36,12 +36,12 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	}
 	close(in)
 
-	ds := s.Database.GetDataset(context.Background(), "BuildList10mNumbers")
-
-	var err error
-	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
-
+	ds, err := s.Database.GetDataset(context.Background(), "BuildList10mNumbers")
 	assert.NoError(err)
+
+	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
+	assert.NoError(err)
+
 	s.Database = ds.Database()
 }
 
@@ -51,18 +51,18 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	out := types.NewStreamingList(context.Background(), s.Database, in)
 
 	for i := 0; i < 1e7; i++ {
-		in <- types.NewStruct("", types.StructData{
+		in <- types.NewStruct(types.Format_7_18, "", types.StructData{
 			"number": types.Float(s.r.Int63()),
 		})
 	}
 	close(in)
 
-	ds := s.Database.GetDataset(context.Background(), "BuildList10mStructs")
-
-	var err error
-	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
-
+	ds, err := s.Database.GetDataset(context.Background(), "BuildList10mStructs")
 	assert.NoError(err)
+
+	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
+	assert.NoError(err)
+
 	s.Database = ds.Database()
 }
 
@@ -97,11 +97,12 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 		assert.Equal((i+1)*(l1Len+l2Len), l3.Len())
 	}
 
-	ds := s.Database.GetDataset(context.Background(), "Concat10mValues2kTimes")
-	var err error
-	ds, err = s.Database.CommitValue(context.Background(), ds, l3)
-
+	ds, err := s.Database.GetDataset(context.Background(), "Concat10mValues2kTimes")
 	assert.NoError(err)
+
+	ds, err = s.Database.CommitValue(context.Background(), ds, l3)
+	assert.NoError(err)
+
 	s.Database = ds.Database()
 }
 
@@ -164,8 +165,12 @@ func (s *perfSuite) randomBytes(seed int64, size int) []byte {
 }
 
 func (s *perfSuite) headList(dsName string) types.List {
-	ds := s.Database.GetDataset(context.Background(), dsName)
-	return ds.HeadValue().(types.List)
+	ass := s.NewAssert()
+	ds, err := s.Database.GetDataset(context.Background(), dsName)
+	ass.NoError(err)
+	headVal, ok := ds.MaybeHeadValue()
+	ass.True(ok)
+	return headVal.(types.List)
 }
 
 func TestPerf(t *testing.T) {

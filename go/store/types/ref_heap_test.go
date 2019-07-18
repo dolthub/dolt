@@ -16,7 +16,7 @@ func TestRefByHeight(t *testing.T) {
 	newRefWithHeight := func(height uint64) Ref {
 		v := Float(unique)
 		unique++
-		return constructRef(v.Hash(), FloaTType, height)
+		return constructRef(Format_7_18, v.Hash(Format_7_18), FloaTType, height)
 	}
 
 	assert := assert.New(t)
@@ -73,7 +73,7 @@ func TestRefByHeight(t *testing.T) {
 func TestDropIndices(t *testing.T) {
 	h := &RefByHeight{}
 	for i := 0; i < 10; i++ {
-		h.PushBack(NewRef(Float(i)))
+		h.PushBack(NewRef(Float(i), Format_7_18))
 	}
 	sort.Sort(h)
 
@@ -89,7 +89,7 @@ func TestDropIndices(t *testing.T) {
 func TestPopRefsOfHeight(t *testing.T) {
 	h := &RefByHeight{}
 	for i, n := range []int{6, 3, 6, 6, 2} {
-		r := constructRef(Float(i).Hash(), FloaTType, uint64(n))
+		r := constructRef(Format_7_18, Float(i).Hash(Format_7_18), FloaTType, uint64(n))
 		h.PushBack(r)
 	}
 	sort.Sort(h)

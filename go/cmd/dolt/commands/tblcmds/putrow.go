@@ -95,6 +95,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	root, err := dEnv.WorkingRoot(context.Background())
+	fmt := root.VRW().Format()
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get working value."))
@@ -109,7 +110,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	sch := tbl.GetSchema(context.TODO())
-	row, verr := createRow(sch, prArgs)
+	row, verr := createRow(fmt, sch, prArgs)
 
 	if verr == nil {
 		me := tbl.GetRowData(context.TODO()).Edit()
@@ -129,7 +130,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func createRow(sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseError) {
+func createRow(nbf *types.NomsBinFormat, sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseError) {
 	var unknownFields []string
 	untypedTaggedVals := make(row.TaggedValues)
 	for k, v := range prArgs.KVPs {
@@ -159,7 +160,7 @@ func createRow(sch schema.Schema, prArgs *putRowArgs) (row.Row, errhand.VerboseE
 		return nil, errhand.BuildDError("failed to create row converter").AddCause(err).Build()
 	}
 
-	untypedRow := row.New(untypedSch, untypedTaggedVals)
+	untypedRow := row.New(nbf, untypedSch, untypedTaggedVals)
 	typedRow, err := rconv.Convert(untypedRow)
 
 	if err != nil {

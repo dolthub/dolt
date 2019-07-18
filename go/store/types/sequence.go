@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
@@ -19,24 +20,25 @@ type sequence interface {
 	cumulativeNumberOfLeaves(idx int) uint64
 	Empty() bool
 	Equals(other Value) bool
+	format() *NomsBinFormat
 	getChildSequence(ctx context.Context, idx int) sequence
 	getCompareFn(other sequence) compareFn
 	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
 	getItem(idx int) sequenceItem
-	Hash() hash.Hash
+	Hash(*NomsBinFormat) hash.Hash
 	isLeaf() bool
 	Kind() NomsKind
 	Len() uint64
-	Less(other LesserValuable) bool
+	Less(nbf *NomsBinFormat, other LesserValuable) bool
 	numLeaves() uint64
 	seqLen() int
 	treeLevel() uint64
 	typeOf() *Type
-	valueBytes() []byte
+	valueBytes(*NomsBinFormat) []byte
 	valueReadWriter() ValueReadWriter
 	valuesSlice(from, to uint64) []Value
-	WalkRefs(cb RefCallback)
-	writeTo(nomsWriter)
+	WalkRefs(nbf *NomsBinFormat, cb RefCallback)
+	writeTo(nomsWriter, *NomsBinFormat)
 }
 
 const (
@@ -52,7 +54,7 @@ type sequenceImpl struct {
 }
 
 func newSequenceImpl(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) sequenceImpl {
-	return sequenceImpl{valueImpl{vrw, buff, offsets}, len}
+	return sequenceImpl{valueImpl{vrw, vrw.Format(), buff, offsets}, len}
 }
 
 func (seq sequenceImpl) decoderSkipToValues() (valueDecoder, uint64) {

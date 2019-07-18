@@ -201,7 +201,7 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func chunkBlobLeaf(vrw ValueReadWriter, buff []byte) (Collection, orderedKey, uint64) {
 	blob := newBlob(newBlobLeafSequence(vrw, buff))
-	return blob, orderedKeyFromInt(len(buff)), uint64(len(buff))
+	return blob, orderedKeyFromInt(len(buff), vrw.Format()), uint64(len(buff))
 }
 
 // NewBlob creates a Blob by reading from every Reader in rs and
@@ -248,7 +248,7 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) Blob {
 	// TODO: The code below is temporary. It's basically a custom leaf-level chunker for blobs. There are substational perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
 	chunkBuff := [8192]byte{}
 	chunkBytes := chunkBuff[:]
-	rv := newRollingValueHasher(0)
+	rv := newRollingValueHasher(vrw.Format(), 0)
 	offset := 0
 	addByte := func(b byte) bool {
 		if offset >= len(chunkBytes) {

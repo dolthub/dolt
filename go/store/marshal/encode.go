@@ -126,7 +126,7 @@ func MustMarshalOpt(ctx context.Context, vrw types.ValueReadWriter, v interface{
 	nt := nomsTags{
 		set: opt.Set,
 	}
-	encoder := typeEncoder(rv.Type(), map[string]reflect.Type{}, nt)
+	encoder := typeEncoder(vrw.Format(), rv.Type(), map[string]reflect.Type{}, nt)
 	return encoder(ctx, rv, vrw)
 }
 
@@ -237,7 +237,7 @@ func marshalerEncoder(t reflect.Type) encoderFunc {
 	}
 }
 
-func typeEncoder(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) encoderFunc {
+func typeEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) encoderFunc {
 	if t.Implements(marshalerInterface) {
 		return marshalerEncoder(t)
 	}
@@ -254,22 +254,22 @@ func typeEncoder(t reflect.Type, seenStructs map[string]reflect.Type, tags nomsT
 	case reflect.String:
 		return stringEncoder
 	case reflect.Struct:
-		return structEncoder(t, seenStructs)
+		return structEncoder(nbf, t, seenStructs)
 	case reflect.Slice, reflect.Array:
 		if shouldEncodeAsSet(t, tags) {
-			return setFromListEncoder(t, seenStructs)
+			return setFromListEncoder(nbf, t, seenStructs)
 		}
-		return listEncoder(t, seenStructs)
+		return listEncoder(nbf, t, seenStructs)
 	case reflect.Map:
 		if shouldEncodeAsSet(t, tags) {
-			return setEncoder(t, seenStructs)
+			return setEncoder(nbf, t, seenStructs)
 		}
-		return mapEncoder(t, seenStructs)
+		return mapEncoder(nbf, t, seenStructs)
 	case reflect.Interface:
 		return func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
 			// Get the dynamic type.
 			v2 := reflect.ValueOf(v.Interface())
-			return typeEncoder(v2.Type(), seenStructs, tags)(ctx, v2, vrw)
+			return typeEncoder(nbf, v2.Type(), seenStructs, tags)(ctx, v2, vrw)
 		}
 	case reflect.Ptr:
 		// Allow implementations of types.Value (like *types.Type)
@@ -290,7 +290,7 @@ func getStructName(t reflect.Type) string {
 	return strings.Title(t.Name())
 }
 
-func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func structEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	if t.Implements(nomsValueInterface) {
 		return nomsValueEncoder
 	}
@@ -303,7 +303,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 	structName := getStructName(t)
 
 	seenStructs[t.Name()] = t
-	fields, knownShape, originalFieldIndex := typeFields(t, seenStructs, false, false)
+	fields, knownShape, originalFieldIndex := typeFields(nbf, t, seenStructs, false, false)
 	if knownShape {
 		fieldNames := make([]string, len(fields))
 		for i, f := range fields {
@@ -316,7 +316,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 			for i, f := range fields {
 				values[i] = f.encoder(ctx, v.FieldByIndex(f.index), vrw)
 			}
-			return structTemplate.NewStruct(values)
+			return structTemplate.NewStruct(nbf, values)
 		}
 	} else if originalFieldIndex == nil {
 		// Slower path: cannot precompute the Noms type since there are Noms collections,
@@ -330,7 +330,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 				}
 				data[f.name] = f.encoder(ctx, fv, vrw)
 			}
-			return types.NewStruct(structName, data)
+			return types.NewStruct(nbf, structName, data)
 		}
 	} else {
 		// Slowest path - we are extending some other struct. We need to start with the
@@ -339,7 +339,7 @@ func structEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderF
 			fv := v.FieldByIndex(originalFieldIndex)
 			ret := fv.Interface().(types.Struct)
 			if ret.IsZeroValue() {
-				ret = types.NewStruct(structName, nil)
+				ret = types.NewStruct(nbf, structName, nil)
 			}
 			for _, f := range fields {
 				fv := v.FieldByIndex(f.index)
@@ -462,7 +462,7 @@ func validateField(f reflect.StructField, t reflect.Type) {
 	}
 }
 
-func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, knownShape bool, originalFieldIndex []int) {
+func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, knownShape bool, originalFieldIndex []int) {
 	knownShape = true
 	for i := 0; i < t.NumField(); i++ {
 		index := make([]int, 1)
@@ -479,7 +479,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		}
 
 		if f.Anonymous && f.PkgPath == "" && !tags.hasName {
-			embeddedFields, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(f.Type, seenStructs, computeType, true)
+			embeddedFields, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(nbf, f.Type, seenStructs, computeType, true)
 			if embeddedOriginalFieldIndex != nil {
 				originalFieldIndex = append(index, embeddedOriginalFieldIndex...)
 			}
@@ -496,7 +496,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 		var nt *types.Type
 		validateField(f, t)
 		if computeType {
-			nt = encodeType(f.Type, seenStructs, tags)
+			nt = encodeType(nbf, f.Type, seenStructs, tags)
 			if nt == nil {
 				knownShape = false
 			}
@@ -508,7 +508,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 
 		fields = append(fields, field{
 			name:      tags.name,
-			encoder:   typeEncoder(f.Type, seenStructs, tags),
+			encoder:   typeEncoder(nbf, f.Type, seenStructs, tags),
 			index:     index,
 			nomsType:  nt,
 			omitEmpty: tags.omitEmpty,
@@ -523,7 +523,7 @@ func typeFields(t reflect.Type, seenStructs map[string]reflect.Type, computeType
 	return
 }
 
-func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func listEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := encoderCache.get(t)
 	if e != nil {
 		return e
@@ -545,12 +545,12 @@ func listEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFun
 	}
 
 	encoderCache.set(t, e)
-	elemEncoder = typeEncoder(t.Elem(), seenStructs, nomsTags{})
+	elemEncoder = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
 // Encode set from array or slice
-func setFromListEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setFromListEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := setEncoderCache.get(t)
 	if e != nil {
 		return e
@@ -572,11 +572,11 @@ func setFromListEncoder(t reflect.Type, seenStructs map[string]reflect.Type) enc
 	}
 
 	setEncoderCache.set(t, e)
-	elemEncoder = typeEncoder(t.Elem(), seenStructs, nomsTags{})
+	elemEncoder = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
-func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := setEncoderCache.get(t)
 	if e != nil {
 		return e
@@ -598,11 +598,11 @@ func setEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 	}
 
 	setEncoderCache.set(t, e)
-	encoder = typeEncoder(t.Key(), seenStructs, nomsTags{})
+	encoder = typeEncoder(nbf, t.Key(), seenStructs, nomsTags{})
 	return e
 }
 
-func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func mapEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
 	e := encoderCache.get(t)
 	if e != nil {
 		return e
@@ -627,8 +627,8 @@ func mapEncoder(t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc
 	}
 
 	encoderCache.set(t, e)
-	keyEncoder = typeEncoder(t.Key(), seenStructs, nomsTags{})
-	valueEncoder = typeEncoder(t.Elem(), seenStructs, nomsTags{})
+	keyEncoder = typeEncoder(nbf, t.Key(), seenStructs, nomsTags{})
+	valueEncoder = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
 	return e
 }
 
