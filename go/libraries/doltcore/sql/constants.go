@@ -206,7 +206,7 @@ const (
 )
 
 // All SQL keywords that we treat as reserved words
-var AllKeywords = []string {
+var AllKeywords = []string{
 	ADD,
 	AGAINST,
 	ALL,
@@ -411,7 +411,7 @@ var AllKeywords = []string {
 }
 
 // Well-supported keywords that are likely to be useful in e.g. autocompletion
-var CommonKeywords = []string {
+var CommonKeywords = []string{
 	ADD,
 	ALTER,
 	AND,
@@ -486,4 +486,3 @@ var CommonKeywords = []string {
 	VARCHAR,
 	WHERE,
 }
-

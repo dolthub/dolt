@@ -6,11 +6,11 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 var NullValue Null
-var NullHash = getHash(NullValue)
 
 // IsNull returns true if the value is nil, or if the value is of kind NULLKind
 func IsNull(val Value) bool {
@@ -29,18 +29,18 @@ func (v Null) Equals(other Value) bool {
 	return other.Kind() == NullKind
 }
 
-func (v Null) Less(other LesserValuable) bool {
+func (v Null) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	return NullKind < other.Kind()
 }
 
-func (v Null) Hash() hash.Hash {
-	return NullHash
+func (v Null) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(NullValue, nbf)
 }
 
 func (v Null) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (v Null) WalkRefs(cb RefCallback) {
+func (v Null) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (v Null) typeOf() *Type {
@@ -55,13 +55,13 @@ func (v Null) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Null) writeTo(w nomsWriter) {
-	NullKind.writeTo(w)
+func (v Null) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	NullKind.writeTo(w, nbf)
 }
 
-func (v Null) valueBytes() []byte {
+func (v Null) valueBytes(nbf *NomsBinFormat) []byte {
 	buff := make([]byte, 1)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w)
+	v.writeTo(&w, nbf)
 	return buff
 }

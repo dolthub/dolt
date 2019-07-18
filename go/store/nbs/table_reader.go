@@ -11,7 +11,6 @@ import (
 	"errors"
 	"github.com/golang/snappy"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"io"
 	"sort"
@@ -498,7 +497,10 @@ func (tr tableReader) parseChunk(buff []byte) ([]byte, error) {
 	dataLen := uint64(len(buff)) - checksumSize
 
 	chksum := binary.BigEndian.Uint32(buff[dataLen:])
-	d.Chk.True(chksum == crc(buff[:dataLen]))
+
+	if chksum != crc(buff[:dataLen]) {
+		return nil, errors.New("checksum error")
+	}
 
 	data, err := snappy.Decode(nil, buff[:dataLen])
 

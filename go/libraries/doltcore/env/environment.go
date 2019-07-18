@@ -434,7 +434,9 @@ func (dEnv *DoltEnv) FindCreds(credsDir, pubKeyOrId string) (string, error) {
 
 func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, error) {
 	localRef := ref.NewBranchRef(refStr)
-	if dEnv.DoltDB.HasRef(ctx, localRef) {
+	if hasRef, err := dEnv.DoltDB.HasRef(ctx, localRef); err != nil {
+		return nil, err
+	} else if hasRef {
 		return localRef, nil
 	} else {
 		slashIdx := strings.IndexRune(refStr, '/')
@@ -447,7 +449,9 @@ func (dEnv *DoltEnv) FindRef(ctx context.Context, refStr string) (ref.DoltRef, e
 					return nil, err
 				}
 
-				if dEnv.DoltDB.HasRef(ctx, remoteRef) {
+				if hasRef, err = dEnv.DoltDB.HasRef(ctx, remoteRef); err != nil {
+					return nil, err
+				} else if hasRef {
 					return remoteRef, nil
 				}
 			}

@@ -23,8 +23,10 @@ func TestHashRoundTrip(t *testing.T) {
 	}
 	defer input.Close()
 
-	serializeHashes(b, input)
-	output := deserializeHashes(b)
+	err := serializeHashes(b, input)
+	assert.NoError(t, err)
+	output, err := deserializeHashes(b)
+	assert.NoError(t, err)
 	assert.Len(t, output, len(input), "Output has different number of elements than input: %v, %v", output, input)
 	for _, h := range output {
 		_, present := input[h]

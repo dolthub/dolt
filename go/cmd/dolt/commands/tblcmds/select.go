@@ -3,6 +3,8 @@ package tblcmds
 import (
 	"context"
 	"errors"
+	"strings"
+
 	"github.com/fatih/color"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
@@ -23,7 +25,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"strings"
 )
 
 const (
@@ -239,7 +240,7 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(outSch, colNames))
+	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(tbl.Format(), outSch, colNames))
 
 	return p
 }

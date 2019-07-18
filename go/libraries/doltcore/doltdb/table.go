@@ -48,8 +48,12 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value
 		tableRowsKey: rowDataRef,
 	}
 
-	tableStruct := types.NewStruct(tableStructName, sd)
+	tableStruct := types.NewStruct(vrw.Format(), tableStructName, sd)
 	return &Table{vrw, tableStruct}
+}
+
+func (t *Table) Format() *types.NomsBinFormat {
+	return t.vrw.Format()
 }
 
 func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) *Table {
@@ -145,7 +149,7 @@ func refToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) 
 		schemaVal := ref.TargetValue(ctx, vrw)
 
 		var err error
-		schema, err = encoding.UnmarshalNomsValue(ctx, schemaVal)
+		schema, err = encoding.UnmarshalNomsValue(ctx, vrw.Format(), schemaVal)
 
 		if err != nil {
 			return err
@@ -183,11 +187,11 @@ func (t *Table) HasTheSameSchema(t2 *Table) bool {
 
 // HashOf returns the hash of the underlying table struct
 func (t *Table) HashOf() hash.Hash {
-	return t.tableStruct.Hash()
+	return t.tableStruct.Hash(t.vrw.Format())
 }
 
 func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {
-	pkTuple := pkVals.NomsTupleForTags(sch.GetPKCols().Tags, true)
+	pkTuple := pkVals.NomsTupleForTags(t.vrw.Format(), sch.GetPKCols().Tags, true)
 	return t.GetRow(ctx, pkTuple.Value(ctx).(types.Tuple), sch)
 }
 

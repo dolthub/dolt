@@ -61,12 +61,12 @@ import (
 //  - a Noms value is not appropriate for a given target type
 //  - a Noms number overflows the target type
 //  - a Noms list is decoded into a Go array of a different length
-func Unmarshal(ctx context.Context, v types.Value, out interface{}) (err error) {
-	return UnmarshalOpt(ctx, v, Opt{}, out)
+func Unmarshal(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, out interface{}) (err error) {
+	return UnmarshalOpt(ctx, nbf, v, Opt{}, out)
 }
 
 // UnmarshalOpt is like Unmarshal but provides additional options.
-func UnmarshalOpt(ctx context.Context, v types.Value, opt Opt, out interface{}) (err error) {
+func UnmarshalOpt(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, opt Opt, out interface{}) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			switch r := r.(type) {
@@ -80,18 +80,18 @@ func UnmarshalOpt(ctx context.Context, v types.Value, opt Opt, out interface{}) 
 		}
 	}()
 
-	MustUnmarshalOpt(ctx, v, opt, out)
+	MustUnmarshalOpt(ctx, nbf, v, opt, out)
 	return
 }
 
 // Unmarshals a Noms value into a Go value using the same rules as Unmarshal().
 // Panics on failure.
-func MustUnmarshal(ctx context.Context, v types.Value, out interface{}) {
-	MustUnmarshalOpt(ctx, v, Opt{}, out)
+func MustUnmarshal(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, out interface{}) {
+	MustUnmarshalOpt(ctx, nbf, v, Opt{}, out)
 }
 
 // MustUnmarshalOpt is like MustUnmarshal but with additional options.
-func MustUnmarshalOpt(ctx context.Context, v types.Value, opt Opt, out interface{}) {
+func MustUnmarshalOpt(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, opt Opt, out interface{}) {
 	rv := reflect.ValueOf(out)
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
 		panic(&InvalidUnmarshalError{reflect.TypeOf(out)})
@@ -101,7 +101,7 @@ func MustUnmarshalOpt(ctx context.Context, v types.Value, opt Opt, out interface
 		set: opt.Set,
 	}
 	d := typeDecoder(rv.Type(), nt)
-	d(ctx, v, rv)
+	d(ctx, nbf, v, rv)
 }
 
 // Unmarshaler is an interface types can implement to provide their own
@@ -114,7 +114,7 @@ func MustUnmarshalOpt(ctx context.Context, v types.Value, opt Opt, out interface
 //  func (t *MyType) UnmarshalNoms(v types.Value) error {}
 type Unmarshaler interface {
 	// UnmarshalNoms decodes v, or returns an error.
-	UnmarshalNoms(ctx context.Context, v types.Value) error
+	UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error
 }
 
 var unmarshalerInterface = reflect.TypeOf((*Unmarshaler)(nil)).Elem()
@@ -142,6 +142,7 @@ type UnmarshalTypeMismatchError struct {
 	Value   types.Value
 	Type    reflect.Type // type of Go value it could not be assigned to
 	details string
+	nbf     *types.NomsBinFormat
 }
 
 func (e *UnmarshalTypeMismatchError) Error() string {
@@ -154,8 +155,8 @@ func (e *UnmarshalTypeMismatchError) Error() string {
 	return fmt.Sprintf("Cannot unmarshal %s into Go value of type %s%s", types.TypeOf(e.Value).Describe(context.Background()), ts, e.details)
 }
 
-func overflowError(v types.Float, t reflect.Type) *UnmarshalTypeMismatchError {
-	return &UnmarshalTypeMismatchError{v, t, fmt.Sprintf(" (%g does not fit in %s)", v, t)}
+func overflowError(nbf *types.NomsBinFormat, v types.Float, t reflect.Type) *UnmarshalTypeMismatchError {
+	return &UnmarshalTypeMismatchError{v, t, fmt.Sprintf(" (%g does not fit in %s)", v, t), nbf}
 }
 
 // unmarshalNomsError wraps errors from Marshaler.UnmarshalNoms. These should
@@ -168,7 +169,7 @@ func (e *unmarshalNomsError) Error() string {
 	return e.err.Error()
 }
 
-type decoderFunc func(ctx context.Context, v types.Value, rv reflect.Value)
+type decoderFunc func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value)
 
 func typeDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 	if reflect.PtrTo(t).Implements(unmarshalerInterface) {
@@ -210,51 +211,51 @@ func typeDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 	}
 }
 
-func boolDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
+func boolDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 	if b, ok := v.(types.Bool); ok {
 		rv.SetBool(bool(b))
 	} else {
-		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
+		panic(&UnmarshalTypeMismatchError{v, rv.Type(), "", nbf})
 	}
 }
 
-func stringDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
+func stringDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 	if s, ok := v.(types.String); ok {
 		rv.SetString(string(s))
 	} else {
-		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
+		panic(&UnmarshalTypeMismatchError{v, rv.Type(), "", nbf})
 	}
 }
 
-func floatDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
+func floatDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 	if n, ok := v.(types.Float); ok {
 		rv.SetFloat(float64(n))
 	} else {
-		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
+		panic(&UnmarshalTypeMismatchError{v, rv.Type(), "", nbf})
 	}
 }
 
-func intDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
+func intDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 	if n, ok := v.(types.Float); ok {
 		i := int64(n)
 		if rv.OverflowInt(i) {
-			panic(overflowError(n, rv.Type()))
+			panic(overflowError(nbf, n, rv.Type()))
 		}
 		rv.SetInt(i)
 	} else {
-		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
+		panic(&UnmarshalTypeMismatchError{v, rv.Type(), "", nbf})
 	}
 }
 
-func uintDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
+func uintDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 	if n, ok := v.(types.Float); ok {
 		u := uint64(n)
 		if rv.OverflowUint(u) {
-			panic(overflowError(n, rv.Type()))
+			panic(overflowError(nbf, n, rv.Type()))
 		}
 		rv.SetUint(u)
 	} else {
-		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
+		panic(&UnmarshalTypeMismatchError{v, rv.Type(), "", nbf})
 	}
 }
 
@@ -337,26 +338,26 @@ func structDecoder(t reflect.Type) decoderFunc {
 
 	fields := structDecoderFields(t)
 
-	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 		s, ok := v.(types.Struct)
 		if !ok {
-			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", expected struct"})
+			panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", expected struct", nbf})
 		}
 
 		for _, f := range fields {
 			sf := rv.FieldByIndex(f.index)
 			if f.original {
 				if sf.Type() != reflect.TypeOf(s) {
-					panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", field with tag \"original\" must have type Struct"})
+					panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", field with tag \"original\" must have type Struct", nbf})
 				}
 				sf.Set(reflect.ValueOf(s))
 				continue
 			}
 			fv, ok := s.MaybeGet(f.name)
 			if ok {
-				f.decoder(ctx, fv, sf)
+				f.decoder(ctx, nbf, fv, sf)
 			} else if !f.omitEmpty {
-				panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", missing field \"" + f.name + "\""})
+				panic(&UnmarshalTypeMismatchError{v, rv.Type(), ", missing field \"" + f.name + "\"", nbf})
 			}
 		}
 	}
@@ -365,17 +366,17 @@ func structDecoder(t reflect.Type) decoderFunc {
 	return d
 }
 
-func nomsValueDecoder(ctx context.Context, v types.Value, rv reflect.Value) {
+func nomsValueDecoder(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 	if !reflect.TypeOf(v).AssignableTo(rv.Type()) {
-		panic(&UnmarshalTypeMismatchError{v, rv.Type(), ""})
+		panic(&UnmarshalTypeMismatchError{v, rv.Type(), "", nbf})
 	}
 	rv.Set(reflect.ValueOf(v))
 }
 
 func marshalerDecoder(t reflect.Type) decoderFunc {
-	return func(ctx context.Context, v types.Value, rv reflect.Value) {
+	return func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 		ptr := reflect.New(t)
-		err := ptr.Interface().(Unmarshaler).UnmarshalNoms(ctx, v)
+		err := ptr.Interface().(Unmarshaler).UnmarshalNoms(ctx, nbf, v)
 		if err != nil {
 			panic(&unmarshalNomsError{err})
 		}
@@ -383,7 +384,7 @@ func marshalerDecoder(t reflect.Type) decoderFunc {
 	}
 }
 
-func iterListOrSlice(ctx context.Context, v types.Value, t reflect.Type, f func(c types.Value, i uint64)) {
+func iterListOrSlice(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, t reflect.Type, f func(c types.Value, i uint64)) {
 	switch v := v.(type) {
 	case types.List:
 		v.IterAll(ctx, f)
@@ -394,7 +395,7 @@ func iterListOrSlice(ctx context.Context, v types.Value, t reflect.Type, f func(
 			i++
 		})
 	default:
-		panic(&UnmarshalTypeMismatchError{v, t, ""})
+		panic(&UnmarshalTypeMismatchError{v, t, "", nbf})
 	}
 }
 
@@ -408,7 +409,7 @@ func sliceDecoder(t reflect.Type) decoderFunc {
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 		var slice reflect.Value
 		if rv.IsNil() {
 			slice = rv
@@ -417,9 +418,9 @@ func sliceDecoder(t reflect.Type) decoderFunc {
 		}
 		init.RLock()
 		defer init.RUnlock()
-		iterListOrSlice(ctx, v, t, func(v types.Value, _ uint64) {
+		iterListOrSlice(ctx, nbf, v, t, func(v types.Value, _ uint64) {
 			elemRv := reflect.New(t.Elem()).Elem()
-			decoder(ctx, v, elemRv)
+			decoder(ctx, nbf, v, elemRv)
 			slice = reflect.Append(slice, elemRv)
 		})
 		rv.Set(slice)
@@ -440,21 +441,21 @@ func arrayDecoder(t reflect.Type) decoderFunc {
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 		size := t.Len()
 		list, ok := v.(types.Collection)
 		if !ok {
-			panic(&UnmarshalTypeMismatchError{v, t, ""})
+			panic(&UnmarshalTypeMismatchError{v, t, "", nbf})
 		}
 
 		l := int(list.Len())
 		if l != size {
-			panic(&UnmarshalTypeMismatchError{v, t, ", length does not match"})
+			panic(&UnmarshalTypeMismatchError{v, t, ", length does not match", nbf})
 		}
 		init.RLock()
 		defer init.RUnlock()
-		iterListOrSlice(ctx, list, t, func(v types.Value, i uint64) {
-			decoder(ctx, v, rv.Index(int(i)))
+		iterListOrSlice(ctx, nbf, list, t, func(v types.Value, i uint64) {
+			decoder(ctx, nbf, v, rv.Index(int(i)))
 		})
 	}
 
@@ -473,19 +474,19 @@ func mapFromSetDecoder(t reflect.Type) decoderFunc {
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 		m := rv
 
 		nomsSet, ok := v.(types.Set)
 		if !ok {
-			panic(&UnmarshalTypeMismatchError{v, t, `, field has "set" tag`})
+			panic(&UnmarshalTypeMismatchError{v, t, `, field has "set" tag`, nbf})
 		}
 
 		init.RLock()
 		defer init.RUnlock()
 		nomsSet.IterAll(ctx, func(v types.Value) {
 			keyRv := reflect.New(t.Key()).Elem()
-			decoder(ctx, v, keyRv)
+			decoder(ctx, nbf, v, keyRv)
 			if m.IsNil() {
 				m = reflect.MakeMap(t)
 			}
@@ -510,27 +511,27 @@ func mapDecoder(t reflect.Type, tags nomsTags) decoderFunc {
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	d = func(ctx context.Context, v types.Value, rv reflect.Value) {
+	d = func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 		m := rv
 
 		// Special case decoding failure if it looks like the "set" tag is missing,
 		// because it's helpful.
 		if _, ok := v.(types.Set); ok && !tags.set {
-			panic(&UnmarshalTypeMismatchError{v, t, `, field missing "set" tag`})
+			panic(&UnmarshalTypeMismatchError{v, t, `, field missing "set" tag`, nbf})
 		}
 
 		nomsMap, ok := v.(types.Map)
 		if !ok {
-			panic(&UnmarshalTypeMismatchError{v, t, ""})
+			panic(&UnmarshalTypeMismatchError{v, t, "", nbf})
 		}
 
 		init.RLock()
 		defer init.RUnlock()
 		nomsMap.IterAll(ctx, func(k, v types.Value) {
 			keyRv := reflect.New(t.Key()).Elem()
-			keyDecoder(ctx, k, keyRv)
+			keyDecoder(ctx, nbf, k, keyRv)
 			valueRv := reflect.New(t.Elem()).Elem()
-			valueDecoder(ctx, v, valueRv)
+			valueDecoder(ctx, nbf, v, valueRv)
 			if m.IsNil() {
 				m = reflect.MakeMap(t)
 			}
@@ -554,11 +555,11 @@ func interfaceDecoder(t reflect.Type) decoderFunc {
 		panic(&UnsupportedTypeError{Type: t})
 	}
 
-	return func(ctx context.Context, v types.Value, rv reflect.Value) {
+	return func(ctx context.Context, nbf *types.NomsBinFormat, v types.Value, rv reflect.Value) {
 		// TODO: Go directly from value to go type
 		t := getGoTypeForNomsType(types.TypeOf(v), rv.Type(), v)
 		i := reflect.New(t).Elem()
-		typeDecoder(t, nomsTags{})(ctx, v, i)
+		typeDecoder(t, nomsTags{})(ctx, nbf, v, i)
 		rv.Set(i)
 	}
 }

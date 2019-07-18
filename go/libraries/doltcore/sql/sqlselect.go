@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -11,7 +13,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"strconv"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -120,7 +121,7 @@ func BuildSelectQueryPipeline(ctx context.Context, root *doltdb.RootValue, s *sq
 		return nil, nil, err
 	}
 
-	if err := processOrderByClause(selectStmt, s.OrderBy); err != nil {
+	if err := processOrderByClause(root.VRW().Format(), selectStmt, s.OrderBy); err != nil {
 		return nil, nil, err
 	}
 
@@ -161,12 +162,12 @@ func createResultSetSchema(selectStmt *SelectStatement) error {
 }
 
 // Processes the order by clause and applies the result to the select statement given, or returns an error if it cannot.
-func processOrderByClause(statement *SelectStatement, orderBy sqlparser.OrderBy) error {
+func processOrderByClause(nbf *types.NomsBinFormat, statement *SelectStatement, orderBy sqlparser.OrderBy) error {
 	if len(orderBy) == 0 {
 		return nil
 	}
 
-	sorter, err := createRowSorter(statement, orderBy)
+	sorter, err := createRowSorter(nbf, statement, orderBy)
 	if err != nil {
 		return err
 	}
@@ -512,7 +513,7 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 	}
 	go func() {
 		defer close(cpChan)
-		selectStmt.intermediateRss.CrossProduct(results, cb)
+		selectStmt.intermediateRss.CrossProduct(root.VRW().Format(), results, cb)
 	}()
 
 	// TODO: we need to check errors in pipeline execution without blocking
@@ -535,7 +536,7 @@ func createSelectPipeline(ctx context.Context, root *doltdb.RootValue, selectStm
 		p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(selectStmt, p)))
 	}
 
-	p.AddStage(createOutputSchemaMappingTransform(selectStmt))
+	p.AddStage(createOutputSchemaMappingTransform(root.VRW().Format(), selectStmt))
 
 	return p, nil
 }
@@ -598,13 +599,13 @@ func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, stat
 		if statement.limit != noLimit {
 			p.AddStage(pipeline.NewNamedTransform("limit", createLimitAndOffsetFn(statement, p)))
 		}
-		p.AddStage(createOutputSchemaMappingTransform(statement))
+		p.AddStage(createOutputSchemaMappingTransform(root.VRW().Format(), statement))
 	}
 
 	return p, nil
 }
 
-func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.NamedTransform {
+func createOutputSchemaMappingTransform(nbf *types.NomsBinFormat, selectStmt *SelectStatement) pipeline.NamedTransform {
 	var transformFunc pipeline.TransformRowFunc
 	transformFunc = func(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 		taggedVals := make(row.TaggedValues)
@@ -614,7 +615,7 @@ func createOutputSchemaMappingTransform(selectStmt *SelectStatement) pipeline.Na
 				taggedVals[uint64(i)] = val
 			}
 		}
-		r := row.New(selectStmt.ResultSetSchema, taggedVals)
+		r := row.New(nbf, selectStmt.ResultSetSchema, taggedVals)
 		return []*pipeline.TransformedRowResult{{r, nil}}, ""
 	}
 

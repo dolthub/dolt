@@ -13,7 +13,7 @@ const (
 
 func TestTupleEquality(t *testing.T) {
 	values := []Value{String("aoeu"), Int(-1234), Uint(1234)}
-	tpl := NewTuple(values...)
+	tpl := NewTuple(Format_7_18, values...)
 
 	if !tpl.Equals(tpl) {
 		t.Error("Tuple not equal to itself")
@@ -128,9 +128,9 @@ func TestTupleLess(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		tpl1 := NewTuple(test.vals1...)
-		tpl2 := NewTuple(test.vals2...)
-		actual := tpl1.Less(tpl2)
+		tpl1 := NewTuple(Format_7_18, test.vals1...)
+		tpl2 := NewTuple(Format_7_18, test.vals2...)
+		actual := tpl1.Less(Format_7_18, tpl2)
 
 		if actual != test.expected {
 			t.Error("tpl1:", EncodedValue(context.Background(), tpl1), "tpl2:", EncodedValue(context.Background(), tpl2), "expected", test.expected, "actual:", actual)

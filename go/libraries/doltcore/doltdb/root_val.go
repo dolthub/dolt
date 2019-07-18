@@ -2,6 +2,7 @@ package doltdb
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -32,7 +33,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 				return ErrHashNotFound
 			}
 
-			values[index+1] = types.NewRef(valForHash)
+			values[index+1] = types.NewRef(valForHash, vrw.Format())
 			index += 2
 		}
 
@@ -60,7 +61,7 @@ func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {
 		tablesKey: tblMap,
 	}
 
-	st := types.NewStruct(ddbRootStructName, sd)
+	st := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
 
 	return newRootValue(vrw, st)
 }
@@ -166,7 +167,7 @@ func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, 
 
 // HashOf gets the hash of the root value
 func (root *RootValue) HashOf() hash.Hash {
-	return root.valueSt.Hash()
+	return root.valueSt.Hash(root.vrw.Format())
 }
 
 // TableDiff returns the slices of tables added, modified, and removed when compared with another root value.  Tables
@@ -188,7 +189,7 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 
 	for pk1 != nil || pk2 != nil {
 		if pk1 == nil || pk2 == nil || !pk1.Equals(pk2) {
-			if pk2 == nil || (pk1 != nil && pk1.Less(pk2)) {
+			if pk2 == nil || (pk1 != nil && pk1.Less(root.vrw.Format(), pk2)) {
 				added = append(added, string(pk1.(types.String)))
 				pk1, val1 = itr1.Next(ctx)
 			} else {

@@ -3,13 +3,14 @@ package cli
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"os"
-	"strings"
 )
 
 var ErrEmptyDefTuple = errors.New("empty definition tuple")
@@ -102,7 +103,7 @@ func parseTuples(args []string, pkCols *schema.ColCollection) ([]map[uint64]stri
 	return results, nil
 }
 
-func ParseKeyValues(sch schema.Schema, args []string) ([]types.Value, error) {
+func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) ([]types.Value, error) {
 	pkCols := sch.GetPKCols()
 
 	var pkMaps []map[uint64]string
@@ -156,7 +157,7 @@ func ParseKeyValues(sch schema.Schema, args []string) ([]types.Value, error) {
 			taggedVals[k] = val
 		}
 
-		pkVals = append(pkVals, taggedVals.NomsTupleForTags(pkCols.Tags, true).Value(context.TODO()))
+		pkVals = append(pkVals, taggedVals.NomsTupleForTags(nbf, pkCols.Tags, true).Value(context.TODO()))
 	}
 
 	return pkVals, nil

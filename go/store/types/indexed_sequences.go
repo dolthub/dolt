@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
@@ -75,16 +76,16 @@ func newIndexedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 			d.PanicIfFalse(BlobKind == kind)
 			col = newBlob(newBlobMetaSequence(level, tuples, vrw))
 		}
-		return col, orderedKeyFromSum(tuples), numLeaves
+		return col, orderedKeyFromSum(tuples, vrw.Format()), numLeaves
 	}
 }
 
-func orderedKeyFromSum(msd []metaTuple) orderedKey {
+func orderedKeyFromSum(msd []metaTuple, nbf *NomsBinFormat) orderedKey {
 	sum := uint64(0)
 	for _, mt := range msd {
 		sum += mt.numLeaves()
 	}
-	return orderedKeyFromUint64(sum)
+	return orderedKeyFromUint64(sum, nbf)
 }
 
 // LoadLeafNodes loads the set of leaf nodes which contain the items

@@ -29,7 +29,7 @@ func NewDimRow(r row.Row, toUntyped, toTyped *rowconv.RowConverter) (*DimRow, er
 }
 
 func (dr *DimRow) StoreValue(me *types.MapEditor) *types.MapEditor {
-	r := row.New(dr.toTyped.SrcSch, dr.currentVals)
+	r := row.New(me.Format(), dr.toTyped.SrcSch, dr.currentVals)
 	typed, err := dr.toTyped.Convert(r)
 
 	if err != nil {

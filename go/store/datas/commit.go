@@ -42,17 +42,18 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 // ```
 // where M is a struct type and T is any type.
 func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.Struct {
-	return commitTemplate.NewStruct([]types.Value{meta, parents, value})
+	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parents, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false.
 func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
-	if !IsRefOfCommitType(types.TypeOf(c1)) {
+	// precondition checks
+	if !IsRefOfCommitType(c1.Format(), types.TypeOf(c1)) {
 		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx))
 	}
-	if !IsRefOfCommitType(types.TypeOf(c2)) {
+	if !IsRefOfCommitType(c2.Format(), types.TypeOf(c1)) {
 		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe(ctx))
 	}
 
@@ -122,18 +123,24 @@ func makeCommitStructType(metaType, parentsType, valueType *types.Type) *types.T
 }
 
 func getRefElementType(t *types.Type) *types.Type {
+	// precondition checks
 	d.PanicIfFalse(t.TargetKind() == types.RefKind)
+
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
-func IsCommitType(t *types.Type) bool {
-	return types.IsSubtype(valueCommitType, t)
+func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
+	return types.IsSubtype(nbf, valueCommitType, t)
 }
 
 func IsCommit(v types.Value) bool {
-	return types.IsValueSubtypeOf(v, valueCommitType)
+	if s, ok := v.(types.Struct); !ok {
+		return false
+	} else {
+		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
+	}
 }
 
-func IsRefOfCommitType(t *types.Type) bool {
-	return t.TargetKind() == types.RefKind && IsCommitType(getRefElementType(t))
+func IsRefOfCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
+	return t.TargetKind() == types.RefKind && IsCommitType(nbf, getRefElementType(t))
 }

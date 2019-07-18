@@ -158,7 +158,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	assert.Equal(contents.specs, upstream.specs)
 
 	// Now, test the case where the optimistic lock fails, and someone else updated the root since last we checked.
-	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2"))}
+	contents2 := manifestContents{lock: computeAddr([]byte("locker 2")), root: hash.Of([]byte("new root 2")), vers: constants.NomsVersion}
 	upstream, err = fm.Update(context.Background(), addr{}, contents2, stats, nil)
 	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
@@ -176,7 +176,7 @@ func TestFileManifestUpdate(t *testing.T) {
 	err = clobberManifest(fm.dir, strings.Join([]string{StorageVersion, constants.NomsVersion, jerkLock.String(), contents2.root.String(), tableName.String(), "1"}, ":"))
 	assert.NoError(err)
 
-	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3"))}
+	contents3 := manifestContents{lock: computeAddr([]byte("locker 3")), root: hash.Of([]byte("new root 3")), vers: constants.NomsVersion}
 	upstream, err = fm.Update(context.Background(), upstream.lock, contents3, stats, nil)
 	assert.NoError(err)
 	assert.Equal(jerkLock, upstream.lock)

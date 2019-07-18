@@ -19,18 +19,19 @@ func newMetaTuple(ref Ref, key orderedKey, numLeaves uint64) metaTuple {
 	w := newBinaryNomsWriter()
 	var offsets [metaTuplePartNumLeaves + 1]uint32
 	offsets[metaTuplePartRef] = w.offset
-	ref.writeTo(&w)
+	ref.writeTo(&w, ref.format())
 	offsets[metaTuplePartKey] = w.offset
-	key.writeTo(&w)
+	key.writeTo(&w, ref.format())
 	offsets[metaTuplePartNumLeaves] = w.offset
 	w.writeCount(numLeaves)
-	return metaTuple{w.data(), offsets}
+	return metaTuple{w.data(), offsets, ref.format()}
 }
 
 // metaTuple is a node in a Prolly Tree, consisting of data in the node (either tree leaves or other metaSequences), and a Value annotation for exploring the tree (e.g. the largest item if this an ordered sequence).
 type metaTuple struct {
 	buff    []byte
 	offsets [metaTuplePartNumLeaves + 1]uint32
+	nbf     *NomsBinFormat
 }
 
 const (
@@ -46,12 +47,12 @@ func (mt metaTuple) decoderAtPart(part uint32) valueDecoder {
 
 func (mt metaTuple) ref() Ref {
 	dec := mt.decoderAtPart(metaTuplePartRef)
-	return dec.readRef()
+	return dec.readRef(mt.nbf)
 }
 
 func (mt metaTuple) key() orderedKey {
 	dec := mt.decoderAtPart(metaTuplePartKey)
-	return dec.readOrderedKey()
+	return dec.readOrderedKey(mt.nbf)
 }
 
 func (mt metaTuple) numLeaves() uint64 {
@@ -63,7 +64,7 @@ func (mt metaTuple) getChildSequence(ctx context.Context, vr ValueReader) sequen
 	return mt.ref().TargetValue(ctx, vr).(Collection).asSequence()
 }
 
-func (mt metaTuple) writeTo(w nomsWriter) {
+func (mt metaTuple) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	w.writeRaw(mt.buff)
 }
 
@@ -75,29 +76,29 @@ type orderedKey struct {
 	h                hash.Hash
 }
 
-func newOrderedKey(v Value) orderedKey {
+func newOrderedKey(v Value, nbf *NomsBinFormat) orderedKey {
 	if isKindOrderedByValue(v.Kind()) {
 		return orderedKey{true, v, hash.Hash{}}
 	}
-	return orderedKey{false, v, v.Hash()}
+	return orderedKey{false, v, v.Hash(nbf)}
 }
 
 func orderedKeyFromHash(h hash.Hash) orderedKey {
 	return orderedKey{false, nil, h}
 }
 
-func orderedKeyFromInt(n int) orderedKey {
-	return newOrderedKey(Float(n))
+func orderedKeyFromInt(n int, nbf *NomsBinFormat) orderedKey {
+	return newOrderedKey(Float(n), nbf)
 }
 
-func orderedKeyFromUint64(n uint64) orderedKey {
-	return newOrderedKey(Float(n))
+func orderedKeyFromUint64(n uint64, nbf *NomsBinFormat) orderedKey {
+	return newOrderedKey(Float(n), nbf)
 }
 
-func (key orderedKey) Less(mk2 orderedKey) bool {
+func (key orderedKey) Less(nbf *NomsBinFormat, mk2 orderedKey) bool {
 	switch {
 	case key.isOrderedByValue && mk2.isOrderedByValue:
-		return key.v.Less(mk2.v)
+		return key.v.Less(nbf, mk2.v)
 	case key.isOrderedByValue:
 		return true
 	case mk2.isOrderedByValue:
@@ -108,13 +109,13 @@ func (key orderedKey) Less(mk2 orderedKey) bool {
 	}
 }
 
-func (key orderedKey) writeTo(w nomsWriter) {
+func (key orderedKey) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	if !key.isOrderedByValue {
 		d.PanicIfTrue(key != emptyKey && key.h.IsEmpty())
-		hashKind.writeTo(w)
+		hashKind.writeTo(w, nbf)
 		w.writeHash(key.h)
 	} else {
-		key.v.writeTo(w)
+		key.v.writeTo(w, nbf)
 	}
 }
 
@@ -131,7 +132,7 @@ func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, 
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(tuples)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	kind.writeTo(&w)
+	kind.writeTo(&w, vrw.Format())
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(level)
 	offsets[sequencePartCount] = w.offset
@@ -140,7 +141,7 @@ func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, 
 	length := uint64(0)
 	for i, mt := range tuples {
 		length += mt.numLeaves()
-		mt.writeTo(&w)
+		mt.writeTo(&w, vrw.Format())
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 	return newMetaSequence(vrw, w.data(), offsets, length)
@@ -157,13 +158,13 @@ func (ms metaSequence) tuples() []metaTuple {
 
 func (ms metaSequence) getKey(idx int) orderedKey {
 	dec := ms.decoderSkipToIndex(idx)
-	dec.skipValue() // ref
-	return dec.readOrderedKey()
+	dec.skipValue(ms.format()) // ref
+	return dec.readOrderedKey(ms.format())
 }
 
 func (ms metaSequence) search(key orderedKey) int {
 	return sort.Search(ms.seqLen(), func(i int) bool {
-		return !ms.getKey(i).Less(key)
+		return !ms.getKey(i).Less(ms.format(), key)
 	})
 }
 
@@ -171,8 +172,8 @@ func (ms metaSequence) cumulativeNumberOfLeaves(idx int) uint64 {
 	cum := uint64(0)
 	dec, _ := ms.decoderSkipToValues()
 	for i := 0; i <= idx; i++ {
-		dec.skipValue() // ref
-		dec.skipValue() // v
+		dec.skipValue(ms.format()) // ref
+		dec.skipValue(ms.format()) // v
 		cum += dec.readCount()
 	}
 	return cum
@@ -193,22 +194,22 @@ func (ms metaSequence) readTuple(dec *valueDecoder) metaTuple {
 	offsets[metaTuplePartRef] = start
 	dec.skipRef()
 	offsets[metaTuplePartKey] = dec.offset
-	dec.skipOrderedKey()
+	dec.skipOrderedKey(ms.format())
 	offsets[metaTuplePartNumLeaves] = dec.offset
 	dec.skipCount()
 	end := dec.offset
-	return metaTuple{dec.byteSlice(start, end), offsets}
+	return metaTuple{dec.byteSlice(start, end), offsets, ms.format()}
 }
 
 func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
 	dec.offset = uint32(ms.getItemOffset(idx))
-	return dec.readRef()
+	return dec.readRef(ms.format())
 }
 
 func (ms metaSequence) getNumLeavesAt(idx int) uint64 {
 	dec := ms.decoderSkipToIndex(idx)
-	dec.skipValue()
-	dec.skipOrderedKey()
+	dec.skipValue(ms.format())
+	dec.skipOrderedKey(ms.format())
 	return dec.readCount()
 }
 
@@ -227,15 +228,15 @@ func (ms metaSequence) typeOf() *Type {
 	ts := make(typeSlice, 0, count)
 	var lastRef Ref
 	for i := uint64(0); i < count; i++ {
-		ref := dec.readRef()
+		ref := dec.readRef(ms.format())
 		if lastRef.IsZeroValue() || !lastRef.isSameTargetType(ref) {
 			lastRef = ref
 			t := ref.TargetType()
 			ts = append(ts, t)
 		}
 
-		dec.skipOrderedKey() // key
-		dec.skipCount()      // numLeaves
+		dec.skipOrderedKey(ms.format()) // key
+		dec.skipCount()                 // numLeaves
 	}
 
 	return makeUnionType(ts...)
@@ -271,7 +272,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 	level := ms.treeLevel()
 	d.PanicIfFalse(level > 0)
 	if length == 0 {
-		return emptySequence{level - 1}
+		return emptySequence{level - 1, ms.format()}
 	}
 
 	output := ms.getChildren(ctx, start, start+length)
@@ -294,7 +295,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 	case MapKind:
 		var valueItems []mapEntry
 		for _, seq := range output {
-			valueItems = append(valueItems, seq.(mapLeafSequence).entries()...)
+			valueItems = append(valueItems, seq.(mapLeafSequence).entries().entries...)
 		}
 		return newMapLeafSequence(ms.vrw, valueItems...)
 	case SetKind:
@@ -341,6 +342,7 @@ func metaHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 
 type emptySequence struct {
 	level uint64
+	nbf   *NomsBinFormat
 }
 
 func (es emptySequence) getItem(idx int) sequenceItem {
@@ -359,7 +361,11 @@ func (es emptySequence) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (es emptySequence) WalkRefs(cb RefCallback) {
+func (es emptySequence) format() *NomsBinFormat {
+	return es.nbf
+}
+
+func (es emptySequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (es emptySequence) getCompareFn(other sequence) compareFn {
@@ -394,7 +400,7 @@ func (es emptySequence) getCompositeChildSequence(ctx context.Context, start uin
 	d.PanicIfFalse(es.level > 0)
 	d.PanicIfFalse(start == 0)
 	d.PanicIfFalse(length == 0)
-	return emptySequence{es.level - 1}
+	return emptySequence{es.level - 1, es.format()}
 }
 
 func (es emptySequence) treeLevel() uint64 {
@@ -405,7 +411,7 @@ func (es emptySequence) isLeaf() bool {
 	return es.level == 0
 }
 
-func (es emptySequence) Hash() hash.Hash {
+func (es emptySequence) Hash(nbf *NomsBinFormat) hash.Hash {
 	panic("empty sequence")
 }
 
@@ -413,11 +419,11 @@ func (es emptySequence) Equals(other Value) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Less(other LesserValuable) bool {
+func (es emptySequence) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) valueBytes() []byte {
+func (es emptySequence) valueBytes(*NomsBinFormat) []byte {
 	panic("empty sequence")
 }
 
@@ -425,7 +431,7 @@ func (es emptySequence) valuesSlice(from, to uint64) []Value {
 	panic("empty sequence")
 }
 
-func (es emptySequence) writeTo(nomsWriter) {
+func (es emptySequence) writeTo(w nomsWriter, nbf *NomsBinFormat) {
 	panic("empty sequence")
 }
 

@@ -7,6 +7,7 @@ package types
 import (
 	"context"
 	"encoding/binary"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -22,21 +23,21 @@ func (v Uint) Equals(other Value) bool {
 	return v == other
 }
 
-func (v Uint) Less(other LesserValuable) bool {
+func (v Uint) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	if v2, ok := other.(Uint); ok {
 		return v < v2
 	}
 	return UintKind < other.Kind()
 }
 
-func (v Uint) Hash() hash.Hash {
-	return getHash(v)
+func (v Uint) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(v, nbf)
 }
 
 func (v Uint) WalkValues(ctx context.Context, cb ValueCallback) {
 }
 
-func (v Uint) WalkRefs(cb RefCallback) {
+func (v Uint) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (v Uint) typeOf() *Type {
@@ -51,16 +52,16 @@ func (v Uint) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Uint) writeTo(w nomsWriter) {
-	UintKind.writeTo(w)
+func (v Uint) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	UintKind.writeTo(w, nbf)
 	w.writeUint(v)
 }
 
-func (v Uint) valueBytes() []byte {
+func (v Uint) valueBytes(nbf *NomsBinFormat) []byte {
 	// We know the size of the buffer here so allocate it once.
 	// UintKind, int (Varint), exp (Varint)
 	buff := make([]byte, 1+2*binary.MaxVarintLen64)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w)
+	v.writeTo(&w, nbf)
 	return buff[:w.offset]
 }

@@ -52,14 +52,16 @@ func nomsSet(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause
 func nomsSetNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	applySetEdits(ctx, sp, types.NewSet(ctx, sp.GetDatabase(ctx)), nil, types.DiffChangeAdded, args)
+	db := sp.GetDatabase(ctx)
+	applySetEdits(ctx, sp, types.NewSet(ctx, db), nil, types.DiffChangeAdded, args)
 	return 0
 }
 
 func nomsSetInsert(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeAdded, args)
 	return 0
 }
@@ -67,7 +69,8 @@ func nomsSetInsert(ctx context.Context, specStr string, args []string) int {
 func nomsSetDel(ctx context.Context, specStr string, args []string) int {
 	sp, err := spec.ForPath(specStr)
 	d.PanicIfError(err)
-	rootVal, basePath := splitPath(ctx, sp)
+	db := sp.GetDatabase(ctx)
+	rootVal, basePath := splitPath(ctx, db, sp)
 	applySetEdits(ctx, sp, rootVal, basePath, types.DiffChangeRemoved, args)
 	return 0
 }
@@ -88,7 +91,7 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		if types.ValueCanBePathIndex(vv) {
 			pp = types.NewIndexPath(vv)
 		} else {
-			pp = types.NewHashIndexPath(vv.Hash())
+			pp = types.NewHashIndexPath(vv.Hash(db.Format()))
 		}
 		d := diff.Difference{
 			Path: append(basePath, pp),
@@ -100,7 +103,7 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		}
 		patch = append(patch, d)
 	}
-	appplyPatch(ctx, sp, rootVal, basePath, patch)
+	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 }
 
 func argumentToValue(ctx context.Context, arg string, db datas.Database) (types.Value, error) {

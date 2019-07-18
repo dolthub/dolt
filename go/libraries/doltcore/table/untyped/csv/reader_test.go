@@ -6,6 +6,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io"
 	"strings"
 	"testing"
@@ -40,13 +41,13 @@ func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
 	_, sch := untyped.NewUntypedSchema(colNames...)
 	goodExpectedRows := []row.Row{
-		untyped.NewRowFromStrings(sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
-		untyped.NewRowFromStrings(sch, []string{"Rob Robertson", "25", "Dufus"}),
-		untyped.NewRowFromStrings(sch, []string{"John Johnson", "21", "Intern Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern Dufus"}),
 	}
 	badExpectedRows := []row.Row{
-		untyped.NewRowFromStrings(sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
-		untyped.NewRowFromStrings(sch, []string{"Rob Robertson", "25", "Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
+		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"}),
 	}
 
 	tests := []struct {
@@ -106,7 +107,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 	const path = "/file.csv"
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
-	csvR, err := OpenCSVReader(path, fs, info)
+	csvR, err := OpenCSVReader(types.Format_7_18, path, fs, info)
 	defer csvR.Close(context.Background())
 
 	if err != nil {

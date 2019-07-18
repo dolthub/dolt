@@ -13,7 +13,7 @@ import (
 
 func TestValidatingBatchingSinkDecode(t *testing.T) {
 	v := Float(42)
-	c := EncodeValue(v)
+	c := EncodeValue(v, Format_7_18)
 	storage := &chunks.TestStorage{}
 	vdc := NewValidatingDecoder(storage.NewView())
 
@@ -26,9 +26,9 @@ func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 	vs := NewValueStore(storage.NewView())
 	dataAsByteSlice := toBinaryNomsReaderData(data)
 	dec := newValueDecoder(dataAsByteSlice, vs)
-	v := dec.readValue()
+	v := dec.readValue(Format_7_18)
 
-	c := EncodeValue(v)
+	c := EncodeValue(v, Format_7_18)
 	vdc := NewValidatingDecoder(storage.NewView())
 
 	assert.Panics(t, func() {

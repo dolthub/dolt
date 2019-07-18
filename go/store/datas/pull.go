@@ -6,13 +6,15 @@ package datas
 
 import (
 	"context"
-	"github.com/golang/snappy"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"math"
 	"math/rand"
+
+	"github.com/golang/snappy"
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type PullProgress struct {
@@ -36,25 +38,30 @@ func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreA
 }
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB.
-func Pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) {
-	pull(ctx, srcDB, sinkDB, sourceRef, progressCh, defaultBatchSize)
+func Pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) error {
+	return pull(ctx, srcDB, sinkDB, sourceRef, progressCh, defaultBatchSize)
 }
 
-func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress, batchSize int) {
+func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress, batchSize int) error {
 	// Sanity Check
 	exists, err := srcDB.chunkStore().Has(ctx, sourceRef.TargetHash())
 
-	// TODO: fix panics
-	d.PanicIfError(err)
-	d.PanicIfFalse(exists)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return errors.New("not found")
+	}
 
 	exists, err = sinkDB.chunkStore().Has(ctx, sourceRef.TargetHash())
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return err
+	}
 
 	if exists {
-		return // already up to date
+		return nil // already up to date
 	}
 
 	var sampleSize, sampleCount uint64
@@ -76,53 +83,79 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 			}
 			batch := absent[start:end]
 
-			neededChunks := getChunks(ctx, srcDB, batch, sampleSize, sampleCount, updateProgress)
-			uniqueOrdered = putChunks(ctx, sinkDB, batch, neededChunks, nextLevel, uniqueOrdered)
+			neededChunks, err := getChunks(ctx, srcDB, batch, sampleSize, sampleCount, updateProgress)
+
+			if err != nil {
+				return err
+			}
+
+			uniqueOrdered, err = putChunks(ctx, sinkDB, batch, neededChunks, nextLevel, uniqueOrdered)
+
+			if err != nil {
+				return err
+			}
 		}
 
-		absent = nextLevelMissingChunks(ctx, sinkDB, nextLevel, absent, uniqueOrdered)
+		absent, err = nextLevelMissingChunks(ctx, sinkDB, nextLevel, absent, uniqueOrdered)
+
+		if err != nil {
+			return err
+		}
 	}
 
-	persistChunks(ctx, sinkDB.chunkStore())
+	err = persistChunks(ctx, sinkDB.chunkStore())
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func persistChunks(ctx context.Context, cs chunks.ChunkStore) {
+func persistChunks(ctx context.Context, cs chunks.ChunkStore) error {
 	var success bool
 	for !success {
 		r, err := cs.Root(ctx)
 
-		//TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 
 		success, err = cs.Commit(ctx, r, r)
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // PullWithoutBatching effectively removes the batching of chunk retrieval done on each level of the tree.  This means
 // all chunks from one level of the tree will be retrieved from the underlying chunk store in one call, which pushes the
 // optimization problem down to the chunk store which can make smarter decisions.
-func PullWithoutBatching(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) {
+func PullWithoutBatching(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, progressCh chan PullProgress) error {
 	// by increasing the batch size to MaxInt32 we effectively remove batching here.
-	pull(ctx, srcDB, sinkDB, sourceRef, progressCh, math.MaxInt32)
+	return pull(ctx, srcDB, sinkDB, sourceRef, progressCh, math.MaxInt32)
 }
 
 // concurrently pull all chunks from this batch that the sink is missing out of the source
-func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64)) map[hash.Hash]*chunks.Chunk {
+func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64)) (map[hash.Hash]*chunks.Chunk, error) {
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
 	found := make(chan *chunks.Chunk)
 
+	ae := nbs.NewAtomicError()
 	go func() {
 		defer close(found)
 		err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), found)
-
-		// TODO: fix panics
-		d.PanicIfError(err)
+		ae.SetIfError(err)
 	}()
 
 	for c := range found {
+		if ae.IsSet() {
+			break
+		}
+
 		neededChunks[c.Hash()] = c
 
 		// Randomly sample amount of data written
@@ -132,20 +165,26 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 		}
 		updateProgress(1, 0, sampleSize/uint64(math.Max(1, float64(sampleCount))))
 	}
-	return neededChunks
+
+	if ae.IsSet() {
+		return nil, ae.Get()
+	}
+
+	return neededChunks, nil
 }
 
 // put the chunks that were downloaded into the sink IN ORDER and at the same time gather up an ordered, uniquified list
 // of all the children of the chunks and add them to the list of the next level tree chunks.
-func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, neededChunks map[hash.Hash]*chunks.Chunk, nextLevel hash.HashSet, uniqueOrdered hash.HashSlice) hash.HashSlice {
+func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, neededChunks map[hash.Hash]*chunks.Chunk, nextLevel hash.HashSet, uniqueOrdered hash.HashSlice) (hash.HashSlice, error) {
 	for _, h := range hashes {
 		c := neededChunks[h]
 		err := sinkDB.chunkStore().Put(ctx, *c)
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return hash.HashSlice{}, err
+		}
 
-		types.WalkRefs(*c, func(r types.Ref) {
+		types.WalkRefs(*c, sinkDB.Format(), func(r types.Ref) {
 			if !nextLevel.Has(r.TargetHash()) {
 				uniqueOrdered = append(uniqueOrdered, r.TargetHash())
 				nextLevel.Insert(r.TargetHash())
@@ -153,16 +192,17 @@ func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, need
 		})
 	}
 
-	return uniqueOrdered
+	return uniqueOrdered, nil
 }
 
 // ask sinkDB which of the next level's hashes it doesn't have, and add those chunks to the absent list which will need
 // to be retrieved.
-func nextLevelMissingChunks(ctx context.Context, sinkDB Database, nextLevel hash.HashSet, absent hash.HashSlice, uniqueOrdered hash.HashSlice) hash.HashSlice {
+func nextLevelMissingChunks(ctx context.Context, sinkDB Database, nextLevel hash.HashSet, absent hash.HashSlice, uniqueOrdered hash.HashSlice) (hash.HashSlice, error) {
 	missingFromSink, err := sinkDB.chunkStore().HasMany(ctx, nextLevel)
 
-	// TODO: fix panics
-	d.PanicIfError(err)
+	if err != nil {
+		return hash.HashSlice{}, err
+	}
 
 	absent = absent[:0]
 	for _, h := range uniqueOrdered {
@@ -171,5 +211,5 @@ func nextLevelMissingChunks(ctx context.Context, sinkDB Database, nextLevel hash
 		}
 	}
 
-	return absent
+	return absent, nil
 }

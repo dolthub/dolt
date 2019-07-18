@@ -73,8 +73,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"io"
 	"io/ioutil"
 	"os"
@@ -86,6 +84,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
@@ -242,7 +243,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		for i, rep := range testReps {
 			timesSlice := types.ValueSlice{}
 			for name, info := range rep {
-				timesSlice = append(timesSlice, types.String(name), types.NewStruct("", types.StructData{
+				timesSlice = append(timesSlice, types.String(name), types.NewStruct(types.Format_7_18, "", types.StructData{
 					"elapsed": types.Float(info.elapsed.Nanoseconds()),
 					"paused":  types.Float(info.paused.Nanoseconds()),
 					"total":   types.Float(info.total.Nanoseconds()),
@@ -251,15 +252,16 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 			reps[i] = types.NewMap(context.Background(), db, timesSlice...)
 		}
 
-		record := types.NewStruct("", map[string]types.Value{
+		record := types.NewStruct(types.Format_7_18, "", map[string]types.Value{
 			"environment":      suite.getEnvironment(db),
 			"nomsRevision":     types.String(suite.getGitHead(path.Join(suite.AtticLabs, "noms"))),
 			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
 			"reps":             types.NewList(context.Background(), db, reps...),
 		})
 
-		ds := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)
-		_, err := db.CommitValue(context.Background(), ds, record)
+		ds, err := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)
+		assert.NoError(err)
+		_, err = db.CommitValue(context.Background(), ds, record)
 		assert.NoError(err)
 	}()
 

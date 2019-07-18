@@ -35,7 +35,7 @@ func (suite *WalkAllTestSuite) SetupTest() {
 
 func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
 	actual := 0
-	WalkValues(context.Background(), v, suite.vs, func(c Value) (stop bool) {
+	WalkValues(context.Background(), Format_7_18, v, suite.vs, func(c Value) (stop bool) {
 		actual++
 		return
 	})
@@ -44,7 +44,7 @@ func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
 
 func (suite *WalkAllTestSuite) assertVisitedOnce(root, v Value) {
 	actual := 0
-	WalkValues(context.Background(), v, suite.vs, func(c Value) bool {
+	WalkValues(context.Background(), Format_7_18, v, suite.vs, func(c Value) bool {
 		if c == v {
 			actual++
 		}
@@ -92,7 +92,7 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 		nums[i] = Float(i)
 	}
 	l := NewList(context.Background(), suite.vs, nums...)
-	suite.True(NewRef(l).Height() > 1)
+	suite.True(NewRef(l, Format_7_18).Height() > 1)
 	suite.assertCallbackCount(l, count+1)
 
 	r := suite.vs.WriteValue(context.Background(), l)
@@ -160,7 +160,7 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 }
 
 func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
-	WalkValues(context.Background(), composite, suite.vs, func(v Value) bool {
+	WalkValues(context.Background(), Format_7_18, composite, suite.vs, func(v Value) bool {
 		suite.False(v.Equals(suite.deadValue), "Should never have reached %+v", suite.deadValue)
 		reached = append(reached, v)
 		return v.Equals(suite.mustSkip)
@@ -173,7 +173,7 @@ func (suite *WalkTestSuite) TestSkipListElement() {
 	wholeList := NewList(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeList)
 	for _, v := range []Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 6)
 }
@@ -182,7 +182,7 @@ func (suite *WalkTestSuite) TestSkipSetElement() {
 	wholeSet := NewSet(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set(context.Background())
 	reached := suite.skipWorker(wholeSet)
 	for _, v := range []Value{wholeSet, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 4)
 }
@@ -193,7 +193,7 @@ func (suite *WalkTestSuite) TestSkipMapValue() {
 	wholeMap := NewMap(context.Background(), suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.shouldSee, suite.shouldSeeItem, suite.mustSkip, shouldAlsoSee, shouldAlsoSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 8)
 }
@@ -202,7 +202,7 @@ func (suite *WalkTestSuite) TestSkipMapKey() {
 	wholeMap := NewMap(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
-		suite.True(reached.Contains(v), "Doesn't contain %+v", v)
+		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
 	}
 	suite.Len(reached, 8)
 }

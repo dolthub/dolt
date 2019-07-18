@@ -64,7 +64,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showRaw {
-		ch := types.EncodeValue(value)
+		ch := types.EncodeValue(value, database.Format())
 		buf := bytes.NewBuffer(ch.Data())
 		_, err = io.Copy(os.Stdout, buf)
 		util.CheckError(err)

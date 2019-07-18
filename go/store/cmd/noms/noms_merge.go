@@ -53,22 +53,49 @@ func runMerge(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 
 	if len(args) != 4 {
-		util.CheckErrorNoUsage(fmt.Errorf("Incorrect number of arguments"))
+		util.CheckErrorNoUsage(fmt.Errorf("incorrect number of arguments"))
 	}
 	db, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckError(err)
 	defer db.Close()
 
-	leftDS, rightDS, outDS := resolveDatasets(ctx, db, args[1], args[2], args[3])
-	left, right, ancestor := getMergeCandidates(ctx, db, leftDS, rightDS)
+	leftDS, rightDS, outDS, err := resolveDatasets(ctx, db, args[1], args[2], args[3])
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		return 1
+	}
+
+	left, right, ancestor, err := getMergeCandidates(ctx, db, leftDS, rightDS)
+
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		return 1
+	}
+
 	policy := decidePolicy(resolver)
 	pc := newMergeProgressChan()
 	merged, err := policy(ctx, left, right, ancestor, db, pc)
 	util.CheckErrorNoUsage(err)
 	close(pc)
 
-	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(merged, types.NewSet(ctx, db, leftDS.HeadRef(), rightDS.HeadRef()), types.EmptyStruct)))
+	leftHeadRef, ok := leftDS.MaybeHeadRef()
+
+	if !ok {
+		fmt.Fprintln(os.Stderr, args[1]+" has no head value.")
+		return 1
+	}
+
+	rightHeadRef, ok := rightDS.MaybeHeadRef()
+
+	if !ok {
+		fmt.Fprintln(os.Stderr, args[2]+" has no head value.")
+		return 1
+	}
+
+	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(merged, types.NewSet(ctx, db, leftHeadRef, rightHeadRef), types.EmptyStruct(db.Format()))))
 	d.PanicIfError(err)
+
 	if !verbose.Quiet() {
 		status.Printf("Done")
 		status.Done()
@@ -76,20 +103,36 @@ func runMerge(ctx context.Context, args []string) int {
 	return 0
 }
 
-func resolveDatasets(ctx context.Context, db datas.Database, leftName, rightName, outName string) (leftDS, rightDS, outDS datas.Dataset) {
-	makeDS := func(dsName string) datas.Dataset {
+func resolveDatasets(ctx context.Context, db datas.Database, leftName, rightName, outName string) (leftDS, rightDS, outDS datas.Dataset, err error) {
+	makeDS := func(dsName string) (datas.Dataset, error) {
 		if !datasetRe.MatchString(dsName) {
 			util.CheckErrorNoUsage(fmt.Errorf("Invalid dataset %s, must match %s", dsName, datas.DatasetRe.String()))
 		}
 		return db.GetDataset(ctx, dsName)
 	}
-	leftDS = makeDS(leftName)
-	rightDS = makeDS(rightName)
-	outDS = makeDS(outName)
+
+	leftDS, err = makeDS(leftName)
+
+	if err != nil {
+		return datas.Dataset{}, datas.Dataset{}, datas.Dataset{}, err
+	}
+
+	rightDS, err = makeDS(rightName)
+
+	if err != nil {
+		return datas.Dataset{}, datas.Dataset{}, datas.Dataset{}, err
+	}
+
+	outDS, err = makeDS(outName)
+
+	if err != nil {
+		return datas.Dataset{}, datas.Dataset{}, datas.Dataset{}, err
+	}
+
 	return
 }
 
-func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value) {
+func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value, err error) {
 	leftRef, ok := leftDS.MaybeHeadRef()
 	checkIfTrue(!ok, "Dataset %s has no data", leftDS.ID())
 	rightRef, ok := rightDS.MaybeHeadRef()
@@ -97,7 +140,20 @@ func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS 
 	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, db)
 	checkIfTrue(!ok, "Datasets %s and %s have no common ancestor", leftDS.ID(), rightDS.ID())
 
-	return leftDS.HeadValue(), rightDS.HeadValue(), ancestorCommit.Get(datas.ValueField)
+	leftHead, ok := leftDS.MaybeHeadValue()
+
+	if !ok {
+		return nil, nil, nil, err
+	}
+
+	rightHead, ok := rightDS.MaybeHeadValue()
+
+	if !ok {
+		return nil, nil, nil, err
+	}
+
+	return leftHead, rightHead, ancestorCommit.Get(datas.ValueField), nil
+
 }
 
 func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {

@@ -3,6 +3,7 @@ package row
 import (
 	"bytes"
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )

@@ -1,6 +1,9 @@
 package sqltestutil
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -8,8 +11,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"reflect"
-	"testing"
 )
 
 // This file collects useful test table definitions and functions for SQL tests to use. It primarily defines a table
@@ -107,7 +108,7 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 		RatingTag:    types.Float(rating),
 	}
 
-	return row.New(PeopleTestSchema, vals)
+	return row.New(types.Format_7_18, PeopleTestSchema, vals)
 }
 
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
@@ -118,7 +119,7 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 		epRatingTag:  types.Float(rating),
 	}
 
-	return row.New(EpisodesTestSchema, vals)
+	return row.New(types.Format_7_18, EpisodesTestSchema, vals)
 }
 
 func newAppsRow(charId, epId int, comment string) row.Row {
@@ -128,7 +129,7 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 		appCommentsTag:  types.String(comment),
 	}
 
-	return row.New(AppearancesTestSchema, vals)
+	return row.New(types.Format_7_18, AppearancesTestSchema, vals)
 }
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
@@ -144,7 +145,7 @@ func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, 
 		NumEpisodesTag: types.Uint(numEpisodes),
 	}
 
-	return row.New(PeopleTestSchema, vals)
+	return row.New(types.Format_7_18, PeopleTestSchema, vals)
 }
 
 // 6 characters

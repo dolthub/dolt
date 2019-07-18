@@ -2,6 +2,7 @@ package merge
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
@@ -26,7 +27,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 
 	tblSchRef := tbl.GetSchemaRef()
 	tblSchVal := tblSchRef.TargetValue(ctx, vrw)
-	tblSch, err := encoding.UnmarshalNomsValue(ctx, tblSchVal)
+	tblSch, err := encoding.UnmarshalNomsValue(ctx, vrw.Format(), tblSchVal)
 
 	if err != nil {
 		return nil, err

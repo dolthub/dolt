@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/cenkalti/backoff"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"net/http"
 	"net/url"
 	"sort"
@@ -14,10 +12,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+
 	"github.com/golang/snappy"
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 )
@@ -58,10 +58,11 @@ type DoltChunkStore struct {
 	host        string
 	csClient    remotesapi.ChunkStoreServiceClient
 	cache       chunkCache
+	metadata    *remotesapi.GetRepoMetadataResponse
 	httpFetcher HTTPFetcher
 }
 
-func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+func NewDoltChunkStoreFromPath(ctx context.Context, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	tokens := strings.Split(strings.Trim(path, "/"), "/")
 	if len(tokens) != 2 {
 		return nil, ErrInvalidDoltSpecPath
@@ -75,19 +76,29 @@ func NewDoltChunkStoreFromPath(path, host string, csClient remotesapi.ChunkStore
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
-	return NewDoltChunkStore(org, repoName, host, RetryingChunkStoreServiceClient{csClient}), nil
+	return NewDoltChunkStore(ctx, org, repoName, host, RetryingChunkStoreServiceClient{csClient})
 }
 
-func NewDoltChunkStore(org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) *DoltChunkStore {
+func NewDoltChunkStore(ctx context.Context, org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), globalHttpFetcher}
+	metadata, err := csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
+		RepoId: &remotesapi.RepoId{
+			Org:      org,
+			RepoName: repoName,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, globalHttpFetcher}, nil
 }
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, fetcher}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, fetcher}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -374,7 +385,7 @@ func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
 
 // Returns the NomsVersion with which this ChunkSource is compatible.
 func (dcs *DoltChunkStore) Version() string {
-	return constants.NomsVersion
+	return dcs.metadata.NbfVersion
 }
 
 // Rebase brings this ChunkStore into sync with the persistent storage's

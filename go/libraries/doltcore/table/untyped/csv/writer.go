@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
+	"path/filepath"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"path/filepath"
-	"strings"
 )
 
 // WriteBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all

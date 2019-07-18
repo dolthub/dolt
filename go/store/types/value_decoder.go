@@ -26,47 +26,47 @@ func newValueDecoderWithValidation(nr binaryNomsReader, vrw ValueReadWriter) val
 	return valueDecoder{typedBinaryNomsReader{nr, true}, vrw}
 }
 
-func (r *valueDecoder) readRef() Ref {
-	return readRef(&(r.typedBinaryNomsReader))
+func (r *valueDecoder) readRef(nbf *NomsBinFormat) Ref {
+	return readRef(nbf, &(r.typedBinaryNomsReader))
 }
 
 func (r *valueDecoder) skipRef() {
 	skipRef(&(r.typedBinaryNomsReader))
 }
 
-func (r *valueDecoder) skipBlobLeafSequence() ([]uint32, uint64) {
+func (r *valueDecoder) skipBlobLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64) {
 	size := r.readCount()
 	valuesPos := r.pos()
 	r.offset += uint32(size)
 	return []uint32{valuesPos, r.pos()}, size
 }
 
-func (r *valueDecoder) skipValueSequence(elementsPerIndex int) ([]uint32, uint64) {
+func (r *valueDecoder) skipValueSequence(nbf *NomsBinFormat, elementsPerIndex int) ([]uint32, uint64) {
 	count := r.readCount()
 	offsets := make([]uint32, count+1)
 	offsets[0] = r.pos()
 	for i := uint64(0); i < count; i++ {
 		for j := 0; j < elementsPerIndex; j++ {
-			r.skipValue()
+			r.skipValue(nbf)
 		}
 		offsets[i+1] = r.pos()
 	}
 	return offsets, count
 }
 
-func (r *valueDecoder) skipListLeafSequence() ([]uint32, uint64) {
-	return r.skipValueSequence(getValuesPerIdx(ListKind))
+func (r *valueDecoder) skipListLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64) {
+	return r.skipValueSequence(nbf, getValuesPerIdx(ListKind))
 }
 
-func (r *valueDecoder) skipSetLeafSequence() ([]uint32, uint64) {
-	return r.skipValueSequence(getValuesPerIdx(SetKind))
+func (r *valueDecoder) skipSetLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64) {
+	return r.skipValueSequence(nbf, getValuesPerIdx(SetKind))
 }
 
-func (r *valueDecoder) skipMapLeafSequence() ([]uint32, uint64) {
-	return r.skipValueSequence(getValuesPerIdx(MapKind))
+func (r *valueDecoder) skipMapLeafSequence(nbf *NomsBinFormat) ([]uint32, uint64) {
+	return r.skipValueSequence(nbf, getValuesPerIdx(MapKind))
 }
 
-func (r *valueDecoder) readSequence(kind NomsKind, leafSkipper func() ([]uint32, uint64)) sequence {
+func (r *valueDecoder) readSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipper func(nbf *NomsBinFormat) ([]uint32, uint64)) sequence {
 	start := r.pos()
 	offsets := []uint32{start}
 	r.skipKind()
@@ -76,9 +76,9 @@ func (r *valueDecoder) readSequence(kind NomsKind, leafSkipper func() ([]uint32,
 	var seqOffsets []uint32
 	var length uint64
 	if level > 0 {
-		seqOffsets, length = r.skipMetaSequence(kind, level)
+		seqOffsets, length = r.skipMetaSequence(nbf, kind, level)
 	} else {
-		seqOffsets, length = leafSkipper()
+		seqOffsets, length = leafSkipper(nbf)
 	}
 	offsets = append(offsets, seqOffsets...)
 	end := r.pos()
@@ -90,99 +90,99 @@ func (r *valueDecoder) readSequence(kind NomsKind, leafSkipper func() ([]uint32,
 	return newLeafSequence(r.vrw, r.byteSlice(start, end), offsets, length)
 }
 
-func (r *valueDecoder) readBlobSequence() sequence {
-	seq := r.readSequence(BlobKind, r.skipBlobLeafSequence)
+func (r *valueDecoder) readBlobSequence(nbf *NomsBinFormat) sequence {
+	seq := r.readSequence(nbf, BlobKind, r.skipBlobLeafSequence)
 	if seq.isLeaf() {
 		return blobLeafSequence{seq.(leafSequence)}
 	}
 	return seq
 }
 
-func (r *valueDecoder) readListSequence() sequence {
-	seq := r.readSequence(ListKind, r.skipListLeafSequence)
+func (r *valueDecoder) readListSequence(nbf *NomsBinFormat) sequence {
+	seq := r.readSequence(nbf, ListKind, r.skipListLeafSequence)
 	if seq.isLeaf() {
 		return listLeafSequence{seq.(leafSequence)}
 	}
 	return seq
 }
 
-func (r *valueDecoder) readSetSequence() orderedSequence {
-	seq := r.readSequence(SetKind, r.skipSetLeafSequence)
+func (r *valueDecoder) readSetSequence(nbf *NomsBinFormat) orderedSequence {
+	seq := r.readSequence(nbf, SetKind, r.skipSetLeafSequence)
 	if seq.isLeaf() {
 		return setLeafSequence{seq.(leafSequence)}
 	}
 	return seq.(orderedSequence)
 }
 
-func (r *valueDecoder) readMapSequence() orderedSequence {
-	seq := r.readSequence(MapKind, r.skipMapLeafSequence)
+func (r *valueDecoder) readMapSequence(nbf *NomsBinFormat) orderedSequence {
+	seq := r.readSequence(nbf, MapKind, r.skipMapLeafSequence)
 	if seq.isLeaf() {
 		return mapLeafSequence{seq.(leafSequence)}
 	}
 	return seq.(orderedSequence)
 }
 
-func (r *valueDecoder) skipList() {
-	r.skipSequence(ListKind, r.skipListLeafSequence)
+func (r *valueDecoder) skipList(nbf *NomsBinFormat) {
+	r.skipSequence(nbf, ListKind, r.skipListLeafSequence)
 }
 
-func (r *valueDecoder) skipSet() {
-	r.skipSequence(SetKind, r.skipSetLeafSequence)
+func (r *valueDecoder) skipSet(nbf *NomsBinFormat) {
+	r.skipSequence(nbf, SetKind, r.skipSetLeafSequence)
 }
 
-func (r *valueDecoder) skipMap() {
-	r.skipSequence(MapKind, r.skipMapLeafSequence)
+func (r *valueDecoder) skipMap(nbf *NomsBinFormat) {
+	r.skipSequence(nbf, MapKind, r.skipMapLeafSequence)
 }
 
-func (r *valueDecoder) skipBlob() {
-	r.skipSequence(BlobKind, r.skipBlobLeafSequence)
+func (r *valueDecoder) skipBlob(nbf *NomsBinFormat) {
+	r.skipSequence(nbf, BlobKind, r.skipBlobLeafSequence)
 }
 
-func (r *valueDecoder) skipSequence(kind NomsKind, leafSkipper func() ([]uint32, uint64)) {
+func (r *valueDecoder) skipSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipper func(nbf *NomsBinFormat) ([]uint32, uint64)) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
-		r.skipMetaSequence(kind, level)
+		r.skipMetaSequence(nbf, kind, level)
 	} else {
-		leafSkipper()
+		leafSkipper(nbf)
 	}
 }
 
-func (r *valueDecoder) skipOrderedKey() {
+func (r *valueDecoder) skipOrderedKey(nbf *NomsBinFormat) {
 	switch r.peekKind() {
 	case hashKind:
 		r.skipKind()
 		r.skipHash()
 	default:
-		r.skipValue()
+		r.skipValue(nbf)
 	}
 }
 
-func (r *valueDecoder) skipMetaSequence(k NomsKind, level uint64) ([]uint32, uint64) {
+func (r *valueDecoder) skipMetaSequence(nbf *NomsBinFormat, k NomsKind, level uint64) ([]uint32, uint64) {
 	count := r.readCount()
 	offsets := make([]uint32, count+1)
 	offsets[0] = r.pos()
 	length := uint64(0)
 	for i := uint64(0); i < count; i++ {
 		r.skipRef()
-		r.skipOrderedKey()
+		r.skipOrderedKey(nbf)
 		length += r.readCount()
 		offsets[i+1] = r.pos()
 	}
 	return offsets, length
 }
 
-func (r *valueDecoder) readValue() Value {
+func (r *valueDecoder) readValue(nbf *NomsBinFormat) Value {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
-		return newBlob(r.readBlobSequence())
+		return newBlob(r.readBlobSequence(nbf))
 	case BoolKind:
 		r.skipKind()
 		return Bool(r.readBool())
 	case FloatKind:
 		r.skipKind()
-		return r.readFloat()
+		return r.readFloat(nbf)
 	case UUIDKind:
 		r.skipKind()
 		return r.readUUID()
@@ -199,17 +199,17 @@ func (r *valueDecoder) readValue() Value {
 		r.skipKind()
 		return String(r.readString())
 	case ListKind:
-		return newList(r.readListSequence())
+		return newList(r.readListSequence(nbf))
 	case MapKind:
-		return newMap(r.readMapSequence())
+		return newMap(r.readMapSequence(nbf))
 	case RefKind:
-		return r.readRef()
+		return r.readRef(nbf)
 	case SetKind:
-		return newSet(r.readSetSequence())
+		return newSet(r.readSetSequence(nbf))
 	case StructKind:
-		return r.readStruct()
+		return r.readStruct(nbf)
 	case TupleKind:
-		return r.readTuple()
+		return r.readTuple(nbf)
 	case TypeKind:
 		r.skipKind()
 		return r.readType()
@@ -220,17 +220,17 @@ func (r *valueDecoder) readValue() Value {
 	panic("not reachable")
 }
 
-func (r *valueDecoder) skipValue() {
+func (r *valueDecoder) skipValue(nbf *NomsBinFormat) {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
-		r.skipBlob()
+		r.skipBlob(nbf)
 	case BoolKind:
 		r.skipKind()
 		r.skipBool()
 	case FloatKind:
 		r.skipKind()
-		r.skipFloat()
+		r.skipFloat(nbf)
 	case UUIDKind:
 		r.skipKind()
 		r.skipUUID()
@@ -246,17 +246,17 @@ func (r *valueDecoder) skipValue() {
 		r.skipKind()
 		r.skipString()
 	case ListKind:
-		r.skipList()
+		r.skipList(nbf)
 	case MapKind:
-		r.skipMap()
+		r.skipMap(nbf)
 	case RefKind:
 		r.skipRef()
 	case SetKind:
-		r.skipSet()
+		r.skipSet(nbf)
 	case StructKind:
-		r.skipStruct()
+		r.skipStruct(nbf)
 	case TupleKind:
-		r.skipTuple()
+		r.skipTuple(nbf)
 	case TypeKind:
 		r.skipKind()
 		r.skipType()
@@ -269,11 +269,11 @@ func (r *valueDecoder) skipValue() {
 
 // readTypeOfValue is basically readValue().typeOf() but it ensures that we do
 // not allocate values where we do not need to.
-func (r *valueDecoder) readTypeOfValue() *Type {
+func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) *Type {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
-		r.skipBlob()
+		r.skipBlob(nbf)
 		return BlobType
 	case BoolKind:
 		r.skipKind()
@@ -281,7 +281,7 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 		return BoolType
 	case FloatKind:
 		r.skipKind()
-		r.skipFloat()
+		r.skipFloat(nbf)
 		return FloaTType
 	case UUIDKind:
 		r.skipKind()
@@ -304,11 +304,11 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 		return StringType
 	case ListKind, MapKind, RefKind, SetKind:
 		// These do not decode the actual values anyway.
-		return r.readValue().typeOf()
+		return r.readValue(nbf).typeOf()
 	case StructKind:
-		return readStructTypeOfValue(r)
+		return readStructTypeOfValue(nbf, r)
 	case TupleKind:
-		return r.readValue().typeOf()
+		return r.readValue(nbf).typeOf()
 	case TypeKind:
 		r.skipKind()
 		r.skipType()
@@ -325,7 +325,7 @@ func (r *valueDecoder) readTypeOfValue() *Type {
 // type.
 // If this returns false the decoder might not have visited the whole value and
 // its offset is no longer valid.
-func (r *valueDecoder) isValueSameTypeForSure(t *Type) bool {
+func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) bool {
 	k := r.peekKind()
 	if k != t.TargetKind() {
 		return false
@@ -333,7 +333,7 @@ func (r *valueDecoder) isValueSameTypeForSure(t *Type) bool {
 
 	switch k {
 	case BlobKind, BoolKind, FloatKind, StringKind, UUIDKind, IntKind, UintKind, NullKind:
-		r.skipValue()
+		r.skipValue(nbf)
 		return true
 	case ListKind, MapKind, RefKind, SetKind, TupleKind:
 		// TODO: Maybe do some simple cases here too. Performance metrics should determine
@@ -341,7 +341,7 @@ func (r *valueDecoder) isValueSameTypeForSure(t *Type) bool {
 		// https://github.com/attic-labs/noms/issues/3776
 		return false
 	case StructKind:
-		return isStructSameTypeForSure(r, t)
+		return isStructSameTypeForSure(nbf, r, t)
 	case TypeKind:
 		return false
 	case CycleKind, UnionKind, ValueKind:
@@ -369,31 +369,31 @@ func (r *valueDecoder) isStringSame(s string) bool {
 	return true
 }
 
-func (r *valueDecoder) readStruct() Value {
-	return readStruct(r)
+func (r *valueDecoder) readStruct(nbf *NomsBinFormat) Value {
+	return readStruct(nbf, r)
 }
 
-func (r *valueDecoder) readTuple() Value {
-	return readTuple(r)
+func (r *valueDecoder) readTuple(nbf *NomsBinFormat) Value {
+	return readTuple(nbf, r)
 }
 
-func (r *valueDecoder) skipStruct() {
-	skipStruct(r)
+func (r *valueDecoder) skipStruct(nbf *NomsBinFormat) {
+	skipStruct(nbf, r)
 }
 
-func (r *valueDecoder) skipTuple() {
-	skipTuple(r)
+func (r *valueDecoder) skipTuple(nbf *NomsBinFormat) {
+	skipTuple(nbf, r)
 }
 
-func (r *valueDecoder) readOrderedKey() orderedKey {
+func (r *valueDecoder) readOrderedKey(nbf *NomsBinFormat) orderedKey {
 	switch r.peekKind() {
 	case hashKind:
 		r.skipKind()
 		h := r.readHash()
 		return orderedKeyFromHash(h)
 	default:
-		v := r.readValue()
-		return newOrderedKey(v)
+		v := r.readValue(nbf)
+		return newOrderedKey(v, nbf)
 	}
 }
 

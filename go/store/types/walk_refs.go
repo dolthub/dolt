@@ -12,13 +12,13 @@ import (
 // WalkRefs calls cb() on each Ref that can be decoded from |c|. The results
 // are precisely equal to DecodeValue(c).WalkRefs(cb), but this should be much
 // faster.
-func WalkRefs(c chunks.Chunk, cb RefCallback) {
-	walkRefs(c.Data(), cb)
+func WalkRefs(c chunks.Chunk, nbf *NomsBinFormat, cb RefCallback) {
+	walkRefs(c.Data(), nbf, cb)
 }
 
-func walkRefs(data []byte, cb RefCallback) {
+func walkRefs(data []byte, nbf *NomsBinFormat, cb RefCallback) {
 	rw := newRefWalker(data)
-	rw.walkValue(cb)
+	rw.walkValue(nbf, cb)
 }
 
 type refWalker struct {
@@ -30,8 +30,8 @@ func newRefWalker(buff []byte) refWalker {
 	return refWalker{typedBinaryNomsReader{nr, false}}
 }
 
-func (r *refWalker) walkRef(cb RefCallback) {
-	cb(readRef(&(r.typedBinaryNomsReader)))
+func (r *refWalker) walkRef(nbf *NomsBinFormat, cb RefCallback) {
+	cb(readRef(nbf, &(r.typedBinaryNomsReader)))
 }
 
 func (r *refWalker) walkBlobLeafSequence() {
@@ -39,89 +39,89 @@ func (r *refWalker) walkBlobLeafSequence() {
 	r.offset += uint32(size)
 }
 
-func (r *refWalker) walkValueSequence(cb RefCallback) {
+func (r *refWalker) walkValueSequence(nbf *NomsBinFormat, cb RefCallback) {
 	count := int(r.readCount())
 	for i := 0; i < count; i++ {
-		r.walkValue(cb)
+		r.walkValue(nbf, cb)
 	}
 }
 
-func (r *refWalker) walkList(cb RefCallback) {
-	r.walkListOrSet(ListKind, cb)
+func (r *refWalker) walkList(nbf *NomsBinFormat, cb RefCallback) {
+	r.walkListOrSet(nbf, ListKind, cb)
 }
 
-func (r *refWalker) walkSet(cb RefCallback) {
-	r.walkListOrSet(SetKind, cb)
+func (r *refWalker) walkSet(nbf *NomsBinFormat, cb RefCallback) {
+	r.walkListOrSet(nbf, SetKind, cb)
 }
 
-func (r *refWalker) walkListOrSet(kind NomsKind, cb RefCallback) {
+func (r *refWalker) walkListOrSet(nbf *NomsBinFormat, kind NomsKind, cb RefCallback) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
-		r.walkMetaSequence(kind, level, cb)
+		r.walkMetaSequence(nbf, kind, level, cb)
 	} else {
-		r.walkValueSequence(cb)
+		r.walkValueSequence(nbf, cb)
 	}
 }
 
-func (r *refWalker) walkMap(cb RefCallback) {
+func (r *refWalker) walkMap(nbf *NomsBinFormat, cb RefCallback) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
-		r.walkMetaSequence(MapKind, level, cb)
+		r.walkMetaSequence(nbf, MapKind, level, cb)
 	} else {
-		r.walkMapLeafSequence(cb)
+		r.walkMapLeafSequence(nbf, cb)
 	}
 }
 
-func (r *refWalker) walkBlob(cb RefCallback) {
+func (r *refWalker) walkBlob(nbf *NomsBinFormat, cb RefCallback) {
 	r.skipKind()
 	level := r.readCount()
 	if level > 0 {
-		r.walkMetaSequence(BlobKind, level, cb)
+		r.walkMetaSequence(nbf, BlobKind, level, cb)
 	} else {
 		r.walkBlobLeafSequence()
 	}
 }
 
-func (r *refWalker) walkMapLeafSequence(cb RefCallback) {
+func (r *refWalker) walkMapLeafSequence(nbf *NomsBinFormat, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkValue(cb) // k
-		r.walkValue(cb) // v
+		r.walkValue(nbf, cb) // k
+		r.walkValue(nbf, cb) // v
 	}
 }
 
-func (r *refWalker) walkMetaSequence(k NomsKind, level uint64, cb RefCallback) {
+func (r *refWalker) walkMetaSequence(nbf *NomsBinFormat, k NomsKind, level uint64, cb RefCallback) {
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkRef(cb) // ref to child sequence
-		r.skipOrderedKey()
+		r.walkRef(nbf, cb) // ref to child sequence
+		r.skipOrderedKey(nbf)
 		r.skipCount() // numLeaves
 	}
 }
 
-func (r *refWalker) skipOrderedKey() {
+func (r *refWalker) skipOrderedKey(nbf *NomsBinFormat) {
 	switch r.peekKind() {
 	case hashKind:
 		r.skipKind()
 		r.skipHash()
 	default:
-		r.walkValue(func(r Ref) {}) // max Value in subtree reachable from here
+		r.walkValue(nbf, func(r Ref) {}) // max Value in subtree reachable from here
 	}
 }
 
-func (r *refWalker) walkValue(cb RefCallback) {
+func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) {
 	k := r.peekKind()
 	switch k {
 	case BlobKind:
-		r.walkBlob(cb)
+		r.walkBlob(nbf, cb)
 	case BoolKind:
 		r.skipKind()
 		r.skipBool()
 	case FloatKind:
 		r.skipKind()
-		r.skipFloat()
+		r.skipFloat(nbf)
 	case IntKind:
 		r.skipKind()
 		r.skipInt()
@@ -137,17 +137,17 @@ func (r *refWalker) walkValue(cb RefCallback) {
 		r.skipKind()
 		r.skipString()
 	case ListKind:
-		r.walkList(cb)
+		r.walkList(nbf, cb)
 	case MapKind:
-		r.walkMap(cb)
+		r.walkMap(nbf, cb)
 	case RefKind:
-		r.walkRef(cb)
+		r.walkRef(nbf, cb)
 	case SetKind:
-		r.walkSet(cb)
+		r.walkSet(nbf, cb)
 	case StructKind:
-		r.walkStruct(cb)
+		r.walkStruct(nbf, cb)
 	case TupleKind:
-		r.walkTuple(cb)
+		r.walkTuple(nbf, cb)
 	case TypeKind:
 		r.skipKind()
 		r.skipType()
@@ -158,10 +158,10 @@ func (r *refWalker) walkValue(cb RefCallback) {
 	}
 }
 
-func (r *refWalker) walkStruct(cb RefCallback) {
-	walkStruct(r, cb)
+func (r *refWalker) walkStruct(nbf *NomsBinFormat, cb RefCallback) {
+	walkStruct(nbf, r, cb)
 }
 
-func (r *refWalker) walkTuple(cb RefCallback) {
-	walkTuple(r, cb)
+func (r *refWalker) walkTuple(nbf *NomsBinFormat, cb RefCallback) {
+	walkTuple(nbf, r, cb)
 }

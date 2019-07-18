@@ -14,6 +14,7 @@ import (
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -107,7 +108,7 @@ func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 	doltRows := make([]row.Row, 0)
 	var r sql.Row
 	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
-		doltRows = append(doltRows, SqlRowToDoltRow(r, targetSch))
+		doltRows = append(doltRows, SqlRowToDoltRow(types.Format_7_18, r, targetSch))
 	}
 	if err !=  io.EOF {
 		return nil, nil, err

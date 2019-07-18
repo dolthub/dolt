@@ -356,7 +356,9 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 // this is not a Dataset spec, returns nil.
 func (sp Spec) GetDataset(ctx context.Context) (ds datas.Dataset) {
 	if sp.Path.Dataset != "" {
-		ds = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
+		var err error
+		ds, err = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
+		d.PanicIfError(err)
 	}
 	return
 }
@@ -396,7 +398,9 @@ func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
 			return sp, true
 		}
 
-		ds = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
+		var err error
+		ds, err = sp.GetDatabase(ctx).GetDataset(ctx, sp.Path.Dataset)
+		d.PanicIfError(err)
 	} else {
 		ds = sp.GetDataset(ctx)
 	}
@@ -406,8 +410,9 @@ func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
 		return Spec{}, false
 	}
 
+	nbf := sp.GetDatabase(ctx).Format()
 	r := sp
-	r.Path.Hash = commit.Hash()
+	r.Path.Hash = commit.Hash(nbf)
 	r.Path.Dataset = ""
 
 	return r, true

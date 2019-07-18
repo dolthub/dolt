@@ -32,8 +32,13 @@ func appendToken(tokens []string, line string, start, pos, quotations int) []str
 	if start == pos {
 		return append(tokens, "")
 	}
+
 	for isWhitespace(line[start]) {
 		start++
+	}
+
+	if start == pos {
+		return append(tokens, "")
 	}
 
 	for isWhitespace(line[pos-1]) {

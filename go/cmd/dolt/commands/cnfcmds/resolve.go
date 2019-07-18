@@ -2,6 +2,7 @@ package cnfcmds
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -116,7 +117,7 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 	}
 
 	tbl, _ := root.GetTable(context.TODO(), tblName)
-	keysToResolve, err := cli.ParseKeyValues(tbl.GetSchema(context.TODO()), args[1:])
+	keysToResolve, err := cli.ParseKeyValues(root.VRW().Format(), tbl.GetSchema(context.TODO()), args[1:])
 
 	if err != nil {
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()

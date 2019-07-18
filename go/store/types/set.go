@@ -23,7 +23,7 @@ func newSet(seq orderedSequence) Set {
 }
 
 func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) Set {
-	data := buildSetData(v)
+	data := buildSetData(vrw.Format(), v)
 	ch := newEmptySetSequenceChunker(ctx, vrw)
 
 	for _, v := range data {
@@ -60,7 +60,7 @@ func readSetInput(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value, 
 	var lastV Value
 	for v := range vChan {
 		if lastV != nil {
-			d.PanicIfFalse(lastV.Less(v))
+			d.PanicIfFalse(lastV.Less(vrw.Format(), v))
 		}
 		lastV = v
 		ch.Append(ctx, v)
@@ -169,17 +169,22 @@ func (s Set) IteratorFrom(ctx context.Context, val Value) SetIterator {
 	}
 }
 
+func (s Set) Format() *NomsBinFormat {
+	return s.format()
+}
+
 func (s Set) Edit() *SetEditor {
 	return NewSetEditor(s)
 }
 
-func buildSetData(values ValueSlice) ValueSlice {
+func buildSetData(nbf *NomsBinFormat, values ValueSlice) ValueSlice {
 	if len(values) == 0 {
 		return ValueSlice{}
 	}
 
+	sort.Stable(ValueSort{values, nbf})
+
 	uniqueSorted := make(ValueSlice, 0, len(values))
-	sort.Stable(values)
 	last := values[0]
 	for i := 1; i < len(values); i++ {
 		v := values[i]
@@ -200,7 +205,7 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		var lastValue Value
 		for i, item := range items {
 			v := item.(Value)
-			d.PanicIfFalse(lastValue == nil || lastValue.Less(v))
+			d.PanicIfFalse(lastValue == nil || lastValue.Less(vrw.Format(), v))
 			lastValue = v
 			setData[i] = v
 		}
@@ -208,7 +213,7 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		set := newSet(newSetLeafSequence(vrw, setData...))
 		var key orderedKey
 		if len(setData) > 0 {
-			key = newOrderedKey(setData[len(setData)-1])
+			key = newOrderedKey(setData[len(setData)-1], vrw.Format())
 		}
 
 		return set, key, uint64(len(items))

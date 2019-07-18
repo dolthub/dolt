@@ -2,14 +2,15 @@ package diff
 
 import (
 	"errors"
+	"io"
+	"time"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/valutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"time"
 )
 
 const (

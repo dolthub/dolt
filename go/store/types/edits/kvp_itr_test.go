@@ -22,7 +22,7 @@ func IsInOrder(itr types.EditProvider) (bool, int) {
 
 		if curr == nil {
 			break
-		} else if curr.Key.Less(prev.Key) {
+		} else if curr.Key.Less(types.Format_7_18, prev.Key) {
 			return false, count
 		}
 
@@ -57,14 +57,14 @@ func TestKVPSliceSort(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		IsInOrder(NewItr(NewKVPCollection(test.kvps)))
-		sort.Stable(test.kvps)
+		IsInOrder(NewItr(types.Format_7_18, NewKVPCollection(types.Format_7_18, test.kvps)))
+		sort.Stable(types.KVPSort{test.kvps, types.Format_7_18})
 
-		if test.kvps.Len() != test.expSorted.Len() {
+		if len(test.kvps) != len(test.expSorted) {
 			t.Error("bad length")
 		}
 
-		for i := 0; i < test.kvps.Len(); i++ {
+		for i := 0; i < len(test.kvps); i++ {
 			if !test.kvps[i].Key.Value(ctx).Equals(test.expSorted[i].Key.Value(ctx)) {
 				t.Error("value at", i, "does not match expected.")
 			}

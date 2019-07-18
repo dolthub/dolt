@@ -34,7 +34,7 @@ func TestMemDatabaseSpec(t *testing.T) {
 	s := types.String("hello")
 	db := spec.GetDatabase(context.Background())
 	db.WriteValue(context.Background(), s)
-	assert.Equal(s, db.ReadValue(context.Background(), s.Hash()))
+	assert.Equal(s, db.ReadValue(context.Background(), s.Hash(types.Format_7_18)))
 }
 
 func TestMemDatasetSpec(t *testing.T) {
@@ -56,7 +56,9 @@ func TestMemDatasetSpec(t *testing.T) {
 	s := types.String("hello")
 	ds, err = spec.GetDatabase(context.Background()).CommitValue(context.Background(), ds, s)
 	assert.NoError(err)
-	assert.Equal(s, ds.HeadValue())
+	currHeadVal, ok := ds.MaybeHeadValue()
+	assert.True(ok)
+	assert.Equal(s, currHeadVal)
 }
 
 func TestMemHashPathSpec(t *testing.T) {
@@ -64,7 +66,7 @@ func TestMemHashPathSpec(t *testing.T) {
 
 	s := types.String("hello")
 
-	spec, err := ForPath("mem::#" + s.Hash().String())
+	spec, err := ForPath("mem::#" + s.Hash(types.Format_7_18).String())
 	assert.NoError(err)
 	defer spec.Close()
 
@@ -93,7 +95,8 @@ func TestMemDatasetPathSpec(t *testing.T) {
 	assert.Nil(spec.GetValue(context.Background()))
 
 	db := spec.GetDatabase(context.Background())
-	ds := db.GetDataset(context.Background(), "test")
+	ds, err := db.GetDataset(context.Background(), "test")
+	assert.NoError(err)
 	_, err = db.CommitValue(context.Background(), ds, types.NewList(context.Background(), db, types.Float(42)))
 	assert.NoError(err)
 
@@ -119,7 +122,9 @@ func TestNBSDatabaseSpec(t *testing.T) {
 			db := datas.NewDatabase(cs)
 			defer db.Close()
 			r := db.WriteValue(context.Background(), s)
-			_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
+			ds, err := db.GetDataset(context.Background(), "datasetID")
+			assert.NoError(err)
+			_, err = db.CommitValue(context.Background(), ds, r)
 			assert.NoError(err)
 		}()
 
@@ -130,7 +135,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		assert.Equal("nbs", spec1.Protocol)
 		assert.Equal(store1, spec1.DatabaseName)
 
-		assert.Equal(s, spec1.GetDatabase(context.Background()).ReadValue(context.Background(), s.Hash()))
+		assert.Equal(s, spec1.GetDatabase(context.Background()).ReadValue(context.Background(), s.Hash(types.Format_7_18)))
 
 		// New databases can be created and read/written from.
 		store2 := filepath.Join(tmpDir, "store2")
@@ -145,9 +150,11 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		db := spec2.GetDatabase(context.Background())
 		db.WriteValue(context.Background(), s)
 		r := db.WriteValue(context.Background(), s)
-		_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
+		ds, err := db.GetDataset(context.Background(), "datasetID")
 		assert.NoError(err)
-		assert.Equal(s, db.ReadValue(context.Background(), s.Hash()))
+		_, err = db.CommitValue(context.Background(), ds, r)
+		assert.NoError(err)
+		assert.Equal(s, db.ReadValue(context.Background(), s.Hash(types.Format_7_18)))
 	}
 
 	run("")
@@ -348,20 +355,29 @@ func TestPinPathSpec(t *testing.T) {
 	defer unpinned.Close()
 
 	db := unpinned.GetDatabase(context.Background())
-	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(42))
+	ds, err := db.GetDataset(context.Background(), "foo")
+	assert.NoError(err)
+	_, err = db.CommitValue(context.Background(), ds, types.Float(42))
+	assert.NoError(err)
 
 	pinned, ok := unpinned.Pin(context.Background())
 	assert.True(ok)
 	defer pinned.Close()
 
-	head := db.GetDataset(context.Background(), "foo").Head()
+	ds, err = db.GetDataset(context.Background(), "foo")
+	assert.NoError(err)
+	head, ok := ds.MaybeHead()
+	assert.True(ok)
 
-	assert.Equal(head.Hash(), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash().String()), pinned.String())
+	assert.Equal(head.Hash(types.Format_7_18), pinned.Path.Hash)
+	assert.Equal(fmt.Sprintf("mem::#%s.value", head.Hash(types.Format_7_18).String()), pinned.String())
 	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
 	assert.Equal(types.Float(42), unpinned.GetValue(context.Background()))
 
-	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(43))
+	ds, err = db.GetDataset(context.Background(), "foo")
+	assert.NoError(err)
+	_, err = db.CommitValue(context.Background(), ds, types.Float(43))
+	assert.NoError(err)
 	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
 	assert.Equal(types.Float(43), unpinned.GetValue(context.Background()))
 }
@@ -374,26 +390,39 @@ func TestPinDatasetSpec(t *testing.T) {
 	defer unpinned.Close()
 
 	db := unpinned.GetDatabase(context.Background())
-	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(42))
+	ds, err := db.GetDataset(context.Background(), "foo")
+	assert.NoError(err)
+	_, err = db.CommitValue(context.Background(), ds, types.Float(42))
+	assert.NoError(err)
 
 	pinned, ok := unpinned.Pin(context.Background())
 	assert.True(ok)
 	defer pinned.Close()
 
-	head := db.GetDataset(context.Background(), "foo").Head()
+	ds, err = db.GetDataset(context.Background(), "foo")
+	assert.NoError(err)
+	head, ok := ds.MaybeHead()
+	assert.True(ok)
 
 	commitValue := func(val types.Value) types.Value {
 		return val.(types.Struct).Get(datas.ValueField)
 	}
 
-	assert.Equal(head.Hash(), pinned.Path.Hash)
-	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash().String()), pinned.String())
+	assert.Equal(head.Hash(types.Format_7_18), pinned.Path.Hash)
+	assert.Equal(fmt.Sprintf("mem::#%s", head.Hash(types.Format_7_18).String()), pinned.String())
 	assert.Equal(types.Float(42), commitValue(pinned.GetValue(context.Background())))
-	assert.Equal(types.Float(42), unpinned.GetDataset(context.Background()).HeadValue())
+	headVal, ok := unpinned.GetDataset(context.Background()).MaybeHeadValue()
+	assert.True(ok)
+	assert.Equal(types.Float(42), headVal)
 
-	db.CommitValue(context.Background(), db.GetDataset(context.Background(), "foo"), types.Float(43))
+	ds, err = db.GetDataset(context.Background(), "foo")
+	assert.NoError(err)
+	_, err = db.CommitValue(context.Background(), ds, types.Float(43))
+	assert.NoError(err)
 	assert.Equal(types.Float(42), commitValue(pinned.GetValue(context.Background())))
-	assert.Equal(types.Float(43), unpinned.GetDataset(context.Background()).HeadValue())
+	headVal, ok = unpinned.GetDataset(context.Background()).MaybeHeadValue()
+	assert.True(ok)
+	assert.Equal(types.Float(43), headVal)
 }
 
 func TestAlreadyPinnedPathSpec(t *testing.T) {
@@ -422,9 +451,11 @@ func TestMultipleSpecsSameNBS(t *testing.T) {
 	s := types.String("hello")
 	db := spec1.GetDatabase(context.Background())
 	r := db.WriteValue(context.Background(), s)
-	_, err = db.CommitValue(context.Background(), db.GetDataset(context.Background(), "datasetID"), r)
+	ds, err := db.GetDataset(context.Background(), "datasetID")
 	assert.NoError(err)
-	assert.Equal(s, spec2.GetDatabase(context.Background()).ReadValue(context.Background(), s.Hash()))
+	_, err = db.CommitValue(context.Background(), ds, r)
+	assert.NoError(err)
+	assert.Equal(s, spec2.GetDatabase(context.Background()).ReadValue(context.Background(), s.Hash(types.Format_7_18)))
 }
 
 func TestAcccessingInvalidSpec(t *testing.T) {
@@ -494,5 +525,7 @@ func TestExternalProtocol(t *testing.T) {
 	ds, err = ds.Database().CommitValue(context.Background(), ds, types.String("hi!"))
 	d.PanicIfError(err)
 
-	assert.True(types.String("hi!").Equals(ds.HeadValue()))
+	headVal, ok := ds.MaybeHeadValue()
+	assert.True(ok)
+	assert.True(types.String("hi!").Equals(headVal))
 }

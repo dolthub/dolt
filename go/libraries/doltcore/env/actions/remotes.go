@@ -6,7 +6,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 )
 
@@ -26,9 +25,7 @@ func Push(ctx context.Context, destRef ref.BranchRef, remoteRef ref.RemoteRef, s
 		return ErrCantFF
 	}
 
-	err = pantoerr.PanicToErrorNil("error pulling chunks", func() {
-		destDB.PushChunks(ctx, srcDB, commit, progChan)
-	})
+	err = destDB.PushChunks(ctx, srcDB, commit, progChan)
 
 	if err != nil {
 		return err
@@ -48,8 +45,13 @@ func Push(ctx context.Context, destRef ref.BranchRef, remoteRef ref.RemoteRef, s
 // DeleteRemoteBranch validates targetRef is a branch on the remote database, and then deletes it, then deletes the
 // remote tracking branch from the local database.
 func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef ref.RemoteRef, localDB, remoteDB *doltdb.DoltDB) error {
-	var err error
-	if remoteDB.HasRef(ctx, targetRef) {
+	hasRef, err := remoteDB.HasRef(ctx, targetRef)
+
+	if err != nil {
+		return err
+	}
+
+	if hasRef {
 		err = remoteDB.DeleteBranch(ctx, targetRef)
 	}
 
@@ -67,9 +69,7 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 }
 
 func Fetch(ctx context.Context, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
-	err := pantoerr.PanicToErrorNil("error pulling chunks", func() {
-		destDB.PullChunks(ctx, srcDB, commit, progChan)
-	})
+	err := destDB.PullChunks(ctx, srcDB, commit, progChan)
 
 	if err != nil {
 		return err

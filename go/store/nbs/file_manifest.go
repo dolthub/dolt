@@ -7,7 +7,6 @@ package nbs
 import (
 	"context"
 	"errors"
-	"github.com/juju/fslock"
 	"io"
 	"io/ioutil"
 	"os"
@@ -15,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/juju/fslock"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -277,8 +276,8 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 				return manifestContents{}, ferr
 			}
 
-			if constants.NomsVersion != upstream.vers {
-				return manifestContents{}, errors.New("invalid noms version")
+			if newContents.vers != upstream.vers {
+				return manifestContents{}, errors.New("Update cannot change manifest version")
 			}
 
 			return upstream, nil
@@ -286,7 +285,10 @@ func (fm fileManifest) Update(ctx context.Context, lastLock addr, newContents ma
 			return manifestContents{}, ferr
 		}
 
-		d.Chk.True(lastLock == addr{})
+		if lastLock != (addr{}) {
+			return manifestContents{}, errors.New("new manifest created with non 0 lock")
+		}
+
 		return manifestContents{}, nil
 	}()
 

@@ -12,17 +12,22 @@ type KVP struct {
 // KVPSlice is a slice of KVPs that implements sort.Interface
 type KVPSlice []KVP
 
+type KVPSort struct {
+	Values []KVP
+	NBF    *NomsBinFormat
+}
+
 // Len returns the size of the slice
-func (kvps KVPSlice) Len() int {
-	return len(kvps)
+func (kvps KVPSort) Len() int {
+	return len(kvps.Values)
 }
 
 // Less returns a bool representing whether the key at index i is less than the key at index j
-func (kvps KVPSlice) Less(i, j int) bool {
-	return kvps[i].Key.Less(kvps[j].Key)
+func (kvps KVPSort) Less(i, j int) bool {
+	return kvps.Values[i].Key.Less(kvps.NBF, kvps.Values[j].Key)
 }
 
 // Swap swaps the KVP at index i with the KVP at index j
-func (kvps KVPSlice) Swap(i, j int) {
-	kvps[i], kvps[j] = kvps[j], kvps[i]
+func (kvps KVPSort) Swap(i, j int) {
+	kvps.Values[i], kvps.Values[j] = kvps.Values[j], kvps.Values[i]
 }

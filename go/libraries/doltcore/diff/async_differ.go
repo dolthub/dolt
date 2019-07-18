@@ -3,9 +3,10 @@ package diff
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/diff"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"time"
 )
 
 type AsyncDiffer struct {
@@ -29,7 +30,7 @@ func tableDontDescendLists(v1, v2 types.Value) bool {
 	return !types.IsPrimitiveKind(kind) && kind != types.TupleKind && kind == v2.Kind() && kind != types.RefKind
 }
 
-func (ad *AsyncDiffer) Start(ctx context.Context, v1, v2 types.Value) {
+func (ad *AsyncDiffer) Start(ctx context.Context, v1, v2 types.Map) {
 	go func() {
 		defer close(ad.diffChan)
 		defer func() {

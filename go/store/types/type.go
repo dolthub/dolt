@@ -7,6 +7,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
@@ -48,34 +49,34 @@ func (t *Type) Equals(other Value) (res bool) {
 	}
 
 	if otherType, ok := other.(*Type); ok {
-		return t.TargetKind() == otherType.TargetKind() && t.Hash() == other.Hash()
+		return t.TargetKind() == otherType.TargetKind() && t.Hash(Format_7_18) == other.Hash(Format_7_18)
 	}
 
 	return false
 }
 
-func (t *Type) Less(other LesserValuable) (res bool) {
-	return valueLess(t, other.(Value))
+func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (res bool) {
+	return valueLess(nbf, t, other.(Value))
 }
 
-func (t *Type) Hash() hash.Hash {
-	return getHash(t)
+func (t *Type) Hash(nbf *NomsBinFormat) hash.Hash {
+	return getHash(t, nbf)
 }
 
-func (t *Type) writeTo(w nomsWriter) {
-	TypeKind.writeTo(w)
-	t.writeToAsType(w, map[string]*Type{})
+func (t *Type) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+	TypeKind.writeTo(w, nbf)
+	t.writeToAsType(w, map[string]*Type{}, nbf)
 }
 
-func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type) {
-	t.Desc.writeTo(w, t, seensStructs)
+func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type, nbf *NomsBinFormat) {
+	t.Desc.writeTo(w, nbf, t, seensStructs)
 }
 
 func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
 	t.Desc.walkValues(cb)
 }
 
-func (t *Type) WalkRefs(cb RefCallback) {
+func (t *Type) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
 }
 
 func (t *Type) typeOf() *Type {

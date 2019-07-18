@@ -50,7 +50,7 @@ func Now() DateTime {
 // MarshalNoms makes DateTime implement marshal.Marshaler and it makes
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms(vrw types.ValueReadWriter) (types.Value, error) {
-	return dateTimeTemplate.NewStruct([]types.Value{types.Float(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)}), nil
+	return dateTimeTemplate.NewStruct(vrw.Format(), []types.Value{types.Float(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)}), nil
 }
 
 // MarshalNomsType makes DateTime implement marshal.TypeMarshaler and it
@@ -62,11 +62,11 @@ func (dt DateTime) MarshalNomsType() (*types.Type, error) {
 // UnmarshalNoms makes DateTime implement marshal.Unmarshaler and it allows
 // Noms struct with type DateTimeType able to be unmarshaled onto a DateTime
 // Go struct
-func (dt *DateTime) UnmarshalNoms(ctx context.Context, v types.Value) error {
+func (dt *DateTime) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	strct := struct {
 		SecSinceEpoch float64
 	}{}
-	err := marshal.Unmarshal(ctx, v, &strct)
+	err := marshal.Unmarshal(ctx, nbf, v, &strct)
 	if err != nil {
 		return err
 	}
@@ -81,12 +81,16 @@ type DateTimeCommenter struct {
 }
 
 func (c DateTimeCommenter) Comment(ctx context.Context, v types.Value) string {
-	if !types.IsValueSubtypeOf(v, DateTimeType) {
-		return ""
+	if s, ok := v.(types.Struct); ok {
+		if secsV, ok := s.MaybeGet("secSinceEpoch"); ok {
+			if secsF, ok := secsV.(types.Float); ok {
+				s, frac := math.Modf(float64(secsF))
+				dt := time.Unix(int64(s), int64(frac*1e9))
+				return dt.In(c.tz).Format(time.RFC3339)
+			}
+		}
 	}
-	var dt DateTime
-	marshal.MustUnmarshal(ctx, v, &dt)
-	return dt.In(c.tz).Format(time.RFC3339)
+	return ""
 }
 
 func RegisterHRSCommenter(tz *time.Location) {

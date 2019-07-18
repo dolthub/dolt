@@ -154,7 +154,7 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 		return maxLen
 	}
 
-	hashStr := node.commit.Hash().String()
+	hashStr := node.commit.Hash(db.Format()).String()
 	if useColor {
 		hashStr = ansi.Color("commit "+hashStr, "red+h")
 	}
@@ -277,7 +277,7 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 			// field of type datetime.DateTimeType
 			if types.TypeOf(v).Equals(datetime.DateTimeType) {
 				var dt datetime.DateTime
-				err = dt.UnmarshalNoms(ctx, v)
+				err = dt.UnmarshalNoms(ctx, node.commit.Format(), v)
 
 				if err != nil {
 					return
@@ -354,10 +354,10 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization
 	// of some of the code in PrintDiff() because it cannot tolerate nil parameters.
 	if neu == nil {
-		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash().String(), path.String())
+		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash(node.commit.Format()).String(), path.String())
 	}
 	if old == nil {
-		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash().String(), path.String())
+		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash(parentCommit.Format()).String(), path.String())
 	}
 
 	if old != nil && neu != nil {

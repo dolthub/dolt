@@ -7,21 +7,25 @@ package types
 import (
 	"context"
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
-var EmptyTuple = NewTuple()
+func EmptyTuple(nbf *NomsBinFormat) Tuple {
+	return NewTuple(nbf)
+}
 
 type TupleIterator struct {
 	dec   valueDecoder
 	count uint64
 	pos   uint64
+	nbf   *NomsBinFormat
 }
 
 func (itr *TupleIterator) Next() (uint64, Value) {
 	if itr.pos < itr.count {
 		valPos := itr.pos
-		val := itr.dec.readValue()
+		val := itr.dec.readValue(itr.nbf)
 
 		itr.pos++
 		return valPos, val
@@ -47,46 +51,50 @@ type Tuple struct {
 }
 
 // readTuple reads the data provided by a decoder and moves the decoder forward.
-func readTuple(dec *valueDecoder) Tuple {
+func readTuple(nbf *NomsBinFormat, dec *valueDecoder) Tuple {
 	start := dec.pos()
-	skipTuple(dec)
+	skipTuple(nbf, dec)
 	end := dec.pos()
-	return Tuple{valueImpl{dec.vrw, dec.byteSlice(start, end), nil}}
+	return Tuple{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}
 }
 
-func skipTuple(dec *valueDecoder) {
+func skipTuple(nbf *NomsBinFormat, dec *valueDecoder) {
 	dec.skipKind()
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
-		dec.skipValue()
+		dec.skipValue(nbf)
 	}
 }
 
-func walkTuple(r *refWalker, cb RefCallback) {
+func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) {
 	r.skipKind()
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkValue(cb)
+		r.walkValue(nbf, cb)
 	}
 }
 
-func NewTuple(values ...Value) Tuple {
+func NewTuple(nbf *NomsBinFormat, values ...Value) Tuple {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	TupleKind.writeTo(&w)
+	TupleKind.writeTo(&w, nbf)
 	numVals := len(values)
 	w.writeCount(uint64(numVals))
 	for i := 0; i < numVals; i++ {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(&w)
+		values[i].writeTo(&w, nbf)
 	}
-	return Tuple{valueImpl{vrw, w.data(), nil}}
+	return Tuple{valueImpl{vrw, nbf, w.data(), nil}}
 }
 
 func (t Tuple) Empty() bool {
 	return t.Len() == 0
+}
+
+func (t Tuple) Format() *NomsBinFormat {
+	return t.format()
 }
 
 // Value interface
@@ -97,7 +105,7 @@ func (t Tuple) Value(ctx context.Context) Value {
 func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) {
 	dec, count := t.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		cb(dec.readValue())
+		cb(dec.readValue(t.format()))
 	}
 }
 
@@ -108,13 +116,13 @@ func (t Tuple) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(lastType) {
+			if dec.isValueSameTypeForSure(t.format(), lastType) {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue()
+		lastType = dec.readTypeOfValue(t.format())
 		ts = append(ts, lastType)
 	}
 
@@ -142,10 +150,10 @@ func (t Tuple) IteratorAt(pos uint64) *TupleIterator {
 	dec, count := t.decoderSkipToFields()
 
 	for i := uint64(0); i < pos; i++ {
-		dec.skipValue()
+		dec.skipValue(t.format())
 	}
 
-	return &TupleIterator{dec, count, pos}
+	return &TupleIterator{dec, count, pos, t.format()}
 }
 
 // IterFields iterates over the fields, calling cb for every field in the tuple until cb returns false
@@ -170,10 +178,10 @@ func (t Tuple) Get(n uint64) Value {
 	}
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue()
+		dec.skipValue(t.format())
 	}
 
-	v := dec.readValue()
+	v := dec.readValue(t.format())
 	return v
 }
 
@@ -190,10 +198,10 @@ func (t Tuple) Set(n uint64, v Value) Tuple {
 
 	w.writeCount(count)
 	w.writeRaw(head)
-	v.writeTo(&w)
+	v.writeTo(&w, t.format())
 	w.writeRaw(tail)
 
-	return Tuple{valueImpl{t.vrw, w.data(), nil}}
+	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}
 }
 
 func (t Tuple) Append(v Value) Tuple {
@@ -207,9 +215,9 @@ func (t Tuple) Append(v Value) Tuple {
 	w.writeRaw(prolog)
 	w.writeCount(count + 1)
 	w.writeRaw(dec.buff[fieldsOffset:])
-	v.writeTo(&w)
+	v.writeTo(&w, t.format())
 
-	return Tuple{valueImpl{t.vrw, w.data(), nil}}
+	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
@@ -228,13 +236,13 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	fieldsOffset := dec.offset
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue()
+		dec.skipValue(t.format())
 	}
 
 	head = dec.buff[fieldsOffset:dec.offset]
 
 	if n != count-1 {
-		dec.skipValue()
+		dec.skipValue(t.format())
 		tail = dec.buff[dec.offset:len(dec.buff)]
 	}
 
@@ -265,7 +273,7 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return false
 }*/
 
-func (t Tuple) Less(other LesserValuable) bool {
+func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	if otherTuple, ok := other.(Tuple); ok {
 		itr := t.Iterator()
 		otherItr := otherTuple.Iterator()
@@ -279,7 +287,7 @@ func (t Tuple) Less(other LesserValuable) bool {
 			_, currOthVal := otherItr.Next()
 
 			if !currVal.Equals(currOthVal) {
-				return currVal.Less(currOthVal)
+				return currVal.Less(nbf, currOthVal)
 			}
 		}
 

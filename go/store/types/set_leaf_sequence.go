@@ -21,11 +21,11 @@ func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
 // orderedSequence interface
 
 func (sl setLeafSequence) getKey(idx int) orderedKey {
-	return newOrderedKey(sl.getItem(idx).(Value))
+	return newOrderedKey(sl.getItem(idx).(Value), sl.format())
 }
 
 func (sl setLeafSequence) search(key orderedKey) int {
 	return sort.Search(int(sl.Len()), func(i int) bool {
-		return !sl.getKey(i).Less(key)
+		return !sl.getKey(i).Less(sl.format(), key)
 	})
 }

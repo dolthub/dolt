@@ -36,14 +36,14 @@ func UnmarshalFromJSON(data []byte) (*JsonRows, error) {
 
 // decodeJsonRows takes []JsonRows and converts them to []row.Row
 //Need schema and tagged vals to create a new row
-func (jr JsonRows) decodeJSONRows(sch schema.Schema) ([]row.Row, error) {
+func (jr JsonRows) decodeJSONRows(nbf *types.NomsBinFormat, sch schema.Schema) ([]row.Row, error) {
 	rowMaps := jr.Rows
 	numRows := len(rowMaps)
 	rows := make([]row.Row, numRows)
 	var err error
 
 	for i := 0; i < numRows; i++ {
-		rows[i], err = convToRow(sch, rowMaps[i])
+		rows[i], err = convToRow(nbf, sch, rowMaps[i])
 		if err != nil {
 			return nil, err
 		}
@@ -64,7 +64,7 @@ func TableFromJSON(ctx context.Context, fp string, vrw types.ValueReadWriter, sc
 		return nil, err
 	}
 
-	tblRows, err := jsonRows.decodeJSONRows(sch)
+	tblRows, err := jsonRows.decodeJSONRows(vrw.Format(), sch)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ func TableFromJSON(ctx context.Context, fp string, vrw types.ValueReadWriter, sc
 
 }
 
-func convToRow(sch schema.Schema, rowMap map[string]interface{}) (row.Row, error) {
+func convToRow(nbf *types.NomsBinFormat, sch schema.Schema, rowMap map[string]interface{}) (row.Row, error) {
 	allCols := sch.GetAllCols()
 
 	taggedVals := make(row.TaggedValues, 1)
@@ -117,5 +117,5 @@ func convToRow(sch schema.Schema, rowMap map[string]interface{}) (row.Row, error
 		}
 
 	}
-	return row.New(sch, taggedVals), nil
+	return row.New(nbf, sch, taggedVals), nil
 }

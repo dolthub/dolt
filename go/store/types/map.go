@@ -29,10 +29,10 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
 }
 
 func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) Map {
-	entries := buildMapData(kv)
+	entries := buildMapData(vrw.Format(), kv)
 	ch := newEmptyMapSequenceChunker(ctx, vrw)
 
-	for _, entry := range entries {
+	for _, entry := range entries.entries {
 		ch.Append(ctx, entry)
 	}
 
@@ -70,7 +70,7 @@ func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value, ou
 	for v := range kvs {
 		if nextIsKey {
 			k = v
-			d.PanicIfFalse(lastK == nil || lastK.Less(k))
+			d.PanicIfFalse(lastK == nil || lastK.Less(vrw.Format(), k))
 			lastK = k
 			nextIsKey = false
 			continue
@@ -134,6 +134,10 @@ func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value) {
 	}
 	entry := cur.current().(mapEntry)
 	return entry.key, entry.value
+}
+
+func (m Map) Format() *NomsBinFormat {
+	return m.format()
 }
 
 func (m Map) First(ctx context.Context) (Value, Value) {
@@ -246,7 +250,7 @@ func (m Map) Edit() *MapEditor {
 	return NewMapEditor(m)
 }
 
-func buildMapData(values []Value) mapEntrySlice {
+func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
 	if len(values) == 0 {
 		return mapEntrySlice{}
 	}
@@ -254,28 +258,38 @@ func buildMapData(values []Value) mapEntrySlice {
 	if len(values)%2 != 0 {
 		d.Panic("Must specify even number of key/value pairs")
 	}
-	kvs := make(mapEntrySlice, len(values)/2)
+	kvs := mapEntrySlice{
+		make([]mapEntry, len(values)/2),
+		nbf,
+	}
 
 	for i := 0; i < len(values); i += 2 {
 		d.PanicIfTrue(values[i] == nil)
 		d.PanicIfTrue(values[i+1] == nil)
 		entry := mapEntry{values[i], values[i+1]}
-		kvs[i/2] = entry
+		kvs.entries[i/2] = entry
 	}
 
-	uniqueSorted := make(mapEntrySlice, 0, len(kvs))
+	uniqueSorted := mapEntrySlice{
+		make([]mapEntry, 0, len(kvs.entries)),
+		nbf,
+	}
+
 	sort.Stable(kvs)
-	last := kvs[0]
-	for i := 1; i < len(kvs); i++ {
-		kv := kvs[i]
+	last := kvs.entries[0]
+	for i := 1; i < kvs.Len(); i++ {
+		kv := kvs.entries[i]
 		if !kv.key.Equals(last.key) {
-			uniqueSorted = append(uniqueSorted, last)
+			uniqueSorted.entries = append(uniqueSorted.entries, last)
 		}
 
 		last = kv
 	}
 
-	return append(uniqueSorted, last)
+	return mapEntrySlice{
+		append(uniqueSorted.entries, last),
+		uniqueSorted.nbf,
+	}
 }
 
 func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
@@ -286,7 +300,7 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		var lastKey Value
 		for i, v := range items {
 			entry := v.(mapEntry)
-			d.PanicIfFalse(lastKey == nil || lastKey.Less(entry.key))
+			d.PanicIfFalse(lastKey == nil || lastKey.Less(vrw.Format(), entry.key))
 			lastKey = entry.key
 			mapData[i] = entry
 		}
@@ -294,7 +308,7 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		m := newMap(newMapLeafSequence(vrw, mapData...))
 		var key orderedKey
 		if len(mapData) > 0 {
-			key = newOrderedKey(mapData[len(mapData)-1].key)
+			key = newOrderedKey(mapData[len(mapData)-1].key, vrw.Format())
 		}
 		return m, key, uint64(len(items))
 	}

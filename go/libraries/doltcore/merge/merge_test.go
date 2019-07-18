@@ -47,7 +47,7 @@ func valsToTestTuple(vals []types.Value, includePrimaryKeys bool) types.Value {
 		}
 	}
 
-	return types.NewTuple(tplVals...)
+	return types.NewTuple(types.Format_7_18, tplVals...)
 }
 
 func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []types.Value, expectCnf bool) RowMergeTest {
@@ -155,9 +155,9 @@ func TestRowMerge(t *testing.T) {
 		),
 		createRowMergeStruct(
 			"modify row where initial value wasn't given",
-			[]types.Value{types.NewTuple(types.String("one"), types.Uint(2), types.String("a"))},
-			[]types.Value{types.NewTuple(types.String("one"), types.Uint(2), types.String("b"))},
-			[]types.Value{types.NewTuple(types.String("one"), types.Uint(2), types.NullValue)},
+			[]types.Value{types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("a"))},
+			[]types.Value{types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("b"))},
+			[]types.Value{types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.NullValue)},
 			nil,
 			true,
 		),
@@ -165,7 +165,7 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualResult, isConflict := rowMerge(context.Background(), test.sch, test.row, test.mergeRow, test.ancRow)
+			actualResult, isConflict := rowMerge(context.Background(), types.Format_7_18, test.sch, test.row, test.mergeRow, test.ancRow)
 			assert.Equal(t, test.expectedResult, actualResult, "expected "+types.EncodedValue(context.Background(), test.expectedResult)+"got "+types.EncodedValue(context.Background(), actualResult))
 			assert.Equal(t, test.expectConflict, isConflict)
 		})
@@ -211,7 +211,7 @@ func init() {
 	keyTag := types.Uint(idTag)
 
 	for i, id := range uuids {
-		keyTuples[i] = types.NewTuple(keyTag, id)
+		keyTuples[i] = types.NewTuple(types.Format_7_18, keyTag, id)
 	}
 }
 

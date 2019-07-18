@@ -2,10 +2,11 @@ package mvdata
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -136,19 +137,19 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 
 		switch dl.Format {
 		case CsvFile:
-			rd, err := csv.OpenCSVReader(dl.Path, fs, csv.NewCSVInfo())
+			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo())
 			return rd, false, err
 
 		case PsvFile:
-			rd, err := csv.OpenCSVReader(dl.Path, fs, csv.NewCSVInfo().SetDelim('|'))
+			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim('|'))
 			return rd, false, err
 
 		case XlsxFile:
-			rd, err := xlsx.OpenXLSXReader(dl.Path, fs, xlsx.NewXLSXInfo(), tblName)
+			rd, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, xlsx.NewXLSXInfo(), tblName)
 			return rd, false, err
 
 		case JsonFile:
-			rd, err := json.OpenJSONReader(dl.Path, fs, json.NewJSONInfo(), schPath)
+			rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), schPath)
 			return rd, false, err
 		}
 	}

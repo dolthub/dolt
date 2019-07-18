@@ -2,12 +2,13 @@ package sql
 
 import (
 	"context"
+	"strconv"
+
 	"github.com/google/uuid"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"strconv"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -15,7 +16,7 @@ import (
 type binaryNomsOperation func(left, right types.Value) types.Value
 
 // predicate function for two noms values, e.g. <
-type binaryNomsPredicate func(left, right types.Value) bool
+type binaryNomsPredicate func(nbf *types.NomsBinFormat, left, right types.Value) bool
 
 // unaryNomsOperation knows how to turn a single noms value into another one, e.g. negation
 type unaryNomsOperation func(val types.Value) types.Value
@@ -165,7 +166,7 @@ func nullSafeBoolOp(left, right *RowValGetter, fn binaryNomsPredicate) func(r ro
 		if types.IsNull(leftVal) || types.IsNull(rightVal) {
 			return nil
 		}
-		return types.Bool(fn(leftVal, rightVal))
+		return types.Bool(fn(r.Format(), leftVal, rightVal))
 	}
 }
 
@@ -256,36 +257,36 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		var predicate binaryNomsPredicate
 		switch e.Operator {
 		case sqlparser.EqualStr:
-			predicate = func(left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				return left.Equals(right)
 			}
 		case sqlparser.LessThanStr:
-			predicate = func(left, right types.Value) bool {
-				return left.Less(right)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return left.Less(nbf, right)
 			}
 		case sqlparser.GreaterThanStr:
-			predicate = func(left, right types.Value) bool {
-				return right.Less(left)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return right.Less(nbf, left)
 			}
 		case sqlparser.LessEqualStr:
-			predicate = func(left, right types.Value) bool {
-				return left.Less(right) || left.Equals(right)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return left.Less(nbf, right) || left.Equals(right)
 			}
 		case sqlparser.GreaterEqualStr:
-			predicate = func(left, right types.Value) bool {
-				return right.Less(left) || right.Equals(left)
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
+				return right.Less(nbf, left) || right.Equals(left)
 			}
 		case sqlparser.NotEqualStr:
-			predicate = func(left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				return !left.Equals(right)
 			}
 		case sqlparser.InStr:
-			predicate = func(left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				set := right.(types.Set)
 				return set.Has(context.Background(), left)
 			}
 		case sqlparser.NotInStr:
-			predicate = func(left, right types.Value) bool {
+			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				set := right.(types.Set)
 				return !set.Has(context.Background(), left)
 			}
@@ -320,7 +321,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 
 		getter := RowValGetterForKind(types.BoolKind)
-		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 			return bool(left.(types.Bool) && right.(types.Bool))
 		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)
@@ -337,7 +338,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		}
 
 		getter := RowValGetterForKind(types.BoolKind)
-		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(left, right types.Value) bool {
+		getter.getFn = nullSafeBoolOp(leftGetter, rightGetter, func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 			return bool(left.(types.Bool) || right.(types.Bool))
 		})
 		getter.initFn = ComposeInits(leftGetter, rightGetter)

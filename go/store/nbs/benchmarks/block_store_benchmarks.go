@@ -46,7 +46,10 @@ func writeToEmptyStore(store chunks.ChunkStore, src *dataSource, t assert.Testin
 func goReadChunks(src *dataSource) <-chan *chunks.Chunk {
 	chunx := make(chan *chunks.Chunk, 1024)
 	go func() {
-		src.ReadChunks(chunx)
+		err := src.ReadChunks(chunx)
+
+		d.PanicIfError(err)
+
 		close(chunx)
 	}()
 	return chunx

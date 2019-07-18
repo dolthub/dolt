@@ -641,7 +641,7 @@ func TestSetOfStruct(t *testing.T) {
 
 	elems := []Value{}
 	for i := 0; i < 200; i++ {
-		elems = append(elems, NewStruct("S1", StructData{"o": Float(i)}))
+		elems = append(elems, NewStruct(Format_7_18, "S1", StructData{"o": Float(i)}))
 	}
 
 	s := NewSet(context.Background(), vs, elems...)
@@ -681,7 +681,7 @@ func TestSetIter2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		sort.Sort(ValueSlice(ts))
+		sort.Sort(ValueSort{ts, Format_7_18})
 		idx := uint64(0)
 		endAt := uint64(64)
 
@@ -727,7 +727,7 @@ func TestSetIterAll2(t *testing.T) {
 		vrw := newTestValueStore()
 		ts := toTestSet(scale, vrw)
 		set := ts.toSet(vrw)
-		sort.Sort(ValueSlice(ts))
+		sort.Sort(ValueSort{ts, Format_7_18})
 		idx := uint64(0)
 
 		set.IterAll(context.Background(), func(v Value) {
@@ -746,7 +746,7 @@ func testSetOrder(assert *assert.Assertions, vrw ValueReadWriter, valueType *Typ
 	m := NewSet(context.Background(), vrw, value...)
 	i := 0
 	m.IterAll(context.Background(), func(value Value) {
-		assert.Equal(expectOrdering[i].Hash().String(), value.Hash().String())
+		assert.Equal(expectOrdering[i].Hash(Format_7_18).String(), value.Hash(Format_7_18).String())
 		i++
 	})
 }
@@ -901,7 +901,7 @@ func TestSetChunks(t *testing.T) {
 	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
-	l2 := NewSet(context.Background(), vs, NewRef(Float(0)))
+	l2 := NewSet(context.Background(), vs, NewRef(Float(0), Format_7_18))
 	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 }
@@ -1014,16 +1014,16 @@ func TestChunkedSetWithValuesOfEveryType(t *testing.T) {
 		NewSet(context.Background(), vs, Bool(true)),
 		NewList(context.Background(), vs, Bool(true)),
 		NewMap(context.Background(), vs, Bool(true), Float(0)),
-		NewStruct("", StructData{"field": Bool(true)}),
+		NewStruct(Format_7_18, "", StructData{"field": Bool(true)}),
 		// Refs of values
-		NewRef(Bool(true)),
-		NewRef(Float(0)),
-		NewRef(String("hello")),
-		NewRef(NewBlob(context.Background(), vs, bytes.NewBufferString("buf"))),
-		NewRef(NewSet(context.Background(), vs, Bool(true))),
-		NewRef(NewList(context.Background(), vs, Bool(true))),
-		NewRef(NewMap(context.Background(), vs, Bool(true), Float(0))),
-		NewRef(NewStruct("", StructData{"field": Bool(true)})),
+		NewRef(Bool(true), Format_7_18),
+		NewRef(Float(0), Format_7_18),
+		NewRef(String("hello"), Format_7_18),
+		NewRef(NewBlob(context.Background(), vs, bytes.NewBufferString("buf")), Format_7_18),
+		NewRef(NewSet(context.Background(), vs, Bool(true)), Format_7_18),
+		NewRef(NewList(context.Background(), vs, Bool(true)), Format_7_18),
+		NewRef(NewMap(context.Background(), vs, Bool(true), Float(0)), Format_7_18),
+		NewRef(NewStruct(Format_7_18, "", StructData{"field": Bool(true)}), Format_7_18),
 	}
 
 	s := NewSet(context.Background(), vs, vals...)
@@ -1092,10 +1092,10 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 	vs := newTestValueStore()
 
 	list := NewSet(context.Background(), vs,
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(1),
 		}),
-		NewStruct("Foo", StructData{
+		NewStruct(Format_7_18, "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		}),

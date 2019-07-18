@@ -10,7 +10,7 @@ import (
 )
 
 type ValidatingDecoder struct {
-	vs *ValueStore
+	vs     *ValueStore
 }
 
 func NewValidatingDecoder(cs chunks.ChunkStore) *ValidatingDecoder {
@@ -31,7 +31,7 @@ func (vbs *ValidatingDecoder) Decode(c *chunks.Chunk) DecodedChunk {
 	h := c.Hash()
 	v := decodeFromBytesWithValidation(c.Data(), vbs.vs)
 
-	if getHash(v) != h {
+	if getHash(v, vbs.vs.Format()) != h {
 		d.Panic("Invalid hash found")
 	}
 	return DecodedChunk{c, &v}
