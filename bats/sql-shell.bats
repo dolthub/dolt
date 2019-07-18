@@ -3,22 +3,7 @@
 setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-	
-	skiponwindows() { :; }
-	
-	unameOut="$(uname -s)"
-	case "${unameOut}" in
-		CYGWIN*)    machine=Windows;;
-		MINGW*)     machine=Windows;;
-		*)          machine=Unix;;
-	esac
-	
-	if [ ${machine} = "Windows" ]; then
-		skiponwindows() {
-			skip "$1"
-		}
-	fi
-	
+	load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
