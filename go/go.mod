@@ -1,7 +1,7 @@
 module github.com/liquidata-inc/ld/dolt/go
 
 require (
-	cloud.google.com/go v0.41.0
+	cloud.google.com/go v0.43.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.3.3 // indirect
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
@@ -62,7 +62,6 @@ require (
 	gopkg.in/square/go-jose.v2 v2.3.1
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible
 )
-
 
 replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a
 
