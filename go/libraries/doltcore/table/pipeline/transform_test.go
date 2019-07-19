@@ -68,7 +68,7 @@ func TestPipeline(t *testing.T) {
 	}
 
 	func() {
-		csvInfo := &csv.CSVFileInfo{Delim: ',', HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
+		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
 		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
@@ -106,7 +106,7 @@ func TestAddingStages(t *testing.T) {
 	}
 
 	func() {
-		csvInfo := &csv.CSVFileInfo{Delim: ',', HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
+		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
 		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
@@ -176,11 +176,11 @@ Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true
 Don,Beddoe,Bewitched (episode Humbug Not to Be Spoken Here - Season 4),1967,true,1`
 
 	func() {
-		csvInfo := &csv.CSVFileInfo{Delim: ',', HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
+		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
 		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 
-		addedStages := []NamedTransform {
+		addedStages := []NamedTransform{
 			NewNamedTransform("identity", identityTransFunc),
 			NewNamedTransform("label", labelTransFunc),
 			NewNamedTransform("dupe", dupeTransFunc),
@@ -262,7 +262,7 @@ func TestAbort(t *testing.T) {
 	}
 
 	func() {
-		csvInfo := &csv.CSVFileInfo{Delim: ',', HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
+		csvInfo := &csv.CSVFileInfo{Delim: ",", HasHeaderLine: true, Columns: nil, EscapeQuotes: true}
 		rd, _ := csv.NewCSVReader(types.Format_7_18, ioutil.NopCloser(buf), csvInfo)
 		wr, _ := csv.NewCSVWriter(iohelp.NopWrCloser(outBuf), schOut, csvInfo)
 

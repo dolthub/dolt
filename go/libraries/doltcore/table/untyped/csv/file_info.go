@@ -3,7 +3,7 @@ package csv
 // CSVFileInfo describes a csv file
 type CSVFileInfo struct {
 	// Delim says which character is used as a field delimiter
-	Delim rune
+	Delim string
 	// HasHeaderLine says if the csv has a header line which contains the names of the columns
 	HasHeaderLine bool
 	// Columns can be provided if you no the columns and their order in the csv
@@ -14,11 +14,11 @@ type CSVFileInfo struct {
 
 // NewCSVInfo creates a new CSVInfo struct with default values
 func NewCSVInfo() *CSVFileInfo {
-	return &CSVFileInfo{',', true, nil, true}
+	return &CSVFileInfo{",", true, nil, true}
 }
 
 // SetDelim sets the Delim member and returns the CSVFileInfo
-func (info *CSVFileInfo) SetDelim(delim rune) *CSVFileInfo {
+func (info *CSVFileInfo) SetDelim(delim string) *CSVFileInfo {
 	info.Delim = delim
 	return info
 }
