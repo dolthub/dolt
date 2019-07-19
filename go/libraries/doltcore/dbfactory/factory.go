@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"net/url"
 	"strings"
 )
@@ -34,7 +35,7 @@ const (
 
 // DBFactory is an interface for creating concrete datas.Database instances which may have different backing stores.
 type DBFactory interface {
-	CreateDB(ctx context.Context, urlObj *url.URL, params map[string]string) (datas.Database, error)
+	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error)
 }
 
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
@@ -54,7 +55,7 @@ func InitializeFactories(grpcCP GRPCConnectionProvider) {
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is
 // determined by the scheme of the url.  Naked urls will use https by default.
-func CreateDB(ctx context.Context, urlStr string, params map[string]string) (datas.Database, error) {
+func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]string) (datas.Database, error) {
 	urlObj, err := earl.Parse(urlStr)
 
 	if err != nil {
@@ -67,7 +68,7 @@ func CreateDB(ctx context.Context, urlStr string, params map[string]string) (dat
 	}
 
 	if fact, ok := DBFactories[strings.ToLower(scheme)]; ok {
-		return fact.CreateDB(ctx, urlObj, params)
+		return fact.CreateDB(ctx, nbf, urlObj, params)
 	}
 
 	return nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)

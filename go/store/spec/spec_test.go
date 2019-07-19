@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
@@ -117,7 +118,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		store1 := filepath.Join(tmpDir, "store1")
 		os.Mkdir(store1, 0777)
 		func() {
-			cs, err := nbs.NewLocalStore(context.Background(), store1, 8*(1<<20))
+			cs, err := nbs.NewLocalStore(context.Background(), constants.DefaultNomsBinFormat, store1, 8*(1<<20))
 			assert.NoError(err)
 			db := datas.NewDatabase(cs)
 			defer db.Close()

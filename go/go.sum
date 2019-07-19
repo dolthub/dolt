@@ -254,6 +254,7 @@ github.com/liquidata-inc/ld v0.0.0-20190703172908-73a5081bfb26 h1:1h8IBvsyC+pIJL
 github.com/liquidata-inc/ld v0.0.0-20190711170108-690f93461e3c h1:QYJzHSr/5bu97HELog+sax37xou4EnedV8BSV8ez62M=
 github.com/liquidata-inc/ld v0.0.0-20190715210953-3a68e353a038 h1:bQakRL91gtxU0g6Zwsrec5YIB5gF9qCI1or/dKAqJYc=
 github.com/liquidata-inc/ld v0.0.0-20190717175747-17efac059a62 h1:lcNZv5VZYpJy/w7acOWXlnFTmAR/HDLDuCD+YO/egYU=
+github.com/liquidata-inc/ld v0.0.0-20190719210819-eeec24c80f3b h1:Jyd7KGLGfAukEypD3XNM5E69D3XvK9MpNWKL/S6bVX8=
 github.com/liquidata-inc/noms v0.0.0-20190531204628-499e9652fee4/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/noms v0.9.3/go.mod h1:hFhYPo5yEzNKzza0fdJugkoIhrubZ5yCJCxHLj7S9lI=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=
@@ -515,6 +516,7 @@ google.golang.org/genproto v0.0.0-20190530194941-fb225487d101 h1:wuGevabY6r+ivPN
 google.golang.org/genproto v0.0.0-20190530194941-fb225487d101/go.mod h1:z3L6/3dTEVtUr6QSP8miRzeRqwQOioJ9I66odjN4I7s=
 google.golang.org/genproto v0.0.0-20190626174449-989357319d63 h1:UsSJe9fhWNSz6emfIGPpH5DF23t7ALo2Pf3sC+/hsdg=
 google.golang.org/genproto v0.0.0-20190626174449-989357319d63/go.mod h1:z3L6/3dTEVtUr6QSP8miRzeRqwQOioJ9I66odjN4I7s=
+google.golang.org/genproto v0.0.0-20190716160619-c506a9f90610 h1:Ygq9/SRJX9+dU0WCIICM8RkWvDw03lvB77hrhJnpxfU=
 google.golang.org/genproto v0.0.0-20190716160619-c506a9f90610/go.mod h1:DMBHOl98Agz4BDEuKkezgsaosCRResVns1a3J2ZsMNc=
 google.golang.org/grpc v1.14.0/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
 google.golang.org/grpc v1.16.0/go.mod h1:0JHn/cJsOMiMfNA9+DeHDlAU7KAAB5GDlYFpa9MZMio=

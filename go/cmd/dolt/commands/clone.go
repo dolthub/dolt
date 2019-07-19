@@ -2,6 +2,10 @@ package commands
 
 import (
 	"context"
+	"os"
+	"path"
+	"path/filepath"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
@@ -13,11 +17,10 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"os"
-	"path"
-	"path/filepath"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (
@@ -70,7 +73,7 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			r, srcDB, verr = createRemote(remoteName, remoteUrl, params)
 
 			if verr == nil {
-				dEnv, verr = envForClone(r, dir, dEnv.FS)
+				dEnv, verr = envForClone(srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS)
 
 				if verr == nil {
 					verr = cloneRemote(context.Background(), srcDB, remoteName, branch, dEnv)
@@ -115,7 +118,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-func envForClone(r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
+func envForClone(nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
 	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
 	if exists {
@@ -135,7 +138,7 @@ func envForClone(r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, er
 	}
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB)
-	err = dEnv.InitRepoWithNoData(context.TODO())
+	err = dEnv.InitRepoWithNoData(context.TODO(), nbf)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to initialize repo without data").AddCause(err).Build()
@@ -156,7 +159,7 @@ func createRemote(remoteName, remoteUrl string, params map[string]string) (env.R
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
 
-	ddb, err := r.GetRemoteDB(context.TODO())
+	ddb, err := r.GetRemoteDB(context.TODO(), types.GetFormatForVersionString(constants.DefaultNomsBinFormat))
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
@@ -192,6 +195,7 @@ func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx contex
 	var dref ref.DoltRef
 	var masterHash hash.Hash
 	var h hash.Hash
+
 	for i := 0; i < len(branches); i++ {
 		dref = branches[i]
 		branch := dref.GetPath()

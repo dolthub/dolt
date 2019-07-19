@@ -8,6 +8,8 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (
@@ -57,7 +59,8 @@ func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	err := dEnv.InitRepo(context.Background(), name, email)
+	nbf := types.GetFormatForVersionString(constants.DefaultNomsBinFormat)
+	err := dEnv.InitRepo(context.Background(), nbf, name, email)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))

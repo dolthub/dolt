@@ -3,6 +3,7 @@ package dbfactory
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
 )
 
@@ -37,7 +38,7 @@ func TestCreateFileDB(t *testing.T) {
 
 func TestCreateMemDB(t *testing.T) {
 	ctx := context.Background()
-	db, err := CreateDB(ctx, "mem://", nil)
+	db, err := CreateDB(ctx, types.Format_7_18, "mem://", nil)
 
 	assert.NoError(t, err)
 	assert.NotNil(t, db)

@@ -5,6 +5,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (
@@ -27,7 +28,7 @@ func CreateTestEnv() *env.DoltEnv {
 		env.UserNameKey:  name,
 		env.UserEmailKey: email,
 	})
-	err := dEnv.InitRepo(context.Background(), name, email)
+	err := dEnv.InitRepo(context.Background(), types.Format_7_18, name, email)
 
 	if err != nil {
 		panic("Failed to initialize environment")

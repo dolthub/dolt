@@ -19,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
@@ -88,7 +89,7 @@ func main() {
 				err := os.RemoveAll(dir)
 				d.PanicIfError(err)
 			}()
-			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), dir, bufSize) }
+			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), constants.DefaultNomsBinFormat, dir, bufSize) }
 			reset = func() {
 				err := os.RemoveAll(dir)
 				d.PanicIfError(err)
@@ -117,7 +118,7 @@ func main() {
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), constants.DefaultNomsBinFormat, dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 			reset = func() {
 				ddb := dynamodb.New(sess)
@@ -138,11 +139,11 @@ func main() {
 		}
 	} else {
 		if *useNBS != "" {
-			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), *useNBS, bufSize) }
+			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), constants.DefaultNomsBinFormat, *useNBS, bufSize) }
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), constants.DefaultNomsBinFormat, dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 		}
 		writeDB = func() {}

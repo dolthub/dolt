@@ -16,12 +16,22 @@ func isFormat_7_18(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_7_18
 }
 
-func getFormatForVersionString(s string) *NomsBinFormat {
+func GetFormatForVersionString(s string) *NomsBinFormat {
 	if s == "7.18" {
 		return Format_7_18
 	} else if s == "__LD_1__" {
 		return Format_LD_1
 	} else {
 		panic("Unsupported ChunkStore.Version() == " + s)
+	}
+}
+
+func (nbf *NomsBinFormat) VersionString() string {
+	if nbf.tag == formatTag_7_18 {
+		return "7.18"
+	} else if nbf.tag == formatTag_LD_1 {
+		return "__LD_1__"
+	} else {
+		panic("unrecognized NomsBinFormat tag value")
 	}
 }

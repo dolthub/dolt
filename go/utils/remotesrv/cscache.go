@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"path/filepath"
 	"sync"
@@ -45,7 +46,7 @@ func (cache *DBCache) Get(org, repo string) (*nbs.NomsBlockStore, error) {
 			return nil, err
 		}
 
-		newCS, err = nbs.NewLocalStore(context.TODO(), id, defaultMemTableSize)
+		newCS, err = nbs.NewLocalStore(context.TODO(), constants.DefaultNomsBinFormat, id, defaultMemTableSize)
 
 		if err != nil {
 			return nil, err

@@ -23,6 +23,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
@@ -271,7 +272,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	case "gs":
 		return parseGCSSpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		cs, err := nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
+		cs, err := nbs.NewLocalStore(ctx, constants.DefaultNomsBinFormat, sp.DatabaseName, 1<<28)
 		d.PanicIfError(err)
 		return cs
 	case "mem":
@@ -321,7 +322,7 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	}
 
 	sess := session.Must(session.NewSession(awsConfig))
-	cs, err := nbs.NewAWSStore(ctx, parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+	cs, err := nbs.NewAWSStore(ctx, constants.DefaultNomsBinFormat, parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 
 	d.PanicIfError(err)
 
@@ -343,7 +344,7 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 		panic("Could not create GCSBlobstore")
 	}
 
-	cs, err := nbs.NewGCSStore(ctx, bucket, path, gcs, 1<<28)
+	cs, err := nbs.NewGCSStore(ctx, constants.DefaultNomsBinFormat, bucket, path, gcs, 1<<28)
 
 	d.PanicIfError(err)
 
@@ -436,7 +437,7 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
-		cs, err := nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
+		cs, err := nbs.NewLocalStore(ctx, constants.DefaultNomsBinFormat, sp.DatabaseName, 1<<28)
 		d.PanicIfError(err)
 		return datas.NewDatabase(cs)
 	case "mem":
