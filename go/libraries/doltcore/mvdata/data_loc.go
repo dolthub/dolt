@@ -141,7 +141,7 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 			return rd, false, err
 
 		case PsvFile:
-			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim('|'))
+			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"))
 			return rd, false, err
 
 		case XlsxFile:
@@ -189,7 +189,7 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, mvOpts 
 	case CsvFile:
 		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo())
 	case PsvFile:
-		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo().SetDelim('|'))
+		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo().SetDelim("|"))
 	case XlsxFile:
 		return xlsx.OpenXLSXWriter(dl.Path, fs, outSch, xlsx.NewXLSXInfo())
 	case JsonFile:
