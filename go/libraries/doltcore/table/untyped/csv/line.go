@@ -1,15 +1,16 @@
 package csv
 
 import (
+	"errors"
 	"math"
 	"strings"
 )
 
-func csvSplitLineRuneDelim(str string, delim rune, escapedQuotes bool) []string {
+func csvSplitLineRuneDelim(str string, delim rune, escapedQuotes bool) ([]string, error) {
 	return csvSplitLine(str, string(delim), escapedQuotes)
 }
 
-func csvSplitLine(str string, delim string, escapedQuotes bool) []string {
+func csvSplitLine(str string, delim string, escapedQuotes bool) ([]string, error) {
 	if strings.IndexRune(delim, '"') != -1 {
 		panic("delims cannot contain quotes")
 	}
@@ -39,15 +40,19 @@ func csvSplitLine(str string, delim string, escapedQuotes bool) []string {
 			tokens = appendToken(tokens, str, cellStart, currPos+nextDelim, escapedQuotes)
 			cellStart = currPos + nextDelim + delimLen
 			currPos = cellStart
-		} else if escapedQuotes && nextQuote != -1 {
+		} else if escapedQuotes && nextQuote != -1 && nextQuote != math.MaxInt32 {
 			escaped = !escaped
 			currPos += nextQuote + 1
 		} else {
+			if escapedQuotes {
+				return nil, errors.New(str[cellStart:] + ` has an unclosed quotation mark`)
+			}
+
 			break
 		}
 	}
 
-	return tokens
+	return tokens, nil
 }
 
 func appendToken(tokens []string, line string, start, pos int, escapedQuotes bool) []string {
