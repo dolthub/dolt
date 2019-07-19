@@ -1,34 +1,71 @@
 package csv
 
-func csvSplitLine(str string, delim rune, escapedQuotes bool) []string {
+import (
+	"errors"
+	"math"
+	"strings"
+)
+
+func csvSplitLineRuneDelim(str string, delim rune, escapedQuotes bool) ([]string, error) {
+	return csvSplitLine(str, string(delim), escapedQuotes)
+}
+
+func csvSplitLine(str string, delim string, escapedQuotes bool) ([]string, error) {
+	if strings.IndexRune(delim, '"') != -1 {
+		panic("delims cannot contain quotes")
+	}
+
 	var tokens []string
+	delimLen := len(delim)
 
-	quotations := 0
+	done := false
 	escaped := false
-	start := 0
-	for pos, c := range str {
-		if c == delim && !escaped {
-			tokens = appendToken(tokens, str, start, pos, quotations)
-			start = pos + 1
-			quotations = 0
+	currPos := 0
+	cellStart := 0
+	for !done {
+		remainingStr := str[currPos:]
+		nextQuote := strings.Index(remainingStr, "\"")
+		nextDelim := strings.Index(remainingStr, delim)
 
-			if pos == len(str)-1 {
-				tokens = appendToken(tokens, "", 0, 0, 0)
+		if nextQuote == -1 || !escapedQuotes {
+			nextQuote = math.MaxInt32
+		}
+
+		if !escaped && nextDelim < nextQuote {
+			if nextDelim == -1 {
+				nextDelim = len(remainingStr)
+				done = true
 			}
-		} else if escapedQuotes && c == '"' {
+
+			tokens = appendToken(tokens, str, cellStart, currPos+nextDelim, escapedQuotes)
+			cellStart = currPos + nextDelim + delimLen
+			currPos = cellStart
+		} else if escapedQuotes && nextQuote != -1 && nextQuote != math.MaxInt32 {
 			escaped = !escaped
-			quotations++
+			currPos += nextQuote + 1
+		} else {
+			if escapedQuotes {
+				return nil, errors.New(str[cellStart:] + ` has an unclosed quotation mark`)
+			}
+
+			break
 		}
 	}
 
-	if start != len(str) {
-		tokens = appendToken(tokens, str, start, len(str), quotations)
-	}
-
-	return tokens
+	return tokens, nil
 }
 
-func appendToken(tokens []string, line string, start, pos, quotations int) []string {
+func appendToken(tokens []string, line string, start, pos int, escapedQuotes bool) []string {
+	quotations := 0
+
+	if escapedQuotes {
+		for _, c := range line {
+			if c == '"' {
+				quotations++
+			}
+		}
+	}
+
 	if start == pos {
 		return append(tokens, "")
 	}

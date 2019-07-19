@@ -5,38 +5,57 @@ import "testing"
 func TestCSVSplitLine(t *testing.T) {
 	splitTests := []struct {
 		ToSplit        string
-		Delim          rune
+		Delim          string
 		expectedTokens []string
 		escapeQuotes   bool
+		expectErr      bool
 	}{
-		{``, ',', []string{}, true},
-		{`one`, ',', []string{"one"}, true},
-		{`one,`, ',', []string{"one", ""}, true},
-		{`one,two, three`, ',', []string{"one", "two", "three"}, true},
-		{`one,"two", three`, ',', []string{"one", "two", "three"}, true},
-		{`one," two", three`, ',', []string{"one", " two", "three"}, true},
-		{`one," two", three`, ',', []string{"one", `" two"`, "three"}, false},
-		{`one,"two, three"`, ',', []string{"one", "two, three"}, true},
-		{`one,""two three""`, ',', []string{"one", `"two three"`}, true},
-		{`one,"two, ""three""`, ',', []string{"one", `two, "three"`}, true},
-		{`brian ""the great"" hendriks,mr.,1.7526`, ',', []string{`brian "the great" hendriks`, "mr.", "1.7526"}, true},
-		{`col1,"Industriepark ""De Bruwaan""",col3`, ',', []string{"col1", `Industriepark "De Bruwaan"`, "col3"}, true},
-		{`|a|`, '|', []string{"", "a", ""}, true},
-		{`72470|30|0|40|0||||`, '|', []string{"72470", "30", "0", "40", "0", "", "", "", ""}, true},
-		{`"one","two"`, ',', []string{`"one"`, `"two"`}, false},
-		{`"one","two"`, ',', []string{`one`, `two`}, true},
-		{`one,  two`, ',', []string{`one`, `two`}, true},
-		{`one,"  two"`, ',', []string{`one`, `  two`}, true},
+		{``, ",", []string{""}, true, false},
+		{`one`, ",", []string{"one"}, true, false},
+		{`one,`, ",", []string{"one", ""}, true, false},
+		{`one,two, three`, ",", []string{"one", "two", "three"}, true, false},
+		{`one,"two", three`, ",", []string{"one", "two", "three"}, true, false},
+		{`one," two", three`, ",", []string{"one", " two", "three"}, true, false},
+		{`one," two", three`, ",", []string{"one", `" two"`, "three"}, false, false},
+		{`one,"two, three"`, ",", []string{"one", "two, three"}, true, false},
+		{`one,""two three""`, ",", []string{"one", `"two three"`}, true, false},
+		{`one,"two, ""three""`, ",", []string{"one", `two, "three"`}, true, false},
+		{`brian ""the great"" hendriks,mr.,1.7526`, ",", []string{`brian "the great" hendriks`, "mr.", "1.7526"}, true, false},
+		{`col1,"Industriepark ""De Bruwaan""",col3`, ",", []string{"col1", `Industriepark "De Bruwaan"`, "col3"}, true, false},
+		{`|a|`, "|", []string{"", "a", ""}, true, false},
+		{`72470|30|0|40|0||||`, "|", []string{"72470", "30", "0", "40", "0", "", "", "", ""}, true, false},
+		{`"one","two"`, ",", []string{`"one"`, `"two"`}, false, false},
+		{`"one","two"`, ",", []string{`one`, `two`}, true, false},
+		{`one,  two`, ",", []string{`one`, `two`}, true, false},
+		{`one,"  two"`, ",", []string{`one`, `  two`}, true, false},
 		{
 			`23660|1300|"Beef, brisket, flat half, separable lean and fat, trimmed to 1/8"""`,
-			'|',
+			"|",
 			[]string{"23660", "1300", `Beef, brisket, flat half, separable lean and fat, trimmed to 1/8"`},
 			true,
+			false,
 		},
+		{`72470<delim>30<delim>0<delim>40<delim>0<delim>"<delim>"<delim><delim><delim>`, "<delim>", []string{"72470", "30", "0", "40", "0", "<delim>", "", "", ""}, true, false},
+		{`72470<delim>30<delim>0<delim>40<delim>0<delim>"""<delim>"""<delim><delim><delim>`, "<delim>", []string{"72470", "30", "0", "40", "0", `"<delim>"`, "", "", ""}, true, false},
+		{`"the ""word"" is true","a ""quoted-field"""`, ",", []string{`the "word" is true`, `a "quoted-field"`}, true, false},
+		{`"not closed,`, ",", []string{}, true, true},
+		{`"closed", "not closed,`, ",", []string{"closed"}, true, true},
 	}
 
 	for _, test := range splitTests {
-		results := csvSplitLine(test.ToSplit, test.Delim, test.escapeQuotes)
+		results, err := csvSplitLine(test.ToSplit, test.Delim, test.escapeQuotes)
+
+		if (err != nil) != test.expectErr {
+			if test.expectErr {
+				t.Error("Expected an error that didn't occur.")
+			} else {
+				t.Error("Unexpected error: " + err.Error())
+			}
+		}
+
+		if err != nil {
+			continue
+		}
 
 		if len(results) != len(test.expectedTokens) {
 			t.Error(test.ToSplit + " split test failure")

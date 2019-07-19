@@ -69,7 +69,11 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 			return nil, errors.New("Header line is empty")
 		}
 
-		colStrsFromFile := csvSplitLine(line, info.Delim, info.EscapeQuotes)
+		colStrsFromFile, err := csvSplitLine(line, info.Delim, info.EscapeQuotes)
+
+		if err != nil {
+			return nil, err
+		}
 
 		if colStrs == nil {
 			colStrs = colStrsFromFile
@@ -127,7 +131,11 @@ func (csvr *CSVReader) Close(ctx context.Context) error {
 }
 
 func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
-	colVals := csvSplitLine(line, csvr.info.Delim, csvr.info.EscapeQuotes)
+	colVals, err := csvSplitLine(line, csvr.info.Delim, csvr.info.EscapeQuotes)
+
+	if err != nil {
+		return nil, table.NewBadRow(nil, err.Error())
+	}
 
 	sch := csvr.sch
 	allCols := sch.GetAllCols()
