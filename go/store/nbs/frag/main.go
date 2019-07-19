@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
@@ -51,7 +52,7 @@ func main() {
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
 		var err error
-		store, err = nbs.NewLocalStore(context.Background(), *dir, memTableSize)
+		store, err = nbs.NewLocalStore(context.Background(), constants.DefaultNomsBinFormat, *dir, memTableSize)
 		d.PanicIfError(err)
 
 		*dbName = *dir
@@ -59,7 +60,7 @@ func main() {
 		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 
 		var err error
-		store, err = nbs.NewAWSStore(context.Background(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
+		store, err = nbs.NewAWSStore(context.Background(), constants.DefaultNomsBinFormat, *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
 		d.PanicIfError(err)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")

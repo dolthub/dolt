@@ -54,11 +54,11 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
-func LoadDoltDB(ctx context.Context, urlStr string) (*DoltDB, error) {
-	return LoadDoltDBWithParams(ctx, urlStr, nil)
+func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string) (*DoltDB, error) {
+	return LoadDoltDBWithParams(ctx, nbf, urlStr, nil)
 }
 
-func LoadDoltDBWithParams(ctx context.Context, urlStr string, params map[string]string) (*DoltDB, error) {
+func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]string) (*DoltDB, error) {
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := filesys.LocalFS.Exists(dbfactory.DoltDataDir)
 
@@ -69,7 +69,7 @@ func LoadDoltDBWithParams(ctx context.Context, urlStr string, params map[string]
 		}
 	}
 
-	db, err := dbfactory.CreateDB(ctx, urlStr, params)
+	db, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
 
 	if err != nil {
 		return nil, err

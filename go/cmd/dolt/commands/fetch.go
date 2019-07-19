@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -116,7 +117,7 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSp
 	ctx := context.TODO()
 
 	for _, rs := range refSpecs {
-		srcDB, err := rem.GetRemoteDB(context.TODO())
+		srcDB, err := rem.GetRemoteDB(context.TODO(), dEnv.DoltDB.ValueReadWriter().Format())
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()

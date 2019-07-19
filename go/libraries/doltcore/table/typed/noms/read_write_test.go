@@ -64,7 +64,7 @@ func createRows(onlyUpdated, updatedAge bool) []row.Row {
 }
 
 func TestReadWrite(t *testing.T) {
-	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), nil, nil)
+	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 
 	rows := createRows(false, false)
 

@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"path/filepath"
 	"testing"
 )
@@ -123,7 +124,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 
 func TestInitRepo(t *testing.T) {
 	dEnv := createTestEnv(false, false)
-	err := dEnv.InitRepo(context.Background(), "aoeu aoeu", "aoeu@aoeu.org")
+	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "aoeu aoeu", "aoeu@aoeu.org")
 
 	if err != nil {
 		t.Error("Failed to init repo.", err.Error())

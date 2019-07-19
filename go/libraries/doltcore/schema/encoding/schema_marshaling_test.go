@@ -33,7 +33,7 @@ func createTestSchema() schema.Schema {
 
 func TestNomsMarshalling(t *testing.T) {
 	tSchema := createTestSchema()
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nil, nil)
+	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 
 	if err != nil {
 		t.Fatal("Could not create in mem noms db.")

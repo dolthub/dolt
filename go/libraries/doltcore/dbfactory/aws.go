@@ -3,6 +3,10 @@ package dbfactory
 import (
 	"context"
 	"errors"
+	"net/url"
+	"os"
+	"strings"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -11,9 +15,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"net/url"
-	"os"
-	"strings"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (
@@ -90,9 +92,9 @@ type AWSFactory struct {
 }
 
 // CreateDB creates an AWS backed database
-func (fact AWSFactory) CreateDB(ctx context.Context, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
 	var db datas.Database
-	cs, err := fact.newChunkStore(ctx, urlObj, params)
+	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
 	if err != nil {
 		return nil, err
@@ -103,7 +105,7 @@ func (fact AWSFactory) CreateDB(ctx context.Context, urlObj *url.URL, params map
 	return db, err
 }
 
-func (fact AWSFactory) newChunkStore(ctx context.Context, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
+func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
 	parts := strings.SplitN(urlObj.Host, ":", 2) // [table]:[bucket]
 	if len(parts) != 2 {
 		return nil, errors.New("aws url has an invalid format")
@@ -122,7 +124,7 @@ func (fact AWSFactory) newChunkStore(ctx context.Context, urlObj *url.URL, param
 	}
 
 	sess := session.Must(session.NewSessionWithOptions(opts))
-	return nbs.NewAWSStore(ctx, parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize)
+	return nbs.NewAWSStore(ctx, nbf.VersionString(), parts[0], dbName, parts[1], s3.New(sess), dynamodb.New(sess), defaultMemTableSize)
 }
 
 func validatePath(path string) (string, error) {

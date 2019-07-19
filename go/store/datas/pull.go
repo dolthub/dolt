@@ -7,9 +7,11 @@ package datas
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"fmt"
 	"math"
 	"math/rand"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 
 	"github.com/golang/snappy"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
@@ -62,6 +64,10 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 
 	if exists {
 		return nil // already up to date
+	}
+
+	if srcDB.chunkStore().Version() != sinkDB.chunkStore().Version() {
+		return fmt.Errorf("cannot pull from src to sink; src version is %v and sink version is %v", srcDB.chunkStore().Version(), sinkDB.chunkStore().Version())
 	}
 
 	var sampleSize, sampleCount uint64

@@ -12,6 +12,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/pkg/errors"
@@ -52,7 +53,7 @@ type DoltEnv struct {
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, urlStr)
+	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.GetFormatForVersionString(constants.DefaultNomsBinFormat), urlStr)
 
 	dEnv := &DoltEnv{
 		config,
@@ -123,7 +124,7 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
 // database with dolt structure.
-func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { // should remove name and email args
+func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -133,7 +134,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { /
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.initDBAndState(ctx, name, email)
+		err = dEnv.initDBAndState(ctx, nbf, name, email)
 	}
 
 	if err != nil {
@@ -143,7 +144,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { /
 	return err
 }
 
-func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
+func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinFormat) error {
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -157,7 +158,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
 		return err
 	}
 
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.urlStr)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
 
 	return err
 }
@@ -188,9 +189,9 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) error {
+func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error {
 	var err error
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.urlStr)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
 
 	if err != nil {
 		return err

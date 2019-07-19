@@ -85,7 +85,6 @@ message RebaseRequest {
 }
 
 message RebaseResponse {
-
 }
 
 message RootRequest {
@@ -106,6 +105,7 @@ message CommitRequest {
   bytes current = 2;
   bytes last = 3;
   repeated ChunkTableInfo chunk_table_info = 4;
+  ClientRepoFormat client_repo_format = 14;
 }
 
 message CommitResponse {
@@ -114,6 +114,7 @@ message CommitResponse {
 
 message GetRepoMetadataRequest {
   RepoId repo_id = 1;
+  ClientRepoFormat client_repo_format = 14;
 }
 
 message GetRepoMetadataResponse {
@@ -122,5 +123,10 @@ message GetRepoMetadataResponse {
   string nbf_version = 1;
   // Version string of the nbs format of this repository.
   // See nbs.StorageVersion.
+  string nbs_version = 2;
+}
+
+message ClientRepoFormat {
+  string nbf_version = 1;
   string nbs_version = 2;
 }
