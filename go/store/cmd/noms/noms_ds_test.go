@@ -8,7 +8,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
@@ -28,7 +27,7 @@ type nomsDsTestSuite struct {
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), constants.DefaultNomsBinFormat, dir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	ds := datas.NewDatabase(cs)
 
@@ -42,7 +41,7 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), constants.DefaultNomsBinFormat, dir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 

@@ -10,7 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
@@ -26,7 +26,7 @@ func NewCache(ctx context.Context) (*NomsBlockCache, error) {
 		return nil, err
 	}
 
-	store, err := NewLocalStore(ctx, constants.DefaultNomsBinFormat, dir, defaultCacheMemTableSize)
+	store, err := NewLocalStore(ctx, types.Format_Default.VersionString(), dir, defaultCacheMemTableSize)
 
 	if err != nil {
 		return nil, err

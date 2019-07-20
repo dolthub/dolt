@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"path/filepath"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
@@ -12,14 +15,11 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"path/filepath"
-	"strings"
 )
 
 const (
@@ -53,7 +53,7 @@ type DoltEnv struct {
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.GetFormatForVersionString(constants.DefaultNomsBinFormat), urlStr)
+	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
 
 	dEnv := &DoltEnv{
 		config,
