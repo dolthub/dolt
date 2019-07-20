@@ -25,7 +25,7 @@ func TestStats(t *testing.T) {
 
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
-	store, err := NewLocalStore(context.Background(), constants.DefaultNomsBinFormat, dir, testMemTableSize)
+	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize)
 	assert.NoError(err)
 
 	assert.EqualValues(1, stats(store).OpenLatency.Samples())

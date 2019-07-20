@@ -106,7 +106,11 @@ func newValueStoreWithCacheAndPending(cs chunks.ChunkStore, cacheSize, pendingMa
 
 func (lvs *ValueStore) expectVersion() {
 	dataVersion := lvs.cs.Version()
-	lvs.nbf = GetFormatForVersionString(dataVersion)
+	nbf, err := GetFormatForVersionString(dataVersion)
+	if err != nil {
+		panic(err)
+	}
+	lvs.nbf = nbf
 }
 
 func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {

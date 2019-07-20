@@ -17,7 +17,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
@@ -159,7 +158,7 @@ func createRemote(remoteName, remoteUrl string, params map[string]string) (env.R
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
 
-	ddb, err := r.GetRemoteDB(context.TODO(), types.GetFormatForVersionString(constants.DefaultNomsBinFormat))
+	ddb, err := r.GetRemoteDB(context.TODO(), types.Format_Default)
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
