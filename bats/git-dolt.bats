@@ -24,7 +24,7 @@ setup() {
 
 teardown() {
 	rm -rf $BATS_TMPDIR/{git,dolt}-repo-$$
-	pkill -2 remotesrv
+	pgrep remotesrv | xargs kill
 	rm -rf $BATS_TMPDIR/remotes-$$
 }
 
@@ -89,7 +89,6 @@ teardown() {
 }
 
 @test "git dolt's smudge filter automatically clones dolt repositories referenced in checked out git-dolt pointer files" {
-	skiponwindows "This test works on Windows command prompt but not the bash terminal: GitHub Issue #1809"
 	init_git_repo
 	git dolt install
 	git dolt link $REMOTE
@@ -120,7 +119,7 @@ teardown() {
 }
 
 @test "git dolt update updates the specified pointer file to the specified revision" {
-	dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+	dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
 	dolt add test
 	dolt commit -m "test commit"
 	export NEW_DOLT_HEAD_COMMIT=`get_head_commit`

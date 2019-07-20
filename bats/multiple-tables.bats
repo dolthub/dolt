@@ -6,9 +6,10 @@ setup() {
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
+	load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     dolt init
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test1
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test2
+    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test1
+    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test2
 }
 
 teardown() {
@@ -106,8 +107,8 @@ teardown() {
     dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
 
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test3
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test4
+    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test3
+    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test4
 
     run dolt status
     [[ "$output" =~ modified.*test1 ]] || false
