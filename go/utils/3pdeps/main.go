@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
@@ -102,7 +101,6 @@ func FindLicenseFile(dir string) string {
 		"LICENSE.md",
 		"COPYING",
 		"LICENSE-MIT",
-		"README.org",
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(dir + "/" + c); err == nil {
@@ -121,18 +119,11 @@ func PrintLicense(filepath string) {
 	if err != nil {
 		panic(err)
 	}
-	base := path.Base(filepath)
-	// XXX: Hack for extracting LICENSE from xslx.
-	// This can be removed when we upgrade the package.
-	if base == "README.org" {
-		start := bytes.Index(contents, []byte("#+BEGIN_EXAMPLE\n\n"))
-		end := bytes.Index(contents, []byte("\n#+END_EXAMPLE\n"))
-		contents = contents[start+17 : end]
-	}
 	_, err = os.Stdout.Write(contents)
 	if err != nil {
 		panic(err)
 	}
+	base := path.Base(filepath)
 	sum := sha512.Sum512_224(contents)
 	fmt.Printf("\n= %v %v =\n", base, hex.EncodeToString(sum[:]))
 }
