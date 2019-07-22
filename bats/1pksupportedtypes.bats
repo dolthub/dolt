@@ -6,8 +6,9 @@ setup() {
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
+    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     dolt init
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pksupportedtypes.schema test
+    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pksupportedtypes.schema` test
 }
 
 teardown() {

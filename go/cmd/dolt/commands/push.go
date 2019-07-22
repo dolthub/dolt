@@ -140,7 +140,7 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			remoteRef, verr = getTrackingRef(dest, remote)
 
 			if verr == nil {
-				destDB, err := remote.GetRemoteDB(ctx)
+				destDB, err := remote.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 				if err != nil {
 					bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)

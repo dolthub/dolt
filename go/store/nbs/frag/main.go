@@ -51,7 +51,7 @@ func main() {
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
 		var err error
-		store, err = nbs.NewLocalStore(context.Background(), *dir, memTableSize)
+		store, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *dir, memTableSize)
 		d.PanicIfError(err)
 
 		*dbName = *dir
@@ -59,7 +59,7 @@ func main() {
 		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 
 		var err error
-		store, err = nbs.NewAWSStore(context.Background(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
+		store, err = nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
 		d.PanicIfError(err)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")

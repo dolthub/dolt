@@ -144,7 +144,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 	assert.NoError(err)
 
-	store, err := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
@@ -181,12 +181,12 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
 	// Simulate another goroutine writing a manifest behind store's back.
-	interloper, err := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
+	interloper, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer interloper.Close()
 
@@ -224,7 +224,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
@@ -265,7 +265,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
@@ -275,6 +275,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 
 	interloper, err := newNomsBlockStore(
 		context.Background(),
+		constants.FormatDefaultString,
 		manifestManager{
 			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
 		},
@@ -319,7 +320,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 	fm = &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	p = newFakeTablePersister()
-	store, err := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, 0)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, inlineConjoiner{defaultMaxTables}, 0)
 	assert.NoError(t, err)
 	return
 }

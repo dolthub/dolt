@@ -10,6 +10,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +25,7 @@ func TestStats(t *testing.T) {
 
 	dir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
-	store, err := NewLocalStore(context.Background(), dir, testMemTableSize)
+	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize)
 	assert.NoError(err)
 
 	assert.EqualValues(1, stats(store).OpenLatency.Samples())

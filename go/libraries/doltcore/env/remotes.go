@@ -2,7 +2,9 @@ package env
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 var NoRemote = Remote{}
@@ -33,6 +35,6 @@ func (r *Remote) GetParamOrDefault(pName, defVal string) string {
 	return val
 }
 
-func (r *Remote) GetRemoteDB(ctx context.Context) (*doltdb.DoltDB, error) {
-	return doltdb.LoadDoltDBWithParams(ctx, r.Url, r.Params)
+func (r *Remote) GetRemoteDB(ctx context.Context, nbf *types.NomsBinFormat) (*doltdb.DoltDB, error) {
+	return doltdb.LoadDoltDBWithParams(ctx, nbf, r.Url, r.Params)
 }

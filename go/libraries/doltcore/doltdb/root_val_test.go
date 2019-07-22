@@ -7,7 +7,7 @@ import (
 )
 
 func TestTableDiff(t *testing.T) {
-	ddb, _ := LoadDoltDB(context.Background(), InMemDoltDB)
+	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
 	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := NewCommitSpec("head", "master")

@@ -3,12 +3,14 @@ package dbfactory
 import (
 	"context"
 	"fmt"
+	"net/url"
+
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"google.golang.org/grpc"
-	"net/url"
 )
 
 // GRPCConnectionProvider is an interface for getting a *grpc.ClientConn.
@@ -30,10 +32,10 @@ func NewDoltRemoteFactory(grpcCP GRPCConnectionProvider, insecure bool) DoltRemo
 
 // CreateDB creates a database backed by a remote server that implements the GRPC rpcs defined by
 // remoteapis.ChunkStoreServiceClient
-func (fact DoltRemoteFactory) CreateDB(ctx context.Context, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
 	var db datas.Database
 
-	cs, err := fact.newChunkStore(ctx, urlObj, params)
+	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
 	if err != nil {
 		return nil, err
@@ -44,7 +46,7 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, urlObj *url.URL, par
 	return db, err
 }
 
-func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
+func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
 	conn, err := fact.grpcCP.GrpcConn(urlObj.Host, fact.insecure)
 
 	if err != nil {
@@ -52,7 +54,7 @@ func (fact DoltRemoteFactory) newChunkStore(ctx context.Context, urlObj *url.URL
 	}
 
 	csClient := remotesapi.NewChunkStoreServiceClient(conn)
-	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, urlObj.Path, urlObj.Host, csClient)
+	cs, err := remotestorage.NewDoltChunkStoreFromPath(ctx, nbf, urlObj.Path, urlObj.Host, csClient)
 
 	if err == remotestorage.ErrInvalidDoltSpecPath {
 		return nil, fmt.Errorf("invalid dolt url '%s'", urlObj.String())

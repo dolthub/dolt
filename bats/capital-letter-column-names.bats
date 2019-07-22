@@ -6,8 +6,9 @@ setup() {
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
+    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     dolt init
-    dolt table import -c -s $BATS_TEST_DIRNAME/helper/capital-letter-column-names.schema test $BATS_TEST_DIRNAME/helper/capital-letter-column-names.csv
+    dolt table import -c -s `nativepath $BATS_TEST_DIRNAME/helper/capital-letter-column-names.schema` test `nativepath $BATS_TEST_DIRNAME/helper/capital-letter-column-names.csv`
 }
 
 teardown() {
