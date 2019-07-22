@@ -75,7 +75,7 @@ func main() {
 func PrintDoltLicense() {
 	fmt.Printf("================================================================================\n")
 	fmt.Printf("= Dolt licensed under: =\n\n")
-	PrintLicense("./LICENSE")
+	PrintLicense("../LICENSE")
 	fmt.Printf("================================================================================\n")
 }
 
