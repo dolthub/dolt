@@ -117,7 +117,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		store1 := filepath.Join(tmpDir, "store1")
 		os.Mkdir(store1, 0777)
 		func() {
-			cs, err := nbs.NewLocalStore(context.Background(), store1, 8*(1<<20))
+			cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), store1, 8*(1<<20))
 			assert.NoError(err)
 			db := datas.NewDatabase(cs)
 			defer db.Close()

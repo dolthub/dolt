@@ -8,7 +8,7 @@ setup() {
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
+    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
 }
 
 teardown() {
@@ -16,7 +16,7 @@ teardown() {
 }
 
 @test "start a sql shell and exit using exit" {
-    skiponwindows "Works on Windows command prompt but not the MinTTY terminal used during bats"
+    skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
     run bash -c "echo exit | dolt sql" 
     [ $status -eq 0 ]
     [[ "$output" =~ "# Welcome to the DoltSQL shell." ]] || false
@@ -24,7 +24,7 @@ teardown() {
 }
 
 @test "start a sql shell and exit using quit" {
-    skiponwindows "Works on Windows command prompt but not the MinTTY terminal used during bats"
+    skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
     run bash -c "echo quit | dolt sql"
     [ $status -eq 0 ]
     [[ "$output" =~ "# Welcome to the DoltSQL shell." ]] || false
@@ -32,7 +32,7 @@ teardown() {
 }
 
 @test "run a query in sql shell" {
-    skiponwindows "Works on Windows command prompt but not the MinTTY terminal used during bats"
+    skiponwindows "Works on Windows command prompt but not the WSL terminal used during bats"
     run bash -c "echo 'select * from test;' | dolt sql"
     [ $status -eq 0 ]
     [[ "$output" =~ "# Welcome to the DoltSQL shell." ]] || false

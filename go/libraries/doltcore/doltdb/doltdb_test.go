@@ -39,7 +39,7 @@ func createTestSchema() schema.Schema {
 }
 
 func TestEmptyInMemoryRepoCreation(t *testing.T) {
-	ddb, err := LoadDoltDB(context.Background(), InMemDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
 
 	if err != nil {
 		t.Fatal("Failed to load db")
@@ -73,7 +73,7 @@ func TestLoadNonExistentLocalFSRepo(t *testing.T) {
 		panic("Couldn't change the working directory to the test directory.")
 	}
 
-	ddb, err := LoadDoltDB(context.Background(), LocalDirDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 	assert.Nil(t, ddb, "Should return nil when loading a non-existent data dir")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -88,7 +88,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	contents := []byte("not a directory")
 	ioutil.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
 
-	ddb, err := LoadDoltDB(context.Background(), LocalDirDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -111,7 +111,7 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create noms directory")
 		}
 
-		ddb, _ := LoadDoltDB(context.Background(), LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		err = ddb.WriteEmptyRepo(context.Background(), committerName, committerEmail)
 
 		if err != nil {
@@ -123,7 +123,7 @@ func TestLDNoms(t *testing.T) {
 	var valHash hash.Hash
 	var tbl *Table
 	{
-		ddb, _ := LoadDoltDB(context.Background(), LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		cs, _ := NewCommitSpec("master", "")
 		commit, err := ddb.Resolve(context.Background(), cs)
 
@@ -161,7 +161,7 @@ func TestLDNoms(t *testing.T) {
 
 	// reopen the db and commit the value.  Perform a couple checks for
 	{
-		ddb, _ := LoadDoltDB(context.Background(), LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		meta, err := NewCommitMeta(committerName, committerEmail, "Sample data")
 		if err != nil {
 			t.Error("Failled to commit")
