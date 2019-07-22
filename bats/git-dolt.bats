@@ -138,13 +138,20 @@ teardown() {
 }
 
 @test "git dolt fails helpfully when dolt is not installed" {
-	skiponwindows "This test does not work on Windows: GitHub Issue #1801"
 	mkdir TMP_PATH
 	pushd TMP_PATH
 	which git | xargs ln -sf
 	which git-dolt | xargs ln -sf
+	if [ $IS_WINDOWS = true ]; then
+		ORIGINAL_PATH=$PATH
+		export PATH=""
+		export WSLENV=PATH
+		run git dolt
+		export PATH=$ORIGINAL_PATH
+	else
+		PATH=`pwd` run git dolt
+	fi
 	popd
-	PATH=`pwd`/TMP_PATH run git dolt
 	rm -rf TMP_PATH
 	[ "$status" -eq 1 ]
 	[[ "$output" =~ "It looks like Dolt is not installed on your system" ]] || false
