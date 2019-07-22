@@ -5,15 +5,15 @@ skiponwindows() { :; }
 IS_WINDOWS=false
 
 if [ -d /mnt/*/Windows/System32 ]; then
-	IS_WINDOWS=true
-	nativepath() {
-		wslpath -w "$1"
-	}
-	nativevar() {
-		eval export "$1"='$2'
-		export WSLENV="$1$3"
-	}
-	skiponwindows() {
-		skip "$1"
-	}
+    IS_WINDOWS=true
+    nativepath() {
+        wslpath -w "$1"
+    }
+    nativevar() {
+        eval export "$1"='$2'
+        export WSLENV="$1$3"
+    }
+    skiponwindows() {
+        skip "$1"
+    }
 fi
