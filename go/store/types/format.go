@@ -1,8 +1,18 @@
 package types
 
-import "errors"
-import "os"
-import "github.com/liquidata-inc/ld/dolt/go/store/constants"
+import (
+	"errors"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+)
+
+func init() {
+	nbf, err := GetFormatForVersionString(constants.FormatDefaultString)
+	if err != nil {
+		panic("unrecognized value for DOLT_DEFAULT_BIN_FORMAT " + constants.FormatDefaultString)
+	}
+	Format_Default = nbf
+}
 
 type NomsBinFormat struct {
 	tag *formatTag
@@ -40,16 +50,4 @@ func (nbf *NomsBinFormat) VersionString() string {
 	} else {
 		panic("unrecognized NomsBinFormat tag value")
 	}
-}
-
-func init() {
-	nbfVerStr := os.Getenv("DOLT_DEFAULT_BIN_FORMAT")
-	if nbfVerStr == "" {
-		nbfVerStr = constants.FormatDefaultString
-	}
-	nbf, err := GetFormatForVersionString(nbfVerStr)
-	if err != nil {
-		panic("unrecognized value for DOLT_DEFAULT_BIN_FORMAT " + nbfVerStr)
-	}
-	Format_Default = nbf
 }
