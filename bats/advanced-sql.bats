@@ -6,7 +6,7 @@ setup() {
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
-	load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     dolt init
     dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` one_pk
     dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/2pk5col-ints.schema` two_pk
@@ -148,7 +148,7 @@ teardown() {
     [[ "$output" =~ "0" ]] || false
     [[ ! "$output" =~ "10" ]] || false
     run dolt sql -q "select * from one_pk join two_pk order by pk1,pk2,pk limit 1"
-	skip "A join should work without an ON clause, but the new engine does not support it yet"
+    skip "A join should work without an ON clause, but the new engine does not support it yet"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "0" ]] || false
