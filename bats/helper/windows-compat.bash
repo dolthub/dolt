@@ -1,5 +1,5 @@
 nativepath() { echo "$1"; }
-nativevar() { eval "$1"='$2'; }
+nativevar() { eval export "$1"="$2"; }
 skiponwindows() { :; }
 
 IS_WINDOWS=false
@@ -10,7 +10,7 @@ if [ -d /mnt/*/Windows/System32 ]; then
         wslpath -w "$1"
     }
     nativevar() {
-        eval export "$1"='$2'
+        eval export "$1"="$2"
         export WSLENV="$1$3"
     }
     skiponwindows() {
