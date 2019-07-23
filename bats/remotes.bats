@@ -5,7 +5,7 @@ setup() {
         export BATS_TMPDIR=$HOME/batstmp/
         mkdir $BATS_TMPDIR
     fi
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
@@ -90,7 +90,7 @@ teardown() {
 
 @test "clone a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -127,7 +127,7 @@ teardown() {
 @test "clone a different branch than master" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote test-branch
@@ -147,7 +147,7 @@ teardown() {
 
 @test "call a clone's remote something other than origin" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -193,7 +193,7 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -222,7 +222,7 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -245,7 +245,7 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -266,12 +266,12 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
     cd "dolt-repo-clones/test-repo"
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test2
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
     dolt add test2
     dolt commit -m "another test commit"
     run dolt pull origin
@@ -281,7 +281,7 @@ teardown() {
 
 @test "generate a merge with a conflict with a remote branch" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "created table"
     dolt push test-remote master
@@ -311,7 +311,7 @@ teardown() {
 
 @test "clone sets your current branch appropriately" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     dolt checkout -b aaa
@@ -344,7 +344,7 @@ teardown() {
 
 @test "file based remotes" {
     # seed with some data
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
 
@@ -377,7 +377,7 @@ teardown() {
 
 @test "multiple remotes" {
     # seed with some data
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
 

@@ -3,12 +3,12 @@
 setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/common.bash
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
 }
 
 teardown() {
