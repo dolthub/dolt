@@ -2,7 +2,8 @@ package ref
 
 import (
 	"testing"
-	"github.com/stretchr/testify/assert" 
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBranchName(t *testing.T) {

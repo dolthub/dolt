@@ -1,8 +1,9 @@
 package table
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 )
 
 // BadRow is an error which contains the row and details about what is wrong with it.

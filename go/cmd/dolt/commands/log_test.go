@@ -2,10 +2,11 @@ package commands
 
 import (
 	"context"
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 func TestLog(t *testing.T) {

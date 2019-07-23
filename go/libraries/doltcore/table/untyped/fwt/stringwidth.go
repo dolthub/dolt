@@ -2,7 +2,7 @@ package fwt
 
 import (
 	"github.com/mattn/go-runewidth"
-  "github.com/rivo/uniseg"
+	"github.com/rivo/uniseg"
 )
 
 // StringWidth returns the number of horizontal cells needed to print the given text. It splits the text into its

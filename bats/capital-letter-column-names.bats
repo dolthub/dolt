@@ -1,14 +1,14 @@
 #!/usr/bin/env bats
 
 setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     dolt init
-    dolt table import -c -s `nativepath $BATS_TEST_DIRNAME/helper/capital-letter-column-names.schema` test `nativepath $BATS_TEST_DIRNAME/helper/capital-letter-column-names.csv`
+    dolt table import -c -s `batshelper capital-letter-column-names.schema` test `batshelper capital-letter-column-names.csv`
 }
 
 teardown() {

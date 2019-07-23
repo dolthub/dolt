@@ -202,8 +202,8 @@ type setEdit struct {
 }
 
 type setEditSlice struct {
-	edits  []setEdit
-	nbf    *NomsBinFormat
+	edits []setEdit
+	nbf   *NomsBinFormat
 }
 
 func (ses setEditSlice) Len() int      { return len(ses.edits) }

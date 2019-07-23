@@ -3,9 +3,10 @@ package table
 import (
 	"context"
 	"errors"
+	"io"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"io"
 )
 
 // TableReader is an interface for reading rows from a table

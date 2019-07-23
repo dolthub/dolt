@@ -2,12 +2,8 @@
 
 REMOTE=http://localhost:50051/test-org/test-repo
 
-setup() { 
-    if [ -z "$BATS_TMPDIR" ]; then
-        export BATS_TMPDIR=$HOME/batstmp/
-        mkdir $BATS_TMPDIR
-    fi
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:$GOPATH/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
@@ -119,7 +115,7 @@ teardown() {
 }
 
 @test "git dolt update updates the specified pointer file to the specified revision" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     export NEW_DOLT_HEAD_COMMIT=`get_head_commit`

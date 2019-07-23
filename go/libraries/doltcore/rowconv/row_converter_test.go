@@ -2,12 +2,14 @@ package rowconv
 
 import (
 	"context"
+	"testing"
+
 	"github.com/google/uuid"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 var srcCols, _ = schema.NewColCollection(

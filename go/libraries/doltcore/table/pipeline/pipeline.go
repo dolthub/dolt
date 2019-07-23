@@ -1,9 +1,10 @@
 package pipeline
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"sync"
 	"sync/atomic"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 )
 
 // Buffer size of processing channels created by the pipeline

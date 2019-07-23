@@ -3,8 +3,9 @@ package mvdata
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"

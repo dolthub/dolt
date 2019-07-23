@@ -11,11 +11,11 @@ import (
 	"math"
 	"math/rand"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-
 	"github.com/golang/snappy"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 

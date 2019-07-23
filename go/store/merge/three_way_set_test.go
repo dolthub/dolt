@@ -8,8 +8,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestThreeWaySetMerge(t *testing.T) {
