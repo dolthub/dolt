@@ -234,6 +234,8 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	err = mover.Move(context.TODO())
 
 	if err != nil {
+		cli.Println()
+
 		if pipeline.IsTransformFailure(err) {
 			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
 
