@@ -1,3 +1,4 @@
+nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 nativepath() { echo "$1"; }
 nativevar() { eval export "$1"="$2"; }
 skiponwindows() { :; }

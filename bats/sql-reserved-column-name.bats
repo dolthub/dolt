@@ -8,7 +8,7 @@ setup() {
     cd "dolt-repo-$$"
     load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     dolt init
-    dolt table import -c -pk=Timestamp test `nativepath $BATS_TEST_DIRNAME/helper/sql-reserved-column-name.csv`
+    dolt table import -c -pk=Timestamp test `nativebatsdir helper/sql-reserved-column-name.csv`
 }
 
 teardown() {
