@@ -27,7 +27,7 @@ import (
 )
 
 type ValidatingDecoder struct {
-	vs     *ValueStore
+	vs *ValueStore
 }
 
 func NewValidatingDecoder(cs chunks.ChunkStore) *ValidatingDecoder {

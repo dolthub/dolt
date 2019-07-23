@@ -16,11 +16,12 @@ package main
 
 import (
 	"context"
+	"path/filepath"
+	"sync"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"path/filepath"
-	"sync"
 )
 
 const (

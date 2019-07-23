@@ -16,12 +16,13 @@ package csv
 
 import (
 	"context"
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 const (
@@ -49,9 +50,9 @@ John Johnson,21,Intern Dufus
 `
 	info := NewCSVInfo()
 	var inCols = []schema.Column{
-		{nameColName, nameColTag, types.StringKind, true, nil},
-		{ageColName, ageColTag, types.UintKind, false, nil},
-		{titleColName, titleColTag, types.StringKind, false, nil},
+		{Name: nameColName, Tag: nameColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
+		{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil},
+		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 	}
 	colColl, _ := schema.NewColCollection(inCols...)
 	rowSch := schema.SchemaFromCols(colColl)

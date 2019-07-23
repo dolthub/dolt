@@ -22,15 +22,16 @@
 package config
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 )
 
 const (

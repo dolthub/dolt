@@ -15,17 +15,18 @@
 package edits
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func createKVPs(rng *rand.Rand, size int) types.KVPSlice {
 	kvps := make(types.KVPSlice, size)
 
 	for i := 0; i < size; i++ {
-		kvps[i] = types.KVP{types.Uint(rng.Uint64() % 10000), types.NullValue}
+		kvps[i] = types.KVP{Key: types.Uint(rng.Uint64() % 10000), Val: types.NullValue}
 	}
 
 	return kvps

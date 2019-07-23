@@ -27,10 +27,10 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-
 	"github.com/golang/snappy"
+
 	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"

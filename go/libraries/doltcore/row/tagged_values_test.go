@@ -16,10 +16,11 @@ package row
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )

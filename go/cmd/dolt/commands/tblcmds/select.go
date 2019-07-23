@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -113,7 +114,7 @@ func (st *selectTransform) LimitAndFilter(inRow row.Row, props pipeline.Readable
 	if st.limit == -1 || st.count < st.limit {
 		if st.filter(inRow) {
 			st.count++
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+			return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
 		}
 	} else if st.count == st.limit {
 		st.p.NoMore()
@@ -264,7 +265,7 @@ func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformColl
 	transforms.AppendTransforms(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
-	transforms.AppendTransforms(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+	transforms.AppendTransforms(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 }
 
 func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
@@ -342,6 +343,6 @@ func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow
 			panic(err)
 		}
 
-		return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+		return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
 	}
 }

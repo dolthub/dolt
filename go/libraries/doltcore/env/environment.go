@@ -21,6 +21,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pkg/errors"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
@@ -31,9 +35,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 const (

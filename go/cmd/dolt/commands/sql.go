@@ -27,6 +27,10 @@ import (
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
 	"github.com/liquidata-inc/ishell"
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -43,9 +47,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // An environment variable to set to get indexed join behavior, currently experimental
@@ -374,7 +375,7 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+	p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 
 	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
@@ -411,7 +412,7 @@ func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untyped
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+	p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 
 	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)

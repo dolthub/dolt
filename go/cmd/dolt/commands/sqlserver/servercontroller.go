@@ -58,7 +58,7 @@ func (controller *ServerController) registerCloseFunction(startError error, clos
 // serverStopped is called within `serve` to signal that the server has stopped and set the exit code.
 // Only the first call will register and unblock, thus it is safe to be called multiple times.
 func (controller *ServerController) serverStopped(closeError error) {
-	controller.stopRegistered.Do(func(){
+	controller.stopRegistered.Do(func() {
 		if closeError != nil {
 			controller.closeError = closeError
 		}
@@ -70,7 +70,7 @@ func (controller *ServerController) serverStopped(closeError error) {
 // multiple goroutines to call this function.
 func (controller *ServerController) StopServer() {
 	if controller.closeFunction != nil {
-		controller.closeCalled.Do(func(){
+		controller.closeCalled.Do(func() {
 			if err := controller.closeFunction(); err != nil {
 				controller.closeError = err
 			}

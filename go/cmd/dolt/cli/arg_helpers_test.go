@@ -16,10 +16,11 @@ package cli
 
 import (
 	"context"
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 func TestParseKeyValues(t *testing.T) {

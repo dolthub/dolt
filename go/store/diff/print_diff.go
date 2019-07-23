@@ -26,6 +26,7 @@ import (
 	"io"
 
 	"github.com/dustin/go-humanize"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/writers"
 )

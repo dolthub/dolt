@@ -18,8 +18,9 @@ import (
 	"context"
 
 	"github.com/cenkalti/backoff"
-	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 	"google.golang.org/grpc"
+
+	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
 )
 
 const (

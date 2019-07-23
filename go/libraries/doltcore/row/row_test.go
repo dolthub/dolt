@@ -15,11 +15,13 @@
 package row
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestGetFieldByName(t *testing.T) {
@@ -85,7 +87,7 @@ func TestIsValid(t *testing.T) {
 	// Test getting a bad column without the constraint failure
 	t.Run("invalid type", func(t *testing.T) {
 		nonPkCols := []schema.Column{
-			{addrColName, addrColTag, types.BoolKind, false, nil},
+			{Name: addrColName, Tag: addrColTag, Kind: types.BoolKind, IsPartOfPK: false, Constraints: nil},
 		}
 		nonKeyColColl, _ := schema.NewColCollection(nonPkCols...)
 		newSch, err := schema.SchemaFromPKAndNonPKCols(testKeyColColl, nonKeyColColl)

@@ -16,11 +16,12 @@ package alterschema
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 )
 
 // RenameTable renames a table with in a RootValue and returns the updated root.
-func RenameTable(ctx context.Context, doltDb *doltdb.DoltDB , root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
+func RenameTable(ctx context.Context, doltDb *doltdb.DoltDB, root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
 	if newName == oldName {
 		return root, nil
 	} else if root == nil {
@@ -43,4 +44,3 @@ func RenameTable(ctx context.Context, doltDb *doltdb.DoltDB , root *doltdb.RootV
 
 	return root.PutTable(ctx, doltDb, newName, tbl), nil
 }
-

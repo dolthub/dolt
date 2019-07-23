@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"strconv"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -27,7 +29,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // No limit marker for limit statements in select
@@ -566,7 +567,7 @@ func createLimitAndOffsetFn(statement *SelectStatement, p *pipeline.Pipeline) pi
 	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
 		if skipped >= statement.offset && returned < statement.limit {
 			returned++
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+			return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
 		} else if returned == statement.limit {
 			p.NoMore()
 		} else {
@@ -589,7 +590,7 @@ func createWhereFn(statement *SelectStatement) pipeline.TransformRowFunc {
 
 	return func(inRow row.Row, props pipeline.ReadableMap) (results []*pipeline.TransformedRowResult, s string) {
 		if rowFilter.filter(inRow) {
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+			return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
 		}
 		return nil, ""
 	}
@@ -630,7 +631,7 @@ func createOutputSchemaMappingTransform(nbf *types.NomsBinFormat, selectStmt *Se
 			}
 		}
 		r := row.New(nbf, selectStmt.ResultSetSchema, taggedVals)
-		return []*pipeline.TransformedRowResult{{r, nil}}, ""
+		return []*pipeline.TransformedRowResult{{RowData: r, PropertyUpdates: nil}}, ""
 	}
 
 	return pipeline.NewNamedTransform("create result set", transformFunc)

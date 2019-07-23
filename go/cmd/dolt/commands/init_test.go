@@ -15,8 +15,9 @@
 package commands
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 )
 
 func TestInit(t *testing.T) {

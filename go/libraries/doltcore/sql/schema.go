@@ -16,8 +16,9 @@ package sql
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 )
 
 // SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to

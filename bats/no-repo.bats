@@ -1,7 +1,16 @@
-#!/usr/bin/env bats                                                                  
+#!/usr/bin/env bats
+
 setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
+	cd $BATS_TMPDIR
+    mkdir no-dolt-dir-$$
+	cd no-dolt-dir-$$
+}
+
+teardown() {
+    rm -rf $BATS_TMPDIR/no-dolt-dir-$$
 }
 
 @test "checking we have a dolt executable available" {

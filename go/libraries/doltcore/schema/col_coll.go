@@ -94,11 +94,11 @@ func NewColCollection(cols ...Column) (*ColCollection, error) {
 	sort.Slice(sortedTags, func(i, j int) bool { return sortedTags[i] < sortedTags[j] })
 
 	return &ColCollection{
-		cols: uniqueCols,
-		Tags: tags,
-		SortedTags: sortedTags,
-		TagToCol: tagToCol,
-		NameToCol: nameToCol,
+		cols:           uniqueCols,
+		Tags:           tags,
+		SortedTags:     sortedTags,
+		TagToCol:       tagToCol,
+		NameToCol:      nameToCol,
 		LowerNameToCol: lowerNameToCol,
 	}, nil
 }

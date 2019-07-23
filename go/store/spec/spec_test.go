@@ -29,12 +29,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMemDatabaseSpec(t *testing.T) {

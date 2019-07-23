@@ -70,14 +70,14 @@ func TestPanicToErrorNil(t *testing.T) {
 	}
 
 	err = PanicToErrorNil(errMsg, func() {
-		var i int = 0; i++
+		var i int = 0
+		i++
 	})
 
 	if err != nil {
 		t.Error("Unexpected error message")
 	}
 }
-
 
 func TestPanicToErrorInstance(t *testing.T) {
 	expected := errors.New("err instance")

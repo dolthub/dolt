@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"

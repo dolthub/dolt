@@ -267,7 +267,7 @@ func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx contex
 		dref = ref.NewBranchRef("master")
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{dref}
+	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
 	dEnv.RepoState.Staged = h.String()
 	dEnv.RepoState.Working = h.String()
 	err := dEnv.RepoState.Save()

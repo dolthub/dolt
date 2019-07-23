@@ -24,12 +24,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 type storeOpenFn func() (chunks.ChunkStore, error)

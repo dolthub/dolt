@@ -17,6 +17,7 @@ package doltdb
 import (
 	"reflect"
 	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 

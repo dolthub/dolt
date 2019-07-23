@@ -16,18 +16,17 @@ package sql
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
+	"vitess.io/vitess/go/vt/sqlparser"
 
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestExecuteCreate(t *testing.T) {
@@ -500,16 +499,16 @@ func TestDropColumn(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:  "alter drop column",
-			query: "alter table people drop rating",
+			name:           "alter drop column",
+			query:          "alter table people drop rating",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag),
-			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag), AllPeopleRows...),
+			expectedRows:   dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag), AllPeopleRows...),
 		},
 		{
-			name:  "alter drop column with optional column keyword",
-			query: "alter table people drop column rating",
+			name:           "alter drop column with optional column keyword",
+			query:          "alter table people drop column rating",
 			expectedSchema: dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag),
-			expectedRows: dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag), AllPeopleRows...),
+			expectedRows:   dtestutils.ConvertToSchema(dtestutils.RemoveColumnFromSchema(PeopleTestSchema, RatingTag), AllPeopleRows...),
 		},
 		{
 			name:        "drop primary key",

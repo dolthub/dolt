@@ -160,7 +160,7 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) boo
 func GetRowConvTransformFunc(rc *RowConverter) func(row.Row, pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	if rc.IdentityConverter {
 		return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+			return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
 		}
 	} else {
 		return func(inRow row.Row, props pipeline.ReadableMap) (outRows []*pipeline.TransformedRowResult, badRowDetails string) {
@@ -175,7 +175,7 @@ func GetRowConvTransformFunc(rc *RowConverter) func(row.Row, pipeline.ReadableMa
 				return nil, "invalid column: " + col.Name
 			}
 
-			return []*pipeline.TransformedRowResult{{outRow, nil}}, ""
+			return []*pipeline.TransformedRowResult{{RowData: outRow, PropertyUpdates: nil}}, ""
 		}
 	}
 }

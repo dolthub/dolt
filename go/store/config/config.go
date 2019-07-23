@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 
 	"github.com/BurntSushi/toml"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 )
 

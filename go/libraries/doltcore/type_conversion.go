@@ -16,8 +16,9 @@ package doltcore
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"strconv"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type ConversionError struct {

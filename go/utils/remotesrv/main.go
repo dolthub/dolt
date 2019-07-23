@@ -18,15 +18,17 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"google.golang.org/grpc"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
+
+	"google.golang.org/grpc"
+
+	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 )
 
 func main() {

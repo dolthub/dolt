@@ -24,9 +24,10 @@ import (
 )
 
 const (
-	IsWindows = true
+	IsWindows     = true
 	PathDelimiter = string(byte(filepath.Separator))
 )
+
 var (
 	SystemVolume   = filepath.VolumeName(os.Getenv("SYSTEMROOT"))
 	FileSystemRoot = SystemVolume + PathDelimiter

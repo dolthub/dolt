@@ -15,9 +15,10 @@
 package resultset
 
 import (
+	"sync"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"sync"
 )
 
 // A table result is a set of rows packaged with their schema. Rows are filled in concurrently from a channel.
@@ -25,17 +26,17 @@ type TableResult struct {
 	// The schema of this table
 	Schema schema.Schema
 	// The rows in this result, filled in concurrently
-	rows   []row.Row
+	rows []row.Row
 	// Whether the rows have been finalized
-	done   bool
+	done bool
 	// The number of rows stored so far
 	length int
 	// A mutex to synchronize logic when iterating over rows that are in the process of being populated.
-	mutex  sync.Mutex
+	mutex sync.Mutex
 }
 
 type RowIterator struct {
-	i int
+	i  int
 	tr *TableResult
 }
 
@@ -48,7 +49,7 @@ func NewTableResult(in chan row.Row, sch schema.Schema) *TableResult {
 
 // Creates a pre-canned table result for use in testing.
 func newTableResultForTest(rs []row.Row, sch schema.Schema) *TableResult {
-		return &TableResult{rows: rs, Schema: sch, done: true, length: len(rs)}
+	return &TableResult{rows: rs, Schema: sch, done: true, length: len(rs)}
 }
 
 // Starts a goroutine to consume the table result's input channel and cache the result in the Rows field.
@@ -56,7 +57,7 @@ func (tr *TableResult) consume(in chan row.Row) {
 	go func() {
 		for {
 			tr.mutex.Lock()
-			r, ok := <- in
+			r, ok := <-in
 			if ok {
 				tr.rows = append(tr.rows, r)
 				tr.length++

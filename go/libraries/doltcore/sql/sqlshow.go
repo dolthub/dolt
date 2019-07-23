@@ -19,12 +19,13 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func ExecuteShow(ctx context.Context, root *doltdb.RootValue, show *sqlparser.Show) ([]row.Row, schema.Schema, error) {
@@ -133,8 +134,6 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 	default:
 		return nil, nil, errFmt("Unsupported show statement: '%v'", nodeToString(show))
 	}
-
-	return nil, nil, nil
 }
 
 // schemaAsShowColumnRows returns the rows for a `show columns from table` or `describe table` for the schema given.

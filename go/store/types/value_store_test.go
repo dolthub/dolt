@@ -25,9 +25,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestValueReadWriteRead(t *testing.T) {

@@ -15,8 +15,9 @@
 package valutil
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestNilSafeEqCheck(t *testing.T) {

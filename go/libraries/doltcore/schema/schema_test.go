@@ -15,11 +15,13 @@
 package schema
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (

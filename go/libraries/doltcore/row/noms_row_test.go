@@ -17,10 +17,12 @@ package row
 import (
 	"context"
 	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 const (
@@ -46,14 +48,14 @@ var ageVal = types.Uint(53)
 var titleVal = types.NullValue
 
 var testKeyCols = []schema.Column{
-	{lnColName, lnColTag, types.StringKind, true, []schema.ColConstraint{schema.NotNullConstraint{}}},
-	{fnColName, fnColTag, types.StringKind, true, []schema.ColConstraint{schema.NotNullConstraint{}}},
+	{Name: lnColName, Tag: lnColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: []schema.ColConstraint{schema.NotNullConstraint{}}},
+	{Name: fnColName, Tag: fnColTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: []schema.ColConstraint{schema.NotNullConstraint{}}},
 }
 var testCols = []schema.Column{
-	{addrColName, addrColTag, types.StringKind, false, nil},
-	{ageColName, ageColTag, types.UintKind, false, nil},
-	{titleColName, titleColTag, types.StringKind, false, nil},
-	{reservedColName, reservedColTag, types.StringKind, false, nil},
+	{Name: addrColName, Tag: addrColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
+	{Name: ageColName, Tag: ageColTag, Kind: types.UintKind, IsPartOfPK: false, Constraints: nil},
+	{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
+	{Name: reservedColName, Tag: reservedColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 }
 var testKeyColColl, _ = schema.NewColCollection(testKeyCols...)
 var testNonKeyColColl, _ = schema.NewColCollection(testCols...)

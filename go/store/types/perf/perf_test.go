@@ -29,9 +29,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/perf/suite"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 )
 
 type perfSuite struct {

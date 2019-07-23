@@ -24,15 +24,16 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
 
 	"github.com/golang/snappy"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestWriteChunks(t *testing.T) {
