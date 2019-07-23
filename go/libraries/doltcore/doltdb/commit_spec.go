@@ -2,9 +2,10 @@ package doltdb
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"regexp"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 )
 
 type stringer string

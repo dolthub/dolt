@@ -16,6 +16,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 )
 

@@ -11,6 +11,7 @@ import (
 	"io"
 
 	"github.com/dustin/go-humanize"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )

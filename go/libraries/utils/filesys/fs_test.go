@@ -7,8 +7,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
 )
 
 const (

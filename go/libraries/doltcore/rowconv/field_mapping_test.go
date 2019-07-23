@@ -1,11 +1,12 @@
 package rowconv
 
 import (
+	"reflect"
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"reflect"
-	"testing"
 )
 
 var fieldsA, _ = schema.NewColCollection(

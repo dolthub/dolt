@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"strconv"
-	"strings"
 )
 
 // For some reason these constants are private in the sql parser library, so we need to either fork that package or

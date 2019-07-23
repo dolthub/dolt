@@ -275,7 +275,7 @@ func (fs *InMemFS) mkDirs(path string) (*memDir, error) {
 		// When iterating Windows-style paths, the first slash is after the volume, e.g. C:/
 		// We check if the first element (like "C:") plus the delimiter is the same as the system root
 		// If so, we skip it as we add the system root when creating the InMemFS
-		if i == 0 && osutil.IsWindows && element + osutil.PathDelimiter == osutil.FileSystemRoot {
+		if i == 0 && osutil.IsWindows && element+osutil.PathDelimiter == osutil.FileSystemRoot {
 			continue
 		}
 		currPath = filepath.Join(currPath, element)

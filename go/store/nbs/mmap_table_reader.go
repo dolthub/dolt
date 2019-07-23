@@ -8,13 +8,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/edsrzf/mmap-go"
 	"io"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	"github.com/edsrzf/mmap-go"
 )
 
 type mmapTableReader struct {

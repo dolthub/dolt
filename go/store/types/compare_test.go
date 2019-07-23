@@ -8,10 +8,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"sort"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 
 	"github.com/stretchr/testify/assert"
 )

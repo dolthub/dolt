@@ -7,9 +7,10 @@ package chunks
 import (
 	"context"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/stretchr/testify/assert"
 )
 
 func assertInputInStore(input string, h hash.Hash, s ChunkStore, assert *assert.Assertions) {

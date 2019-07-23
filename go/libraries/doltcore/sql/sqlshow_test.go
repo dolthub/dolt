@@ -2,17 +2,17 @@ package sql
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"vitess.io/vitess/go/vt/sqlparser"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
+	"vitess.io/vitess/go/vt/sqlparser"
 
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestExecuteShow(t *testing.T) {

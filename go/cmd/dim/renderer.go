@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gizak/termui/v3"
 	"github.com/gizak/termui/v3/widgets"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"

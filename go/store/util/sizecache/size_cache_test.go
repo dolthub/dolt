@@ -10,8 +10,9 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 func hashFromString(s string) hash.Hash {

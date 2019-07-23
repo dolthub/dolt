@@ -2,6 +2,10 @@ package sqlexport
 
 import (
 	"context"
+	"io"
+	"path/filepath"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -9,9 +13,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"path/filepath"
-	"strings"
 )
 
 const doubleQuot = "\""

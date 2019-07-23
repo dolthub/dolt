@@ -65,7 +65,6 @@ func TestParsing(t *testing.T) {
 			map[string]string{"message": "value"},
 			[]string{"b", ""},
 		},
-
 	}
 
 	for _, test := range tests {

@@ -1,9 +1,10 @@
 package test
 
 import (
-	"github.com/google/uuid"
 	"os"
 	"path/filepath"
+
+	"github.com/google/uuid"
 )
 
 // TestDir creates a subdirectory inside the systems temp directory
