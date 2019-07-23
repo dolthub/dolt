@@ -2,6 +2,12 @@ package doltdb
 
 import (
 	"context"
+	"io/ioutil"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
@@ -9,10 +15,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"io/ioutil"
-	"path/filepath"
-	"testing"
 )
 
 const (

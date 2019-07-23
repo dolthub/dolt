@@ -1,8 +1,9 @@
 package edits
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestAddKVP(t *testing.T) {

@@ -9,8 +9,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 )
 
 func getTestVals(vrw ValueReadWriter) []Value {

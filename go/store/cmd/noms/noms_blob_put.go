@@ -8,9 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"io"
 	"os"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"

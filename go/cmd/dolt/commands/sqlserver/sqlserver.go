@@ -2,6 +2,7 @@ package sqlserver
 
 import (
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -9,11 +10,11 @@ import (
 )
 
 const (
-	hostFlag  = "host"
-	portFlag  = "port"
-	userFlag = "user"
+	hostFlag     = "host"
+	portFlag     = "port"
+	userFlag     = "user"
 	passwordFlag = "password"
-	timeoutFlag = "timeout"
+	timeoutFlag  = "timeout"
 	readonlyFlag = "readonly"
 	logLevelFlag = "loglevel"
 )

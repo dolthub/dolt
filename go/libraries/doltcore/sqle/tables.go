@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
+	"github.com/src-d/go-mysql-server/sql"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/src-d/go-mysql-server/sql"
-	"io"
 )
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.

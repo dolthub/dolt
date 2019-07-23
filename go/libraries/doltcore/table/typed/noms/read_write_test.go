@@ -2,13 +2,15 @@ package noms
 
 import (
 	"context"
+	"testing"
+
 	"github.com/google/uuid"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 const (

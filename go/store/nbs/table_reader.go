@@ -9,12 +9,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/golang/snappy"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"io"
 	"sort"
 	"sync"
+
+	"github.com/golang/snappy"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 var ErrInvalidTableFile = errors.New("invalid or corrupt table file")

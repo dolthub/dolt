@@ -8,8 +8,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"regexp"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
