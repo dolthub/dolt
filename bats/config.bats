@@ -3,7 +3,7 @@
 setup() {
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/common.bash
     mkdir $BATS_TMPDIR/config-$$
     nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
     cd $BATS_TMPDIR
