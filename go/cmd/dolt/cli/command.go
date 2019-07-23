@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 )
 

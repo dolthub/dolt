@@ -2,13 +2,15 @@ package commands
 
 import (
 	"fmt"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
-	"github.com/stretchr/testify/assert"
-	"path/filepath"
-	"testing"
 )
 
 func TestGetAbsRemoteUrl(t *testing.T) {

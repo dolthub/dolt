@@ -8,9 +8,10 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestHashRoundTrip(t *testing.T) {

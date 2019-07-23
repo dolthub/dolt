@@ -16,6 +16,8 @@ import (
 	"time"
 
 	flag "github.com/juju/gnuflag"
+	"github.com/mgutz/ansi"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
@@ -28,7 +30,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/util/outputpager"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/writers"
-	"github.com/mgutz/ansi"
 )
 
 var (

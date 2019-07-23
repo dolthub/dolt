@@ -5,15 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
+
 	"github.com/acarl005/stripansi"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"io"
-	"strconv"
-	"strings"
 )
 
 const writeBufSize = 256 * 1024

@@ -1,9 +1,10 @@
 package argparser
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 	"math"
 	"strconv"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
 )
 
 type ArgParseResults struct {

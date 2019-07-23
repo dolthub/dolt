@@ -1,8 +1,9 @@
 package filesys
 
 import (
-	"github.com/pkg/errors"
 	"io"
+
+	"github.com/pkg/errors"
 )
 
 var ErrIsDir = errors.New("operation not valid on a directory")

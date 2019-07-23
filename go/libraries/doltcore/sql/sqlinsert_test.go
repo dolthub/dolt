@@ -2,17 +2,18 @@ package sql
 
 import (
 	"context"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestExecuteInsert(t *testing.T) {
@@ -329,11 +330,11 @@ func TestExecuteInsert(t *testing.T) {
 
 func rowsEqual(expected, actual row.Row) (bool, string) {
 	er, ar := make(map[uint64]types.Value), make(map[uint64]types.Value)
-	expected.IterCols(func (t uint64, v types.Value) bool {
+	expected.IterCols(func(t uint64, v types.Value) bool {
 		er[t] = v
 		return false
 	})
-	actual.IterCols(func (t uint64, v types.Value) bool {
+	actual.IterCols(func(t uint64, v types.Value) bool {
 		ar[t] = v
 		return false
 	})

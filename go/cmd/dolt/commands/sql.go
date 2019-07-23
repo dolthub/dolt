@@ -13,6 +13,10 @@ import (
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
 	"github.com/liquidata-inc/ishell"
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -29,9 +33,6 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // An environment variable to set to get indexed join behavior, currently experimental

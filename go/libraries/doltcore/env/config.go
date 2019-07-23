@@ -2,9 +2,10 @@ package env
 
 import (
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"path/filepath"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"

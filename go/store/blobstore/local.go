@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/juju/fslock"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/juju/fslock"
 
 	"github.com/google/uuid"
 )

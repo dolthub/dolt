@@ -6,7 +6,6 @@ package nbs
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"io"
 	"math/rand"
 	"sync"
@@ -15,8 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
 )
 
 func TestAWSTablePersisterPersist(t *testing.T) {

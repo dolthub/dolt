@@ -1,18 +1,20 @@
 package sqlserver
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
+	"net"
+	"strconv"
+	"time"
+
 	"github.com/sirupsen/logrus"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/auth"
 	"github.com/src-d/go-mysql-server/server"
 	"github.com/src-d/go-mysql-server/sql"
-	"net"
-	"strconv"
-	"time"
 	"vitess.io/vitess/go/mysql"
+
+	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
+	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
 )
 
 // serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -28,11 +30,11 @@ func serve(serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverContro
 
 	var mySQLServer *server.Server
 	// This guarantees unblocking on any routines with a waiting `ServerController`
-	defer func(){
+	defer func() {
 		if mySQLServer != nil {
 			serverController.registerCloseFunction(startError, mySQLServer.Close)
 		} else {
-			serverController.registerCloseFunction(startError, func()error{return nil})
+			serverController.registerCloseFunction(startError, func() error { return nil })
 		}
 		serverController.StopServer()
 		serverController.serverStopped(closeError)

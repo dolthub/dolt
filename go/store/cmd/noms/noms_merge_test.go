@@ -7,17 +7,18 @@ package main
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
+	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
-	"github.com/stretchr/testify/suite"
 )
 
 type nomsMergeTestSuite struct {

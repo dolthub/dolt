@@ -2,17 +2,17 @@ package sql
 
 import (
 	"context"
+	"testing"
+
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"vitess.io/vitess/go/vt/sqlparser"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
-
 )
 
 func TestExecuteUpdate(t *testing.T) {
@@ -129,7 +129,7 @@ func TestExecuteUpdate(t *testing.T) {
 		{
 			name:  "update reverse rating",
 			query: `update people set rating = -rating`,
-			updatedRows:   []row.Row{
+			updatedRows: []row.Row{
 				MutateRow(Homer, RatingTag, -8.5),
 				MutateRow(Marge, RatingTag, -8.0),
 				MutateRow(Bart, RatingTag, -9.0),

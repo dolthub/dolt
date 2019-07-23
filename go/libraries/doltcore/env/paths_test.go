@@ -1,9 +1,10 @@
 package env
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"path/filepath"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 )
 
 func TestGetGlobalCfgPath(t *testing.T) {

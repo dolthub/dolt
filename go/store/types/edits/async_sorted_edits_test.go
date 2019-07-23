@@ -1,10 +1,11 @@
 package edits
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func createKVPs(rng *rand.Rand, size int) types.KVPSlice {
