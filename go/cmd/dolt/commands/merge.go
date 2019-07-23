@@ -148,8 +148,6 @@ func mergeBranch(dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
 	} else {
 		return executeMerge(dEnv, cm1, cm2, dref)
 	}
-
-	return nil
 }
 
 func executeFFMerge(dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {

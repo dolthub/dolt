@@ -32,5 +32,5 @@ func ColoringTransform(r row.Row, props pipeline.ReadableMap) ([]*pipeline.Trans
 		}
 	}
 
-	return []*pipeline.TransformedRowResult{{r, updatedProps}}, ""
+	return []*pipeline.TransformedRowResult{{RowData: r, PropertyUpdates: updatedProps}}, ""
 }

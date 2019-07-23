@@ -42,23 +42,23 @@ func TestKVPSliceSort(t *testing.T) {
 	}{
 		{
 			types.KVPSlice{
-				{types.Uint(5), types.NullValue},
-				{types.Uint(1), types.NullValue},
-				{types.Uint(4), types.NullValue},
-				{types.Uint(3), types.NullValue},
+				{Key: types.Uint(5), Val: types.NullValue},
+				{Key: types.Uint(1), Val: types.NullValue},
+				{Key: types.Uint(4), Val: types.NullValue},
+				{Key: types.Uint(3), Val: types.NullValue},
 			},
 			types.KVPSlice{
-				{types.Uint(1), types.NullValue},
-				{types.Uint(3), types.NullValue},
-				{types.Uint(4), types.NullValue},
-				{types.Uint(5), types.NullValue},
+				{Key: types.Uint(1), Val: types.NullValue},
+				{Key: types.Uint(3), Val: types.NullValue},
+				{Key: types.Uint(4), Val: types.NullValue},
+				{Key: types.Uint(5), Val: types.NullValue},
 			},
 		},
 	}
 
 	for _, test := range tests {
 		IsInOrder(NewItr(types.Format_7_18, NewKVPCollection(types.Format_7_18, test.kvps)))
-		sort.Stable(types.KVPSort{test.kvps, types.Format_7_18})
+		sort.Stable(types.KVPSort{Values: test.kvps, NBF: types.Format_7_18})
 
 		if len(test.kvps) != len(test.expSorted) {
 			t.Error("bad length")

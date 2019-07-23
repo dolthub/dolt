@@ -44,7 +44,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		return "", nil, nil
 	}
 
-	tableLoc := &mvdata.DataLocation{tableName, mvdata.DoltDB}
+	tableLoc := &mvdata.DataLocation{Path: tableName, Format: mvdata.DoltDB}
 
 	return tableName, tableLoc, fileLoc
 }

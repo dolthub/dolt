@@ -171,7 +171,7 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				}
 
 				dEnv.RepoState.Branches[src.GetPath()] = env.BranchConfig{
-					Merge:  ref.MarshalableRef{dest},
+					Merge:  ref.MarshalableRef{Ref: dest},
 					Remote: remoteName,
 				}
 

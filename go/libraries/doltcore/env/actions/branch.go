@@ -3,6 +3,7 @@ package actions
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -26,7 +27,7 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 	}
 
 	if ref.Equals(dEnv.RepoState.Head.Ref, oldRef) {
-		dEnv.RepoState.Head = ref.MarshalableRef{newRef}
+		dEnv.RepoState.Head = ref.MarshalableRef{Ref: newRef}
 		err = dEnv.RepoState.Save()
 
 		if err != nil {
@@ -210,7 +211,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{dref}
+	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
 	dEnv.RepoState.Working = wrkHash.String()
 	dEnv.RepoState.Staged = stgHash.String()
 
