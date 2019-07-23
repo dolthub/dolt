@@ -35,7 +35,7 @@ func (m *RepoId) Reset()         { *m = RepoId{} }
 func (m *RepoId) String() string { return proto.CompactTextString(m) }
 func (*RepoId) ProtoMessage()    {}
 func (*RepoId) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{0}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{0}
 }
 func (m *RepoId) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RepoId.Unmarshal(m, b)
@@ -81,7 +81,7 @@ func (m *HasChunksRequest) Reset()         { *m = HasChunksRequest{} }
 func (m *HasChunksRequest) String() string { return proto.CompactTextString(m) }
 func (*HasChunksRequest) ProtoMessage()    {}
 func (*HasChunksRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{1}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{1}
 }
 func (m *HasChunksRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HasChunksRequest.Unmarshal(m, b)
@@ -126,7 +126,7 @@ func (m *HasChunksResponse) Reset()         { *m = HasChunksResponse{} }
 func (m *HasChunksResponse) String() string { return proto.CompactTextString(m) }
 func (*HasChunksResponse) ProtoMessage()    {}
 func (*HasChunksResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{2}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{2}
 }
 func (m *HasChunksResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HasChunksResponse.Unmarshal(m, b)
@@ -165,7 +165,7 @@ func (m *HttpGetChunk) Reset()         { *m = HttpGetChunk{} }
 func (m *HttpGetChunk) String() string { return proto.CompactTextString(m) }
 func (*HttpGetChunk) ProtoMessage()    {}
 func (*HttpGetChunk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{3}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{3}
 }
 func (m *HttpGetChunk) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HttpGetChunk.Unmarshal(m, b)
@@ -212,7 +212,7 @@ func (m *RangeChunk) Reset()         { *m = RangeChunk{} }
 func (m *RangeChunk) String() string { return proto.CompactTextString(m) }
 func (*RangeChunk) ProtoMessage()    {}
 func (*RangeChunk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{4}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{4}
 }
 func (m *RangeChunk) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RangeChunk.Unmarshal(m, b)
@@ -265,7 +265,7 @@ func (m *HttpGetRange) Reset()         { *m = HttpGetRange{} }
 func (m *HttpGetRange) String() string { return proto.CompactTextString(m) }
 func (*HttpGetRange) ProtoMessage()    {}
 func (*HttpGetRange) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{5}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{5}
 }
 func (m *HttpGetRange) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HttpGetRange.Unmarshal(m, b)
@@ -313,7 +313,7 @@ func (m *DownloadLoc) Reset()         { *m = DownloadLoc{} }
 func (m *DownloadLoc) String() string { return proto.CompactTextString(m) }
 func (*DownloadLoc) ProtoMessage()    {}
 func (*DownloadLoc) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{6}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{6}
 }
 func (m *DownloadLoc) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_DownloadLoc.Unmarshal(m, b)
@@ -455,7 +455,7 @@ func (m *HttpPostChunk) Reset()         { *m = HttpPostChunk{} }
 func (m *HttpPostChunk) String() string { return proto.CompactTextString(m) }
 func (*HttpPostChunk) ProtoMessage()    {}
 func (*HttpPostChunk) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{7}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{7}
 }
 func (m *HttpPostChunk) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_HttpPostChunk.Unmarshal(m, b)
@@ -496,7 +496,7 @@ func (m *UploadLoc) Reset()         { *m = UploadLoc{} }
 func (m *UploadLoc) String() string { return proto.CompactTextString(m) }
 func (*UploadLoc) ProtoMessage()    {}
 func (*UploadLoc) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{8}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{8}
 }
 func (m *UploadLoc) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_UploadLoc.Unmarshal(m, b)
@@ -614,7 +614,7 @@ func (m *GetDownloadLocsRequest) Reset()         { *m = GetDownloadLocsRequest{}
 func (m *GetDownloadLocsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetDownloadLocsRequest) ProtoMessage()    {}
 func (*GetDownloadLocsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{9}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{9}
 }
 func (m *GetDownloadLocsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetDownloadLocsRequest.Unmarshal(m, b)
@@ -659,7 +659,7 @@ func (m *GetDownloadLocsResponse) Reset()         { *m = GetDownloadLocsResponse
 func (m *GetDownloadLocsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetDownloadLocsResponse) ProtoMessage()    {}
 func (*GetDownloadLocsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{10}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{10}
 }
 func (m *GetDownloadLocsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetDownloadLocsResponse.Unmarshal(m, b)
@@ -698,7 +698,7 @@ func (m *GetUploadLocsRequest) Reset()         { *m = GetUploadLocsRequest{} }
 func (m *GetUploadLocsRequest) String() string { return proto.CompactTextString(m) }
 func (*GetUploadLocsRequest) ProtoMessage()    {}
 func (*GetUploadLocsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{11}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{11}
 }
 func (m *GetUploadLocsRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetUploadLocsRequest.Unmarshal(m, b)
@@ -743,7 +743,7 @@ func (m *GetUploadLocsResponse) Reset()         { *m = GetUploadLocsResponse{} }
 func (m *GetUploadLocsResponse) String() string { return proto.CompactTextString(m) }
 func (*GetUploadLocsResponse) ProtoMessage()    {}
 func (*GetUploadLocsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{12}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{12}
 }
 func (m *GetUploadLocsResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetUploadLocsResponse.Unmarshal(m, b)
@@ -781,7 +781,7 @@ func (m *RebaseRequest) Reset()         { *m = RebaseRequest{} }
 func (m *RebaseRequest) String() string { return proto.CompactTextString(m) }
 func (*RebaseRequest) ProtoMessage()    {}
 func (*RebaseRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{13}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{13}
 }
 func (m *RebaseRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RebaseRequest.Unmarshal(m, b)
@@ -818,7 +818,7 @@ func (m *RebaseResponse) Reset()         { *m = RebaseResponse{} }
 func (m *RebaseResponse) String() string { return proto.CompactTextString(m) }
 func (*RebaseResponse) ProtoMessage()    {}
 func (*RebaseResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{14}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{14}
 }
 func (m *RebaseResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RebaseResponse.Unmarshal(m, b)
@@ -849,7 +849,7 @@ func (m *RootRequest) Reset()         { *m = RootRequest{} }
 func (m *RootRequest) String() string { return proto.CompactTextString(m) }
 func (*RootRequest) ProtoMessage()    {}
 func (*RootRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{15}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{15}
 }
 func (m *RootRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RootRequest.Unmarshal(m, b)
@@ -887,7 +887,7 @@ func (m *RootResponse) Reset()         { *m = RootResponse{} }
 func (m *RootResponse) String() string { return proto.CompactTextString(m) }
 func (*RootResponse) ProtoMessage()    {}
 func (*RootResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{16}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{16}
 }
 func (m *RootResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_RootResponse.Unmarshal(m, b)
@@ -926,7 +926,7 @@ func (m *ChunkTableInfo) Reset()         { *m = ChunkTableInfo{} }
 func (m *ChunkTableInfo) String() string { return proto.CompactTextString(m) }
 func (*ChunkTableInfo) ProtoMessage()    {}
 func (*ChunkTableInfo) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{17}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{17}
 }
 func (m *ChunkTableInfo) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ChunkTableInfo.Unmarshal(m, b)
@@ -975,7 +975,7 @@ func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
 func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
 func (*CommitRequest) ProtoMessage()    {}
 func (*CommitRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{18}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{18}
 }
 func (m *CommitRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitRequest.Unmarshal(m, b)
@@ -1041,7 +1041,7 @@ func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
 func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
 func (*CommitResponse) ProtoMessage()    {}
 func (*CommitResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{19}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{19}
 }
 func (m *CommitResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_CommitResponse.Unmarshal(m, b)
@@ -1080,7 +1080,7 @@ func (m *GetRepoMetadataRequest) Reset()         { *m = GetRepoMetadataRequest{}
 func (m *GetRepoMetadataRequest) String() string { return proto.CompactTextString(m) }
 func (*GetRepoMetadataRequest) ProtoMessage()    {}
 func (*GetRepoMetadataRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{20}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{20}
 }
 func (m *GetRepoMetadataRequest) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetRepoMetadataRequest.Unmarshal(m, b)
@@ -1130,7 +1130,7 @@ func (m *GetRepoMetadataResponse) Reset()         { *m = GetRepoMetadataResponse
 func (m *GetRepoMetadataResponse) String() string { return proto.CompactTextString(m) }
 func (*GetRepoMetadataResponse) ProtoMessage()    {}
 func (*GetRepoMetadataResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{21}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{21}
 }
 func (m *GetRepoMetadataResponse) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_GetRepoMetadataResponse.Unmarshal(m, b)
@@ -1176,7 +1176,7 @@ func (m *ClientRepoFormat) Reset()         { *m = ClientRepoFormat{} }
 func (m *ClientRepoFormat) String() string { return proto.CompactTextString(m) }
 func (*ClientRepoFormat) ProtoMessage()    {}
 func (*ClientRepoFormat) Descriptor() ([]byte, []int) {
-	return fileDescriptor_chunkstore_777ebdc2debedb19, []int{22}
+	return fileDescriptor_chunkstore_6a769066ddb98dcb, []int{22}
 }
 func (m *ClientRepoFormat) XXX_Unmarshal(b []byte) error {
 	return xxx_messageInfo_ClientRepoFormat.Unmarshal(m, b)
@@ -1507,10 +1507,10 @@ var _ChunkStoreService_serviceDesc = grpc.ServiceDesc{
 }
 
 func init() {
-	proto.RegisterFile("dolt/services/remotesapi/v1alpha1/chunkstore.proto", fileDescriptor_chunkstore_777ebdc2debedb19)
+	proto.RegisterFile("dolt/services/remotesapi/v1alpha1/chunkstore.proto", fileDescriptor_chunkstore_6a769066ddb98dcb)
 }
 
-var fileDescriptor_chunkstore_777ebdc2debedb19 = []byte{
+var fileDescriptor_chunkstore_6a769066ddb98dcb = []byte{
 	// 908 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xbc, 0x57, 0xcf, 0x73, 0xdb, 0x44,
 	0x14, 0x8e, 0x12, 0xe3, 0xd8, 0xcf, 0x3f, 0x70, 0x35, 0x50, 0x34, 0xe6, 0xd0, 0x74, 0x4f, 0x81,
