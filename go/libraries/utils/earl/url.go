@@ -1,11 +1,12 @@
 package earl
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 )
 
 var validHostRegex = regexp.MustCompile("^[-.a-zA-z0-9]*$")
@@ -61,7 +62,7 @@ func parse(urlStr string) (*url.URL, error) {
 	if strIdx := strings.Index(urlStr, ":///"); strIdx != -1 && osutil.StartsWithWindowsVolume(urlStr[strIdx+4:]) {
 		return &url.URL{
 			Scheme: urlStr[:strIdx],
-			Path: urlStr[strIdx+4:],
+			Path:   urlStr[strIdx+4:],
 		}, nil
 	}
 	if strings.Index(urlStr, "://") == -1 {

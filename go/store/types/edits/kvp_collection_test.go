@@ -2,11 +2,12 @@ package edits
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"math/rand"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func (coll *KVPCollection) String() string {

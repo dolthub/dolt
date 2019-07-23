@@ -2,14 +2,16 @@ package alterschema
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestRenameTable(t *testing.T) {

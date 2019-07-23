@@ -11,9 +11,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/nomdl"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMarshalTypeType(tt *testing.T) {

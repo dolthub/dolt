@@ -3,6 +3,7 @@ package sql
 import (
 	"errors"
 	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 

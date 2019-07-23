@@ -8,9 +8,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/suite"
 )
 
 const datasetID = "ds1"

@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/suite"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/constants"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
-	"github.com/stretchr/testify/suite"
 )
 
 func TestVersion(t *testing.T) {

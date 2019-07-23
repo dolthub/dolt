@@ -14,13 +14,12 @@ import (
 	"time"
 
 	"github.com/attic-labs/kingpin"
+	flag "github.com/juju/gnuflag"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/exit"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
-
-	flag "github.com/juju/gnuflag"
 )
 
 var commands = []*util.Command{
