@@ -1,12 +1,12 @@
 #!/usr/bin/env bats
 
 setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
-    load $BATS_TEST_DIRNAME/helper/common.bash
     dolt init
     dolt table create -s=`batshelper 1pk5col-strings.schema` test
 }

@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 
 setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-    load $BATS_TEST_DIRNAME/helper/common.bash
     cd $BATS_TMPDIR
     # Append the directory name with the pid of the calling process so
     # multiple tests can be run in parallel on the same machine
