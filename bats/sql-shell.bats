@@ -8,7 +8,7 @@ setup() {
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
 }
 
 teardown() {

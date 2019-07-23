@@ -119,7 +119,7 @@ teardown() {
 }
 
 @test "git dolt update updates the specified pointer file to the specified revision" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "test commit"
     export NEW_DOLT_HEAD_COMMIT=`get_head_commit`

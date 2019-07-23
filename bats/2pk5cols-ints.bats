@@ -8,7 +8,7 @@ setup() {
     cd "dolt-repo-$$"
     load $BATS_TEST_DIRNAME/helper/windows-compat.bash
     dolt init
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/2pk5col-ints.schema` test
+    dolt table create -s=`nativebatsdir helper/2pk5col-ints.schema` test
 }
 
 teardown() {
