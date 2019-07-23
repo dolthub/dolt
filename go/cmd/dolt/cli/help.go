@@ -2,13 +2,15 @@ package cli
 
 import (
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/funcitr"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/fatih/color"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/funcitr"
 )
 
 var underline = color.New(color.Underline)

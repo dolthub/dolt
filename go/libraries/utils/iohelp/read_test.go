@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/mathutil"
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
 )
 

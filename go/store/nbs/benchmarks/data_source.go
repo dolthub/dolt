@@ -9,14 +9,15 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"io"
 	"os"
 
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"github.com/liquidata-inc/ld/dolt/go/store/nbs/benchmarks/gen"
 )
 

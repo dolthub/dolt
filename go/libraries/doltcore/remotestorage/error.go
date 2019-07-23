@@ -2,6 +2,7 @@ package remotestorage
 
 import (
 	"encoding/json"
+
 	"google.golang.org/grpc/status"
 )
 

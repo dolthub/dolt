@@ -1,9 +1,9 @@
 package main
 
 import (
-	"io/ioutil"
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 

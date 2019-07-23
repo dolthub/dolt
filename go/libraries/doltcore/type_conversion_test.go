@@ -1,9 +1,11 @@
 package doltcore
 
 import (
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (
