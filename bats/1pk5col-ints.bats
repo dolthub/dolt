@@ -503,6 +503,19 @@ teardown() {
     [ "${#lines[@]}" -eq 6 ]
 }
 
+@test "import data from a csv file with a bad line" {
+    run dolt table import test -u `nativebatsdir helper/1pk5col-ints-badline.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "line only has 1 value" ]] || false
+
+    # This line should be removed when the remainder of the test is unskipped
+    [[ "$output" =~ "A bad row was encountered" ]] || false
+
+    skip "missing line break; see issue #1807"
+    [[ "${lines[0]}" =~ "Additions" ]] || false
+    [[ "${lines[1]}" =~ "A bad row was encountered" ]] || false
+}
+
 @test "import data from a psv file after table created" {
     run dolt table import test -u  `nativebatsdir helper/1pk5col-ints.psv`
     [ "$status" -eq 0 ]
