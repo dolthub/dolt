@@ -16,15 +16,17 @@ package merge
 
 import (
 	"context"
+	"strconv"
+	"testing"
+
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"strconv"
-	"testing"
 )
 
 type RowMergeTest struct {

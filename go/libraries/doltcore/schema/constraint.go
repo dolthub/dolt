@@ -16,6 +16,7 @@ package schema
 
 import (
 	"fmt"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 

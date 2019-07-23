@@ -24,12 +24,13 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"io"
 	"os"
 	"time"
 
 	humanize "github.com/dustin/go-humanize"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"

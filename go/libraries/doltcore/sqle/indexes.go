@@ -18,11 +18,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+
+	"github.com/src-d/go-mysql-server/sql"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/src-d/go-mysql-server/sql"
-	"io"
 )
 
 // IndexDriver implementation. Not ready for prime time.
@@ -62,14 +64,14 @@ func (i *DoltIndexDriver) LoadAll(db, table string) ([]sql.Index, error) {
 	}
 
 	sch := tbl.GetSchema(context.TODO())
-	return []sql.Index{ &doltIndex{sch, table, i.db, i} }, nil
+	return []sql.Index{&doltIndex{sch, table, i.db, i}}, nil
 }
 
 type doltIndex struct {
-	sch schema.Schema
+	sch       schema.Schema
 	tableName string
-	db *Database
-	driver *DoltIndexDriver
+	db        *Database
+	driver    *DoltIndexDriver
 }
 
 func (di *doltIndex) Get(key ...interface{}) (sql.IndexLookup, error) {
@@ -218,8 +220,8 @@ func (il *doltIndexLookup) RowIter(ctx *sql.Context) (sql.RowIter, error) {
 
 type indexLookupRowIterAdapter struct {
 	indexLookup *doltIndexLookup
-	ctx *sql.Context
-	i int
+	ctx         *sql.Context
+	i           int
 }
 
 func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {

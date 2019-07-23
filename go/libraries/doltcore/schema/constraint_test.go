@@ -15,8 +15,9 @@
 package schema
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 type TestConstraint struct {

@@ -26,6 +26,7 @@ import (
 	"fmt"
 
 	flag "github.com/juju/gnuflag"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/ld/dolt/go/store/config"
 	"github.com/liquidata-inc/ld/dolt/go/store/d"

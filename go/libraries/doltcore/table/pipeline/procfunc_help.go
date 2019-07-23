@@ -118,7 +118,6 @@ func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 	}
 }
 
-
 // SourceFuncForRows returns a source func that yields the rows given in order. Suitable for very small result sets
 // that are statically defined or otherwise fit easily into memory.
 func SourceFuncForRows(rows []row.Row) SourceFunc {

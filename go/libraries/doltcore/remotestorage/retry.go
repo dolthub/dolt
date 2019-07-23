@@ -16,10 +16,11 @@ package remotestorage
 
 import (
 	"fmt"
+	"net/http"
+
 	"github.com/cenkalti/backoff"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"net/http"
 )
 
 var RetriableHTTPStatusCodes = map[int]struct{}{

@@ -28,9 +28,10 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/nomdl"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMarshalTypeType(tt *testing.T) {
@@ -250,7 +251,7 @@ func TestMarshalTypeOmitEmpty(t *testing.T) {
 	var s S
 	typ, err := MarshalType(types.Format_7_18, s)
 	assert.NoError(err)
-	assert.True(types.MakeStructType("S", types.StructField{"string", types.StringType, true}).Equals(typ))
+	assert.True(types.MakeStructType("S", types.StructField{Name: "string", Type: types.StringType, Optional: true}).Equals(typ))
 }
 
 func ExampleMarshalType() {
@@ -432,9 +433,9 @@ func TestMarshalTypeSetWithTags(t *testing.T) {
 	typ, err := MarshalType(types.Format_7_18, s)
 	assert.NoError(err)
 	assert.True(types.MakeStructType("S",
-		types.StructField{"foo", types.MakeSetType(types.FloaTType), false},
-		types.StructField{"b", types.MakeSetType(types.FloaTType), true},
-		types.StructField{"bar", types.MakeSetType(types.FloaTType), true},
+		types.StructField{Name: "foo", Type: types.MakeSetType(types.FloaTType), Optional: false},
+		types.StructField{Name: "b", Type: types.MakeSetType(types.FloaTType), Optional: true},
+		types.StructField{Name: "bar", Type: types.MakeSetType(types.FloaTType), Optional: true},
 	).Equals(typ))
 }
 
@@ -478,7 +479,7 @@ func TestMarshalTypeOriginal(t *testing.T) {
 	typ, err := MarshalType(types.Format_7_18, s)
 	assert.NoError(err)
 	assert.True(types.MakeStructType("S",
-		types.StructField{"foo", types.FloaTType, true},
+		types.StructField{Name: "foo", Type: types.FloaTType, Optional: true},
 	).Equals(typ))
 }
 
@@ -605,7 +606,7 @@ func TestMarshalTypeStructName(t *testing.T) {
 
 	var ts TestStructWithNameImpl
 	typ := MustMarshalType(types.Format_7_18, ts)
-	assert.True(types.MakeStructType("A", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe(context.Background()))
+	assert.True(types.MakeStructType("A", types.StructField{Name: "x", Type: types.FloaTType, Optional: false}).Equals(typ), typ.Describe(context.Background()))
 }
 
 func TestMarshalTypeStructName2(t *testing.T) {
@@ -613,7 +614,7 @@ func TestMarshalTypeStructName2(t *testing.T) {
 
 	var ts TestStructWithNameImpl2
 	typ := MustMarshalType(types.Format_7_18, ts)
-	assert.True(types.MakeStructType("", types.StructField{"x", types.FloaTType, false}).Equals(typ), typ.Describe(context.Background()))
+	assert.True(types.MakeStructType("", types.StructField{Name: "x", Type: types.FloaTType, Optional: false}).Equals(typ), typ.Describe(context.Background()))
 }
 
 type OutPhoto struct {

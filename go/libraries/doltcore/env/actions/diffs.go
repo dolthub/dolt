@@ -16,9 +16,10 @@ package actions
 
 import (
 	"context"
+	"sort"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"sort"
 )
 
 type TableDiffType int

@@ -15,10 +15,11 @@
 package env
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 	"os"
 	"os/user"
 	"path/filepath"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
 )
 
 const (

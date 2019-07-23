@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
@@ -143,7 +144,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		return mvdata.InvalidOp, nil, nil
 	}
 
-	tableLoc := &mvdata.DataLocation{tableName, mvdata.DoltDB}
+	tableLoc := &mvdata.DataLocation{Path: tableName, Format: mvdata.DoltDB}
 
 	return mvOp, tableLoc, fileLoc
 }

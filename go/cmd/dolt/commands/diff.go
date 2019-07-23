@@ -21,6 +21,7 @@ import (
 	"strconv"
 
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/diff"
@@ -363,7 +364,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
 	transforms := pipeline.NewTransformCollection(
 		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
-		pipeline.NamedTransform{fwtStageName, fwtTr.TransformToFWT},
+		pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT},
 	)
 
 	var verr errhand.VerboseError

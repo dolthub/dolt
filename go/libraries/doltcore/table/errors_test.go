@@ -15,10 +15,11 @@
 package table
 
 import (
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 func TestBadRow(t *testing.T) {

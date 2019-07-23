@@ -26,13 +26,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 
-	"sync"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/stretchr/testify/assert"
 )
 
 func buildTable(chunks [][]byte) ([]byte, addr, error) {

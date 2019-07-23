@@ -16,8 +16,9 @@ package doltdb
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestTableDiff(t *testing.T) {

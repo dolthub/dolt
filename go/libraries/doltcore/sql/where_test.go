@@ -16,92 +16,94 @@ package sql
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/stretchr/testify/assert"
-	"testing"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestWhereClauseErrorHandling(t *testing.T) {
 	tests := []struct {
-		name           string
-		query          string
-		expectedErr    string
+		name        string
+		query       string
+		expectedErr string
 	}{
 		{
-			name: "Type mismatch: int -> string",
-			query: `select * from people where first = 0`,
+			name:        "Type mismatch: int -> string",
+			query:       `select * from people where first = 0`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: int -> bool",
-			query: `select * from people where is_married = 0`,
+			name:        "Type mismatch: int -> bool",
+			query:       `select * from people where is_married = 0`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: int -> uuid",
-			query: `select * from people where uuid = 0`,
+			name:        "Type mismatch: int -> uuid",
+			query:       `select * from people where uuid = 0`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: string -> int",
-			query: `select * from people where age = "yes"`,
+			name:        "Type mismatch: string -> int",
+			query:       `select * from people where age = "yes"`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: string -> float",
-			query: `select * from people where rating = "great"`,
+			name:        "Type mismatch: string -> float",
+			query:       `select * from people where rating = "great"`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: string -> uint",
-			query: `select * from people where num_episodes = "so many"`,
+			name:        "Type mismatch: string -> uint",
+			query:       `select * from people where num_episodes = "so many"`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: string -> uuid",
-			query: `select * from people where uuid = "this is a uuid i promise"`,
+			name:        "Type mismatch: string -> uuid",
+			query:       `select * from people where uuid = "this is a uuid i promise"`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: float -> string",
-			query: `select * from people where first = 1.5`,
+			name:        "Type mismatch: float -> string",
+			query:       `select * from people where first = 1.5`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: float -> bool",
-			query: `select * from people where is_married = 1.5`,
+			name:        "Type mismatch: float -> bool",
+			query:       `select * from people where is_married = 1.5`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: float -> int",
-			query: `select * from people where age = 10.5`,
+			name:        "Type mismatch: float -> int",
+			query:       `select * from people where age = 10.5`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: bool -> int",
-			query: `select * from people where age = true`,
+			name:        "Type mismatch: bool -> int",
+			query:       `select * from people where age = true`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: bool -> float",
-			query: `select * from people where rating = false`,
+			name:        "Type mismatch: bool -> float",
+			query:       `select * from people where rating = false`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: bool -> string",
-			query: `select * from people where first = true`,
+			name:        "Type mismatch: bool -> string",
+			query:       `select * from people where first = true`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: bool -> uuid",
-			query: `select * from people where uuid = false`,
+			name:        "Type mismatch: bool -> uuid",
+			query:       `select * from people where uuid = false`,
 			expectedErr: "Type mismatch:",
 		},
 		{
-			name: "Type mismatch: non-bool column used as bool",
-			query: `select * from people where uuid`,
+			name:        "Type mismatch: non-bool column used as bool",
+			query:       `select * from people where uuid`,
 			expectedErr: "Type mismatch:",
 		},
 	}
@@ -119,7 +121,7 @@ func TestWhereClauseErrorHandling(t *testing.T) {
 			if err != nil {
 				assert.Contains(t, err.Error(), tt.expectedErr)
 			} else {
-				assert.Equal(t,"", tt.expectedErr)
+				assert.Equal(t, "", tt.expectedErr)
 			}
 		})
 	}

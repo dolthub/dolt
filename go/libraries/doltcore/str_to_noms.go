@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 

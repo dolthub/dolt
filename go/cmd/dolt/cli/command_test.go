@@ -15,10 +15,11 @@
 package cli
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 )
 
 const (

@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
@@ -25,8 +26,7 @@ import (
 )
 
 var tblCpShortDesc = "Makes a copy of a table"
-var tblCpLongDesc =
-`The dolt table cp command makes a copy of a table at a given commit.  If a commit is not specified the copy is made of
+var tblCpLongDesc = `The dolt table cp command makes a copy of a table at a given commit.  If a commit is not specified the copy is made of
 the current working table.
 
 If a table exists at the target location this command will fail unless the <b>--force|-f</b> flag is provided.  In this

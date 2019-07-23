@@ -27,9 +27,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-	"github.com/stretchr/testify/assert"
 )
 
 const (

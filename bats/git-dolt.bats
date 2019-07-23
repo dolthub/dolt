@@ -2,11 +2,7 @@
 
 REMOTE=http://localhost:50051/test-org/test-repo
 
-setup() { 
-    if [ -z "$BATS_TMPDIR" ]; then
-        export BATS_TMPDIR=$HOME/batstmp/
-        mkdir $BATS_TMPDIR
-    fi
+setup() {
     load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:$GOPATH/bin
     export NOMS_VERSION_NEXT=1

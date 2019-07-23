@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
@@ -58,7 +59,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		return "", nil, nil
 	}
 
-	tableLoc := &mvdata.DataLocation{tableName, mvdata.DoltDB}
+	tableLoc := &mvdata.DataLocation{Path: tableName, Format: mvdata.DoltDB}
 
 	return tableName, tableLoc, fileLoc
 }

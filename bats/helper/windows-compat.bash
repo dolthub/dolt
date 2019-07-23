@@ -4,8 +4,12 @@ skiponwindows() { :; }
 
 IS_WINDOWS=false
 
-if [ -d /mnt/*/Windows/System32 ]; then
+if [ -d /mnt/c/Windows/System32 ]; then
     IS_WINDOWS=true
+    if [ ! -d /mnt/c/batstmp ]; then
+        mkdir /mnt/c/batstmp
+    fi
+    export BATS_TMPDIR=/mnt/c/batstmp
     nativepath() {
         wslpath -w "$1"
     }

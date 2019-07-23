@@ -22,7 +22,7 @@ import (
 
 func sorter(nbf *types.NomsBinFormat, in, out chan types.KVPSlice) {
 	for kvps := range in {
-		sort.Stable(types.KVPSort{kvps, nbf})
+		sort.Stable(types.KVPSort{Values: kvps, NBF: nbf})
 		out <- kvps
 	}
 }
@@ -97,7 +97,7 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 
 // AddEdit adds an edit
 func (ase *AsyncSortedEdits) AddEdit(k types.LesserValuable, v types.Valuable) {
-	ase.accumulating = append(ase.accumulating, types.KVP{k, v})
+	ase.accumulating = append(ase.accumulating, types.KVP{Key: k, Val: v})
 
 	if len(ase.accumulating) == ase.sliceSize {
 		ase.asyncSortAcc()
@@ -130,7 +130,7 @@ func (ase *AsyncSortedEdits) FinishedEditing() types.EditProvider {
 
 	if len(ase.accumulating) > 0 {
 		sl := types.KVPSlice(ase.accumulating)
-		sort.Stable(types.KVPSort{sl, ase.nbf})
+		sort.Stable(types.KVPSort{Values: sl, NBF: ase.nbf})
 
 		ase.resultChan <- sl
 	}

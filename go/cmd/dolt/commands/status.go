@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
@@ -46,14 +47,12 @@ func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	if err != nil {
 		panic(err) // fix
-		return 1
 	}
 
 	workingInConflict, _, _, err := actions.GetTablesInConflict(context.Background(), dEnv)
 
 	if err != nil {
 		panic(err) // fix
-		return 1
 	}
 
 	printStatus(dEnv, stagedDiffs, notStagedDiffs, workingInConflict)

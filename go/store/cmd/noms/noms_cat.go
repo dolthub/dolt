@@ -27,15 +27,13 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-
 	"github.com/golang/snappy"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-
 	flag "github.com/juju/gnuflag"
 
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
+	"github.com/liquidata-inc/ld/dolt/go/store/spec"
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 const (

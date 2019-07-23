@@ -31,8 +31,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func TestEncode(tt *testing.T) {

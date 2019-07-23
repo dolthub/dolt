@@ -23,9 +23,10 @@ package main
 
 import (
 	"flag"
-	"github.com/juju/fslock"
 	"log"
 	"os"
+
+	"github.com/juju/fslock"
 )
 
 func main() {

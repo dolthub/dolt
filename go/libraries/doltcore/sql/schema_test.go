@@ -19,8 +19,9 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
 
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const expectedSQL = "CREATE TABLE `table_name` (\n" +

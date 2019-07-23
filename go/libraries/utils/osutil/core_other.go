@@ -22,11 +22,12 @@ import (
 )
 
 const (
-	IsWindows = false
+	IsWindows     = false
 	PathDelimiter = string(byte(filepath.Separator))
 )
+
 var (
-	SystemVolume = ""
+	SystemVolume   = ""
 	FileSystemRoot = PathDelimiter
 )
 

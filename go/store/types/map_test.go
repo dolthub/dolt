@@ -31,9 +31,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 )
 
 const testMapSize = 8000

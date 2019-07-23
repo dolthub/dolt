@@ -16,15 +16,16 @@ package sql
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
 
@@ -41,7 +42,8 @@ func TestJoins(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			runSelectTest(t, test)
 		})
-	}}
+	}
+}
 
 func TestCaseSensitivity(t *testing.T) {
 	for _, test := range CaseSensitivityTests {
@@ -65,10 +67,10 @@ func TestBuildSelectQueryPipeline(t *testing.T) {
 			expectedSchema:  CompressSchema(PeopleTestSchema),
 		},
 		{
-			name:  "Test select columns",
-			query: "select age, id from people",
+			name:            "Test select columns",
+			query:           "select age, id from people",
 			expectedNumRows: len([]row.Row{Homer, Marge, Bart, Lisa, Moe, Barney}),
-			expectedSchema: CompressSchema(PeopleTestSchema, "age", "id"),
+			expectedSchema:  CompressSchema(PeopleTestSchema, "age", "id"),
 		},
 	}
 	for _, tt := range tests {

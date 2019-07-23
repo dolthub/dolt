@@ -17,11 +17,12 @@ package dbfactory
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/ld/dolt/go/store/datas"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"net/url"
-	"strings"
 )
 
 const (

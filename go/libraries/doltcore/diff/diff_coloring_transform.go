@@ -16,6 +16,7 @@ package diff
 
 import (
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
 )
@@ -46,5 +47,5 @@ func ColoringTransform(r row.Row, props pipeline.ReadableMap) ([]*pipeline.Trans
 		}
 	}
 
-	return []*pipeline.TransformedRowResult{{r, updatedProps}}, ""
+	return []*pipeline.TransformedRowResult{{RowData: r, PropertyUpdates: updatedProps}}, ""
 }

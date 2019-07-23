@@ -30,12 +30,11 @@ import (
 	"sync"
 	"time"
 
+	"cloud.google.com/go/storage"
+	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
-
-	"cloud.google.com/go/storage"
-	"github.com/dustin/go-humanize"
 	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )

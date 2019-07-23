@@ -15,13 +15,14 @@
 package sqltestutil
 
 import (
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 // This file defines test queries and expected results. The purpose of defining them here is to make them portable --
@@ -163,10 +164,10 @@ var BasicSelectTests = []SelectTest{
 	},
 	// TODO: float logic seems broken in sql engine
 	{
-		Name:            "select *, order by float",
-		Query:           "select * from people order by rating",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Barney, Moe, Marge, Homer, Bart, Lisa),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, order by float",
+		Query:          "select * from people order by rating",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Barney, Moe, Marge, Homer, Bart, Lisa),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, order by string",
@@ -253,10 +254,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, where > float",
-		Query:           "select * from people where rating > 8.0 order by id",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Bart, Lisa),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, where > float",
+		Query:          "select * from people where rating > 8.0 order by id",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Bart, Lisa),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, where < float",
@@ -265,16 +266,16 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, where = float",
-		Query:           "select * from people where rating = 8.0",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Marge),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, where = float",
+		Query:          "select * from people where rating = 8.0",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Marge),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, where < float reversed",
-		Query:           "select * from people where 8.0 < rating",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Bart, Lisa),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, where < float reversed",
+		Query:          "select * from people where 8.0 < rating",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Bart, Lisa),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, where > float reversed",
@@ -283,10 +284,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, where = float reversed",
-		Query:           "select * from people where 8.0 = rating",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Marge),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, where = float reversed",
+		Query:          "select * from people where 8.0 = rating",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Marge),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, where bool = ",
@@ -337,10 +338,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, in clause float",
-		Query:           "select * from people where rating in (-10.0, 8.5)",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Homer),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, in clause float",
+		Query:          "select * from people where rating in (-10.0, 8.5)",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Homer),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:            "select *, in clause, mixed types",
@@ -385,28 +386,28 @@ var BasicSelectTests = []SelectTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, is true clause ",
-		Query:           "select * from people where is_married is true",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Marge),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, is true clause ",
+		Query:          "select * from people where is_married is true",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, is not true clause ",
-		Query:           "select * from people where is_married is not true",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Bart, Lisa, Moe, Barney),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, is not true clause ",
+		Query:          "select * from people where is_married is not true",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Bart, Lisa, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, is false clause ",
-		Query:           "select * from people where is_married is false",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Bart, Lisa, Moe, Barney),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, is false clause ",
+		Query:          "select * from people where is_married is false",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Bart, Lisa, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:            "select *, is not false clause ",
-		Query:           "select * from people where is_married is not false",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Homer, Marge),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, is not false clause ",
+		Query:          "select * from people where is_married is not false",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:            "select *, is true clause on non-bool column",
@@ -451,10 +452,10 @@ var BasicSelectTests = []SelectTest{
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:            "select *, -column",
-		Query:           "select * from people where -rating = -8.5",
-		ExpectedRows:    CompressRows(PeopleTestSchema, Homer),
-		ExpectedSchema:  CompressSchema(PeopleTestSchema),
+		Name:           "select *, -column",
+		Query:          "select * from people where -rating = -8.5",
+		ExpectedRows:   CompressRows(PeopleTestSchema, Homer),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:            "select *, -column, string type",
@@ -686,9 +687,9 @@ var BasicSelectTests = []SelectTest{
 }
 
 // SQL is supposed to be case insensitive. These are tests of that promise.
-var CaseSensitivityTests = []SelectTest {
+var CaseSensitivityTests = []SelectTest{
 	{
-		Name:           "table name has mixed case, select lower case",
+		Name: "table name has mixed case, select lower case",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			NewRow(types.String("1"))),
@@ -697,7 +698,7 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
-		Name:           "table name has mixed case, select upper case",
+		Name: "table name has mixed case, select upper case",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			NewRow(types.String("1"))),
@@ -706,17 +707,17 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
-		Name:           "qualified select *",
+		Name: "qualified select *",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			NewRow(types.String("1"))),
-		Query:          "select mixedcAse.* from MIXEDCASE",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
+		Query:           "select mixedcAse.* from MIXEDCASE",
+		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
+		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:           "qualified select column",
+		Name: "qualified select column",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			NewRow(types.String("1"))),
@@ -725,17 +726,17 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
-		Name:           "table alias select *",
+		Name: "table alias select *",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			NewRow(types.String("1"))),
-		Query:          "select Mc.* from MIXEDCASE as mc",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
+		Query:           "select Mc.* from MIXEDCASE as mc",
+		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
+		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:           "table alias select column",
+		Name: "table alias select column",
 		AdditionalSetup: CreateTableFn("MiXeDcAsE",
 			NewSchema("test", types.StringKind),
 			NewRow(types.String("1"))),
@@ -744,49 +745,49 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
-		Name:        "multiple tables with the same case-insensitive name, exact match",
+		Name: "multiple tables with the same case-insensitive name, exact match",
 		AdditionalSetup: Compose(
 			CreateTableFn("tableName", NewSchema("test", types.StringKind), NewRow(types.String("1"))),
 			CreateTableFn("TABLENAME", NewSchema("test", types.StringKind)),
 			CreateTableFn("tablename", NewSchema("test", types.StringKind)),
 		),
-		Query:          "select test from tableName",
-		ExpectedSchema: NewResultSetSchema("test", types.StringKind),
-		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
+		Query:           "select test from tableName",
+		ExpectedSchema:  NewResultSetSchema("test", types.StringKind),
+		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:        "multiple tables with the same case-insensitive name, no exact match",
+		Name: "multiple tables with the same case-insensitive name, no exact match",
 		AdditionalSetup: Compose(
 			CreateTableFn("tableName", NewSchema("test", types.StringKind)),
 			CreateTableFn("TABLENAME", NewSchema("test", types.StringKind)),
 		),
-		Query:       "select test from tablename",
-		ExpectedErr: "Ambiguous table: 'tablename'",
+		Query:           "select test from tablename",
+		ExpectedErr:     "Ambiguous table: 'tablename'",
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:        "alias with same name as table",
+		Name: "alias with same name as table",
 		AdditionalSetup: Compose(
 			CreateTableFn("tableName", NewSchema("test", types.StringKind)),
 			CreateTableFn("other", NewSchema("othercol", types.StringKind)),
 		),
-		Query:       "select other.test from tablename as other, other",
-		ExpectedErr: "Non-unique table name / alias: 'other'",
+		Query:           "select other.test from tablename as other, other",
+		ExpectedErr:     "Non-unique table name / alias: 'other'",
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:        "two table aliases with same name",
+		Name: "two table aliases with same name",
 		AdditionalSetup: Compose(
 			CreateTableFn("tableName", NewSchema("test", types.StringKind)),
 			CreateTableFn("other", NewSchema("othercol", types.StringKind)),
 		),
-		Query:       "select bad.test from tablename as bad, other as bad",
-		ExpectedErr: "Non-unique table name / alias: 'bad'",
+		Query:           "select bad.test from tablename as bad, other as bad",
+		ExpectedErr:     "Non-unique table name / alias: 'bad'",
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:           "column name has mixed case, select lower case",
+		Name: "column name has mixed case, select lower case",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind),
 			NewRow(types.String("1"))),
@@ -795,7 +796,7 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
-		Name:           "column name has mixed case, select upper case",
+		Name: "column name has mixed case, select upper case",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind),
 			NewRow(types.String("1"))),
@@ -804,7 +805,7 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
-		Name:           "select with multiple matching columns, exact match",
+		Name: "select with multiple matching columns, exact match",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			NewRow(types.String("1"), types.String("2"))),
@@ -813,31 +814,31 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("2"))),
 	},
 	{
-		Name:           "select with multiple matching columns, exact match #2",
+		Name: "select with multiple matching columns, exact match #2",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			NewRow(types.String("1"), types.String("2"))),
-		Query:          "select MiXeDcAsE from test",
-		ExpectedSchema: NewResultSetSchema("MiXeDcAsE", types.StringKind),
-		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
+		Query:           "select MiXeDcAsE from test",
+		ExpectedSchema:  NewResultSetSchema("MiXeDcAsE", types.StringKind),
+		ExpectedRows:    Rs(NewResultSetRow(types.String("1"))),
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:        "select with multiple matching columns, no exact match",
+		Name: "select with multiple matching columns, no exact match",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			NewRow(types.String("1"), types.String("2"))),
-		Query:       "select MIXEDCASE from test",
-		ExpectedErr: "Ambiguous column: 'MIXEDCASE'",
+		Query:           "select MIXEDCASE from test",
+		ExpectedErr:     "Ambiguous column: 'MIXEDCASE'",
 		SkipOnSqlEngine: true,
 	},
 	{
-		Name:        "select with multiple matching columns, no exact match, table alias",
+		Name: "select with multiple matching columns, no exact match, table alias",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("MiXeDcAsE", types.StringKind, "mixedcase", types.StringKind),
 			NewRow(types.String("1"), types.String("2"))),
-		Query:       "select t.MIXEDCASE from test t",
-		ExpectedErr: "Ambiguous column: 'MIXEDCASE'",
+		Query:           "select t.MIXEDCASE from test t",
+		ExpectedErr:     "Ambiguous column: 'MIXEDCASE'",
 		SkipOnSqlEngine: true,
 	},
 	// TODO: this could be handled better (not change the case of the result set schema), but the parser will silently
@@ -856,7 +857,7 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedSchema: NewResultSetSchema("timestamp", types.StringKind),
 	},
 	{
-		Name:      "column is reserved word, qualified with table alias",
+		Name: "column is reserved word, qualified with table alias",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema(
 				"Timestamp", types.StringKind,
@@ -869,7 +870,7 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedSchema: NewResultSetSchema("timestamp", types.StringKind),
 	},
 	{
-		Name:      "column is reserved word, select not backticked #2",
+		Name: "column is reserved word, select not backticked #2",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema("YeAr", types.StringKind),
 			NewRow(types.String("1"))),
@@ -878,7 +879,7 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedRows:   Rs(NewResultSetRow(types.String("1"))),
 	},
 	{
-		Name:      "column is reserved word, select backticked",
+		Name: "column is reserved word, select backticked",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema(
 				"Timestamp", types.StringKind,
@@ -891,7 +892,7 @@ var CaseSensitivityTests = []SelectTest {
 		ExpectedSchema: NewResultSetSchema("Timestamp", types.StringKind),
 	},
 	{
-		Name:      "column is reserved word, select backticked #2",
+		Name: "column is reserved word, select backticked #2",
 		AdditionalSetup: CreateTableFn("test",
 			NewSchema(
 				"Year", types.StringKind,
@@ -899,7 +900,7 @@ var CaseSensitivityTests = []SelectTest {
 				"or", types.StringKind,
 				"select", types.StringKind),
 			NewRow(types.String("1"), types.String("1.1"), types.String("aaa"), types.String("create"))),
-		Query:       "select `Year`, `OR`, `SELect`, `anD` from test",
+		Query: "select `Year`, `OR`, `SELect`, `anD` from test",
 		ExpectedSchema: NewResultSetSchema(
 			"Year", types.StringKind,
 			"OR", types.StringKind,
@@ -972,13 +973,13 @@ var JoinTests = []SelectTest{
 	},
 	// TODO: error messages are different in SQL engine
 	{
-		Name:  "ambiguous column in select",
-		Query: `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
+		Name:        "ambiguous column in select",
+		Query:       `select id from people p, episodes e, appearances a where a.episode_id = e.id and a.character_id = p.id`,
 		ExpectedErr: "Ambiguous column: 'id'",
 	},
 	{
-		Name:  "ambiguous column in where",
-		Query: `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
+		Name:        "ambiguous column in where",
+		Query:       `select p.*, e.* from people p, episodes e, appearances a where a.episode_id = id and a.character_id = id`,
 		ExpectedErr: "Ambiguous column: 'id'",
 	},
 	{
@@ -1133,7 +1134,7 @@ var JoinTests = []SelectTest{
 			"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
 	},
 	{
-		Name:  "Join from table with two key columns to table with one key column",
+		Name: "Join from table with two key columns to table with one key column",
 		Query: `select a.episode_id as eid, p.id as pid, p.first
 						from appearances a join people p on a.character_id = p.id order by eid, pid`,
 		ExpectedRows: Rs(

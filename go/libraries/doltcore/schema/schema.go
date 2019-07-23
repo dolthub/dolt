@@ -83,7 +83,7 @@ func AutoGenerateTag(sch Schema) uint64 {
 
 	allCols := sch.GetAllCols()
 	for maxTagVal/2 < uint64(allCols.Size()) {
-		if maxTagVal == ReservedTagMin - 1 {
+		if maxTagVal == ReservedTagMin-1 {
 			panic("There is no way anyone should ever have this many columns.  You are a bad person if you hit this panic.")
 		} else if maxTagVal*128 < maxTagVal {
 			maxTagVal = ReservedTagMin - 1

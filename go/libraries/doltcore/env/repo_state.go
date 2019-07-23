@@ -16,6 +16,7 @@ package env
 
 import (
 	"encoding/json"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
@@ -41,7 +42,7 @@ type RepoState struct {
 	Remotes  map[string]Remote       `json:"remotes"`
 	Branches map[string]BranchConfig `json:"branches"`
 
-	fs filesys.ReadWriteFS `json:"-"`
+	fs filesys.ReadWriteFS
 }
 
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
@@ -67,7 +68,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.MarshalableRef{ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{Ref: ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil, fs}
 
 	err := rs.Save()
 
@@ -86,7 +87,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 		return nil, err
 	}
 
-	rs := &RepoState{ref.MarshalableRef{headRef}, hashStr, hashStr, nil, nil, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{Ref: headRef}, hashStr, hashStr, nil, nil, nil, fs}
 
 	err = rs.Save()
 
@@ -116,7 +117,7 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 }
 
 func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string) error {
-	rs.Merge = &MergeState{ref.MarshalableRef{dref}, commit, rs.Working}
+	rs.Merge = &MergeState{ref.MarshalableRef{Ref: dref}, commit, rs.Working}
 	return rs.Save()
 }
 

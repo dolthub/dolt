@@ -17,10 +17,11 @@ package sqle
 import (
 	"io"
 
+	"github.com/src-d/go-mysql-server/sql"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/src-d/go-mysql-server/sql"
 )
 
 // An iterator over the rows of a table.

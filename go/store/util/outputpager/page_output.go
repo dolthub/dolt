@@ -28,8 +28,9 @@ import (
 	"sync"
 
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	goisatty "github.com/mattn/go-isatty"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 var (

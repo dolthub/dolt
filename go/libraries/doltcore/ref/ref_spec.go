@@ -16,8 +16,9 @@ package ref
 
 import (
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/strhelp"
 	"strings"
+
+	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/strhelp"
 )
 
 // ErrInvalidRefSpec is the error returned when a refspec isn't syntactically valid
@@ -215,8 +216,6 @@ func newLocalToRemoteTrackingRef(remote string, srcRef BranchRef, destRef Remote
 			}, nil
 		}
 	}
-
-	return nil, ErrInvalidRefSpec
 }
 
 // SrcRef will return the current working branchh reference that is passed in as long as the cwbRef matches

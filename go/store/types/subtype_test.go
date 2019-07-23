@@ -28,8 +28,9 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
 func assertInvalid(tt *testing.T, t *Type, v Value) {

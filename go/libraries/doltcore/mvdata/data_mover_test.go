@@ -16,9 +16,10 @@ package mvdata
 
 import (
 	"context"
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"testing"
 )
 
 const (

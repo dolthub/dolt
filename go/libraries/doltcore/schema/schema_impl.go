@@ -171,4 +171,3 @@ func (si *schemaImpl) String() string {
 	b.WriteString("]")
 	return b.String()
 }
-

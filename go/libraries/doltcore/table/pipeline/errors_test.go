@@ -15,10 +15,11 @@
 package pipeline
 
 import (
+	"testing"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"testing"
 )
 
 func TestTransformRowFailure(t *testing.T) {

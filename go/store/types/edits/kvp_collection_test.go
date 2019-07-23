@@ -16,11 +16,12 @@ package edits
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"math/rand"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/types"
 )
 
 func (coll *KVPCollection) String() string {
@@ -114,10 +115,10 @@ func createKVPColl(rng *rand.Rand, size int) *KVPCollection {
 	kvps := make(types.KVPSlice, size)
 
 	for i := 0; i < size; i++ {
-		kvps[i] = types.KVP{types.Uint(rng.Uint64() % 10000), types.NullValue}
+		kvps[i] = types.KVP{Key: types.Uint(rng.Uint64() % 10000), Val: types.NullValue}
 	}
 
-	sort.Stable(types.KVPSort{kvps, types.Format_7_18})
+	sort.Stable(types.KVPSort{Values: kvps, NBF: types.Format_7_18})
 
 	return NewKVPCollection(types.Format_7_18, kvps)
 }

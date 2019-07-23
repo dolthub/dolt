@@ -15,11 +15,12 @@
 package remotestorage
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
 func TestHashesToSlices(t *testing.T) {

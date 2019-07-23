@@ -15,11 +15,13 @@
 package untyped
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 func TestNewUntypedSchema(t *testing.T) {
