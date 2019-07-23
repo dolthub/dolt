@@ -165,7 +165,7 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 				conflictTuple := doltdb.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
 				addConflict(conflictValChan, key, conflictTuple)
 			} else {
-				applyChange(mapEditor, stats, types.ValueChanged{change.ChangeType, key, r, mergedRow})
+				applyChange(mapEditor, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
 			}
 
 			change = types.ValueChanged{}

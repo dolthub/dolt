@@ -32,14 +32,12 @@ func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	if err != nil {
 		panic(err) // fix
-		return 1
 	}
 
 	workingInConflict, _, _, err := actions.GetTablesInConflict(context.Background(), dEnv)
 
 	if err != nil {
 		panic(err) // fix
-		return 1
 	}
 
 	printStatus(dEnv, stagedDiffs, notStagedDiffs, workingInConflict)

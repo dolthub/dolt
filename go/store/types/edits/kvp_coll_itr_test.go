@@ -9,9 +9,9 @@ import (
 func TestKVPCollItr(t *testing.T) {
 	ctx := context.Background()
 
-	slice1 := types.KVPSlice{{types.Uint(1), types.NullValue}, {types.Uint(2), types.NullValue}}
-	slice2 := types.KVPSlice{{types.Uint(3), types.NullValue}, {types.Uint(4), types.NullValue}}
-	slice3 := types.KVPSlice{{types.Uint(5), types.NullValue}, {}}
+	slice1 := types.KVPSlice{{Key: types.Uint(1), Val: types.NullValue}, {Key: types.Uint(2), Val: types.NullValue}}
+	slice2 := types.KVPSlice{{Key: types.Uint(3), Val: types.NullValue}, {Key: types.Uint(4), Val: types.NullValue}}
+	slice3 := types.KVPSlice{{Key: types.Uint(5), Val: types.NullValue}, {}}
 
 	type itrRes struct {
 		keyVal       uint

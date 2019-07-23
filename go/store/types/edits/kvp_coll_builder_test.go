@@ -7,9 +7,9 @@ import (
 
 func TestAddKVP(t *testing.T) {
 	builder := NewKVPCollBuilder(2)
-	builder.AddKVP(types.KVP{types.Uint(0), types.NullValue})
-	builder.AddKVP(types.KVP{types.Uint(1), types.NullValue})
-	builder.AddKVP(types.KVP{types.Uint(2), types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(0), Val: types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(1), Val: types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(2), Val: types.NullValue})
 
 	coll := builder.Build()
 	itr := coll.Iterator()
@@ -24,8 +24,8 @@ func TestAddKVP(t *testing.T) {
 }
 
 func TestMoveRemaining(t *testing.T) {
-	sl1 := types.KVPSlice{{types.Uint(0), types.NullValue}, {types.Uint(1), types.NullValue}}
-	sl2 := types.KVPSlice{{types.Uint(2), types.NullValue}, {}}
+	sl1 := types.KVPSlice{{Key: types.Uint(0), Val: types.NullValue}, {Key: types.Uint(1), Val: types.NullValue}}
+	sl2 := types.KVPSlice{{Key: types.Uint(2), Val: types.NullValue}, {}}
 	coll := &KVPCollection{
 		2,
 		2,
@@ -50,11 +50,11 @@ func TestMoveRemaining(t *testing.T) {
 }
 
 func TestAddKVPAndMoveRemaining(t *testing.T) {
-	sl := types.KVPSlice{{types.Uint(1), types.NullValue}, {types.Uint(2), types.NullValue}}
+	sl := types.KVPSlice{{Key: types.Uint(1), Val: types.NullValue}, {Key: types.Uint(2), Val: types.NullValue}}
 	coll := NewKVPCollection(types.Format_7_18, sl)
 
 	builder := NewKVPCollBuilder(2)
-	builder.AddKVP(types.KVP{types.Uint(0), types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(0), Val: types.NullValue})
 	builder.MoveRemaining(coll.Iterator())
 
 	result := builder.Build()

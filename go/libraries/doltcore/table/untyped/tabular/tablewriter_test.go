@@ -31,9 +31,9 @@ func (*StringBuilderCloser) Close() error {
 func TestWriter(t *testing.T) {
 
 	var inCols = []schema.Column{
-		{nameColName, nameColTag, types.StringKind, false, nil},
-		{ageColName, ageColTag, types.StringKind, false, nil},
-		{titleColName, titleColTag, types.StringKind, false, nil},
+		{Name: nameColName, Tag: nameColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
+		{Name: ageColName, Tag: ageColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
+		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 	}
 	colColl, _ := schema.NewColCollection(inCols...)
 	rowSch := schema.UnkeyedSchemaFromCols(colColl)
@@ -179,9 +179,9 @@ func TestWriter(t *testing.T) {
 func TestEastAsianLanguages(t *testing.T) {
 
 	var inCols = []schema.Column{
-		{nameColName, nameColTag, types.StringKind, false, nil},
-		{ageColName, ageColTag, types.StringKind, false, nil},
-		{titleColName, titleColTag, types.StringKind, false, nil},
+		{Name: nameColName, Tag: nameColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
+		{Name: ageColName, Tag: ageColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
+		{Name: titleColName, Tag: titleColTag, Kind: types.StringKind, IsPartOfPK: false, Constraints: nil},
 	}
 	colColl, _ := schema.NewColCollection(inCols...)
 	rowSch := schema.UnkeyedSchemaFromCols(colColl)

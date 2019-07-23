@@ -17,10 +17,10 @@ const (
 )
 
 var fields, _ = schema.NewColCollection(
-	schema.Column{"name", nameTag, types.StringKind, true, nil},
-	schema.Column{"age", ageTag, types.UintKind, true, nil},
-	schema.Column{"title", titleTag, types.StringKind, true, nil},
-	schema.Column{"is_great", greatTag, types.BoolKind, true, nil},
+	schema.Column{Name: "name", Tag: nameTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
+	schema.Column{Name: "age", Tag: ageTag, Kind: types.UintKind, IsPartOfPK: true, Constraints: nil},
+	schema.Column{Name: "title", Tag: titleTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
+	schema.Column{Name: "is_great", Tag: greatTag, Kind: types.BoolKind, IsPartOfPK: true, Constraints: nil},
 )
 
 var rowSch = schema.SchemaFromCols(fields)

@@ -119,8 +119,6 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 	default:
 		return nil, nil, errFmt("Unsupported show statement: '%v'", nodeToString(show))
 	}
-
-	return nil, nil, nil
 }
 
 // schemaAsShowColumnRows returns the rows for a `show columns from table` or `describe table` for the schema given.

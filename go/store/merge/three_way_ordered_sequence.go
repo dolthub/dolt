@@ -78,7 +78,7 @@ func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueC
 	if aChange.ChangeType != bChange.ChangeType {
 		if change, mergedVal, ok := m.resolve(aChange.ChangeType, bChange.ChangeType, aValue, bValue, path); ok {
 			// TODO: Correctly encode Old/NewValue with this change report. https://github.com/attic-labs/noms/issues/3467
-			return types.ValueChanged{change, aChange.Key, nil, nil}, mergedVal, nil
+			return types.ValueChanged{ChangeType: change, Key: aChange.Key, OldValue: nil, NewValue: nil}, mergedVal, nil
 		}
 		return change, nil, newMergeConflict("Conflict:\n%s\nvs\n%s\n", describeChange(aChange), describeChange(bChange))
 	}
@@ -100,7 +100,7 @@ func (m *merger) mergeChanges(ctx context.Context, aChange, bChange types.ValueC
 
 	if change, mergedVal, ok := m.resolve(aChange.ChangeType, bChange.ChangeType, aValue, bValue, path); ok {
 		// TODO: Correctly encode Old/NewValue with this change report. https://github.com/attic-labs/noms/issues/3467
-		return types.ValueChanged{change, aChange.Key, nil, nil}, mergedVal, nil
+		return types.ValueChanged{ChangeType: change, Key: aChange.Key, OldValue: nil, NewValue: nil}, mergedVal, nil
 	}
 	return change, nil, newMergeConflict("Conflict:\n%s = %s\nvs\n%s = %s", describeChange(aChange), types.EncodedValue(ctx, aValue), describeChange(bChange), types.EncodedValue(ctx, bValue))
 }

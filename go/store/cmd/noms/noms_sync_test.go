@@ -41,7 +41,7 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 
 	defer func() {
 		err := recover()
-		s.Equal(clienttest.ExitError{1}, err)
+		s.Equal(clienttest.ExitError{Code: 1}, err)
 	}()
 
 	s.MustRun(main, []string{"sync", sourceSpecMissingHashSymbol, sinkDatasetSpec})

@@ -123,7 +123,7 @@ func (asTr *AutoSizingFWTTransformer) processRow(rowWithProps pipeline.RowWithPr
 			outProps = outProps.Set(propUpdates)
 		}
 
-		outRow := pipeline.RowWithProps{rds[0].RowData, outProps}
+		outRow := pipeline.RowWithProps{Row: rds[0].RowData, Props: outProps}
 		outChan <- outRow
 	}
 }
