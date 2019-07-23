@@ -6,7 +6,7 @@ setup() {
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/common.bash
     dolt init
 }
 
@@ -15,12 +15,12 @@ teardown() {
 }
 
 @test "changing column types should not produce a data diff error" {
-    dolt table import -c --pk=pk test `nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv`
+    dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
     run dolt schema
     [[ "$output" =~ "varchar" ]] || false
     dolt add test
     dolt commit -m "Added test table"
-    dolt table import -c -f -pk=pk -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test `nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.csv`
+    dolt table import -c -f -pk=pk -s=`batshelper 1pk5col-ints.schema` test `batshelper 1pk5col-ints.csv`
     run dolt diff
     skip "This produces a failed to merge schemas error message right now"
     [ "$status" -eq 0 ]
@@ -30,7 +30,7 @@ teardown() {
 }
 
 @test "dolt schema rename column" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt schema --rename-column test c1 c0
     [ "$status" -eq 0 ]
@@ -50,7 +50,7 @@ teardown() {
 }
 
 @test "dolt schema delete column" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt schema --drop-column test c1
     [ "$status" -eq 0 ]
@@ -69,7 +69,7 @@ teardown() {
 }
 
 @test "dolt diff on schema changes" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt schema --add-column test c0 int
@@ -99,10 +99,10 @@ teardown() {
 }
 
 @test "change the primary key. view the schema diff" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-diff-pk.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-diff-pk.schema` test
     run dolt diff --schema
     [ "$status" -eq 0 ]
     skip "Schema diff output does not handle changing primary keys"
@@ -110,7 +110,7 @@ teardown() {
 }
 
 @test "adding and dropping column should produce no diff" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt schema --add-column test c0 int

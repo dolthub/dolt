@@ -6,7 +6,7 @@ setup() {
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/common.bash
     dolt init
 }
 
@@ -15,7 +15,7 @@ teardown() {
 }
 
 @test "two branches modify different cell different row. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
     dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
     dolt add test
@@ -38,7 +38,7 @@ teardown() {
 }
 
 @test "two branches modify different cell same row. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
     dolt add test
     dolt commit -m "table created"
@@ -60,7 +60,7 @@ teardown() {
 }
 
 @test "two branches modify same cell. merge. conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
     dolt add test
     dolt commit -m "table created"
@@ -79,7 +79,7 @@ teardown() {
 }
 
 @test "two branches add a different row. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-row
@@ -100,7 +100,7 @@ teardown() {
 }
 
 @test "two branches add same row. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-row
@@ -119,7 +119,7 @@ teardown() {
 }
 
 @test "one branch add table, other modifies table. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-table
@@ -127,7 +127,7 @@ teardown() {
     dolt add test
     dolt commit -m "added row"
     dolt checkout add-table
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test2
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
     dolt add test2
     dolt commit -m "added new table test2"
     dolt checkout master
@@ -140,7 +140,7 @@ teardown() {
 }
 
 @test "two branches add same column. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
@@ -159,7 +159,7 @@ teardown() {
 }
 
 @test "two branches add different column. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
@@ -179,7 +179,7 @@ teardown() {
 }
 
 @test "two branches add same column, different types. merge. conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
@@ -198,7 +198,7 @@ teardown() {
 }
 
 @test "two branches delete same column. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch delete-column
@@ -217,7 +217,7 @@ teardown() {
 }
 
 @test "two branches delete different column. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch delete-column
@@ -236,7 +236,7 @@ teardown() {
 }
 
 @test "two branches rename same column to same name. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -255,7 +255,7 @@ teardown() {
 }
 
 @test "two branches rename same column to different name. merge. conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -276,7 +276,7 @@ teardown() {
 }
 
 @test "two branches rename different column to same name. merge. conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -299,15 +299,15 @@ teardown() {
 # Altering types and properties of the schema are not really supported by the 
 # command line. Have to upload schema files for these next few tests.
 @test "two branches change type of same column to same type. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch change-types
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-1.schema` test
     dolt add test
     dolt commit -m "changed c1 to type bool"
     dolt checkout change-types
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-1.schema` test
     dolt add test
     dolt commit -m "changed c1 to type bool again"
     dolt checkout master
@@ -318,15 +318,15 @@ teardown() {
 }
 
 @test "two branches change type of same column to different type. merge. conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch change-types
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-1.schema` test
     dolt add test
     dolt commit -m "changed c1 to type bool"
     dolt checkout change-types
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-change-type-2.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-2.schema` test
     dolt add test
     dolt commit -m "changed c1 to type float"
     dolt checkout master
@@ -339,15 +339,15 @@ teardown() {
 }
 
 @test "two branches make same column primary key. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-pk
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-change-pk-1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-change-pk-1.schema` test
     dolt add test
     dolt commit -m "made c1 a pk"
     dolt checkout add-pk
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-change-pk-1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-change-pk-1.schema` test
     dolt add test
     dolt commit -m "made c1 a pk again"
     dolt checkout master
@@ -358,15 +358,15 @@ teardown() {
 }
 
 @test "two branches add same primary key column. merge. no conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-pk
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk1.schema` test
     dolt add test
     dolt commit -m "added pk pk1"
     dolt checkout add-pk
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk1.schema` test
     dolt add test
     dolt commit -m "added pk pk1 again"
     dolt checkout master
@@ -377,15 +377,15 @@ teardown() {
 }
 
 @test "two branches make different columns primary key. merge. conflict" {
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "table created"
     dolt branch add-pk
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk1.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk1.schema` test
     dolt add test
     dolt commit -m "added pk pk1"
     dolt checkout add-pk
-    dolt table create -f -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints-add-pk2.schema` test
+    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk2.schema` test
     dolt add test
     dolt commit -m "added pk pk2"
     dolt checkout master
@@ -399,11 +399,11 @@ teardown() {
     dolt branch table1
     dolt branch table2
     dolt checkout table1
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema` table1
+    dolt table create -s=`batshelper 1pk5col-ints.schema` table1
     dolt add table1
     dolt commit -m "first table"
     dolt checkout table2
-    dolt table create -s=`nativepath $BATS_TEST_DIRNAME/helper/2pk5col-ints.schema` table2
+    dolt table create -s=`batshelper 2pk5col-ints.schema` table2
     dolt add table2
     dolt commit -m "second table"
     dolt checkout master
