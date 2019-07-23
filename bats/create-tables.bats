@@ -6,7 +6,7 @@ setup() {
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
-    load $BATS_TEST_DIRNAME/helper/windows-compat.bash
+    load $BATS_TEST_DIRNAME/helper/common.bash
     dolt init
 }
 
@@ -15,7 +15,7 @@ teardown() {
 }
 
 @test "create a single primary key table" {
-    run dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    run dolt table create -s=`batshelper 1pk5col-ints.schema` test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt ls
@@ -24,7 +24,7 @@ teardown() {
 }
 
 @test "create a two primary key table" {
-    run dolt table create -s=`nativebatsdir helper/2pk5col-ints.schema` test
+    run dolt table create -s=`batshelper 2pk5col-ints.schema` test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt ls
@@ -33,7 +33,7 @@ teardown() {
 }
 
 @test "create a table that uses all supported types" {
-    run dolt table create -s=`nativebatsdir helper/1pksupportedtypes.schema` test
+    run dolt table create -s=`batshelper 1pksupportedtypes.schema` test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt ls
@@ -42,14 +42,14 @@ teardown() {
 }
 
 @test "create a table that uses unsupported blob type" {
-    run dolt table create -s=`nativebatsdir helper/1pkunsupportedtypes.schema` test
+    run dolt table create -s=`batshelper 1pkunsupportedtypes.schema` test
     skip "Can create a blob type in schema now but I should not be able to. Also can create a column of type poop that gets converted to type bool."
     [ "$status" -eq 1 ]
 }
 
 @test "create a repo with two tables" {
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test1
-    dolt table create -s=`nativebatsdir helper/2pk5col-ints.schema` test2
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test1
+    dolt table create -s=`batshelper 2pk5col-ints.schema` test2
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
@@ -62,7 +62,7 @@ teardown() {
 }
 
 @test "create a table with json import" {
-    run dolt table import -c -s `nativebatsdir helper/employees-sch.json` employees `nativebatsdir helper/employees-tbl.json`
+    run dolt table import -c -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -75,13 +75,13 @@ teardown() {
 }
 
 @test "create a table with json import. no schema." {
-    run dolt table import -c employees `nativebatsdir helper/employees-tbl.json`
+    run dolt table import -c employees `batshelper employees-tbl.json`
     [ "$status" -ne 0 ]
     [ "$output" = "Please specify schema file for .json tables." ] 
 }
 
 @test "create a table with json import. bad json." {
-    run dolt table import -c -s `nativebatsdir employees-sch.json` employees `nativebatsdir helper/employees-tbl-bad.json`
+    run dolt table import -c -s `nativebatsdir employees-sch.json` employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error creating reader" ]] || false
     [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
@@ -91,7 +91,7 @@ teardown() {
 }
 
 @test "create a table with json import. bad schema." {
-    run dolt table import -c -s `nativebatsdir employees-sch-bad.json` employees `nativebatsdir helper/employees-tbl.json`
+    run dolt table import -c -s `nativebatsdir employees-sch-bad.json` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error creating reader" ]] || false
     skip "Error message mentions valid table file but not invalid schema file"
@@ -101,7 +101,7 @@ teardown() {
 }
 
 @test "import data from csv and create the table" {
-    run dolt table import -c --pk=pk test `nativebatsdir helper/1pk5col-ints.csv`
+    run dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -113,13 +113,13 @@ teardown() {
 }
 
 @test "try to create a table with a bad csv" {
-    run dolt table import -c --pk=pk test `nativebatsdir helper/bad.csv`
+    run dolt table import -c --pk=pk test `batshelper bad.csv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error creating reader" ]] || false
 }
 
 @test "create a table with two primary keys from csv import" {
-    run dolt table import -c --pk=pk1,pk2 test `nativebatsdir helper/2pk5col-ints.csv`
+    run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -128,7 +128,7 @@ teardown() {
 }
 
 @test "import data from psv and create the table" {
-    run dolt table import -c --pk=pk test `nativebatsdir helper/1pk5col-ints.psv`
+    run dolt table import -c --pk=pk test `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -140,14 +140,14 @@ teardown() {
 }
 
 @test "create two table with the same name" {
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
-    run dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    run dolt table create -s=`batshelper 1pk5col-ints.schema` test
     [ "$status" -ne 0 ]
     [[ "$output" =~ "already exists." ]] || false
 }
 
 @test "create a table from CSV with common column name patterns" {
-    run dolt table import -c --pk=UPPERCASE test `nativebatsdir helper/caps-column-names.csv`
+    run dolt table import -c --pk=UPPERCASE test `batshelper caps-column-names.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table select test
@@ -156,7 +156,7 @@ teardown() {
 }
 
 @test "create a table from excel import with multiple sheets" {
-    run dolt table import -c --pk=id employees `nativebatsdir helper/employees.xlsx`
+    run dolt table import -c --pk=id employees `batshelper employees.xlsx`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -166,7 +166,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
     [ "${#lines[@]}" -eq 7 ]
-    run dolt table import -c --pk=number basketball `nativebatsdir helper/employees.xlsx`
+    run dolt table import -c --pk=number basketball `batshelper employees.xlsx`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -180,7 +180,7 @@ teardown() {
 }
 
 @test "specify incorrect sheet name on excel import" {
-    run dolt table import -c --pk=id bad-sheet-name `nativebatsdir helper/employees.xlsx`
+    run dolt table import -c --pk=id bad-sheet-name `batshelper employees.xlsx`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "table name must match excel sheet name" ]] || false
     run dolt ls
@@ -189,7 +189,7 @@ teardown() {
 }
 
 @test "import an .xlsx file that is not a valid excel spreadsheet" {
-    run dolt table import -c --pk=id test `nativebatsdir helper/bad.xlsx`
+    run dolt table import -c --pk=id test `batshelper bad.xlsx`
     [ "$status" -eq 1 ]
     skip "errors with 'cause: zip: not a valid zip file'. should say not a valid xlsx file"
     [[ "$output" =~ "not a valid xlsx file" ]] || false
@@ -304,27 +304,27 @@ teardown() {
     skip "This case needs a lot of work."
     [ "$output" = "Invalid table name. Table names cannot start with digits." ] 
     skip "dolt table create should fail on invalid table name" 
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` 1pk
+    dolt table create -s=`batshelper 1pk5col-ints.schema` 1pk
     [ "$status" -eq 1 ]
     [ "$output" = "Invalid table name. Table names cannot start with digits." ]
     run dolt sql -q "create table one-pk (pk int not null, c1 int, primary key(pk))"
     [ "$status" -eq 1 ]
     skip "Need better error message"
     [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` 1pk
+    dolt table create -s=`batshelper 1pk5col-ints.schema` 1pk
     [ "$status" -eq 1 ]
     [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
 }
 
 @test "import a table with non UTF-8 characters in it" {
-    run dolt table import -c --pk=pk test `nativebatsdir helper/bad-characters.csv`
+    run dolt table import -c --pk=pk test `batshelper bad-characters.csv`
     skip "Dolt allows you to create tables with non-UTF-8 characters right now"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "unsupported characters" ]] || false
 }
 
 @test "dolt diff on a newly created table" {
-    dolt table create -s=`nativebatsdir helper/1pk5col-ints.schema` test
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
     run dolt diff
     [ $status -eq 0 ]
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
