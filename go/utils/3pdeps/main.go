@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha512"
 	"encoding/hex"
 	"encoding/json"
@@ -40,6 +41,20 @@ type Package struct {
 }
 
 func main() {
+	var verifyFilename *string
+	if len(os.Args) > 1 {
+		if os.Args[1] == "-verify" {
+			if len(os.Args) != 3 {
+				fmt.Printf("Usage: 3pdeps [-verify EXISTING_LICENSES_FILENAME]\n")
+				os.Exit(1)
+			}
+			verifyFilename = &os.Args[2]
+		} else {
+			fmt.Printf("Usage: 3pdeps [-verify EXISTING_LICENSES_FILENAME]\n")
+			os.Exit(1)
+		}
+	}
+
 	d := json.NewDecoder(os.Stdin)
 	var root string
 	var mods []string
@@ -67,8 +82,13 @@ func main() {
 		}
 	}
 
-	PrintDoltLicense()
-	PrintGoLicense(root)
+	var out io.Writer = os.Stdout
+	if verifyFilename != nil {
+		out = &bytes.Buffer{}
+	}
+
+	PrintDoltLicense(out)
+	PrintGoLicense(out, root)
 
 	sort.Strings(mods)
 	var l string
@@ -79,33 +99,49 @@ func main() {
 			if m.Replace != nil {
 				dir = m.Replace.Dir
 			}
-			PrintPkgLicense(k, dir)
+			PrintPkgLicense(out, k, dir)
 		}
 		l = k
 	}
 
+	if verifyFilename != nil {
+		verifyFile, err := os.Open(*verifyFilename)
+		if err != nil {
+			panic(err)
+		}
+		verifyContents, err := ioutil.ReadAll(verifyFile)
+		if err != nil {
+			panic(err)
+		}
+		if !bytes.Equal(out.(*bytes.Buffer).Bytes(), verifyContents) {
+			fmt.Printf("Difference found between current output and %s\n", *verifyFilename)
+			fmt.Printf("Please run ./Godeps/update.sh and check in the results.\n")
+			os.Exit(1)
+		}
+	}
+
 }
 
-func PrintDoltLicense() {
-	fmt.Printf("================================================================================\n")
-	fmt.Printf("= Dolt licensed under: =\n\n")
-	PrintLicense("../LICENSE")
-	fmt.Printf("================================================================================\n")
+func PrintDoltLicense(out io.Writer) {
+	fmt.Fprintf(out, "================================================================================\n")
+	fmt.Fprintf(out, "= Dolt licensed under: =\n\n")
+	PrintLicense(out, "../LICENSE")
+	fmt.Fprintf(out, "================================================================================\n")
 }
 
-func PrintGoLicense(root string) {
-	fmt.Printf("\n================================================================================\n")
-	fmt.Printf("= Go standard library licensed under: =\n\n")
-	PrintLicense(root + "/LICENSE")
-	fmt.Printf("================================================================================\n")
+func PrintGoLicense(out io.Writer, root string) {
+	fmt.Fprintf(out, "\n================================================================================\n")
+	fmt.Fprintf(out, "= Go standard library licensed under: =\n\n")
+	PrintLicense(out, root+"/LICENSE")
+	fmt.Fprintf(out, "================================================================================\n")
 }
 
-func PrintPkgLicense(pkg string, dir string) {
+func PrintPkgLicense(out io.Writer, pkg string, dir string) {
 	filepath := FindLicenseFile(dir)
-	fmt.Printf("\n================================================================================\n")
-	fmt.Printf("= %v licensed under: =\n\n", pkg)
-	PrintLicense(filepath)
-	fmt.Printf("================================================================================\n")
+	fmt.Fprintf(out, "\n================================================================================\n")
+	fmt.Fprintf(out, "= %v licensed under: =\n\n", pkg)
+	PrintLicense(out, filepath)
+	fmt.Fprintf(out, "================================================================================\n")
 }
 
 func FindLicenseFile(dir string) string {
@@ -124,7 +160,7 @@ func FindLicenseFile(dir string) string {
 	panic("License not found: " + dir)
 }
 
-func PrintLicense(filepath string) {
+func PrintLicense(out io.Writer, filepath string) {
 	f, err := os.Open(filepath)
 	if err != nil {
 		panic(err)
@@ -133,11 +169,11 @@ func PrintLicense(filepath string) {
 	if err != nil {
 		panic(err)
 	}
-	_, err = os.Stdout.Write(contents)
+	_, err = out.Write(contents)
 	if err != nil {
 		panic(err)
 	}
 	base := path.Base(filepath)
 	sum := sha512.Sum512_224(contents)
-	fmt.Printf("\n= %v %v =\n", base, hex.EncodeToString(sum[:]))
+	fmt.Fprintf(out, "\n= %v %v =\n", base, hex.EncodeToString(sum[:]))
 }
