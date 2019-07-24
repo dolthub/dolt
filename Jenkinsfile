@@ -32,8 +32,9 @@ pipeline {
                             sh "go get golang.org/x/tools/cmd/goimports"
                         }
                         dir ("go") {
-                            sh "go get ./..."
+                            sh "go get -mod=readonly ./..."
                             sh "./utils/repofmt/check_fmt.sh"
+                            sh "./Godeps/verify.sh"
                             sh "go vet -mod=readonly ./..."
                             sh "go run -mod=readonly ./utils/copyrightshdrs/"
                             sh "go test -mod=readonly -test.v ./..."
@@ -67,7 +68,7 @@ pipeline {
                             sh "chmod +x git"
                         }
                         dir ("go") {
-                            sh "go get ./..."
+                            sh "go get -mod=readonly ./..."
                             sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
                             sh "go build -mod=readonly -o ../.ci_bin/git-dolt ./cmd/git-dolt/."
                             sh "go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/."
