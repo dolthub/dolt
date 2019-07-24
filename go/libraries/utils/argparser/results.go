@@ -18,7 +18,7 @@ import (
 	"math"
 	"strconv"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 type ArgParseResults struct {

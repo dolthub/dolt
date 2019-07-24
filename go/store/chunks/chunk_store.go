@@ -25,7 +25,7 @@ import (
 	"context"
 	"io"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 // ChunkStore is the core storage abstraction in noms. We can put data

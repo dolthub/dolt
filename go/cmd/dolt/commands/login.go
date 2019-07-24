@@ -21,13 +21,13 @@ import (
 
 	"github.com/skratchdot/open-golang/open"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
 const (

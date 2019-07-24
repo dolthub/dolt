@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle/sqletestutil"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqletestutil"
 )
 
 // These tests are slow, working on making them faster. Right now they're skipped unless this env var is set.

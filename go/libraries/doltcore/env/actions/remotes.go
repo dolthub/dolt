@@ -18,10 +18,10 @@ import (
 	"context"
 	"errors"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/store/datas"
 )
 
 var ErrCantFF = errors.New("can't fast forward merge")

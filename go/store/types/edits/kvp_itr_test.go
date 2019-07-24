@@ -19,7 +19,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // IsInOrder iterates over every value and validates that they are returned in key order.  This is intended for testing.

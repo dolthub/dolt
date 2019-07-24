@@ -18,8 +18,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 )
 
 const (

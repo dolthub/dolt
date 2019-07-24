@@ -30,7 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/dolt/go/store/constants"
 )
 
 type fakeDDB struct {

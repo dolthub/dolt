@@ -15,7 +15,7 @@
 package pipeline
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 )
 
 // TransformRowFailure is an error implementation that stores the row that failed to transform, the transform that

@@ -19,11 +19,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 const (

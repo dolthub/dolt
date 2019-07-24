@@ -22,13 +22,13 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/diff"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var WriteBufSize = 256 * 1024

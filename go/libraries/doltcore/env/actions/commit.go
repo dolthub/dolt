@@ -20,10 +20,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 var ErrNameNotConfigured = errors.New("name not configured")

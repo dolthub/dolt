@@ -19,11 +19,11 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/config"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 const (

@@ -19,7 +19,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
 // A qualified column names its table and its column.

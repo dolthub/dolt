@@ -14,7 +14,7 @@
 
 package doltdb
 
-import "github.com/liquidata-inc/ld/dolt/go/store/types"
+import "github.com/liquidata-inc/dolt/go/store/types"
 
 type Conflict struct {
 	Base       types.Value

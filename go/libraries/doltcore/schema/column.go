@@ -18,7 +18,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // KindToLwrStr maps a noms kind to the kinds lowercased name

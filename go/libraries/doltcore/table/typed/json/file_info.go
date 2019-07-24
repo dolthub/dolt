@@ -14,7 +14,7 @@
 
 package json
 
-import "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+import "github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 
 type JSONFileInfo struct {
 	Rows []row.Row

@@ -17,7 +17,7 @@ package sqle
 import (
 	"github.com/src-d/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
 // doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.

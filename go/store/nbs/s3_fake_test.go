@@ -37,8 +37,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 type mockAWSError string

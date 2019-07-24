@@ -25,7 +25,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 func EmptyTuple(nbf *NomsBinFormat) Tuple {

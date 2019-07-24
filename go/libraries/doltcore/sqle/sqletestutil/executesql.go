@@ -25,10 +25,10 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	dsql "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
-	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
 // Executes all the SQL non-select statements given in the string against the root value given and returns the updated

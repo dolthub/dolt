@@ -32,10 +32,10 @@ import (
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs/benchmarks/gen"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/nbs/benchmarks/gen"
 )
 
 var readFile = flag.String("input-file", "", "A file full of test data. Creates and saves associated .chunks file at runtime if it doesn't yet exist. If none is specified, data and .chunks files will be generated and saved.")

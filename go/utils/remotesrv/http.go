@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {

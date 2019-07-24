@@ -15,7 +15,7 @@
 package cnfcmds
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
 
 var Commands = cli.GenSubCommandHandler([]*cli.Command{

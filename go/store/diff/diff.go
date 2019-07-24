@@ -25,7 +25,7 @@ import (
 	"context"
 	"sync/atomic"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type (

@@ -24,10 +24,10 @@ import (
 	"os"
 	"runtime/debug"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 const (

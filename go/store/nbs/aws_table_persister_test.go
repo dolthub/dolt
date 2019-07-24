@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
+	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
 )
 
 func TestAWSTablePersisterPersist(t *testing.T) {

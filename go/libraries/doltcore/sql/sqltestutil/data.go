@@ -20,12 +20,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // This file collects useful test table definitions and functions for SQL tests to use. It primarily defines a table

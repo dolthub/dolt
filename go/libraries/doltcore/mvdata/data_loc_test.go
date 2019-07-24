@@ -19,16 +19,16 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/json"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var testSchema = `

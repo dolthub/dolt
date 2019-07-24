@@ -19,7 +19,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (

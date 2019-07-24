@@ -21,8 +21,8 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 const (

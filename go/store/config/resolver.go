@@ -26,11 +26,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/verbose"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/spec"
+	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/util/verbose"
 )
 
 type Resolver struct {

@@ -29,7 +29,7 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/golang/snappy"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 type ValueStats interface {

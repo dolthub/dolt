@@ -20,11 +20,11 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var id0, _ = uuid.NewRandom()

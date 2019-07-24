@@ -20,10 +20,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (

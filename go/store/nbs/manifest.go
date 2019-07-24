@@ -29,8 +29,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 var ErrCorruptManifest = errors.New("corrupt manifest")

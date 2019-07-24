@@ -19,7 +19,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 )
 
 type stringer string

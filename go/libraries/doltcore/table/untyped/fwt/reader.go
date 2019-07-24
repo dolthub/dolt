@@ -22,13 +22,13 @@ import (
 	"io"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // ReadBufSize is the size of the buffer used when reading the fwt file.  It is set at the package level and all

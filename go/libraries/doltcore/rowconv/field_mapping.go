@@ -20,9 +20,9 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 // ErrMappingFileRead is an error returned when a mapping file cannot be read

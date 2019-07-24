@@ -17,7 +17,7 @@ package edits
 import (
 	"sort"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func sorter(nbf *types.NomsBinFormat, in, out chan types.KVPSlice) {

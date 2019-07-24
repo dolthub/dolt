@@ -25,9 +25,9 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 const initialBufferSize = 2048

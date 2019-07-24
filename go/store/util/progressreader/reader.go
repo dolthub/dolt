@@ -26,7 +26,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/util/status"
+	"github.com/liquidata-inc/dolt/go/store/util/status"
 )
 
 type Callback func(seen uint64)

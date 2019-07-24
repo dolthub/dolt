@@ -19,9 +19,9 @@ import (
 	"log"
 	"runtime/debug"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type DataWindow struct {

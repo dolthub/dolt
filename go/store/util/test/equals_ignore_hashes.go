@@ -29,7 +29,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 var pattern = regexp.MustCompile("([0-9a-v]{" + strconv.Itoa(hash.StringLen) + "})")

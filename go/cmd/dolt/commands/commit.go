@@ -22,12 +22,12 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/editor"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
 )
 
 var commitShortDesc = `Record changes to the repository`

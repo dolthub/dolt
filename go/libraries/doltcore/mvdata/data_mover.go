@@ -19,17 +19,17 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/funcitr"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 type MoveOperation string

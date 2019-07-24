@@ -18,10 +18,10 @@ import (
 	"context"
 	"io"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // NomsMapReader is a TableReader that reads rows from a noms table which is stored in a types.Map where the key is

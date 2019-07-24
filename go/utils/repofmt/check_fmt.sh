@@ -5,12 +5,12 @@ set -eo pipefail
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 
-bad_files=$(goimports -l -local github.com/liquidata-inc/ld .)
+bad_files=$(goimports -l -local github.com/liquidata-inc/dolt .)
 if [ "$bad_files" != "" ]; then
     echo "ERROR: The following files do not match goimports output:"
     echo "$bad_files"
     echo
-    echo "Please format the go code in the repository with 'goimports -l -local github.com/liquidata-inc/ld .'"
+    echo "Please format the go code in the repository with 'goimports -l -local github.com/liquidata-inc/dolt .'"
     exit 1
 fi
 

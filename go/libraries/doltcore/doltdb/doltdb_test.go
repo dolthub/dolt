@@ -22,13 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (

@@ -1,4 +1,4 @@
-module github.com/liquidata-inc/ld/dolt/go
+module github.com/liquidata-inc/dolt/go
 
 require (
 	cloud.google.com/go v0.43.0

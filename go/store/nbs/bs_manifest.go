@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
+	"github.com/liquidata-inc/dolt/go/store/blobstore"
 )
 
 const (

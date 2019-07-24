@@ -20,7 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/src-d/go-mysql-server/sql"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func nomsTypeToSqlType(kind types.NomsKind) sql.Type {

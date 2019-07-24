@@ -17,8 +17,8 @@ package actions
 import (
 	"context"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
 func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {

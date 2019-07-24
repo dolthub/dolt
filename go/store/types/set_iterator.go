@@ -24,7 +24,7 @@ package types
 import (
 	"context"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 // SetIterator defines methods that can be used to efficiently iterate through a set in 'Noms-defined'

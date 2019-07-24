@@ -18,7 +18,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func TestTableDiff(t *testing.T) {

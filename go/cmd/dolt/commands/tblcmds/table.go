@@ -14,7 +14,7 @@
 
 package tblcmds
 
-import "github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+import "github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 
 var Commands = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "import", Desc: "Creates, overwrites, or updates a table from the data in a file.", Func: Import, ReqRepo: true},

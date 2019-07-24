@@ -21,8 +21,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/env"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/utils"
+	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/env"
+	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/utils"
 )
 
 // GitDoltConfig represents the configuration for a git-dolt integration.

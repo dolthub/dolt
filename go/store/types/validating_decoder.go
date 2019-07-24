@@ -22,8 +22,8 @@
 package types
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 type ValidatingDecoder struct {

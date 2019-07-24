@@ -19,14 +19,14 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var tblCreateShortDesc = "Creates or overwrite existing table(s) with an empty table(s)."

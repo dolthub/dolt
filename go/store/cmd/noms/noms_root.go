@@ -29,11 +29,11 @@ import (
 
 	flag "github.com/juju/gnuflag"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/cmd/noms/util"
-	"github.com/liquidata-inc/ld/dolt/go/store/config"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
+	"github.com/liquidata-inc/dolt/go/store/config"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var nomsRoot = &util.Command{

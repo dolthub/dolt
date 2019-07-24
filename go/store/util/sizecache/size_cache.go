@@ -29,7 +29,7 @@ import (
 	"container/list"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 type sizeCacheEntry struct {

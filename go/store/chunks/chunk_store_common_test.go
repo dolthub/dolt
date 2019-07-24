@@ -26,8 +26,8 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/constants"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 type ChunkStoreTestSuite struct {

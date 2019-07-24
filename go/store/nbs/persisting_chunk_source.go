@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
 )
 
 var ErrNoReader = errors.New("could not get reader")

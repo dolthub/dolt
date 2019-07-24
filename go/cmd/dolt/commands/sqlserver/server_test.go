@@ -24,11 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 )
 
 type testPerson struct {

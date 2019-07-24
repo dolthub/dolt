@@ -17,8 +17,8 @@ package resultset
 import (
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
 // A table result is a set of rows packaged with their schema. Rows are filled in concurrently from a channel.

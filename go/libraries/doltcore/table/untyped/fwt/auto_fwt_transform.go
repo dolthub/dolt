@@ -15,9 +15,9 @@
 package fwt
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // AutoSizingFWTTransformer samples rows to automatically determine maximum column widths to provide to FWTTransformer.

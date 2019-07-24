@@ -26,9 +26,9 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/mysql"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
 // serve starts a MySQL-compatible server. Returns any errors that were encountered.
