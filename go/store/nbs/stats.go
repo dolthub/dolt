@@ -24,7 +24,7 @@ package nbs
 import (
 	"fmt"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/metrics"
+	"github.com/liquidata-inc/dolt/go/store/metrics"
 )
 
 type Stats struct {

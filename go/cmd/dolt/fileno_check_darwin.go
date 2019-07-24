@@ -20,7 +20,7 @@ import (
 	"github.com/fatih/color"
 	"golang.org/x/sys/unix"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
 
 var red = color.New(color.FgRed).SprintFunc()

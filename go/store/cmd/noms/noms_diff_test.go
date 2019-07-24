@@ -28,9 +28,9 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
+	"github.com/liquidata-inc/dolt/go/store/spec"
+	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
 )
 
 type nomsDiffTestSuite struct {

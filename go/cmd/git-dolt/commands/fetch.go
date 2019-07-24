@@ -17,9 +17,9 @@ package commands
 import (
 	"fmt"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/config"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/doltops"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/utils"
+	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/config"
+	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/doltops"
+	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/utils"
 )
 
 // Fetch takes the filename of a git-dolt pointer file and clones

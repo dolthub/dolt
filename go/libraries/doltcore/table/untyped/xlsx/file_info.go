@@ -14,7 +14,7 @@
 
 package xlsx
 
-import "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+import "github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 
 type XLSXFileInfo struct {
 	Rows []row.Row

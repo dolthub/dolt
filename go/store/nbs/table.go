@@ -31,7 +31,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
 )
 
 /*

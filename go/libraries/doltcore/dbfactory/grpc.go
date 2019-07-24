@@ -21,11 +21,11 @@ import (
 
 	"google.golang.org/grpc"
 
-	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/remotestorage"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // GRPCConnectionProvider is an interface for getting a *grpc.ClientConn.

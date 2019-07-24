@@ -27,7 +27,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Unmarshal converts a Noms value into a Go value. It decodes v and stores the

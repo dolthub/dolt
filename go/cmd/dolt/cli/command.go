@@ -19,7 +19,7 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
 // CommandFunc specifies the signature of the functions that will be called based on the command line being executed.

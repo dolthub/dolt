@@ -25,8 +25,8 @@ package chunks
 import (
 	"bytes"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 // Chunk is a unit of stored data in noms

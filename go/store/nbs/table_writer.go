@@ -31,7 +31,7 @@ import (
 
 	"github.com/golang/snappy"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 // tableWriter encodes a collection of byte stream chunks into a nbs table. NOT goroutine safe.

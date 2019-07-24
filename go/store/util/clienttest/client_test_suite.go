@@ -29,9 +29,9 @@ import (
 	flag "github.com/juju/gnuflag"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/exit"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/util/exit"
 )
 
 const DefaultMemTableSize = 8 * (1 << 20) // 8MB

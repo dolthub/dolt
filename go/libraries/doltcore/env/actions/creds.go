@@ -15,10 +15,10 @@
 package actions
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
 func NewCredsFile(dEnv *env.DoltEnv) (string, creds.DoltCreds, errhand.VerboseError) {

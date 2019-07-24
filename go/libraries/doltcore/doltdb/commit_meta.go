@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (

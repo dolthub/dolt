@@ -22,8 +22,8 @@
 package datas
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/merge"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/merge"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // CommitOptions is used to pass options into Commit.

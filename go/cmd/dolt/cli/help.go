@@ -23,8 +23,8 @@ import (
 
 	"github.com/fatih/color"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/funcitr"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
 )
 
 var underline = color.New(color.Underline)

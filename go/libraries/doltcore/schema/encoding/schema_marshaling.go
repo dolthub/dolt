@@ -19,9 +19,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/marshal"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/marshal"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type encodedColumn struct {

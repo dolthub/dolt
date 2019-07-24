@@ -17,7 +17,7 @@ package types
 import (
 	"errors"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
+	"github.com/liquidata-inc/dolt/go/store/constants"
 )
 
 func init() {

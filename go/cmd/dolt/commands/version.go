@@ -15,8 +15,8 @@
 package commands
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
 // Version displays the version of the running dolt client

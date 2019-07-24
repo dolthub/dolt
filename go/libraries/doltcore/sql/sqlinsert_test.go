@@ -24,10 +24,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func TestExecuteInsert(t *testing.T) {

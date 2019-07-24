@@ -18,7 +18,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type TaggedValues map[uint64]types.Value

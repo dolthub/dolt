@@ -23,15 +23,15 @@ import (
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/cnfcmds"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/credcmds"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands/tblcmds"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (

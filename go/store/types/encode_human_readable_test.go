@@ -30,7 +30,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/util/test"
+	"github.com/liquidata-inc/dolt/go/store/util/test"
 )
 
 func assertWriteHRSEqual(t *testing.T, expected string, v Value) {

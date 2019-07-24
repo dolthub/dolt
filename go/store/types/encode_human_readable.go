@@ -32,8 +32,8 @@ import (
 	humanize "github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/writers"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/util/writers"
 )
 
 // Clients can register a 'commenter' to return a comment that will get appended

@@ -15,7 +15,7 @@
 package sql
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var DoltToSQLType = map[types.NomsKind]string{

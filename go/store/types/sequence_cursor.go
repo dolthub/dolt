@@ -22,7 +22,7 @@
 package types
 
 import "context"
-import "github.com/liquidata-inc/ld/dolt/go/store/d"
+import "github.com/liquidata-inc/dolt/go/store/d"
 import "fmt"
 
 // sequenceCursor explores a tree of sequence items.

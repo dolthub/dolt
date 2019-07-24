@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os/exec"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/utils"
+	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/utils"
 )
 
 // Clone clones the specified dolt remote, streaming the output from dolt clone to stdout.

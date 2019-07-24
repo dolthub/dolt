@@ -24,7 +24,7 @@ package types
 import (
 	"context"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 type newSequenceChunkerFn func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker

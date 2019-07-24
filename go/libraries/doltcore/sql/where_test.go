@@ -21,8 +21,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 )
 
 func TestWhereClauseErrorHandling(t *testing.T) {

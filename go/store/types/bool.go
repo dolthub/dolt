@@ -24,7 +24,7 @@ package types
 import (
 	"context"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 // Bool is a Noms Value wrapper around the primitive bool type.

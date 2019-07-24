@@ -25,8 +25,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // candidate represents a collection that is a candidate to be merged. This

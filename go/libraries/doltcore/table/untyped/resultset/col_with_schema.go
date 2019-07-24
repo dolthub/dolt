@@ -14,7 +14,7 @@
 
 package resultset
 
-import "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
+import "github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 
 // Container type to package columns with their source schemas.
 type ColWithSchema struct {

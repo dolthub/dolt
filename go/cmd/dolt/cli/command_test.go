@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
 const (

@@ -14,7 +14,7 @@
 
 package edits
 
-import "github.com/liquidata-inc/ld/dolt/go/store/types"
+import "github.com/liquidata-inc/dolt/go/store/types"
 
 // KVPCollection is a collection of sorted KVPs
 type KVPCollection struct {

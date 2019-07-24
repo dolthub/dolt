@@ -30,7 +30,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/util/sizecache"
+	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
 )
 
 type tableCache interface {

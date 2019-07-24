@@ -19,8 +19,8 @@ import (
 	"io"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 )
 
 // SourceFunc is a function that will return a new row for each successive call until all it's rows are exhausted, at

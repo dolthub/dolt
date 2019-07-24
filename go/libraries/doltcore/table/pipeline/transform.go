@@ -15,7 +15,7 @@
 package pipeline
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 )
 
 // NamedTransform is a struct containing a TransformFunc and the name of the transform being applied.  If an error occurs

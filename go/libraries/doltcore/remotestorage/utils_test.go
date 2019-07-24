@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 func TestHashesToSlices(t *testing.T) {

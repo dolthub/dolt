@@ -19,7 +19,7 @@ import (
 	"os/user"
 	"path/filepath"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 )
 
 const (

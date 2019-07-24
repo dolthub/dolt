@@ -20,7 +20,7 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/liquidata-inc/ld/dolt/go/cmd/git-dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/commands"
 )
 
 func main() {

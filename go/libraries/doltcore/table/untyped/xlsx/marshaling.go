@@ -20,10 +20,10 @@ import (
 
 	"github.com/tealeg/xlsx"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func UnmarshalFromXLSX(path string) ([][][]string, error) {

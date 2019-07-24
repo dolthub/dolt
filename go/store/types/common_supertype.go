@@ -14,7 +14,7 @@
 
 package types
 
-import "github.com/liquidata-inc/ld/dolt/go/store/d"
+import "github.com/liquidata-inc/dolt/go/store/d"
 
 // ContainCommonSupertype returns true if it's possible to synthesize
 // a non-trivial (i.e. not empty) supertype from types |a| and |b|.

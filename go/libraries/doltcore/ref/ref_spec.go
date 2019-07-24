@@ -18,7 +18,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/strhelp"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
 )
 
 // ErrInvalidRefSpec is the error returned when a refspec isn't syntactically valid
