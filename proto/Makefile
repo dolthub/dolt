@@ -1,4 +1,4 @@
-THIRD_PARTY_ROOT := ../../proto/third_party
+THIRD_PARTY_ROOT := ./third_party
 
 GOOGLEAPIS := $(THIRD_PARTY_ROOT)/googleapis
 PROTOBUF := $(THIRD_PARTY_ROOT)/protobuf/src
