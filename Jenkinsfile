@@ -17,6 +17,7 @@ pipeline {
                             sh "go get golang.org/x/tools/cmd/goimports"
                         }
                         dir ("go") {
+                            sh "env"
                             sh "go get -mod=readonly ./..."
                             sh "./utils/repofmt/check_fmt.sh"
                             sh "./Godeps/verify.sh"
