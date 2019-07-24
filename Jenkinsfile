@@ -68,10 +68,10 @@ pipeline {
                         }
                         dir ("go") {
                             sh "go get ./..."
-                            sh "go build -mod=readonly -o ../../.ci_bin/dolt ./cmd/dolt/."
-                            sh "go build -mod=readonly -o ../../.ci_bin/git-dolt ./cmd/git-dolt/."
-                            sh "go build -mod=readonly -o ../../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/."
-                            sh "go build -mod=readonly -o ../../.ci_bin/remotesrv ./utils/remotesrv/."
+                            sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
+                            sh "go build -mod=readonly -o ../.ci_bin/git-dolt ./cmd/git-dolt/."
+                            sh "go build -mod=readonly -o ../.ci_bin/git-dolt-smudge ./cmd/git-dolt-smudge/."
+                            sh "go build -mod=readonly -o ../.ci_bin/remotesrv ./utils/remotesrv/."
                         }
                         dir (".ci_bin") {
                             sh "npm i bats"
