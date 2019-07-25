@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/store/d"

@@ -55,7 +55,13 @@ func NewRef(v Value, nbf *NomsBinFormat) (Ref, error) {
 		return Ref{}, err
 	}
 
-	return constructRef(nbf, h, TypeOf(v), mch+1)
+	t, err := TypeOf(v)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
+	return constructRef(nbf, h, t, mch+1)
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
@@ -78,7 +84,12 @@ func constructRef(nbf *NomsBinFormat, targetHash hash.Hash, targetType *Type, he
 	offsets[refPartTargetHash] = w.offset
 	w.writeHash(targetHash)
 	offsets[refPartTargetType] = w.offset
-	targetType.writeToAsType(&w, map[string]*Type{}, nbf)
+	err = targetType.writeToAsType(&w, map[string]*Type{}, nbf)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
 	offsets[refPartHeight] = w.offset
 	w.writeCount(height)
 

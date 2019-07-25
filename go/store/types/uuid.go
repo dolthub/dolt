@@ -36,20 +36,20 @@ func (v UUID) Equals(other Value) bool {
 	return v == other
 }
 
-func (v UUID) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (v UUID) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(UUID); ok {
 		for i := 0; i < uuidNumBytes; i++ {
 			b1 := v[i]
 			b2 := v2[i]
 
 			if b1 != b2 {
-				return b1 < b2
+				return b1 < b2, nil
 			}
 		}
 
-		return false
+		return false, nil
 	}
-	return UUIDKind < other.Kind()
+	return UUIDKind < other.Kind(), nil
 }
 
 func (v UUID) Hash(nbf *NomsBinFormat) (hash.Hash, error) {

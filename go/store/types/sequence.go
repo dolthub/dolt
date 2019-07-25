@@ -46,7 +46,7 @@ type sequence interface {
 	isLeaf() bool
 	Kind() NomsKind
 	Len() uint64
-	Less(nbf *NomsBinFormat, other LesserValuable) bool
+	Less(nbf *NomsBinFormat, other LesserValuable) (bool, error)
 	numLeaves() uint64
 	seqLen() int
 	treeLevel() uint64

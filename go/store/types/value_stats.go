@@ -54,8 +54,8 @@ func writeUnchunkedValueStats(w io.Writer, v Value, vr ValueReader) error {
 		return err
 	}
 
-	fmt.Fprintf(w, "Kind: %s\nCompressedSize: %s\n", v.Kind().String(), humanize.Bytes(cmpSize))
-	return nil
+	_, err = fmt.Fprintf(w, "Kind: %s\nCompressedSize: %s\n", v.Kind().String(), humanize.Bytes(cmpSize))
+	return err
 }
 
 const treeRowFormat = "%5s%20s%20s%20s\n"
@@ -66,8 +66,17 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 	totalCompressedSize := uint64(0)
 	totalChunks := uint64(0)
 
-	fmt.Fprintf(w, "Kind: %s\n", v.Kind().String())
-	fmt.Fprintf(w, treeLevelHeader)
+	_, err := fmt.Fprintf(w, "Kind: %s\n", v.Kind().String())
+
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(w, treeLevelHeader)
+
+	if err != nil {
+		return err
+	}
 
 	level := int64(v.(Collection).asSequence().treeLevel())
 	nodes := ValueSlice{v}
@@ -113,9 +122,12 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 			}
 		}
 
-		printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
+		err :=printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
 
-		var err error
+		if err != nil {
+			return err
+		}
+
 		nodes, err = loadNextLevel(ctx, children, vr)
 
 		if err != nil {
@@ -130,15 +142,17 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 	return nil
 }
 
-func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) {
+func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) error{
 	avgItems := float64(values) / float64(chunks)
 	avgSize := byteSize / chunks
 
-	fmt.Fprintf(w, treeRowFormat,
+	_, err := fmt.Fprintf(w, treeRowFormat,
 		fmt.Sprintf("%d", level),
 		humanize.Comma(int64(chunks)),
 		fmt.Sprintf("%.1f", avgItems),
 		humanize.Bytes(avgSize))
+
+	return err
 }
 
 func compressedSize(nbf *NomsBinFormat, v Value) (uint64, error) {

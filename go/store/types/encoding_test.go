@@ -610,12 +610,12 @@ func TestWriteEmptyUnionList(t *testing.T) {
 
 type bogusType int
 
-func (bg bogusType) Value(ctx context.Context) (Value, error)               { return bg, nil }
-func (bg bogusType) Equals(other Value) bool                                { return false }
-func (bg bogusType) Less(nbf *NomsBinFormat, other LesserValuable) bool     { return false }
-func (bg bogusType) Hash(*NomsBinFormat) (hash.Hash, error)                 { return hash.Hash{}, nil }
-func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) error { return nil }
-func (bg bogusType) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error      { return nil }
+func (bg bogusType) Value(ctx context.Context) (Value, error)               		{ return bg, nil }
+func (bg bogusType) Equals(other Value) bool                                		{ return false }
+func (bg bogusType) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) 	{ return false, nil }
+func (bg bogusType) Hash(*NomsBinFormat) (hash.Hash, error)                 		{ return hash.Hash{}, nil }
+func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) error 		{ return nil }
+func (bg bogusType) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error      		{ return nil }
 func (bg bogusType) Kind() NomsKind {
 	return CycleKind
 }

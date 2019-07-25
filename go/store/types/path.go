@@ -228,7 +228,9 @@ func NewFieldPath(name string) FieldPath {
 func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
 	switch v := v.(type) {
 	case Struct:
-		if sv, ok := v.MaybeGet(fp.Name); ok {
+		if sv, ok, err := v.MaybeGet(fp.Name); err != nil {
+			return nil, err
+		} else if ok {
 			return sv, nil
 		}
 	case *Type:
@@ -317,7 +319,13 @@ func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value
 }
 
 func (ip IndexPath) String() (str string) {
-	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), ip.Index))
+	valStr, err := EncodedIndexValue(context.Background(), ip.Index)
+
+	if err != nil {
+		return "error: " + err.Error()
+	}
+
+	str = fmt.Sprintf("[%s]", valStr)
 	if ip.IntoKey {
 		str += "@key"
 	}
@@ -501,7 +509,7 @@ type TypeAnnotation struct {
 }
 
 func (ann TypeAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
-	return TypeOf(v), nil
+	return TypeOf(v)
 }
 
 func (ann TypeAnnotation) String() string {

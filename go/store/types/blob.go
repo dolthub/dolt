@@ -24,13 +24,12 @@ package types
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"io"
+	"runtime"
 	"sync"
 
-	"runtime"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 // Blob represents a list of Blobs.
@@ -126,7 +125,7 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 
 	go func() {
 		defer close(bChan)
-		for idx, len := uint64(0), b.Len(); idx < len; {
+		for idx, l := uint64(0), b.Len(); idx < l; {
 			if ae.IsSet() {
 				break
 			}

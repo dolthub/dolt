@@ -248,20 +248,22 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 
 	case TupleKind:
 		w.write("(")
-		var err error
-		v.(Tuple).IterFields(func(i uint64, v Value) bool {
+		err := v.(Tuple).IterFields(func(i uint64, v Value) (bool, error) {
 			if i != 0 {
 				w.write(",")
 			}
 
-			err = w.Write(ctx, v)
+			err := w.Write(ctx, v)
 
 			if err != nil {
-				return true
+				return false, err
 			}
 
-			err = w.err
-			return err != nil
+			if w.err != nil {
+				return false, w.err
+			}
+
+			return false, nil
 		})
 
 		if err != nil {
@@ -350,7 +352,11 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 		w.writeType(v.(*Type), map[*Type]struct{}{})
 
 	case StructKind:
-		w.writeStruct(ctx, v.(Struct))
+		err := w.writeStruct(ctx, v.(Struct))
+
+		if err != nil {
+			return err
+		}
 
 	case UUIDKind:
 		id, _ := v.(UUID)
@@ -425,8 +431,8 @@ func (w hrsStructWriter) end() {
 	w.write("}")
 }
 
-func (w *hrsWriter) writeStruct(ctx context.Context, v Struct) {
-	v.iterParts(ctx, hrsStructWriter{w, v})
+func (w *hrsWriter) writeStruct(ctx context.Context, v Struct) error {
+	return v.iterParts(ctx, hrsStructWriter{w, v})
 }
 
 func (w *hrsWriter) writeSize(v Value) {

@@ -48,7 +48,7 @@ type EditAccumulator interface {
 
 	// FinishEditing should be called when all edits have been added to get an EditProvider which provides the
 	// edits in sorted order.  Adding more edits after calling FinishedEditing is an error
-	FinishedEditing() EditProvider
+	FinishedEditing() (EditProvider, error)
 }
 
 // MapEditor allows for efficient editing of Map-typed prolly trees.
@@ -63,45 +63,50 @@ func NewMapEditor(m Map) *MapEditor {
 }
 
 // Map applies all edits and returns a newly updated Map
-func (me *MapEditor) Map(ctx context.Context) (Map, error) {
-	edits := me.acc.FinishedEditing()
-	m, _, err := ApplyEdits(ctx, edits, me.m)
+func (med *MapEditor) Map(ctx context.Context) (Map, error) {
+	edits, err := med.acc.FinishedEditing()
+
+	if err != nil {
+		return EmptyMap, err
+	}
+
+	m, _, err := ApplyEdits(ctx, edits, med.m)
 	return m, err
 }
 
 // Set adds an edit
-func (me *MapEditor) Set(k LesserValuable, v Valuable) *MapEditor {
+func (med *MapEditor) Set(k LesserValuable, v Valuable) *MapEditor {
 	d.PanicIfTrue(v == nil)
-	me.set(k, v)
-	return me
+	med.set(k, v)
+	return med
 }
 
 // SetM adds M edits where even values are keys followed by their respective value
-func (me *MapEditor) SetM(kv ...Valuable) *MapEditor {
+func (med *MapEditor) SetM(kv ...Valuable) *MapEditor {
 	d.PanicIfFalse(len(kv)%2 == 0)
 
 	for i := 0; i < len(kv); i += 2 {
-		me.Set(kv[i].(LesserValuable), kv[i+1])
+		med.Set(kv[i].(LesserValuable), kv[i+1])
 	}
-	return me
+	return med
 }
 
 // Remove adds an edit that will remove a value by key
-func (me *MapEditor) Remove(k LesserValuable) *MapEditor {
-	me.set(k, nil)
-	return me
+func (med *MapEditor) Remove(k LesserValuable) *MapEditor {
+	med.set(k, nil)
+	return med
 }
 
-func (me *MapEditor) set(k LesserValuable, v Valuable) {
-	me.numEdits++
-	me.acc.AddEdit(k, v)
+func (med *MapEditor) set(k LesserValuable, v Valuable) {
+	med.numEdits++
+	med.acc.AddEdit(k, v)
 }
 
 // NumEdits returns the number of edits that have been added.
-func (me *MapEditor) NumEdits() int64 {
-	return me.numEdits
+func (med *MapEditor) NumEdits() int64 {
+	return med.numEdits
 }
 
-func (me *MapEditor) Format() *NomsBinFormat {
-	return me.m.format()
+func (med *MapEditor) Format() *NomsBinFormat {
+	return med.m.format()
 }

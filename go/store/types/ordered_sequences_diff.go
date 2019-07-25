@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -256,7 +256,9 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 				return false
 			}
 
-			if currentKey.Less(last.format(), lastKey) {
+			if isLess, err := currentKey.Less(last.format(), lastKey); ae.SetIfErrAndCheck(err) {
+				return false
+			} else if isLess {
 				mv, err := getMapValue(currentCur)
 
 				if ae.SetIfErrAndCheck(err) {
@@ -272,49 +274,53 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 				if ae.SetIfErrAndCheck(err) {
 					return false
 				}
-			} else if lastKey.Less(last.format(), currentKey) {
-				mv, err := getMapValue(lastCur)
-
-				if ae.SetIfErrAndCheck(err) {
-					return false
-				}
-
-				if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}) {
-					return false
-				}
-
-				_, err = lastCur.advance(ctx)
-
-				if ae.SetIfErrAndCheck(err) {
-					return false
-				}
 			} else {
-				lmv, err := getMapValue(currentCur)
-
-				if ae.SetIfErrAndCheck(err) {
+				if isLess, err := lastKey.Less(last.format(), currentKey); ae.SetIfErrAndCheck(err) {
 					return false
-				}
+				} else if isLess {
+					mv, err := getMapValue(lastCur)
 
-				cmv, err := getMapValue(currentCur)
+					if ae.SetIfErrAndCheck(err) {
+						return false
+					}
 
-				if ae.SetIfErrAndCheck(err) {
-					return false
-				}
+					if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}) {
+						return false
+					}
 
-				if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v, lmv, cmv}) {
-					return false
-				}
+					_, err = lastCur.advance(ctx)
 
-				_, err = lastCur.advance(ctx)
+					if ae.SetIfErrAndCheck(err) {
+						return false
+					}
+				} else {
+					lmv, err := getMapValue(currentCur)
 
-				if ae.SetIfErrAndCheck(err) {
-					return false
-				}
+					if ae.SetIfErrAndCheck(err) {
+						return false
+					}
 
-				_, err = currentCur.advance(ctx)
+					cmv, err := getMapValue(currentCur)
 
-				if ae.SetIfErrAndCheck(err) {
-					return false
+					if ae.SetIfErrAndCheck(err) {
+						return false
+					}
+
+					if !sendChange(changes, stopChan, ValueChanged{DiffChangeModified, lastKey.v, lmv, cmv}) {
+						return false
+					}
+
+					_, err = lastCur.advance(ctx)
+
+					if ae.SetIfErrAndCheck(err) {
+						return false
+					}
+
+					_, err = currentCur.advance(ctx)
+
+					if ae.SetIfErrAndCheck(err) {
+						return false
+					}
 				}
 			}
 		}

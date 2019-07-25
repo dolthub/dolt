@@ -178,7 +178,13 @@ func LoadLeafNodes(ctx context.Context, cols []Collection, startIdx, endIdx uint
 
 	hs := make(hash.HashSlice, len(childTuples))
 	for i, mt := range childTuples {
-		hs[i] = mt.ref().TargetHash()
+		ref, err := mt.ref()
+
+		if err != nil {
+			return nil, 0, err
+		}
+
+		hs[i] = ref.TargetHash()
 	}
 
 	// Fetch committed child sequences in a single batch

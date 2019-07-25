@@ -76,7 +76,7 @@ func (t *Type) Equals(other Value) (res bool) {
 	return false
 }
 
-func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (res bool) {
+func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return valueLess(nbf, t, other.(Value))
 }
 

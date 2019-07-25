@@ -24,8 +24,6 @@ package types
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
@@ -47,7 +45,7 @@ type LesserValuable interface {
 	// String) then the natural ordering is used. For other Noms values the Hash of the value is
 	// used. When comparing Noms values of different type the following ordering is used:
 	// Bool < Float < String < everything else.
-	Less(nbf *NomsBinFormat, other LesserValuable) bool
+	Less(nbf *NomsBinFormat, other LesserValuable) (bool, error)
 }
 
 // Emptyable is an interface for Values which may or may not be empty
@@ -115,9 +113,10 @@ type ValueSort struct {
 
 func (vs ValueSort) Len() int      { return len(vs.values) }
 func (vs ValueSort) Swap(i, j int) { vs.values[i], vs.values[j] = vs.values[j], vs.values[i] }
-func (vs ValueSort) Less(i, j int) bool {
+func (vs ValueSort) Less(i, j int) (bool, error) {
 	return vs.values[i].Less(vs.nbf, vs.values[j])
 }
+
 func (vs ValueSort) Equals(other ValueSort) bool {
 	return ValueSlice(vs.values).Equals(ValueSlice(other.values))
 }
@@ -182,23 +181,18 @@ func (v valueImpl) Equals(other Value) bool {
 	return false
 }
 
-func (v valueImpl) Less(nbf *NomsBinFormat, other LesserValuable) bool {
-	isLess, err := valueLess(nbf, v, other.(Value))
-
-	// TODO: fix panics
-	d.PanicIfError(err)
-
-	return isLess
+func (v valueImpl) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	return valueLess(nbf, v, other.(Value))
 }
 
 func (v valueImpl) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	bytes, err := v.valueBytes(nbf)
+	bts, err := v.valueBytes(nbf)
 
 	if err != nil {
 		return err
 	}
 
-	return walkRefs(bytes, nbf, cb)
+	return walkRefs(bts, nbf, cb)
 }
 
 type asValueImpl interface {

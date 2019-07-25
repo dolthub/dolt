@@ -21,8 +21,6 @@
 
 package types
 
-import "sort"
-
 type setLeafSequence struct {
 	leafSequence
 }
@@ -54,18 +52,22 @@ func (sl setLeafSequence) getKey(idx int) (orderedKey, error) {
 }
 
 func (sl setLeafSequence) search(key orderedKey) (int, error) {
-	var err error
-	n := sort.Search(int(sl.Len()), func(i int) bool {
+	n, err := searchWithErroringLess(int(sl.Len()), func(i int) (b bool, e error) {
+		k, err := sl.getKey(i)
+
 		if err != nil {
-			return false
+			return false, err
 		}
 
-		var k orderedKey
-		k, err = sl.getKey(i)
+		isLess, err := k.Less(sl.format(), key)
 
-		return err == nil && !k.Less(sl.format(), key)
+		if err != nil {
+			return false, err
+		}
+
+		return !isLess, nil
 	})
-
+	
 	if err != nil {
 		return 0, err
 	}

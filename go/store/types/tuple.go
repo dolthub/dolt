@@ -401,26 +401,45 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return false
 }*/
 
-func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if otherTuple, ok := other.(Tuple); ok {
-		itr := t.Iterator()
-		otherItr := otherTuple.Iterator()
+		itr, err := t.Iterator()
+
+		if err != nil {
+			return false, err
+		}
+
+		otherItr, err := otherTuple.Iterator()
+
+		if err != nil {
+			return false, err
+		}
+
 		for itr.HasMore() {
 			if !otherItr.HasMore() {
 				// equal up til the end of other. other is shorter, therefore it is less
-				return false
+				return false, nil
 			}
 
-			_, currVal := itr.Next()
-			_, currOthVal := otherItr.Next()
+			_, currVal, err := itr.Next()
+
+			if err != nil {
+				return false, err
+			}
+
+			_, currOthVal, err := otherItr.Next()
+
+			if err != nil {
+				return false, err
+			}
 
 			if !currVal.Equals(currOthVal) {
 				return currVal.Less(nbf, currOthVal)
 			}
 		}
 
-		return itr.Len() < otherItr.Len()
+		return itr.Len() < otherItr.Len(), nil
 	}
 
-	return TupleKind < other.Kind()
+	return TupleKind < other.Kind(), nil
 }

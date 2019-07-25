@@ -40,11 +40,11 @@ func (v Int) Equals(other Value) bool {
 	return v == other
 }
 
-func (v Int) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (v Int) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Int); ok {
-		return v < v2
+		return v < v2, nil
 	}
-	return IntKind < other.Kind()
+	return IntKind < other.Kind(), nil
 }
 
 func (v Int) Hash(nbf *NomsBinFormat) (hash.Hash, error) {

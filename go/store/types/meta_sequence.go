@@ -23,8 +23,6 @@ package types
 
 import (
 	"context"
-	"sort"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -72,7 +70,7 @@ func (mt metaTuple) decoderAtPart(part uint32) valueDecoder {
 	return newValueDecoder(mt.buff[offset:], nil)
 }
 
-func (mt metaTuple) ref() Ref {
+func (mt metaTuple) ref() (Ref, error) {
 	dec := mt.decoderAtPart(metaTuplePartRef)
 	return dec.readRef(mt.nbf)
 }
@@ -88,7 +86,13 @@ func (mt metaTuple) numLeaves() uint64 {
 }
 
 func (mt metaTuple) getChildSequence(ctx context.Context, vr ValueReader) (sequence, error) {
-	val, err := mt.ref().TargetValue(ctx, vr)
+	ref, err := mt.ref()
+
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := ref.TargetValue(ctx, vr)
 
 	if err != nil {
 		return nil, err
@@ -135,17 +139,17 @@ func orderedKeyFromUint64(n uint64, nbf *NomsBinFormat) (orderedKey, error) {
 	return newOrderedKey(Float(n), nbf)
 }
 
-func (key orderedKey) Less(nbf *NomsBinFormat, mk2 orderedKey) bool {
+func (key orderedKey) Less(nbf *NomsBinFormat, mk2 orderedKey) (bool, error) {
 	switch {
 	case key.isOrderedByValue && mk2.isOrderedByValue:
 		return key.v.Less(nbf, mk2.v)
 	case key.isOrderedByValue:
-		return true
+		return true, nil
 	case mk2.isOrderedByValue:
-		return false
+		return false, nil
 	default:
 		d.PanicIfTrue(key.h.IsEmpty() || mk2.h.IsEmpty())
-		return key.h.Less(mk2.h)
+		return key.h.Less(mk2.h), nil
 	}
 }
 
@@ -235,16 +239,14 @@ func (ms metaSequence) getKey(idx int) (orderedKey, error) {
 }
 
 func (ms metaSequence) search(key orderedKey) (int, error) {
-	var err error
-	res := sort.Search(ms.seqLen(), func(i int) bool {
+	res, err := searchWithErroringLess(int(ms.seqLen()), func(i int) (bool, error) {
+		ordKey, err := ms.getKey(i)
+
 		if err != nil {
-			return false
+			return false, err
 		}
 
-		var ordKey orderedKey
-		ordKey, err = ms.getKey(i)
-
-		return err == nil && !ordKey.Less(ms.format(), key)
+		return ordKey.Less(ms.format(), key)
 	})
 
 	if err != nil {
@@ -280,7 +282,19 @@ func (ms metaSequence) getCompareFn(other sequence) compareFn {
 	oms := other.(metaSequence)
 	otherDec := oms.decoder()
 	return func(idx, otherIdx int) (bool, error) {
-		return ms.getRefAt(&dec, idx).TargetHash() == oms.getRefAt(&otherDec, otherIdx).TargetHash(), nil
+		msRef, err := ms.getRefAt(&dec, idx)
+
+		if err != nil {
+			return false, err
+		}
+
+		omsRef, err := oms.getRefAt(&otherDec, otherIdx)
+
+		if err != nil {
+			return false, err
+		}
+
+		return msRef.TargetHash() == omsRef.TargetHash(), nil
 	}
 }
 
@@ -288,9 +302,14 @@ func (ms metaSequence) readTuple(dec *valueDecoder) (metaTuple, error) {
 	var offsets [metaTuplePartNumLeaves + 1]uint32
 	start := dec.offset
 	offsets[metaTuplePartRef] = start
-	dec.skipRef()
+	err := dec.skipRef()
+
+	if err  != nil {
+		return metaTuple{}, err
+	}
+
 	offsets[metaTuplePartKey] = dec.offset
-	err := dec.skipOrderedKey(ms.format())
+	err = dec.skipOrderedKey(ms.format())
 
 	if err != nil {
 		return metaTuple{}, err
@@ -302,7 +321,7 @@ func (ms metaSequence) readTuple(dec *valueDecoder) (metaTuple, error) {
 	return metaTuple{dec.byteSlice(start, end), offsets, ms.format()}, nil
 }
 
-func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) Ref {
+func (ms metaSequence) getRefAt(dec *valueDecoder, idx int) (Ref, error) {
 	dec.offset = uint32(ms.getItemOffset(idx))
 	return dec.readRef(ms.format())
 }
@@ -339,14 +358,24 @@ func (ms metaSequence) typeOf() (*Type, error) {
 	ts := make(typeSlice, 0, count)
 	var lastRef Ref
 	for i := uint64(0); i < count; i++ {
-		ref := dec.readRef(ms.format())
+		ref, err := dec.readRef(ms.format())
+
+		if err != nil {
+			return nil, err
+		}
+
 		if lastRef.IsZeroValue() || !lastRef.isSameTargetType(ref) {
 			lastRef = ref
-			t := ref.TargetType()
+			t, err := ref.TargetType()
+
+			if err != nil {
+				return nil, err
+			}
+
 			ts = append(ts, t)
 		}
 
-		err := dec.skipOrderedKey(ms.format()) // key
+		err = dec.skipOrderedKey(ms.format()) // key
 
 		if err != nil {
 			return nil, err
@@ -455,7 +484,7 @@ func (ms metaSequence) getCompositeChildSequence(ctx context.Context, start uint
 			valueItems = append(valueItems, vals...)
 		}
 
-		return newSetLeafSequence(ms.vrw, valueItems...), nil
+		return newSetLeafSequence(ms.vrw, valueItems...)
 	}
 
 	panic("unreachable")
@@ -472,7 +501,13 @@ func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) ([]se
 	dec := ms.decoder()
 
 	for i := start; i < end; i++ {
-		hs[i-start] = ms.getRefAt(&dec, int(i)).TargetHash()
+		ref, err := ms.getRefAt(&dec, int(i))
+
+		if err != nil {
+			return nil, err
+		}
+
+		hs[i-start] = ref.TargetHash()
 	}
 
 	if len(hs) == 0 {
@@ -578,7 +613,7 @@ func (es emptySequence) Equals(other Value) bool {
 	panic("empty sequence")
 }
 
-func (es emptySequence) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (es emptySequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("empty sequence")
 }
 

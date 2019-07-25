@@ -39,11 +39,11 @@ func (b Bool) Equals(other Value) bool {
 	return b == other
 }
 
-func (b Bool) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (b Bool) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if b2, ok := other.(Bool); ok {
-		return !bool(b) && bool(b2)
+		return !bool(b) && bool(b2), nil
 	}
-	return true
+	return true, nil
 }
 
 func (b Bool) Hash(nbf *NomsBinFormat) (hash.Hash, error) {

@@ -46,8 +46,8 @@ func (v Null) Equals(other Value) bool {
 	return other.Kind() == NullKind
 }
 
-func (v Null) Less(nbf *NomsBinFormat, other LesserValuable) bool {
-	return NullKind < other.Kind()
+func (v Null) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+	return NullKind < other.Kind(), nil
 }
 
 func (v Null) Hash(nbf *NomsBinFormat) (hash.Hash, error) {

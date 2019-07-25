@@ -62,7 +62,7 @@ func MakeUnionType(elemTypes ...*Type) (*Type, error) {
 		return nil, err
 	}
 
-	return simplifyType(t, false), nil
+	return simplifyType(t, false)
 }
 
 func MakeListType(elemType *Type) (*Type, error) {
@@ -72,7 +72,7 @@ func MakeListType(elemType *Type) (*Type, error) {
 		return nil, err
 	}
 
-	return simplifyType(t, false), nil
+	return simplifyType(t, false)
 }
 
 func MakeSetType(elemType *Type) (*Type, error) {
@@ -82,7 +82,7 @@ func MakeSetType(elemType *Type) (*Type, error) {
 		return nil, err
 	}
 
-	return simplifyType(t, false), nil
+	return simplifyType(t, false)
 }
 
 func MakeRefType(elemType *Type) (*Type, error) {
@@ -92,7 +92,7 @@ func MakeRefType(elemType *Type) (*Type, error) {
 		return nil, err
 	}
 
-	return simplifyType(t, false), nil
+	return simplifyType(t, false)
 }
 
 func MakeMapType(keyType, valType *Type) (*Type, error) {
@@ -102,7 +102,7 @@ func MakeMapType(keyType, valType *Type) (*Type, error) {
 		return nil, err
 	}
 
-	return simplifyType(t, false), nil
+	return simplifyType(t, false)
 }
 
 func MakeStructType(name string, fields ...StructField) (*Type, error) {
@@ -114,7 +114,7 @@ func MakeStructType(name string, fields ...StructField) (*Type, error) {
 		return nil, err
 	}
 
-	return simplifyType(t, false), nil
+	return simplifyType(t, false)
 }
 
 func MakeCycleType(name string) *Type {
@@ -188,7 +188,7 @@ func MakeStructTypeFromFields(name string, fields FieldMap) (*Type, error) {
 		return nil, err
 	}
 
-	return simplifyType(t, false), nil
+	return simplifyType(t, false)
 }
 
 // StructField describes a field in a struct type.

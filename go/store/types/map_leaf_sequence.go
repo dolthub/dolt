@@ -22,8 +22,6 @@
 package types
 
 import (
-	"sort"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
@@ -75,7 +73,7 @@ func (mes mapEntrySlice) Len() int { return len(mes.entries) }
 func (mes mapEntrySlice) Swap(i, j int) {
 	mes.entries[i], mes.entries[j] = mes.entries[j], mes.entries[i]
 }
-func (mes mapEntrySlice) Less(i, j int) bool {
+func (mes mapEntrySlice) Less(i, j int) (bool, error) {
 	return mes.entries[i].key.Less(mes.nbf, mes.entries[j].key)
 }
 func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
@@ -296,16 +294,14 @@ func (ml mapLeafSequence) getKey(idx int) (orderedKey, error) {
 }
 
 func (ml mapLeafSequence) search(key orderedKey) (int, error) {
-	var err error
-	n := sort.Search(int(ml.Len()), func(i int) bool {
+	n, err := searchWithErroringLess(int(ml.Len()), func(i int) (bool, error) {
+		k, err := ml.getKey(i)
+
 		if err != nil {
-			return false
+			return false, err
 		}
 
-		var k orderedKey
-		k, err = ml.getKey(i)
-
-		return err == nil && !k.Less(ml.format(), key)
+		return k.Less(ml.format(), key)
 	})
 
 	return n, err

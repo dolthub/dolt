@@ -35,7 +35,8 @@ import (
 var EmptyStructType, _ = MakeStructType("")
 
 func EmptyStruct(nbf *NomsBinFormat) Struct {
-	return newStruct(nbf, "", nil, nil)
+	es, _ :=  newStruct(nbf, "", nil, nil)
+	return es
 }
 
 type StructData map[string]Value
@@ -456,9 +457,9 @@ func (s Struct) Delete(n string) (Struct, error) {
 	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}, nil
 }
 
-func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) error {
 	if s.Equals(last) {
-		return
+		return nil
 	}
 	dec1, dec2 := s.decoder(), last.decoder()
 	dec1.skipKind()
@@ -478,7 +479,18 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		}
 		var change ValueChanged
 		if fn1 == fn2 {
-			v1, v2 := dec1.readValue(s.format()), dec2.readValue(s.format())
+			v1, err := dec1.readValue(s.format())
+
+			if err != nil {
+				return err
+			}
+
+			v2, err := dec2.readValue(s.format())
+
+			if err != nil {
+				return err
+			}
+
 			if !v1.Equals(v2) {
 				change = ValueChanged{DiffChangeModified, String(fn1), v2, v1}
 			}
@@ -486,19 +498,29 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			i2++
 			fn1, fn2 = "", ""
 		} else if fn1 < fn2 {
-			v1 := dec1.readValue(s.format())
+			v1, err := dec1.readValue(s.format())
+
+			if err != nil {
+				return err
+			}
+
 			change = ValueChanged{DiffChangeAdded, String(fn1), nil, v1}
 			i1++
 			fn1 = ""
 		} else {
-			v2 := dec2.readValue(s.format())
+			v2, err := dec2.readValue(s.format())
+
+			if err != nil {
+				return err
+			}
+
 			change = ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}
 			i2++
 			fn2 = ""
 		}
 
 		if change != (ValueChanged{}) && !sendChange(changes, closeChan, change) {
-			return
+			return nil
 		}
 	}
 
@@ -507,9 +529,14 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 			fn1 = dec1.readString()
 			fmt.Println(fn1)
 		}
-		v1 := dec1.readValue(s.format())
+		v1, err := dec1.readValue(s.format())
+
+		if err != nil {
+			return err
+		}
+
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeAdded, String(fn1), nil, v1}) {
-			return
+			return nil
 		}
 	}
 
@@ -517,11 +544,19 @@ func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan 
 		if fn2 == "" {
 			fn2 = dec2.readString()
 		}
-		v2 := dec2.readValue(s.format())
+
+		v2, err := dec2.readValue(s.format())
+
+		if err != nil {
+			return err
+		}
+
 		if !sendChange(changes, closeChan, ValueChanged{DiffChangeRemoved, String(fn2), v2, nil}) {
-			return
+			return nil
 		}
 	}
+
+	return nil
 }
 
 var escapeChar = "Q"

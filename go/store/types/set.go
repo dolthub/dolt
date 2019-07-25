@@ -24,7 +24,7 @@ package types
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -97,7 +97,13 @@ func readSetInput(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError,
 	var lastV Value
 	for v := range vChan {
 		if lastV != nil {
-			d.PanicIfFalse(lastV.Less(vrw.Format(), v))
+			isLess, err := lastV.Less(vrw.Format(), v)
+
+			if ae.SetIfErrAndCheck(err) {
+				return
+			}
+
+			d.PanicIfFalse(isLess)
 		}
 		lastV = v
 		_, err := ch.Append(ctx, v)
@@ -302,12 +308,27 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		var lastValue Value
 		for i, item := range items {
 			v := item.(Value)
-			d.PanicIfFalse(lastValue == nil || lastValue.Less(vrw.Format(), v))
+
+			if lastValue != nil {
+				isLess, err := lastValue.Less(vrw.Format(), v)
+
+				if err != nil {
+					return nil, orderedKey{}, 0, err
+				}
+
+				d.PanicIfFalse(isLess)
+			}
 			lastValue = v
 			setData[i] = v
 		}
 
-		set := newSet(newSetLeafSequence(vrw, setData...))
+		seq, err := newSetLeafSequence(vrw, setData...)
+
+		if err != nil {
+			return nil, orderedKey{}, 0, err
+		}
+
+		set := newSet(seq)
 		var key orderedKey
 		if len(setData) > 0 {
 			var err error

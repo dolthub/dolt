@@ -40,11 +40,11 @@ func (s String) Equals(other Value) bool {
 	return s == other
 }
 
-func (s String) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (s String) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if s2, ok := other.(String); ok {
-		return s < s2
+		return s < s2, nil
 	}
-	return StringKind < other.Kind()
+	return StringKind < other.Kind(), nil
 }
 
 func (s String) Hash(nbf *NomsBinFormat) (hash.Hash, error) {

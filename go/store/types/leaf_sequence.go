@@ -70,8 +70,8 @@ func (seq leafSequence) values() ([]Value, error) {
 }
 
 func (seq leafSequence) valuesSlice(from, to uint64) ([]Value, error) {
-	if len := seq.Len(); to > len {
-		to = len
+	if l := seq.Len(); to > l {
+		to = l
 	}
 
 	dec := seq.decoderSkipToIndex(int(from))

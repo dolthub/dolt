@@ -28,10 +28,10 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
-
-	"github.com/stretchr/testify/assert"
 )
 
 const uint32Size = 4

@@ -79,7 +79,9 @@ func (si *setIterator) Next(ctx context.Context) (Value, error) {
 func (si *setIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
 	if si.cursor.valid() {
-		if compareValue(si.s.format(), v, si.currentValue) <= 0 {
+		if cmp, err := compareValue(si.s.format(), v, si.currentValue); err != nil {
+			return nil, err
+		} else if cmp <= 0 {
 			return si.Next(ctx)
 		}
 
@@ -179,7 +181,13 @@ func NewUnionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetI
 }
 
 func (u *UnionIterator) Next(ctx context.Context) (Value, error) {
-	switch compareValue(u.nbf, u.aState.v, u.bState.v) {
+	cmp, err := compareValue(u.nbf, u.aState.v, u.bState.v)
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch cmp {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
@@ -199,7 +207,9 @@ func (u *UnionIterator) Next(ctx context.Context) (Value, error) {
 func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
 	didAdvance := false
-	if compareValue(u.nbf, u.aState.v, v) < 0 {
+	if cmp, err := compareValue(u.nbf, u.aState.v, v); err != nil {
+		return nil, err
+	} else if cmp < 0 {
 		didAdvance = true
 		_, err := u.aState.SkipTo(ctx, v)
 
@@ -207,7 +217,9 @@ func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 			return nil, err
 		}
 	}
-	if compareValue(u.nbf, u.bState.v, v) < 0 {
+	if cmp, err := compareValue(u.nbf, u.bState.v, v); err != nil {
+		return nil, err
+	} else if cmp < 0 {
 		didAdvance = true
 		_, err := u.bState.SkipTo(ctx, v)
 
@@ -218,7 +230,13 @@ func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	if !didAdvance {
 		return u.Next(ctx)
 	}
-	switch compareValue(u.nbf, u.aState.v, u.bState.v) {
+	cmp, err := compareValue(u.nbf, u.aState.v, u.bState.v)
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch cmp {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
@@ -266,7 +284,13 @@ func NewIntersectionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, ite
 
 func (i *IntersectionIterator) Next(ctx context.Context) (Value, error) {
 	for cont := true; cont; {
-		switch compareValue(i.nbf, i.aState.v, i.bState.v) {
+		cmp, err := compareValue(i.nbf, i.aState.v, i.bState.v)
+
+		if err != nil {
+			return nil, err
+		}
+
+		switch cmp {
 		case -1:
 			_, err := i.aState.SkipTo(ctx, i.bState.v)
 
@@ -302,33 +326,56 @@ func (i *IntersectionIterator) Next(ctx context.Context) (Value, error) {
 
 func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
-	if compareValue(i.nbf, v, i.aState.v) >= 0 {
+	if cmp, err := compareValue(i.nbf, v, i.aState.v); err != nil {
+		return nil, err
+	} else if cmp >= 0 {
 		_, err := i.aState.SkipTo(ctx, v)
 
 		if err != nil {
 			return nil, err
 		}
 	}
-	if compareValue(i.nbf, v, i.bState.v) >= 0 {
+
+	if cmp, err := compareValue(i.nbf, v, i.bState.v); err != nil {
+		return nil, err
+	} else if cmp >= 0 {
 		_, err := i.bState.SkipTo(ctx, v)
 
 		if err != nil {
 			return nil, err
 		}
 	}
+
 	return i.Next(ctx)
 }
 
 // considers nil max value, return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-func compareValue(nbf *NomsBinFormat, v1, v2 Value) int {
+func compareValue(nbf *NomsBinFormat, v1, v2 Value) (int, error) {
 	if v1 == nil && v2 == nil {
-		return 0
+		return 0, nil
 	}
-	if v2 == nil || (v1 != nil && v1.Less(nbf, v2)) {
-		return -1
+
+	if v2 == nil {
+		return -1, nil
 	}
-	if v1 == nil || (v2 != nil && v2.Less(nbf, v1)) {
-		return 1
+
+	if v1 != nil {
+		if isLess, err := v1.Less(nbf, v2); err != nil {
+			return 0, err
+		} else if isLess{
+			return -1, nil
+		}
 	}
-	return 0
+
+	if v1 == nil {
+		return 1, nil
+	}
+
+	if isLess, err := v2.Less(nbf, v1); err != nil {
+		return 0, err
+	} else if isLess {
+		return 1, nil
+	}
+
+	return 0, nil
 }

@@ -24,7 +24,7 @@ package types
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"

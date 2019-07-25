@@ -414,7 +414,13 @@ func isMetaSequenceSubtypeOf(nbf *NomsBinFormat, ms metaSequence, t *Type, hasEx
 		return false, false, err
 	}
 	for _, mt := range tups {
-		tt, err := mt.ref().TargetType()
+		ref, err := mt.ref()
+
+		if err != nil {
+			return false, false, err
+		}
+
+		tt, err := ref.TargetType()
 
 		if err != nil {
 			return false, false, err

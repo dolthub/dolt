@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -149,7 +149,12 @@ func (le *ListEditor) List(ctx context.Context) (List, error) {
 
 		dc := sp.removed
 		for dc > 0 {
-			ch.Skip(ctx)
+			err := ch.Skip(ctx)
+
+			if err != nil {
+				return EmptyList, err
+			}
+
 			dc--
 		}
 

@@ -14,8 +14,6 @@
 
 package types
 
-import "sort"
-
 // DumbEditAccumulator is a simple EditAccumulator and EditProvider implementation that allows for more complex
 // implementations to be put into other packages. It is fine for small edits, and tests, but edits.AsyncSortedEdits
 // performs much better for large amounts of data
@@ -37,9 +35,14 @@ func (dumb *DumbEditAccumulator) AddEdit(k LesserValuable, v Valuable) {
 
 // FinishEditing should be called when all edits have been added to get an EditProvider which provides the
 // edits in sorted order.  Adding more edits after calling FinishedEditing is an error
-func (dumb *DumbEditAccumulator) FinishedEditing() EditProvider {
-	sort.Stable(KVPSort{dumb.edits, dumb.nbf})
-	return dumb
+func (dumb *DumbEditAccumulator) FinishedEditing() (EditProvider, error) {
+	err := sortWithErroringLess(KVPSort{dumb.edits, dumb.nbf})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dumb, nil
 }
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs

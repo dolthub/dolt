@@ -103,7 +103,7 @@ func (ts testSequence) valuesSlice(from, to uint64) ([]Value, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("not reached")
 }
 

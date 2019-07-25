@@ -16,7 +16,8 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 // EditProvider is an interface which provides map edits as KVPs where each edit is a key and the new value
@@ -267,7 +268,13 @@ func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResu
 			return mapWorkResult{}, err
 		}
 
-		if cur == nil || !ordKey.Less(seq.format(), curKey) {
+		isLess, err := ordKey.Less(seq.format(), curKey)
+
+		if err != nil {
+			return mapWorkResult{}, err
+		}
+
+		if cur == nil || !isLess {
 			cur, err = newCursorAt(ctx, seq, ordKey, true, false)
 
 			if err != nil {
@@ -331,7 +338,13 @@ func buildBatches(nbf *NomsBinFormat, ae *nbs.AtomicError, rc chan chan mapWorkR
 
 			nextEdit = edits.Next()
 
-			if nextEdit != nil && !edit.Key.Less(nbf, nextEdit.Key) {
+			isLess, err := edit.Key.Less(nbf, nextEdit.Key)
+
+			if ae.SetIfErrAndCheck(err) {
+				return
+			}
+
+			if nextEdit != nil && !isLess {
 				// keys are sorted, so if this key is not less than the next key then they are equal and the next
 				// value will take precedence
 				continue

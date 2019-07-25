@@ -24,10 +24,8 @@ package types
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"sort"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 var EmptyMap Map
@@ -58,7 +56,12 @@ func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) error {
 }
 
 func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) {
-	entries := buildMapData(vrw.Format(), kv)
+	entries, err := buildMapData(vrw.Format(), kv)
+
+	if err != nil {
+		return EmptyMap, err
+	}
+
 	ch, err := newEmptyMapSequenceChunker(ctx, vrw)
 
 	if err != nil {
@@ -121,7 +124,16 @@ func readMapInput(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError,
 	for v := range kvs {
 		if nextIsKey {
 			k = v
-			d.PanicIfFalse(lastK == nil || lastK.Less(vrw.Format(), k))
+
+			if lastK != nil {
+				isLess, err := lastK.Less(vrw.Format(), k)
+
+				if ae.SetIfError(err) {
+					return
+				}
+
+				d.PanicIfFalse(isLess)
+			}
 			lastK = k
 			nextIsKey = false
 			continue
@@ -392,9 +404,9 @@ func (m Map) Edit() *MapEditor {
 	return NewMapEditor(m)
 }
 
-func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
+func buildMapData(nbf *NomsBinFormat, values []Value) (mapEntrySlice, error) {
 	if len(values) == 0 {
-		return mapEntrySlice{}
+		return mapEntrySlice{}, nil
 	}
 
 	if len(values)%2 != 0 {
@@ -417,7 +429,12 @@ func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
 		nbf,
 	}
 
-	sort.Stable(kvs)
+	err := sortWithErroringLess(kvs)
+
+	if err != nil {
+		return mapEntrySlice{}, err
+	}
+
 	last := kvs.entries[0]
 	for i := 1; i < kvs.Len(); i++ {
 		kv := kvs.entries[i]
@@ -431,7 +448,7 @@ func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
 	return mapEntrySlice{
 		append(uniqueSorted.entries, last),
 		uniqueSorted.nbf,
-	}
+	}, nil
 }
 
 func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
@@ -442,7 +459,17 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		var lastKey Value
 		for i, v := range items {
 			entry := v.(mapEntry)
-			d.PanicIfFalse(lastKey == nil || lastKey.Less(vrw.Format(), entry.key))
+
+			if lastKey != nil {
+				isLess, err := lastKey.Less(vrw.Format(), entry.key)
+
+				if err != nil {
+					return nil, orderedKey{}, 0, err
+				}
+
+				d.PanicIfFalse(isLess)
+			}
+
 			lastKey = entry.key
 			mapData[i] = entry
 		}
