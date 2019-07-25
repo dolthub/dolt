@@ -54,7 +54,7 @@ pipeline {
 //                        }
 //                    }
 //                }
-                stage ("Windows dolt") {
+                stage ("Windows") {
                     agent {
                         label "windows"
                     }
