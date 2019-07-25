@@ -73,12 +73,14 @@ pipeline {
                             bat "copy /Y ..\\.ci_bin\\git-dolt-smudge.exe ..\\.ci_bin\\git-dolt-smudge"
                             bat "go build -mod=readonly -o ..\\.ci_bin\\remotesrv.exe ./utils/remotesrv/."
                             bat "copy /Y ..\\.ci_bin\\remotesrv.exe ..\\.ci_bin\\remotesrv"
-                            bat(returnStatus: true, script: "setLocal EnableDelayedExpansion && pushd %LOCALAPPDATA%\\Temp && del /q/f/s .\\* >nul 2>&1 && rmdir /s/q . >nul 2>&1 && popd")
                         }
                         dir ("bats/") {
                             bat "dolt config --global --add user.name \"Liquidata Jenkins\""
                             bat "dolt config --global --add user.email \"jenkins@liquidata.co\""
                             bat "C:\\wsl.exe /mnt/c/bats/libexec/bats `pwd`"
+                        }
+                        dir ("./") {
+                            bat(returnStatus: true, script: "setLocal EnableDelayedExpansion && pushd %LOCALAPPDATA%\\Temp && del /q/f/s .\\* >nul 2>&1 && rmdir /s/q . >nul 2>&1 && popd")
                         }
                     }
                 }
