@@ -56,22 +56,22 @@ var AllowedCommitters = map[string]*struct{}{
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Printf("Usage: checkcommitters GIT_COMMIT CHANGE_TARGET\n")
-		fmt.Printf("  GIT_COMMIT is the commit to be merged by the PR.\n")
-		fmt.Printf("  CHANGE_TARGET is the target branch, for example master.\n")
+		fmt.Printf("Usage: checkcommitters SOURCE_BRANCH TARGET_BRANCH\n")
+		fmt.Printf("  SOURCE_BRANCH is the remotes/origin branch to be merged by the PR, for example PR-4.\n")
+		fmt.Printf("  CHANGE_TARGET is the target remotes/origin branch of the PR, for example master.\n")
 		fmt.Printf("This should be run from the git checkout workspace for the PR.\n")
 		os.Exit(1)
 	}
-	mbc := exec.Command("git", "merge-base", "remotes/origin/"+os.Args[2], os.Args[1])
+	mbc := exec.Command("git", "merge-base", "remotes/origin/"+os.Args[2], "remotes/origin/"+os.Args[1])
 	mbco, err := mbc.CombinedOutput()
 	if err != nil {
-		log.Fatalf("Error running `git merge-base remotes/origin/%s %s` to find merge parent: %v\n", os.Args[2], os.Args[1], err)
+		log.Fatalf("Error running `git merge-base remotes/origin/%s remotes/origin/%s` to find merge parent: %v\n", os.Args[2], os.Args[1], err)
 	}
 	base := strings.TrimSpace(string(mbco))
-	lc := exec.Command("git", "log", "--format=full", base+".."+os.Args[1])
+	lc := exec.Command("git", "log", "--format=full", base+"..remotes/origin/"+os.Args[1])
 	lco, err := lc.CombinedOutput()
 	if err != nil {
-		log.Fatalf("Error running `git log --format=full %s..%s`: %v\n", base, os.Args[1], err)
+		log.Fatalf("Error running `git log --format=full %s..remotes/origin/%s`: %v\n", base, os.Args[1], err)
 	}
 
 	var failed bool
