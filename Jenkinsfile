@@ -63,7 +63,7 @@ pipeline {
                         PATH = "C:\\msys64\\mingw64\\bin;${pwd()}\\.ci_bin;${env.PATH}"
                     }
                     steps {
-                        dir ("dolt/go") {
+                        dir ("go/") {
                             bat "go test ./..."
                             bat "go build -mod=readonly -o ..\\..\\.ci_bin\\dolt.exe ./cmd/dolt/."
                             bat "copy /Y ..\\..\\.ci_bin\\dolt.exe ..\\..\\.ci_bin\\dolt"
@@ -75,7 +75,7 @@ pipeline {
                             bat "copy /Y ..\\..\\.ci_bin\\remotesrv.exe ..\\..\\.ci_bin\\remotesrv"
                             bat "setLocal EnableDelayedExpansion && pushd %LOCALAPPDATA%\\Temp && del /q/f/s .\\* >nul 2>&1 && rmdir /s/q . >nul 2>&1 && popd"
                         }
-                        dir ("dolt/bats") {
+                        dir ("bats/") {
                             bat "dolt config --global --add user.name \"Liquidata Jenkins\""
                             bat "dolt config --global --add user.email \"jenkins@liquidata.co\""
                             bat "C:\\wsl.exe /mnt/c/bats/libexec/bats `pwd`"
