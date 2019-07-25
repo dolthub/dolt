@@ -136,8 +136,8 @@ teardown() {
 @test "git dolt fails helpfully when dolt is not installed" {
     mkdir TMP_PATH
     pushd TMP_PATH
-    which git | xargs ln -sf
-    which git-dolt | xargs ln -sf
+    cp `which git` ./git
+    cp `which git-dolt` ./git-dolt
     if [ $IS_WINDOWS = true ]; then
         ORIGINAL_PATH=$PATH
         export PATH=""
