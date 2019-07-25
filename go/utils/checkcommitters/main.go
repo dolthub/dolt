@@ -30,6 +30,7 @@ var AllowedAuthors = map[string]*struct{}{
 	"Katie McCulloch <katie@liquidata.co>": nil,
 	"Matt Jesuele <matt@liquidata.co>":     nil,
 	"Osheiza Otori <osheiza@liquidata.co>": nil,
+	"Taylor Bantle <taylor@liquidata.co>":  nil,
 	"Timothy Sehn <tim@liquidata.co>":      nil,
 	"Zach Musgrave <zach@liquidata.co>":    nil,
 }
@@ -41,6 +42,7 @@ var AllowedCommitters = map[string]*struct{}{
 	"Katie McCulloch <katie@liquidata.co>": nil,
 	"Matt Jesuele <matt@liquidata.co>":     nil,
 	"Osheiza Otori <osheiza@liquidata.co>": nil,
+	"Taylor Bantle <taylor@liquidata.co>":  nil,
 	"Timothy Sehn <tim@liquidata.co>":      nil,
 	"Zach Musgrave <zach@liquidata.co>":    nil,
 }
