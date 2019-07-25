@@ -1,16 +1,32 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package merge
 
 import (
 	"context"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type RowMergeTest struct {
@@ -216,7 +232,7 @@ func init() {
 }
 
 func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), doltdb.InMemDoltDB)
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_7_18, doltdb.InMemDoltDB)
 	vrw := ddb.ValueReadWriter()
 
 	err := ddb.WriteEmptyRepo(context.Background(), name, email)

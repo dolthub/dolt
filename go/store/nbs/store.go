@@ -1,3 +1,20 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -13,15 +30,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/errors"
-
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/blobstore"
-
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/pkg/errors"
+
+	"github.com/liquidata-inc/dolt/go/store/blobstore"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 var ErrFetchFailure = errors.New("fetch failed")
@@ -219,7 +234,7 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	return updatedContents, nil
 }
 
-func NewAWSStore(ctx context.Context, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
+func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
@@ -233,11 +248,11 @@ func NewAWSStore(ctx context.Context, table, ns, bucket string, s3 s3svc, ddb dd
 		ns,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewGCSStore(ctx context.Context, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
+func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
 	bucket := gcs.Bucket(bucketName)
@@ -245,10 +260,10 @@ func NewGCSStore(ctx context.Context, bucketName, path string, gcs *storage.Clie
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
 	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}
-	return newNomsBlockStore(ctx, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
-func NewLocalStore(ctx context.Context, dir string, memTableSize uint64) (*NomsBlockStore, error) {
+func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	err := checkDir(dir)
 
@@ -258,7 +273,7 @@ func NewLocalStore(ctx context.Context, dir string, memTableSize uint64) (*NomsB
 
 	mm := makeManifestManager(fileManifest{dir})
 	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
-	return newNomsBlockStore(ctx, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
 func checkDir(dir string) error {
@@ -272,7 +287,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -282,7 +297,7 @@ func newNomsBlockStore(ctx context.Context, mm manifestManager, p tablePersister
 		p:        p,
 		c:        c,
 		tables:   newTableSet(p),
-		upstream: manifestContents{vers: constants.DefaultNomsBinFormat},
+		upstream: manifestContents{vers: nbfVerStr},
 		mtSize:   memTableSize,
 		stats:    NewStats(),
 	}

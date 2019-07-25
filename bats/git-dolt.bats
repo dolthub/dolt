@@ -2,176 +2,178 @@
 
 REMOTE=http://localhost:50051/test-org/test-repo
 
-setup() { 
-	if [ -z "$BATS_TMPDIR" ]; then
-		export BATS_TMPDIR=$HOME/batstmp/
-		mkdir $BATS_TMPDIR
-	fi
-	load $BATS_TEST_DIRNAME/helper/windows-compat.bash
-	export PATH=$PATH:$GOPATH/bin
-	export NOMS_VERSION_NEXT=1
-	cd $BATS_TMPDIR
-	mkdir remotes-$$
-	echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
-	remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
-	mkdir dolt-repo-$$
-	cd dolt-repo-$$
-	dolt init
-	dolt remote add test-remote $REMOTE
-	dolt push test-remote master
-	export DOLT_HEAD_COMMIT=`get_head_commit`
+setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
+    export PATH=$PATH:$GOPATH/bin
+    export NOMS_VERSION_NEXT=1
+    cd $BATS_TMPDIR
+    mkdir remotes-$$
+    echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
+    remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
+    mkdir dolt-repo-$$
+    cd dolt-repo-$$
+    dolt init
+    dolt remote add test-remote $REMOTE
+    dolt push test-remote master
+    export DOLT_HEAD_COMMIT=`get_head_commit`
 }
 
 teardown() {
-	rm -rf $BATS_TMPDIR/{git,dolt}-repo-$$
-	pkill -2 remotesrv
-	rm -rf $BATS_TMPDIR/remotes-$$
+    rm -rf $BATS_TMPDIR/{git,dolt}-repo-$$
+    pgrep remotesrv | xargs kill
+    rm -rf $BATS_TMPDIR/remotes-$$
 }
 
 @test "git dolt install sets up a smudge filter in the current git repository" {
-	init_git_repo
-	run git dolt install
-	[ "$status" -eq 0 ]
-	[[ "${lines[0]}" =~ "Installed git-dolt smudge filter" ]] || false
-	[[ "${lines[1]}" =~ "commit the changes to .gitattributes" ]] || false
+    init_git_repo
+    run git dolt install
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "Installed git-dolt smudge filter" ]] || false
+    [[ "${lines[1]}" =~ "commit the changes to .gitattributes" ]] || false
 
-	run cat .gitattributes
-	[ "${lines[0]}" = "*.git-dolt filter=git-dolt" ]
+    run cat .gitattributes
+    [ "${lines[0]}" = "*.git-dolt filter=git-dolt" ]
 
-	run cat .git/config
-	len=${#lines[@]}
-	[ "${lines[len-2]}" = "[filter \"git-dolt\"]" ]
-	[[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
+    run cat .git/config
+    len=${#lines[@]}
+    [ "${lines[len-2]}" = "[filter \"git-dolt\"]" ]
+    [[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
 }
 
 @test "git dolt install works in subdirectories of the git repository" {
-	init_git_repo
-	mkdir -p deeply/nested/directory
-	pushd deeply/nested/directory
-	run git dolt install
-	[ "$status" -eq 0 ]
+    init_git_repo
+    mkdir -p deeply/nested/directory
+    pushd deeply/nested/directory
+    run git dolt install
+    [ "$status" -eq 0 ]
 
-	popd
-	run cat .gitattributes
-	[ "${lines[0]}" = "*.git-dolt filter=git-dolt" ]
+    popd
+    run cat .gitattributes
+    [ "${lines[0]}" = "*.git-dolt filter=git-dolt" ]
 
-	run cat .git/config
-	len=${#lines[@]}
-	[ "${lines[len-2]}" = "[filter \"git-dolt\"]" ]
-	[[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
+    run cat .git/config
+    len=${#lines[@]}
+    [ "${lines[len-2]}" = "[filter \"git-dolt\"]" ]
+    [[ "${lines[len-1]}" =~ "smudge = git-dolt-smudge" ]] || false
 }
 
 @test "git dolt install fails with a helpful error when executed outside of a git repo" {
-	run git dolt install
-	[ "$status" -eq 1 ]
-	[[ "$output" =~ "couldn't find a .git directory" ]] || false
+    run git dolt install
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "couldn't find a .git directory" ]] || false
 }
 
 @test "git dolt link takes a remote url (and an optional revspec and destination directory), clones the repo, and outputs a pointer file" {
-	init_git_repo
-	run git dolt link $REMOTE
-	[ "$status" -eq 0 ]
-	# Ensure it reports the resolved revision
-	[[ "$output" =~ "revision $DOLT_HEAD_COMMIT" ]] || false
-	# Ensure it reports the pointer filename
-	[[ "$output" =~ "test-repo.git-dolt" ]] || false
-	# Ensure it reports the addition to .gitignore
-	[[ "$output" =~ "test-repo added to .gitignore" ]] || false
-	[ -d test-repo ]
+    init_git_repo
+    run git dolt link $REMOTE
+    [ "$status" -eq 0 ]
+    # Ensure it reports the resolved revision
+    [[ "$output" =~ "revision $DOLT_HEAD_COMMIT" ]] || false
+    # Ensure it reports the pointer filename
+    [[ "$output" =~ "test-repo.git-dolt" ]] || false
+    # Ensure it reports the addition to .gitignore
+    [[ "$output" =~ "test-repo added to .gitignore" ]] || false
+    [ -d test-repo ]
 
-	run cat test-repo.git-dolt
-	[[ "${lines[0]}" =~ ^version\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
-	[ "${lines[1]}" = "remote $REMOTE" ]
-	[ "${lines[2]}" = "revision $DOLT_HEAD_COMMIT" ]
+    run cat test-repo.git-dolt
+    [[ "${lines[0]}" =~ ^version\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
+    [ "${lines[1]}" = "remote $REMOTE" ]
+    [ "${lines[2]}" = "revision $DOLT_HEAD_COMMIT" ]
 
-	run cat .gitignore
-	[[ "${lines[0]}" =~ "test-repo" ]] || false
+    run cat .gitignore
+    [[ "${lines[0]}" =~ "test-repo" ]] || false
 }
 
 @test "git dolt's smudge filter automatically clones dolt repositories referenced in checked out git-dolt pointer files" {
-	skiponwindows "This test works on Windows command prompt but not the bash terminal: GitHub Issue #1809"
-	init_git_repo
-	git dolt install
-	git dolt link $REMOTE
-	git add .
-	git commit -m "set up git-dolt integration"
-	rm -rf test-repo test-repo.git-dolt
+    init_git_repo
+    git dolt install
+    git dolt link $REMOTE
+    git add .
+    git commit -m "set up git-dolt integration"
+    rm -rf test-repo test-repo.git-dolt
 
-	run git checkout -- test-repo.git-dolt
-	[[ "$output" =~ "Found git-dolt pointer file" ]] || false
-	[[ "$output" =~ "Cloning remote $REMOTE" ]] || false
-	[ -d test-repo ]
+    run git checkout -- test-repo.git-dolt
+    [[ "$output" =~ "Found git-dolt pointer file" ]] || false
+    [[ "$output" =~ "Cloning remote $REMOTE" ]] || false
+    [ -d test-repo ]
 
-	cd test-repo
-	[ `get_head_commit` = "$DOLT_HEAD_COMMIT" ]
+    cd test-repo
+    [ `get_head_commit` = "$DOLT_HEAD_COMMIT" ]
 }
 
 @test "git dolt fetch takes the name of a git-dolt pointer file and clones the repo to the specified revision if it doesn't exist" {
-	init_git_repo
-	create_test_pointer
+    init_git_repo
+    create_test_pointer
 
-	run git dolt fetch test-repo
-	[ "$status" -eq 0 ]
-	[[ "$output" =~ "Dolt repository cloned from remote $REMOTE to directory test-repo at revision $DOLT_HEAD_COMMIT" ]] || false
-	[ -d test-repo ]
+    run git dolt fetch test-repo
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Dolt repository cloned from remote $REMOTE to directory test-repo at revision $DOLT_HEAD_COMMIT" ]] || false
+    [ -d test-repo ]
 
-	cd test-repo
-	[ `get_head_commit` = "$DOLT_HEAD_COMMIT" ]
+    cd test-repo
+    [ `get_head_commit` = "$DOLT_HEAD_COMMIT" ]
 }
 
 @test "git dolt update updates the specified pointer file to the specified revision" {
-	dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema test
-	dolt add test
-	dolt commit -m "test commit"
-	export NEW_DOLT_HEAD_COMMIT=`get_head_commit`
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add test
+    dolt commit -m "test commit"
+    export NEW_DOLT_HEAD_COMMIT=`get_head_commit`
 
-	init_git_repo
-	create_test_pointer
-	run git dolt update test-repo $NEW_DOLT_HEAD_COMMIT
+    init_git_repo
+    create_test_pointer
+    run git dolt update test-repo $NEW_DOLT_HEAD_COMMIT
 
-	[ "$status" -eq 0 ]
-	[ "${lines[0]}" = "Updated pointer file test-repo.git-dolt to revision $NEW_DOLT_HEAD_COMMIT. You should git commit this change." ]
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "Updated pointer file test-repo.git-dolt to revision $NEW_DOLT_HEAD_COMMIT. You should git commit this change." ]
 
-	run cat test-repo.git-dolt
-	[[ "${lines[0]}" =~ ^version\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
-	[ "${lines[1]}" = "remote $REMOTE" ]
-	[ "${lines[2]}" = "revision $NEW_DOLT_HEAD_COMMIT" ]
+    run cat test-repo.git-dolt
+    [[ "${lines[0]}" =~ ^version\ [0-9]+\.[0-9]+\.[0-9]+$ ]] || false
+    [ "${lines[1]}" = "remote $REMOTE" ]
+    [ "${lines[2]}" = "revision $NEW_DOLT_HEAD_COMMIT" ]
 }
 
 @test "git dolt fails helpfully when dolt is not installed" {
-	skiponwindows "This test does not work on Windows: GitHub Issue #1801"
-	mkdir TMP_PATH
-	pushd TMP_PATH
-	which git | xargs ln -sf
-	which git-dolt | xargs ln -sf
-	popd
-	PATH=`pwd`/TMP_PATH run git dolt
-	rm -rf TMP_PATH
-	[ "$status" -eq 1 ]
-	[[ "$output" =~ "It looks like Dolt is not installed on your system" ]] || false
+    mkdir TMP_PATH
+    pushd TMP_PATH
+    cp `which git` ./git
+    cp `which git-dolt` ./git-dolt
+    if [ $IS_WINDOWS = true ]; then
+        ORIGINAL_PATH=$PATH
+        export PATH=""
+        export WSLENV=PATH
+        run git dolt
+        export PATH=$ORIGINAL_PATH
+    else
+        PATH=`pwd` run git dolt
+    fi
+    popd
+    rm -rf TMP_PATH
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "It looks like Dolt is not installed on your system" ]] || false
 }
 
 @test "git dolt errors on unknown commands" {
-	run git dolt nonsense
-	[ "$status" -eq 1 ]
-	[[ "$output" =~ "Unknown command" ]] || false
+    run git dolt nonsense
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Unknown command" ]] || false
 }
 
 @test "git dolt prints usage information with no arguments" {
-	run git dolt
-	[[ "$output" =~ Usage ]] || false
+    run git dolt
+    [[ "$output" =~ Usage ]] || false
 }
 
 init_git_repo() {
-	mkdir ../git-repo-$$
-	cd ../git-repo-$$
-	git init
-	git config user.email "foo@bar.com"
-	git config user.name "Foo User"
+    mkdir ../git-repo-$$
+    cd ../git-repo-$$
+    git init
+    git config user.email "foo@bar.com"
+    git config user.name "Foo User"
 }
 
 create_test_pointer() {
-	cat <<EOF > test-repo.git-dolt
+    cat <<EOF > test-repo.git-dolt
 version 0.0.0
 remote $REMOTE
 revision $DOLT_HEAD_COMMIT
@@ -179,5 +181,5 @@ EOF
 }
 
 get_head_commit() {
-	dolt log -n 1 | grep -m 1 commit | cut -c 8-
+    dolt log -n 1 | grep -m 1 commit | cut -c 8-
 }

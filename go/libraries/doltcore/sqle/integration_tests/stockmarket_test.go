@@ -1,13 +1,29 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package integration_tests
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle/sqletestutil"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqletestutil"
 )
 
 // These tests are slow, working on making them faster. Right now they're skipped unless this env var is set.
@@ -14895,7 +14911,7 @@ func TestCreateTables(t *testing.T) {
 
 func TestInserts(t *testing.T) {
 	if _, ok := os.LookupEnv(RunSlowSqlTests); !ok {
-		t.Skip("Skipping slow SQL test. Set", RunSlowSqlTests,  "in your env to run them")
+		t.Skip("Skipping slow SQL test. Set", RunSlowSqlTests, "in your env to run them")
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
@@ -14915,7 +14931,7 @@ func TestInserts(t *testing.T) {
 
 func TestJoin(t *testing.T) {
 	if _, ok := os.LookupEnv(RunSlowSqlTests); !ok {
-		t.Skip("Skipping slow SQL test. Set", RunSlowSqlTests,  "in your env to run them")
+		t.Skip("Skipping slow SQL test. Set", RunSlowSqlTests, "in your env to run them")
 	}
 
 	dEnv := dtestutils.CreateTestEnv()

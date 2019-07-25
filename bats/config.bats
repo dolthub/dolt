@@ -1,10 +1,11 @@
 #!/usr/bin/env bats
 
 setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     mkdir $BATS_TMPDIR/config-$$
-    export DOLT_ROOT_PATH=$BATS_TMPDIR/config-$$
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
@@ -32,7 +33,7 @@ teardown() {
     [ "$status" -eq 0 ]
     # Need to make this a regex because of the coloring
     [[ "$output" =~ "Config successfully updated" ]] || false
-    [ -f ~/.dolt/config_global.json ]
+    [ -f `nativepath ~/.dolt/config_global.json` ]
     run dolt config --list
     [ "$status" -eq 0 ]
     [ "$output" = "test = test" ]

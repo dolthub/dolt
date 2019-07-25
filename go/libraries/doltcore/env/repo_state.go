@@ -1,11 +1,26 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package env
 
 import (
 	"encoding/json"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 type BranchConfig struct {
@@ -27,7 +42,7 @@ type RepoState struct {
 	Remotes  map[string]Remote       `json:"remotes"`
 	Branches map[string]BranchConfig `json:"branches"`
 
-	fs filesys.ReadWriteFS `json:"-"`
+	fs filesys.ReadWriteFS
 }
 
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
@@ -53,7 +68,7 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.MarshalableRef{ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{Ref: ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil, fs}
 
 	err := rs.Save()
 
@@ -72,7 +87,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 		return nil, err
 	}
 
-	rs := &RepoState{ref.MarshalableRef{headRef}, hashStr, hashStr, nil, nil, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{Ref: headRef}, hashStr, hashStr, nil, nil, nil, fs}
 
 	err = rs.Save()
 
@@ -102,7 +117,7 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 }
 
 func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string) error {
-	rs.Merge = &MergeState{ref.MarshalableRef{dref}, commit, rs.Working}
+	rs.Merge = &MergeState{ref.MarshalableRef{Ref: dref}, commit, rs.Working}
 	return rs.Save()
 }
 

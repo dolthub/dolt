@@ -1,31 +1,47 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sqlserver
 
 import (
+	"strings"
+	"testing"
+
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gocraft/dbr"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
-	"strings"
-	"testing"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 )
 
 type testPerson struct {
-	Name string
-	Age int
+	Name       string
+	Age        int
 	Is_married bool
-	Title string
+	Title      string
 }
 
 var (
 	bill = testPerson{"Bill Billerson", 32, true, "Senior Dufus"}
 	john = testPerson{"John Johnson", 25, false, "Dufus"}
-	rob = testPerson{"Rob Robertson", 21, false, ""}
+	rob  = testPerson{"Rob Robertson", 21, false, ""}
 )
 
 func TestServerArgs(t *testing.T) {
@@ -55,7 +71,7 @@ func TestServerArgs(t *testing.T) {
 func TestServerBadArgs(t *testing.T) {
 	env := createEnvWithSeedData(t)
 
-	tests := [][]string {
+	tests := [][]string{
 		{"-a", "127.0.0.0.1"},
 		{"-a", "loclahost"},
 		{"-p", "300"},
@@ -68,7 +84,7 @@ func TestServerBadArgs(t *testing.T) {
 	for _, test := range tests {
 		t.Run(strings.Join(test, " "), func(t *testing.T) {
 			serverController := CreateServerController()
-			go func(serverController *ServerController){
+			go func(serverController *ServerController) {
 				sqlServerImpl("dolt sql-server", test, env, serverController)
 			}(serverController)
 			// In the event that a test fails, we need to prevent a test from hanging due to a running server
@@ -86,7 +102,7 @@ func TestServerGoodParams(t *testing.T) {
 	root, verr := commands.GetWorkingWithVErr(env)
 	require.NoError(t, verr)
 
-	tests := []*ServerConfig {
+	tests := []*ServerConfig{
 		DefaultServerConfig(),
 		DefaultServerConfig().WithHost("127.0.0.1").WithPort(15400),
 		DefaultServerConfig().WithHost("localhost").WithPort(15401),
@@ -143,20 +159,22 @@ func TestServerSelect(t *testing.T) {
 		query       func() *dbr.SelectStmt
 		expectedRes []testPerson
 	}{
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people")}, []testPerson{bill, john, rob} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age = 32")}, []testPerson{bill} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("title = 'Senior Dufus'")}, []testPerson{bill} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name = 'Bill Billerson'")}, []testPerson{bill} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name = 'John Johnson'")}, []testPerson{john} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age = 25")}, []testPerson{john} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("25 = age")}, []testPerson{john} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("is_married = false")}, []testPerson{john, rob} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age < 30")}, []testPerson{john, rob} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age > 24")}, []testPerson{bill, john} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age >= 25")}, []testPerson{bill, john} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name <= 'John Johnson'")}, []testPerson{bill, john} },
-		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name <> 'John Johnson'")}, []testPerson{bill, rob} },
-		{func() *dbr.SelectStmt { return sess.Select("age, is_married").From("people").Where("name = 'John Johnson'")}, []testPerson{{"", 25, false, ""}} },
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people") }, []testPerson{bill, john, rob}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age = 32") }, []testPerson{bill}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("title = 'Senior Dufus'") }, []testPerson{bill}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name = 'Bill Billerson'") }, []testPerson{bill}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name = 'John Johnson'") }, []testPerson{john}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age = 25") }, []testPerson{john}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("25 = age") }, []testPerson{john}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("is_married = false") }, []testPerson{john, rob}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age < 30") }, []testPerson{john, rob}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age > 24") }, []testPerson{bill, john}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("age >= 25") }, []testPerson{bill, john}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name <= 'John Johnson'") }, []testPerson{bill, john}},
+		{func() *dbr.SelectStmt { return sess.Select("*").From("people").Where("name <> 'John Johnson'") }, []testPerson{bill, rob}},
+		{func() *dbr.SelectStmt {
+			return sess.Select("age, is_married").From("people").Where("name = 'John Johnson'")
+		}, []testPerson{{"", 25, false, ""}}},
 	}
 
 	for _, test := range tests {

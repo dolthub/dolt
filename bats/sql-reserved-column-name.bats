@@ -1,13 +1,14 @@
 #!/usr/bin/env bats
 
 setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
-    dolt table import -c -pk=Timestamp test $BATS_TEST_DIRNAME/helper/sql-reserved-column-name.csv
+    dolt table import -c -pk=Timestamp test `batshelper sql-reserved-column-name.csv`
 }
 
 teardown() {

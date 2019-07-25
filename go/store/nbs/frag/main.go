@@ -1,3 +1,20 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -7,7 +24,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
 	"log"
 	"os"
 	"sync"
@@ -18,11 +34,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/util/profile"
 )
 
 var (
@@ -51,7 +69,7 @@ func main() {
 	var store *nbs.NomsBlockStore
 	if *dir != "" {
 		var err error
-		store, err = nbs.NewLocalStore(context.Background(), *dir, memTableSize)
+		store, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *dir, memTableSize)
 		d.PanicIfError(err)
 
 		*dbName = *dir
@@ -59,7 +77,7 @@ func main() {
 		sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 
 		var err error
-		store, err = nbs.NewAWSStore(context.Background(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
+		store, err = nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), *table, *dbName, *bucket, s3.New(sess), dynamodb.New(sess), memTableSize)
 		d.PanicIfError(err)
 	} else {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")

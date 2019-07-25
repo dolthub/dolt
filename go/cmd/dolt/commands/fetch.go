@@ -1,15 +1,30 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package commands
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/store/datas"
 )
 
 var fetchShortDesc = "Download objects and refs from another repository"
@@ -116,7 +131,7 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSp
 	ctx := context.TODO()
 
 	for _, rs := range refSpecs {
-		srcDB, err := rem.GetRemoteDB(context.TODO())
+		srcDB, err := rem.GetRemoteDB(context.TODO(), dEnv.DoltDB.ValueReadWriter().Format())
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()

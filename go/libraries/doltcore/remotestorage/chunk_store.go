@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package remotestorage
 
 import (
@@ -13,13 +27,14 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-
 	"github.com/golang/snappy"
-	remotesapi "github.com/liquidata-inc/ld/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
+
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var ErrUploadFailed = errors.New("upload failed")
@@ -59,10 +74,11 @@ type DoltChunkStore struct {
 	csClient    remotesapi.ChunkStoreServiceClient
 	cache       chunkCache
 	metadata    *remotesapi.GetRepoMetadataResponse
+	nbf         *types.NomsBinFormat
 	httpFetcher HTTPFetcher
 }
 
-func NewDoltChunkStoreFromPath(ctx context.Context, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+func NewDoltChunkStoreFromPath(ctx context.Context, nbf *types.NomsBinFormat, path, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	tokens := strings.Split(strings.Trim(path, "/"), "/")
 	if len(tokens) != 2 {
 		return nil, ErrInvalidDoltSpecPath
@@ -76,10 +92,10 @@ func NewDoltChunkStoreFromPath(ctx context.Context, path, host string, csClient 
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
-	return NewDoltChunkStore(ctx, org, repoName, host, RetryingChunkStoreServiceClient{csClient})
+	return NewDoltChunkStore(ctx, nbf, org, repoName, host, RetryingChunkStoreServiceClient{csClient})
 }
 
-func NewDoltChunkStore(ctx context.Context, org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
+func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoName, host string, csClient remotesapi.ChunkStoreServiceClient) (*DoltChunkStore, error) {
 	if _, ok := csClient.(RetryingChunkStoreServiceClient); !ok {
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
@@ -89,16 +105,19 @@ func NewDoltChunkStore(ctx context.Context, org, repoName, host string, csClient
 			Org:      org,
 			RepoName: repoName,
 		},
+		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+			NbfVersion: nbf.VersionString(),
+			NbsVersion: nbs.StorageVersion,
+		},
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, globalHttpFetcher}, nil
+	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher}, nil
 }
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
-	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, fetcher}
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -429,7 +448,16 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 		chnkTblInfo = append(chnkTblInfo, &remotesapi.ChunkTableInfo{Hash: h[:], ChunkCount: uint32(cnt)})
 	}
 
-	req := &remotesapi.CommitRequest{RepoId: dcs.getRepoId(), Current: current[:], Last: last[:], ChunkTableInfo: chnkTblInfo}
+	req := &remotesapi.CommitRequest{
+		RepoId:         dcs.getRepoId(),
+		Current:        current[:],
+		Last:           last[:],
+		ChunkTableInfo: chnkTblInfo,
+		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+			NbfVersion: dcs.nbf.VersionString(),
+			NbsVersion: nbs.StorageVersion,
+		},
+	}
 	resp, err := dcs.csClient.Commit(ctx, req)
 
 	if err != nil {

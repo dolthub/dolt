@@ -1,3 +1,20 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -8,12 +25,13 @@ import (
 	"context"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/clienttest"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/spec"
+	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
 )
 
 func TestDs(t *testing.T) {
@@ -27,7 +45,7 @@ type nomsDsTestSuite struct {
 func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), dir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	ds := datas.NewDatabase(cs)
 
@@ -41,7 +59,7 @@ func (s *nomsDsTestSuite) TestEmptyNomsDs() {
 func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
-	cs, err := nbs.NewLocalStore(context.Background(), dir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize)
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 

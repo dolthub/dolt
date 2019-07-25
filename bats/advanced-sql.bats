@@ -1,14 +1,15 @@
 #!/usr/bin/env bats
 
 setup() {
+    load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/1pk5col-ints.schema one_pk
-    dolt table create -s=$BATS_TEST_DIRNAME/helper/2pk5col-ints.schema two_pk
+    dolt table create -s=`batshelper 1pk5col-ints.schema` one_pk
+    dolt table create -s=`batshelper 2pk5col-ints.schema` two_pk
     dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (0,0,0,0,0,0),(1,10,10,10,10,10),(2,20,20,20,20,20),(3,30,30,30,30,30)"
     dolt sql -q "insert into two_pk (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0),(0,1,10,10,10,10,10),(1,0,20,20,20,20,20),(1,1,30,30,30,30,30)"
 }
@@ -147,7 +148,7 @@ teardown() {
     [[ "$output" =~ "0" ]] || false
     [[ ! "$output" =~ "10" ]] || false
     run dolt sql -q "select * from one_pk join two_pk order by pk1,pk2,pk limit 1"
-	skip "A join should work without an ON clause, but the new engine does not support it yet"
+    skip "A join should work without an ON clause, but the new engine does not support it yet"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "0" ]] || false

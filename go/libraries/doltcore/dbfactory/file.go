@@ -1,13 +1,29 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package dbfactory
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"net/url"
 	"os"
 	"path/filepath"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -26,7 +42,7 @@ type FileFactory struct {
 }
 
 // CreateDB creates an local filesys backed database
-func (fact FileFactory) CreateDB(ctx context.Context, urlObj *url.URL, params map[string]string) (datas.Database, error) {
+func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (datas.Database, error) {
 	path := urlObj.Host + urlObj.Path
 
 	info, err := os.Stat(path)
@@ -37,7 +53,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, urlObj *url.URL, params ma
 		return nil, filesys.ErrIsFile
 	}
 
-	st, err := nbs.NewLocalStore(ctx, path, defaultMemTableSize)
+	st, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
 
 	if err != nil {
 		return nil, err

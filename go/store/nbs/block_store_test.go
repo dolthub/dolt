@@ -1,3 +1,20 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -15,13 +32,14 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/osutil"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/constants"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 const testMemTableSize = 1 << 8
@@ -41,7 +59,7 @@ func (suite *BlockStoreSuite) SetupTest() {
 	var err error
 	suite.dir, err = ioutil.TempDir("", "")
 	suite.NoError(err)
-	suite.store, err = NewLocalStore(context.Background(), suite.dir, testMemTableSize)
+	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
 	suite.NoError(err)
 	suite.putCountFn = func() int {
 		return int(suite.store.putCount)
@@ -59,7 +77,7 @@ func (suite *BlockStoreSuite) TearDownTest() {
 
 func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 	newDir := filepath.Join(suite.dir, "does-not-exist")
-	_, err := NewLocalStore(context.Background(), newDir, testMemTableSize)
+	_, err := NewLocalStore(context.Background(), constants.FormatDefaultString, newDir, testMemTableSize)
 	suite.Error(err)
 }
 
@@ -68,7 +86,7 @@ func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	_, err := os.Create(existingFile)
 	suite.NoError(err)
 
-	_, err = NewLocalStore(context.Background(), existingFile, testMemTableSize)
+	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize)
 	suite.Error(err)
 }
 
@@ -252,7 +270,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
+	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -298,7 +316,7 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 	input1 := []byte("abc")
 	c1 := chunks.NewChunk(input1)
 
-	interloper, err := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
+	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -334,7 +352,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), suite.dir, testMemTableSize)
+	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -419,7 +437,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 		p := newFakeTablePersister()
 		c := &fakeConjoiner{}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), mm, p, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, testMemTableSize)
 		assert.NoError(t, err)
 
 		root, err := smallTableStore.Root(context.Background())
@@ -460,7 +478,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), makeManifestManager(fm), p, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, c, testMemTableSize)
 		assert.NoError(t, err)
 
 		root, err := smallTableStore.Root(context.Background())
@@ -491,7 +509,7 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			},
 		}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), makeManifestManager(fm), p, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, c, testMemTableSize)
 		assert.NoError(t, err)
 
 		root, err := smallTableStore.Root(context.Background())

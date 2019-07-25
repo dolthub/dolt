@@ -1,14 +1,29 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package actions
 
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/set"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 var ErrAlreadyExists = errors.New("already exists")
@@ -26,7 +41,7 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 	}
 
 	if ref.Equals(dEnv.RepoState.Head.Ref, oldRef) {
-		dEnv.RepoState.Head = ref.MarshalableRef{newRef}
+		dEnv.RepoState.Head = ref.MarshalableRef{Ref: newRef}
 		err = dEnv.RepoState.Save()
 
 		if err != nil {
@@ -210,7 +225,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{dref}
+	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
 	dEnv.RepoState.Working = wrkHash.String()
 	dEnv.RepoState.Staged = stgHash.String()
 

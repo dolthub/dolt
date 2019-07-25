@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package doltdb
 
 import (
@@ -6,17 +20,17 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/spec"
-	"github.com/liquidata-inc/ld/dolt/go/store/types/edits"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/spec"
+	"github.com/liquidata-inc/dolt/go/store/types/edits"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/pantoerr"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/pantoerr"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func init() {
@@ -54,11 +68,11 @@ func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
 // to a newly created in memory database will be used. If the location is LocalDirDoltDB, the directory must exist or
 // this returns nil.
-func LoadDoltDB(ctx context.Context, urlStr string) (*DoltDB, error) {
-	return LoadDoltDBWithParams(ctx, urlStr, nil)
+func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string) (*DoltDB, error) {
+	return LoadDoltDBWithParams(ctx, nbf, urlStr, nil)
 }
 
-func LoadDoltDBWithParams(ctx context.Context, urlStr string, params map[string]string) (*DoltDB, error) {
+func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]string) (*DoltDB, error) {
 	if urlStr == LocalDirDoltDB {
 		exists, isDir := filesys.LocalFS.Exists(dbfactory.DoltDataDir)
 
@@ -69,7 +83,7 @@ func LoadDoltDBWithParams(ctx context.Context, urlStr string, params map[string]
 		}
 	}
 
-	db, err := dbfactory.CreateDB(ctx, urlStr, params)
+	db, err := dbfactory.CreateDB(ctx, nbf, urlStr, params)
 
 	if err != nil {
 		return nil, err

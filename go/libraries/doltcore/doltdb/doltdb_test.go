@@ -1,18 +1,34 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package doltdb
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/test"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -39,7 +55,7 @@ func createTestSchema() schema.Schema {
 }
 
 func TestEmptyInMemoryRepoCreation(t *testing.T) {
-	ddb, err := LoadDoltDB(context.Background(), InMemDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
 
 	if err != nil {
 		t.Fatal("Failed to load db")
@@ -73,7 +89,7 @@ func TestLoadNonExistentLocalFSRepo(t *testing.T) {
 		panic("Couldn't change the working directory to the test directory.")
 	}
 
-	ddb, err := LoadDoltDB(context.Background(), LocalDirDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 	assert.Nil(t, ddb, "Should return nil when loading a non-existent data dir")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -88,7 +104,7 @@ func TestLoadBadLocalFSRepo(t *testing.T) {
 	contents := []byte("not a directory")
 	ioutil.WriteFile(filepath.Join(testDir, dbfactory.DoltDataDir), contents, 0644)
 
-	ddb, err := LoadDoltDB(context.Background(), LocalDirDoltDB)
+	ddb, err := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 	assert.Nil(t, ddb, "Should return nil when loading a non-directory data dir file")
 	assert.Error(t, err, "Should see an error here")
 }
@@ -111,7 +127,7 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create noms directory")
 		}
 
-		ddb, _ := LoadDoltDB(context.Background(), LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		err = ddb.WriteEmptyRepo(context.Background(), committerName, committerEmail)
 
 		if err != nil {
@@ -123,7 +139,7 @@ func TestLDNoms(t *testing.T) {
 	var valHash hash.Hash
 	var tbl *Table
 	{
-		ddb, _ := LoadDoltDB(context.Background(), LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		cs, _ := NewCommitSpec("master", "")
 		commit, err := ddb.Resolve(context.Background(), cs)
 
@@ -161,7 +177,7 @@ func TestLDNoms(t *testing.T) {
 
 	// reopen the db and commit the value.  Perform a couple checks for
 	{
-		ddb, _ := LoadDoltDB(context.Background(), LocalDirDoltDB)
+		ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, LocalDirDoltDB)
 		meta, err := NewCommitMeta(committerName, committerEmail, "Sample data")
 		if err != nil {
 			t.Error("Failled to commit")

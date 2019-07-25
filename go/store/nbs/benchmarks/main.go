@@ -1,3 +1,20 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -19,11 +36,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/util/profile"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/util/profile"
 )
 
 var (
@@ -88,7 +107,9 @@ func main() {
 				err := os.RemoveAll(dir)
 				d.PanicIfError(err)
 			}()
-			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), dir, bufSize) }
+			open = func() (chunks.ChunkStore, error) {
+				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, bufSize)
+			}
 			reset = func() {
 				err := os.RemoveAll(dir)
 				d.PanicIfError(err)
@@ -117,7 +138,7 @@ func main() {
 		} else if *toAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *toAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 			reset = func() {
 				ddb := dynamodb.New(sess)
@@ -138,11 +159,13 @@ func main() {
 		}
 	} else {
 		if *useNBS != "" {
-			open = func() (chunks.ChunkStore, error) { return nbs.NewLocalStore(context.Background(), *useNBS, bufSize) }
+			open = func() (chunks.ChunkStore, error) {
+				return nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), *useNBS, bufSize)
+			}
 		} else if *useAWS != "" {
 			sess := session.Must(session.NewSession(aws.NewConfig().WithRegion("us-west-2")))
 			open = func() (chunks.ChunkStore, error) {
-				return nbs.NewAWSStore(context.Background(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
+				return nbs.NewAWSStore(context.Background(), types.Format_Default.VersionString(), dynamoTable, *useAWS, s3Bucket, s3.New(sess), dynamodb.New(sess), bufSize)
 			}
 		}
 		writeDB = func() {}

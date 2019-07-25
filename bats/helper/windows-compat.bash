@@ -1,26 +1,23 @@
+nativepath() { echo "$1"; }
+nativevar() { eval export "$1"="$2"; }
 skiponwindows() { :; }
-	
-unameOut="$(uname -s)"
-case "${unameOut}" in
-	CYGWIN*)    machine=Windows;;
-	MINGW*)     machine=Windows;;
-	*)          machine=Unix;;
-esac
 
-if [ ${machine} = "Windows" ]; then
-	skiponwindows() {
-		skip "$1"
-	}
-fi
+IS_WINDOWS=false
 
-if ! [ -x "$(command -v pkill)" ]; then
-	pkill() {
-		taskkill -fi "IMAGENAME eq $2*" -f
-	}
-fi
-
-if ! [ -x "$(command -v pgrep)" ]; then
-	pgrep() {
-		tasklist -fi "IMAGENAME eq $1*"
-	}
+if [ -d /mnt/c/Windows/System32 ]; then
+    IS_WINDOWS=true
+    if [ ! -d /mnt/c/batstmp ]; then
+        mkdir /mnt/c/batstmp
+    fi
+    export BATS_TMPDIR=/mnt/c/batstmp
+    nativepath() {
+        wslpath -w "$1"
+    }
+    nativevar() {
+        eval export "$1"="$2"
+        export WSLENV="$1$3"
+    }
+    skiponwindows() {
+        skip "$1"
+    }
 fi

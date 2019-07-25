@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package tblcmds
 
 import (
@@ -5,16 +19,17 @@ import (
 	"fmt"
 
 	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/mvdata"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -129,7 +144,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		return mvdata.InvalidOp, nil, nil
 	}
 
-	tableLoc := &mvdata.DataLocation{tableName, mvdata.DoltDB}
+	tableLoc := &mvdata.DataLocation{Path: tableName, Format: mvdata.DoltDB}
 
 	return mvOp, tableLoc, fileLoc
 }
@@ -234,6 +249,8 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	err = mover.Move(context.TODO())
 
 	if err != nil {
+		cli.Println()
+
 		if pipeline.IsTransformFailure(err) {
 			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
 

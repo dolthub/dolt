@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 syntax = "proto3";
 
 package dolt.services.remotesapi.v1alpha1;
@@ -85,7 +99,6 @@ message RebaseRequest {
 }
 
 message RebaseResponse {
-
 }
 
 message RootRequest {
@@ -106,6 +119,7 @@ message CommitRequest {
   bytes current = 2;
   bytes last = 3;
   repeated ChunkTableInfo chunk_table_info = 4;
+  ClientRepoFormat client_repo_format = 14;
 }
 
 message CommitResponse {
@@ -114,6 +128,7 @@ message CommitResponse {
 
 message GetRepoMetadataRequest {
   RepoId repo_id = 1;
+  ClientRepoFormat client_repo_format = 14;
 }
 
 message GetRepoMetadataResponse {
@@ -122,5 +137,10 @@ message GetRepoMetadataResponse {
   string nbf_version = 1;
   // Version string of the nbs format of this repository.
   // See nbs.StorageVersion.
+  string nbs_version = 2;
+}
+
+message ClientRepoFormat {
+  string nbf_version = 1;
   string nbs_version = 2;
 }

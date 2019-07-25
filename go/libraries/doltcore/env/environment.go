@@ -1,24 +1,40 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package env
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/creds"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"path/filepath"
+	"strings"
+
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"path/filepath"
-	"strings"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -52,7 +68,7 @@ type DoltEnv struct {
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, urlStr)
+	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
 
 	dEnv := &DoltEnv{
 		config,
@@ -123,7 +139,7 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
 // database with dolt structure.
-func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { // should remove name and email args
+func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -133,7 +149,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { /
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.initDBAndState(ctx, name, email)
+		err = dEnv.initDBAndState(ctx, nbf, name, email)
 	}
 
 	if err != nil {
@@ -143,7 +159,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, name, email string) error { /
 	return err
 }
 
-func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
+func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context, nbf *types.NomsBinFormat) error {
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -157,7 +173,7 @@ func (dEnv *DoltEnv) InitRepoWithNoData(ctx context.Context) error {
 		return err
 	}
 
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.urlStr)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
 
 	return err
 }
@@ -188,9 +204,9 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) initDBAndState(ctx context.Context, name, email string) error {
+func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error {
 	var err error
-	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, dEnv.urlStr)
+	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
 
 	if err != nil {
 		return err

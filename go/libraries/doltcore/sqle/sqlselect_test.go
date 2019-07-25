@@ -1,24 +1,39 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/dtestutils"
-	. "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"io"
+	"testing"
+
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
-	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
-const singleQueryTest = ""//"Natural join with join clause"
+const singleQueryTest = "" //"Natural join with join clause"
 
 // Set to false to run tests known to be broken
 const skipBroken = true
@@ -110,7 +125,7 @@ func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
 		doltRows = append(doltRows, SqlRowToDoltRow(types.Format_7_18, r, targetSch))
 	}
-	if err !=  io.EOF {
+	if err != io.EOF {
 		return nil, nil, err
 	}
 

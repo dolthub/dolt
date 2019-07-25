@@ -1,3 +1,20 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -10,10 +27,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/constants"
-	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/constants"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 func TestChunkStoreZeroValue(t *testing.T) {
@@ -144,7 +162,7 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 	assert.NoError(err)
 
-	store, err := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
@@ -181,12 +199,12 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
 	// Simulate another goroutine writing a manifest behind store's back.
-	interloper, err := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
+	interloper, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer interloper.Close()
 
@@ -224,7 +242,7 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), mm, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
@@ -265,7 +283,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 
@@ -275,6 +293,7 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 
 	interloper, err := newNomsBlockStore(
 		context.Background(),
+		constants.FormatDefaultString,
 		manifestManager{
 			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
 		},
@@ -319,7 +338,7 @@ func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store
 	fm = &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
 	p = newFakeTablePersister()
-	store, err := newNomsBlockStore(context.Background(), mm, p, inlineConjoiner{defaultMaxTables}, 0)
+	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, inlineConjoiner{defaultMaxTables}, 0)
 	assert.NoError(t, err)
 	return
 }

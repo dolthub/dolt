@@ -1,12 +1,27 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package edits
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"math/rand"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func (coll *KVPCollection) String() string {
@@ -100,10 +115,10 @@ func createKVPColl(rng *rand.Rand, size int) *KVPCollection {
 	kvps := make(types.KVPSlice, size)
 
 	for i := 0; i < size; i++ {
-		kvps[i] = types.KVP{types.Uint(rng.Uint64() % 10000), types.NullValue}
+		kvps[i] = types.KVP{Key: types.Uint(rng.Uint64() % 10000), Val: types.NullValue}
 	}
 
-	sort.Stable(types.KVPSort{kvps, types.Format_7_18})
+	sort.Stable(types.KVPSort{Values: kvps, NBF: types.Format_7_18})
 
 	return NewKVPCollection(types.Format_7_18, kvps)
 }

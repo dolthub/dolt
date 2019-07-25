@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package tblcmds
 
 import (
@@ -6,25 +20,26 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/rowconv"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -99,7 +114,7 @@ func (st *selectTransform) LimitAndFilter(inRow row.Row, props pipeline.Readable
 	if st.limit == -1 || st.count < st.limit {
 		if st.filter(inRow) {
 			st.count++
-			return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+			return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
 		}
 	} else if st.count == st.limit {
 		st.p.NoMore()
@@ -250,7 +265,7 @@ func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformColl
 	transforms.AppendTransforms(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(outSch, fwt.PrintAllWhenTooLong, 10000)
-	transforms.AppendTransforms(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+	transforms.AppendTransforms(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 }
 
 func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipeline.TransformCollection) (schema.Schema, errhand.VerboseError) {
@@ -328,6 +343,6 @@ func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow
 			panic(err)
 		}
 
-		return []*pipeline.TransformedRowResult{{inRow, nil}}, ""
+		return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
 	}
 }

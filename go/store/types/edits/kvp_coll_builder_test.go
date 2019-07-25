@@ -1,15 +1,30 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package edits
 
 import (
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func TestAddKVP(t *testing.T) {
 	builder := NewKVPCollBuilder(2)
-	builder.AddKVP(types.KVP{types.Uint(0), types.NullValue})
-	builder.AddKVP(types.KVP{types.Uint(1), types.NullValue})
-	builder.AddKVP(types.KVP{types.Uint(2), types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(0), Val: types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(1), Val: types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(2), Val: types.NullValue})
 
 	coll := builder.Build()
 	itr := coll.Iterator()
@@ -24,8 +39,8 @@ func TestAddKVP(t *testing.T) {
 }
 
 func TestMoveRemaining(t *testing.T) {
-	sl1 := types.KVPSlice{{types.Uint(0), types.NullValue}, {types.Uint(1), types.NullValue}}
-	sl2 := types.KVPSlice{{types.Uint(2), types.NullValue}, {}}
+	sl1 := types.KVPSlice{{Key: types.Uint(0), Val: types.NullValue}, {Key: types.Uint(1), Val: types.NullValue}}
+	sl2 := types.KVPSlice{{Key: types.Uint(2), Val: types.NullValue}, {}}
 	coll := &KVPCollection{
 		2,
 		2,
@@ -50,11 +65,11 @@ func TestMoveRemaining(t *testing.T) {
 }
 
 func TestAddKVPAndMoveRemaining(t *testing.T) {
-	sl := types.KVPSlice{{types.Uint(1), types.NullValue}, {types.Uint(2), types.NullValue}}
+	sl := types.KVPSlice{{Key: types.Uint(1), Val: types.NullValue}, {Key: types.Uint(2), Val: types.NullValue}}
 	coll := NewKVPCollection(types.Format_7_18, sl)
 
 	builder := NewKVPCollBuilder(2)
-	builder.AddKVP(types.KVP{types.Uint(0), types.NullValue})
+	builder.AddKVP(types.KVP{Key: types.Uint(0), Val: types.NullValue})
 	builder.MoveRemaining(coll.Iterator())
 
 	result := builder.Build()

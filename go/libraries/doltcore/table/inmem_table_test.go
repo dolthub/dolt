@@ -1,12 +1,27 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package table
 
 import (
 	"context"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	"io"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -17,10 +32,10 @@ const (
 )
 
 var fields, _ = schema.NewColCollection(
-	schema.Column{"name", nameTag, types.StringKind, true, nil},
-	schema.Column{"age", ageTag, types.UintKind, true, nil},
-	schema.Column{"title", titleTag, types.StringKind, true, nil},
-	schema.Column{"is_great", greatTag, types.BoolKind, true, nil},
+	schema.Column{Name: "name", Tag: nameTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
+	schema.Column{Name: "age", Tag: ageTag, Kind: types.UintKind, IsPartOfPK: true, Constraints: nil},
+	schema.Column{Name: "title", Tag: titleTag, Kind: types.StringKind, IsPartOfPK: true, Constraints: nil},
+	schema.Column{Name: "is_great", Tag: greatTag, Kind: types.BoolKind, IsPartOfPK: true, Constraints: nil},
 )
 
 var rowSch = schema.SchemaFromCols(fields)

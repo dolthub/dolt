@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package sqlserver
 
 import (
@@ -9,32 +23,32 @@ import (
 type LogLevel string
 
 const (
-	LogLevel_Debug LogLevel = "debug"
-	LogLevel_Info LogLevel = "info"
+	LogLevel_Debug   LogLevel = "debug"
+	LogLevel_Info    LogLevel = "info"
 	LogLevel_Warning LogLevel = "warning"
-	LogLevel_Error LogLevel = "error"
-	LogLevel_Fatal LogLevel = "fatal"
+	LogLevel_Error   LogLevel = "error"
+	LogLevel_Fatal   LogLevel = "fatal"
 )
 
 // ServerConfig contains all of the configurable options for the MySQL-compatible server.
 type ServerConfig struct {
-	Host     string // The domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
-	Port     int // The port that the server will run on. The valid range is [1024, 65535].
-	User     string // The username that connecting clients must use.
-	Password string // The password that connecting clients must use.
-	Timeout  int // The read and write timeouts.
-	ReadOnly bool // Whether the server will only accept read statements or all statements.
+	Host     string   // The domain that the server will run on. Accepts an IPv4 or IPv6 address, in addition to localhost.
+	Port     int      // The port that the server will run on. The valid range is [1024, 65535].
+	User     string   // The username that connecting clients must use.
+	Password string   // The password that connecting clients must use.
+	Timeout  int      // The read and write timeouts.
+	ReadOnly bool     // Whether the server will only accept read statements or all statements.
 	LogLevel LogLevel // Specifies the level of logging that the server will use.
 }
 
 // DefaultServerConfig creates a `*ServerConfig` that has all of the options set to their default values.
 func DefaultServerConfig() *ServerConfig {
 	return &ServerConfig{
-		Host: "localhost",
-		Port: 3306,
-		User: "root",
+		Host:     "localhost",
+		Port:     3306,
+		User:     "root",
 		Password: "",
-		Timeout: 30,
+		Timeout:  30,
 		ReadOnly: false,
 		LogLevel: LogLevel_Info,
 	}
@@ -113,18 +127,23 @@ func (config *ServerConfig) ConnectionString() string {
 // String implements `fmt.Stringer`.
 func (config *ServerConfig) String() string {
 	return fmt.Sprintf(`HP="%v:%v"|U="%v"|P="%v"|T="%v"|R="%v"|L="%v"`, config.Host, config.Port, config.User,
-		config.Password,config.Timeout, config.ReadOnly, config.LogLevel)
+		config.Password, config.Timeout, config.ReadOnly, config.LogLevel)
 }
 
 // String returns the string representation of the log level.
 func (level LogLevel) String() string {
 	switch level {
-	case LogLevel_Debug: fallthrough
-	case LogLevel_Info: fallthrough
-	case LogLevel_Warning: fallthrough
-	case LogLevel_Error: fallthrough
+	case LogLevel_Debug:
+		fallthrough
+	case LogLevel_Info:
+		fallthrough
+	case LogLevel_Warning:
+		fallthrough
+	case LogLevel_Error:
+		fallthrough
 	case LogLevel_Fatal:
 		return string(level)
-	default: return "unknown"
+	default:
+		return "unknown"
 	}
 }

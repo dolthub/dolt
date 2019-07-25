@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package commands
 
 import (
@@ -13,25 +27,26 @@ import (
 	"github.com/fatih/color"
 	"github.com/flynn-archive/go-shlex"
 	"github.com/liquidata-inc/ishell"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/ld/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/schema"
-	dsql "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sql"
-	dsqle "github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/doltcore/table/untyped/tabular"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/ld/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // An environment variable to set to get indexed join behavior, currently experimental
@@ -360,7 +375,7 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+	p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 
 	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
@@ -397,7 +412,7 @@ func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untyped
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
 	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{fwtStageName, autoSizeTransform.TransformToFWT})
+	p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
 
 	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)

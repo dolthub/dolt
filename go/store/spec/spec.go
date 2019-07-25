@@ -1,3 +1,20 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// This file incorporates work covered by the following copyright and
+// permission notice:
+//
 // Copyright 2016 Attic Labs, Inc. All rights reserved.
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
@@ -22,11 +39,12 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
-	"github.com/liquidata-inc/ld/dolt/go/store/chunks"
-	"github.com/liquidata-inc/ld/dolt/go/store/d"
-	"github.com/liquidata-inc/ld/dolt/go/store/datas"
-	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
-	"github.com/liquidata-inc/ld/dolt/go/store/types"
+
+	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/datas"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -271,7 +289,7 @@ func (sp Spec) NewChunkStore(ctx context.Context) chunks.ChunkStore {
 	case "gs":
 		return parseGCSSpec(ctx, sp.Href(), sp.Options)
 	case "nbs":
-		cs, err := nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
+		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
 		d.PanicIfError(err)
 		return cs
 	case "mem":
@@ -321,7 +339,7 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	}
 
 	sess := session.Must(session.NewSession(awsConfig))
-	cs, err := nbs.NewAWSStore(ctx, parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
+	cs, err := nbs.NewAWSStore(ctx, types.Format_Default.VersionString(), parts[0], u.Path, parts[1], s3.New(sess), dynamodb.New(sess), 1<<28)
 
 	d.PanicIfError(err)
 
@@ -343,7 +361,7 @@ func parseGCSSpec(ctx context.Context, gcsURL string, options SpecOptions) chunk
 		panic("Could not create GCSBlobstore")
 	}
 
-	cs, err := nbs.NewGCSStore(ctx, bucket, path, gcs, 1<<28)
+	cs, err := nbs.NewGCSStore(ctx, types.Format_Default.VersionString(), bucket, path, gcs, 1<<28)
 
 	d.PanicIfError(err)
 
@@ -436,7 +454,7 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
-		cs, err := nbs.NewLocalStore(ctx, sp.DatabaseName, 1<<28)
+		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
 		d.PanicIfError(err)
 		return datas.NewDatabase(cs)
 	case "mem":
