@@ -60,7 +60,7 @@ pipeline {
                     }
                     environment {
                         GIT_SSH_KEYFILE = credentials("liquidata-inc-ssh")
-                        PATH = "C:\\msys64\\mingw64\\bin;${pwd()}\\.ci_bin;${env.PATH}"
+                        PATH = "C:\\tools\\msys64\\mingw64\\bin;${pwd()}\\.ci_bin;${env.PATH}"
                     }
                     steps {
                         dir ("go/") {
