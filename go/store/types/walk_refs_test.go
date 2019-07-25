@@ -19,15 +19,21 @@ func TestWalkRefs(t *testing.T) {
 	runTest := func(v Value, t *testing.T) {
 		assert := assert.New(t)
 		expected := hash.HashSlice{}
-		v.WalkRefs(Format_7_18, func(r Ref) {
+		v.WalkRefs(Format_7_18, func(r Ref) error {
 			expected = append(expected, r.TargetHash())
+			return nil
 		})
-		WalkRefs(EncodeValue(v, Format_7_18), Format_7_18, func(r Ref) {
+		val, err := EncodeValue(v, Format_7_18)
+		assert.NoError(err)
+		err = WalkRefs(val, Format_7_18, func(r Ref) error {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
 				expected = expected[1:]
 			}
+
+			return nil
 		})
+		assert.NoError(err)
 		assert.Len(expected, 0)
 	}
 

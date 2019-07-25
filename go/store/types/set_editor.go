@@ -31,8 +31,8 @@ func (se *SetEditor) Kind() NomsKind {
 	return SetKind
 }
 
-func (se *SetEditor) Value(ctx context.Context) Value {
-	return se.Set(ctx)
+func (se *SetEditor) Value(ctx context.Context) (Value, error) {
+	return se.Set(ctx), nil
 }
 
 func (se *SetEditor) Set(ctx context.Context) Set {
@@ -202,8 +202,8 @@ type setEdit struct {
 }
 
 type setEditSlice struct {
-	edits  []setEdit
-	nbf    *NomsBinFormat
+	edits []setEdit
+	nbf   *NomsBinFormat
 }
 
 func (ses setEditSlice) Len() int      { return len(ses.edits) }

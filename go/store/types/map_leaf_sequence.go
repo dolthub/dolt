@@ -19,13 +19,30 @@ type mapEntry struct {
 	value Value
 }
 
-func (entry mapEntry) writeTo(w nomsWriter, nbf *NomsBinFormat) {
-	entry.key.writeTo(w, nbf)
-	entry.value.writeTo(w, nbf)
+func (entry mapEntry) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	err := entry.key.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
+	return entry.value.writeTo(w, nbf)
 }
 
-func readMapEntry(r *valueDecoder, nbf *NomsBinFormat) mapEntry {
-	return mapEntry{r.readValue(nbf), r.readValue(nbf)}
+func readMapEntry(r *valueDecoder, nbf *NomsBinFormat) (mapEntry, error) {
+	k, err := r.readValue(nbf)
+
+	if err != nil {
+		return mapEntry{}, err
+	}
+
+	v, err := r.readValue(nbf)
+
+	if err != nil {
+		return mapEntry{}, err
+	}
+
+	return mapEntry{k, v}, nil
 }
 
 func (entry mapEntry) equals(other mapEntry) bool {
@@ -58,12 +75,17 @@ func (mes mapEntrySlice) Equals(other mapEntrySlice) bool {
 	return true
 }
 
-func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
+func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) (orderedSequence, error) {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, len(data)+sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	MapKind.writeTo(&w, vrw.Format())
+	err := MapKind.writeTo(&w, vrw.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -71,58 +93,104 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) orderedSequence {
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, me := range data {
-		me.writeTo(&w, vrw.Format())
+		err := me.writeTo(&w, vrw.Format())
+
+		if err != nil {
+			return nil, err
+		}
+
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
+	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}, nil
 }
 
-func (ml mapLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+func (ml mapLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	w.writeRaw(ml.buff)
+	return nil
 }
 
 // sequence interface
 
-func (ml mapLeafSequence) getItem(idx int) sequenceItem {
+func (ml mapLeafSequence) getItem(idx int) (sequenceItem, error) {
 	dec := ml.decoderSkipToIndex(idx)
 	return readMapEntry(&dec, ml.format())
 }
 
-func (ml mapLeafSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
-	walkRefs(ml.valueBytes(ml.format()), ml.format(), cb)
+func (ml mapLeafSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	bytes, err := ml.valueBytes(ml.format())
+
+	if err != nil {
+		return err
+	}
+
+	return walkRefs(bytes, ml.format(), cb)
 }
 
-func (ml mapLeafSequence) entries() mapEntrySlice {
+func (ml mapLeafSequence) entries() (mapEntrySlice, error) {
 	dec, count := ml.decoderSkipToValues()
 	entries := mapEntrySlice{
 		make([]mapEntry, count),
 		ml.format(),
 	}
 	for i := uint64(0); i < count; i++ {
-		entries.entries[i] = mapEntry{dec.readValue(ml.format()), dec.readValue(ml.format())}
+		k, err := dec.readValue(ml.format())
+
+		if err != nil {
+			return mapEntrySlice{}, err
+		}
+
+		v, err := dec.readValue(ml.format())
+
+		if err != nil {
+			return mapEntrySlice{}, err
+		}
+
+		entries.entries[i] = mapEntry{k, v}
 	}
-	return entries
+
+	return entries, nil
 }
 
 func (ml mapLeafSequence) getCompareFn(other sequence) compareFn {
 	dec1 := ml.decoder()
 	ml2 := other.(mapLeafSequence)
 	dec2 := ml2.decoder()
-	return func(idx, otherIdx int) bool {
+	return func(idx, otherIdx int) (bool, error) {
 		dec1.offset = uint32(ml.getItemOffset(idx))
 		dec2.offset = uint32(ml2.getItemOffset(otherIdx))
-		k1 := dec1.readValue(ml.format())
-		k2 := dec2.readValue(ml2.format())
-		if !k1.Equals(k2) {
-			return false
+		k1, err := dec1.readValue(ml.format())
+
+		if err != nil {
+			return false, err
 		}
-		v1 := dec1.readValue(ml.format())
-		v2 := dec2.readValue(ml2.format())
-		return v1.Equals(v2)
+
+		k2, err := dec2.readValue(ml2.format())
+
+		if err != nil {
+			return false, err
+		}
+
+		if !k1.Equals(k2) {
+			return false, nil
+		}
+
+		v1, err := dec1.readValue(ml.format())
+
+		if err != nil {
+			return false, err
+		}
+
+		v2, err := dec2.readValue(ml2.format())
+
+		if err != nil {
+			return false, err
+		}
+
+		return v1.Equals(v2), nil
 	}
 }
 
-func (ml mapLeafSequence) typeOf() *Type {
+func (ml mapLeafSequence) typeOf() (*Type, error) {
 	dec, count := ml.decoderSkipToValues()
 	kts := make(typeSlice, 0, count)
 	vts := make(typeSlice, 0, count)
@@ -130,20 +198,66 @@ func (ml mapLeafSequence) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastKeyType != nil && lastValueType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(ml.format(), lastKeyType) && dec.isValueSameTypeForSure(ml.format(), lastValueType) {
+
+			sameKeyTypes, err := dec.isValueSameTypeForSure(ml.format(), lastKeyType)
+
+			if err != nil {
+				return nil, err
+			}
+
+			sameValTypes, err := dec.isValueSameTypeForSure(ml.format(), lastValueType)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if sameKeyTypes && sameValTypes {
 				continue
 			}
-			dec.offset = offset
 
+			dec.offset = offset
 		}
 
-		lastKeyType = dec.readTypeOfValue(ml.format())
+		var err error
+		lastKeyType, err = dec.readTypeOfValue(ml.format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		if lastKeyType.Kind() == UnknownKind {
+			// if any of the elements are unknown, return unknown
+			return nil, ErrUnknownType
+		}
+
 		kts = append(kts, lastKeyType)
-		lastValueType = dec.readTypeOfValue(ml.format())
+		lastValueType, err = dec.readTypeOfValue(ml.format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		if lastValueType.Kind() == UnknownKind {
+			// if any of the elements are unknown, return unknown
+			return nil, ErrUnknownType
+		}
+
 		vts = append(vts, lastValueType)
 	}
 
-	return makeCompoundType(MapKind, makeUnionType(kts...), makeUnionType(vts...))
+	unionOfKTypes, err := makeUnionType(kts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	uninionOfVTypes, err := makeUnionType(vts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return makeCompoundType(MapKind, unionOfKTypes, uninionOfVTypes)
 }
 
 // orderedSequence interface
@@ -153,19 +267,40 @@ func (ml mapLeafSequence) decoderSkipToIndex(idx int) valueDecoder {
 	return ml.decoderAtOffset(offset)
 }
 
-func (ml mapLeafSequence) getKey(idx int) orderedKey {
+func (ml mapLeafSequence) getKey(idx int) (orderedKey, error) {
 	dec := ml.decoderSkipToIndex(idx)
-	return newOrderedKey(dec.readValue(ml.format()), ml.format())
+	v, err := dec.readValue(ml.format())
+
+	if err != nil {
+		return orderedKey{}, err
+	}
+
+	return newOrderedKey(v, ml.format())
 }
 
-func (ml mapLeafSequence) search(key orderedKey) int {
-	return sort.Search(int(ml.Len()), func(i int) bool {
-		return !ml.getKey(i).Less(ml.format(), key)
+func (ml mapLeafSequence) search(key orderedKey) (int, error) {
+	var err error
+	n := sort.Search(int(ml.Len()), func(i int) bool {
+		if err != nil {
+			return false
+		}
+
+		var k orderedKey
+		k, err = ml.getKey(i)
+
+		return err == nil && !k.Less(ml.format(), key)
 	})
+
+	return n, err
 }
 
-func (ml mapLeafSequence) getValue(idx int) Value {
+func (ml mapLeafSequence) getValue(idx int) (Value, error) {
 	dec := ml.decoderSkipToIndex(idx)
-	dec.skipValue(ml.format())
+	err := dec.skipValue(ml.format())
+
+	if err != nil {
+		return nil, err
+	}
+
 	return dec.readValue(ml.format())
 }

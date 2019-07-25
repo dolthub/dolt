@@ -31,7 +31,7 @@ type Splice struct {
 	SpFrom    uint64
 }
 
-type EditDistanceEqualsFn func(prevIndex uint64, currentIndex uint64) bool
+type EditDistanceEqualsFn func(prevIndex uint64, currentIndex uint64) (bool, error)
 
 func (s Splice) String() string {
 	return fmt.Sprintf("[%d, %d, %d, %d]", s.SpAt, s.SpRemoved, s.SpAdded, s.SpFrom)
@@ -73,10 +73,19 @@ func addSplice(splices []Splice, s Splice) []Splice {
 	return splices
 }
 
-func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSize uint64, eqFn EditDistanceEqualsFn) []Splice {
+func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSize uint64, eqFn EditDistanceEqualsFn) ([]Splice, error) {
 	minLength := uint64Min(previousLength, currentLength)
-	prefixCount := sharedPrefix(eqFn, minLength)
-	suffixCount := sharedSuffix(eqFn, previousLength, currentLength, minLength-prefixCount)
+	prefixCount, err := sharedPrefix(eqFn, minLength)
+
+	if err != nil {
+		return nil, err
+	}
+
+	suffixCount, err := sharedSuffix(eqFn, previousLength, currentLength, minLength-prefixCount)
+
+	if err != nil {
+		return nil, err
+	}
 
 	previousStart := prefixCount
 	currentStart := prefixCount
@@ -84,24 +93,29 @@ func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSiz
 	currentEnd := currentLength - suffixCount
 
 	if (currentEnd-currentStart) == 0 && (previousEnd-previousStart) == 0 {
-		return []Splice{}
+		return []Splice{}, nil
 	}
 
 	if currentStart == currentEnd {
-		return []Splice{{previousStart, previousEnd - previousStart, 0, 0}}
+		return []Splice{{previousStart, previousEnd - previousStart, 0, 0}}, nil
 	} else if previousStart == previousEnd {
-		return []Splice{{previousStart, 0, currentEnd - currentStart, currentStart}}
+		return []Splice{{previousStart, 0, currentEnd - currentStart, currentStart}}, nil
 	}
 
 	previousLength = previousEnd - previousStart
 	currentLength = currentEnd - currentStart
 
 	if previousLength*currentLength > maxSpliceMatrixSize {
-		return []Splice{{0, previousLength, currentLength, 0}}
+		return []Splice{{0, previousLength, currentLength, 0}}, nil
 	}
 
 	splices := make([]Splice, 0)
-	distances := calcEditDistances(eqFn, previousStart, previousLength, currentStart, currentLength)
+	distances, err := calcEditDistances(eqFn, previousStart, previousLength, currentStart, currentLength)
+
+	if err != nil {
+		return nil, err
+	}
+
 	ops := operationsFromEditDistances(distances)
 
 	var splice *Splice
@@ -158,11 +172,10 @@ func calcSplices(previousLength uint64, currentLength uint64, maxSpliceMatrixSiz
 		splices = addSplice(splices, *splice)
 	}
 
-	return splices
+	return splices, nil
 }
 
-func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previousLen uint64,
-	currentStart uint64, currentLen uint64) [][]uint64 {
+func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previousLen uint64, currentStart uint64, currentLen uint64) ([][]uint64, error) {
 	// "Deletion" columns
 	rowCount := previousLen + 1
 	columnCount := currentLen + 1
@@ -186,7 +199,13 @@ func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previous
 
 	for i := uint64(1); i < rowCount; i++ {
 		for j := uint64(1); j < columnCount; j++ {
-			if eqFn(previousStart+i-1, currentStart+j-1) {
+			equal, err := eqFn(previousStart+i-1, currentStart+j-1)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if equal {
 				distances[i][j] = distances[i-1][j-1]
 			} else {
 				north := distances[i-1][j] + 1
@@ -196,7 +215,7 @@ func calcEditDistances(eqFn EditDistanceEqualsFn, previousStart uint64, previous
 		}
 	}
 
-	return distances
+	return distances, nil
 }
 
 func operationsFromEditDistances(distances [][]uint64) []uint64 {
@@ -244,25 +263,37 @@ func operationsFromEditDistances(distances [][]uint64) []uint64 {
 	return reverse(edits)
 }
 
-func sharedPrefix(eqFn EditDistanceEqualsFn, searchLength uint64) uint64 {
+func sharedPrefix(eqFn EditDistanceEqualsFn, searchLength uint64) (uint64, error) {
 	for i := uint64(0); i < searchLength; i++ {
-		if !eqFn(i, i) {
-			return i
+		equals, err := eqFn(i, i)
+
+		if err != nil {
+			return 0, err
+		}
+
+		if !equals {
+			return i, nil
 		}
 	}
 
-	return searchLength
+	return searchLength, nil
 }
 
-func sharedSuffix(eqFn EditDistanceEqualsFn, previousLength uint64, currentLength uint64, searchLength uint64) uint64 {
+func sharedSuffix(eqFn EditDistanceEqualsFn, previousLength uint64, currentLength uint64, searchLength uint64) (uint64, error) {
 	count := uint64(0)
-	previousLength--
-	currentLength--
-	for count < searchLength && eqFn(previousLength, currentLength) {
+	previousLength-
+		currentLength--
+	equals, err := eqFn(previousLength, currentLength)
+
+	if err != nil {
+		return 0, err
+	}
+
+	for count < searchLength && equals {
 		count++
 		previousLength--
 		currentLength--
 	}
 
-	return count
+	return count, nil
 }

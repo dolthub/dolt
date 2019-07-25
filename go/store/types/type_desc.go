@@ -11,8 +11,8 @@ import (
 // TypeDesc describes a type of the kind returned by Kind(), e.g. Map, Float, or a custom type.
 type TypeDesc interface {
 	Kind() NomsKind
-	walkValues(cb ValueCallback)
-	writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type)
+	walkValues(cb ValueCallback) error
+	writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) error
 
 	// isSimplifiedForSure is used to determine if the type should be
 	// simplified. It may contain false negatives.
@@ -36,11 +36,12 @@ func (p PrimitiveDesc) Kind() NomsKind {
 	return NomsKind(p)
 }
 
-func (p PrimitiveDesc) walkValues(cb ValueCallback) {
+func (p PrimitiveDesc) walkValues(cb ValueCallback) error {
+	return nil
 }
 
-func (p PrimitiveDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) {
-	NomsKind(p).writeTo(w, nbf)
+func (p PrimitiveDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) error {
+	return NomsKind(p).writeTo(w, nbf)
 }
 
 func (p PrimitiveDesc) isSimplifiedForSure() bool {
@@ -62,20 +63,38 @@ func (c CompoundDesc) Kind() NomsKind {
 	return c.kind
 }
 
-func (c CompoundDesc) walkValues(cb ValueCallback) {
+func (c CompoundDesc) walkValues(cb ValueCallback) error {
 	for _, t := range c.ElemTypes {
-		cb(t)
+		err := cb(t)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (c CompoundDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) {
-	c.kind.writeTo(w, nbf)
+func (c CompoundDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) error {
+	err := c.kind.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
 	if c.kind == UnionKind {
 		w.writeCount(uint64(len(c.ElemTypes)))
 	}
+
 	for _, t := range c.ElemTypes {
-		t.writeToAsType(w, seenStructs, nbf)
+		err := t.writeToAsType(w, seenStructs, nbf)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (c CompoundDesc) isSimplifiedForSure() bool {
@@ -105,25 +124,41 @@ func (s StructDesc) Kind() NomsKind {
 	return StructKind
 }
 
-func (s StructDesc) walkValues(cb ValueCallback) {
+func (s StructDesc) walkValues(cb ValueCallback) error {
 	for _, field := range s.fields {
-		cb(field.Type)
+		err := cb(field.Type)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (s StructDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) {
+func (s StructDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStructs map[string]*Type) error {
 	name := s.Name
 
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
-			CycleKind.writeTo(w, nbf)
+			err := CycleKind.writeTo(w, nbf)
+
+			if err != nil {
+				return err
+			}
+
 			w.writeString(name)
-			return
+			return nil
 		}
 		seenStructs[name] = t
 	}
 
-	StructKind.writeTo(w, nbf)
+	err := StructKind.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
 	w.writeString(name)
 	w.writeCount(uint64(s.Len()))
 
@@ -132,11 +167,17 @@ func (s StructDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStruc
 		w.writeString(field.Name)
 	}
 	for _, field := range s.fields {
-		field.Type.writeToAsType(w, seenStructs, nbf)
+		err := field.Type.writeToAsType(w, seenStructs, nbf)
+
+		if err != nil {
+			return err
+		}
 	}
 	for _, field := range s.fields {
 		w.writeBool(field.Optional)
 	}
+
+	return nil
 }
 
 func (s StructDesc) isSimplifiedForSure() bool {
@@ -186,10 +227,11 @@ func (c CycleDesc) Kind() NomsKind {
 	return CycleKind
 }
 
-func (c CycleDesc) walkValues(cb ValueCallback) {
+func (c CycleDesc) walkValues(cb ValueCallback) error {
+	return nil
 }
 
-func (c CycleDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStruct map[string]*Type) {
+func (c CycleDesc) writeTo(w nomsWriter, nbf *NomsBinFormat, t *Type, seenStruct map[string]*Type) error {
 	panic("Should not write cycle types")
 }
 

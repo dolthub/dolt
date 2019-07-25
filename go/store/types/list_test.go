@@ -721,16 +721,19 @@ func accumulateDiffSplices(l1, l2 List) (diff []Splice) {
 	return
 }
 
-func accumulateDiffSplicesWithLimit(l1, l2 List, maxSpliceMatrixSize uint64) (diff []Splice) {
+func accumulateDiffSplicesWithLimit(l1, l2 List, maxSpliceMatrixSize uint64) (diff []Splice, err error) {
 	diffChan := make(chan Splice)
+
 	go func() {
-		l1.DiffWithLimit(context.Background(), l2, diffChan, nil, maxSpliceMatrixSize)
+		err = l1.DiffWithLimit(context.Background(), l2, diffChan, nil, maxSpliceMatrixSize)
 		close(diffChan)
 	}()
+
 	for splice := range diffChan {
 		diff = append(diff, splice)
 	}
-	return diff
+
+	return diff, err
 }
 
 func TestListDiffIdentical(t *testing.T) {

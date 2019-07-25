@@ -13,19 +13,19 @@ import (
 
 type sequenceItem interface{}
 
-type compareFn func(x int, y int) bool
+type compareFn func(x int, y int) (bool, error)
 
 type sequence interface {
 	asValueImpl() valueImpl
-	cumulativeNumberOfLeaves(idx int) uint64
+	cumulativeNumberOfLeaves(idx int) (uint64, error)
 	Empty() bool
 	Equals(other Value) bool
 	format() *NomsBinFormat
-	getChildSequence(ctx context.Context, idx int) sequence
+	getChildSequence(ctx context.Context, idx int) (sequence, error)
 	getCompareFn(other sequence) compareFn
-	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence
-	getItem(idx int) sequenceItem
-	Hash(*NomsBinFormat) hash.Hash
+	getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error)
+	getItem(idx int) (sequenceItem, error)
+	Hash(*NomsBinFormat) (hash.Hash, error)
 	isLeaf() bool
 	Kind() NomsKind
 	Len() uint64
@@ -33,12 +33,12 @@ type sequence interface {
 	numLeaves() uint64
 	seqLen() int
 	treeLevel() uint64
-	typeOf() *Type
-	valueBytes(*NomsBinFormat) []byte
+	typeOf() (*Type, error)
+	valueBytes(*NomsBinFormat) ([]byte, error)
 	valueReadWriter() ValueReadWriter
-	valuesSlice(from, to uint64) []Value
-	WalkRefs(nbf *NomsBinFormat, cb RefCallback)
-	writeTo(nomsWriter, *NomsBinFormat)
+	valuesSlice(from, to uint64) ([]Value, error)
+	WalkRefs(nbf *NomsBinFormat, cb RefCallback) error
+	writeTo(nomsWriter, *NomsBinFormat) error
 }
 
 const (

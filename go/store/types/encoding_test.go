@@ -52,7 +52,8 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	assert.EqualValues(t, expectedAsByteSlice, w.data())
 
 	dec := newValueDecoder(expectedAsByteSlice, vs)
-	v2 := dec.readValue(Format_7_18)
+	v2, err := dec.readValue(Format_7_18)
+	assert.NoError(t, err)
 	assert.True(t, v.Equals(v2))
 }
 
@@ -60,7 +61,8 @@ func TestRoundTrips(t *testing.T) {
 	vs := newTestValueStore()
 
 	assertRoundTrips := func(v Value) {
-		out := DecodeValue(EncodeValue(v, Format_7_18), vs)
+		out, err := DecodeValue(EncodeValue(v, Format_7_18), vs)
+		assert.NoError(t, err)
 		assert.True(t, v.Equals(out))
 	}
 
@@ -346,7 +348,8 @@ func TestWriteStructTooMuchData(t *testing.T) {
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
-		decodeFromBytes(buff, newTestValueStore())
+		_, err := decodeFromBytes(buff, newTestValueStore())
+		assert.NoError(t, err)
 	})
 }
 
@@ -589,25 +592,26 @@ func TestWriteEmptyUnionList(t *testing.T) {
 
 type bogusType int
 
-func (bg bogusType) Value(ctx context.Context) Value                    { return bg }
-func (bg bogusType) Equals(other Value) bool                            { return false }
-func (bg bogusType) Less(nbf *NomsBinFormat, other LesserValuable) bool { return false }
-func (bg bogusType) Hash(*NomsBinFormat) hash.Hash                      { return hash.Hash{} }
-func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback)   {}
-func (bg bogusType) WalkRefs(nbf *NomsBinFormat, cb RefCallback)        {}
+func (bg bogusType) Value(ctx context.Context) (Value, error)               { return bg, nil }
+func (bg bogusType) Equals(other Value) bool                                { return false }
+func (bg bogusType) Less(nbf *NomsBinFormat, other LesserValuable) bool     { return false }
+func (bg bogusType) Hash(*NomsBinFormat) (hash.Hash, error)                 { return hash.Hash{}, nil }
+func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) error { return nil }
+func (bg bogusType) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error      { return nil }
 func (bg bogusType) Kind() NomsKind {
 	return CycleKind
 }
-func (bg bogusType) typeOf() *Type {
-	return MakeCycleType("ABC")
+func (bg bogusType) typeOf() (*Type, error) {
+	return MakeCycleType("ABC"), nil
 }
-func (bg bogusType) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+func (bg bogusType) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	panic("abc")
+	return nil
 }
 
 func TestBogusValueWithUnresolvedCycle(t *testing.T) {
 	g := bogusType(1)
-	assert.Panics(t, func() {
-		EncodeValue(g, Format_7_18)
-	})
+	_, err := EncodeValue(g, Format_7_18)
+
+	assert.Equal(t, err, ErrUnknownType)
 }

@@ -23,7 +23,7 @@ type valueRec struct {
 const maxRefCount = 1 << 12 // ~16MB of data
 
 // WalkValues recursively walks over all types.Values reachable from r and calls cb on them.
-func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueReader, cb SkipValueCallback) {
+func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueReader, cb SkipValueCallback) error {
 	visited := hash.HashSet{}
 	refs := map[hash.Hash]bool{}
 	values := []valueRec{{target, true}}
@@ -48,15 +48,27 @@ func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueR
 			}
 
 			if col, ok := v.(Collection); ok && !col.asSequence().isLeaf() {
-				col.WalkRefs(nbf, func(r Ref) {
+				err := col.WalkRefs(nbf, func(r Ref) error {
 					refs[r.TargetHash()] = false
+					return nil
 				})
+
+				if err != nil {
+					return err
+				}
+
 				continue
 			}
 
-			v.WalkValues(ctx, func(sv Value) {
+			err := v.WalkValues(ctx, func(sv Value) error {
 				values = append(values, valueRec{sv, true})
+
+				return nil
 			})
+
+			if err != nil {
+				return err
+			}
 		}
 
 		if len(refs) == 0 {
@@ -81,10 +93,17 @@ func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueR
 		}
 
 		if len(hs) > 0 {
-			readValues := vr.ReadManyValues(ctx, hs)
+			readValues, err := vr.ReadManyValues(ctx, hs)
+
+			if err != nil {
+				return err
+			}
+
 			for i, sv := range readValues {
 				values = append(values, valueRec{sv, oldRefs[hs[i]]})
 			}
 		}
 	}
+
+	return nil
 }

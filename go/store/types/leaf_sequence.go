@@ -19,12 +19,17 @@ func newLeafSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uin
 	return leafSequence{newSequenceImpl(vrw, buff, offsets, len)}
 }
 
-func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) leafSequence {
+func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) (leafSequence, error) {
 	d.PanicIfTrue(vrw == nil)
 	w := newBinaryNomsWriter()
 	offsets := make([]uint32, len(vs)+sequencePartValues+1)
 	offsets[sequencePartKind] = w.offset
-	kind.writeTo(&w, vrw.Format())
+	err := kind.writeTo(&w, vrw.Format())
+
+	if err != nil {
+		return leafSequence{}, err
+	}
+
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -32,17 +37,22 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) 
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	for i, v := range vs {
-		v.writeTo(&w, vrw.Format())
+		err := v.writeTo(&w, vrw.Format())
+
+		if err != nil {
+			return leafSequence{}, err
+		}
+
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return newLeafSequence(vrw, w.data(), offsets, count)
+	return newLeafSequence(vrw, w.data(), offsets, count), nil
 }
 
-func (seq leafSequence) values() []Value {
+func (seq leafSequence) values() ([]Value, error) {
 	return seq.valuesSlice(0, math.MaxUint64)
 }
 
-func (seq leafSequence) valuesSlice(from, to uint64) []Value {
+func (seq leafSequence) valuesSlice(from, to uint64) ([]Value, error) {
 	if len := seq.Len(); to > len {
 		to = len
 	}
@@ -50,19 +60,36 @@ func (seq leafSequence) valuesSlice(from, to uint64) []Value {
 	dec := seq.decoderSkipToIndex(int(from))
 	vs := make([]Value, (to-from)*uint64(getValuesPerIdx(seq.Kind())))
 	for i := range vs {
-		vs[i] = dec.readValue(seq.format())
+		var err error
+		vs[i], err = dec.readValue(seq.format())
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	return vs
+	return vs, nil
 }
 
 func (seq leafSequence) getCompareFnHelper(other leafSequence) compareFn {
 	dec := seq.decoder()
 	otherDec := other.decoder()
 
-	return func(idx, otherIdx int) bool {
+	return func(idx, otherIdx int) (bool, error) {
 		dec.offset = uint32(seq.getItemOffset(idx))
 		otherDec.offset = uint32(other.getItemOffset(otherIdx))
-		return dec.readValue(seq.format()).Equals(otherDec.readValue(seq.format()))
+		val, err := dec.readValue(seq.format())
+
+		if err != nil {
+			return false, err
+		}
+
+		otherVal, err := otherDec.readValue(seq.format())
+
+		if err != nil {
+			return false, err
+		}
+
+		return val.Equals(otherVal), nil
 	}
 }
 
@@ -70,7 +97,7 @@ func (seq leafSequence) getCompareFn(other sequence) compareFn {
 	panic("unreachable")
 }
 
-func (seq leafSequence) typeOf() *Type {
+func (seq leafSequence) typeOf() (*Type, error) {
 	dec := seq.decoder()
 	kind := dec.readKind()
 	dec.skipCount() // level
@@ -80,25 +107,48 @@ func (seq leafSequence) typeOf() *Type {
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(seq.format(), lastType) {
+			sameType, err := dec.isValueSameTypeForSure(seq.format(), lastType)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if sameType {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue(seq.format())
+		var err error
+		lastType, err = dec.readTypeOfValue(seq.format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		if lastType.Kind() == UnknownKind {
+			// if any of the elements are unknown, return unknown
+			return nil, ErrUnknownType
+		}
+
 		ts = append(ts, lastType)
 	}
 
-	return makeCompoundType(kind, makeUnionType(ts...))
+	t, err := makeUnionType(ts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return makeCompoundType(kind, t)
 }
 
 func (seq leafSequence) numLeaves() uint64 {
 	return seq.len
 }
 
-func (seq leafSequence) getChildSequence(ctx context.Context, idx int) sequence {
-	return nil
+func (seq leafSequence) getChildSequence(ctx context.Context, idx int) (sequence, error) {
+	return nil, nil
 }
 
 func (seq leafSequence) treeLevel() uint64 {
@@ -109,15 +159,15 @@ func (seq leafSequence) isLeaf() bool {
 	return true
 }
 
-func (seq leafSequence) cumulativeNumberOfLeaves(idx int) uint64 {
-	return uint64(idx) + 1
+func (seq leafSequence) cumulativeNumberOfLeaves(idx int) (uint64, error) {
+	return uint64(idx) + 1, nil
 }
 
-func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence {
+func (seq leafSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error) {
 	panic("getCompositeChildSequence called on a leaf sequence")
 }
 
-func (seq leafSequence) getItem(idx int) sequenceItem {
+func (seq leafSequence) getItem(idx int) (sequenceItem, error) {
 	dec := seq.decoderSkipToIndex(idx)
 	return dec.readValue(seq.format())
 }

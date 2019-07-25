@@ -15,6 +15,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func assertSubtype(ctx context.Context, nbf *NomsBinFormat, t *Type, v Value) {
+	is, err := IsValueSubtypeOf(nbf, v, t)
+	d.PanicIfError(err)
+
+	if !is {
+		d.Panic("Invalid type. %s is not a subtype of %s", TypeOf(v).Describe(ctx), t.Describe(ctx))
+	}
+}
+
 func assertInvalid(tt *testing.T, t *Type, v Value) {
 	assert := assert.New(tt)
 	assert.Panics(func() {

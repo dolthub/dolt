@@ -21,8 +21,8 @@ func IsNull(val Value) bool {
 type Null byte
 
 // Value interface
-func (v Null) Value(ctx context.Context) Value {
-	return v
+func (v Null) Value(ctx context.Context) (Value, error) {
+	return v, nil
 }
 
 func (v Null) Equals(other Value) bool {
@@ -33,18 +33,20 @@ func (v Null) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	return NullKind < other.Kind()
 }
 
-func (v Null) Hash(nbf *NomsBinFormat) hash.Hash {
+func (v Null) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(NullValue, nbf)
 }
 
-func (v Null) WalkValues(ctx context.Context, cb ValueCallback) {
+func (v Null) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return nil
 }
 
-func (v Null) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+func (v Null) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	return nil
 }
 
-func (v Null) typeOf() *Type {
-	return NullType
+func (v Null) typeOf() (*Type, error) {
+	return NullType, nil
 }
 
 func (v Null) Kind() NomsKind {
@@ -55,13 +57,18 @@ func (v Null) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Null) writeTo(w nomsWriter, nbf *NomsBinFormat) {
-	NullKind.writeTo(w, nbf)
+func (v Null) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	return NullKind.writeTo(w, nbf)
 }
 
-func (v Null) valueBytes(nbf *NomsBinFormat) []byte {
+func (v Null) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
 	buff := make([]byte, 1)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w, nbf)
-	return buff
+	err := v.writeTo(&w, nbf)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buff, nil
 }

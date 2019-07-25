@@ -15,7 +15,7 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
-var EmptyStructType = MakeStructType("")
+var EmptyStructType, _ = MakeStructType("")
 
 func EmptyStruct(nbf *NomsBinFormat) Struct {
 	return newStruct(nbf, "", nil, nil)
@@ -28,62 +28,90 @@ type Struct struct {
 }
 
 // readStruct reads the data provided by a decoder and moves the decoder forward.
-func readStruct(nbf *NomsBinFormat, dec *valueDecoder) Struct {
+func readStruct(nbf *NomsBinFormat, dec *valueDecoder) (Struct, error) {
 	start := dec.pos()
-	skipStruct(nbf, dec)
+	err := skipStruct(nbf, dec)
+
+	if err != nil {
+		return EmptyStruct(nbf), err
+	}
+
 	end := dec.pos()
-	return Struct{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}
+	return Struct{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
 }
 
-func skipStruct(nbf *NomsBinFormat, dec *valueDecoder) {
+func skipStruct(nbf *NomsBinFormat, dec *valueDecoder) error {
 	dec.skipKind()
 	dec.skipString() // name
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		dec.skipValue(nbf)
+		err := dec.skipValue(nbf)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func isStructSameTypeForSure(nbf *NomsBinFormat, dec *valueDecoder, t *Type) bool {
+func isStructSameTypeForSure(nbf *NomsBinFormat, dec *valueDecoder, t *Type) (bool, error) {
 	desc := t.Desc.(StructDesc)
 	dec.skipKind()
 	if !dec.isStringSame(desc.Name) {
-		return false
+		return false, nil
 	}
 	count := dec.readCount()
 	if count != uint64(len(desc.fields)) {
-		return false
+		return false, nil
 	}
 	for i := uint64(0); i < count; i++ {
 		if desc.fields[i].Optional {
-			return false
+			return false, nil
 		}
 		if !dec.isStringSame(desc.fields[i].Name) {
-			return false
+			return false, nil
 		}
 
-		if !dec.isValueSameTypeForSure(nbf, desc.fields[i].Type) {
-			return false
+		isSame, err := dec.isValueSameTypeForSure(nbf, desc.fields[i].Type)
+
+		if err != nil {
+			return false, err
+		}
+
+		if !isSame {
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
-func walkStruct(nbf *NomsBinFormat, r *refWalker, cb RefCallback) {
+func walkStruct(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	r.skipKind()
 	r.skipString() // name
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
 		r.skipString()
-		r.walkValue(nbf, cb)
+		err := r.walkValue(nbf, cb)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func newStruct(nbf *NomsBinFormat, name string, fieldNames []string, values []Value) Struct {
+func newStruct(nbf *NomsBinFormat, name string, fieldNames []string, values []Value) (Struct, error) {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	StructKind.writeTo(&w, nbf)
+	err := StructKind.writeTo(&w, nbf)
+
+	if err != nil {
+		return EmptyStruct(nbf), err
+	}
+
 	w.writeString(name)
 	w.writeCount(uint64(len(fieldNames)))
 	for i := 0; i < len(fieldNames); i++ {
@@ -91,12 +119,16 @@ func newStruct(nbf *NomsBinFormat, name string, fieldNames []string, values []Va
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(&w, nbf)
+		err := values[i].writeTo(&w, nbf)
+
+		if err != nil {
+			return EmptyStruct(nbf), err
+		}
 	}
-	return Struct{valueImpl{vrw, nbf, w.data(), nil}}
+	return Struct{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
-func NewStruct(nbf *NomsBinFormat, name string, data StructData) Struct {
+func NewStruct(nbf *NomsBinFormat, name string, data StructData) (Struct, error) {
 	verifyStructName(name)
 	fieldNames := make([]string, len(data))
 	values := make([]Value, len(data))
@@ -147,7 +179,7 @@ func MakeStructTemplate(name string, fieldNames []string) (t StructTemplate) {
 
 // NewStruct creates a new Struct from the StructTemplate. The order of the
 // values must match the order of the field names of the StructTemplate.
-func (st StructTemplate) NewStruct(nbf *NomsBinFormat, values []Value) Struct {
+func (st StructTemplate) NewStruct(nbf *NomsBinFormat, values []Value) (Struct, error) {
 	d.PanicIfFalse(len(st.fieldNames) == len(values))
 	return newStruct(nbf, st.name, st.fieldNames, values)
 }
@@ -157,35 +189,54 @@ func (s Struct) Empty() bool {
 }
 
 // Value interface
-func (s Struct) Value(ctx context.Context) Value {
-	return s
+func (s Struct) Value(ctx context.Context) (Value, error) {
+	return s, nil
 }
 
-func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) {
+func (s Struct) WalkValues(ctx context.Context, cb ValueCallback) error {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
 		dec.skipString()
-		cb(dec.readValue(s.format()))
+		v, err := dec.readValue(s.format())
+
+		if err != nil {
+			return err
+		}
+
+		err = cb(v)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (s Struct) typeOf() *Type {
+func (s Struct) typeOf() (*Type, error) {
 	dec := s.decoder()
 	return readStructTypeOfValue(s.format(), &dec)
 }
 
-func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) *Type {
+func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) (*Type, error) {
 	dec.skipKind()
 	name := dec.readString()
 	count := dec.readCount()
 	typeFields := make(structTypeFields, count)
 	for i := uint64(0); i < count; i++ {
+		t, err := dec.readTypeOfValue(nbf)
+
+		if err != nil {
+			return nil, err
+		}
+
 		typeFields[i] = StructField{
 			Name:     dec.readString(),
 			Optional: false,
-			Type:     dec.readTypeOfValue(nbf),
+			Type:     t,
 		}
 	}
+
 	return makeStructTypeQuickly(name, typeFields)
 }
 
@@ -212,22 +263,34 @@ func (s Struct) Name() string {
 
 // IterFields iterates over the fields, calling cb for every field in the
 // struct.
-func (s Struct) IterFields(cb func(name string, value Value)) {
+func (s Struct) IterFields(cb func(name string, value Value) error) error {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		cb(dec.readString(), dec.readValue(s.format()))
+		val, err := dec.readValue(s.format())
+
+		if err != nil {
+			return err
+		}
+
+		err = cb(dec.readString(), val)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 type structPartCallbacks interface {
 	name(ctx context.Context, n string)
 	count(c uint64)
 	fieldName(n string)
-	fieldValue(ctx context.Context, v Value)
+	fieldValue(ctx context.Context, v Value) error
 	end()
 }
 
-func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) {
+func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) error {
 	dec := s.decoder()
 	dec.skipKind()
 	cbs.name(ctx, dec.readString())
@@ -235,48 +298,64 @@ func (s Struct) iterParts(ctx context.Context, cbs structPartCallbacks) {
 	cbs.count(count)
 	for i := uint64(0); i < count; i++ {
 		cbs.fieldName(dec.readString())
-		cbs.fieldValue(ctx, dec.readValue(s.format()))
+		val, err := dec.readValue(s.format())
+
+		if err != nil {
+			return err
+		}
+
+		err = cbs.fieldValue(ctx, val)
+
+		if err != nil {
+			return err
+		}
 	}
 	cbs.end()
+	return nil
 }
 
 // MaybeGet returns the value of a field in the struct. If the struct does not a have a field with
 // the name name then this returns (nil, false).
-func (s Struct) MaybeGet(n string) (v Value, found bool) {
+func (s Struct) MaybeGet(n string) (v Value, found bool, err error) {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
 		name := dec.readString()
 		if name == n {
 			found = true
-			v = dec.readValue(s.format())
-			return
+			v, err = dec.readValue(s.format())
+
+			if err != nil {
+				return nil, false, err
+			}
+
+			return v, found, nil
 		}
+
 		if name > n {
 			return
 		}
-		dec.skipValue(s.format())
+
+		err = dec.skipValue(s.format())
+
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
-	return
-}
-
-// Get returns the value of a field in the struct. If the struct does not a have a field with the
-// name name then this panics.
-func (s Struct) Get(n string) Value {
-	v, ok := s.MaybeGet(n)
-	if !ok {
-		d.Chk.Fail(fmt.Sprintf(`Struct has no field "%s"`, n))
-	}
-	return v
+	return v, found, nil
 }
 
 // Set returns a new struct where the field name has been set to value. If name is not an
 // existing field in the struct or the type of value is different from the old value of the
 // struct field a new struct type is created.
-func (s Struct) Set(n string, v Value) Struct {
+func (s Struct) Set(n string, v Value) (Struct, error) {
 	verifyFieldName(n)
 
-	prolog, head, tail, count, found := s.splitFieldsAt(n)
+	prolog, head, tail, count, found, err := s.splitFieldsAt(n)
+
+	if err != nil {
+		return EmptyStruct(s.Format()), err
+	}
 
 	w := binaryNomsWriter{make([]byte, len(s.buff)), 0}
 	w.writeRaw(prolog)
@@ -287,15 +366,20 @@ func (s Struct) Set(n string, v Value) Struct {
 	w.writeCount(count)
 	w.writeRaw(head)
 	w.writeString(n)
-	v.writeTo(&w, s.format())
+	err = v.writeTo(&w, s.format())
+
+	if err != nil {
+		return EmptyStruct(s.Format()), err
+	}
+
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}
+	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}, nil
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
 // and the fields coming after it.
-func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uint64, found bool) {
+func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uint64, found bool, err error) {
 	dec := s.decoder()
 	dec.skipKind()
 	dec.skipString()
@@ -306,7 +390,11 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 	for i := uint64(0); i < count; i++ {
 		beforeCurrent := dec.offset
 		fn := dec.readString()
-		dec.skipValue(s.format())
+		err = dec.skipValue(s.format())
+
+		if err != nil {
+			return nil, nil, nil, 0, false, err
+		}
 
 		if fn == name {
 			found = true
@@ -326,15 +414,20 @@ func (s Struct) splitFieldsAt(name string) (prolog, head, tail []byte, count uin
 		head = dec.buff[fieldsOffset:dec.offset]
 	}
 
-	return
+	return prolog, head, tail, count, found, nil
 }
 
 // Delete returns a new struct where the field name has been removed.
 // If name is not an existing field in the struct then the current struct is returned.
-func (s Struct) Delete(n string) Struct {
-	prolog, head, tail, count, found := s.splitFieldsAt(n)
+func (s Struct) Delete(n string) (Struct, error) {
+	prolog, head, tail, count, found, err := s.splitFieldsAt(n)
+
+	if err != nil {
+		return EmptyStruct(s.nbf), err
+	}
+
 	if !found {
-		return s
+		return s, nil
 	}
 
 	w := binaryNomsWriter{make([]byte, len(s.buff)), 0}
@@ -343,7 +436,7 @@ func (s Struct) Delete(n string) Struct {
 	w.writeRaw(head)
 	w.writeRaw(tail)
 
-	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}
+	return Struct{valueImpl{s.vrw, s.format(), w.data(), nil}}, nil
 }
 
 func (s Struct) Diff(last Struct, changes chan<- ValueChanged, closeChan <-chan struct{}) {

@@ -13,8 +13,8 @@ const (
 
 type UUID uuid.UUID
 
-func (v UUID) Value(ctx context.Context) Value {
-	return v
+func (v UUID) Value(ctx context.Context) (Value, error) {
+	return v, nil
 }
 
 func (v UUID) Equals(other Value) bool {
@@ -37,18 +37,20 @@ func (v UUID) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	return UUIDKind < other.Kind()
 }
 
-func (v UUID) Hash(nbf *NomsBinFormat) hash.Hash {
+func (v UUID) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(v, nbf)
 }
 
-func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) {
+func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return nil
 }
 
-func (v UUID) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+func (v UUID) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	return nil
 }
 
-func (v UUID) typeOf() *Type {
-	return UUIDType
+func (v UUID) typeOf() (*Type, error) {
+	return UUIDType, nil
 }
 
 func (v UUID) Kind() NomsKind {
@@ -59,15 +61,21 @@ func (v UUID) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v UUID) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+func (v UUID) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	id := UUID(v)
 	byteSl := id[:]
-	UUIDKind.writeTo(w, nbf)
+	err := UUIDKind.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
 	w.writeBytes(byteSl)
+	return nil
 }
 
-func (v UUID) valueBytes(nbf *NomsBinFormat) []byte {
-	return v[:]
+func (v UUID) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
+	return v[:], nil
 }
 
 func (v UUID) String() string {

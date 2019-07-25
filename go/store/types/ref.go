@@ -25,22 +25,39 @@ const (
 	refPartEnd
 )
 
-func NewRef(v Value, nbf *NomsBinFormat) Ref {
-	return constructRef(nbf, v.Hash(nbf), TypeOf(v), maxChunkHeight(nbf, v)+1)
+func NewRef(v Value, nbf *NomsBinFormat) (Ref, error) {
+	h, err := v.Hash(nbf)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
+	mch, err := maxChunkHeight(nbf, v)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
+	return constructRef(nbf, h, TypeOf(v), mch+1)
 }
 
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
 // with the type 'Ref<Value>'.
-func ToRefOfValue(r Ref, nbf *NomsBinFormat) Ref {
+func ToRefOfValue(r Ref, nbf *NomsBinFormat) (Ref, error) {
 	return constructRef(nbf, r.TargetHash(), ValueType, r.Height())
 }
 
-func constructRef(nbf *NomsBinFormat, targetHash hash.Hash, targetType *Type, height uint64) Ref {
+func constructRef(nbf *NomsBinFormat, targetHash hash.Hash, targetType *Type, height uint64) (Ref, error) {
 	w := newBinaryNomsWriter()
 
 	offsets := make([]uint32, refPartEnd)
 	offsets[refPartKind] = w.offset
-	RefKind.writeTo(&w, nbf)
+	err := RefKind.writeTo(&w, nbf)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
 	offsets[refPartTargetHash] = w.offset
 	w.writeHash(targetHash)
 	offsets[refPartTargetType] = w.offset
@@ -48,38 +65,55 @@ func constructRef(nbf *NomsBinFormat, targetHash hash.Hash, targetType *Type, he
 	offsets[refPartHeight] = w.offset
 	w.writeCount(height)
 
-	return Ref{valueImpl{nil, nbf, w.data(), offsets}}
+	return Ref{valueImpl{nil, nbf, w.data(), offsets}}, nil
 }
 
 // readRef reads the data provided by a reader and moves the reader forward.
-func readRef(nbf *NomsBinFormat, dec *typedBinaryNomsReader) Ref {
+func readRef(nbf *NomsBinFormat, dec *typedBinaryNomsReader) (Ref, error) {
 	start := dec.pos()
-	offsets := skipRef(dec)
+	offsets, err := skipRef(dec)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
 	end := dec.pos()
-	return Ref{valueImpl{nil, nbf, dec.byteSlice(start, end), offsets}}
+	return Ref{valueImpl{nil, nbf, dec.byteSlice(start, end), offsets}}, nil
 }
 
 // skipRef moves the reader forward, past the data representing the Ref, and returns the offsets of the component parts.
-func skipRef(dec *typedBinaryNomsReader) []uint32 {
+func skipRef(dec *typedBinaryNomsReader) ([]uint32, error) {
 	offsets := make([]uint32, refPartEnd)
 	offsets[refPartKind] = dec.pos()
 	dec.skipKind()
 	offsets[refPartTargetHash] = dec.pos()
 	dec.skipHash() // targetHash
 	offsets[refPartTargetType] = dec.pos()
-	dec.skipType() // targetType
+	err := dec.skipType() // targetType
+
+	if err != nil {
+		return nil, err
+	}
+
 	offsets[refPartHeight] = dec.pos()
 	dec.skipCount() // height
-	return offsets
+	return offsets, nil
 }
 
-func maxChunkHeight(nbf *NomsBinFormat, v Value) (max uint64) {
-	v.WalkRefs(nbf, func(r Ref) {
+func maxChunkHeight(nbf *NomsBinFormat, v Value) (max uint64, err error) {
+	err = v.WalkRefs(nbf, func(r Ref) error {
 		if height := r.Height(); height > max {
 			max = height
 		}
+
+		return nil
 	})
-	return
+
+	if err != nil {
+		return 0, err
+	}
+
+	return max, nil
 }
 
 func (r Ref) offsetAtPart(part refPart) uint32 {
@@ -105,25 +139,32 @@ func (r Ref) Height() uint64 {
 	return dec.readCount()
 }
 
-func (r Ref) TargetValue(ctx context.Context, vr ValueReader) Value {
+func (r Ref) TargetValue(ctx context.Context, vr ValueReader) (Value, error) {
 	return vr.ReadValue(ctx, r.TargetHash())
 }
 
-func (r Ref) TargetType() *Type {
+func (r Ref) TargetType() (*Type, error) {
 	dec := r.decoderAtPart(refPartTargetType)
 	return dec.readType()
 }
 
 // Value interface
-func (r Ref) Value(ctx context.Context) Value {
-	return r
+func (r Ref) Value(ctx context.Context) (Value, error) {
+	return r, nil
 }
 
-func (r Ref) WalkValues(ctx context.Context, cb ValueCallback) {
+func (r Ref) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return nil
 }
 
-func (r Ref) typeOf() *Type {
-	return makeCompoundType(RefKind, r.TargetType())
+func (r Ref) typeOf() (*Type, error) {
+	t, err := r.TargetType()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return makeCompoundType(RefKind, t)
 }
 
 func (r Ref) isSameTargetType(other Ref) bool {

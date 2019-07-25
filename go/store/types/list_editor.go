@@ -6,6 +6,7 @@ package types
 
 import (
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"sync"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
@@ -24,23 +25,31 @@ func (le *ListEditor) Kind() NomsKind {
 	return ListKind
 }
 
-func (le *ListEditor) Value(ctx context.Context) Value {
+func (le *ListEditor) Value(ctx context.Context) (Value, error) {
 	return le.List(ctx)
 }
 
-func (le *ListEditor) List(ctx context.Context) List {
+func (le *ListEditor) List(ctx context.Context) (List, error) {
 	if le.edits == nil {
-		return le.l // no edits
+		return le.l, nil // no edits
 	}
 
 	seq := le.l.sequence
 	vrw := seq.valueReadWriter()
 
+	ae := nbs.NewAtomicError()
 	cursChan := make(chan chan *sequenceCursor)
 	spliceChan := make(chan chan listEdit)
 
 	go func() {
+		defer close(cursChan)
+		defer close(spliceChan)
+
 		for edit := le.edits; edit != nil; edit = edit.next {
+			if ae.IsSet() {
+				break
+			}
+
 			edit := edit
 
 			// TODO: Use ReadMany
@@ -48,7 +57,14 @@ func (le *ListEditor) List(ctx context.Context) List {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtIndex(ctx, seq, edit.idx)
+				defer close(cc)
+
+				cur, err := newCursorAtIndex(ctx, seq, edit.idx)
+
+				if ae.SetIfError(err) {
+					return
+				}
+				cc <- cur
 			}()
 
 			sc := make(chan listEdit, 1)
@@ -65,10 +81,14 @@ func (le *ListEditor) List(ctx context.Context) List {
 				idx, val := i, v
 				wg.Add(1)
 				go func() {
-					edit.inserted[idx] = val.Value(ctx)
-					wg.Done()
+					defer wg.Done()
+
+					var err error
+					edit.inserted[idx], err = val.Value(ctx)
+					ae.SetIfError(err)
 				}()
 			}
+
 			if !subEditors {
 				sc <- *edit
 				continue
@@ -79,20 +99,35 @@ func (le *ListEditor) List(ctx context.Context) List {
 				sc <- *edit
 			}()
 		}
-
-		close(cursChan)
-		close(spliceChan)
 	}()
 
 	var ch *sequenceChunker
 	for cc := range cursChan {
-		cur := <-cc
-		sp := <-<-spliceChan
+		cur, ok := <-cc
 
+		if !ok || ae.IsSet() {
+			continue // drain
+		}
+
+		if cur == nil {
+			return EmptyList, ae.Get()
+		}
+
+		sp, ok := <-<-spliceChan
+
+		if !ok || ae.IsSet() {
+			continue // drain
+		}
+
+		var err error
 		if ch == nil {
-			ch = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+			ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
 		} else {
-			ch.advanceTo(ctx, cur)
+			err = ch.advanceTo(ctx, cur)
+		}
+
+		if ae.SetIfError(err) {
+			continue
 		}
 
 		dc := sp.removed
@@ -106,11 +141,25 @@ func (le *ListEditor) List(ctx context.Context) List {
 				continue
 			}
 
-			ch.Append(ctx, v)
+			_, err := ch.Append(ctx, v)
+
+			if ae.SetIfError(err) {
+				break
+			}
 		}
 	}
 
-	return newList(ch.Done(ctx))
+	if err := ae.Get(); err != nil {
+		return EmptyList, err
+	}
+
+	seq, err := ch.Done(ctx)
+
+	if err != nil {
+		return EmptyList, err
+	}
+
+	return newList(seq), nil
 }
 
 func collapseListEdit(newEdit, edit *listEdit) bool {
@@ -254,7 +303,7 @@ func adjustIdx(idx uint64, e *listEdit) uint64 {
 	return idx + e.removed - uint64(len(e.inserted))
 }
 
-func (le *ListEditor) Get(ctx context.Context, idx uint64) Valuable {
+func (le *ListEditor) Get(ctx context.Context, idx uint64) (Valuable, error) {
 	edit := le.edits
 	for edit != nil {
 		if edit.idx > idx {
@@ -264,7 +313,7 @@ func (le *ListEditor) Get(ctx context.Context, idx uint64) Valuable {
 
 		if edit.idx <= idx && idx < (edit.idx+uint64(len(edit.inserted))) {
 			// idx is within the insert values of edit
-			return edit.inserted[idx-edit.idx]
+			return edit.inserted[idx-edit.idx], nil
 		}
 
 		idx = adjustIdx(idx, edit)

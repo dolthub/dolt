@@ -14,8 +14,8 @@ import (
 type Bool bool
 
 // Value interface
-func (b Bool) Value(ctx context.Context) Value {
-	return b
+func (b Bool) Value(ctx context.Context) (Value, error) {
+	return b, nil
 }
 
 func (b Bool) Equals(other Value) bool {
@@ -29,18 +29,20 @@ func (b Bool) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	return true
 }
 
-func (b Bool) Hash(nbf *NomsBinFormat) hash.Hash {
+func (b Bool) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(b, nbf)
 }
 
-func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) {
+func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return nil
 }
 
-func (b Bool) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+func (b Bool) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	return nil
 }
 
-func (b Bool) typeOf() *Type {
-	return BoolType
+func (b Bool) typeOf() (*Type, error) {
+	return BoolType, nil
 }
 
 func (b Bool) Kind() NomsKind {
@@ -51,14 +53,21 @@ func (b Bool) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (b Bool) writeTo(w nomsWriter, nbf *NomsBinFormat) {
-	BoolKind.writeTo(w, nbf)
+func (b Bool) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	err := BoolKind.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
 	w.writeBool(bool(b))
+
+	return nil
 }
 
-func (b Bool) valueBytes(nbf *NomsBinFormat) []byte {
+func (b Bool) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
 	if bool(b) {
-		return []byte{byte(BoolKind), 1}
+		return []byte{byte(BoolKind), 1}, nil
 	}
-	return []byte{byte(BoolKind), 0}
+	return []byte{byte(BoolKind), 0}, nil
 }

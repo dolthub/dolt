@@ -171,10 +171,10 @@ func (w *hexWriter) Write(p []byte) (n int, err error) {
 	return
 }
 
-func (w *hrsWriter) Write(ctx context.Context, v Value) {
+func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	if v == nil {
 		w.write("nil")
-		return
+		return nil
 	}
 
 	switch v.Kind() {
@@ -197,27 +197,59 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) {
 		w.write("[")
 		w.writeSize(v)
 		w.indent()
-		v.(List).Iter(ctx, func(v Value, i uint64) bool {
+
+		var err error
+		iterErr := v.(List).Iter(ctx, func(v Value, i uint64) bool {
 			if i == 0 {
 				w.newLine()
 			}
-			w.Write(ctx, v)
+
+			err = w.Write(ctx, v)
+
+			if err != nil {
+				return true
+			}
+
 			w.write(",")
 			w.newLine()
-			return w.err != nil
+			err = w.err
+
+			return err != nil
 		})
+
+		if err != nil {
+			return err
+		}
+
+		if iterErr != nil {
+			return iterErr
+		}
+
 		w.outdent()
 		w.write("]")
 
 	case TupleKind:
 		w.write("(")
+		var err error
 		v.(Tuple).IterFields(func(i uint64, v Value) bool {
 			if i != 0 {
 				w.write(",")
 			}
-			w.Write(ctx, v)
-			return w.err != nil
+
+			err = w.Write(ctx, v)
+
+			if err != nil {
+				return true
+			}
+
+			err = w.err
+			return err != nil
 		})
+
+		if err != nil {
+			return err
+		}
+
 		w.outdent()
 		w.write(")")
 
@@ -228,14 +260,35 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) {
 		if !v.(Map).Empty() {
 			w.newLine()
 		}
-		v.(Map).Iter(ctx, func(key, val Value) bool {
-			w.Write(ctx, key)
+
+		err := v.(Map).Iter(ctx, func(key, val Value) (bool, error) {
+			err := w.Write(ctx, key)
+
+			if err != nil {
+				return false, err
+			}
+
 			w.write(": ")
-			w.Write(ctx, val)
+			err = w.Write(ctx, val)
+
+			if err != nil {
+				return false, err
+			}
+
 			w.write(",")
 			w.newLine()
-			return w.err != nil
+
+			if w.err != nil {
+				return false, w.err
+			}
+
+			return false, nil
 		})
+
+		if err != nil {
+			return err
+		}
+
 		w.outdent()
 		w.write("}")
 
@@ -250,12 +303,28 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) {
 		if !v.(Set).Empty() {
 			w.newLine()
 		}
-		v.(Set).Iter(ctx, func(v Value) bool {
-			w.Write(ctx, v)
+
+		err := v.(Set).Iter(ctx, func(v Value) (bool, error) {
+			err := w.Write(ctx, v)
+
+			if err != nil {
+				return false, err
+			}
+
 			w.write(",")
 			w.newLine()
-			return w.err != nil
+
+			if w.err != nil {
+				return false, err
+			}
+
+			return false, nil
 		})
+
+		if err != nil {
+			return err
+		}
+
 		w.outdent()
 		w.write("}")
 
@@ -280,8 +349,10 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) {
 		w.write("null_value")
 
 	default:
-		panic("unreachable")
+		return ErrUnknownType
 	}
+
+	return nil
 }
 
 type hrsStructWriter struct {
@@ -318,10 +389,17 @@ func (w hrsStructWriter) fieldName(n string) {
 	w.write(": ")
 }
 
-func (w hrsStructWriter) fieldValue(ctx context.Context, v Value) {
-	w.Write(ctx, v)
+func (w hrsStructWriter) fieldValue(ctx context.Context, v Value) error {
+	err := w.Write(ctx, v)
+
+	if err != nil {
+		return err
+	}
+
 	w.write(",")
 	w.newLine()
+
+	return nil
 }
 
 func (w hrsStructWriter) end() {
@@ -426,44 +504,63 @@ func (w *hrsWriter) writeStructType(t *Type, seenStructs map[*Type]struct{}) {
 	w.write("}")
 }
 
-func encodedValueFormatMaxLines(ctx context.Context, v Value, floatFormat byte, maxLines uint32) string {
+func encodedValueFormatMaxLines(ctx context.Context, v Value, floatFormat byte, maxLines uint32) (string, error) {
 	var buf bytes.Buffer
 	mlw := &writers.MaxLineWriter{Dest: &buf, MaxLines: maxLines}
 	w := &hrsWriter{w: mlw, floatFormat: floatFormat}
-	w.Write(ctx, v)
-	if w.err != nil {
-		d.Chk.IsType(writers.MaxLinesError{}, w.err, "Unexpected error: %s", w.err)
+	err := w.Write(ctx, v)
+
+	if err != nil {
+		return "", err
 	}
-	return buf.String()
+
+	if w.err != nil {
+		return "", w.err
+	}
+
+	return buf.String(), nil
 }
 
-func encodedValueFormat(ctx context.Context, v Value, floatFormat byte) string {
+func encodedValueFormat(ctx context.Context, v Value, floatFormat byte) (string, error) {
 	var buf bytes.Buffer
 	w := &hrsWriter{w: &buf, floatFormat: floatFormat}
-	w.Write(ctx, v)
-	d.Chk.NoError(w.err)
-	return buf.String()
+	err := w.Write(ctx, v)
+
+	if err != nil {
+		return "", err
+	}
+
+	if w.err != nil {
+		return "", w.err
+	}
+
+	return buf.String(), nil
 }
 
-func EncodedIndexValue(ctx context.Context, v Value) string {
+func EncodedIndexValue(ctx context.Context, v Value) (string, error) {
 	return encodedValueFormat(ctx, v, 'f')
 }
 
 // EncodedValue returns a string containing the serialization of a value.
-func EncodedValue(ctx context.Context, v Value) string {
+func EncodedValue(ctx context.Context, v Value) (string, error) {
 	return encodedValueFormat(ctx, v, 'g')
 }
 
 // EncodedValueMaxLines returns a string containing the serialization of a value.
 // The string is truncated at |maxLines|.
-func EncodedValueMaxLines(ctx context.Context, v Value, maxLines uint32) string {
+func EncodedValueMaxLines(ctx context.Context, v Value, maxLines uint32) (string, error) {
 	return encodedValueFormatMaxLines(ctx, v, 'g', maxLines)
 }
 
 // WriteEncodedValue writes the serialization of a value
 func WriteEncodedValue(ctx context.Context, w io.Writer, v Value) error {
 	hrs := &hrsWriter{w: w, floatFormat: 'g'}
-	hrs.Write(ctx, v)
+	err := hrs.Write(ctx, v)
+
+	if err != nil {
+		return err
+	}
+
 	return hrs.err
 }
 
@@ -472,6 +569,11 @@ func WriteEncodedValue(ctx context.Context, w io.Writer, v Value) error {
 func WriteEncodedValueMaxLines(ctx context.Context, w io.Writer, v Value, maxLines uint32) error {
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: maxLines}
 	hrs := &hrsWriter{w: mlw, floatFormat: 'g'}
-	hrs.Write(ctx, v)
+	err := hrs.Write(ctx, v)
+
+	if err != nil {
+		return err
+	}
+
 	return hrs.err
 }

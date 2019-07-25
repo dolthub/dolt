@@ -10,12 +10,17 @@ type blobLeafSequence struct {
 	leafSequence
 }
 
-func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
+func newBlobLeafSequence(vrw ValueReadWriter, data []byte) (sequence, error) {
 	d.PanicIfTrue(vrw == nil)
 	offsets := make([]uint32, sequencePartValues+1)
 	w := newBinaryNomsWriter()
 	offsets[sequencePartKind] = w.offset
-	BlobKind.writeTo(&w, vrw.Format())
+	err := BlobKind.writeTo(&w, vrw.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
 	offsets[sequencePartLevel] = w.offset
 	w.writeCount(0) // level
 	offsets[sequencePartCount] = w.offset
@@ -23,11 +28,12 @@ func newBlobLeafSequence(vrw ValueReadWriter, data []byte) sequence {
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
 	w.writeBytes(data)
-	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}
+	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}, nil
 }
 
-func (bl blobLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+func (bl blobLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	w.writeRaw(bl.buff)
+	return nil
 }
 
 // sequence interface
@@ -41,16 +47,16 @@ func (bl blobLeafSequence) getCompareFn(other sequence) compareFn {
 	offsetStart := int(bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind])
 	obl := other.(blobLeafSequence)
 	otherOffsetStart := int(obl.offsets[sequencePartValues] - obl.offsets[sequencePartKind])
-	return func(idx, otherIdx int) bool {
-		return bl.buff[offsetStart+idx] == obl.buff[otherOffsetStart+otherIdx]
+	return func(idx, otherIdx int) (bool, error) {
+		return bl.buff[offsetStart+idx] == obl.buff[otherOffsetStart+otherIdx], nil
 	}
 }
 
-func (bl blobLeafSequence) getItem(idx int) sequenceItem {
+func (bl blobLeafSequence) getItem(idx int) (sequenceItem, error) {
 	offset := bl.offsets[sequencePartValues] - bl.offsets[sequencePartKind] + uint32(idx)
-	return bl.buff[offset]
+	return bl.buff[offset], nil
 }
 
-func (bl blobLeafSequence) typeOf() *Type {
-	return BlobType
+func (bl blobLeafSequence) typeOf() (*Type, error) {
+	return BlobType, nil
 }

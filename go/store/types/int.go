@@ -15,8 +15,8 @@ import (
 type Int int64
 
 // Value interface
-func (v Int) Value(ctx context.Context) Value {
-	return v
+func (v Int) Value(ctx context.Context) (Value, error) {
+	return v, nil
 }
 
 func (v Int) Equals(other Value) bool {
@@ -30,18 +30,20 @@ func (v Int) Less(nbf *NomsBinFormat, other LesserValuable) bool {
 	return IntKind < other.Kind()
 }
 
-func (v Int) Hash(nbf *NomsBinFormat) hash.Hash {
+func (v Int) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(v, nbf)
 }
 
-func (v Int) WalkValues(ctx context.Context, cb ValueCallback) {
+func (v Int) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return nil
 }
 
-func (v Int) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+func (v Int) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	return nil
 }
 
-func (v Int) typeOf() *Type {
-	return IntType
+func (v Int) typeOf() (*Type, error) {
+	return IntType, nil
 }
 
 func (v Int) Kind() NomsKind {
@@ -52,16 +54,28 @@ func (v Int) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (v Int) writeTo(w nomsWriter, nbf *NomsBinFormat) {
-	IntKind.writeTo(w, nbf)
+func (v Int) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	err := IntKind.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
 	w.writeInt(v)
+
+	return nil
 }
 
-func (v Int) valueBytes(nbf *NomsBinFormat) []byte {
+func (v Int) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
 	// We know the size of the buffer here so allocate it once.
 	// IntKind, int (Varint), exp (Varint)
 	buff := make([]byte, 1+2*binary.MaxVarintLen64)
 	w := binaryNomsWriter{buff, 0}
-	v.writeTo(&w, nbf)
-	return buff[:w.offset]
+	err := v.writeTo(&w, nbf)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buff[:w.offset], err
 }

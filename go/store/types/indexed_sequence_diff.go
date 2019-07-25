@@ -15,20 +15,34 @@ func sendSpliceChange(changes chan<- Splice, closeChan <-chan struct{}, splice S
 	return true
 }
 
-func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) bool {
+func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, current sequence, currentOffset uint64, changes chan<- Splice, closeChan <-chan struct{}, maxSpliceMatrixSize uint64) (bool, error) {
 	if last.treeLevel() > current.treeLevel() {
-		lastChild := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
+		lastChild, err := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
+
+		if err != nil {
+			return false, err
+		}
+
 		return indexedSequenceDiff(ctx, lastChild, lastOffset, current, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	if current.treeLevel() > last.treeLevel() {
-		currentChild := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
+		currentChild, err := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
+
+		if err != nil {
+			return false, err
+		}
+
 		return indexedSequenceDiff(ctx, last, lastOffset, currentChild, currentOffset, changes, closeChan, maxSpliceMatrixSize)
 	}
 
 	compareFn := last.getCompareFn(current)
-	initialSplices := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), maxSpliceMatrixSize,
-		func(i uint64, j uint64) bool { return compareFn(int(i), int(j)) })
+	initialSplices, err := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), maxSpliceMatrixSize,
+		func(i uint64, j uint64) (bool, error) { return compareFn(int(i), int(j)) })
+
+	if err != nil {
+		return false, err
+	}
 
 	for _, splice := range initialSplices {
 		if last.isLeaf() {
@@ -39,28 +53,45 @@ func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, 
 			}
 
 			if !sendSpliceChange(changes, closeChan, splice) {
-				return false
+				return false, nil
 			}
 			continue
 		}
 
 		if splice.SpRemoved == 0 || splice.SpAdded == 0 {
+			var err error
 			// An entire subtree was removed at a meta level. We must do some math to map the splice from the meta level into the leaf coordinates.
 			beginRemoveIndex := uint64(0)
 			if splice.SpAt > 0 {
-				beginRemoveIndex = last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
+				beginRemoveIndex, err = last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
+
+				if err != nil {
+					return false, err
+				}
 			}
 			endRemoveIndex := uint64(0)
 			if splice.SpAt+splice.SpRemoved > 0 {
-				endRemoveIndex = last.cumulativeNumberOfLeaves(int(splice.SpAt+splice.SpRemoved) - 1)
+				endRemoveIndex, err = last.cumulativeNumberOfLeaves(int(splice.SpAt+splice.SpRemoved) - 1)
+
+				if err != nil {
+					return false, err
+				}
 			}
 			beginAddIndex := uint64(0)
 			if splice.SpFrom > 0 {
-				beginAddIndex = current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
+				beginAddIndex, err = current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
+
+				if err != nil {
+					return false, err
+				}
 			}
 			endAddIndex := uint64(0)
 			if splice.SpFrom+splice.SpAdded > 0 {
-				endAddIndex = current.cumulativeNumberOfLeaves(int(splice.SpFrom+splice.SpAdded) - 1)
+				endAddIndex, err = current.cumulativeNumberOfLeaves(int(splice.SpFrom+splice.SpAdded) - 1)
+
+				if err != nil {
+					return false, err
+				}
 			}
 
 			splice.SpAt = lastOffset + beginRemoveIndex
@@ -72,26 +103,51 @@ func indexedSequenceDiff(ctx context.Context, last sequence, lastOffset uint64, 
 			}
 
 			if !sendSpliceChange(changes, closeChan, splice) {
-				return false
+				return false, nil
 			}
 			continue
 		}
 
 		// Meta sequence splice which includes removed & added sub-sequences. Must recurse down.
-		lastChild := last.getCompositeChildSequence(ctx, splice.SpAt, splice.SpRemoved)
-		currentChild := current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded)
+		lastChild, err := last.getCompositeChildSequence(ctx, splice.SpAt, splice.SpRemoved)
+
+		if err != nil {
+			return false, err
+		}
+
+		currentChild, err := current.getCompositeChildSequence(ctx, splice.SpFrom, splice.SpAdded)
+
+		if err != nil {
+			return false, err
+		}
+
 		lastChildOffset := lastOffset
 		if splice.SpAt > 0 {
-			lastChildOffset += last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
+			cnt, err := last.cumulativeNumberOfLeaves(int(splice.SpAt) - 1)
+
+			if err != nil {
+				return false, err
+			}
+
+			lastChildOffset += cnt
 		}
 		currentChildOffset := currentOffset
 		if splice.SpFrom > 0 {
-			currentChildOffset += current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
+			cnt, err := current.cumulativeNumberOfLeaves(int(splice.SpFrom) - 1)
+
+			if err != nil {
+				return false, err
+			}
+
+			currentChildOffset += cnt
 		}
-		if ok := indexedSequenceDiff(ctx, lastChild, lastChildOffset, currentChild, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); !ok {
-			return false
+
+		if ok, err := indexedSequenceDiff(ctx, lastChild, lastChildOffset, currentChild, currentChildOffset, changes, closeChan, maxSpliceMatrixSize); err != nil {
+			return false, err
+		} else if !ok {
+			return false, nil
 		}
 	}
 
-	return true
+	return true, nil
 }

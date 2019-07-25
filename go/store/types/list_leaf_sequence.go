@@ -8,8 +8,14 @@ type listLeafSequence struct {
 	leafSequence
 }
 
-func newListLeafSequence(vrw ValueReadWriter, vs ...Value) sequence {
-	return listLeafSequence{newLeafSequenceFromValues(ListKind, vrw, vs...)}
+func newListLeafSequence(vrw ValueReadWriter, vs ...Value) (sequence, error) {
+	seq, err := newLeafSequenceFromValues(ListKind, vrw, vs...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return listLeafSequence{seq}, nil
 }
 
 // sequence interface

@@ -54,12 +54,14 @@ type rollingValueHasher struct {
 	nbf             *NomsBinFormat
 }
 
-func hashValueBytes(item sequenceItem, rv *rollingValueHasher) {
-	rv.HashValue(item.(Value))
+func hashValueBytes(item sequenceItem, rv *rollingValueHasher) error {
+	return rv.HashValue(item.(Value))
 }
 
-func hashValueByte(item sequenceItem, rv *rollingValueHasher) {
+func hashValueByte(item sequenceItem, rv *rollingValueHasher) error {
 	rv.HashByte(item.(byte))
+
+	return nil
 }
 
 func newRollingValueHasher(nbf *NomsBinFormat, salt byte) *rollingValueHasher {
@@ -98,9 +100,16 @@ func (rv *rollingValueHasher) Reset() {
 	rv.sl.Reset()
 }
 
-func (rv *rollingValueHasher) HashValue(v Value) {
-	v.writeTo(&rv.bw, rv.nbf)
+func (rv *rollingValueHasher) HashValue(v Value) error {
+	err := v.writeTo(&rv.bw, rv.nbf)
+
+	if err != nil {
+		return err
+	}
+
 	rv.sl.Update(rv.bw.data())
+
+	return nil
 }
 
 func (rv *rollingValueHasher) hashBytes(buff []byte) {

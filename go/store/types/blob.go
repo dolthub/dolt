@@ -7,6 +7,7 @@ package types
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"io"
 	"sync"
 
@@ -24,8 +25,14 @@ func newBlob(seq sequence) Blob {
 	return Blob{seq}
 }
 
-func NewEmptyBlob(vrw ValueReadWriter) Blob {
-	return Blob{newBlobLeafSequence(vrw, []byte{})}
+func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
+	seq, err := newBlobLeafSequence(vrw, []byte{})
+
+	if err != nil {
+		return Blob{}, err
+	}
+
+	return Blob{seq}, nil
 }
 
 // ReadAt implements the ReaderAt interface. Eagerly loads requested byte-range from the blob p-tree.
@@ -51,7 +58,17 @@ func (b Blob) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error
 		return
 	}
 
-	leaves, localStart := LoadLeafNodes(ctx, []Collection{b}, startIdx, endIdx)
+	leaves, localStart, llnErr := LoadLeafNodes(ctx, []Collection{b}, startIdx, endIdx)
+
+	if llnErr != nil {
+		err = llnErr
+		return 0, err
+	}
+
+	if err != nil {
+		return 0, err
+	}
+
 	endIdx = localStart + endIdx - startIdx
 	startIdx = localStart
 
@@ -79,18 +96,24 @@ func (b Blob) Reader(ctx context.Context) *BlobReader {
 	return &BlobReader{b, 0, ctx}
 }
 
-func (b Blob) Copy(ctx context.Context, w io.Writer) (n int64) {
+func (b Blob) Copy(ctx context.Context, w io.Writer) (int64, error) {
 	return b.CopyReadAhead(ctx, w, 1<<23 /* 8MB */, 6)
 }
 
 // CopyReadAhead copies the entire contents of |b| to |w|, and attempts to stay
 // |concurrency| |chunkSize| blocks of bytes ahead of the last byte written to
 // |w|.
-func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, concurrency int) (n int64) {
+func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, concurrency int) (int64, error) {
+	ae := nbs.NewAtomicError()
 	bChan := make(chan chan []byte, concurrency)
 
 	go func() {
+		defer close(bChan)
 		for idx, len := uint64(0), b.Len(); idx < len; {
+			if ae.IsSet() {
+				break
+			}
+
 			bc := make(chan []byte)
 			bChan <- bc
 
@@ -102,12 +125,17 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 			idx += blockLength
 
 			go func() {
+				defer close(bc)
 				buff := make([]byte, blockLength)
-				b.ReadAt(ctx, buff, int64(start))
-				bc <- buff
+				_, err := b.ReadAt(ctx, buff, int64(start))
+
+				if err != nil {
+					ae.SetIfError(err)
+				} else {
+					bc <- buff
+				}
 			}()
 		}
-		close(bChan)
 	}()
 
 	// Ensure read-ahead goroutines can exit
@@ -116,27 +144,44 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 		}
 	}()
 
+	var n int64
 	for b := range bChan {
-		ln, err := w.Write(<-b)
+		if ae.IsSet() {
+			break
+		}
+
+		bytes, ok := <-b
+
+		if !ok {
+			continue
+		}
+
+		ln, err := w.Write(bytes)
 		n += int64(ln)
 		if err != nil {
-			return
+			ae.SetIfError(err)
 		}
 	}
-	return
+
+	return n, ae.Get()
 }
 
 // Concat returns a new Blob comprised of this joined with other. It only needs
 // to visit the rightmost prolly tree chunks of this Blob, and the leftmost
 // prolly tree chunks of other, so it's efficient.
-func (b Blob) Concat(ctx context.Context, other Blob) Blob {
-	seq := concat(ctx, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+func (b Blob) Concat(ctx context.Context, other Blob) (Blob, error) {
+	seq, err := concat(ctx, b.sequence, other.sequence, func(cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
 		return b.newChunker(ctx, cur, vrw)
 	})
-	return newBlob(seq)
+
+	if err != nil {
+		return Blob{}, err
+	}
+
+	return newBlob(seq), nil
 }
 
-func (b Blob) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker {
+func (b Blob) newChunker(ctx context.Context, cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error) {
 	return newSequenceChunker(ctx, cur, 0, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), hashValueByte)
 }
 
@@ -145,11 +190,12 @@ func (b Blob) asSequence() sequence {
 }
 
 // Value interface
-func (b Blob) Value(ctx context.Context) Value {
-	return b
+func (b Blob) Value(ctx context.Context) (Value, error) {
+	return b, nil
 }
 
-func (b Blob) WalkValues(ctx context.Context, cb ValueCallback) {
+func (b Blob) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return nil
 }
 
 type BlobReader struct {
@@ -187,7 +233,7 @@ func (cbr *BlobReader) Seek(offset int64, whence int) (int64, error) {
 }
 
 func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		d.PanicIfFalse(level == 0)
 		buff := make([]byte, len(items))
 
@@ -199,18 +245,31 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 	}
 }
 
-func chunkBlobLeaf(vrw ValueReadWriter, buff []byte) (Collection, orderedKey, uint64) {
-	blob := newBlob(newBlobLeafSequence(vrw, buff))
-	return blob, orderedKeyFromInt(len(buff), vrw.Format()), uint64(len(buff))
+func chunkBlobLeaf(vrw ValueReadWriter, buff []byte) (Collection, orderedKey, uint64, error) {
+	seq, err := newBlobLeafSequence(vrw, buff)
+
+	if err != nil {
+		return nil, orderedKey{}, 0, err
+	}
+
+	blob := newBlob(seq)
+
+	ordKey, err := orderedKeyFromInt(len(buff), vrw.Format())
+
+	if err != nil {
+		return nil, orderedKey{}, 0, err
+	}
+
+	return blob, ordKey, uint64(len(buff)), nil
 }
 
 // NewBlob creates a Blob by reading from every Reader in rs and
 // concatenating the result. NewBlob uses one goroutine per Reader.
-func NewBlob(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob {
+func NewBlob(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) (Blob, error) {
 	return readBlobsP(ctx, vrw, rs...)
 }
 
-func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob {
+func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) (Blob, error) {
 	switch len(rs) {
 	case 0:
 		return NewEmptyBlob(vrw)
@@ -220,32 +279,57 @@ func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) Blob 
 
 	blobs := make([]Blob, len(rs))
 
+	ae := nbs.NewAtomicError()
 	wg := &sync.WaitGroup{}
 	wg.Add(len(rs))
 
 	for i, r := range rs {
+		if ae.IsSet() {
+			break
+		}
+
 		i2, r2 := i, r
 		go func() {
-			blobs[i2] = readBlob(ctx, r2, vrw)
-			wg.Done()
+			defer wg.Done()
+
+			if !ae.IsSet() {
+				var err error
+				blobs[i2], err = readBlob(ctx, r2, vrw)
+				ae.SetIfError(err)
+			}
 		}()
 	}
 
 	wg.Wait()
 
+	if ae.IsSet() {
+		return Blob{}, ae.Get()
+	}
+
 	b := blobs[0]
 	for i := 1; i < len(blobs); i++ {
-		b = b.Concat(ctx, blobs[i])
+		var err error
+		b, err = b.Concat(ctx, blobs[i])
+
+		if err != nil {
+			return Blob{}, err
+		}
 	}
-	return b
+	return b, nil
 }
 
-func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) Blob {
-	sc := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) {
+func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, error) {
+	sc, err := newEmptySequenceChunker(ctx, vrw, makeBlobLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(BlobKind, vrw), func(item sequenceItem, rv *rollingValueHasher) error {
 		rv.HashByte(item.(byte))
+		return nil
 	})
 
-	// TODO: The code below is temporary. It's basically a custom leaf-level chunker for blobs. There are substational perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
+	if err != nil {
+		return Blob{}, err
+	}
+
+	// TODO: The code below is temporary. It's basically a custom leaf-level chunker for blobs. There are substational
+	// perf gains by doing it this way as it avoids the cost of boxing every single byte which is chunked.
 	chunkBuff := [8192]byte{}
 	chunkBytes := chunkBuff[:]
 	rv := newRollingValueHasher(vrw.Format(), 0)
@@ -262,6 +346,7 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) Blob {
 		return rv.crossedBoundary
 	}
 
+	ae := nbs.NewAtomicError()
 	mtChan := make(chan chan metaTuple, runtime.NumCPU())
 
 	makeChunk := func() {
@@ -273,42 +358,89 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) Blob {
 		mtChan <- ch
 
 		go func(ch chan metaTuple, cp []byte) {
-			col, key, numLeaves := chunkBlobLeaf(vrw, cp)
-			ch <- newMetaTuple(vrw.WriteValue(ctx, col), key, numLeaves)
+			defer close(ch)
+
+			col, key, numLeaves, err := chunkBlobLeaf(vrw, cp)
+
+			if err != nil {
+				ae.SetIfError(err)
+				return
+			}
+
+			val, err := vrw.WriteValue(ctx, col)
+
+			if ae.SetIfError(err) {
+				return
+			}
+
+			mt, err := newMetaTuple(val, key, numLeaves)
+
+			if ae.SetIfError(err) {
+				return
+			}
+
+			ch <- mt
 		}(ch, cp)
 
 		offset = 0
 	}
 
 	go func() {
+		defer close(mtChan)
 		readBuff := [8192]byte{}
 		for {
+			if ae.IsSet() {
+				break
+			}
+
 			n, err := r.Read(readBuff[:])
+
+			if err != nil && err != io.EOF {
+				ae.SetIfError(err)
+				break
+			}
+
 			for i := 0; i < n; i++ {
 				if addByte(readBuff[i]) {
 					makeChunk()
 				}
 			}
-			if err != nil {
-				if err != io.EOF {
-					panic(err)
-				}
-				if offset > 0 {
-					makeChunk()
-				}
-				close(mtChan)
-				break
+
+			if offset > 0 {
+				makeChunk()
 			}
+			break
 		}
 	}()
 
 	for ch := range mtChan {
-		mt := <-ch
-		if sc.parent == nil {
-			sc.createParent(ctx)
+		if ae.IsSet() {
+			break
 		}
-		sc.parent.Append(ctx, mt)
+
+		mt, ok := <-ch
+
+		if !ok {
+			continue
+		}
+
+		if sc.parent == nil {
+			err := sc.createParent(ctx)
+
+			if ae.SetIfError(err) {
+				continue
+			}
+		}
+
+		_, err := sc.parent.Append(ctx, mt)
+		ae.SetIfError(err)
 	}
 
-	return newBlob(sc.Done(ctx))
+	seq, err := sc.Done(ctx)
+
+	if err != nil {
+		return Blob{}, err
+	}
+
+	return newBlob(seq), nil
 }

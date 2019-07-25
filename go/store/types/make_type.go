@@ -10,58 +10,94 @@ import (
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
 )
 
-func MakePrimitiveType(k NomsKind) *Type {
+func MakePrimitiveType(k NomsKind) (*Type, error) {
 	switch k {
 	case BoolKind:
-		return BoolType
+		return BoolType, nil
 	case FloatKind:
-		return FloaTType
+		return FloaTType, nil
 	case UUIDKind:
-		return UUIDType
+		return UUIDType, nil
 	case IntKind:
-		return IntType
+		return IntType, nil
 	case UintKind:
-		return UintType
+		return UintType, nil
 	case NullKind:
-		return NullType
+		return NullType, nil
 	case StringKind:
-		return StringType
+		return StringType, nil
 	case BlobKind:
-		return BlobType
+		return BlobType, nil
 	case ValueKind:
-		return ValueType
+		return ValueType, nil
 	case TypeKind:
-		return TypeType
+		return TypeType, nil
 	}
-	d.Chk.Fail("invalid NomsKind: %d", k)
-	return nil
+
+	return nil, ErrUnknownType
 }
 
 // MakeUnionType creates a new union type unless the elemTypes can be folded into a single non union type.
-func MakeUnionType(elemTypes ...*Type) *Type {
-	return simplifyType(makeUnionType(elemTypes...), false)
+func MakeUnionType(elemTypes ...*Type) (*Type, error) {
+	t, err := makeUnionType(elemTypes...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false), nil
 }
 
-func MakeListType(elemType *Type) *Type {
-	return simplifyType(makeCompoundType(ListKind, elemType), false)
+func MakeListType(elemType *Type) (*Type, error) {
+	t, err := makeCompoundType(ListKind, elemType)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false), nil
 }
 
-func MakeSetType(elemType *Type) *Type {
-	return simplifyType(makeCompoundType(SetKind, elemType), false)
+func MakeSetType(elemType *Type) (*Type, error) {
+	t, err := makeCompoundType(SetKind, elemType)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false), nil
 }
 
-func MakeRefType(elemType *Type) *Type {
-	return simplifyType(makeCompoundType(RefKind, elemType), false)
+func MakeRefType(elemType *Type) (*Type, error) {
+	t, err := makeCompoundType(RefKind, elemType)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false), nil
 }
 
-func MakeMapType(keyType, valType *Type) *Type {
-	return simplifyType(makeCompoundType(MapKind, keyType, valType), false)
+func MakeMapType(keyType, valType *Type) (*Type, error) {
+	t, err := makeCompoundType(MapKind, keyType, valType)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false), nil
 }
 
-func MakeStructType(name string, fields ...StructField) *Type {
+func MakeStructType(name string, fields ...StructField) (*Type, error) {
 	fs := structTypeFields(fields)
 	sort.Sort(fs)
-	return simplifyType(makeStructType(name, fs), false)
+	t, err := makeStructType(name, fs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false), nil
 }
 
 func MakeCycleType(name string) *Type {
@@ -84,22 +120,36 @@ var IntType = makePrimitiveType(IntKind)
 var UintType = makePrimitiveType(UintKind)
 var NullType = makePrimitiveType(NullKind)
 
-func makeCompoundType(kind NomsKind, elemTypes ...*Type) *Type {
-	return newType(CompoundDesc{kind, elemTypes})
+func makeCompoundType(kind NomsKind, elemTypes ...*Type) (*Type, error) {
+	for _, el := range elemTypes {
+		if el.Kind() == UnknownKind {
+			// If any of the element's types are an unknown type then this is unknown
+			return nil, ErrUnknownType
+		}
+	}
+
+	return newType(CompoundDesc{kind, elemTypes}), nil
 }
 
-func makeUnionType(elemTypes ...*Type) *Type {
+func makeUnionType(elemTypes ...*Type) (*Type, error) {
 	if len(elemTypes) == 1 {
-		return elemTypes[0]
+		return elemTypes[0], nil
 	}
 	return makeCompoundType(UnionKind, elemTypes...)
 }
 
-func makeStructTypeQuickly(name string, fields structTypeFields) *Type {
-	return newType(StructDesc{name, fields})
+func makeStructTypeQuickly(name string, fields structTypeFields) (*Type, error) {
+	for _, fld := range fields {
+		if fld.Type.Kind() == UnknownKind {
+			// If any of the fields have an unknown type then this is unknown
+			return nil, ErrUnknownType
+		}
+	}
+
+	return newType(StructDesc{name, fields}), nil
 }
 
-func makeStructType(name string, fields structTypeFields) *Type {
+func makeStructType(name string, fields structTypeFields) (*Type, error) {
 	verifyStructName(name)
 	verifyFields(fields)
 	return makeStructTypeQuickly(name, fields)
@@ -107,7 +157,7 @@ func makeStructType(name string, fields structTypeFields) *Type {
 
 type FieldMap map[string]*Type
 
-func MakeStructTypeFromFields(name string, fields FieldMap) *Type {
+func MakeStructTypeFromFields(name string, fields FieldMap) (*Type, error) {
 	fs := make(structTypeFields, len(fields))
 	i := 0
 	for k, v := range fields {
@@ -115,7 +165,13 @@ func MakeStructTypeFromFields(name string, fields FieldMap) *Type {
 		i++
 	}
 	sort.Sort(fs)
-	return simplifyType(makeStructType(name, fs), false)
+	t, err := makeStructType(name, fs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false), nil
 }
 
 // StructField describes a field in a struct type.

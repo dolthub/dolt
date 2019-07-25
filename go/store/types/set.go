@@ -7,6 +7,7 @@ package types
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/ld/dolt/go/store/nbs"
 	"sort"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/d"
@@ -22,15 +23,29 @@ func newSet(seq orderedSequence) Set {
 	return Set{seq}
 }
 
-func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) Set {
+func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) (Set, error) {
 	data := buildSetData(vrw.Format(), v)
-	ch := newEmptySetSequenceChunker(ctx, vrw)
+	ch, err := newEmptySetSequenceChunker(ctx, vrw)
 
-	for _, v := range data {
-		ch.Append(ctx, v)
+	if err != nil {
+		return EmptySet, err
 	}
 
-	return newSet(ch.Done(ctx).(orderedSequence))
+	for _, v := range data {
+		_, err := ch.Append(ctx, v)
+
+		if err != nil {
+			return EmptySet, err
+		}
+	}
+
+	seq, err := ch.Done(ctx)
+
+	if err != nil {
+		return EmptySet, err
+	}
+
+	return newSet(seq.(orderedSequence)), nil
 }
 
 // NewStreamingSet takes an input channel of values and returns a output
@@ -39,9 +54,9 @@ func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) Set {
 // out of order will result in a panic. Once the input channel is closed
 // by the caller, a finished Set will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingSet(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value) <-chan Set {
+func NewStreamingSet(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError, vChan <-chan Value) <-chan Set {
 	return newStreamingSet(vrw, vChan, func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
-		go readSetInput(ctx, vrw, vChan, outChan)
+		go readSetInput(ctx, vrw, ae, vChan, outChan)
 	})
 }
 
@@ -54,47 +69,62 @@ func newStreamingSet(vrw ValueReadWriter, vChan <-chan Value, readFunc streaming
 	return outChan
 }
 
-func readSetInput(ctx context.Context, vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
+func readSetInput(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError, vChan <-chan Value, outChan chan<- Set) {
 	defer close(outChan)
-	ch := newEmptySetSequenceChunker(ctx, vrw)
+
+	ch, err := newEmptySetSequenceChunker(ctx, vrw)
+	if ae.SetIfError(err) {
+		return
+	}
+
 	var lastV Value
 	for v := range vChan {
 		if lastV != nil {
 			d.PanicIfFalse(lastV.Less(vrw.Format(), v))
 		}
 		lastV = v
-		ch.Append(ctx, v)
+		_, err := ch.Append(ctx, v)
+
+		if ae.SetIfError(err) {
+			return
+		}
 	}
-	outChan <- newSet(ch.Done(ctx).(orderedSequence))
+	seq, err := ch.Done(ctx)
+
+	if ae.SetIfError(err) {
+		return
+	}
+
+	outChan <- newSet(seq.(orderedSequence))
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
-func (s Set) Diff(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) Diff(ctx context.Context, last Set, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffTopDown(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffTopDown(ctx, last.orderedSequence, s.orderedSequence, ae, changes, closeChan)
 }
 
 // DiffHybrid computes the diff from |last| to |s| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
-func (s Set) DiffHybrid(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffHybrid(ctx context.Context, last Set, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffBest(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffBest(ctx, last.orderedSequence, s.orderedSequence, ae, changes, closeChan)
 }
 
 // DiffLeftRight computes the diff from |last| to |s| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
-func (s Set) DiffLeftRight(ctx context.Context, last Set, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffLeftRight(ctx context.Context, last Set, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
-	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, s.orderedSequence, changes, closeChan)
+	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, s.orderedSequence, ae, changes, closeChan)
 }
 
 func (s Set) asSequence() sequence {
@@ -102,71 +132,121 @@ func (s Set) asSequence() sequence {
 }
 
 // Value interface
-func (s Set) Value(ctx context.Context) Value {
-	return s
+func (s Set) Value(ctx context.Context) (Value, error) {
+	return s, nil
 }
 
-func (s Set) WalkValues(ctx context.Context, cb ValueCallback) {
-	iterAll(ctx, s, func(v Value, idx uint64) {
-		cb(v)
+func (s Set) WalkValues(ctx context.Context, cb ValueCallback) error {
+	err := iterAll(ctx, s, func(v Value, idx uint64) error {
+		return cb(v)
 	})
+
+	return err
 }
 
-func (s Set) First(ctx context.Context) Value {
-	cur := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
-	if !cur.valid() {
-		return nil
+func (s Set) First(ctx context.Context) (Value, error) {
+	cur, err := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
+
+	if err != nil {
+		return nil, err
 	}
-	return cur.current().(Value)
+
+	if !cur.valid() {
+		return nil, nil
+	}
+
+	item, err := cur.current()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return item.(Value), nil
 }
 
-func (s Set) At(ctx context.Context, idx uint64) Value {
+func (s Set) At(ctx context.Context, idx uint64) (Value, error) {
 	if idx >= s.Len() {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur := newCursorAtIndex(ctx, s.orderedSequence, idx)
-	return cur.current().(Value)
+	cur, err := newCursorAtIndex(ctx, s.orderedSequence, idx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	item, err := cur.current()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return item.(Value), nil
 }
 
-func (s Set) Has(ctx context.Context, v Value) bool {
-	cur := newCursorAtValue(ctx, s.orderedSequence, v, false, false)
-	return cur.valid() && cur.current().(Value).Equals(v)
+func (s Set) Has(ctx context.Context, v Value) (bool, error) {
+	cur, err := newCursorAtValue(ctx, s.orderedSequence, v, false, false)
+
+	if err != nil {
+		return false, err
+	}
+
+	item, err := cur.current()
+
+	if err != nil {
+		return false, err
+	}
+
+	return cur.valid() && item.(Value).Equals(v), nil
 }
 
-type setIterCallback func(v Value) bool
+type setIterCallback func(v Value) (bool, error)
 
-func (s Set) Iter(ctx context.Context, cb setIterCallback) {
-	cur := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
-	cur.iter(ctx, func(v interface{}) bool {
+func (s Set) Iter(ctx context.Context, cb setIterCallback) error {
+	cur, err := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
+
+	if err != nil {
+		return err
+	}
+
+	return cur.iter(ctx, func(v interface{}) (bool, error) {
 		return cb(v.(Value))
 	})
 }
 
-type setIterAllCallback func(v Value)
+type setIterAllCallback func(v Value) error
 
-func (s Set) IterAll(ctx context.Context, cb setIterAllCallback) {
-	iterAll(ctx, s, func(v Value, idx uint64) {
-		cb(v)
+func (s Set) IterAll(ctx context.Context, cb setIterAllCallback) error {
+	return iterAll(ctx, s, func(v Value, idx uint64) error {
+		return cb(v)
 	})
 }
 
-func (s Set) Iterator(ctx context.Context) SetIterator {
+func (s Set) Iterator(ctx context.Context) (SetIterator, error) {
 	return s.IteratorAt(ctx, 0)
 }
 
-func (s Set) IteratorAt(ctx context.Context, idx uint64) SetIterator {
-	return &setIterator{
-		cursor: newCursorAtIndex(ctx, s.orderedSequence, idx),
-		s:      s,
+func (s Set) IteratorAt(ctx context.Context, idx uint64) (SetIterator, error) {
+	cur, err := newCursorAtIndex(ctx, s.orderedSequence, idx)
+
+	if err != nil {
+		return nil, err
 	}
+
+	return &setIterator{
+		cursor: cur,
+		s:      s,
+	}, nil
 }
 
-func (s Set) IteratorFrom(ctx context.Context, val Value) SetIterator {
-	return &setIterator{
-		cursor: newCursorAtValue(ctx, s.orderedSequence, val, false, false),
-		s:      s,
+func (s Set) IteratorFrom(ctx context.Context, val Value) (SetIterator, error) {
+	cur, err := newCursorAtValue(ctx, s.orderedSequence, val, false, false)
+
+	if err != nil {
+		return nil, err
 	}
+
+	return &setIterator{cursor: cur, s: s}, nil
 }
 
 func (s Set) Format() *NomsBinFormat {
@@ -198,7 +278,7 @@ func buildSetData(nbf *NomsBinFormat, values ValueSlice) ValueSlice {
 }
 
 func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		d.PanicIfFalse(level == 0)
 		setData := make([]Value, len(items))
 
@@ -213,13 +293,18 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 		set := newSet(newSetLeafSequence(vrw, setData...))
 		var key orderedKey
 		if len(setData) > 0 {
-			key = newOrderedKey(setData[len(setData)-1], vrw.Format())
+			var err error
+			key, err = newOrderedKey(setData[len(setData)-1], vrw.Format())
+
+			if err != nil {
+				return nil, orderedKey{}, 0, err
+			}
 		}
 
-		return set, key, uint64(len(items))
+		return set, key, uint64(len(items)), nil
 	}
 }
 
-func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
+func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
 	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 }

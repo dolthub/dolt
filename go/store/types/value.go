@@ -7,19 +7,20 @@ package types
 import (
 	"bytes"
 	"context"
+	"github.com/liquidata-inc/ld/dolt/go/store/d"
 
 	"github.com/liquidata-inc/ld/dolt/go/store/hash"
 )
 
-type ValueCallback func(v Value)
-type RefCallback func(ref Ref)
+type ValueCallback func(v Value) error
+type RefCallback func(ref Ref) error
 
 // Valuable is an interface from which a Value can be retrieved.
 type Valuable interface {
 	// Kind is the NomsKind describing the kind of value this is.
 	Kind() NomsKind
 
-	Value(ctx context.Context) Value
+	Value(ctx context.Context) (Value, error)
 }
 
 type LesserValuable interface {
@@ -46,23 +47,23 @@ type Value interface {
 
 	// Hash is the hash of the value. All Noms values have a unique hash and if two values have the
 	// same hash they must be equal.
-	Hash(*NomsBinFormat) hash.Hash
+	Hash(*NomsBinFormat) (hash.Hash, error)
 
 	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	// Type()
-	WalkValues(context.Context, ValueCallback)
+	WalkValues(context.Context, ValueCallback) error
 
 	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
-	WalkRefs(*NomsBinFormat, RefCallback)
+	WalkRefs(*NomsBinFormat, RefCallback) error
 
 	// typeOf is the internal implementation of types.TypeOf. It is not normalized
 	// and unions might have a single element, duplicates and be in the wrong
 	// order.
-	typeOf() *Type
+	typeOf() (*Type, error)
 
 	// writeTo writes the encoded version of the value to a nomsWriter.
-	writeTo(nomsWriter, *NomsBinFormat)
+	writeTo(nomsWriter, *NomsBinFormat) error
 }
 
 type ValueSlice []Value
@@ -123,12 +124,13 @@ func (v valueImpl) valueReadWriter() ValueReadWriter {
 	return v.vrw
 }
 
-func (v valueImpl) writeTo(enc nomsWriter, nbf *NomsBinFormat) {
+func (v valueImpl) writeTo(enc nomsWriter, nbf *NomsBinFormat) error {
 	enc.writeRaw(v.buff)
+	return nil
 }
 
-func (v valueImpl) valueBytes(nbf *NomsBinFormat) []byte {
-	return v.buff
+func (v valueImpl) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
+	return v.buff, nil
 }
 
 // IsZeroValue can be used to test if a Value is the same as T{}.
@@ -136,8 +138,8 @@ func (v valueImpl) IsZeroValue() bool {
 	return v.buff == nil
 }
 
-func (v valueImpl) Hash(*NomsBinFormat) hash.Hash {
-	return hash.Of(v.buff)
+func (v valueImpl) Hash(*NomsBinFormat) (hash.Hash, error) {
+	return hash.Of(v.buff), nil
 }
 
 func (v valueImpl) decoder() valueDecoder {
@@ -164,11 +166,22 @@ func (v valueImpl) Equals(other Value) bool {
 }
 
 func (v valueImpl) Less(nbf *NomsBinFormat, other LesserValuable) bool {
-	return valueLess(nbf, v, other.(Value))
+	isLess, err := valueLess(nbf, v, other.(Value))
+
+	// TODO: fix panics
+	d.PanicIfError(err)
+
+	return isLess
 }
 
-func (v valueImpl) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
-	walkRefs(v.valueBytes(nbf), nbf, cb)
+func (v valueImpl) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	bytes, err := v.valueBytes(nbf)
+
+	if err != nil {
+		return err
+	}
+
+	return walkRefs(bytes, nbf, cb)
 }
 
 type asValueImpl interface {
