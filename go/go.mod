@@ -43,6 +43,7 @@ require (
 	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/sirupsen/logrus v1.4.2
 	github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e
+	github.com/spf13/cobra v0.0.3
 	github.com/src-d/go-mysql-server v0.4.1-0.20190624170509-8702d43af506
 	github.com/stretchr/testify v1.3.0
 	github.com/tealeg/xlsx v1.0.4-0.20190601071628-e2d23f3c43dc
