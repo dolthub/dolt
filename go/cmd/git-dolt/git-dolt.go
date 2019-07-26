@@ -15,12 +15,12 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
 
 	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/commands"
+	"github.com/spf13/cobra"
 )
 
 func main() {
@@ -28,37 +28,57 @@ func main() {
 		log.Fatal("It looks like Dolt is not installed on your system. Make sure that the `dolt` binary is in your PATH before attempting to run git-dolt commands.")
 	}
 
-	if len(os.Args) == 1 {
-		fmt.Println("Dolt: It's Git for Data.")
-		printUsage()
-		return
+	rootCmd := &cobra.Command{
+		Use:   "git-dolt",
+		Short: "Run a git-dolt subcommand",
+		Long: `Run a git-dolt subcommand.
+Valid subcommands are: fetch, help, install, link, update.`,
 	}
 
-	var err error
-
-	switch cmd := os.Args[1]; cmd {
-	case "install":
-		err = commands.Install()
-	case "link":
-		remote := os.Args[2]
-		err = commands.Link(remote)
-	case "fetch":
-		ptrFname := os.Args[2]
-		err = commands.Fetch(ptrFname)
-	case "update":
-		ptrFname := os.Args[2]
-		revision := os.Args[3]
-		err = commands.Update(ptrFname, revision)
-	default:
-		printUsage()
-		log.Fatalf("Unknown command %s\n", cmd)
+	cmdInstall := &cobra.Command{
+		Use:   "install",
+		Short: "Installs the git-dolt smudge filter for this Git repository",
+		Long: `Installs the git-dolt smudge filter for this Git repository.
+After this, when git-dolt pointer files are checked out in this repository, the corresponding Dolt repositories will automatically be cloned.`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commands.Install()
+		},
 	}
 
-	if err != nil {
-		log.Fatalf("Error: %v\n", err)
+	cmdLink := &cobra.Command{
+		Use:   "link <remote-url>",
+		Short: "Links the given Dolt repository to the current Git repository",
+		Long: `Links the given Dolt repository to the current Git repository.
+The Dolt repository is cloned in the current directory and added to ./.gitignore, and a git-dolt pointer file is created.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commands.Link(args[0])
+		},
 	}
-}
 
-func printUsage() {
-	fmt.Println("Usage")
+	cmdFetch := &cobra.Command{
+		Use:   "fetch <pointer-file>",
+		Short: "Fetches the Dolt repository referred to in the given git-dolt pointer file",
+		Long: `Fetches the Dolt repository referred to in the given git-dolt pointer file.
+The Dolt repository is cloned to the current directory and checked out to the revision specified in the git-dolt pointer file.`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commands.Fetch(args[0])
+		},
+	}
+
+	cmdUpdate := &cobra.Command{
+		Use:   "update <pointer-file> <revision>",
+		Short: "Updates the reference in the given git-dolt pointer file to the given revision",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return commands.Update(args[0], args[1])
+		},
+	}
+
+	rootCmd.AddCommand(cmdInstall, cmdLink, cmdFetch, cmdUpdate)
+	if err := rootCmd.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

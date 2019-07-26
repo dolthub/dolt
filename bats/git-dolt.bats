@@ -156,7 +156,7 @@ teardown() {
 @test "git dolt errors on unknown commands" {
     run git dolt nonsense
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown command" ]] || false
+    [[ "$output" =~ "unknown command \"nonsense\"" ]] || false
 }
 
 @test "git dolt prints usage information with no arguments" {
