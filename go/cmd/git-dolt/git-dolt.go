@@ -18,9 +18,11 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
+
+	"github.com/spf13/cobra"
 
 	"github.com/liquidata-inc/dolt/go/cmd/git-dolt/commands"
-	"github.com/spf13/cobra"
 )
 
 func main() {
@@ -28,12 +30,21 @@ func main() {
 		log.Fatal("It looks like Dolt is not installed on your system. Make sure that the `dolt` binary is in your PATH before attempting to run git-dolt commands.")
 	}
 
+	if filepath.Base(os.Args[0]) == "git-dolt" {
+		os.Args = append([]string{"git", "dolt"}, os.Args[1:]...)
+	}
+
+	fakeGitCmd := &cobra.Command{
+		Use: "git",
+	}
+
 	rootCmd := &cobra.Command{
-		Use:   "git-dolt",
+		Use:   "dolt",
 		Short: "Run a git-dolt subcommand",
 		Long: `Run a git-dolt subcommand.
-Valid subcommands are: fetch, help, install, link, update.`,
+Valid subcommands are: fetch, install, link, update.`,
 	}
+	fakeGitCmd.AddCommand(rootCmd)
 
 	cmdInstall := &cobra.Command{
 		Use:   "install",
