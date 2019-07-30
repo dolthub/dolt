@@ -39,8 +39,112 @@ type InsertResult struct {
 var ErrMissingPrimaryKeys = errors.New("One or more primary key columns missing from insert statement")
 var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 
-// ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
+// ExecuteInsertBatch executes the given insert statement in batch mode and returns the result. The table is not changed
+// until the batch is Commited.
+func ExecuteBatchInsert(
+		ctx context.Context,
+		db *doltdb.DoltDB,
+		root *doltdb.RootValue,
+		s *sqlparser.Insert,
+		batcher *SqlBatcher,
+) (*InsertResult, error) {
+
+	tableName := s.Table.Name.String()
+	if !root.HasTable(ctx, tableName) {
+		return nil, fmt.Errorf("Unknown table %v", tableName)
+	}
+	table, _ := root.GetTable(ctx, tableName)
+	tableSch := table.GetSchema(ctx)
+
+	// Parser supports overwrite on insert with both the replace keyword (from MySQL) as well as the ignore keyword
+	replace := s.Action == sqlparser.ReplaceStr
+	ignore := s.Ignore != ""
+
+	// Get the list of columns to insert into. We support both naked inserts (no column list specified) as well as
+	// explicit column lists.
+	var cols []schema.Column
+	if s.Columns == nil || len(s.Columns) == 0 {
+		cols = tableSch.GetAllCols().GetColumns()
+	} else {
+		cols = make([]schema.Column, len(s.Columns))
+		for i, colName := range s.Columns {
+			for _, c := range cols {
+				if c.Name == colName.String() {
+					return nil, fmt.Errorf("Repeated column: '%v'", c.Name)
+				}
+			}
+
+			col, ok := tableSch.GetAllCols().GetByName(colName.String())
+			if !ok {
+				return nil, fmt.Errorf(UnknownColumnErrFmt, colName)
+			}
+			cols[i] = col
+		}
+	}
+
+	var rows []row.Row // your boat
+
+	switch queryRows := s.Rows.(type) {
+	case sqlparser.Values:
+		var err error
+		rows, err = prepareInsertVals(root.VRW().Format(), cols, &queryRows, tableSch)
+		if err != nil {
+			return nil, err
+		}
+	case *sqlparser.Select:
+		return nil, fmt.Errorf("Insert as select not supported")
+	case *sqlparser.ParenSelect:
+		return nil, fmt.Errorf("Parenthesized select expressions in insert not supported")
+	case *sqlparser.Union:
+		return nil, fmt.Errorf("Union not supported")
+	default:
+		return nil, fmt.Errorf("Unrecognized type for insert: %v", queryRows)
+	}
+
+	// Perform the insert
+	var result InsertResult
+	opt := InsertOptions{Replace: replace, IgnoreExisting: ignore}
+	for _, r := range rows {
+		if !row.IsValid(r, tableSch) {
+			if ignore {
+				result.NumErrorsIgnored += 1
+				continue
+			} else {
+				col, constraint := row.GetInvalidConstraint(r, tableSch)
+				return nil, fmt.Errorf(ConstraintFailedFmt, col.Name, constraint)
+			}
+		}
+
+		insertResult, err := batcher.Insert(ctx, tableName, r, opt)
+		if err != nil {
+			if ignore {
+				result.NumErrorsIgnored += 1
+				continue
+			} else {
+				return nil, err
+			}
+		}
+
+		if insertResult.RowInserted {
+			result.NumRowsInserted++
+		}
+		if insertResult.RowUpdated {
+			result.NumRowsUpdated++
+		}
+	}
+
+	return &result, nil
+}
+
+// ExecuteInsert executes the given select insert statement and returns the result.
+func ExecuteInsert(
+	ctx context.Context,
+	db *doltdb.DoltDB,
+	root *doltdb.RootValue,
+	s *sqlparser.Insert,
+	query string,
+) (*InsertResult, error) {
+
 	tableName := s.Table.Name.String()
 	if !root.HasTable(ctx, tableName) {
 		return errInsert("Unknown table %v", tableName)
