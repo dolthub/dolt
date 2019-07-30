@@ -25,7 +25,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -103,7 +102,7 @@ func ExecuteBatchInsert(
 
 	// Perform the insert
 	var result InsertResult
-	opt := InsertOptions{Replace: replace, IgnoreExisting: ignore}
+	opt := InsertOptions{replace}
 	for _, r := range rows {
 		if !row.IsValid(r, tableSch) {
 			if ignore {
@@ -145,100 +144,23 @@ func ExecuteInsert(
 	query string,
 ) (*InsertResult, error) {
 
-	tableName := s.Table.Name.String()
-	if !root.HasTable(ctx, tableName) {
-		return errInsert("Unknown table %v", tableName)
-	}
-	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema(ctx)
-
-	// Parser supports overwrite on insert with both the replace keyword (from MySQL) as well as the ignore keyword
-	replace := s.Action == sqlparser.ReplaceStr
-	ignore := s.Ignore != ""
-
-	// Get the list of columns to insert into. We support both naked inserts (no column list specified) as well as
-	// explicit column lists.
-	var cols []schema.Column
-	if s.Columns == nil || len(s.Columns) == 0 {
-		cols = tableSch.GetAllCols().GetColumns()
-	} else {
-		cols = make([]schema.Column, len(s.Columns))
-		for i, colName := range s.Columns {
-			for _, c := range cols {
-				if c.Name == colName.String() {
-					return errInsert("Repeated column: '%v'", c.Name)
-				}
-			}
-
-			col, ok := tableSch.GetAllCols().GetByName(colName.String())
-			if !ok {
-				return errInsert(UnknownColumnErrFmt, colName)
-			}
-			cols[i] = col
-		}
+	batcher := NewSqlBatcher(db, root)
+	insertResult, err := ExecuteBatchInsert(ctx, db, root, s, batcher)
+	if err != nil {
+		return nil, err
 	}
 
-	var rows []row.Row // your boat
-
-	switch queryRows := s.Rows.(type) {
-	case sqlparser.Values:
-		var err error
-		rows, err = prepareInsertVals(root.VRW().Format(), cols, &queryRows, tableSch)
-		if err != nil {
-			return &InsertResult{}, err
-		}
-	case *sqlparser.Select:
-		return errInsert("Insert as select not supported")
-	case *sqlparser.ParenSelect:
-		return errInsert("Parenthesized select expressions in insert not supported")
-	case *sqlparser.Union:
-		return errInsert("Union not supported")
-	default:
-		return errInsert("Unrecognized type for insertRows: %v", queryRows)
+	newRoot, err := batcher.Commit(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	// Perform the insert
-	rowData := table.GetRowData(ctx)
-	me := rowData.Edit()
-	var result InsertResult
-
-	insertedPKHashes := make(map[hash.Hash]struct{})
-	for _, r := range rows {
-		if !row.IsValid(r, tableSch) {
-			if ignore {
-				result.NumErrorsIgnored += 1
-				continue
-			} else {
-				col, constraint := row.GetInvalidConstraint(r, tableSch)
-				return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
-			}
-		}
-
-		key := r.NomsMapKey(tableSch).Value(ctx)
-
-		rowExists := rowData.Get(ctx, key) != nil
-		_, rowInserted := insertedPKHashes[key.Hash(root.VRW().Format())]
-
-		if rowExists || rowInserted {
-			if replace {
-				result.NumRowsUpdated += 1
-			} else if ignore {
-				result.NumErrorsIgnored += 1
-				continue
-			} else {
-				return errInsert("Duplicate primary key: '%v'", getPrimaryKeyString(r, tableSch))
-			}
-		}
-		me.Set(key, r.NomsMapValue(tableSch))
-
-		insertedPKHashes[key.Hash(root.VRW().Format())] = struct{}{}
-	}
-	newMap := me.Map(ctx)
-	table = table.UpdateRows(ctx, newMap)
-
-	result.NumRowsInserted = int(newMap.Len() - rowData.Len())
-	result.Root = root.PutTable(ctx, db, tableName, table)
-	return &result, nil
+	return &InsertResult{
+		Root:             newRoot,
+		NumRowsInserted:  insertResult.NumRowsInserted,
+		NumRowsUpdated:   insertResult.NumRowsUpdated,
+		NumErrorsIgnored: insertResult.NumErrorsIgnored,
+	}, nil
 }
 
 // Returns a primary key summary of the row given

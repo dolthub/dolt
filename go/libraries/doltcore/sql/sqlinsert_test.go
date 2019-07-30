@@ -334,7 +334,7 @@ func TestExecuteInsert(t *testing.T) {
 
 			for _, expectedRow := range tt.insertedValues {
 				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
-				assert.True(t, ok, "Row not found: %v", expectedRow)
+				require.True(t, ok, "Row not found: %v", expectedRow)
 				eq, diff := rowsEqual(expectedRow, foundRow)
 				assert.True(t, eq, "Rows not equals, found diff %v", diff)
 			}

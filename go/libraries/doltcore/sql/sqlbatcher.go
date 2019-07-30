@@ -2,7 +2,6 @@ package sql
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -11,11 +10,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var ErrKeyExists = errors.New("key already exists")
-
 // SqlBatcher knows how to efficiently batch insert / update statements, e.g. when doing a SQL import. It does this by
 // using a single MapEditor per table that isn't persisted until Commit is called.
 type SqlBatcher struct {
+	// The database we are editing
+	db *doltdb.DoltDB
 	// The root value we are editing
 	root *doltdb.RootValue
 	// The set of tables under edit
@@ -31,10 +30,12 @@ type SqlBatcher struct {
 }
 
 // Returns a new SqlBatcher for the given environment and root value.
-func NewSqlBatcher(root *doltdb.RootValue) *SqlBatcher {
+func NewSqlBatcher(db *doltdb.DoltDB, root *doltdb.RootValue) *SqlBatcher {
 	return &SqlBatcher{
+		db: db,
 		root: root,
 		tables: make(map[string]*doltdb.Table),
+		schemas: make(map[string]schema.Schema),
 		rowData: make(map[string]types.Map),
 		editors: make(map[string]*types.MapEditor),
 		hashes: make(map[string]map[hash.Hash]bool),
@@ -44,9 +45,6 @@ func NewSqlBatcher(root *doltdb.RootValue) *SqlBatcher {
 type InsertOptions struct {
 	// Whether to silently replace any existing rows with the same primary key as rows inserted
 	Replace bool
-	// Whether to ignore primary key duplication. Unlike Replace, inserts for existing keys are simply ignored, not
-	// updated.
-	IgnoreExisting bool
 }
 
 type BatchInsertResult struct {
@@ -77,15 +75,8 @@ func (b *SqlBatcher) Insert(ctx context.Context, tableName string, r row.Row, op
 	rowAlreadyTouched := hashes[key.Hash(b.root.VRW().Format())]
 
 	if rowExists || rowAlreadyTouched {
-		if !opt.Replace && !opt.IgnoreExisting {
-			return nil, ErrKeyExists
-		}
-
-		// If Replace and IgnoreExisting are both set, favor Replace semantics
-		if opt.Replace {
-			// do nothing, continue to editing
-		} else if opt.IgnoreExisting {
-			return &BatchInsertResult{}, nil
+		if !opt.Replace {
+			return nil, fmt.Errorf("Duplicate primary key: '%v'", getPrimaryKeyString(r, sch))
 		}
 	}
 
@@ -168,6 +159,17 @@ func (b *SqlBatcher) Update(r row.Row) {
 
 }
 
-func (b *SqlBatcher) Commit() (*doltdb.RootValue, error) {
-	return nil, nil
+// Commit writes a new root value for every table under edit and returns the new root value. Tables are written in an
+// arbitrary order.
+func (b *SqlBatcher) Commit(ctx context.Context) (*doltdb.RootValue, error) {
+	root := b.root
+
+	for tableName, ed := range b.editors {
+		newMap := ed.Map(ctx)
+		table := b.tables[tableName]
+		table = table.UpdateRows(ctx, newMap)
+		root = root.PutTable(ctx, b.db, tableName, table)
+	}
+
+	return root, nil
 }
