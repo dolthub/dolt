@@ -42,7 +42,6 @@ var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 // until the batch is Commited.
 func ExecuteBatchInsert(
 		ctx context.Context,
-		db *doltdb.DoltDB,
 		root *doltdb.RootValue,
 		s *sqlparser.Insert,
 		batcher *SqlBatcher,
@@ -145,7 +144,7 @@ func ExecuteInsert(
 ) (*InsertResult, error) {
 
 	batcher := NewSqlBatcher(db, root)
-	insertResult, err := ExecuteBatchInsert(ctx, db, root, s, batcher)
+	insertResult, err := ExecuteBatchInsert(ctx, root, s, batcher)
 	if err != nil {
 		return nil, err
 	}
