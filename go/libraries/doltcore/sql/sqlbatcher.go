@@ -16,6 +16,7 @@ package sql
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -45,15 +46,39 @@ type SqlBatcher struct {
 
 // Returns a new SqlBatcher for the given environment and root value.
 func NewSqlBatcher(db *doltdb.DoltDB, root *doltdb.RootValue) *SqlBatcher {
-	return &SqlBatcher{
-		db: db,
-		root: root,
-		tables: make(map[string]*doltdb.Table),
-		schemas: make(map[string]schema.Schema),
-		rowData: make(map[string]types.Map),
-		editors: make(map[string]*types.MapEditor),
-		hashes: make(map[string]map[hash.Hash]bool),
+	batcher := &SqlBatcher{
+		db:      db,
+		root:    root,
 	}
+	batcher.resetState()
+	return batcher
+}
+
+// Updates this batcher with a new root value.  If there are outstanding edits, returns an error.
+func (b *SqlBatcher) UpdateRoot(root *doltdb.RootValue) error {
+	if b.isDirty() {
+		return errors.New("UpdateRoot called with outstanding edits")
+	}
+	b.root = root
+
+	// resetting the state shouldn't be necessary here because of the isDirty check, but if the client chooses to ignore
+	// the returned error, we'll at least have a clean state going forward
+	b.resetState()
+	return nil
+}
+
+// isDirty returns whether there are outstanding edits that haven't been committed.
+func (b *SqlBatcher) isDirty() bool {
+	return len(b.editors) > 0
+}
+
+// resetState flushes the cache of outstanding edits and other data
+func (b *SqlBatcher) resetState() {
+	b.tables = make(map[string]*doltdb.Table)
+	b.schemas = make(map[string]schema.Schema)
+	b.rowData = make(map[string]types.Map)
+	b.editors = make(map[string]*types.MapEditor)
+	b.hashes = make(map[string]map[hash.Hash]bool)
 }
 
 type InsertOptions struct {
@@ -184,6 +209,9 @@ func (b *SqlBatcher) Commit(ctx context.Context) (*doltdb.RootValue, error) {
 		table = table.UpdateRows(ctx, newMap)
 		root = root.PutTable(ctx, b.db, tableName, table)
 	}
+
+	b.root = root
+	b.resetState()
 
 	return root, nil
 }

@@ -39,7 +39,8 @@ var ErrMissingPrimaryKeys = errors.New("One or more primary key columns missing 
 var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 
 // ExecuteInsertBatch executes the given insert statement in batch mode and returns the result. The table is not changed
-// until the batch is Commited.
+// until the batch is Commited. The InsertResult returned similarly doesn't have a Root set, since the root isn't
+// modified by this function.
 func ExecuteBatchInsert(
 		ctx context.Context,
 		root *doltdb.RootValue,
@@ -136,11 +137,10 @@ func ExecuteBatchInsert(
 
 // ExecuteInsert executes the given select insert statement and returns the result.
 func ExecuteInsert(
-	ctx context.Context,
-	db *doltdb.DoltDB,
-	root *doltdb.RootValue,
-	s *sqlparser.Insert,
-	query string,
+		ctx context.Context,
+		db *doltdb.DoltDB,
+		root *doltdb.RootValue,
+		s *sqlparser.Insert,
 ) (*InsertResult, error) {
 
 	batcher := NewSqlBatcher(db, root)

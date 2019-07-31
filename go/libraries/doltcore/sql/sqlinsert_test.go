@@ -315,7 +315,7 @@ func TestExecuteInsert(t *testing.T) {
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Insert)
 
-			result, err := ExecuteInsert(ctx, dEnv.DoltDB, root, s, tt.query)
+			result, err := ExecuteInsert(ctx, dEnv.DoltDB, root, s)
 
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)

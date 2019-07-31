@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -154,12 +153,23 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	// TODO: update completer on create / drop / alter statements
 	shell.CustomCompleter(newCompleter(dEnv))
 
+	batcher := dsql.NewSqlBatcher(dEnv.DoltDB, root)
+
+	cleanup := func() {
+		if newRoot, _ := batcher.Commit(context.Background()); newRoot != nil {
+			root = newRoot
+		}
+	}
+
 	shell.EOF(func(c *ishell.Context) {
 		c.Stop()
+		cleanup()
 	})
+
 	shell.Interrupt(func(c *ishell.Context, count int, input string) {
 		if count > 1 {
 			c.Stop()
+			cleanup()
 		} else {
 			c.Println("Received SIGINT. Interrupt again to exit, or use ^D, quit, or exit")
 		}
@@ -171,7 +181,7 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 			return
 		}
 
-		if newRoot, err := processQuery(query, dEnv, root); err != nil {
+		if newRoot, err := processBatchQuery(query, dEnv, root, batcher); err != nil {
 			shell.Println(color.RedString(err.Error()))
 		} else if newRoot != nil {
 			root = newRoot
@@ -288,9 +298,11 @@ func prepend(s string, ss []string) []string {
 
 // Processes a single query and returns the new root value of the DB, or an error encountered.
 func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	cli.Print("Processing " + query)
+
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
-		return nil, errFmt("Error parsing SQL: %v.", err.Error())
+		return nil, fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
 	switch s := sqlStatement.(type) {
@@ -303,7 +315,7 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 		}
 		return nil, err
 	case *sqlparser.Insert:
-		return sqlInsert(dEnv, root, s, query)
+		return sqlInsert(dEnv, root, s)
 	case *sqlparser.Update:
 		return sqlUpdate(dEnv, root, s, query)
 	case *sqlparser.Delete:
@@ -311,11 +323,43 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
-			return nil, errFmt("Error parsing DDL: %v.", err.Error())
+			return nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
 		}
 		return sqlDDL(dEnv, root, s, query)
 	default:
-		return nil, errFmt("Unsupported SQL statement: '%v'.", query)
+		return nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
+	}
+}
+
+// Processes a single query in batch mode and returns the result. The RootValue may or may not be changed.
+func processBatchQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue, batcher *dsql.SqlBatcher) (*doltdb.RootValue, error) {
+	sqlStatement, err := sqlparser.Parse(query)
+	if err != nil {
+		return nil, fmt.Errorf("Error parsing SQL: %v.", err.Error())
+	}
+
+	switch s := sqlStatement.(type) {
+	case *sqlparser.Insert:
+		return sqlInsertBatch(dEnv, root, s, batcher)
+	default:
+		// For any other kind of statement, we need to commit whatever batch edit we've accumulated so far before executing
+		// the query
+		newRoot, err := batcher.Commit(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		newRoot, err = processQuery(query, dEnv, newRoot)
+		if err != nil {
+			return nil, err
+		}
+		if newRoot != nil {
+			root = newRoot
+			if err := batcher.UpdateRoot(root); err != nil {
+				return nil, err
+			}
+		}
+
+		return root, nil
 	}
 }
 
@@ -396,10 +440,10 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 
 	p.Start()
 	if err := p.Wait(); err != nil {
-		return errFmt("error processing results: %v", err)
+		return fmt.Errorf("error processing results: %v", err)
 	}
 	if chanErr != io.EOF {
-		return errFmt("error processing results: %v", chanErr)
+		return fmt.Errorf("error processing results: %v", chanErr)
 	}
 
 	return nil
@@ -433,17 +477,17 @@ func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untyped
 
 	p.Start()
 	if err := p.Wait(); err != nil {
-		return errFmt("error processing results: %v", err)
+		return fmt.Errorf("error processing results: %v", err)
 	}
 
 	return nil
 }
 
 // Executes a SQL insert statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt, query)
+func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert) (*doltdb.RootValue, error) {
+	result, err := dsql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt)
 	if err != nil {
-		return nil, errFmt("Error inserting rows: %v", err.Error())
+		return nil, fmt.Errorf("Error inserting rows: %v", err.Error())
 	}
 
 	cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
@@ -457,11 +501,34 @@ func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert
 	return result.Root, nil
 }
 
+// Executes a SQL insert statement in batch mode and returns the new root value (which is usually unchanged) or an
+// error. No output is written to the console in batch mode.
+func sqlInsertBatch(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, batcher *dsql.SqlBatcher) (*doltdb.RootValue, error) {
+	result, err := dsql.ExecuteBatchInsert(context.Background(), root, stmt, batcher)
+	if err != nil {
+		return nil, fmt.Errorf("Error inserting rows: %v", err.Error())
+	}
+
+	cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
+	if result.NumRowsUpdated > 0 {
+		cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
+	}
+	if result.NumErrorsIgnored > 0 {
+		cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
+	}
+
+	if result.Root != nil {
+		root = result.Root
+	}
+
+	return root, nil
+}
+
 // Executes a SQL update statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
 func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) (*doltdb.RootValue, error) {
 	result, err := dsql.ExecuteUpdate(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
-		return nil, errFmt("Error during update: %v", err.Error())
+		return nil, fmt.Errorf("Error during update: %v", err.Error())
 	}
 
 	cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
@@ -476,7 +543,7 @@ func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Upda
 func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) (*doltdb.RootValue, error) {
 	result, err := dsql.ExecuteDelete(context.Background(), dEnv.DoltDB, root, update, query)
 	if err != nil {
-		return nil, errFmt("Error during update: %v", err.Error())
+		return nil, fmt.Errorf("Error during update: %v", err.Error())
 	}
 
 	cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
@@ -490,28 +557,24 @@ func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query
 	case sqlparser.CreateStr:
 		newRoot, _, err := dsql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
 		if err != nil {
-			return nil, errFmt("Error creating table: %v", err)
+			return nil, fmt.Errorf("Error creating table: %v", err)
 		}
 		return newRoot, nil
 	case sqlparser.AlterStr, sqlparser.RenameStr:
 		newRoot, err := dsql.ExecuteAlter(context.Background(), dEnv.DoltDB, root, ddl, query)
 		if err != nil {
-			return nil, errFmt("Error altering table: %v", err)
+			return nil, fmt.Errorf("Error altering table: %v", err)
 		}
 		return newRoot, nil
 	case sqlparser.DropStr:
 		newRoot, err := dsql.ExecuteDrop(context.Background(), dEnv.DoltDB, root, ddl, query)
 		if err != nil {
-			return nil, errFmt("Error dropping table: %v", err)
+			return nil, fmt.Errorf("Error dropping table: %v", err)
 		}
 		return newRoot, nil
 	case sqlparser.TruncateStr:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	default:
-		return nil, errFmt("Unhandled DDL action %v in query %v", ddl.Action, query)
+		return nil, fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
-}
-
-func errFmt(fmtMsg string, args ...interface{}) error {
-	return errors.New(fmt.Sprintf(fmtMsg, args...))
 }

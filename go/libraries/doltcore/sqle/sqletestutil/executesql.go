@@ -52,7 +52,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			return nil, errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
 			var result *dsql.InsertResult
-			result, execErr = dsql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, s, query)
+			result, execErr = dsql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, s)
 			root = result.Root
 		case *sqlparser.Update:
 			var result *dsql.UpdateResult
