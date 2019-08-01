@@ -301,7 +301,13 @@ func (ml mapLeafSequence) search(key orderedKey) (int, error) {
 			return false, err
 		}
 
-		return k.Less(ml.format(), key)
+		isLess, err := k.Less(ml.format(), key)
+
+		if err != nil {
+			return false, nil
+		}
+
+		return !isLess, nil
 	})
 
 	return n, err

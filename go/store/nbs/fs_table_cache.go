@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"io/ioutil"
 	"os"
@@ -105,7 +106,7 @@ func (ftc *fsTableCache) init(concurrency int) error {
 		})
 	}()
 
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 	wg := sync.WaitGroup{}
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {

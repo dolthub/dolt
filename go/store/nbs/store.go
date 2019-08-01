@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"os"
 	"reflect"
 	"sort"
@@ -408,7 +409,7 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		}
 	}()
 
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
 
 	tables, remaining := func() (tables chunkReader, remaining bool) {

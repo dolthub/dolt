@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
@@ -129,7 +130,7 @@ func (ts tableSet) get(ctx context.Context, h addr, stats *Stats) ([]byte, error
 	return f(ts.upstream)
 }
 
-func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if ae.IsSet() {
@@ -399,7 +400,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	}
 
 	// Open all the new upstream tables concurrently
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 	merged.upstream = make(chunkSources, len(tablesToOpen))
 	wg := &sync.WaitGroup{}
 	i := 0

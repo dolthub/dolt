@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sort"
 	"sync"
 	"time"
@@ -119,7 +120,7 @@ func conjoinTables(ctx context.Context, p tablePersister, upstream []tableSpec, 
 	// Open all the upstream tables concurrently
 	sources := make(chunkSources, len(upstream))
 
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 	wg := sync.WaitGroup{}
 	for i, spec := range upstream {
 		wg.Add(1)

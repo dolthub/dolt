@@ -60,11 +60,17 @@ func New(vrw types.ValueReadWriter, r io.Reader, options ParserOptions) *Parser 
 // ParseType parses a string describing a Noms type.
 func ParseType(code string) (typ *types.Type, err error) {
 	p := New(nil, strings.NewReader(code), ParserOptions{})
+	var typeErr error
 	err = catchSyntaxError(func() {
-		typ = p.parseType()
+		typ, typeErr = p.parseType()
 		p.ensureAtEnd()
 	})
-	return
+
+	if err == nil && typeErr != nil {
+		return nil, typeErr
+	}
+
+	return typ, err
 }
 
 // MustParseType parses a string describing a Noms type and panics if there
@@ -78,11 +84,17 @@ func MustParseType(code string) *types.Type {
 // Parse parses a string describing a Noms value.
 func Parse(ctx context.Context, vrw types.ValueReadWriter, code string) (v types.Value, err error) {
 	p := New(vrw, strings.NewReader(code), ParserOptions{})
+	var parseErr error
 	err = catchSyntaxError(func() {
-		v = p.parseValue(ctx)
+		v, parseErr = p.parseValue(ctx)
 		p.ensureAtEnd()
 	})
-	return
+
+	if err == nil && parseErr != nil {
+		return nil, parseErr
+	}
+
+	return v, err
 }
 
 // MustParse parses a string describing a Noms value and panics if there
@@ -145,16 +157,21 @@ func (p *Parser) ensureAtEnd() {
 // StructFieldName :
 //   Ident
 
-func (p *Parser) parseType() *types.Type {
+func (p *Parser) parseType() (*types.Type, error) {
 	tok := p.lex.eat(scanner.Ident)
 	return p.parseTypeWithToken(tok, p.lex.tokenText())
 }
 
-func (p *Parser) parseTypeWithToken(tok rune, tokenText string) *types.Type {
-	t := p.parseSingleTypeWithToken(tok, tokenText)
+func (p *Parser) parseTypeWithToken(tok rune, tokenText string) (*types.Type, error) {
+	t, err := p.parseSingleTypeWithToken(tok, tokenText)
+
+	if err != nil {
+		return nil, err
+	}
+
 	tok = p.lex.peek()
 	if tok != '|' {
-		return t
+		return t, nil
 	}
 	unionTypes := []*types.Type{t}
 
@@ -165,52 +182,73 @@ func (p *Parser) parseTypeWithToken(tok rune, tokenText string) *types.Type {
 		} else {
 			break
 		}
-		unionTypes = append(unionTypes, p.parseSingleType())
+		st, err := p.parseSingleType()
+
+		if err != nil {
+			return nil, err
+		}
+
+		unionTypes = append(unionTypes, st)
 	}
 	return types.MakeUnionType(unionTypes...)
 }
 
-func (p *Parser) parseSingleType() *types.Type {
+func (p *Parser) parseSingleType() (*types.Type, error) {
 	tok := p.lex.eat(scanner.Ident)
 	return p.parseSingleTypeWithToken(tok, p.lex.tokenText())
 }
 
-func (p *Parser) parseSingleTypeWithToken(tok rune, tokenText string) *types.Type {
+func (p *Parser) parseSingleTypeWithToken(tok rune, tokenText string) (*types.Type, error) {
 	switch tokenText {
 	case "Bool":
-		return types.BoolType
+		return types.BoolType, nil
 	case "Blob":
-		return types.BlobType
+		return types.BlobType, nil
 	case "Float":
-		return types.FloaTType
+		return types.FloaTType, nil
 	case "String":
-		return types.StringType
+		return types.StringType, nil
 	case "Type":
-		return types.TypeType
+		return types.TypeType, nil
 	case "Value":
-		return types.ValueType
+		return types.ValueType, nil
 	case "Struct":
 		return p.parseStructType()
 	case "Map":
 		return p.parseMapType()
 	case "List":
-		elemType := p.parseSingleElemType(true)
+		elemType, err := p.parseSingleElemType(true)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return types.MakeListType(elemType)
 	case "Set":
-		elemType := p.parseSingleElemType(true)
+		elemType, err := p.parseSingleElemType(true)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return types.MakeSetType(elemType)
 	case "Ref":
-		elemType := p.parseSingleElemType(false)
+		elemType, err := p.parseSingleElemType(false)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return types.MakeRefType(elemType)
 	case "Cycle":
-		return p.parseCycleType()
+		return p.parseCycleType(), nil
 	}
 
 	p.lex.unexpectedToken(tok)
-	return nil
+	return nil, types.ErrUnknownType
 }
 
-func (p *Parser) parseStructType() *types.Type {
+func (p *Parser) parseStructType() (*types.Type, error) {
 	tok := p.lex.next()
 	name := ""
 	if tok == scanner.Ident {
@@ -227,7 +265,12 @@ func (p *Parser) parseStructType() *types.Type {
 		fieldName := p.lex.tokenText()
 		optional := p.lex.eatIf('?')
 		p.lex.eat(':')
-		typ := p.parseType()
+		typ, err := p.parseType()
+
+		if err != nil {
+			return nil, err
+		}
+
 		fields = append(fields, types.StructField{
 			Name:     fieldName,
 			Type:     typ,
@@ -244,14 +287,19 @@ func (p *Parser) parseStructType() *types.Type {
 	return types.MakeStructType(name, fields...)
 }
 
-func (p *Parser) parseSingleElemType(allowEmptyUnion bool) *types.Type {
+func (p *Parser) parseSingleElemType(allowEmptyUnion bool) (*types.Type, error) {
 	p.lex.eat('<')
 	if allowEmptyUnion && p.lex.eatIf('>') {
 		return types.MakeUnionType()
 	}
-	elemType := p.parseType()
+	elemType, err := p.parseType()
+
+	if err != nil {
+		return nil, err
+	}
+
 	p.lex.eat('>')
-	return elemType
+	return elemType, nil
 }
 
 func (p *Parser) parseCycleType() *types.Type {
@@ -262,17 +310,34 @@ func (p *Parser) parseCycleType() *types.Type {
 	return types.MakeCycleType(name)
 }
 
-func (p *Parser) parseMapType() *types.Type {
+func (p *Parser) parseMapType() (*types.Type, error) {
 	var keyType, valueType *types.Type
 	p.lex.eat('<')
 
 	if p.lex.eatIf('>') {
-		keyType = types.MakeUnionType()
+		var err error
+		keyType, err = types.MakeUnionType()
+
+		if err != nil {
+			return nil, err
+		}
+
 		valueType = keyType
 	} else {
-		keyType = p.parseType()
+		var err error
+		keyType, err = p.parseType()
+
+		if err != nil {
+			return nil, err
+		}
+
 		p.lex.eat(',')
-		valueType = p.parseType()
+		valueType, err = p.parseType()
+
+		if err != nil {
+			return nil, err
+		}
+
 		p.lex.eat('>')
 	}
 	return types.MakeMapType(keyType, valueType)
@@ -327,15 +392,15 @@ func (p *Parser) parseMapType() *types.Type {
 //
 // StructField :
 //   StructFieldName `:` Value
-func (p *Parser) parseValue(ctx context.Context) types.Value {
+func (p *Parser) parseValue(ctx context.Context) (types.Value, error) {
 	tok := p.lex.next()
 	switch tok {
 	case scanner.Ident:
 		switch tokenText := p.lex.tokenText(); tokenText {
 		case "true":
-			return types.Bool(true)
+			return types.Bool(true), nil
 		case "false":
-			return types.Bool(false)
+			return types.Bool(false), nil
 		case "set":
 			return p.parseSet(ctx)
 		case "map":
@@ -349,18 +414,18 @@ func (p *Parser) parseValue(ctx context.Context) types.Value {
 		}
 	case scanner.Float, scanner.Int:
 		f := p.parseFloat()
-		return types.Float(f)
+		return types.Float(f), nil
 	case '-':
 		if !p.lex.eatIf(scanner.Float) {
 			p.lex.eat(scanner.Int)
 		}
 		n := p.parseFloat()
-		return types.Float(-float64(n))
+		return types.Float(-float64(n)), nil
 	case '+':
 		if !p.lex.eatIf(scanner.Float) {
 			p.lex.eat(scanner.Int)
 		}
-		return p.parseFloat()
+		return p.parseFloat(), nil
 	case '[':
 		return p.parseList(ctx)
 	case scanner.String:
@@ -369,7 +434,7 @@ func (p *Parser) parseValue(ctx context.Context) types.Value {
 		if err != nil {
 			raiseSyntaxError(fmt.Sprintf("Invalid string %s", s), p.lex.pos())
 		}
-		return types.String(s2)
+		return types.String(s2), nil
 	}
 
 	p.lex.unexpectedToken(tok)
@@ -383,12 +448,22 @@ func (p *Parser) parseFloat() types.Float {
 	return types.Float(f)
 }
 
-func (p *Parser) parseList(ctx context.Context) types.List {
+func (p *Parser) parseList(ctx context.Context) (types.List, error) {
 	// already swallowed '['
-	le := types.NewList(ctx, p.vrw).Edit()
+	l, err := types.NewList(ctx, p.vrw)
+
+	if err != nil {
+		return types.EmptyList, err
+	}
+
+	le := l.Edit()
 
 	for p.lex.peek() != ']' {
-		v := p.parseValue(ctx)
+		v, err := p.parseValue(ctx)
+
+		if err != nil {
+			return types.EmptyList, err
+		}
 		le.Append(v)
 
 		if p.lex.eatIf(',') {
@@ -401,14 +476,29 @@ func (p *Parser) parseList(ctx context.Context) types.List {
 	return le.List(ctx)
 }
 
-func (p *Parser) parseSet(ctx context.Context) types.Set {
+func (p *Parser) parseSet(ctx context.Context) (types.Set, error) {
 	// already swallowed 'set'
 	p.lex.eat('{')
-	se := types.NewSet(ctx, p.vrw).Edit()
+	s, err := types.NewSet(ctx, p.vrw)
+
+	if err != nil {
+		return types.EmptySet, err
+	}
+
+	se := s.Edit()
 
 	for p.lex.peek() != '}' {
-		v := p.parseValue(ctx)
-		se.Insert(v)
+		v, err := p.parseValue(ctx)
+
+		if err != nil {
+			return types.EmptySet, err
+		}
+
+		se, err = se.Insert(v)
+
+		if err != nil {
+			return types.EmptySet, err
+		}
 
 		if p.lex.eatIf(',') {
 			continue
@@ -420,17 +510,27 @@ func (p *Parser) parseSet(ctx context.Context) types.Set {
 	return se.Set(ctx)
 }
 
-func (p *Parser) parseMap(ctx context.Context) types.Map {
+func (p *Parser) parseMap(ctx context.Context) (types.Map, error) {
 	// already swallowed 'map'
 	p.lex.eat('{')
-	me := types.NewMap(ctx, p.vrw).Edit()
+	m, err := types.NewMap(ctx, p.vrw)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	me := m.Edit()
 
 	for p.lex.peek() != '}' {
-		key := p.parseValue(ctx)
+		key, err := p.parseValue(ctx)
+
+		if err != nil {
+			return types.EmptyMap, err
+		}
 
 		p.lex.eat(':')
-		value := p.parseValue(ctx)
-		me.Set(key, value)
+		value, err := p.parseValue(ctx)
+		me = me.Set(key, value)
 
 		if p.lex.eatIf(',') {
 			continue
@@ -462,7 +562,7 @@ func (p *Parser) blobString(s string) []byte {
 	return buff.Bytes()
 }
 
-func (p *Parser) parseBlob(ctx context.Context) types.Blob {
+func (p *Parser) parseBlob(ctx context.Context) (types.Blob, error) {
 	// already swallowed 'blob'
 	p.lex.eat('{')
 	var buff bytes.Buffer
@@ -482,7 +582,7 @@ func (p *Parser) parseBlob(ctx context.Context) types.Blob {
 	return types.NewBlob(ctx, p.vrw, bytes.NewReader(buff.Bytes()))
 }
 
-func (p *Parser) parseStruct(ctx context.Context) types.Struct {
+func (p *Parser) parseStruct(ctx context.Context) (types.Struct, error) {
 	// already swallowed 'struct'
 	tok := p.lex.next()
 	name := ""
@@ -499,7 +599,12 @@ func (p *Parser) parseStruct(ctx context.Context) types.Struct {
 
 		fieldName := p.lex.tokenText()
 		p.lex.eat(':')
-		v := p.parseValue(ctx)
+		v, err := p.parseValue(ctx)
+
+		if err != nil {
+			return types.EmptyStruct(types.Format_Default), err
+		}
+
 		data[fieldName] = v
 
 		if p.lex.eatIf(',') {

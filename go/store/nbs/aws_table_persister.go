@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"net/url"
 	"sort"
@@ -364,7 +365,7 @@ func (s3p awsTablePersister) assembleTable(ctx context.Context, plan compactionP
 		return nil, err
 	}
 
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 	// Concurrently read data from small tables into |buff|
 	var readWg sync.WaitGroup
 	for _, man := range manuals {

@@ -26,6 +26,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"sort"
 	"sync"
@@ -375,7 +376,7 @@ func (tr tableReader) getMany(
 	reqs []getRecord,
 	foundChunks chan *chunks.Chunk,
 	wg *sync.WaitGroup,
-	ae *AtomicError,
+	ae *atomicerr.AtomicError,
 	stats *Stats) bool {
 
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
@@ -391,7 +392,7 @@ func (tr tableReader) getManyAtOffsets(
 	offsetRecords offsetRecSlice,
 	foundChunks chan *chunks.Chunk,
 	wg *sync.WaitGroup,
-	ae *AtomicError,
+	ae *atomicerr.AtomicError,
 	stats *Stats,
 ) {
 

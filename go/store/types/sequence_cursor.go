@@ -212,13 +212,13 @@ func (cur *sequenceCursor) compare(other *sequenceCursor) int {
 
 // iter iterates forward from the current position
 func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) error {
-	item, err := cur.getItem(cur.idx)
-
-	if err != nil {
-		return err
-	}
-
 	for cur.valid() {
+		item, err := cur.getItem(cur.idx)
+
+		if err != nil {
+			return err
+		}
+
 		stop, err := cb(item)
 
 		if err != nil {

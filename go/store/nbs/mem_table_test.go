@@ -24,6 +24,7 @@ package nbs
 import (
 	"bytes"
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -250,7 +251,7 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	for _, haver := range crg {
 		remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
 

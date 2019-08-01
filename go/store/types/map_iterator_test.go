@@ -46,6 +46,7 @@ func TestMapIterator(t *testing.T) {
 		for i := start; i < 5; i++ {
 			k, v, err := it.Next(context.Background())
 			assert.NoError(err)
+
 			assert.True(k.Equals(k), msg)
 			assert.True(v.Equals(v), msg)
 			assert.True(String(string(byte(65+i))).Equals(k), msg)

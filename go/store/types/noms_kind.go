@@ -27,7 +27,6 @@ type NomsKind uint8
 // All supported kinds of Noms types are enumerated here.
 // The ordering of these (especially Bool, Float and String) is important for ordering of values.
 const (
-	UnknownKind NomsKind = 255
 	BoolKind    NomsKind = iota
 	FloatKind
 	StringKind
@@ -53,6 +52,8 @@ const (
 	UintKind
 	NullKind
 	TupleKind
+
+	UnknownKind NomsKind = 255
 )
 
 var SupportedKinds = map[NomsKind]struct{}{
