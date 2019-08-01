@@ -62,7 +62,7 @@ func EncodeValue(v Value, nbf *NomsBinFormat) (chunks.Chunk, error) {
 		return chunks.NewChunk(w.data()), nil
 	}
 
-	panic("unreachable")
+	return chunks.EmptyChunk, ErrUnknownType
 }
 
 func decodeFromBytes(data []byte, vrw ValueReadWriter) (Value, error) {

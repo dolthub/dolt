@@ -534,7 +534,11 @@ func encodedValueFormatMaxLines(ctx context.Context, v Value, floatFormat byte, 
 	w := &hrsWriter{w: mlw, floatFormat: floatFormat}
 	err := w.Write(ctx, v)
 
-	if err != nil {
+	if err == writers.MaxLinesErr {
+		return buf.String(), writers.MaxLinesErr
+	}
+
+	if err != nil && err != writers.MaxLinesErr {
 		return "", err
 	}
 

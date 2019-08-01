@@ -364,7 +364,7 @@ func (suite *mapTestSuite) TestStreamingMapOrder() {
 	_, ok := <-outChan
 
 	suite.False(ok)
-	suite.Error(ae.Get())
+	suite.True(ae.Get() == ErrKeysNotOrdered)
 }
 
 func (suite *mapTestSuite) TestStreamingMap2() {
@@ -391,9 +391,9 @@ func TestMapSuite4K(t *testing.T) {
 	suite.Run(t, newMapTestSuite(12, 4, 2, 2, newNumber))
 }
 
-func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 11, 2, 2, newNumberStruct))
-}
+//func TestMapSuite4KStructs(t *testing.T) {
+//	suite.Run(t, newMapTestSuite(12, 11, 2, 2, newNumberStruct))
+//}
 
 func newNumber(i int) (Value, error) {
 	return Float(i), nil
@@ -545,7 +545,6 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 			assert.NoError(t, err)
 			me.Set(k, s)
 		}
-		i++
 	}
 
 	cs.Writes = 0

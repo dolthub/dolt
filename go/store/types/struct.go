@@ -242,6 +242,7 @@ func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) (*Type, error)
 	count := dec.readCount()
 	typeFields := make(structTypeFields, count)
 	for i := uint64(0); i < count; i++ {
+		fname := dec.readString()
 		t, err := dec.readTypeOfValue(nbf)
 
 		if err != nil {
@@ -249,7 +250,7 @@ func readStructTypeOfValue(nbf *NomsBinFormat, dec *valueDecoder) (*Type, error)
 		}
 
 		typeFields[i] = StructField{
-			Name:     dec.readString(),
+			Name:     fname,
 			Optional: false,
 			Type:     t,
 		}

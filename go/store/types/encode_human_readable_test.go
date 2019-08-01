@@ -26,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/util/writers"
 	"strings"
 	"testing"
 
@@ -364,11 +365,13 @@ func TestEncodedValueMaxLines(t *testing.T) {
 	l1, err := NewList(context.Background(), vrw, generateNumbersAsValues(11)...)
 	assert.NoError(err)
 	expected := strings.Join(strings.SplitAfterN(mustString(EncodedValue(context.Background(), l1)), "\n", 6)[:5], "")
-	assert.Equal(expected, mustString(EncodedValueMaxLines(context.Background(), l1, 5)))
+	actual, err := EncodedValueMaxLines(context.Background(), l1, 5)
+	assert.True(err == writers.MaxLinesErr)
+	assert.Equal(expected, actual)
 
 	buf := bytes.Buffer{}
 	err = WriteEncodedValueMaxLines(context.Background(), &buf, l1, 5)
-	assert.NoError(err)
+	assert.True(err == writers.MaxLinesErr)
 	assert.Equal(expected, buf.String())
 }
 

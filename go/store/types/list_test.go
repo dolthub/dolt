@@ -253,10 +253,9 @@ func TestListRemoveAt(t *testing.T) {
 	assert.NoError(err)
 	assert.True(mustList(NewList(context.Background(), vrw)).Equals(l1))
 
-	//assert.Panics(func() {
-	_, err = l1.Edit().RemoveAt(0).List(context.Background())
-	assert.Error(err)
-	//})
+	assert.Panics(func() {
+		l1.Edit().RemoveAt(0).List(context.Background())
+	})
 }
 
 func getTestListLen() uint64 {

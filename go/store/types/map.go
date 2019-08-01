@@ -23,10 +23,13 @@ package types
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
+
+var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")
 
 var EmptyMap Map
 
@@ -132,7 +135,10 @@ func readMapInput(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.Atomic
 					return
 				}
 
-				d.PanicIfFalse(isLess)
+				if !isLess {
+					ae.SetIfError(ErrKeysNotOrdered)
+					return
+				}
 			}
 			lastK = k
 			nextIsKey = false

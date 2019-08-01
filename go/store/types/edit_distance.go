@@ -300,16 +300,17 @@ func sharedSuffix(eqFn EditDistanceEqualsFn, previousLength uint64, currentLengt
 	count := uint64(0)
 	previousLength--
 	currentLength--
-	equals, err := eqFn(previousLength, currentLength)
 
-	if err != nil {
-		return 0, err
-	}
-
-	for count < searchLength && equals {
-		count++
-		previousLength--
-		currentLength--
+	for count < searchLength {
+		if equals, err := eqFn(previousLength, currentLength); err != nil {
+			return 0, err
+		} else if equals {
+			count++
+			previousLength--
+			currentLength--
+		} else {
+			break
+		}
 	}
 
 	return count, nil
