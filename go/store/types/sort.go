@@ -16,15 +16,15 @@ package types
 
 import "sort"
 
-type sortData interface {
+type SortData interface {
 	Len() int
 	Less(i, j int) (bool, error)
 	Swap(i, j int)
 }
 
 type sortWrapper struct {
-	data sortData
-	err error
+	data SortData
+	err  error
 }
 
 func (sw *sortWrapper) Len() int {
@@ -50,14 +50,14 @@ func (sw *sortWrapper) Swap(i, j int) {
 }
 
 
-func sortWithErroringLess(data sortData) error {
+func SortWithErroringLess(data SortData) error {
 	sw := &sortWrapper{data, nil}
 	sort.Stable(sw)
 
 	return sw.err
 }
 
-func searchWithErroringLess(n int, f func(i int) (bool, error)) (int, error) {
+func SearchWithErroringLess(n int, f func(i int) (bool, error)) (int, error) {
 	var err error
 	fWrapper := func(i int) bool {
 		if err != nil {

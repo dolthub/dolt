@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -56,7 +56,7 @@ func sendChange(changes chan<- ValueChanged, stopChan <-chan struct{}, change Va
 // The left-right diff is expected to return results earlier, whereas the top-down approach is faster overall. This "best" algorithm runs both:
 // - early results from left-right are sent to |changes|.
 // - if/when top-down catches up, left-right is stopped and the rest of the changes are streamed from top-down.
-func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current orderedSequence, ae *nbs.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	lrChanges := make(chan ValueChanged)
 	tdChanges := make(chan ValueChanged)
 	// Give the stop channels a buffer size of 1 so that they won't block (see below).
@@ -134,12 +134,12 @@ func orderedSequenceDiffBest(ctx context.Context, last orderedSequence, current 
 
 // Streams the diff from |last| to |current| into |changes|, using a top-down approach.
 // Top-down is parallel and efficiently returns the complete diff, but compared to left-right it's slow to start streaming changes.
-func orderedSequenceDiffTopDown(ctx context.Context, last orderedSequence, current orderedSequence, ae *nbs.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffTopDown(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	return orderedSequenceDiffInternalNodes(ctx, last, current, ae, changes, stopChan)
 }
 
 // TODO - something other than the literal edit-distance, which is way too much cpu work for this case - https://github.com/attic-labs/noms/issues/2027
-func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence, current orderedSequence, ae *nbs.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	if last.treeLevel() > current.treeLevel() && !ae.IsSet() {
 		lastChild, err := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
 
@@ -209,7 +209,7 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence,
 
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
-func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, ae *nbs.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
+func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	lastCur, err := newCursorAt(ctx, last, emptyKey, false, false)
 
 	if ae.SetIfErrAndCheck(err) {

@@ -24,8 +24,8 @@ package types
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 var EmptyMap Map
@@ -92,7 +92,7 @@ func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) 
 // input channel out of order will result in a panic. Once the input channel is
 // closed by the caller, a finished Map will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError, kvs <-chan Value) <-chan Map {
+func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, kvs <-chan Value) <-chan Map {
 	d.PanicIfTrue(vrw == nil)
 	return newStreamingMap(vrw, kvs, func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
 		go func() {
@@ -109,7 +109,7 @@ func newStreamingMap(vrw ValueReadWriter, kvs <-chan Value, readFunc streamingMa
 	return outChan
 }
 
-func readMapInput(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError, kvs <-chan Value, outChan chan<- Map) {
+func readMapInput(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, kvs <-chan Value, outChan chan<- Map) {
 	defer close(outChan)
 
 	ch, err := newEmptyMapSequenceChunker(ctx, vrw)
@@ -159,7 +159,7 @@ func readMapInput(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError,
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
-func (m Map) Diff(ctx context.Context, last Map, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) Diff(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
 	}
@@ -168,7 +168,7 @@ func (m Map) Diff(ctx context.Context, last Map, ae *nbs.AtomicError, changes ch
 
 // DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
-func (m Map) DiffHybrid(ctx context.Context, last Map, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) DiffHybrid(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
 	}
@@ -178,7 +178,7 @@ func (m Map) DiffHybrid(ctx context.Context, last Map, ae *nbs.AtomicError, chan
 // DiffLeftRight computes the diff from |last| to |m| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
-func (m Map) DiffLeftRight(ctx context.Context, last Map, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) DiffLeftRight(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
 	}
@@ -429,7 +429,7 @@ func buildMapData(nbf *NomsBinFormat, values []Value) (mapEntrySlice, error) {
 		nbf,
 	}
 
-	err := sortWithErroringLess(kvs)
+	err := SortWithErroringLess(kvs)
 
 	if err != nil {
 		return mapEntrySlice{}, err

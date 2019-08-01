@@ -298,8 +298,8 @@ func sharedPrefix(eqFn EditDistanceEqualsFn, searchLength uint64) (uint64, error
 
 func sharedSuffix(eqFn EditDistanceEqualsFn, previousLength uint64, currentLength uint64, searchLength uint64) (uint64, error) {
 	count := uint64(0)
-	previousLength-
-		currentLength--
+	previousLength--
+	currentLength--
 	equals, err := eqFn(previousLength, currentLength)
 
 	if err != nil {

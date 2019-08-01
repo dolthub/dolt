@@ -153,7 +153,9 @@ func TestTestCursor(t *testing.T) {
 		assert.Equal(expectParentIdx, cur.parent.indexInChunk())
 		assert.Equal(expectOk, cur.valid())
 		if cur.valid() {
-			assert.Equal(expectVal, cur.current())
+			seq, err := cur.current()
+			assert.NoError(err)
+			assert.Equal(expectVal, seq)
 		}
 	}
 

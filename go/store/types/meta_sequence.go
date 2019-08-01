@@ -239,7 +239,7 @@ func (ms metaSequence) getKey(idx int) (orderedKey, error) {
 }
 
 func (ms metaSequence) search(key orderedKey) (int, error) {
-	res, err := searchWithErroringLess(int(ms.seqLen()), func(i int) (bool, error) {
+	res, err := SearchWithErroringLess(int(ms.seqLen()), func(i int) (bool, error) {
 		ordKey, err := ms.getKey(i)
 
 		if err != nil {
@@ -346,7 +346,7 @@ func (ms metaSequence) getNumLeavesAt(idx int) (uint64, error) {
 // sequence interface
 func (ms metaSequence) getItem(idx int) (sequenceItem, error) {
 	dec := ms.decoderSkipToIndex(idx)
-	return ms.readTuple(&dec), nil
+	return ms.readTuple(&dec)
 }
 
 func (ms metaSequence) valuesSlice(from, to uint64) ([]Value, error) {

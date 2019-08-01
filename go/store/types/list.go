@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -76,7 +76,7 @@ func NewList(ctx context.Context, vrw ValueReadWriter, values ...Value) (List, e
 // NewStreamingList creates a new List, populated with values, chunking if and when needed. As
 // chunks are created, they're written to vrw -- including the root chunk of the list. Once the
 // caller has closed values, the caller can read the completed List from the returned channel.
-func NewStreamingList(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError, values <-chan Value) <-chan List {
+func NewStreamingList(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, values <-chan Value) <-chan List {
 	out := make(chan List, 1)
 	go func() {
 		defer close(out)
@@ -230,7 +230,7 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 	targetBatchBytes := 1 << 23 // 8MB
 	estimatedNumValues := uint64(1000)
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	go func() {
 		defer close(vcChan)
 		for idx, l := uint64(0), col.Len(); idx < l; {

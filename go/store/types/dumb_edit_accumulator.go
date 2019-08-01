@@ -36,7 +36,7 @@ func (dumb *DumbEditAccumulator) AddEdit(k LesserValuable, v Valuable) {
 // FinishEditing should be called when all edits have been added to get an EditProvider which provides the
 // edits in sorted order.  Adding more edits after calling FinishedEditing is an error
 func (dumb *DumbEditAccumulator) FinishedEditing() (EditProvider, error) {
-	err := sortWithErroringLess(KVPSort{dumb.edits, dumb.nbf})
+	err := SortWithErroringLess(KVPSort{dumb.edits, dumb.nbf})
 
 	if err != nil {
 		return nil, err
@@ -47,14 +47,14 @@ func (dumb *DumbEditAccumulator) FinishedEditing() (EditProvider, error) {
 
 // Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 // in key sorted order
-func (dumb *DumbEditAccumulator) Next() *KVP {
+func (dumb *DumbEditAccumulator) Next() (*KVP, error) {
 	var curr *KVP
 	if dumb.pos < len(dumb.edits) {
 		curr = &dumb.edits[dumb.pos]
 		dumb.pos++
 	}
 
-	return curr
+	return curr, nil
 }
 
 // NumEdits returns the number of KVPs representing the edits that will be provided when calling next

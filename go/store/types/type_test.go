@@ -32,48 +32,55 @@ func TestTypes(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	mapType := MakeMapType(StringType, FloaTType)
-	setType := MakeSetType(StringType)
-	mahType := MakeStructType("MahStruct",
+	mapType, err := MakeMapType(StringType, FloaTType)
+	assert.NoError(err)
+	setType, err := MakeSetType(StringType)
+	assert.NoError(err)
+	mahType, err := MakeStructType("MahStruct",
 		StructField{"Field1", StringType, false},
 		StructField{"Field2", BoolType, false},
 	)
-	recType := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType("RecursiveStruct"), false})
+	assert.NoError(err)
+	recType, err := MakeStructType("RecursiveStruct", StructField{"self", MakeCycleType("RecursiveStruct"), false})
+	assert.NoError(err)
 
-	mRef := vs.WriteValue(context.Background(), mapType).TargetHash()
-	setRef := vs.WriteValue(context.Background(), setType).TargetHash()
-	mahRef := vs.WriteValue(context.Background(), mahType).TargetHash()
-	recRef := vs.WriteValue(context.Background(), recType).TargetHash()
+	mRef := mustRef(vs.WriteValue(context.Background(), mapType)).TargetHash()
+	setRef := mustRef(vs.WriteValue(context.Background(), setType)).TargetHash()
+	mahRef := mustRef(vs.WriteValue(context.Background(), mahType)).TargetHash()
+	recRef := mustRef(vs.WriteValue(context.Background(), recType)).TargetHash()
 
-	assert.True(mapType.Equals(vs.ReadValue(context.Background(), mRef)))
-	assert.True(setType.Equals(vs.ReadValue(context.Background(), setRef)))
-	assert.True(mahType.Equals(vs.ReadValue(context.Background(), mahRef)))
-	assert.True(recType.Equals(vs.ReadValue(context.Background(), recRef)))
+	assert.True(mapType.Equals(mustValue(vs.ReadValue(context.Background(), mRef))))
+	assert.True(setType.Equals(mustValue(vs.ReadValue(context.Background(), setRef))))
+	assert.True(mahType.Equals(mustValue(vs.ReadValue(context.Background(), mahRef))))
+	assert.True(recType.Equals(mustValue(vs.ReadValue(context.Background(), recRef))))
 }
 
 func TestTypeType(t *testing.T) {
-	assert.True(t, TypeOf(BoolType).Equals(TypeType))
+	assert.True(t, mustType(TypeOf(BoolType)).Equals(TypeType))
 }
 
 func TestTypeRefDescribe(t *testing.T) {
 	assert := assert.New(t)
-	mapType := MakeMapType(StringType, FloaTType)
-	setType := MakeSetType(StringType)
+	mapType, err := MakeMapType(StringType, FloaTType)
+	assert.NoError(err)
+	setType, err := MakeSetType(StringType)
+	assert.NoError(err)
 
-	assert.Equal("Bool", BoolType.Describe(context.Background()))
-	assert.Equal("Float", FloaTType.Describe(context.Background()))
-	assert.Equal("String", StringType.Describe(context.Background()))
-	assert.Equal("UUID", UUIDType.Describe(context.Background()))
-	assert.Equal("Int", IntType.Describe(context.Background()))
-	assert.Equal("Uint", UintType.Describe(context.Background()))
-	assert.Equal("Map<String, Float>", mapType.Describe(context.Background()))
-	assert.Equal("Set<String>", setType.Describe(context.Background()))
+	assert.Equal("Bool", mustString(BoolType.Describe(context.Background())))
+	assert.Equal("Float", mustString(FloaTType.Describe(context.Background())))
+	assert.Equal("String", mustString(StringType.Describe(context.Background())))
+	assert.Equal("UUID", mustString(UUIDType.Describe(context.Background())))
+	assert.Equal("Int", mustString(IntType.Describe(context.Background())))
+	assert.Equal("Uint", mustString(UintType.Describe(context.Background())))
+	assert.Equal("Map<String, Float>", mustString(mapType.Describe(context.Background())))
+	assert.Equal("Set<String>", mustString(setType.Describe(context.Background())))
 
-	mahType := MakeStructType("MahStruct",
+	mahType, err := MakeStructType("MahStruct",
 		StructField{"Field1", StringType, false},
 		StructField{"Field2", BoolType, false},
 	)
-	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mahType.Describe(context.Background()))
+	assert.NoError(err)
+	assert.Equal("Struct MahStruct {\n  Field1: String,\n  Field2: Bool,\n}", mustString(mahType.Describe(context.Background())))
 }
 
 func TestTypeOrdered(t *testing.T) {
@@ -88,26 +95,26 @@ func TestTypeOrdered(t *testing.T) {
 
 	assert.False(isKindOrderedByValue(BlobType.TargetKind()))
 	assert.False(isKindOrderedByValue(ValueType.TargetKind()))
-	assert.False(isKindOrderedByValue(MakeListType(StringType).TargetKind()))
-	assert.False(isKindOrderedByValue(MakeSetType(StringType).TargetKind()))
-	assert.False(isKindOrderedByValue(MakeMapType(StringType, ValueType).TargetKind()))
-	assert.False(isKindOrderedByValue(MakeRefType(StringType).TargetKind()))
+	assert.False(isKindOrderedByValue(mustType(MakeListType(StringType)).TargetKind()))
+	assert.False(isKindOrderedByValue(mustType(MakeSetType(StringType)).TargetKind()))
+	assert.False(isKindOrderedByValue(mustType(MakeMapType(StringType, ValueType)).TargetKind()))
+	assert.False(isKindOrderedByValue(mustType(MakeRefType(StringType)).TargetKind()))
 }
 
 func TestFlattenUnionTypes(t *testing.T) {
 	assert := assert.New(t)
-	assert.Equal(BoolType, MakeUnionType(BoolType))
-	assert.Equal(MakeUnionType(), MakeUnionType())
-	assert.Equal(MakeUnionType(BoolType, StringType), MakeUnionType(BoolType, MakeUnionType(StringType)))
-	assert.Equal(MakeUnionType(BoolType, StringType, FloaTType), MakeUnionType(BoolType, MakeUnionType(StringType, FloaTType)))
-	assert.Equal(BoolType, MakeUnionType(BoolType, BoolType))
-	assert.Equal(BoolType, MakeUnionType(BoolType, MakeUnionType()))
-	assert.Equal(BoolType, MakeUnionType(MakeUnionType(), BoolType))
-	assert.True(MakeUnionType(MakeUnionType(), MakeUnionType()).Equals(MakeUnionType()))
-	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(BoolType, FloaTType))
-	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(FloaTType, BoolType))
-	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(BoolType, FloaTType, BoolType))
-	assert.Equal(MakeUnionType(BoolType, FloaTType), MakeUnionType(MakeUnionType(BoolType, FloaTType), FloaTType, BoolType))
+	assert.Equal(BoolType, mustType(MakeUnionType(BoolType)))
+	assert.Equal(mustType(MakeUnionType()), mustType(MakeUnionType()))
+	assert.Equal(mustType(MakeUnionType(BoolType, StringType)), mustType(MakeUnionType(BoolType, mustType(MakeUnionType(StringType)))))
+	assert.Equal(mustType(MakeUnionType(BoolType, StringType, FloaTType)), mustType(MakeUnionType(BoolType, mustType(MakeUnionType(StringType, FloaTType)))))
+	assert.Equal(BoolType, mustType(MakeUnionType(BoolType, BoolType)))
+	assert.Equal(BoolType, mustType(MakeUnionType(BoolType, mustType(MakeUnionType()))))
+	assert.Equal(BoolType, mustType(MakeUnionType(mustType(MakeUnionType()), BoolType)))
+	assert.True(mustType(MakeUnionType(mustType(MakeUnionType()), mustType(MakeUnionType()))).Equals(mustType(MakeUnionType())))
+	assert.Equal(mustType(MakeUnionType(BoolType, FloaTType)), mustType(MakeUnionType(BoolType, FloaTType)))
+	assert.Equal(mustType(MakeUnionType(BoolType, FloaTType)), mustType(MakeUnionType(FloaTType, BoolType)))
+	assert.Equal(mustType(MakeUnionType(BoolType, FloaTType)), mustType(MakeUnionType(BoolType, FloaTType, BoolType)))
+	assert.Equal(mustType(MakeUnionType(BoolType, FloaTType)), mustType(MakeUnionType(mustType(MakeUnionType(BoolType, FloaTType)), FloaTType, BoolType)))
 }
 
 func TestVerifyStructFieldName(t *testing.T) {
@@ -168,28 +175,31 @@ func TestVerifyStructName(t *testing.T) {
 }
 
 func TestStructUnionWithCycles(tt *testing.T) {
-	inodeType := MakeStructTypeFromFields("Inode", FieldMap{
-		"attr": MakeStructTypeFromFields("Attr", FieldMap{
+	inodeType := mustType(MakeStructTypeFromFields("Inode", FieldMap{
+		"attr": mustType(MakeStructTypeFromFields("Attr", FieldMap{
 			"ctime": FloaTType,
 			"mode":  FloaTType,
 			"mtime": FloaTType,
-		}),
-		"contents": MakeUnionType(
-			MakeStructTypeFromFields("Directory", FieldMap{
-				"entries": MakeMapType(StringType, MakeCycleType("Inode")),
-			}),
-			MakeStructTypeFromFields("File", FieldMap{
+		})),
+		"contents": mustType(MakeUnionType(
+			mustType(MakeStructTypeFromFields("Directory", FieldMap{
+				"entries": mustType(MakeMapType(StringType, MakeCycleType("Inode"))),
+			})),
+			mustType(MakeStructTypeFromFields("File", FieldMap{
 				"data": BlobType,
-			}),
-			MakeStructTypeFromFields("Symlink", FieldMap{
+			})),
+			mustType(MakeStructTypeFromFields("Symlink", FieldMap{
 				"targetPath": StringType,
-			}),
-		),
-	})
+			})),
+		)),
+	}))
 
 	vs := newTestValueStore()
 	t1, _ := inodeType.Desc.(StructDesc).Field("contents")
-	t2 := DecodeValue(EncodeValue(t1, Format_7_18), vs)
+	enc, err := EncodeValue(t1, Format_7_18)
+	assert.NoError(tt, err)
+	t2, err := DecodeValue(enc, vs)
+	assert.NoError(tt, err)
 
 	assert.True(tt, t1.Equals(t2))
 	// Note that we cannot ensure pointer equality between t1 and t2 because the
@@ -212,39 +222,42 @@ func TestHasStructCycles(tt *testing.T) {
 		HasStructCycles(MakeCycleType("Abc"))
 	})
 
-	assert.False(HasStructCycles(MakeStructType("")))
-	assert.False(HasStructCycles(MakeStructType("A")))
+	assert.False(HasStructCycles(mustType(MakeStructType(""))))
+	assert.False(HasStructCycles(mustType(MakeStructType("A"))))
 
 	assert.True(HasStructCycles(
-		MakeStructType("A", StructField{"a", MakeStructType("A"), false})))
+		mustType(MakeStructType("A", StructField{"a", mustType(MakeStructType("A")), false}))))
 	assert.True(HasStructCycles(
-		MakeStructType("A", StructField{"a", MakeCycleType("A"), false})))
+		mustType(MakeStructType("A", StructField{"a", MakeCycleType("A"), false}))))
 	assert.True(HasStructCycles(
-		MakeSetType(MakeStructType("A", StructField{"a", MakeCycleType("A"), false}))))
+		mustType(MakeSetType(mustType(MakeStructType("A", StructField{"a", MakeCycleType("A"), false}))))))
 	assert.True(HasStructCycles(
-		MakeStructType("A", StructField{"a", MakeSetType(MakeCycleType("A")), false})))
+		mustType(MakeStructType("A", StructField{"a", mustType(MakeSetType(MakeCycleType("A"))), false}))))
 
 	assert.False(HasStructCycles(
-		MakeMapType(
-			MakeStructType("A"),
-			MakeStructType("A"),
-		),
-	))
-	assert.False(HasStructCycles(
-		MakeMapType(
-			MakeStructType("A"),
-			MakeCycleType("A"),
-		),
-	))
-
-	assert.False(HasStructCycles(
-		MakeStructType("",
-			StructField{"a", MakeStructType("",
-				StructField{"b", BoolType, false},
-			), false},
-			StructField{"b", MakeStructType("",
-				StructField{"b", BoolType, false},
-			), false},
+		mustType(MakeMapType(
+			mustType(MakeStructType("A")),
+			mustType(MakeStructType("A")),
 		)),
+	))
+	assert.False(HasStructCycles(
+		mustType(MakeMapType(
+			mustType(MakeStructType("A")),
+			MakeCycleType("A"),
+		)),
+	))
+
+	assert.False(HasStructCycles(
+		mustType(MakeStructType("",
+			StructField{
+				"a",
+				mustType(MakeStructType("", StructField{"b", BoolType, false})),
+				false,
+			},
+			StructField{
+				"b",
+				mustType(MakeStructType("", StructField{"b", BoolType, false})),
+				false},
+		))),
 	)
 }

@@ -38,8 +38,16 @@ func NewItr(nbf *types.NomsBinFormat, coll *KVPCollection) *KVPCollItr {
 }
 
 // Less returns whether the current key this iterator is less than the current key for another iterator
-func (itr *KVPCollItr) Less(other *KVPCollItr) bool {
-	return other.currKey == nil || itr.currKey != nil && itr.currKey.Less(itr.nbf, other.currKey)
+func (itr *KVPCollItr) Less(other *KVPCollItr) (bool, error) {
+	if other.currKey == nil {
+		return true, nil
+	}
+
+	if itr.currKey == nil {
+		return false, nil
+	}
+
+	return itr.currKey.Less(itr.nbf, other.currKey)
 }
 
 // returns the next kvp, the slice it was read from when that slice is empty, and whether or not iteration is complete.
@@ -76,9 +84,9 @@ func (itr *KVPCollItr) nextForDestructiveMerge() (nextKVP *types.KVP, sliceIfExh
 }
 
 // Next returns the next KVP
-func (itr *KVPCollItr) Next() *types.KVP {
+func (itr *KVPCollItr) Next() (*types.KVP, error) {
 	kvp, _, _ := itr.nextForDestructiveMerge()
-	return kvp
+	return kvp, nil
 }
 
 // NumEdits returns the number of KVPs representing the edits that this will iterate over

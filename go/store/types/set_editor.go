@@ -23,9 +23,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"sort"
-
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
@@ -67,7 +65,7 @@ func (se *SetEditor) Set(ctx context.Context) (Set, error) {
 		return EmptySet, err
 	}
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	cursChan := make(chan chan *sequenceCursor)
 	editChan := make(chan setEdit)
 
@@ -177,7 +175,7 @@ func (se *SetEditor) Set(ctx context.Context) (Set, error) {
 }
 
 func (se *SetEditor) Insert(vs ...Value) (*SetEditor, error) {
-	sort.Stable(ValueSort{vs, se.s.format()})
+	SortWithErroringLess(ValueSort{vs, se.s.format()})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		err := se.edit(v, true)
@@ -190,7 +188,7 @@ func (se *SetEditor) Insert(vs ...Value) (*SetEditor, error) {
 }
 
 func (se *SetEditor) Remove(vs ...Value) (*SetEditor, error) {
-	sort.Stable(ValueSort{vs, se.s.format()})
+	SortWithErroringLess(ValueSort{vs, se.s.format()})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
 		err := se.edit(v, false)
@@ -251,7 +249,7 @@ func (se *SetEditor) findEdit(v Value) (int, bool, error) {
 	}
 
 	var found bool
-	idx, err := searchWithErroringLess(len(se.edits.edits), func(i int) (bool, error) {
+	idx, err := SearchWithErroringLess(len(se.edits.edits), func(i int) (bool, error) {
 		return se.edits.edits[i].value.Less(se.s.format(), v)
 	})
 
@@ -282,7 +280,7 @@ func (se *SetEditor) normalize() error {
 		return nil
 	}
 
-	err := sortWithErroringLess(se.edits)
+	err := SortWithErroringLess(se.edits)
 
 	if err != nil {
 		return err

@@ -24,12 +24,12 @@ package types
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"runtime"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 // Blob represents a list of Blobs.
@@ -120,7 +120,7 @@ func (b Blob) Copy(ctx context.Context, w io.Writer) (int64, error) {
 // |concurrency| |chunkSize| blocks of bytes ahead of the last byte written to
 // |w|.
 func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, concurrency int) (int64, error) {
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	bChan := make(chan chan []byte, concurrency)
 
 	go func() {
@@ -145,7 +145,7 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 				buff := make([]byte, blockLength)
 				_, err := b.ReadAt(ctx, buff, int64(start))
 
-				if err != nil {
+				if err != nil && err != io.EOF{
 					ae.SetIfError(err)
 				} else {
 					bc <- buff
@@ -295,7 +295,7 @@ func readBlobsP(ctx context.Context, vrw ValueReadWriter, rs ...io.Reader) (Blob
 
 	blobs := make([]Blob, len(rs))
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
 	wg.Add(len(rs))
 
@@ -362,7 +362,7 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, erro
 		return rv.crossedBoundary
 	}
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	mtChan := make(chan chan metaTuple, runtime.NumCPU())
 
 	makeChunk := func() {

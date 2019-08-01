@@ -21,7 +21,10 @@
 
 package types
 
-import "github.com/stretchr/testify/suite"
+import (
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/stretchr/testify/suite"
+)
 
 type collectionTestSuite struct {
 	suite.Suite
@@ -37,10 +40,12 @@ type collectionTestSuite struct {
 }
 
 type validateFn func(v2 Collection) bool
-type deltaFn func() Collection
+type deltaFn func() (Collection, error)
 
 func (suite *collectionTestSuite) TestType() {
-	suite.True(suite.expectType.Equals(TypeOf(suite.col)))
+	t, err := TypeOf(suite.col)
+	suite.NoError(err)
+	suite.True(suite.expectType.Equals(t))
 }
 
 func (suite *collectionTestSuite) TestLen() {
@@ -56,10 +61,20 @@ func (suite *collectionTestSuite) TestEquals() {
 
 func (suite *collectionTestSuite) TestChunkCountAndType() {
 	suite.Equal(suite.expectChunkCount, leafCount(suite.col), "chunk count")
-	refType := MakeRefType(suite.expectType)
-	suite.col.WalkRefs(Format_7_18, func(r Ref) {
-		suite.True(refType.Equals(TypeOf(r)))
+	refType, err := MakeRefType(suite.expectType)
+	suite.NoError(err)
+	err = suite.col.WalkRefs(Format_7_18, func(r Ref) error {
+		t, err := TypeOf(r)
+
+		if err != nil {
+			return err
+		}
+
+		suite.True(refType.Equals(t))
+		return nil
 	})
+
+	suite.NoError(err)
 }
 
 func (suite *collectionTestSuite) TestRoundTripAndValidate() {
@@ -67,12 +82,14 @@ func (suite *collectionTestSuite) TestRoundTripAndValidate() {
 }
 
 func (suite *collectionTestSuite) TestPrependChunkDiff() {
-	v2 := suite.prependOne()
+	v2, err := suite.prependOne()
+	suite.NoError(err)
 	suite.Equal(suite.expectPrependChunkDiff, leafDiffCount(suite.col, v2), "prepend count")
 }
 
 func (suite *collectionTestSuite) TestAppendChunkDiff() {
-	v2 := suite.appendOne()
+	v2, err := suite.appendOne()
+	suite.NoError(err)
 	suite.Equal(suite.expectAppendChunkDiff, leafDiffCount(suite.col, v2), "append count")
 }
 
@@ -81,5 +98,10 @@ func deriveCollectionHeight(c Collection) uint64 {
 }
 
 func getRefHeightOfCollection(c Collection) uint64 {
-	return c.asSequence().getItem(0).(metaTuple).ref().Height()
+	item, err := c.asSequence().getItem(0)
+	d.PanicIfError(err)
+	ref, err := item.(metaTuple).ref()
+	d.PanicIfError(err)
+
+	return ref.Height()
 }

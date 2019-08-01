@@ -24,6 +24,7 @@ package types
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -70,7 +71,17 @@ func (t *Type) Equals(other Value) (res bool) {
 	}
 
 	if otherType, ok := other.(*Type); ok {
-		return t.TargetKind() == otherType.TargetKind() && t.Hash(Format_7_18) == other.Hash(Format_7_18)
+		h, err := t.Hash(Format_7_18)
+
+		// TODO - fix panics
+		d.PanicIfError(err)
+
+		oh, err := other.Hash(Format_7_18)
+
+		// TODO - fix panics
+		d.PanicIfError(err)
+
+		return t.TargetKind() == otherType.TargetKind() && h == oh
 	}
 
 	return false

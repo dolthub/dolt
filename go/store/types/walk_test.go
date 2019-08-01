@@ -53,21 +53,23 @@ func (suite *WalkAllTestSuite) SetupTest() {
 
 func (suite *WalkAllTestSuite) assertCallbackCount(v Value, expected int) {
 	actual := 0
-	WalkValues(context.Background(), Format_7_18, v, suite.vs, func(c Value) (stop bool) {
+	err := WalkValues(context.Background(), Format_7_18, v, suite.vs, func(c Value) (stop bool) {
 		actual++
 		return
 	})
+	suite.NoError(err)
 	suite.Equal(expected, actual)
 }
 
 func (suite *WalkAllTestSuite) assertVisitedOnce(root, v Value) {
 	actual := 0
-	WalkValues(context.Background(), Format_7_18, v, suite.vs, func(c Value) bool {
+	err := WalkValues(context.Background(), Format_7_18, v, suite.vs, func(c Value) bool {
 		if c == v {
 			actual++
 		}
 		return false
 	})
+	suite.NoError(err)
 	suite.Equal(1, actual)
 }
 
@@ -80,18 +82,22 @@ func (suite *WalkAllTestSuite) TestWalkValuesDuplicates() {
 
 func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 	buff := randomBuff(16)
-	blob := NewBlob(context.Background(), suite.vs, bytes.NewReader(buff))
-	r := suite.vs.WriteValue(context.Background(), blob)
+	blob, err := NewBlob(context.Background(), suite.vs, bytes.NewReader(buff))
+	suite.NoError(err)
+	r, err := suite.vs.WriteValue(context.Background(), blob)
+	suite.NoError(err)
 	suite.True(r.Height() > 1)
-	outBlob := suite.vs.ReadValue(context.Background(), r.TargetHash()).(Blob)
+	val, err := suite.vs.ReadValue(context.Background(), r.TargetHash())
+	outBlob := val.(Blob)
+	suite.NoError(err)
 	suite.Equal(suite.ts.Reads, 0)
 	suite.assertCallbackCount(outBlob, 1)
 	suite.Equal(suite.ts.Reads, 0)
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {
-	suite.assertCallbackCount(suite.vs.WriteValue(context.Background(), Float(0.0)), 2)
-	suite.assertCallbackCount(suite.vs.WriteValue(context.Background(), String("hello")), 2)
+	suite.assertCallbackCount(mustRef(suite.vs.WriteValue(context.Background(), Float(0.0))), 2)
+	suite.assertCallbackCount(mustRef(suite.vs.WriteValue(context.Background(), String("hello"))), 2)
 }
 
 func (suite *WalkAllTestSuite) TestWalkComposites() {
@@ -109,17 +115,20 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 	for i := 0; i < count; i++ {
 		nums[i] = Float(i)
 	}
-	l := NewList(context.Background(), suite.vs, nums...)
-	suite.True(NewRef(l, Format_7_18).Height() > 1)
+	l, err := NewList(context.Background(), suite.vs, nums...)
+	suite.NoError(err)
+	suite.True(mustRef(NewRef(l, Format_7_18)).Height() > 1)
 	suite.assertCallbackCount(l, count+1)
 
-	r := suite.vs.WriteValue(context.Background(), l)
-	outList := suite.vs.ReadValue(context.Background(), r.TargetHash())
+	r, err := suite.vs.WriteValue(context.Background(), l)
+	suite.NoError(err)
+	outList, err := suite.vs.ReadValue(context.Background(), r.TargetHash())
+	suite.NoError(err)
 	suite.assertCallbackCount(outList, count+1)
 }
 
 func (suite *WalkAllTestSuite) TestWalkType() {
-	t := MakeStructTypeFromFields("TestStruct", FieldMap{
+	t, err := MakeStructTypeFromFields("TestStruct", FieldMap{
 		"s":  StringType,
 		"b":  BoolType,
 		"n":  FloaTType,
@@ -130,6 +139,7 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 		"i":  IntType,
 		"u":  UintType,
 	})
+	suite.NoError(err)
 	suite.assertVisitedOnce(t, t)
 	suite.assertVisitedOnce(t, BoolType)
 	suite.assertVisitedOnce(t, FloaTType)
@@ -142,29 +152,29 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 	suite.assertVisitedOnce(t, ValueType)
 
 	{
-		t2 := MakeListType(BoolType)
+		t2 := mustType(MakeListType(BoolType))
 		suite.assertVisitedOnce(t2, t2)
 		suite.assertVisitedOnce(t2, BoolType)
 	}
 
 	{
-		t2 := MakeSetType(BoolType)
+		t2 := mustType(MakeSetType(BoolType))
 		suite.assertVisitedOnce(t2, t2)
 		suite.assertVisitedOnce(t2, BoolType)
 	}
 
 	{
-		t2 := MakeRefType(BoolType)
+		t2 := mustType(MakeRefType(BoolType))
 		suite.assertVisitedOnce(t2, t2)
 		suite.assertVisitedOnce(t2, BoolType)
 	}
 
-	t2 := MakeMapType(FloaTType, StringType)
+	t2 := mustType(MakeMapType(FloaTType, StringType))
 	suite.assertVisitedOnce(t2, t2)
 	suite.assertVisitedOnce(t2, FloaTType)
 	suite.assertVisitedOnce(t2, StringType)
 
-	t3 := MakeUnionType(FloaTType, StringType, BoolType, UUIDType)
+	t3 := mustType(MakeUnionType(FloaTType, StringType, BoolType, UUIDType))
 	suite.assertVisitedOnce(t3, t3)
 	suite.assertVisitedOnce(t3, BoolType)
 	suite.assertVisitedOnce(t3, FloaTType)
@@ -178,17 +188,19 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 }
 
 func (suite *WalkTestSuite) skipWorker(composite Value) (reached ValueSlice) {
-	WalkValues(context.Background(), Format_7_18, composite, suite.vs, func(v Value) bool {
+	err := WalkValues(context.Background(), Format_7_18, composite, suite.vs, func(v Value) bool {
 		suite.False(v.Equals(suite.deadValue), "Should never have reached %+v", suite.deadValue)
 		reached = append(reached, v)
 		return v.Equals(suite.mustSkip)
 	})
+	suite.NoError(err)
 	return
 }
 
 // Skipping a sub-tree must allow other items in the list to be processed.
 func (suite *WalkTestSuite) TestSkipListElement() {
-	wholeList := NewList(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
+	wholeList, err := NewList(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee)
+	suite.NoError(err)
 	reached := suite.skipWorker(wholeList)
 	for _, v := range []Value{wholeList, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
@@ -197,7 +209,12 @@ func (suite *WalkTestSuite) TestSkipListElement() {
 }
 
 func (suite *WalkTestSuite) TestSkipSetElement() {
-	wholeSet := NewSet(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee).Edit().Insert(suite.shouldSee).Set(context.Background())
+	s, err := NewSet(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee)
+	suite.NoError(err)
+	se, err := s.Edit().Insert(suite.shouldSee)
+	suite.NoError(err)
+	wholeSet, err := se.Set(context.Background())
+	suite.NoError(err)
 	reached := suite.skipWorker(wholeSet)
 	for _, v := range []Value{wholeSet, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
@@ -207,8 +224,9 @@ func (suite *WalkTestSuite) TestSkipSetElement() {
 
 func (suite *WalkTestSuite) TestSkipMapValue() {
 	shouldAlsoSeeItem := String("Also good")
-	shouldAlsoSee := NewSet(context.Background(), suite.vs, shouldAlsoSeeItem)
-	wholeMap := NewMap(context.Background(), suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
+	shouldAlsoSee, err := NewSet(context.Background(), suite.vs, shouldAlsoSeeItem)
+	suite.NoError(err)
+	wholeMap, err := NewMap(context.Background(), suite.vs, suite.shouldSee, suite.mustSkip, shouldAlsoSee, suite.shouldSee)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.shouldSee, suite.shouldSeeItem, suite.mustSkip, shouldAlsoSee, shouldAlsoSeeItem} {
 		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
@@ -217,7 +235,8 @@ func (suite *WalkTestSuite) TestSkipMapValue() {
 }
 
 func (suite *WalkTestSuite) TestSkipMapKey() {
-	wholeMap := NewMap(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
+	wholeMap, err := NewMap(context.Background(), suite.vs, suite.mustSkip, suite.shouldSee, suite.shouldSee, suite.shouldSee)
+	suite.NoError(err)
 	reached := suite.skipWorker(wholeMap)
 	for _, v := range []Value{wholeMap, suite.mustSkip, suite.shouldSee, suite.shouldSeeItem} {
 		suite.True(reached.Contains(Format_7_18, v), "Doesn't contain %+v", v)
@@ -226,18 +245,27 @@ func (suite *WalkTestSuite) TestSkipMapKey() {
 }
 
 func (suite *WalkAllTestSuite) NewList(vs ...Value) Ref {
-	v := NewList(context.Background(), suite.vs, vs...)
-	return suite.vs.WriteValue(context.Background(), v)
+	v, err := NewList(context.Background(), suite.vs, vs...)
+	suite.NoError(err)
+	ref, err := suite.vs.WriteValue(context.Background(), v)
+	suite.NoError(err)
+	return ref
 }
 
 func (suite *WalkAllTestSuite) NewMap(vs ...Value) Ref {
-	v := NewMap(context.Background(), suite.vs, vs...)
-	return suite.vs.WriteValue(context.Background(), v)
+	v, err := NewMap(context.Background(), suite.vs, vs...)
+	suite.NoError(err)
+	ref, err := suite.vs.WriteValue(context.Background(), v)
+	suite.NoError(err)
+	return ref
 }
 
 func (suite *WalkAllTestSuite) NewSet(vs ...Value) Ref {
-	v := NewSet(context.Background(), suite.vs, vs...)
-	return suite.vs.WriteValue(context.Background(), v)
+	v, err := NewSet(context.Background(), suite.vs, vs...)
+	suite.NoError(err)
+	ref, err := suite.vs.WriteValue(context.Background(), v)
+	suite.NoError(err)
+	return ref
 }
 
 func (suite *WalkAllTestSuite) TestWalkNestedComposites() {
@@ -270,11 +298,14 @@ type WalkTestSuite struct {
 }
 
 func (suite *WalkTestSuite) SetupTest() {
+	var err error
 	storage := &chunks.TestStorage{}
 	suite.ts = storage.NewView()
 	suite.vs = NewValueStore(suite.ts)
 	suite.shouldSeeItem = String("zzz")
-	suite.shouldSee = NewList(context.Background(), suite.vs, suite.shouldSeeItem)
+	suite.shouldSee, err = NewList(context.Background(), suite.vs, suite.shouldSeeItem)
+	suite.NoError(err)
 	suite.deadValue = Float(0xDEADBEEF)
-	suite.mustSkip = NewList(context.Background(), suite.vs, suite.deadValue)
+	suite.mustSkip, err = NewList(context.Background(), suite.vs, suite.deadValue)
+	suite.NoError(err)
 }

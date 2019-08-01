@@ -52,7 +52,7 @@ func (sl setLeafSequence) getKey(idx int) (orderedKey, error) {
 }
 
 func (sl setLeafSequence) search(key orderedKey) (int, error) {
-	n, err := searchWithErroringLess(int(sl.Len()), func(i int) (b bool, e error) {
+	n, err := SearchWithErroringLess(int(sl.Len()), func(i int) (b bool, e error) {
 		k, err := sl.getKey(i)
 
 		if err != nil {

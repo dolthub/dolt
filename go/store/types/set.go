@@ -24,9 +24,7 @@ package types
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"sort"
-
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
@@ -71,7 +69,7 @@ func NewSet(ctx context.Context, vrw ValueReadWriter, v ...Value) (Set, error) {
 // out of order will result in a panic. Once the input channel is closed
 // by the caller, a finished Set will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingSet(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError, vChan <-chan Value) <-chan Set {
+func NewStreamingSet(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, vChan <-chan Value) <-chan Set {
 	return newStreamingSet(vrw, vChan, func(vrw ValueReadWriter, vChan <-chan Value, outChan chan<- Set) {
 		go readSetInput(ctx, vrw, ae, vChan, outChan)
 	})
@@ -86,7 +84,7 @@ func newStreamingSet(vrw ValueReadWriter, vChan <-chan Value, readFunc streaming
 	return outChan
 }
 
-func readSetInput(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError, vChan <-chan Value, outChan chan<- Set) {
+func readSetInput(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, vChan <-chan Value, outChan chan<- Set) {
 	defer close(outChan)
 
 	ch, err := newEmptySetSequenceChunker(ctx, vrw)
@@ -124,7 +122,7 @@ func readSetInput(ctx context.Context, vrw ValueReadWriter, ae *nbs.AtomicError,
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
-func (s Set) Diff(ctx context.Context, last Set, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) Diff(ctx context.Context, last Set, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
@@ -133,7 +131,7 @@ func (s Set) Diff(ctx context.Context, last Set, ae *nbs.AtomicError, changes ch
 
 // DiffHybrid computes the diff from |last| to |s| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
-func (s Set) DiffHybrid(ctx context.Context, last Set, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffHybrid(ctx context.Context, last Set, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
@@ -143,7 +141,7 @@ func (s Set) DiffHybrid(ctx context.Context, last Set, ae *nbs.AtomicError, chan
 // DiffLeftRight computes the diff from |last| to |s| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
-func (s Set) DiffLeftRight(ctx context.Context, last Set, ae *nbs.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (s Set) DiffLeftRight(ctx context.Context, last Set, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if s.Equals(last) {
 		return
 	}
@@ -285,7 +283,7 @@ func buildSetData(nbf *NomsBinFormat, values ValueSlice) ValueSlice {
 		return ValueSlice{}
 	}
 
-	sort.Stable(ValueSort{values, nbf})
+	SortWithErroringLess(ValueSort{values, nbf})
 
 	uniqueSorted := make(ValueSlice, 0, len(values))
 	last := values[0]

@@ -26,7 +26,8 @@ func TestSimplifyStructFields(t *testing.T) {
 
 	test := func(in []structTypeFields, exp structTypeFields) {
 		// simplifier := newSimplifier(false)
-		act := simplifyStructFields(in, typeset{}, false)
+		act, err := simplifyStructFields(in, typeset{}, false)
+		assert.NoError(err)
 		assert.Equal(act, exp)
 	}
 
@@ -76,8 +77,9 @@ func TestSimplifyType(t *testing.T) {
 
 	run := func(intersectStructs bool) {
 		test := func(in, exp *Type) {
-			act := simplifyType(in, intersectStructs)
-			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", exp.Describe(context.Background()), act.Describe(context.Background()))
+			act, err := simplifyType(in, intersectStructs)
+			assert.NoError(err)
+			assert.True(exp.Equals(act), "Expected: %s\nActual: %s", mustString(exp.Describe(context.Background())), mustString(act.Describe(context.Background())))
 		}
 		testSame := func(t *Type) {
 			test(t, t)
@@ -89,278 +91,278 @@ func TestSimplifyType(t *testing.T) {
 		testSame(StringType)
 		testSame(TypeType)
 		testSame(ValueType)
-		testSame(makeCompoundType(ListKind, BoolType))
-		testSame(makeCompoundType(SetKind, BoolType))
-		testSame(makeCompoundType(RefKind, BoolType))
-		testSame(makeCompoundType(MapKind, BoolType, FloaTType))
+		testSame(mustType(makeCompoundType(ListKind, BoolType)))
+		testSame(mustType(makeCompoundType(SetKind, BoolType)))
+		testSame(mustType(makeCompoundType(RefKind, BoolType)))
+		testSame(mustType(makeCompoundType(MapKind, BoolType, FloaTType)))
 
 		{
 			// Cannot do equals on cycle types
 			in := MakeCycleType("ABC")
-			act := simplifyType(in, intersectStructs)
+			act := mustType(simplifyType(in, intersectStructs))
 			assert.Equal(in, act)
 		}
 
-		test(makeUnionType(BoolType), BoolType)
-		test(makeUnionType(BoolType, BoolType), BoolType)
-		testSame(makeUnionType(BoolType, FloaTType))
-		test(makeUnionType(FloaTType, BoolType), makeUnionType(BoolType, FloaTType))
-		test(makeUnionType(FloaTType, BoolType), makeUnionType(BoolType, FloaTType))
+		test(mustType(makeUnionType(BoolType)), BoolType)
+		test(mustType(makeUnionType(BoolType, BoolType)), BoolType)
+		testSame(mustType(makeUnionType(BoolType, FloaTType)))
+		test(mustType(makeUnionType(FloaTType, BoolType)), mustType(makeUnionType(BoolType, FloaTType)))
+		test(mustType(makeUnionType(FloaTType, BoolType)), mustType(makeUnionType(BoolType, FloaTType)))
 
-		testSame(makeCompoundType(ListKind, makeUnionType(BoolType, FloaTType)))
-		test(makeCompoundType(ListKind, makeUnionType(BoolType)), makeCompoundType(ListKind, BoolType))
-		test(makeCompoundType(ListKind, makeUnionType(BoolType, BoolType)), makeCompoundType(ListKind, BoolType))
+		testSame(mustType(makeCompoundType(ListKind, mustType(makeUnionType(BoolType, FloaTType)))))
+		test(mustType(makeCompoundType(ListKind, mustType(makeUnionType(BoolType)))), mustType(makeCompoundType(ListKind, BoolType)))
+		test(mustType(makeCompoundType(ListKind, mustType(makeUnionType(BoolType, BoolType)))), mustType(makeCompoundType(ListKind, BoolType)))
 
-		testSame(makeStructType("", nil))
-		testSame(makeStructType("", structTypeFields{}))
-		testSame(makeStructType("", structTypeFields{
+		testSame(mustType(makeStructType("", nil)))
+		testSame(mustType(makeStructType("", structTypeFields{})))
+		testSame(mustType(makeStructType("", structTypeFields{
 			StructField{"b", BoolType, false},
 			StructField{"s", StringType, !intersectStructs},
-		}))
+		})))
 		test(
-			makeStructType("", structTypeFields{
+			mustType(makeStructType("", structTypeFields{
 				StructField{"a", BoolType, false},
-				StructField{"b", makeUnionType(FloaTType, FloaTType), false},
-			}),
-			makeStructType("", structTypeFields{
+				StructField{"b", mustType(makeUnionType(FloaTType, FloaTType)), false},
+			})),
+			mustType(makeStructType("", structTypeFields{
 				StructField{"a", BoolType, false},
 				StructField{"b", FloaTType, false},
-			}),
+			})),
 		)
 		// non named structs do not create cycles.
-		testSame(makeStructType("", structTypeFields{
+		testSame(mustType(makeStructType("", structTypeFields{
 			StructField{"b", BoolType, false},
 			StructField{
 				"s",
-				makeStructType("", structTypeFields{
+				mustType(makeStructType("", structTypeFields{
 					StructField{"c", StringType, false},
-				}),
+				})),
 				!intersectStructs,
 			},
-		}))
+		})))
 
 		// merge non named structs in unions
 		test(
-			makeCompoundType(
+			mustType(makeCompoundType(
 				UnionKind,
-				makeStructType("", structTypeFields{
+				mustType(makeStructType("", structTypeFields{
 					StructField{"a", BoolType, false},
-				}),
-				makeStructType("", structTypeFields{
+				})),
+				mustType(makeStructType("", structTypeFields{
 					StructField{"b", BoolType, false},
-				}),
-			),
-			makeStructType("", structTypeFields{
+				})),
+			)),
+			mustType(makeStructType("", structTypeFields{
 				StructField{"a", BoolType, !intersectStructs},
 				StructField{"b", BoolType, !intersectStructs},
-			}),
+			})),
 		)
 
 		// List<Float> | List<Bool> -> List<Bool | Float>
 		for _, k := range []NomsKind{ListKind, SetKind, RefKind} {
 			test(
-				makeCompoundType(
+				mustType(makeCompoundType(
 					UnionKind,
-					makeCompoundType(k, FloaTType),
-					makeCompoundType(k, BoolType),
-				),
-				makeCompoundType(k,
-					makeUnionType(BoolType, FloaTType),
-				),
+					mustType(makeCompoundType(k, FloaTType)),
+					mustType(makeCompoundType(k, BoolType)),
+				)),
+				mustType(makeCompoundType(k,
+					mustType(makeUnionType(BoolType, FloaTType)),
+				)),
 			)
 		}
 
 		// Map<Float, Float> | List<Bool, Float> -> List<Bool | Float, Float>
 		test(
-			makeCompoundType(
+			mustType(makeCompoundType(
 				UnionKind,
-				makeCompoundType(MapKind, FloaTType, FloaTType),
-				makeCompoundType(MapKind, BoolType, FloaTType),
-			),
-			makeCompoundType(MapKind,
-				makeUnionType(BoolType, FloaTType),
+				mustType(makeCompoundType(MapKind, FloaTType, FloaTType)),
+				mustType(makeCompoundType(MapKind, BoolType, FloaTType)),
+			)),
+			mustType(makeCompoundType(MapKind,
+				mustType(makeUnionType(BoolType, FloaTType)),
 				FloaTType,
-			),
+			)),
 		)
 
 		// Map<Float, Float> | List<Float, Bool> -> List<Float, Bool | Float>
 		test(
-			makeCompoundType(
+			mustType(makeCompoundType(
 				UnionKind,
-				makeCompoundType(MapKind, FloaTType, FloaTType),
-				makeCompoundType(MapKind, FloaTType, BoolType),
-			),
-			makeCompoundType(MapKind,
+				mustType(makeCompoundType(MapKind, FloaTType, FloaTType)),
+				mustType(makeCompoundType(MapKind, FloaTType, BoolType)),
+			)),
+			mustType(makeCompoundType(MapKind,
 				FloaTType,
-				makeUnionType(BoolType, FloaTType),
-			),
+				mustType(makeUnionType(BoolType, FloaTType)),
+			)),
 		)
 
 		// union flattening
 		test(
-			makeUnionType(FloaTType, makeUnionType(FloaTType, BoolType)),
-			makeUnionType(BoolType, FloaTType),
+			mustType(makeUnionType(FloaTType, mustType(makeUnionType(FloaTType, BoolType)))),
+			mustType(makeUnionType(BoolType, FloaTType)),
 		)
 
 		{
 			// Cannot do equals on cycle types
-			in := makeUnionType(MakeCycleType("A"), MakeCycleType("A"))
+			in := mustType(makeUnionType(MakeCycleType("A"), MakeCycleType("A")))
 			exp := MakeCycleType("A")
-			act := simplifyType(in, intersectStructs)
+			act := mustType(simplifyType(in, intersectStructs))
 			assert.Equal(exp, act)
 		}
 
 		{
 			// Cannot do equals on cycle types
-			in := makeCompoundType(UnionKind,
-				makeCompoundType(ListKind, MakeCycleType("A")),
-				makeCompoundType(ListKind, MakeCycleType("A")))
-			exp := makeCompoundType(ListKind, MakeCycleType("A"))
-			act := simplifyType(in, intersectStructs)
-			assert.Equal(exp, act, "Expected: %s\nActual: %s", exp.Describe(context.Background()), act.Describe(context.Background()))
+			in := mustType(makeCompoundType(UnionKind,
+				mustType(makeCompoundType(ListKind, MakeCycleType("A"))),
+				mustType(makeCompoundType(ListKind, MakeCycleType("A")))))
+			exp := mustType(makeCompoundType(ListKind, MakeCycleType("A")))
+			act := mustType(simplifyType(in, intersectStructs))
+			assert.Equal(exp, act, "Expected: %s\nActual: %s", mustString(exp.Describe(context.Background())), mustString(act.Describe(context.Background())))
 		}
 
-		testSame(makeStructType("A", nil))
-		testSame(makeStructType("A", structTypeFields{}))
-		testSame(makeStructType("A", structTypeFields{
+		testSame(mustType(makeStructType("A", nil)))
+		testSame(mustType(makeStructType("A", structTypeFields{})))
+		testSame(mustType(makeStructType("A", structTypeFields{
 			StructField{"a", BoolType, !intersectStructs},
-		}))
+		})))
 		test(
-			makeStructType("A", structTypeFields{
-				StructField{"a", makeUnionType(BoolType, BoolType, FloaTType), false},
-			}),
-			makeStructType("A", structTypeFields{
-				StructField{"a", makeUnionType(BoolType, FloaTType), false},
-			}),
+			mustType(makeStructType("A", structTypeFields{
+				StructField{"a", mustType(makeUnionType(BoolType, BoolType, FloaTType)), false},
+			})),
+			mustType(makeStructType("A", structTypeFields{
+				StructField{"a", mustType(makeUnionType(BoolType, FloaTType)), false},
+			})),
 		)
 
 		testSame(
-			makeStructType("A", structTypeFields{
+			mustType(makeStructType("A", structTypeFields{
 				StructField{
 					"a",
-					makeStructType("B", structTypeFields{
+					mustType(makeStructType("B", structTypeFields{
 						StructField{"b", BoolType, !intersectStructs},
-					}),
+					})),
 					false,
 				},
 			}),
-		)
+		))
 
 		{
 			// Create pointer cycle manually.
-			exp := makeStructType("A", structTypeFields{
+			exp := mustType(makeStructType("A", structTypeFields{
 				StructField{
 					"a",
 					BoolType, // placeholder
 					!intersectStructs,
 				},
-			})
+			}))
 			exp.Desc.(StructDesc).fields[0].Type = exp
 			test(
-				makeStructType("A", structTypeFields{
+				mustType(makeStructType("A", structTypeFields{
 					StructField{
 						"a",
-						makeStructType("A", structTypeFields{}),
+						mustType(makeStructType("A", structTypeFields{})),
 						false,
 					},
-				}),
+				})),
 				exp,
 			)
 		}
 
 		{
-			a := makeStructType("S", structTypeFields{})
-			exp := makeCompoundType(MapKind, a, a)
+			a := mustType(makeStructType("S", structTypeFields{}))
+			exp := mustType(makeCompoundType(MapKind, a, a))
 			test(
-				makeCompoundType(MapKind,
-					makeStructType("S", structTypeFields{}),
-					makeStructType("S", structTypeFields{}),
-				),
+				mustType(makeCompoundType(MapKind,
+					mustType(makeStructType("S", structTypeFields{})),
+					mustType(makeStructType("S", structTypeFields{})),
+				)),
 				exp,
 			)
 		}
 
 		{
-			a := makeStructType("S", structTypeFields{
+			a := mustType(makeStructType("S", structTypeFields{
 				StructField{"a", BoolType, !intersectStructs},
-				StructField{"b", makeUnionType(BoolType, StringType), false},
-			})
-			exp := makeCompoundType(MapKind, a, a)
+				StructField{"b", mustType(makeUnionType(BoolType, StringType)), false},
+			}))
+			exp := mustType(makeCompoundType(MapKind, a, a))
 			test(
-				makeCompoundType(MapKind,
-					makeStructType("S", structTypeFields{
+				mustType(makeCompoundType(MapKind,
+					mustType(makeStructType("S", structTypeFields{
 						StructField{"a", BoolType, false},
 						StructField{"b", StringType, false},
-					}),
-					makeStructType("S", structTypeFields{
+					})),
+					mustType(makeStructType("S", structTypeFields{
 						StructField{"b", BoolType, false},
-					}),
-				),
+					})),
+				)),
 				exp,
 			)
 		}
 
 		// Non named do not get merged outside unions
 		testSame(
-			makeCompoundType(MapKind,
-				makeStructType("", structTypeFields{
+			mustType(makeCompoundType(MapKind,
+				mustType(makeStructType("", structTypeFields{
 					StructField{"a", BoolType, false},
 					StructField{"b", StringType, false},
-				}),
-				makeStructType("", structTypeFields{
+				})),
+				mustType(makeStructType("", structTypeFields{
 					StructField{"b", BoolType, false},
-				}),
-			),
+				})),
+			)),
 		)
 
 		// Cycle in union
 		{
-			a := makeStructType("A", structTypeFields{
+			a := mustType(makeStructType("A", structTypeFields{
 				StructField{
 					"a",
 					BoolType, // placeholder
 					!intersectStructs,
 				},
-			})
+			}))
 			a.Desc.(StructDesc).fields[0].Type = a
-			exp := makeUnionType(FloaTType, a, TypeType)
+			exp := mustType(makeUnionType(FloaTType, a, TypeType))
 			test(
-				makeCompoundType(UnionKind,
-					makeStructType("A", structTypeFields{
+				mustType(makeCompoundType(UnionKind,
+					mustType(makeStructType("A", structTypeFields{
 						StructField{
 							"a",
-							makeStructType("A", structTypeFields{}),
+							mustType(makeStructType("A", structTypeFields{})),
 							false,
 						},
-					}),
+					})),
 					FloaTType,
 					TypeType,
-				),
+				)),
 				exp,
 			)
 		}
 
 		test(
-			makeCompoundType(RefKind,
-				makeCompoundType(UnionKind,
-					makeCompoundType(ListKind,
+			mustType(makeCompoundType(RefKind,
+				mustType(makeCompoundType(UnionKind,
+					mustType(makeCompoundType(ListKind,
 						BoolType,
-					),
-					makeCompoundType(SetKind,
-						makeUnionType(StringType, FloaTType),
-					),
-				),
-			),
-			makeCompoundType(RefKind,
-				makeCompoundType(UnionKind,
-					makeCompoundType(ListKind,
+					)),
+					mustType(makeCompoundType(SetKind,
+						mustType(makeUnionType(StringType, FloaTType)),
+					)),
+				)),
+			)),
+			mustType(makeCompoundType(RefKind,
+				mustType(makeCompoundType(UnionKind,
+					mustType(makeCompoundType(ListKind,
 						BoolType,
-					),
-					makeCompoundType(SetKind,
-						makeUnionType(FloaTType, StringType),
-					),
-				),
-			),
+					)),
+					mustType(makeCompoundType(SetKind,
+						mustType(makeUnionType(FloaTType, StringType)),
+					)),
+				)),
+			)),
 		)
 	}
 

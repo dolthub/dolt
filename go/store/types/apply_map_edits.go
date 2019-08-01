@@ -16,8 +16,7 @@ package types
 
 import (
 	"context"
-
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 )
 
 // EditProvider is an interface which provides map edits as KVPs where each edit is a key and the new value
@@ -25,7 +24,7 @@ import (
 type EditProvider interface {
 	// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 	// in key sorted order
-	Next() *KVP
+	Next() (*KVP,error)
 
 	// NumEdits returns the number of KVPs representing the edits that will be provided when calling next
 	NumEdits() int64
@@ -35,8 +34,8 @@ type EditProvider interface {
 type EmptyEditProvider struct{}
 
 // Next will always return nil
-func (eep EmptyEditProvider) Next() *KVP {
-	return nil
+func (eep EmptyEditProvider) Next() (*KVP, error) {
+	return nil, nil
 }
 
 // NumEdits will always return 0
@@ -117,7 +116,7 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 		numWorkers = maxWorkerCount
 	}
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	rc := make(chan chan mapWorkResult, 128)
 	wc := make(chan mapWork, 128)
 
@@ -172,13 +171,13 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 						var err error
 						ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 
-						if ae.SetIfErrAndCheck(err) {
+						if ae.SetIfError(err) {
 							continue
 						}
 					} else {
 						err := ch.advanceTo(ctx, cur)
 
-						if ae.SetIfErrAndCheck(err) {
+						if ae.SetIfError(err) {
 							continue
 						}
 					}
@@ -187,7 +186,7 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 						stats.Modifications++
 						err := ch.Skip(ctx)
 
-						if ae.SetIfErrAndCheck(err) {
+						if ae.SetIfError(err) {
 							continue
 						}
 
@@ -198,7 +197,7 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 					if kv.value != nil {
 						_, err := ch.Append(ctx, kv)
 
-						if ae.SetIfErrAndCheck(err) {
+						if ae.SetIfError(err) {
 							continue
 						}
 					}
@@ -229,7 +228,7 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 // prepWorker will wait for work to be read from a channel, then iterate over all of the edits finding the appropriate
 // cursor where the insertion should happen.  It attempts to reuse cursors when consecutive keys share the same
 // insertion point
-func prepWorker(ctx context.Context, ae *nbs.AtomicError, seq orderedSequence, wc chan mapWork) {
+func prepWorker(ctx context.Context, ae *atomicerr.AtomicError, seq orderedSequence, wc chan mapWork) {
 	for work := range wc {
 		// In the case of an error drain wc
 		if !ae.IsSet() {
@@ -319,14 +318,15 @@ func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResu
 }
 
 // buildBatches iterates over the sorted edits building batches of work to be completed by the worker threads.
-func buildBatches(nbf *NomsBinFormat, ae *nbs.AtomicError, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
+func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
 	defer close(rc)
 	defer close(wc)
 
 	batchSize := batchSizeStart
-	nextEdit := edits.Next()
+	nextEdit, err := edits.Next()
+	ae.SetIfError(err)
 
-	for !ae.IsSet() {
+	for {
 		batch := make([]*KVP, 0, batchSize)
 
 		for i := 0; i < batchSize; i++ {
@@ -336,18 +336,26 @@ func buildBatches(nbf *NomsBinFormat, ae *nbs.AtomicError, rc chan chan mapWorkR
 				break
 			}
 
-			nextEdit = edits.Next()
+			nextEdit, err = edits.Next()
 
-			isLess, err := edit.Key.Less(nbf, nextEdit.Key)
-
-			if ae.SetIfErrAndCheck(err) {
+			if ae.SetIfError(err) {
 				return
 			}
 
-			if nextEdit != nil && !isLess {
+
+
+			if nextEdit != nil {
+				isLess, err := edit.Key.Less(nbf, nextEdit.Key)
+
+				if ae.SetIfError(err) {
+					return
+				}
+
 				// keys are sorted, so if this key is not less than the next key then they are equal and the next
 				// value will take precedence
-				continue
+				if !isLess {
+					continue
+				}
 			}
 
 			batch = append(batch, edit)

@@ -66,7 +66,8 @@ func assertEncoding(t *testing.T, expect []interface{}, v Value) {
 	expectedAsByteSlice := toBinaryNomsReaderData(expect)
 	vs := newTestValueStore()
 	w := newBinaryNomsWriter()
-	v.writeTo(&w, Format_7_18)
+	err := v.writeTo(&w, Format_7_18)
+	assert.NoError(t, err)
 	assert.EqualValues(t, expectedAsByteSlice, w.data())
 
 	dec := newValueDecoder(expectedAsByteSlice, vs)
@@ -79,7 +80,9 @@ func TestRoundTrips(t *testing.T) {
 	vs := newTestValueStore()
 
 	assertRoundTrips := func(v Value) {
-		out, err := DecodeValue(EncodeValue(v, Format_7_18), vs)
+		chnk, err := EncodeValue(v, Format_7_18)
+		assert.NoError(t, err)
+		out, err := DecodeValue(chnk, vs)
 		assert.NoError(t, err)
 		assert.True(t, v.Equals(out))
 	}
@@ -125,27 +128,42 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(String("AINT NO THANG"))
 	assertRoundTrips(String("💩"))
 
-	assertRoundTrips(NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)}))
+	st, err := NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)})
+	assert.NoError(t, err)
+	assertRoundTrips(st)
 
-	listLeaf := newList(newListLeafSequence(vs, Float(4), Float(5), Float(6), Float(7)))
+	ll, err := newListLeafSequence(vs, Float(4), Float(5), Float(6), Float(7))
+	assert.NoError(t, err)
+	listLeaf := newList(ll)
 	assertRoundTrips(listLeaf)
 
-	assertRoundTrips(newList(newListMetaSequence(1, []metaTuple{
-		newMetaTuple(NewRef(listLeaf, Format_7_18), orderedKeyFromInt(10, Format_7_18), 10),
-		newMetaTuple(NewRef(listLeaf, Format_7_18), orderedKeyFromInt(20, Format_7_18), 20),
-	}, vs)))
+	ref, err := NewRef(listLeaf, Format_7_18)
+	assert.NoError(t, err)
+	k10, err := orderedKeyFromInt(10, Format_7_18)
+	assert.NoError(t, err)
+	k20, err := orderedKeyFromInt(20, Format_7_18)
+	assert.NoError(t, err)
+	mt1, err := newMetaTuple(ref, k10, 10)
+	assert.NoError(t, err)
+	mt2, err := newMetaTuple(ref, k20, 20)
+	assert.NoError(t, err)
+	mseq, err := newListMetaSequence(1, []metaTuple{mt1, mt2}, vs)
+	assert.NoError(t, err)
+	assertRoundTrips(newList(mseq))
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
 	t := func(f float64) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
-				err = r.(error)
+				if err == nil {
+					err = r.(error)
+				}
 			}
 		}()
 
 		v := Float(f)
-		EncodeValue(v, Format_7_18)
+		_, err = EncodeValue(v, Format_7_18)
 		return
 	}
 
@@ -213,7 +231,7 @@ func TestWriteSimpleBlob(t *testing.T) {
 		[]interface{}{
 			BlobKind, uint64(0), []byte{0x00, 0x01},
 		},
-		NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01})),
+		mustValue(NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01}))),
 	)
 }
 
@@ -224,7 +242,7 @@ func TestWriteList(t *testing.T) {
 		[]interface{}{
 			ListKind, uint64(0), uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3)),
+		mustValue(NewList(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))),
 	)
 }
 func TestWriteTuple(t *testing.T) {
@@ -233,7 +251,7 @@ func TestWriteTuple(t *testing.T) {
 		[]interface{}{
 			TupleKind, uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewTuple(Format_7_18, Float(0), Float(1), Float(2), Float(3)),
+		mustValue(NewTuple(Format_7_18, Float(0), Float(1), Float(2), Float(3))),
 	)
 }
 
@@ -247,9 +265,9 @@ func TestWriteListOfList(t *testing.T) {
 			ListKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
 			ListKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewList(context.Background(), vrw,
-			NewList(context.Background(), vrw, Float(0)),
-			NewList(context.Background(), vrw, Float(1), Float(2), Float(3))),
+		mustValue(NewList(context.Background(), vrw,
+			mustList(NewList(context.Background(), vrw, Float(0))),
+			mustList(NewList(context.Background(), vrw, Float(1), Float(2), Float(3))))),
 	)
 }
 
@@ -261,7 +279,7 @@ func TestWriteSet(t *testing.T) {
 			SetKind, uint64(0), uint64(4), /* len */
 			FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		NewSet(context.Background(), vrw, Float(3), Float(1), Float(2), Float(0)),
+		mustValue(NewSet(context.Background(), vrw, Float(3), Float(1), Float(2), Float(0))),
 	)
 }
 
@@ -274,9 +292,9 @@ func TestWriteSetOfSet(t *testing.T) {
 			SetKind, uint64(0), uint64(3) /* len */, FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 			SetKind, uint64(0), uint64(1) /* len */, FloatKind, Float(0),
 		},
-		NewSet(context.Background(), vrw,
-			NewSet(context.Background(), vrw, Float(0)),
-			NewSet(context.Background(), vrw, Float(1), Float(2), Float(3))),
+		mustValue(NewSet(context.Background(), vrw,
+			mustValue(NewSet(context.Background(), vrw, Float(0))),
+			mustValue(NewSet(context.Background(), vrw, Float(1), Float(2), Float(3))))),
 	)
 }
 
@@ -290,7 +308,7 @@ func TestWriteMap(t *testing.T) {
 			StringKind, "b", BoolKind, true,
 			StringKind, "c", TupleKind, uint64(1), FloatKind, Float(1.0),
 		},
-		NewMap(context.Background(), vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), NewTuple(Format_7_18, Float(1.0))),
+		mustValue(NewMap(context.Background(), vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), mustValue(NewTuple(Format_7_18, Float(1.0))))),
 	)
 }
 
@@ -303,9 +321,9 @@ func TestWriteMapOfMap(t *testing.T) {
 			MapKind, uint64(0), uint64(1) /* len */, StringKind, "a", FloatKind, Float(0),
 			SetKind, uint64(0), uint64(1) /* len */, BoolKind, true,
 		},
-		NewMap(context.Background(), vrw,
-			NewMap(context.Background(), vrw, String("a"), Float(0)),
-			NewSet(context.Background(), vrw, Bool(true))),
+		mustValue(NewMap(context.Background(), vrw,
+			mustValue(NewMap(context.Background(), vrw, String("a"), Float(0))),
+			mustValue(NewSet(context.Background(), vrw, Bool(true))))),
 	)
 }
 
@@ -322,11 +340,11 @@ func TestWriteCompoundBlob(t *testing.T) {
 			RefKind, r2, BlobKind, uint64(22), FloatKind, Float(40), uint64(40),
 			RefKind, r3, BlobKind, uint64(33), FloatKind, Float(60), uint64(60),
 		},
-		newBlob(newBlobMetaSequence(1, []metaTuple{
-			newMetaTuple(constructRef(Format_7_18, r1, BlobType, 11), orderedKeyFromInt(20, Format_7_18), 20),
-			newMetaTuple(constructRef(Format_7_18, r2, BlobType, 22), orderedKeyFromInt(40, Format_7_18), 40),
-			newMetaTuple(constructRef(Format_7_18, r3, BlobType, 33), orderedKeyFromInt(60, Format_7_18), 60),
-		}, newTestValueStore())),
+		newBlob(mustSeq(newBlobMetaSequence(1, []metaTuple{
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r1, BlobType, 11)), mustOrdKey(orderedKeyFromInt(20, Format_7_18)), 20)),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r2, BlobType, 22)), mustOrdKey(orderedKeyFromInt(40, Format_7_18)), 40)),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r3, BlobType, 33)), mustOrdKey(orderedKeyFromInt(60, Format_7_18)), 60)),
+		}, newTestValueStore()))),
 	)
 }
 
@@ -335,7 +353,7 @@ func TestWriteEmptyStruct(t *testing.T) {
 		[]interface{}{
 			StructKind, "S", uint64(0), /* len */
 		},
-		NewStruct(Format_7_18, "S", nil),
+		mustValue(NewStruct(Format_7_18, "S", nil)),
 	)
 }
 
@@ -344,7 +362,7 @@ func TestWriteEmptyTuple(t *testing.T) {
 		[]interface{}{
 			TupleKind, uint64(0), /* len */
 		},
-		NewTuple(Format_7_18),
+		mustValue(NewTuple(Format_7_18)),
 	)
 }
 
@@ -354,13 +372,15 @@ func TestWriteStruct(t *testing.T) {
 			StructKind, "S", uint64(2), /* len */
 			"b", BoolKind, true, "x", FloatKind, Float(42),
 		},
-		NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)}),
+		mustValue(NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)})),
 	)
 }
 
 func TestWriteStructTooMuchData(t *testing.T) {
-	s := NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)})
-	c := EncodeValue(s, Format_7_18)
+	s, err := NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)})
+	assert.NoError(t, err)
+	c, err := EncodeValue(s, Format_7_18)
+	assert.NoError(t, err)
 	data := c.Data()
 	buff := make([]byte, len(data)+1)
 	copy(buff, data)
@@ -380,7 +400,7 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		NewStruct(Format_7_18, "S", StructData{"l": NewList(context.Background(), vrw, String("a"), String("b"))}),
+		mustValue(NewStruct(Format_7_18, "S", StructData{"l": mustValue(NewList(context.Background(), vrw, String("a"), String("b")))})),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -389,7 +409,7 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(0), /* len */
 		},
-		NewStruct(Format_7_18, "S", StructData{"l": NewList(context.Background(), vrw)}),
+		mustValue(NewStruct(Format_7_18, "S", StructData{"l": mustList(NewList(context.Background(), vrw))})),
 	)
 }
 
@@ -400,7 +420,7 @@ func TestWriteStructWithTuple(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		NewStruct(Format_7_18, "S", StructData{"t": NewTuple(Format_7_18, String("a"), String("b"))}),
+		mustValue(NewStruct(Format_7_18, "S", StructData{"t": mustValue(NewTuple(Format_7_18, String("a"), String("b")))})),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -409,7 +429,7 @@ func TestWriteStructWithTuple(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(0), /* len */
 		},
-		NewStruct(Format_7_18, "S", StructData{"t": NewTuple(Format_7_18)}),
+		mustValue(NewStruct(Format_7_18, "S", StructData{"t": mustValue(NewTuple(Format_7_18))})),
 	)
 }
 
@@ -427,7 +447,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 			"x", FloatKind, Float(42),
 		},
 		// {s: {x: 42}}
-		NewStruct(Format_7_18, "S", StructData{"s": NewStruct(Format_7_18, "S2", StructData{"x": Float(42)})}),
+		mustValue(NewStruct(Format_7_18, "S", StructData{"s": mustValue(NewStruct(Format_7_18, "S2", StructData{"x": Float(42)}))})),
 	)
 }
 
@@ -439,44 +459,48 @@ func TestWriteStructWithBlob(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"b", BlobKind, uint64(0), []byte{0x00, 0x01},
 		},
-		NewStruct(Format_7_18, "S", StructData{"b": NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01}))}),
+		mustValue(NewStruct(Format_7_18, "S", StructData{"b": mustBlob(NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01})))})),
 	)
 }
 
 func TestWriteCompoundList(t *testing.T) {
 	vrw := newTestValueStore()
 
-	list1 := newList(newListLeafSequence(vrw, Float(0)))
-	list2 := newList(newListLeafSequence(vrw, Float(1), Float(2), Float(3)))
+	list1 := newList(mustSeq(newListLeafSequence(vrw, Float(0))))
+	list2 := newList(mustSeq(newListLeafSequence(vrw, Float(1), Float(2), Float(3))))
 	assertEncoding(t,
 		[]interface{}{
 			ListKind, uint64(1), uint64(2), // len,
-			RefKind, list1.Hash(Format_7_18), ListKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(1),
-			RefKind, list2.Hash(Format_7_18), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
+			RefKind, mustHash(list1.Hash(Format_7_18)), ListKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(1),
+			RefKind, mustHash(list2.Hash(Format_7_18)), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
 		},
-		newList(newListMetaSequence(1, []metaTuple{
-			newMetaTuple(NewRef(list1, Format_7_18), orderedKeyFromInt(1, Format_7_18), 1),
-			newMetaTuple(NewRef(list2, Format_7_18), orderedKeyFromInt(3, Format_7_18), 3),
-		}, vrw)),
+		newList(mustSeq(newListMetaSequence(1, []metaTuple{
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(list1, Format_7_18)), mustOrdKey(orderedKeyFromInt(1, Format_7_18)), 1)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(list2, Format_7_18)), mustOrdKey(orderedKeyFromInt(3, Format_7_18)), 3)),
+		}, vrw))),
 	)
 }
 
 func TestWriteCompoundSet(t *testing.T) {
 	vrw := newTestValueStore()
 
-	set1 := newSet(newSetLeafSequence(vrw, Float(0), Float(1)))
-	set2 := newSet(newSetLeafSequence(vrw, Float(2), Float(3), Float(4)))
+	sls, err := newSetLeafSequence(vrw, Float(0), Float(1))
+	assert.NoError(t, err)
+	sls2, err := newSetLeafSequence(vrw, Float(2), Float(3), Float(4))
+	assert.NoError(t, err)
+	set1 := newSet(sls)
+	set2 := newSet(sls2)
 
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			RefKind, set1.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
-			RefKind, set2.Hash(Format_7_18), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
+			RefKind, mustHash(set1.Hash(Format_7_18)), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
+			RefKind, mustHash(set2.Hash(Format_7_18)), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
 		},
-		newSet(newSetMetaSequence(1, []metaTuple{
-			newMetaTuple(NewRef(set1, Format_7_18), orderedKeyFromInt(1, Format_7_18), 2),
-			newMetaTuple(NewRef(set2, Format_7_18), orderedKeyFromInt(4, Format_7_18), 3),
-		}, vrw)),
+		newSet(mustOrdSeq(newSetMetaSequence(1, []metaTuple{
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, Format_7_18)), mustOrdKey(orderedKeyFromInt(1, Format_7_18)), 2)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, Format_7_18)), mustOrdKey(orderedKeyFromInt(4, Format_7_18)), 3)),
+		}, vrw))),
 	)
 }
 
@@ -485,7 +509,7 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 
 	// Blobs are interesting because unlike the numbers used in TestWriteCompondSet, refs are sorted by their hashes, not their value.
 	newBlobOfInt := func(i int) Blob {
-		return NewBlob(context.Background(), vrw, strings.NewReader(strconv.Itoa(i)))
+		return mustBlob(NewBlob(context.Background(), vrw, strings.NewReader(strconv.Itoa(i))))
 	}
 
 	blob0 := newBlobOfInt(0)
@@ -494,19 +518,19 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	blob3 := newBlobOfInt(3)
 	blob4 := newBlobOfInt(4)
 
-	set1 := newSet(newSetLeafSequence(vrw, blob0, blob1))
-	set2 := newSet(newSetLeafSequence(vrw, blob2, blob3, blob4))
+	set1 := newSet(mustOrdSeq(newSetLeafSequence(vrw, blob0, blob1)))
+	set2 := newSet(mustOrdSeq(newSetLeafSequence(vrw, blob2, blob3, blob4)))
 
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			RefKind, set1.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob1.Hash(Format_7_18), uint64(2),
-			RefKind, set2.Hash(Format_7_18), SetKind, BlobKind, uint64(1), hashKind, blob4.Hash(Format_7_18), uint64(3),
+			RefKind, mustHash(set1.Hash(Format_7_18)), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob1.Hash(Format_7_18)), uint64(2),
+			RefKind, mustHash(set2.Hash(Format_7_18)), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob4.Hash(Format_7_18)), uint64(3),
 		},
-		newSet(newSetMetaSequence(1, []metaTuple{
-			newMetaTuple(NewRef(set1, Format_7_18), newOrderedKey(blob1, Format_7_18), 2),
-			newMetaTuple(NewRef(set2, Format_7_18), newOrderedKey(blob4, Format_7_18), 3),
-		}, vrw)),
+		newSet(mustOrdSeq(newSetMetaSequence(1, []metaTuple{
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, Format_7_18)), mustOrdKey(newOrderedKey(blob1, Format_7_18)), 2)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, Format_7_18)), mustOrdKey(newOrderedKey(blob4, Format_7_18)), 3)),
+		}, vrw))),
 	)
 }
 
@@ -519,12 +543,12 @@ func TestWriteListOfUnion(t *testing.T) {
 			ListKind, uint64(0),
 			uint64(4) /* len */, StringKind, "0", FloatKind, Float(1), StringKind, "2", BoolKind, true,
 		},
-		NewList(context.Background(), vrw,
+		mustList(NewList(context.Background(), vrw,
 			String("0"),
 			Float(1),
 			String("2"),
 			Bool(true),
-		),
+		)),
 	)
 }
 
@@ -536,14 +560,15 @@ func TestWriteListOfStruct(t *testing.T) {
 			ListKind, uint64(0), uint64(1), /* len */
 			StructKind, "S", uint64(1) /* len */, "x", FloatKind, Float(42),
 		},
-		NewList(context.Background(), vrw, NewStruct(Format_7_18, "S", StructData{"x": Float(42)})),
+		mustValue(NewList(context.Background(), vrw, mustValue(NewStruct(Format_7_18, "S", StructData{"x": Float(42)})))),
 	)
 }
 
 func TestWriteListOfUnionWithType(t *testing.T) {
 	vrw := newTestValueStore()
 
-	structType := MakeStructType("S", StructField{"x", FloaTType, false})
+	structType, err := MakeStructType("S", StructField{"x", FloaTType, false})
+	assert.NoError(t, err)
 
 	assertEncoding(t,
 		[]interface{}{
@@ -553,12 +578,12 @@ func TestWriteListOfUnionWithType(t *testing.T) {
 			TypeKind, TypeKind,
 			TypeKind, StructKind, "S", uint64(1) /* len */, "x", FloatKind, false,
 		},
-		NewList(context.Background(), vrw,
+		mustList(NewList(context.Background(), vrw,
 			Bool(true),
 			FloaTType,
 			TypeType,
 			structType,
-		),
+		)),
 	)
 }
 
@@ -569,7 +594,7 @@ func TestWriteRef(t *testing.T) {
 		[]interface{}{
 			RefKind, r, FloatKind, uint64(4),
 		},
-		constructRef(Format_7_18, r, FloaTType, 4),
+		mustValue(constructRef(Format_7_18, r, FloaTType, 4)),
 	)
 }
 
@@ -581,7 +606,7 @@ func TestWriteListOfTypes(t *testing.T) {
 			ListKind, uint64(0), uint64(2), /* len */
 			TypeKind, BoolKind, TypeKind, StringKind,
 		},
-		NewList(context.Background(), vrw, BoolType, StringType),
+		mustValue(NewList(context.Background(), vrw, BoolType, StringType)),
 	)
 }
 
@@ -593,7 +618,7 @@ func TestWriteUnionList(t *testing.T) {
 			ListKind, uint64(0), uint64(3), /* len */
 			FloatKind, Float(23), StringKind, "hi", FloatKind, Float(42),
 		},
-		NewList(context.Background(), vrw, Float(23), String("hi"), Float(42)),
+		mustValue(NewList(context.Background(), vrw, Float(23), String("hi"), Float(42))),
 	)
 }
 
@@ -604,7 +629,7 @@ func TestWriteEmptyUnionList(t *testing.T) {
 		[]interface{}{
 			ListKind, uint64(0), uint64(0), /* len */
 		},
-		NewList(context.Background(), vrw),
+		mustValue(NewList(context.Background(), vrw)),
 	)
 }
 

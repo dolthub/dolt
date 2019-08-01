@@ -33,10 +33,14 @@ func TestRefInList(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	l := NewList(context.Background(), vs)
-	r := NewRef(l, Format_7_18)
-	l = l.Edit().Append(r).List(context.Background())
-	r2 := l.Get(context.Background(), 0)
+	l, err := NewList(context.Background(), vs)
+	assert.NoError(err)
+	r, err := NewRef(l, Format_7_18)
+	assert.NoError(err)
+	l, err = l.Edit().Append(r).List(context.Background())
+	assert.NoError(err)
+	r2, err := l.Get(context.Background(), 0)
+	assert.NoError(err)
 	assert.True(r.Equals(r2))
 }
 
@@ -45,10 +49,16 @@ func TestRefInSet(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	s := NewSet(context.Background(), vs)
-	r := NewRef(s, Format_7_18)
-	s = s.Edit().Insert(r).Set(context.Background())
-	r2 := s.First(context.Background())
+	s, err := NewSet(context.Background(), vs)
+	assert.NoError(err)
+	r, err := NewRef(s, Format_7_18)
+	assert.NoError(err)
+	se, err := s.Edit().Insert(r)
+	assert.NoError(err)
+	s, err = se.Set(context.Background())
+	assert.NoError(err)
+	r2, err := s.First(context.Background())
+	assert.NoError(err)
 	assert.True(r.Equals(r2))
 }
 
@@ -57,13 +67,20 @@ func TestRefInMap(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	m := NewMap(context.Background(), vs)
-	r := NewRef(m, Format_7_18)
-	m = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
-	r2 := m.Get(context.Background(), Float(0))
+	m, err := NewMap(context.Background(), vs)
+	assert.NoError(err)
+	r, err := NewRef(m, Format_7_18)
+	assert.NoError(err)
+	m, err  = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
+	assert.NoError(err)
+	r2, ok, err := m.MaybeGet(context.Background(), Float(0))
+	assert.NoError(err)
+	assert.True(ok)
 	assert.True(r.Equals(r2))
 
-	i := m.Get(context.Background(), r)
+	i, ok, err := m.MaybeGet(context.Background(), r)
+	assert.NoError(err)
+	assert.True(ok)
 	assert.Equal(int32(1), int32(i.(Float)))
 }
 
@@ -72,8 +89,10 @@ func TestRefChunks(t *testing.T) {
 
 	vs := newTestValueStore()
 
-	l := NewList(context.Background(), vs)
-	r := NewRef(l, Format_7_18)
+	l, err := NewList(context.Background(), vs)
+	assert.NoError(err)
+	r, err := NewRef(l, Format_7_18)
+	assert.NoError(err)
 	assert.Len(getChunks(r), 1)
 	assert.Equal(r, getChunks(r)[0])
 }

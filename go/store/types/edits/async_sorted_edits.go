@@ -15,31 +15,44 @@
 package edits
 
 import (
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-func sorter(nbf *types.NomsBinFormat, in, out chan types.KVPSlice) {
+func sorter(nbf *types.NomsBinFormat, in, out chan types.KVPSlice) error {
 	for kvps := range in {
-		sort.Stable(types.KVPSort{Values: kvps, NBF: nbf})
+		err := types.SortWithErroringLess(types.KVPSort{Values: kvps, NBF: nbf})
+
+		if err != nil {
+			return err
+		}
+
 		out <- kvps
 	}
+
+	return nil
 }
 
-func merger(in chan [2]*KVPCollection, out chan *KVPCollection) {
+func merger(in chan [2]*KVPCollection, out chan *KVPCollection) error {
 	for {
 		colls, ok := <-in
 
 		if !ok {
-			return
+			return nil
 		}
 
 		var res *KVPCollection
 		if colls[1] == nil {
 			res = colls[0]
 		} else {
-			res = colls[0].DestructiveMerge(colls[1])
+			var err error
+			res, err = colls[0].DestructiveMerge(colls[1])
+
+			if err != nil {
+				return err
+			}
 		}
 
 		out <- res
@@ -54,6 +67,7 @@ type AsyncSortedEdits struct {
 	sortConcurrency  int
 	asyncConcurrency int
 
+	ae 		   *atomicerr.AtomicError
 	sortChan   chan types.KVPSlice
 	resultChan chan types.KVPSlice
 	doneChan   chan bool
@@ -68,6 +82,7 @@ type AsyncSortedEdits struct {
 // 'asyncConcurrency' go routines for background sorting of batches.  The final Sort call is processed with
 // 'sortConcurrency' go routines
 func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, sortConcurrency int) *AsyncSortedEdits {
+	ae := atomicerr.New()
 	sortChan := make(chan types.KVPSlice, asyncConcurrency*8)
 	resChan := make(chan types.KVPSlice, asyncConcurrency*8)
 	doneChan := make(chan bool, asyncConcurrency)
@@ -78,7 +93,8 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 				doneChan <- true
 			}()
 
-			sorter(nbf, sortChan, resChan)
+			err := sorter(nbf, sortChan, resChan)
+			ae.SetIfError(err)
 		}()
 	}
 
@@ -86,6 +102,7 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 		sliceSize:        sliceSize,
 		asyncConcurrency: asyncConcurrency,
 		sortConcurrency:  sortConcurrency,
+		ae:				  ae,
 		sortChan:         sortChan,
 		resultChan:       resChan,
 		doneChan:         doneChan,
@@ -125,21 +142,33 @@ func (ase *AsyncSortedEdits) pollSortedSlices() {
 
 // FinishedEditing should be called once all edits have been added.  Once FinishedEditing is called adding more edits
 // will have undefined behavior.
-func (ase *AsyncSortedEdits) FinishedEditing() types.EditProvider {
+func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 	close(ase.sortChan)
 
 	if len(ase.accumulating) > 0 {
 		sl := types.KVPSlice(ase.accumulating)
-		sort.Stable(types.KVPSort{Values: sl, NBF: ase.nbf})
+		err := types.SortWithErroringLess(types.KVPSort{Values: sl, NBF: ase.nbf})
+
+		if err != nil {
+			return nil, err
+		}
 
 		ase.resultChan <- sl
 	}
 
 	ase.wait()
 
+	if err := ase.ae.Get(); err != nil{
+		return nil, err
+	}
+
 	ase.Sort()
 
-	return ase.Iterator()
+	if err := ase.ae.Get(); err != nil{
+		return nil, err
+	}
+
+	return ase.Iterator(), nil
 }
 
 func (ase *AsyncSortedEdits) wait() {
@@ -190,7 +219,8 @@ func (ase *AsyncSortedEdits) Sort() {
 					ase.doneChan <- true
 				}()
 
-				merger(sortChan, resChan)
+				err := merger(sortChan, resChan)
+				ase.ae.SetIfError(err)
 			}()
 		}
 

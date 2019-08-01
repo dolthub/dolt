@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -54,7 +54,7 @@ func (le *ListEditor) List(ctx context.Context) (List, error) {
 	seq := le.l.sequence
 	vrw := seq.valueReadWriter()
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	cursChan := make(chan chan *sequenceCursor)
 	spliceChan := make(chan chan listEdit)
 

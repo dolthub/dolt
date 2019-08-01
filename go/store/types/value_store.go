@@ -24,7 +24,7 @@ package types
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
@@ -251,7 +251,7 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 		foundChunks := make(chan *chunks.Chunk, 16)
 
-		ae := nbs.NewAtomicError()
+		ae := atomicerr.New()
 		go func() {
 			defer close(foundChunks)
 			err := lvs.cs.GetMany(ctx, remaining, foundChunks)
