@@ -256,7 +256,12 @@ func encodeForGraph(bs []byte, v Value, asValue bool) ([]byte, error) {
 		// noms-kind(1-byte), serialization-len(4-bytes), serialization(n-bytes)
 		buf := [initialBufferSize]byte{}
 		uint32buf := [4]byte{}
-		encodedVal := encToSlice(v, buf[:])
+		encodedVal, err := encToSlice(v, buf[:])
+
+		if err != nil {
+			return nil, err
+		}
+
 		binary.BigEndian.PutUint32(uint32buf[:], uint32(len(encodedVal)))
 		bs = append(bs, uint8(v.Kind()))
 		bs = append(bs, uint32buf[:]...)
@@ -276,11 +281,16 @@ func encodeForGraph(bs []byte, v Value, asValue bool) ([]byte, error) {
 }
 
 // Note that, if 'v' are prolly trees, any in-memory child chunks will be written to vw at this time.
-func encToSlice(v Value, initBuf []byte) []byte {
+func encToSlice(v Value, initBuf []byte) ([]byte, error) {
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter?
 	w := &binaryNomsWriter{initBuf, 0}
-	v.writeTo(w, Format_7_18)
-	return w.data()
+	err := v.writeTo(w, Format_7_18)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return w.data(), nil
 }
 
 var prefix = []byte{0x01, 0x02, 0x03, 0x04}

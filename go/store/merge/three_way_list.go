@@ -24,22 +24,26 @@ package merge
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged types.List, err error) {
+	ae := atomicerr.New()
 	aSpliceChan, bSpliceChan := make(chan types.Splice), make(chan types.Splice)
 	aStopChan, bStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
 	go func() {
-		a.Diff(ctx, parent, aSpliceChan, aStopChan)
-		close(aSpliceChan)
+		defer close(aSpliceChan)
+		err := a.Diff(ctx, parent, aSpliceChan, aStopChan)
+		ae.SetIfError(err)
 	}()
 	go func() {
-		b.Diff(ctx, parent, bSpliceChan, bStopChan)
-		close(bSpliceChan)
+		defer close(bSpliceChan)
+		err := b.Diff(ctx, parent, bSpliceChan, bStopChan)
+		ae.SetIfError(err)
 	}()
 
 	stopAndDrain := func(stop chan<- struct{}, drain <-chan types.Splice) {
@@ -77,9 +81,16 @@ func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged typ
 			break
 		}
 		if overlap(aSplice, bSplice) {
-			if canMerge(ctx, a, b, aSplice, bSplice) {
+			if mergeable, err := canMerge(ctx, a, b, aSplice, bSplice); err != nil {
+				return types.EmptyList, err
+			} else if mergeable {
 				splice := merge(aSplice, bSplice)
-				merged = apply(ctx, a, merged, offset, splice)
+				merged, err = apply(ctx, a, merged, offset, splice)
+
+				if err != nil {
+					return types.EmptyList, err
+				}
+
 				offset += splice.SpAdded - splice.SpRemoved
 				aSplice, bSplice = invalidSplice, invalidSplice
 				continue
@@ -87,14 +98,28 @@ func threeWayListMerge(ctx context.Context, a, b, parent types.List) (merged typ
 			return parent, newMergeConflict("Overlapping splices: %s vs %s", describeSplice(aSplice), describeSplice(bSplice))
 		}
 		if aSplice.SpAt < bSplice.SpAt {
-			merged = apply(ctx, a, merged, offset, aSplice)
+			merged, err = apply(ctx, a, merged, offset, aSplice)
+
+			if err != nil {
+				return types.EmptyList, err
+			}
+
 			offset += aSplice.SpAdded - aSplice.SpRemoved
 			aSplice = invalidSplice
 			continue
 		}
-		merged = apply(ctx, b, merged, offset, bSplice)
+		merged, err = apply(ctx, b, merged, offset, bSplice)
+
+		if err != nil {
+			return types.EmptyList, err
+		}
+
 		offset += bSplice.SpAdded - bSplice.SpRemoved
 		bSplice = invalidSplice
+	}
+
+	if err := ae.Get(); err != nil {
+		return types.EmptyList, err
 	}
 
 	return merged, nil
@@ -109,18 +134,40 @@ func overlap(s1, s2 types.Splice) bool {
 }
 
 // canMerge returns whether aSplice and bSplice can be merged into a single splice that can be applied to parent. Currently, we're only willing to do this if the two splices do _precisely_ the same thing -- that is, remove the same number of elements from the same starting index and insert the exact same list of new elements.
-func canMerge(ctx context.Context, a, b types.List, aSplice, bSplice types.Splice) bool {
+func canMerge(ctx context.Context, a, b types.List, aSplice, bSplice types.Splice) (bool, error) {
 	if aSplice != bSplice {
-		return false
+		return false, nil
 	}
-	aIter, bIter := a.IteratorAt(ctx, aSplice.SpFrom), b.IteratorAt(ctx, bSplice.SpFrom)
+	aIter, err := a.IteratorAt(ctx, aSplice.SpFrom)
+
+	if err != nil {
+		return false, err
+	}
+
+	bIter, err := b.IteratorAt(ctx, bSplice.SpFrom)
+
+	if err != nil {
+		return false, err
+	}
+
 	for count := uint64(0); count < aSplice.SpAdded; count++ {
-		aVal, bVal := aIter.Next(ctx), bIter.Next(ctx)
+		aVal, err := aIter.Next(ctx)
+
+		if err != nil {
+			return false, err
+		}
+
+		bVal, err := bIter.Next(ctx)
+
+		if err != nil {
+			return false, err
+		}
+
 		if aVal == nil || bVal == nil || !aVal.Equals(bVal) {
-			return false
+			return false, nil
 		}
 	}
-	return true
+	return true, nil
 }
 
 // Since merge() is only called when canMerge() is true, we know s1 and s2 are exactly equal.
@@ -128,11 +175,21 @@ func merge(s1, s2 types.Splice) types.Splice {
 	return s1
 }
 
-func apply(ctx context.Context, source, target types.List, offset uint64, s types.Splice) types.List {
+func apply(ctx context.Context, source, target types.List, offset uint64, s types.Splice) (types.List, error) {
 	toAdd := make([]types.Valuable, s.SpAdded)
-	iter := source.IteratorAt(ctx, s.SpFrom)
+	iter, err := source.IteratorAt(ctx, s.SpFrom)
+
+	if err != nil {
+		return types.EmptyList, err
+	}
+
 	for i := 0; uint64(i) < s.SpAdded; i++ {
-		v := iter.Next(ctx)
+		v, err := iter.Next(ctx)
+
+		if err != nil {
+			return types.EmptyList, err
+		}
+
 		if v == nil {
 			d.Panic("List diff returned a splice that inserts a nonexistent element.")
 		}

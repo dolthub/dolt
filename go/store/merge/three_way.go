@@ -23,6 +23,7 @@ package merge
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -152,17 +153,42 @@ func NewThreeWay(resolve ResolveFunc) Policy {
 // b:      [a, d, e]
 // merged: [a, d, e]
 func ThreeWay(ctx context.Context, a, b, parent types.Value, vrw types.ValueReadWriter, resolve ResolveFunc, progress chan struct{}) (merged types.Value, err error) {
-	describe := func(v types.Value) string {
+	describe := func(v types.Value) (string, error) {
 		if v != nil {
-			return types.TypeOf(v).Describe(ctx)
+			t, err := types.TypeOf(v)
+
+			if err != nil {
+				return "", err
+			}
+
+			str, err := t.Describe(ctx)
+
+			if err != nil {
+				return "", err
+			}
+
+			return str, nil
 		}
-		return "nil Value"
+
+		return "nil Value", nil
 	}
 
 	if a == nil && b == nil {
 		return parent, nil
 	} else if unmergeable(a, b) {
-		return parent, newMergeConflict("Cannot merge %s with %s.", describe(a), describe(b))
+		aDesc, err := describe(a)
+
+		if err != nil {
+			return nil, err
+		}
+
+		bDesc, err := describe(b)
+
+		if err != nil {
+			return nil, err
+		}
+
+		return parent, newMergeConflict("Cannot merge %s with %s.", aDesc, bDesc)
 	}
 
 	if resolve == nil {
@@ -196,56 +222,96 @@ func updateProgress(progress chan<- struct{}) {
 
 func (m *merger) threeWay(ctx context.Context, a, b, parent types.Value, path types.Path) (merged types.Value, err error) {
 	defer updateProgress(m.progress)
+
 	if a == nil || b == nil {
 		d.Panic("Merge candidates cannont be nil: a = %v, b = %v", a, b)
 	}
 
 	switch a.Kind() {
 	case types.ListKind:
-		if aList, bList, pList, ok := listAssert(ctx, m.vrw, a, b, parent); ok {
+		if aList, bList, pList, ok, err := listAssert(ctx, m.vrw, a, b, parent); err != nil {
+			return nil, err
+		} else if ok {
 			return threeWayListMerge(ctx, aList, bList, pList)
 		}
 
 	case types.MapKind:
-		if aMap, bMap, pMap, ok := mapAssert(ctx, m.vrw, a, b, parent); ok {
+		if aMap, bMap, pMap, ok, err := mapAssert(ctx, m.vrw, a, b, parent); err != nil {
+			return nil, err
+		} else if ok {
 			return m.threeWayMapMerge(ctx, aMap, bMap, pMap, path)
 		}
 
 	case types.RefKind:
-		if aValue, bValue, pValue, ok := refAssert(ctx, a, b, parent, m.vrw); ok {
+		if aValue, bValue, pValue, ok, err := refAssert(ctx, a, b, parent, m.vrw); err != nil {
+			return nil, err
+		} else if ok {
 			merged, err := m.threeWay(ctx, aValue, bValue, pValue, path)
 			if err != nil {
 				return parent, err
 			}
-			return m.vrw.WriteValue(ctx, merged), nil
+			return m.vrw.WriteValue(ctx, merged)
 		}
 
 	case types.SetKind:
-		if aSet, bSet, pSet, ok := setAssert(ctx, m.vrw, a, b, parent); ok {
+		if aSet, bSet, pSet, ok, err := setAssert(ctx, m.vrw, a, b, parent); err != nil {
+			return nil, err
+
+		} else if ok {
 			return m.threeWaySetMerge(ctx, aSet, bSet, pSet, path)
 		}
 
 	case types.StructKind:
-		if aStruct, bStruct, pStruct, ok := structAssert(a, b, parent); ok {
+		if aStruct, bStruct, pStruct, ok, err := structAssert(a, b, parent); err != nil {
+			return nil, err
+		} else if ok {
 			return m.threeWayStructMerge(ctx, aStruct, bStruct, pStruct, path)
 		}
 	}
 
 	pDescription := "<nil>"
 	if parent != nil {
-		pDescription = types.TypeOf(parent).Describe(ctx)
+		t, err := types.TypeOf(parent)
+
+		if err != nil {
+			return nil, err
+		}
+
+		pDescription, err = t.Describe(ctx)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	return parent, newMergeConflict("Cannot merge %s and %s on top of %s.", types.TypeOf(a).Describe(ctx), types.TypeOf(b).Describe(ctx), pDescription)
+
+	aType, err := types.TypeOf(a)
+	bType, err := types.TypeOf(b)
+	aDesc, err := aType.Describe(ctx)
+	bDesc, err := bType.Describe(ctx)
+
+	return parent, newMergeConflict("Cannot merge %s and %s on top of %s.", aDesc, bDesc, pDescription)
 }
 
 func (m *merger) threeWayMapMerge(ctx context.Context, a, b, parent types.Map, path types.Path) (merged types.Value, err error) {
-	apply := func(target candidate, change types.ValueChanged, newVal types.Value) candidate {
+	apply := func(target candidate, change types.ValueChanged, newVal types.Value) (candidate, error) {
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return mapCandidate{target.getValue().(types.Map).Edit().Set(change.Key, newVal).Map(ctx)}
+			res, err := target.getValue().(types.Map).Edit().Set(change.Key, newVal).Map(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return mapCandidate{res}, nil
 		case types.DiffChangeRemoved:
-			return mapCandidate{target.getValue().(types.Map).Edit().Remove(change.Key).Map(ctx)}
+			res, err := target.getValue().(types.Map).Edit().Remove(change.Key).Map(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return mapCandidate{res}, nil
 		default:
 			panic("Not Reached")
 		}
@@ -254,13 +320,37 @@ func (m *merger) threeWayMapMerge(ctx context.Context, a, b, parent types.Map, p
 }
 
 func (m *merger) threeWaySetMerge(ctx context.Context, a, b, parent types.Set, path types.Path) (merged types.Value, err error) {
-	apply := func(target candidate, change types.ValueChanged, newVal types.Value) candidate {
+	apply := func(target candidate, change types.ValueChanged, newVal types.Value) (candidate, error) {
 		defer updateProgress(m.progress)
 		switch change.ChangeType {
 		case types.DiffChangeAdded, types.DiffChangeModified:
-			return setCandidate{target.getValue().(types.Set).Edit().Insert(newVal).Set(ctx)}
+			se, err := target.getValue().(types.Set).Edit().Insert(newVal)
+
+			if err != nil {
+				return nil, err
+			}
+
+			s, err := se.Set(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return setCandidate{s}, nil
 		case types.DiffChangeRemoved:
-			return setCandidate{target.getValue().(types.Set).Edit().Remove(newVal).Set(ctx)}
+			se, err := target.getValue().(types.Set).Edit().Remove(newVal)
+
+			if err != nil {
+				return nil, err
+			}
+
+			s, err := se.Set(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return setCandidate{s}, nil
 		default:
 			panic("Not Reached")
 		}
@@ -269,53 +359,77 @@ func (m *merger) threeWaySetMerge(ctx context.Context, a, b, parent types.Set, p
 }
 
 func (m *merger) threeWayStructMerge(ctx context.Context, a, b, parent types.Struct, path types.Path) (merged types.Value, err error) {
-	apply := func(target candidate, change types.ValueChanged, newVal types.Value) candidate {
+	apply := func(target candidate, change types.ValueChanged, newVal types.Value) (candidate, error) {
 		defer updateProgress(m.progress)
 		// Right now, this always iterates over all fields to create a new Struct, because there's no API for adding/removing a field from an existing struct type.
 		targetVal := target.getValue().(types.Struct)
 		if f, ok := change.Key.(types.String); ok {
 			field := string(f)
 			data := types.StructData{}
-			targetVal.IterFields(func(name string, v types.Value) {
+			_ = targetVal.IterFields(func(name string, v types.Value) error {
 				if name != field {
 					data[name] = v
 				}
+
+				return nil
 			})
 			if change.ChangeType == types.DiffChangeAdded || change.ChangeType == types.DiffChangeModified {
 				data[field] = newVal
 			}
-			return structCandidate{types.NewStruct(m.vrw.Format(), targetVal.Name(), data)}
+
+			st, err := types.NewStruct(m.vrw.Format(), targetVal.Name(), data)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return structCandidate{st}, nil
 		}
-		panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(change.Key).Describe(ctx)))
+
+		return nil, errors.New("bad key type in diff")
 	}
 	return m.threeWayOrderedSequenceMerge(ctx, structCandidate{a}, structCandidate{b}, structCandidate{parent}, apply, path)
 }
 
-func listAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aList, bList, pList types.List, ok bool) {
+func listAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aList, bList, pList types.List, ok bool, err error) {
 	var aOk, bOk, pOk bool
 	aList, aOk = a.(types.List)
 	bList, bOk = b.(types.List)
 	if parent != nil {
 		pList, pOk = parent.(types.List)
 	} else {
-		pList, pOk = types.NewList(ctx, vrw), true
+		pList, err = types.NewList(ctx, vrw)
+
+		if err != nil {
+			return types.EmptyList, types.EmptyList, types.EmptyList, false, err
+		}
+
+		pOk = true
 	}
-	return aList, bList, pList, aOk && bOk && pOk
+
+	return aList, bList, pList, aOk && bOk && pOk, nil
 }
 
-func mapAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool) {
+func mapAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aMap, bMap, pMap types.Map, ok bool, err error) {
 	var aOk, bOk, pOk bool
 	aMap, aOk = a.(types.Map)
 	bMap, bOk = b.(types.Map)
 	if parent != nil {
 		pMap, pOk = parent.(types.Map)
 	} else {
-		pMap, pOk = types.NewMap(ctx, vrw), true
+		pMap, err = types.NewMap(ctx, vrw)
+
+		if err != nil {
+			return types.EmptyMap, types.EmptyMap, types.EmptyMap, false, err
+		}
+
+		pOk = true
 	}
-	return aMap, bMap, pMap, aOk && bOk && pOk
+
+	return aMap, bMap, pMap, aOk && bOk && pOk, nil
 }
 
-func refAssert(ctx context.Context, a, b, parent types.Value, vrw types.ValueReadWriter) (aValue, bValue, pValue types.Value, ok bool) {
+func refAssert(ctx context.Context, a, b, parent types.Value, vrw types.ValueReadWriter) (aValue, bValue, pValue types.Value, ok bool, err error) {
 	var aOk, bOk, pOk bool
 	var aRef, bRef, pRef types.Ref
 	aRef, aOk = a.(types.Ref)
@@ -324,31 +438,53 @@ func refAssert(ctx context.Context, a, b, parent types.Value, vrw types.ValueRea
 		return
 	}
 
-	aValue = aRef.TargetValue(ctx, vrw)
-	bValue = bRef.TargetValue(ctx, vrw)
+	aValue, err = aRef.TargetValue(ctx, vrw)
+
+	if err != nil {
+		return nil, nil, nil, false, err
+	}
+
+	bValue, err = bRef.TargetValue(ctx, vrw)
+
+	if err != nil {
+		return nil, nil, nil, false, err
+	}
+
 	if parent != nil {
 		if pRef, pOk = parent.(types.Ref); pOk {
-			pValue = pRef.TargetValue(ctx, vrw)
+			pValue, err = pRef.TargetValue(ctx, vrw)
+
+			if err != nil {
+				return nil, nil, nil, false, err
+			}
+
 		}
 	} else {
 		pOk = true // parent == nil is still OK. It just leaves pValue as nil.
 	}
-	return aValue, bValue, pValue, aOk && bOk && pOk
+	return aValue, bValue, pValue, aOk && bOk && pOk, nil
 }
 
-func setAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aSet, bSet, pSet types.Set, ok bool) {
+func setAssert(ctx context.Context, vrw types.ValueReadWriter, a, b, parent types.Value) (aSet, bSet, pSet types.Set, ok bool, err error) {
 	var aOk, bOk, pOk bool
 	aSet, aOk = a.(types.Set)
 	bSet, bOk = b.(types.Set)
 	if parent != nil {
 		pSet, pOk = parent.(types.Set)
 	} else {
-		pSet, pOk = types.NewSet(ctx, vrw), true
+		pSet, err = types.NewSet(ctx, vrw)
+
+		if err != nil {
+			return types.EmptySet, types.EmptySet, types.EmptySet, false, err
+		}
+
+		pOk = true
 	}
-	return aSet, bSet, pSet, aOk && bOk && pOk
+
+	return aSet, bSet, pSet, aOk && bOk && pOk, nil
 }
 
-func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Struct, ok bool) {
+func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Struct, ok bool, err error) {
 	var aOk, bOk, pOk bool
 	aStruct, aOk = a.(types.Struct)
 	bStruct, bOk = b.(types.Struct)
@@ -357,10 +493,19 @@ func structAssert(a, b, parent types.Value) (aStruct, bStruct, pStruct types.Str
 			if parent != nil {
 				pStruct, pOk = parent.(types.Struct)
 			} else {
-				pStruct, pOk = types.NewStruct(aStruct.Format(), aStruct.Name(), nil), true
+				pStruct, err = types.NewStruct(aStruct.Format(), aStruct.Name(), nil)
+
+				if err != nil {
+					es := types.EmptyStruct(aStruct.Format())
+					return es, es, es, false, err
+				}
+
+				pOk = true
 			}
-			return aStruct, bStruct, pStruct, pOk
+
+			return aStruct, bStruct, pStruct, pOk, err
 		}
 	}
+
 	return
 }

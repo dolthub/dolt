@@ -66,20 +66,16 @@ func (b Blob) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error
 		endIdx = b.Len()
 	}
 
+	var isEOF bool
 	if endIdx == b.Len() {
-		err = io.EOF
+		isEOF = true
 	}
 
 	if startIdx == endIdx {
 		return
 	}
 
-	leaves, localStart, llnErr := LoadLeafNodes(ctx, []Collection{b}, startIdx, endIdx)
-
-	if llnErr != nil {
-		err = llnErr
-		return 0, err
-	}
+	leaves, localStart, err := LoadLeafNodes(ctx, []Collection{b}, startIdx, endIdx)
 
 	if err != nil {
 		return 0, err
@@ -105,7 +101,11 @@ func (b Blob) ReadAt(ctx context.Context, p []byte, off int64) (n int, err error
 		startIdx = 0
 	}
 
-	return
+	if isEOF {
+		err = io.EOF
+	}
+
+	return n, err
 }
 
 func (b Blob) Reader(ctx context.Context) *BlobReader {
@@ -143,11 +143,11 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 			go func() {
 				defer close(bc)
 				buff := make([]byte, blockLength)
-				_, err := b.ReadAt(ctx, buff, int64(start))
+				n, err := b.ReadAt(ctx, buff, int64(start))
 
 				if err != nil && err != io.EOF{
 					ae.SetIfError(err)
-				} else {
+				} else if n > 0 {
 					bc <- buff
 				}
 			}()
@@ -411,6 +411,7 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, erro
 
 			n, err := r.Read(readBuff[:])
 
+			isEOF := err == io.EOF
 			if err != nil && err != io.EOF {
 				ae.SetIfError(err)
 				break
@@ -422,10 +423,12 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, erro
 				}
 			}
 
-			if offset > 0 {
-				makeChunk()
+			if isEOF {
+				if offset > 0 {
+					makeChunk()
+				}
+				break
 			}
-			break
 		}
 	}()
 

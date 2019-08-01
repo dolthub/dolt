@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"sync"
 	"time"
@@ -38,7 +39,7 @@ var ErrNoChunkSource = errors.New("no chunk source")
 func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
 	t1 := time.Now()
 
-	ccs := &persistingChunkSource{ae: NewAtomicError(), mt: mt}
+	ccs := &persistingChunkSource{ae: atomicerr.New(), mt: mt}
 	ccs.wg.Add(1)
 	rl <- struct{}{}
 	go func() {
@@ -75,7 +76,7 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 }
 
 type persistingChunkSource struct {
-	ae *AtomicError
+	ae *atomicerr.AtomicError
 	mu sync.RWMutex
 	mt *memTable
 

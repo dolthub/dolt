@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"math"
 	"math/rand"
 
@@ -167,7 +168,7 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
 	found := make(chan *chunks.Chunk)
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	go func() {
 		defer close(found)
 		err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), found)

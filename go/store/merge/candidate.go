@@ -23,7 +23,7 @@ package merge
 
 import (
 	"context"
-	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -34,9 +34,9 @@ import (
 // threeWayOrderedSequenceMerge() can remain agnostic to which kind of
 // collections it's actually working with.
 type candidate interface {
-	diff(ctx context.Context, parent candidate, change chan<- types.ValueChanged, stop <-chan struct{})
-	get(ctx context.Context, k types.Value) types.Value
-	pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path)
+	diff(ctx context.Context, parent candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{})
+	get(ctx context.Context, k types.Value) (types.Value, bool, error)
+	pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path, err error)
 	getValue() types.Value
 }
 
@@ -44,22 +44,28 @@ type mapCandidate struct {
 	m types.Map
 }
 
-func (mc mapCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	mc.m.Diff(ctx, p.(mapCandidate).m, change, stop)
+func (mc mapCandidate) diff(ctx context.Context, p candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{}) {
+	mc.m.Diff(ctx, p.(mapCandidate).m, ae, change, stop)
 }
 
-func (mc mapCandidate) get(ctx context.Context, k types.Value) types.Value {
-	return mc.m.Get(ctx, k)
+func (mc mapCandidate) get(ctx context.Context, k types.Value) (types.Value, bool, error) {
+	return mc.m.MaybeGet(ctx, k)
 }
 
-func (mc mapCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
+func (mc mapCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path, err error) {
 	out = append(out, path...)
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
 	} else {
-		out = append(out, types.NewHashIndexPath(change.Key.Hash(mc.m.Format())))
+		h, err := change.Key.Hash(mc.m.Format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, types.NewHashIndexPath(h))
 	}
-	return
+	return out, nil
 }
 
 func (mc mapCandidate) getValue() types.Value {
@@ -70,22 +76,28 @@ type setCandidate struct {
 	s types.Set
 }
 
-func (sc setCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	sc.s.Diff(ctx, p.(setCandidate).s, change, stop)
+func (sc setCandidate) diff(ctx context.Context, p candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{}) {
+	sc.s.Diff(ctx, p.(setCandidate).s, ae, change, stop)
 }
 
-func (sc setCandidate) get(ctx context.Context, k types.Value) types.Value {
-	return k
+func (sc setCandidate) get(ctx context.Context, k types.Value) (types.Value, bool, error) {
+	return k, true, nil
 }
 
-func (sc setCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
+func (sc setCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path, err error) {
 	out = append(out, path...)
 	if kind := change.Key.Kind(); kind == types.BoolKind || kind == types.StringKind || kind == types.FloatKind {
 		out = append(out, types.NewIndexPath(change.Key))
 	} else {
-		out = append(out, types.NewHashIndexPath(change.Key.Hash(sc.s.Format())))
+		h, err := change.Key.Hash(sc.s.Format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		out = append(out, types.NewHashIndexPath(h))
 	}
-	return
+	return out, nil
 }
 
 func (sc setCandidate) getValue() types.Value {
@@ -96,25 +108,33 @@ type structCandidate struct {
 	s types.Struct
 }
 
-func (sc structCandidate) diff(ctx context.Context, p candidate, change chan<- types.ValueChanged, stop <-chan struct{}) {
-	sc.s.Diff(p.(structCandidate).s, change, stop)
+func (sc structCandidate) diff(ctx context.Context, p candidate, ae *atomicerr.AtomicError, change chan<- types.ValueChanged, stop <-chan struct{}) {
+	err := sc.s.Diff(p.(structCandidate).s, change, stop)
+	ae.SetIfError(err)
 }
 
-func (sc structCandidate) get(ctx context.Context, key types.Value) types.Value {
+func (sc structCandidate) get(ctx context.Context, key types.Value) (types.Value, bool, error) {
 	if field, ok := key.(types.String); ok {
-		val, _ := sc.s.MaybeGet(string(field))
-		return val
+		return sc.s.MaybeGet(string(field))
 	}
-	panic(fmt.Errorf("bad key type in diff: %s", types.TypeOf(key).Describe(ctx)))
+
+	return nil, false, nil
 }
 
-func (sc structCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path) {
+func (sc structCandidate) pathConcat(ctx context.Context, change types.ValueChanged, path types.Path) (out types.Path, err error) {
 	out = append(out, path...)
 	str, ok := change.Key.(types.String)
 	if !ok {
-		d.Panic("Field names must be strings, not %s", types.TypeOf(change.Key).Describe(ctx))
+		t, err := types.TypeOf(change.Key)
+
+		var typeStr string
+		if err == nil {
+			typeStr, _ = t.Describe(ctx)
+		}
+
+		d.Panic("Field names must be strings, not %s", typeStr)
 	}
-	return append(out, types.NewFieldPath(string(str)))
+	return append(out, types.NewFieldPath(string(str))), nil
 }
 
 func (sc structCandidate) getValue() types.Value {

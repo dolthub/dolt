@@ -23,6 +23,7 @@ package merge
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,16 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func mustValue(val types.Value, err error) types.Value {
+	d.PanicIfError(err)
+	return val
+}
+
+func mustString(str string, err error) string {
+	d.PanicIfError(err)
+	return str
+}
+
 type seq interface {
 	items() []interface{}
 }
@@ -39,7 +50,7 @@ type seq interface {
 type ThreeWayMergeSuite struct {
 	suite.Suite
 	vs      *types.ValueStore
-	create  func(seq) types.Value
+	create  func(seq) (types.Value, error)
 	typeStr string
 }
 
@@ -49,14 +60,22 @@ func (s *ThreeWayMergeSuite) SetupTest() {
 }
 
 func (s *ThreeWayMergeSuite) TearDownTest() {
-	s.vs.Close()
+	err := s.vs.Close()
+	s.NoError(err)
 }
 
 func (s *ThreeWayMergeSuite) tryThreeWayMerge(a, b, p, exp seq) {
-	merged, err := ThreeWay(context.Background(), s.create(a), s.create(b), s.create(p), s.vs, nil, nil)
+	aVal, err := s.create(a)
+	s.NoError(err)
+	bVal, err := s.create(b)
+	s.NoError(err)
+	pVal, err := s.create(p)
+	s.NoError(err)
+	merged, err := ThreeWay(context.Background(), aVal, bVal, pVal, s.vs, nil, nil)
 	if s.NoError(err) {
-		expected := s.create(exp)
-		s.True(expected.Equals(merged), "%s != %s", types.EncodedValue(context.Background(), expected), types.EncodedValue(context.Background(), merged))
+		expected, err := s.create(exp)
+		s.NoError(err)
+		s.True(expected.Equals(merged), "%s != %s", mustString(types.EncodedValue(context.Background(), expected)), mustString(types.EncodedValue(context.Background(), merged)))
 	}
 }
 
@@ -66,31 +85,37 @@ func (s *ThreeWayMergeSuite) tryThreeWayConflict(a, b, p types.Value, contained 
 		s.Contains(err.Error(), contained)
 		return
 	}
-	s.Fail("Expected error!", "Got successful merge: %s", types.EncodedValue(context.Background(), m))
+	s.Fail("Expected error!", "Got successful merge: %s", mustString(types.EncodedValue(context.Background(), m)))
 }
 
-func valsToTypesValues(f func(seq) types.Value, items ...interface{}) []types.Value {
+func valsToTypesValues(f func(seq) (types.Value, error), items ...interface{}) ([]types.Value, error) {
 	keyValues := []types.Value{}
 	for _, e := range items {
-		v := valToTypesValue(f, e)
+		v, err := valToTypesValue(f, e)
+
+		if err != nil {
+			return nil, err
+		}
+
 		keyValues = append(keyValues, v)
 	}
-	return keyValues
+	return keyValues, nil
 }
 
-func valToTypesValue(f func(seq) types.Value, v interface{}) types.Value {
+func valToTypesValue(f func(seq) (types.Value, error), v interface{}) (types.Value, error) {
 	var v1 types.Value
+	var err error
 	switch t := v.(type) {
 	case string:
 		v1 = types.String(t)
 	case int:
 		v1 = types.Float(t)
 	case seq:
-		v1 = f(t)
+		v1, err = f(t)
 	case types.Value:
 		v1 = t
 	}
-	return v1
+	return v1, err
 }
 
 func TestThreeWayMerge_PrimitiveConflict(t *testing.T) {
@@ -101,7 +126,7 @@ func TestThreeWayMerge_PrimitiveConflict(t *testing.T) {
 			assert.Contains(t, err.Error(), contained)
 			return
 		}
-		assert.Fail(t, "Expected error!", "Got successful merge: %s", types.EncodedValue(context.Background(), m))
+		assert.Fail(t, "Expected error!", "Got successful merge: %s", mustString(types.EncodedValue(context.Background(), m)))
 	}
 
 	a, b, p := types.Float(7), types.String("nope"), types.String("parent")

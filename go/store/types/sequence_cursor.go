@@ -108,22 +108,24 @@ func (cur *sequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPa
 		return false, nil
 	}
 
-	ok, err := cur.parent.advanceMaybeAllowPastEnd(ctx, false)
-
-	if err != nil {
-		return false, err
-	}
-
-	if cur.parent != nil && ok {
-		// at end of current leaf chunk and there are more
-		err := cur.sync(ctx)
+	if cur.parent != nil {
+		ok, err := cur.parent.advanceMaybeAllowPastEnd(ctx, false)
 
 		if err != nil {
 			return false, err
 		}
 
-		cur.idx = 0
-		return true, nil
+		if ok {
+			// at end of current leaf chunk and there are more
+			err := cur.sync(ctx)
+
+			if err != nil {
+				return false, err
+			}
+
+			cur.idx = 0
+			return true, nil
+		}
 	}
 
 	if allowPastEnd {
@@ -148,21 +150,24 @@ func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, all
 	}
 
 	d.PanicIfFalse(0 == cur.idx)
-	ok, err := cur.parent.retreatMaybeAllowBeforeStart(ctx, false)
 
-	if err != nil {
-		return false, err
-	}
-
-	if cur.parent != nil && ok {
-		err := cur.sync(ctx)
+	if cur.parent != nil {
+		ok, err := cur.parent.retreatMaybeAllowBeforeStart(ctx, false)
 
 		if err != nil {
 			return false, err
 		}
 
-		cur.idx = cur.length() - 1
-		return true, nil
+		if ok {
+			err := cur.sync(ctx)
+
+			if err != nil {
+				return false, err
+			}
+
+			cur.idx = cur.length() - 1
+			return true, nil
+		}
 	}
 
 	if allowBeforeStart {
