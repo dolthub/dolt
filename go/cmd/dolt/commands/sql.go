@@ -15,6 +15,8 @@
 package commands
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -114,8 +116,13 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 	}
 
-	// start an interactive shell
-	root = runShell(dEnv, root)
+	// Run in either batch mode for piped input, or shell mode for interactive
+	fi, _ := os.Stdin.Stat()
+	if (fi.Mode() & os.ModeCharDevice) == 0 {
+		root = runBatchMode(dEnv, root)
+	} else {
+		root = runShell(dEnv, root)
+	}
 
 	// If the SQL session wrote a new root value, update the working set with it
 	if root != nil {
@@ -123,6 +130,51 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	return 0
+}
+
+// ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token. It doesn't
+// work for strings that contain semi-colons. Supporting that requires implementing a state machine.
+func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if i := bytes.IndexByte(data, ';'); i >= 0 {
+		// We have a full ;-terminated line.
+		return i + 1, data[0:i], nil
+	}
+	// If we're at EOF, we have a final, non-terminated line. Return it.
+	if atEOF {
+		return len(data), data, nil
+	}
+	// Request more data.
+	return 0, nil, nil
+}
+
+// runBatchMode processes queries until EOF and returns the resulting root value
+func runBatchMode(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
+	scanner := bufio.NewScanner(os.Stdin)
+	scanner.Split(scanStatements)
+
+	batcher := dsql.NewSqlBatcher(dEnv.DoltDB, root)
+
+	for scanner.Scan() {
+		query := scanner.Text()
+		if newRoot, err := processBatchQuery(query, dEnv, root, batcher); newRoot != nil {
+			root = newRoot
+		} else if err != nil {
+			cli.Println(fmt.Sprintf("Error processing query '%s': %s", query, err.Error()))
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		cli.Println(err.Error())
+	}
+
+	if newRoot, _ := batcher.Commit(context.Background()); newRoot != nil {
+		root = newRoot
+	}
+
+	return root
 }
 
 // runShell starts a SQL shell. Returns when the user exits the shell with the root value resulting from any queries.
@@ -298,8 +350,6 @@ func prepend(s string, ss []string) []string {
 
 // Processes a single query and returns the new root value of the DB, or an error encountered.
 func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-	cli.Print("Processing " + query)
-
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SQL: %v.", err.Error())

@@ -39,7 +39,7 @@ var ErrMissingPrimaryKeys = errors.New("One or more primary key columns missing 
 var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 
 // ExecuteInsertBatch executes the given insert statement in batch mode and returns the result. The table is not changed
-// until the batch is Commited. The InsertResult returned similarly doesn't have a Root set, since the root isn't
+// until the batch is Committed. The InsertResult returned similarly doesn't have a Root set, since the root isn't
 // modified by this function.
 func ExecuteBatchInsert(
 		ctx context.Context,
@@ -49,11 +49,10 @@ func ExecuteBatchInsert(
 ) (*InsertResult, error) {
 
 	tableName := s.Table.Name.String()
-	if !root.HasTable(ctx, tableName) {
-		return nil, fmt.Errorf("Unknown table %v", tableName)
+	tableSch, err := batcher.GetSchema(ctx, tableName)
+	if err != nil {
+		return nil, err
 	}
-	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema(ctx)
 
 	// Parser supports overwrite on insert with both the replace keyword (from MySQL) as well as the ignore keyword
 	replace := s.Action == sqlparser.ReplaceStr

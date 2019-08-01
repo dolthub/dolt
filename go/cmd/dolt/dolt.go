@@ -66,25 +66,43 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts.", Func: cnfcmds.Commands, ReqRepo: false},
 })
 
-var cpuProf = false
-var memProf = false
+const profFlag = "--prof"
+const cpuProf = "cpu"
+const memProf = "mem"
+const blockingProf = "blocking"
+const traceProf = "trace"
 
 func main() {
 	os.Exit(runMain())
 }
 
 func runMain() int {
-	if cpuProf {
-		fmt.Println("cpu profiling enabled.")
-		defer profile.Start(profile.CPUProfile).Stop()
-	}
-
-	if memProf {
-		fmt.Println("mem profiling enabled.")
-		defer profile.Start(profile.MemProfile).Stop()
-	}
-
 	args := os.Args[1:]
+
+	if len(args) > 0 && args[0] == profFlag {
+		if len(os.Args) <= 2 {
+			panic("Expected a profile arg after " + profFlag)
+		}
+		prof := args[1]
+		switch prof {
+		case cpuProf:
+			fmt.Println("cpu profiling enabled.")
+			defer profile.Start(profile.CPUProfile).Stop()
+		case memProf:
+			fmt.Println("mem profiling enabled.")
+			defer profile.Start(profile.MemProfile).Stop()
+		case blockingProf:
+			fmt.Println("block profiling enabled")
+			defer profile.Start(profile.BlockProfile).Stop()
+		case traceProf:
+			fmt.Println("trace profiling enabled")
+			defer profile.Start(profile.TraceProfile).Stop()
+		default:
+			panic("Unexpected prof flag: " + prof)
+		}
+		args = args[2:]
+	}
+
 	// Currently goland doesn't support running with a different working directory when using go modules.
 	// This is a hack that allows a different working directory to be set after the application starts using
 	// chdir=<DIR>.  The syntax is not flexible and must match exactly this.

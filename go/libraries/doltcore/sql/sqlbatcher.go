@@ -92,7 +92,7 @@ type BatchInsertResult struct {
 }
 
 func (b *SqlBatcher) Insert(ctx context.Context, tableName string, r row.Row, opt InsertOptions) (*BatchInsertResult, error) {
-	sch, err := b.getSchema(ctx, tableName)
+	sch, err := b.GetSchema(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,9 @@ func (b *SqlBatcher) Insert(ctx context.Context, tableName string, r row.Row, op
 	return &BatchInsertResult{RowInserted: !rowExists, RowUpdated: rowExists || rowAlreadyTouched}, nil
 }
 
-func (b *SqlBatcher) getTable(ctx context.Context, tableName string) (*doltdb.Table, error) {
+// GetTable returns the table with the name given. This method is offered because reading the table from the root value
+// is relatively expensive, and SqlBatcher caches Tables to avoid the overhead.
+func (b *SqlBatcher) GetTable(ctx context.Context, tableName string) (*doltdb.Table, error) {
 	if table, ok := b.tables[tableName]; ok {
 		return table, nil
 	}
@@ -139,12 +141,14 @@ func (b *SqlBatcher) getTable(ctx context.Context, tableName string) (*doltdb.Ta
 	return table, nil
 }
 
-func (b *SqlBatcher) getSchema(ctx context.Context, tableName string) (schema.Schema, error) {
+// GetSchema returns the schema for the table name given. This method is offered because reading the schema from disk
+// is actually relatively expensive -- SqlBatcher caches the schema values per table to avoid the overhead.
+func (b *SqlBatcher) GetSchema(ctx context.Context, tableName string) (schema.Schema, error) {
 	if schema, ok := b.schemas[tableName]; ok {
 		return schema, nil
 	}
 
-	table, err := b.getTable(ctx, tableName)
+	table, err := b.GetTable(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +178,7 @@ func (b *SqlBatcher) getRowData(ctx context.Context, tableName string) (types.Ma
 		return rowData, nil
 	}
 
-	table, err := b.getTable(ctx, tableName)
+	table, err := b.GetTable(ctx, tableName)
 	if err != nil {
 		return types.EmptyMap, err
 	}
