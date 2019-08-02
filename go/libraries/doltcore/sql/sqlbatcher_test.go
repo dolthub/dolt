@@ -86,13 +86,9 @@ func TestSqlBatchInserts(t *testing.T) {
 	root, err := batcher.Commit(ctx)
 	require.NoError(t, err)
 
-	expectedPeople := make([]row.Row, len(AllPeopleRows))
-	copy(expectedPeople, AllPeopleRows)
-	expectedEpisodes := make([]row.Row, len(AllEpsRows))
-	copy(expectedEpisodes, AllEpsRows)
-	expectedAppearances := make([]row.Row, len(AllAppsRows))
-	copy(expectedAppearances, AllAppsRows)
+	var expectedPeople, expectedEpisodes, expectedAppearances []row.Row
 
+	expectedPeople = append(expectedPeople, AllPeopleRows...)
 	expectedPeople = append(expectedPeople,
 		NewPeopleRowWithOptionalFields(7, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000007"), 677),
 		NewPeopleRowWithOptionalFields(8, "Milhouse", "VanHouten", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000008"), 677),
@@ -101,6 +97,7 @@ func TestSqlBatchInserts(t *testing.T) {
 		newPeopleRow(11, "Ned", "Flanders"),
 	)
 
+	expectedEpisodes = append(expectedEpisodes, AllEpsRows...)
 	expectedEpisodes = append(expectedEpisodes,
 		newEpsRow(5, "Bart the General"),
 		newEpsRow(6, "Moaning Lisa"),
@@ -109,6 +106,7 @@ func TestSqlBatchInserts(t *testing.T) {
 		newEpsRow(9, "Life on the Fast Lane"),
 	)
 
+	expectedAppearances = append(expectedAppearances, AllAppsRows...)
 	expectedAppearances = append(expectedAppearances,
 		newAppsRow(7, 5),
 		newAppsRow(7, 6),
@@ -127,6 +125,81 @@ func TestSqlBatchInserts(t *testing.T) {
 	assertRowSetsEqual(t, expectedPeople, allPeopleRows)
 	assertRowSetsEqual(t, expectedEpisodes, allEpsRows)
 	assertRowSetsEqual(t, expectedAppearances, allAppearanceRows)
+}
+
+func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
+	insertStatements := []string{
+		`replace into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
+		`insert ignore into people values
+					(2, "Milhouse", "VanHouten", false, 1, 5.1, '00000000-0000-0000-0000-000000000008', 677)`,
+	}
+	numRowsUpdated := []int{1,0}
+	numErrorsIgnored := []int{0,1}
+
+	dEnv := dtestutils.CreateTestEnv()
+	ctx := context.Background()
+
+	CreateTestDatabase(dEnv, t)
+	root, _ := dEnv.WorkingRoot(ctx)
+
+	batcher := NewSqlBatcher(dEnv.DoltDB, root)
+	for i := range insertStatements {
+		stmt := insertStatements[i]
+		statement, err := sqlparser.Parse(stmt)
+		require.NoError(t, err)
+		insertStmt, ok := statement.(*sqlparser.Insert)
+		require.True(t, ok)
+		result, err := ExecuteBatchInsert(context.Background(), root, insertStmt, batcher)
+		require.NoError(t, err)
+		assert.Equal(t, 0, result.NumRowsInserted)
+		assert.Equal(t, numRowsUpdated[i], result.NumRowsUpdated)
+		assert.Equal(t, numErrorsIgnored[i], result.NumErrorsIgnored)
+	}
+
+	// Before committing the batch, the database should be unchanged from its original state
+	allPeopleRows := GetAllRows(root, PeopleTableName)
+	assert.ElementsMatch(t, AllPeopleRows, allPeopleRows)
+
+	// Now commit the batch and check for new rows
+	root, err := batcher.Commit(ctx)
+	require.NoError(t, err)
+
+	var expectedPeople []row.Row
+
+	expectedPeople = append(expectedPeople, AllPeopleRows[1:]...) // skip homer
+	expectedPeople = append(expectedPeople,
+		NewPeopleRowWithOptionalFields(0, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000007"), 677),
+	)
+
+	allPeopleRows = GetAllRows(root, PeopleTableName)
+	assertRowSetsEqual(t, expectedPeople, allPeopleRows)
+}
+
+func TestSqlBatchInsertErrors(t *testing.T) {
+	insertStatements := []string{
+		`insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
+		`insert into people values
+					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`,
+	}
+
+	dEnv := dtestutils.CreateTestEnv()
+	ctx := context.Background()
+
+	CreateTestDatabase(dEnv, t)
+	root, _ := dEnv.WorkingRoot(ctx)
+
+	batcher := NewSqlBatcher(dEnv.DoltDB, root)
+	for i := range insertStatements {
+		stmt := insertStatements[i]
+		statement, err := sqlparser.Parse(stmt)
+		require.NoError(t, err)
+		insertStmt, ok := statement.(*sqlparser.Insert)
+		require.True(t, ok)
+		_, err = ExecuteBatchInsert(context.Background(), root, insertStmt, batcher)
+		require.Error(t, err)
+	}
 }
 
 func assertRowSetsEqual(t *testing.T, expected, actual []row.Row) {

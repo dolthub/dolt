@@ -198,10 +198,6 @@ func (b *SqlBatcher) getHashes(ctx context.Context, tableName string) map[hash.H
 	return hashes
 }
 
-func (b *SqlBatcher) Update(r row.Row) {
-
-}
-
 // Commit writes a new root value for every table under edit and returns the new root value. Tables are written in an
 // arbitrary order.
 func (b *SqlBatcher) Commit(ctx context.Context) (*doltdb.RootValue, error) {
