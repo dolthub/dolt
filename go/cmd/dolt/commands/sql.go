@@ -243,7 +243,6 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 		// Longer term we need to switch to a new readline library, like in this bug:
 		// https://github.com/cockroachdb/cockroach/issues/15460
 		// For now, we store all history entries as single-line strings to avoid the issue.
-		// TODO: only store history if it's a tty
 		singleLine := strings.ReplaceAll(query, "\n", " ")
 		if err := shell.AddHistory(singleLine); err != nil {
 			// TODO: handle better, like by turning off history writing for the rest of the session
