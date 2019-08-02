@@ -308,12 +308,12 @@ func TestFindCommonAncestor(t *testing.T) {
 	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, types.Format_7_18)), mustRef(types.NewRef(a6, types.Format_7_18)), db)
 	assert.NoError(err)
 
-	d2V, _, _ := d2.MaybeGet(ValueField)
-	a6V, _, _ := a6.MaybeGet(ValueField)
-	fTV, _ := found.TargetValue(context.Background(), db)
-	fV, _, _ := fTV.(types.Struct).MaybeGet(ValueField)
-
 	if !assert.False(ok) {
+		d2V, _, _ := d2.MaybeGet(ValueField)
+		a6V, _, _ := a6.MaybeGet(ValueField)
+		fTV, _ := found.TargetValue(context.Background(), db)
+		fV, _, _ := fTV.(types.Struct).MaybeGet(ValueField)
+
 		assert.Fail(
 			"Unexpected common ancestor!",
 			"Should be no common ancestor of %s, %s. Got %s",

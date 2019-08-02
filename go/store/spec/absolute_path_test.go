@@ -44,7 +44,8 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 		assert.Equal(str, p.String())
 	}
 
-	h := types.Float(42).Hash(types.Format_7_18) // arbitrary hash
+	h, err := types.Float(42).Hash(types.Format_7_18) // arbitrary hash
+	assert.NoError(err)
 	test(fmt.Sprintf("foo.bar[#%s]", h.String()))
 	test(fmt.Sprintf("#%s.bar[42]", h.String()))
 }
@@ -55,15 +56,20 @@ func TestAbsolutePaths(t *testing.T) {
 	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(context.Background(), db, s0, s1)
-	emptySet := types.NewSet(context.Background(), db)
+	list, err := types.NewList(context.Background(), db, s0, s1)
+	assert.NoError(err)
+	emptySet, err := types.NewSet(context.Background(), db)
+	assert.NoError(err)
 
-	db.WriteValue(context.Background(), s0)
-	db.WriteValue(context.Background(), s1)
-	db.WriteValue(context.Background(), list)
-	db.WriteValue(context.Background(), emptySet)
+	_, err = db.WriteValue(context.Background(), s0)
+	assert.NoError(err)
+	_, err = db.WriteValue(context.Background(), s1)
+	assert.NoError(err)
+	_, err = db.WriteValue(context.Background(), list)
+	assert.NoError(err)
+	_, err = db.WriteValue(context.Background(), emptySet)
+	assert.NoError(err)
 
-	var err error
 	ds, err := db.GetDataset(context.Background(), "ds")
 	assert.NoError(err)
 	ds, err = db.CommitValue(context.Background(), ds, list)
@@ -108,7 +114,8 @@ func TestReadAbsolutePaths(t *testing.T) {
 	db := datas.NewDatabase(storage.NewView())
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list := types.NewList(context.Background(), db, s0, s1)
+	list, err := types.NewList(context.Background(), db, s0, s1)
+	assert.NoError(err)
 
 	ds, err := db.GetDataset(context.Background(), "ds")
 	assert.NoError(err)

@@ -113,13 +113,17 @@ func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database) (val types
 			val = nil
 		}
 	} else if !p.Hash.IsEmpty() {
-		val = db.ReadValue(ctx, p.Hash)
+		var err error
+		val, err = db.ReadValue(ctx, p.Hash)
+		d.PanicIfError(err)
 	} else {
 		panic("Unreachable")
 	}
 
 	if val != nil && p.Path != nil {
-		val = p.Path.Resolve(ctx, val, db)
+		var err error
+		val, err = p.Path.Resolve(ctx, val, db)
+		d.PanicIfError(err)
 	}
 	return
 }

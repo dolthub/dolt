@@ -129,5 +129,5 @@ func CreateCommitMetaStruct(ctx context.Context, db datas.Database, date, messag
 	} else if commitMetaMessage != "" {
 		metaValues["message"] = types.String(commitMetaMessage)
 	}
-	return types.NewStruct(db.Format(), "Meta", metaValues), nil
+	return types.NewStruct(db.Format(), "Meta", metaValues)
 }

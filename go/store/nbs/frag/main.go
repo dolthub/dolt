@@ -95,7 +95,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	height := types.NewRef(dss, types.Format_7_18).Height()
+	ref, err := types.NewRef(dss, types.Format_7_18)
+	d.PanicIfError(err)
+	height := ref.Height()
 	fmt.Println("Store is of height", height)
 	fmt.Println("| Height |   Nodes | Children | Branching | Groups | Reads | Pruned |")
 	fmt.Println("+--------+---------+----------+-----------+--------+-------+--------+")
@@ -115,7 +117,8 @@ func main() {
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))
-		readValues := db.ReadManyValues(context.Background(), current)
+		readValues, err := db.ReadManyValues(context.Background(), current)
+		d.PanicIfError(err)
 		for i, v := range readValues {
 			h := current[i]
 			currentValues[h] = v
@@ -129,12 +132,14 @@ func main() {
 		orderedChildren := hash.HashSlice{}
 		nextLevel := hash.HashSlice{}
 		for _, h := range current {
-			currentValues[h].WalkRefs(types.Format_7_18, func(r types.Ref) {
+			_ = currentValues[h].WalkRefs(types.Format_7_18, func(r types.Ref) error {
 				target := r.TargetHash()
 				orderedChildren = append(orderedChildren, target)
 				if !visited[target] && r.Height() > 1 {
 					nextLevel = append(nextLevel, target)
 				}
+
+				return nil
 			})
 		}
 

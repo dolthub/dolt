@@ -430,8 +430,11 @@ func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
 
 	nbf := sp.GetDatabase(ctx).Format()
 	r := sp
-	r.Path.Hash = commit.Hash(nbf)
+
+	var err error
 	r.Path.Dataset = ""
+	r.Path.Hash, err = commit.Hash(nbf)
+	d.PanicIfError(err)
 
 	return r, true
 }
