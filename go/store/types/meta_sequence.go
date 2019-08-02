@@ -246,7 +246,13 @@ func (ms metaSequence) search(key orderedKey) (int, error) {
 			return false, err
 		}
 
-		return ordKey.Less(ms.format(), key)
+		isLess, err := ordKey.Less(ms.format(), key)
+
+		if err != nil {
+			return false, err
+		}
+
+		return !isLess, nil
 	})
 
 	if err != nil {

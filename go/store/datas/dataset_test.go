@@ -23,6 +23,7 @@ package datas
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,12 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+func mustGetValue(v types.Value, found bool, err error) types.Value{
+	d.PanicIfError(err)
+	d.PanicIfFalse(found)
+	return v
+}
 
 func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert := assert.New(t)
@@ -46,40 +53,41 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	a := types.String("a")
 	ds1, err = store.CommitValue(context.Background(), ds1, a)
 	assert.NoError(err)
-	assert.True(mustHead(ds1).Get(ValueField).Equals(a))
+	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(a))
 
 	// ds1: |a|
 	//        \ds2
 	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: types.NewSet(context.Background(), store, mustHeadRef(ds1))})
+	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: mustSet(types.NewSet(context.Background(), store, mustHeadRef(ds1)))})
 	assert.NoError(err)
-	assert.True(mustHead(ds2).Get(ValueField).Equals(a))
+	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(a))
 
 	// ds1: |a| <- |b|
 	b := types.String("b")
 	ds1, err = store.CommitValue(context.Background(), ds1, b)
 	assert.NoError(err)
-	assert.True(mustHead(ds1).Get(ValueField).Equals(b))
+	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
 	c := types.String("c")
 	ds2, err = store.CommitValue(context.Background(), ds2, c)
 	assert.NoError(err)
-	assert.True(mustHead(ds2).Get(ValueField).Equals(c))
+	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(c))
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents := types.NewSet(context.Background(), store, types.NewRef(mustHead(ds1), types.Format_7_18), types.NewRef(mustHead(ds2), types.Format_7_18))
+	mergeParents, err := types.NewSet(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_7_18)), mustRef(types.NewRef(mustHead(ds2), types.Format_7_18)))
+	assert.NoError(err)
 	d := types.String("d")
 	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: mergeParents})
 	assert.NoError(err)
-	assert.True(mustHead(ds2).Get(ValueField).Equals(d))
+	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(d))
 
 	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: mergeParents})
 	assert.NoError(err)
-	assert.True(mustHead(ds1).Get(ValueField).Equals(d))
+	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(d))
 }
 
 func TestTwoClientsWithEmptyDataset(t *testing.T) {
@@ -98,7 +106,7 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	a := types.String("a")
 	dsx, err = store.CommitValue(context.Background(), dsx, a)
 	assert.NoError(err)
-	assert.True(mustHead(dsx).Get(ValueField).Equals(a))
+	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(a))
 
 	// dsy: || -> |b|
 	_, ok := dsy.MaybeHead()
@@ -131,7 +139,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 		assert.NoError(err)
 		ds1, err = store.CommitValue(context.Background(), ds1, a)
 		assert.NoError(err)
-		assert.True(mustHead(ds1).Get(ValueField).Equals(a))
+		assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(a))
 	}
 
 	dsx, err := store.GetDataset(context.Background(), id1)
@@ -140,14 +148,14 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.NoError(err)
 
 	// dsx: |a| -> |b|
-	assert.True(mustHead(dsx).Get(ValueField).Equals(a))
+	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(a))
 	b := types.String("b")
 	dsx, err = store.CommitValue(context.Background(), dsx, b)
 	assert.NoError(err)
-	assert.True(mustHead(dsx).Get(ValueField).Equals(b))
+	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(b))
 
 	// dsy: |a| -> |c|
-	assert.True(mustHead(dsy).Get(ValueField).Equals(a))
+	assert.True(mustGetValue(mustHead(dsy).MaybeGet(ValueField)).Equals(a))
 	c := types.String("c")
 	_, err = store.CommitValue(context.Background(), dsy, c)
 	assert.Error(err)
@@ -157,7 +165,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.NoError(err)
 	dsy, err = store.CommitValue(context.Background(), dsy, c)
 	assert.NoError(err)
-	assert.True(mustHead(dsy).Get(ValueField).Equals(c))
+	assert.True(mustGetValue(mustHead(dsy).MaybeGet(ValueField)).Equals(c))
 }
 
 func TestIdValidation(t *testing.T) {
@@ -192,17 +200,21 @@ func TestHeadValueFunctions(t *testing.T) {
 	assert.NoError(err)
 	assert.True(ds1.HasHead())
 
-	hv := mustHead(ds1).Get(ValueField)
+	hv, ok, err := mustHead(ds1).MaybeGet(ValueField)
+	assert.True(ok)
+	assert.NoError(err)
 	assert.Equal(a, hv)
 	assert.Equal(a, mustHeadValue(ds1))
 
-	hv, ok := ds1.MaybeHeadValue()
+	hv, ok, err = ds1.MaybeHeadValue()
+	assert.NoError(err)
 	assert.True(ok)
 	assert.Equal(a, hv)
 
 	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	_, ok = ds2.MaybeHeadValue()
+	_, ok, err = ds2.MaybeHeadValue()
+	assert.NoError(err)
 	assert.False(ok)
 }
 

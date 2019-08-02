@@ -53,10 +53,9 @@ func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 	assert.NoError(t, err)
 	vdc := NewValidatingDecoder(storage.NewView())
 
-	//assert.Panics(t, func() {
-		_, err = vdc.Decode(&c)
-		assert.Error(t, err)
-	//})
+	assert.Panics(t, func() {
+		_, _ = vdc.Decode(&c)
+	})
 }
 
 func TestValidatingBatchingSinkDecodeInvalidUnion(t *testing.T) {

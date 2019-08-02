@@ -235,14 +235,11 @@ func (suite *setTestSuite) TestStreamingSetOrder() {
 		readSetInput(context.Background(), vrw, ae, vChan, outChan)
 	}
 
-	//testFunc := func() {
+	testFunc := func() {
 	outChan := newStreamingSet(vs, vChan, readInput)
-	_, ok := <-outChan
-	suite.False(ok)
-	err := ae.Get()
-	suite.Error(err)
-	//}
-	//suite.Panics(testFunc)
+		<-outChan
+	}
+	suite.Panics(testFunc)
 }
 
 func (suite *setTestSuite) TestStreamingSet2() {
@@ -1297,10 +1294,9 @@ func TestSetAt(t *testing.T) {
 		assert.Equal(v, valAt)
 	}
 
-	//assert.Panics(func() {
-		_, err = s.At(context.Background(), 42)
-		assert.Error(err)
-	//})
+	assert.Panics(func() {
+		_, _ = s.At(context.Background(), 42)
+	})
 }
 
 func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
@@ -1328,12 +1324,10 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 func TestSetWithNil(t *testing.T) {
 	vs := newTestValueStore()
 
-	//assert.Panics(t, func() {
-	_, err := NewSet(context.Background(), vs, nil)
-	assert.Error(t, err)
-	//})
-	//assert.Panics(t, func() {
-	_, err = NewSet(context.Background(), vs, Float(42), nil)
-	assert.Error(t, err)
-	//})
+	assert.Panics(t, func() {
+		_, _ = NewSet(context.Background(), vs, nil)
+	})
+	assert.Panics(t, func() {
+		_, _ = NewSet(context.Background(), vs, Float(42), nil)
+	})
 }

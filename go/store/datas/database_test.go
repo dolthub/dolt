@@ -23,6 +23,7 @@ package datas
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,10 +49,11 @@ func TestValidateRef(t *testing.T) {
 	db := NewDatabase(st.NewView()).(*database)
 	defer db.Close()
 	b := types.Bool(true)
-	r := db.WriteValue(context.Background(), b)
+	r, err := db.WriteValue(context.Background(), b)
+	assert.NoError(t, err)
 
 	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), r) })
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), types.NewRef(b, types.Format_7_18)) })
+	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_7_18))) })
 }
 
 type DatabaseSuite struct {
@@ -90,7 +92,8 @@ func (suite *DatabaseSuite) TearDownTest() {
 func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	ds, err := suite.db.GetDataset(context.Background(), "foo")
 	suite.NoError(err)
-	r := types.NewRef(types.Bool(true), types.Format_7_18)
+	r, err := types.NewRef(types.Bool(true), types.Format_7_18)
+	suite.NoError(err)
 	suite.Panics(func() { suite.db.CommitValue(context.Background(), ds, r) })
 }
 
@@ -103,17 +106,27 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	ds1, err := suite.db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 
-	se := types.NewSet(context.Background(), suite.db).Edit()
+	s, err := types.NewSet(context.Background(), suite.db)
+	suite.NoError(err)
+	se := s.Edit()
 	for i := 0; i < 100; i++ {
-		se.Insert(suite.db.WriteValue(context.Background(), types.Float(100)))
+		ref, err := suite.db.WriteValue(context.Background(), types.Float(100))
+		suite.NoError(err)
+		se.Insert(ref)
 	}
-	s := se.Set(context.Background())
+	s, err = se.Set(context.Background())
+	suite.NoError(err)
 
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, s)
 	suite.NoError(err)
 
 	s = mustHeadValue(ds1).(types.Set)
-	s = s.Edit().Insert(types.NewRef(types.Float(1000), types.Format_7_18)).Set(context.Background()) // danging ref
+	ref, err := types.NewRef(types.Float(1000), types.Format_7_18)
+	suite.NoError(err)
+	se, err = s.Edit().Insert(ref)
+	suite.NoError(err)
+	s, err = se.Set(context.Background()) // danging ref
+	suite.NoError(err)
 	suite.Panics(func() {
 		ds1, err = suite.db.CommitValue(context.Background(), ds1, s)
 	})
@@ -211,7 +224,8 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.True(mustHeadRef(ds2).Equals(headRef))
 
 	// ds2 has |a| at its head
-	h, ok := ds2.MaybeHeadValue()
+	h, ok, err := ds2.MaybeHeadValue()
+	suite.NoError(err)
 	suite.True(ok)
 	suite.True(h.Equals(a))
 	suite.Equal(uint64(1), mustHeadRef(ds2).Height())
@@ -293,12 +307,13 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 }
 
 func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets types.Map, vr types.ValueReader) {
+	ae := atomicerr.New()
 	stopChan := make(chan struct{})
 	defer close(stopChan)
 	changes := make(chan types.ValueChanged)
 	go func() {
 		defer close(changes)
-		proposed.Diff(ctx, datasets, changes, stopChan)
+		proposed.Diff(ctx, datasets, ae, changes, stopChan)
 	}()
 	for change := range changes {
 		switch change.ChangeType {
@@ -308,17 +323,24 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 			val := change.NewValue
 			ref, ok := val.(types.Ref)
 			if !ok {
-				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but key %s maps to a %s", change.Key.(types.String), types.TypeOf(val).Describe(ctx))
+				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but key %s maps to a %s", change.Key.(types.String), mustString(mustType(types.TypeOf(val)).Describe(ctx)))
 			}
-			if targetValue := ref.TargetValue(ctx, vr); !IsCommit(targetValue) {
-				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but the ref at key %s points to a %s", change.Key.(types.String), types.TypeOf(targetValue).Describe(ctx))
+			if targetValue, err := ref.TargetValue(ctx, vr); err != nil {
+				d.PanicIfError(err)
+			} else if is, err := IsCommit(targetValue); err != nil {
+				d.PanicIfError(err)
+			} else if !is {
+				d.Panic("Root of a Database must be a Map<String, Ref<Commit>>, but the ref at key %s points to a %s", change.Key.(types.String), mustString(mustType(types.TypeOf(targetValue)).Describe(ctx)))
 			}
 		}
 	}
 }
 
 func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {
-	return CommitOptions{Parents: types.NewSet(context.Background(), vrw, parents...)}
+	pSet, err := types.NewSet(context.Background(), vrw, parents...)
+	d.PanicIfError(err)
+
+	return CommitOptions{Parents: pSet}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -344,11 +366,14 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	ds2, err := suite.db.GetDataset(context.Background(), datasetID2)
 	suite.NoError(err)
 
-	v := types.NewMap(context.Background(), suite.db, types.String("Hello"), types.Float(42))
+	v, err := types.NewMap(context.Background(), suite.db, types.String("Hello"), types.Float(42))
+	suite.NoError(err)
 	ds1, err = suite.db.CommitValue(context.Background(), ds1, v)
 	ds1First := ds1
 	suite.NoError(err)
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, v.Edit().Set(types.String("Friends"), types.Bool(true)).Map(context.Background()))
+	s, err := v.Edit().Set(types.String("Friends"), types.Bool(true)).Map(context.Background())
+	suite.NoError(err)
+	ds1, err = suite.db.CommitValue(context.Background(), ds1, s)
 	suite.NoError(err)
 
 	ds2, err = suite.db.CommitValue(context.Background(), ds2, types.String("Goodbye"))
@@ -363,22 +388,26 @@ func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
 	// Merge policies
-	newV := v.Edit().Set(types.String("Friends"), types.Bool(false)).Map(context.Background())
+	newV, err := v.Edit().Set(types.String("Friends"), types.Bool(false)).Map(context.Background())
+	suite.NoError(err)
 	_, err = suite.db.Commit(context.Background(), ds1, newV, newOptsWithMerge(suite.db, merge.None, mustHeadRef(ds1First)))
 	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
 
 	theirs, err := suite.db.Commit(context.Background(), ds1, newV, newOptsWithMerge(suite.db, merge.Theirs, mustHeadRef(ds1First)))
 	suite.NoError(err)
-	suite.True(types.Bool(true).Equals(mustHeadValue(theirs).(types.Map).Get(context.Background(), types.String("Friends"))))
+	suite.True(types.Bool(true).Equals(mustGetValue(mustHeadValue(theirs).(types.Map).MaybeGet(context.Background(), types.String("Friends")))))
 
-	newV = v.Edit().Set(types.String("Friends"), types.Float(47)).Map(context.Background())
+	newV, err = v.Edit().Set(types.String("Friends"), types.Float(47)).Map(context.Background())
+	suite.NoError(err)
 	ours, err := suite.db.Commit(context.Background(), ds1First, newV, newOptsWithMerge(suite.db, merge.Ours, mustHeadRef(ds1First)))
 	suite.NoError(err)
-	suite.True(types.Float(47).Equals(mustHeadValue(ours).(types.Map).Get(context.Background(), types.String("Friends"))))
+	suite.True(types.Float(47).Equals(mustGetValue(mustHeadValue(ours).(types.Map).MaybeGet(context.Background(), types.String("Friends")))))
 }
 
 func newOptsWithMerge(vrw types.ValueReadWriter, policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
-	return CommitOptions{Parents: types.NewSet(context.Background(), vrw, parents...), Policy: merge.NewThreeWay(policy)}
+	pset, err := types.NewSet(context.Background(), vrw, parents...)
+	d.PanicIfError(err)
+	return CommitOptions{Parents: pset, Policy: merge.NewThreeWay(policy)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDelete() {
@@ -421,7 +450,8 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.Equal(uint64(1), datasets.Len())
 	newDS, err := newDB.GetDataset(context.Background(), datasetID2)
 	suite.NoError(err)
-	_, present = newDS.MaybeHeadRef()
+	_, present, err = newDS.MaybeHeadRef()
+	suite.NoError(err)
 	suite.True(present, "Dataset %s should be present", datasetID2)
 }
 
@@ -519,7 +549,8 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	// Attempted concurrent delete, which should proceed without a problem
 	ds1, err = suite.db.Delete(context.Background(), ds1)
 	suite.NoError(err)
-	_, present := ds1.MaybeHeadRef()
+	_, present, err := ds1.MaybeHeadRef()
+	suite.NoError(err)
 	suite.False(present, "Dataset %s should not be present", datasetID)
 }
 
@@ -588,71 +619,88 @@ func (suite *DatabaseSuite) TestFastForward() {
 }
 
 func (suite *DatabaseSuite) TestDatabaseHeightOfRefs() {
-	r1 := suite.db.WriteValue(context.Background(), types.String("hello"))
+	r1, err := suite.db.WriteValue(context.Background(), types.String("hello"))
+	suite.NoError(err)
 	suite.Equal(uint64(1), r1.Height())
 
-	r2 := suite.db.WriteValue(context.Background(), r1)
+	r2, err := suite.db.WriteValue(context.Background(), r1)
+	suite.NoError(err)
 	suite.Equal(uint64(2), r2.Height())
-	suite.Equal(uint64(3), suite.db.WriteValue(context.Background(), r2).Height())
+	suite.Equal(uint64(3), mustRef(suite.db.WriteValue(context.Background(), r2)).Height())
 }
 
 func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
-	setOfStringType := types.MakeSetType(types.StringType)
-	setOfRefOfStringType := types.MakeSetType(types.MakeRefType(types.StringType))
+	setOfStringType, err := types.MakeSetType(types.StringType)
+	suite.NoError(err)
+	setOfRefOfStringType, err := types.MakeSetType(mustType(types.MakeRefType(types.StringType)))
+	suite.NoError(err)
 
 	// Set<String>
 	v1 := types.String("hello")
 	v2 := types.String("world")
-	s1 := types.NewSet(context.Background(), suite.db, v1, v2)
-	suite.Equal(uint64(1), suite.db.WriteValue(context.Background(), s1).Height())
+	s1, err := types.NewSet(context.Background(), suite.db, v1, v2)
+	suite.NoError(err)
+	ref, err := suite.db.WriteValue(context.Background(), s1)
+	suite.NoError(err)
+	suite.Equal(uint64(1), ref.Height())
 
 	// Set<Ref<String>>
-	s2 := types.NewSet(context.Background(), suite.db, suite.db.WriteValue(context.Background(), v1), suite.db.WriteValue(context.Background(), v2))
-	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), s2).Height())
+	s2, err := types.NewSet(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), v1)), mustRef(suite.db.WriteValue(context.Background(), v2)))
+	suite.NoError(err)
+	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), s2)).Height())
 
 	// List<Set<String>>
 	v3 := types.String("foo")
 	v4 := types.String("bar")
-	s3 := types.NewSet(context.Background(), suite.db, v3, v4)
-	l1 := types.NewList(context.Background(), suite.db, s1, s3)
-	suite.Equal(uint64(1), suite.db.WriteValue(context.Background(), l1).Height())
+	s3, err := types.NewSet(context.Background(), suite.db, v3, v4)
+	suite.NoError(err)
+	l1, err := types.NewList(context.Background(), suite.db, s1, s3)
+	suite.NoError(err)
+	suite.Equal(uint64(1), mustRef(suite.db.WriteValue(context.Background(), l1)).Height())
 
 	// List<Ref<Set<String>>
-	l2 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s1), suite.db.WriteValue(context.Background(), s3))
-	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l2).Height())
+	l2, err := types.NewList(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), s1)), mustRef(suite.db.WriteValue(context.Background(), s3)))
+	suite.NoError(err)
+	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), l2)).Height())
 
 	// List<Ref<Set<Ref<String>>>
-	s4 := types.NewSet(context.Background(), suite.db, suite.db.WriteValue(context.Background(), v3), suite.db.WriteValue(context.Background(), v4))
-	l3 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s4))
-	suite.Equal(uint64(3), suite.db.WriteValue(context.Background(), l3).Height())
+	s4, err := types.NewSet(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), v3)), mustRef(suite.db.WriteValue(context.Background(), v4)))
+	suite.NoError(err)
+	l3, err := types.NewList(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), s4)))
+	suite.NoError(err)
+	suite.Equal(uint64(3), mustRef(suite.db.WriteValue(context.Background(), l3)).Height())
 
 	// List<Set<String> | RefValue<Set<String>>>
-	l4 := types.NewList(context.Background(), suite.db, s1, suite.db.WriteValue(context.Background(), s3))
-	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l4).Height())
-	l5 := types.NewList(context.Background(), suite.db, suite.db.WriteValue(context.Background(), s1), s3)
-	suite.Equal(uint64(2), suite.db.WriteValue(context.Background(), l5).Height())
+	l4, err := types.NewList(context.Background(), suite.db, s1, mustRef(suite.db.WriteValue(context.Background(), s3)))
+	suite.NoError(err)
+	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), l4)).Height())
+	l5, err := types.NewList(context.Background(), suite.db, mustRef(suite.db.WriteValue(context.Background(), s1)), s3)
+	suite.NoError(err)
+	suite.Equal(uint64(2), mustRef(suite.db.WriteValue(context.Background(), l5)).Height())
 
 	// Familiar with the "New Jersey Turnpike" drink? Here's the noms version of that...
 	everything := []types.Value{v1, v2, s1, s2, v3, v4, s3, l1, l2, s4, l3, l4, l5}
 	andMore := make([]types.Value, 0, len(everything)*3+2)
 	for _, v := range everything {
-		andMore = append(andMore, v, types.TypeOf(v), suite.db.WriteValue(context.Background(), v))
+		andMore = append(andMore, v, mustType(types.TypeOf(v)), mustRef(suite.db.WriteValue(context.Background(), v)))
 	}
 	andMore = append(andMore, setOfStringType, setOfRefOfStringType)
 
-	suite.db.WriteValue(context.Background(), types.NewList(context.Background(), suite.db, andMore...))
+	_, err = suite.db.WriteValue(context.Background(), mustValue(types.NewList(context.Background(), suite.db, andMore...)))
+	suite.NoError(err)
 }
 
 func (suite *DatabaseSuite) TestMetaOption() {
 	ds, err := suite.db.GetDataset(context.Background(), "ds1")
 	suite.NoError(err)
 
-	m := types.NewStruct(types.Format_7_18, "M", types.StructData{
+	m, err := types.NewStruct(types.Format_7_18, "M", types.StructData{
 		"author": types.String("arv"),
 	})
 
+	suite.NoError(err)
 	ds, err = suite.db.Commit(context.Background(), ds, types.String("a"), CommitOptions{Meta: m})
 	suite.NoError(err)
 	c := mustHead(ds)
-	suite.Equal(types.String("arv"), c.Get("meta").(types.Struct).Get("author"))
+	suite.Equal(types.String("arv"), mustGetValue(mustGetValue(c.MaybeGet("meta")).(types.Struct).MaybeGet("author")))
 }

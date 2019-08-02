@@ -285,13 +285,14 @@ func (s Struct) Name() string {
 func (s Struct) IterFields(cb func(name string, value Value) error) error {
 	dec, count := s.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
+		fldName := dec.readString()
 		val, err := dec.readValue(s.format())
 
 		if err != nil {
 			return err
 		}
 
-		err = cb(dec.readString(), val)
+		err = cb(fldName, val)
 
 		if err != nil {
 			return err

@@ -45,10 +45,9 @@ func TestSetIterator(t *testing.T) {
 
 	i, err = s.Iterator(context.Background())
 	assert.NoError(err)
-	//assert.Panics(func() {
-	_, err =i.SkipTo(context.Background(), nil)
-	assert.Error(err)
-	//})
+	assert.Panics(func() {
+		_, _ = i.SkipTo(context.Background(), nil)
+	})
 	assert.Equal(Float(0), mustValue(i.SkipTo(context.Background(), Float(-20))))
 	assert.Equal(Float(2), mustValue(i.SkipTo(context.Background(), Float(2))))
 	assert.Equal(Float(3), mustValue(i.SkipTo(context.Background(), Float(-20))))
@@ -191,10 +190,10 @@ func TestUnionIterator(t *testing.T) {
 	ui2, err = NewUnionIterator(context.Background(), Format_7_18, mustSIter(set3.Iterator(context.Background())), mustSIter(set2.Iterator(context.Background())))
 	ui3, err = NewUnionIterator(context.Background(), Format_7_18, ui1, ui2)
 
-	//assert.Panics(func() {
-	_, err = ui3.SkipTo(context.Background(), nil)
-	assert.Error(err)
-	//})
+	assert.Panics(func() {
+		_, _ = ui3.SkipTo(context.Background(), nil)
+		assert.Error(err)
+	})
 	assert.Equal(Float(0), mustValue(ui3.SkipTo(context.Background(), Float(-5))))
 	assert.Equal(Float(5), mustValue(ui3.SkipTo(context.Background(), Float(5))))
 	assert.Equal(Float(8), mustValue(ui3.SkipTo(context.Background(), Float(8))))
@@ -250,10 +249,9 @@ func TestIntersectionIterator(t *testing.T) {
 	it2, err = NewIntersectionIterator(context.Background(), Format_7_18, it1, mustSIter(byTwos.Iterator(context.Background())))
 	assert.NoError(err)
 
-	//assert.Panics(func() {
-	_, err = it2.SkipTo(context.Background(), nil)
-	assert.Error(err)
-	//})
+	assert.Panics(func() {
+	_, _ = it2.SkipTo(context.Background(), nil)
+	})
 	assert.Equal(Float(30), mustValue(it2.SkipTo(context.Background(), Float(5))))
 	assert.Equal(Float(60), mustValue(it2.SkipTo(context.Background(), Float(60))))
 	assert.Equal(Float(90), mustValue(it2.SkipTo(context.Background(), Float(5))))

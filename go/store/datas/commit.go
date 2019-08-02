@@ -58,20 +58,33 @@ var valueCommitType = nomdl.MustParseType(`Struct Commit {
 // }
 // ```
 // where M is a struct type and T is any type.
-func NewCommit(value types.Value, parents types.Set, meta types.Struct) types.Struct {
+func NewCommit(value types.Value, parents types.Set, meta types.Struct) (types.Struct, error) {
 	return commitTemplate.NewStruct(meta.Format(), []types.Value{meta, parents, value})
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
 // one exists, setting ok to true. If there is no common ancestor, ok is set
 // to false.
-func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool) {
-	// precondition checks
-	if !IsRefOfCommitType(c1.Format(), types.TypeOf(c1)) {
-		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c1).Describe(ctx))
+func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
+	t1, err := types.TypeOf(c1)
+
+	if err != nil {
+		return types.Ref{}, false, err
 	}
-	if !IsRefOfCommitType(c2.Format(), types.TypeOf(c1)) {
-		d.Panic("FindCommonAncestor() called on %s", types.TypeOf(c2).Describe(ctx))
+
+	// precondition checks
+	if !IsRefOfCommitType(c1.Format(), t1) {
+		d.Panic("first reference is not a commit")
+	}
+
+	t2, err := types.TypeOf(c2)
+
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	if !IsRefOfCommitType(c2.Format(), t2) {
+		d.Panic("second reference is not a commit")
 	}
 
 	c1Q, c2Q := &types.RefByHeight{c1}, &types.RefByHeight{c2}
@@ -80,7 +93,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueRea
 		if c1Ht == c2Ht {
 			c1Parents, c2Parents := c1Q.PopRefsOfHeight(c1Ht), c2Q.PopRefsOfHeight(c2Ht)
 			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
-				return common, true
+				return common, true, nil
 			}
 			parentsToQueue(ctx, c1Parents, c1Q, vr)
 			parentsToQueue(ctx, c2Parents, c2Q, vr)
@@ -90,18 +103,36 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr types.ValueRea
 			parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), c2Q, vr)
 		}
 	}
-	return
+
+	return a, ok, nil
 }
 
-func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeight, vr types.ValueReader) {
+func parentsToQueue(ctx context.Context, refs types.RefSlice, q *types.RefByHeight, vr types.ValueReader) error {
 	for _, r := range refs {
-		c := r.TargetValue(ctx, vr).(types.Struct)
-		p := c.Get(ParentsField).(types.Set)
-		p.IterAll(ctx, func(v types.Value) {
-			q.PushBack(v.(types.Ref))
-		})
+		v, err := r.TargetValue(ctx, vr)
+
+		if err != nil {
+			return err
+		}
+
+		c := v.(types.Struct)
+		ps, ok, err := c.MaybeGet(ParentsField)
+
+		if err != nil {
+			return err
+		}
+
+		if ok {
+			p := ps.(types.Set)
+			err = p.IterAll(ctx, func(v types.Value) error {
+				q.PushBack(v.(types.Ref))
+				return nil
+			})
+		}
 	}
+
 	sort.Sort(q)
+	return nil
 }
 
 func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
@@ -122,7 +153,7 @@ func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
 	return types.Ref{}, false
 }
 
-func makeCommitStructType(metaType, parentsType, valueType *types.Type) *types.Type {
+func makeCommitStructType(metaType, parentsType, valueType *types.Type) (*types.Type, error) {
 	return types.MakeStructType("Commit",
 		types.StructField{
 			Name: MetaField,
@@ -150,9 +181,9 @@ func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
 	return types.IsSubtype(nbf, valueCommitType, t)
 }
 
-func IsCommit(v types.Value) bool {
+func IsCommit(v types.Value) (bool, error) {
 	if s, ok := v.(types.Struct); !ok {
-		return false
+		return false, nil
 	} else {
 		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
 	}

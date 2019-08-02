@@ -181,7 +181,7 @@ func (p Path) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, erro
 		}
 	}
 
-	return v, nil
+	return resolved, nil
 }
 
 func (p Path) Equals(o Path) bool {

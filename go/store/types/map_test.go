@@ -391,9 +391,9 @@ func TestMapSuite4K(t *testing.T) {
 	suite.Run(t, newMapTestSuite(12, 4, 2, 2, newNumber))
 }
 
-//func TestMapSuite4KStructs(t *testing.T) {
-//	suite.Run(t, newMapTestSuite(12, 11, 2, 2, newNumberStruct))
-//}
+func TestMapSuite4KStructs(t *testing.T) {
+	suite.Run(t, newMapTestSuite(12, 11, 2, 2, newNumberStruct))
+}
 
 func newNumber(i int) (Value, error) {
 	return Float(i), nil
@@ -956,8 +956,8 @@ func TestMapSetGet(t *testing.T) {
 		m, err := me.Map(ctx)
 		assert.NoError(err)
 		mV, ok, err := m.MaybeGet(ctx, k)
-		assert.True(ok)
 		assert.NoError(err)
+		assert.True(ok == (expectedVal != nil))
 		assert.True((expectedVal == nil && mV == nil) || expectedVal.Equals(mV))
 		return m.Edit()
 	}
@@ -1391,7 +1391,7 @@ func TestMapNotStringKeys(t *testing.T) {
 	}
 	v, ok, err := m1.MaybeGet(context.Background(), Float(42))
 	assert.NoError(err)
-	assert.True(ok)
+	assert.False(ok)
 	assert.Nil(v)
 }
 
@@ -1985,10 +1985,9 @@ func TestMapAt(t *testing.T) {
 		assert.Equal(values[i+1], v)
 	}
 
-	//assert.Panics(func() {
-	_, _, err = m.At(context.Background(), 42)
-	assert.Error(err)
-	//})
+	assert.Panics(func() {
+		m.At(context.Background(), 42)
+	})
 }
 
 func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
@@ -2040,20 +2039,16 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 func TestMapWithNil(t *testing.T) {
 	vrw := newTestValueStore()
 
-	//assert.Panics(t, func() {
-	_, err := NewMap(context.Background(), nil, Float(42))
-	assert.Error(t, err)
-	//})
-	//assert.Panics(t, func() {
-	_, err = NewSet(context.Background(), vrw, Float(42), nil)
-	assert.Error(t, err)
-	//})
-	//assert.Panics(t, func() {
-	_, err = NewMap(context.Background(), vrw, String("a"), String("b"), nil, Float(42))
-	assert.Error(t, err)
-	//})
-	//assert.Panics(t, func() {
-	_, err = NewSet(context.Background(), vrw, String("a"), String("b"), Float(42), nil)
-	assert.Error(t, err)
-	//})
+	assert.Panics(t, func() {
+		NewMap(context.Background(), nil, Float(42))
+	})
+	assert.Panics(t, func() {
+		NewSet(context.Background(), vrw, Float(42), nil)
+	})
+	assert.Panics(t, func() {
+		NewMap(context.Background(), vrw, String("a"), String("b"), nil, Float(42))
+	})
+	assert.Panics(t, func() {
+		NewSet(context.Background(), vrw, String("a"), String("b"), Float(42), nil)
+	})
 }

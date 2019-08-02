@@ -267,13 +267,18 @@ func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResu
 			return mapWorkResult{}, err
 		}
 
-		isLess, err := ordKey.Less(seq.format(), curKey)
+		createCur := cur == nil
+		if cur != nil {
+			isLess, err := ordKey.Less(seq.format(), curKey)
 
-		if err != nil {
-			return mapWorkResult{}, err
+			if err != nil {
+				return mapWorkResult{}, err
+			}
+
+			createCur = !isLess
 		}
 
-		if cur == nil || !isLess {
+		if createCur {
 			cur, err = newCursorAt(ctx, seq, ordKey, true, false)
 
 			if err != nil {

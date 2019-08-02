@@ -212,13 +212,17 @@ func (s Set) Has(ctx context.Context, v Value) (bool, error) {
 		return false, err
 	}
 
+	if !cur.valid() {
+		return false, nil
+	}
+
 	item, err := cur.current()
 
 	if err != nil {
 		return false, err
 	}
 
-	return cur.valid() && item.(Value).Equals(v), nil
+	return item.(Value).Equals(v), nil
 }
 
 type setIterCallback func(v Value) (bool, error)

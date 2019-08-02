@@ -143,7 +143,7 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence,
 	if last.treeLevel() > current.treeLevel() && !ae.IsSet() {
 		lastChild, err := last.getCompositeChildSequence(ctx, 0, uint64(last.seqLen()))
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 
@@ -153,7 +153,7 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence,
 	if current.treeLevel() > last.treeLevel() && !ae.IsSet() {
 		currentChild, err := current.getCompositeChildSequence(ctx, 0, uint64(current.seqLen()))
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 
@@ -172,7 +172,7 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence,
 	initialSplices, err := calcSplices(uint64(last.seqLen()), uint64(current.seqLen()), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
 		func(i uint64, j uint64) (bool, error) { return compareFn(int(i), int(j)) })
 
-	if ae.SetIfErrAndCheck(err) {
+	if ae.SetIfError(err) {
 		return false
 	}
 
@@ -212,13 +212,13 @@ func orderedSequenceDiffInternalNodes(ctx context.Context, last orderedSequence,
 func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, ae *atomicerr.AtomicError, changes chan<- ValueChanged, stopChan <-chan struct{}) bool {
 	lastCur, err := newCursorAt(ctx, last, emptyKey, false, false)
 
-	if ae.SetIfErrAndCheck(err) {
+	if ae.SetIfError(err) {
 		return false
 	}
 
 	currentCur, err := newCursorAt(ctx, current, emptyKey, false, false)
 
-	if ae.SetIfErrAndCheck(err) {
+	if ae.SetIfError(err) {
 		return false
 	}
 
@@ -229,39 +229,43 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 
 		err := fastForward(ctx, lastCur, currentCur)
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 
-		equals, err := lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx)
-
-		if ae.SetIfErrAndCheck(err) {
-			return false
-		}
-
-		for lastCur.valid() && currentCur.valid() && !equals {
+		for lastCur.valid() && currentCur.valid() {
 			if ae.IsSet() {
 				return false
 			}
 
+			equals, err := lastCur.seq.getCompareFn(currentCur.seq)(lastCur.idx, currentCur.idx)
+
+			if ae.SetIfError(err) {
+				return false
+			}
+
+			if equals {
+				break
+			}
+
 			lastKey, err := getCurrentKey(lastCur)
 
-			if ae.SetIfErrAndCheck(err) {
+			if ae.SetIfError(err) {
 				return false
 			}
 
 			currentKey, err := getCurrentKey(currentCur)
 
-			if ae.SetIfErrAndCheck(err) {
+			if ae.SetIfError(err) {
 				return false
 			}
 
-			if isLess, err := currentKey.Less(last.format(), lastKey); ae.SetIfErrAndCheck(err) {
+			if isLess, err := currentKey.Less(last.format(), lastKey); ae.SetIfError(err) {
 				return false
 			} else if isLess {
 				mv, err := getMapValue(currentCur)
 
-				if ae.SetIfErrAndCheck(err) {
+				if ae.SetIfError(err) {
 					return false
 				}
 
@@ -271,16 +275,16 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 
 				_, err = currentCur.advance(ctx)
 
-				if ae.SetIfErrAndCheck(err) {
+				if ae.SetIfError(err) {
 					return false
 				}
 			} else {
-				if isLess, err := lastKey.Less(last.format(), currentKey); ae.SetIfErrAndCheck(err) {
+				if isLess, err := lastKey.Less(last.format(), currentKey); ae.SetIfError(err) {
 					return false
 				} else if isLess {
 					mv, err := getMapValue(lastCur)
 
-					if ae.SetIfErrAndCheck(err) {
+					if ae.SetIfError(err) {
 						return false
 					}
 
@@ -290,19 +294,19 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 
 					_, err = lastCur.advance(ctx)
 
-					if ae.SetIfErrAndCheck(err) {
+					if ae.SetIfError(err) {
 						return false
 					}
 				} else {
 					lmv, err := getMapValue(currentCur)
 
-					if ae.SetIfErrAndCheck(err) {
+					if ae.SetIfError(err) {
 						return false
 					}
 
 					cmv, err := getMapValue(currentCur)
 
-					if ae.SetIfErrAndCheck(err) {
+					if ae.SetIfError(err) {
 						return false
 					}
 
@@ -312,13 +316,13 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 
 					_, err = lastCur.advance(ctx)
 
-					if ae.SetIfErrAndCheck(err) {
+					if ae.SetIfError(err) {
 						return false
 					}
 
 					_, err = currentCur.advance(ctx)
 
-					if ae.SetIfErrAndCheck(err) {
+					if ae.SetIfError(err) {
 						return false
 					}
 				}
@@ -327,38 +331,38 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 	}
 
 	for lastCur.valid() && !ae.IsSet() {
-		currKey, err := getCurrentKey(lastCur)
+		lastKey, err := getCurrentKey(lastCur)
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 
 		mv, err := getMapValue(lastCur)
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 
-		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, currKey.v, mv, nil}) {
+		if !sendChange(changes, stopChan, ValueChanged{DiffChangeRemoved, lastKey.v, mv, nil}) {
 			return false
 		}
 
 		_, err = lastCur.advance(ctx)
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 	}
 
 	for currentCur.valid() && !ae.IsSet() {
-		currKey, err := getCurrentKey(lastCur)
+		currKey, err := getCurrentKey(currentCur)
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 
 		mv, err := getMapValue(currentCur)
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 
@@ -368,7 +372,7 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 
 		_, err = currentCur.advance(ctx)
 
-		if ae.SetIfErrAndCheck(err) {
+		if ae.SetIfError(err) {
 			return false
 		}
 	}
@@ -418,20 +422,29 @@ func doFastForward(ctx context.Context, allowPastEnd bool, a *sequenceCursor, b 
 	aHasMore = true
 	bHasMore = true
 
-	equals, err := isCurrentEqual(a, b)
 
-	if err != nil {
-		return false, false, err
-	}
-
-	for aHasMore && bHasMore && equals {
-		parentsEqual, err := isCurrentEqual(a.parent, b.parent)
+	for aHasMore && bHasMore {
+		equals, err := isCurrentEqual(a, b)
 
 		if err != nil {
 			return false, false, err
 		}
 
-		if nil != a.parent && nil != b.parent && parentsEqual {
+		if !equals {
+			break
+		}
+
+		parentsEqAndNotNil := nil != a.parent && nil != b.parent
+
+		if parentsEqAndNotNil {
+			parentsEqAndNotNil, err = isCurrentEqual(a.parent, b.parent)
+
+			if err != nil {
+				return false, false, err
+			}
+		}
+
+		if parentsEqAndNotNil {
 			// Key optimisation: if the sequences have common parents, then entire chunks can be
 			// fast-forwarded without reading unnecessary data.
 			aHasMore, bHasMore, err = doFastForward(ctx, false, a.parent, b.parent)

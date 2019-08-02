@@ -23,6 +23,7 @@ package datas
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -168,7 +169,7 @@ func (suite *PullSuite) TestPullEverything() {
 	expectedReads := suite.sinkCS.Reads
 
 	l := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(l, types.NewSet(context.Background(), suite.source))
+	sourceRef := suite.commitToSource(l, mustSet(types.NewSet(context.Background(), suite.source)))
 	pt := startProgressTracker()
 
 	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
@@ -176,9 +177,9 @@ func (suite *PullSuite) TestPullEverything() {
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
+	v := mustValue(suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())).(types.Struct)
 	suite.NotNil(v)
-	suite.True(l.Equals(v.Get(ValueField)))
+	suite.True(l.Equals(mustGetValue(v.MaybeGet(ValueField))))
 }
 
 // Source: -6-> C3(L5) -1-> N
@@ -202,15 +203,15 @@ func (suite *PullSuite) TestPullEverything() {
 //                         \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sink)
-	suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink))
+	suite.commitToSink(sinkL, mustSet(types.NewSet(context.Background(), suite.sink)))
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
+	sourceRef := suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source)))
 	srcL = buildListOfHeight(4, suite.source)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	sourceRef = suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source, sourceRef)))
 	srcL = buildListOfHeight(5, suite.source)
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	sourceRef = suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source, sourceRef)))
 
 	pt := startProgressTracker()
 
@@ -220,9 +221,10 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
+	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
+	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(v.Get(ValueField)))
+	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(ValueField))))
 }
 
 // Source: -6-> C2(L5) -1-> N
@@ -249,27 +251,31 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 //                                     \ -1-> L0
 func (suite *PullSuite) TestPullDivergentHistory() {
 	sinkL := buildListOfHeight(3, suite.sink)
-	sinkRef := suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink))
+	sinkRef := suite.commitToSink(sinkL, mustSet(types.NewSet(context.Background(), suite.sink)))
 	srcL := buildListOfHeight(3, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
+	sourceRef := suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source)))
 
-	sinkL = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
-	sinkRef = suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink, sinkRef))
-	srcL = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	var err error
+	sinkL, err = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
+	suite.NoError(err)
+	sinkRef = suite.commitToSink(sinkL, mustSet(types.NewSet(context.Background(), suite.sink, sinkRef)))
+	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
+	suite.NoError(err)
+	sourceRef = suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source, sourceRef)))
 	preReads := suite.sinkCS.Reads
 
 	pt := startProgressTracker()
 
-	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	err = Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(preReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
+	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
+	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(v.Get(ValueField)))
+	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(ValueField))))
 }
 
 // Source: -6-> C2(L4) -1-> N
@@ -290,29 +296,36 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 //                                         \ -1-> L0
 func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sink)
-	suite.commitToSink(sinkL, types.NewSet(context.Background(), suite.sink))
+	suite.commitToSink(sinkL, mustSet(types.NewSet(context.Background(), suite.sink)))
 	expectedReads := suite.sinkCS.Reads
 
 	srcL := buildListOfHeight(4, suite.source)
-	sourceRef := suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source))
-	L3 := srcL.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
-	L2 := L3.Get(context.Background(), 1).(types.Ref).TargetValue(context.Background(), suite.source).(types.List)
-	L2 = L2.Edit().Append(suite.source.WriteValue(context.Background(), types.String("oy!"))).List(context.Background())
-	L3 = L3.Edit().Set(1, suite.source.WriteValue(context.Background(), L2)).List(context.Background())
-	srcL = srcL.Edit().Set(1, suite.source.WriteValue(context.Background(), L3)).List(context.Background())
-	sourceRef = suite.commitToSource(srcL, types.NewSet(context.Background(), suite.source, sourceRef))
+	sourceRef := suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source)))
+	L3 := mustValue(mustValue(srcL.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.source)).(types.List)
+	L2 := mustValue(mustValue(L3.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.source)).(types.List)
+	L2Ed := L2.Edit().Append(mustRef(suite.source.WriteValue(context.Background(), types.String("oy!"))))
+	L2, err := L2Ed.List(context.Background())
+	suite.NoError(err)
+	L3Ed := L3.Edit().Set(1, mustRef(suite.source.WriteValue(context.Background(), L2)))
+	L3, err = L3Ed.List(context.Background())
+	suite.NoError(err)
+	srcLEd := srcL.Edit().Set(1, mustRef(suite.source.WriteValue(context.Background(), L3)))
+	srcL, err = srcLEd.List(context.Background())
+	suite.NoError(err)
+	sourceRef = suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source, sourceRef)))
 
 	pt := startProgressTracker()
 
-	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	err = Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash()).(types.Struct)
+	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
+	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(v.Get(ValueField)))
+	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(ValueField))))
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p types.Set) types.Ref {
@@ -333,13 +346,18 @@ func (suite *PullSuite) commitToSink(v types.Value, p types.Set) types.Ref {
 
 func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
 	unique := 0
-	l := types.NewList(context.Background(), vrw, types.Float(unique), types.Float(unique+1))
+	l, err := types.NewList(context.Background(), vrw, types.Float(unique), types.Float(unique+1))
+	d.PanicIfError(err)
 	unique += 2
 
 	for i := 0; i < height; i++ {
-		r1, r2 := vrw.WriteValue(context.Background(), types.Float(unique)), vrw.WriteValue(context.Background(), l)
+		r1, err := vrw.WriteValue(context.Background(), types.Float(unique))
+		d.PanicIfError(err)
+		r2, err := vrw.WriteValue(context.Background(), l)
+		d.PanicIfError(err)
 		unique++
-		l = types.NewList(context.Background(), vrw, r1, r2)
+		l, err = types.NewList(context.Background(), vrw, r1, r2)
+		d.PanicIfError(err)
 	}
 	return l
 }

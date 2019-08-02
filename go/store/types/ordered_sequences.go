@@ -142,13 +142,16 @@ func newOrderedMetaSequenceChunkFn(kind NomsKind, vrw ValueReadWriter) makeChunk
 				return nil, orderedKey{}, 0, err
 			}
 
-			isLess, err := lastKey.Less(vrw.Format(), key)
+			if lastKey != emptyKey {
+				isLess, err := lastKey.Less(vrw.Format(), key)
 
-			if err != nil {
-				return nil, orderedKey{}, 0, err
+				if err != nil {
+					return nil, orderedKey{}, 0, err
+				}
+
+				d.PanicIfFalse(isLess)
 			}
 
-			d.PanicIfFalse(lastKey == emptyKey || isLess)
 			lastKey = key
 			tuples[i] = mt // chunk is written when the root sequence is written
 			numLeaves += mt.numLeaves()

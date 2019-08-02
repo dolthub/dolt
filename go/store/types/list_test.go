@@ -1380,14 +1380,12 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 func TestListWithNil(t *testing.T) {
 	vrw := newTestValueStore()
 
-	//assert.Panics(t, func() {
-	_, err := NewList(context.Background(), vrw, nil)
-	assert.Error(t, err)
-	//})
-	//assert.Panics(t, func() {
-	_, err = NewList(context.Background(), vrw, Float(42), nil)
-	assert.Error(t, err)
-	//})
+	assert.Panics(t, func() {
+		NewList(context.Background(), vrw, nil)
+	})
+	assert.Panics(t, func() {
+		NewList(context.Background(), vrw, Float(42), nil)
+	})
 }
 
 func TestListOfListsDoesNotWriteRoots(t *testing.T) {
@@ -1401,11 +1399,12 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	l3, err := NewList(context.Background(), vrw, l1, l2)
 	assert.NoError(err)
 
-	assert.Nil(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18))))
-	assert.Nil(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18))))
-	assert.Nil(vrw.ReadValue(context.Background(), mustHash(l3.Hash(Format_7_18))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18)))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18)))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l3.Hash(Format_7_18)))))
 
-	vrw.WriteValue(context.Background(), l3)
-	assert.Nil(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18))))
-	assert.Nil(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18))))
+	_, err = vrw.WriteValue(context.Background(), l3)
+	assert.NoError(err)
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18)))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18)))))
 }
