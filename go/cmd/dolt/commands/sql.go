@@ -162,7 +162,7 @@ func runBatchMode(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 		if newRoot, err := processBatchQuery(query, dEnv, root, batcher); newRoot != nil {
 			root = newRoot
 		} else if err != nil {
-			cli.Println(fmt.Sprintf("Error processing query '%s': %s", query, err.Error()))
+			_, _ = fmt.Fprintf(cli.CliErr, "Error processing query '%s': %s\n", query, err.Error())
 		}
 	}
 
@@ -205,23 +205,13 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	// TODO: update completer on create / drop / alter statements
 	shell.CustomCompleter(newCompleter(dEnv))
 
-	batcher := dsql.NewSqlBatcher(dEnv.DoltDB, root)
-
-	cleanup := func() {
-		if newRoot, _ := batcher.Commit(context.Background()); newRoot != nil {
-			root = newRoot
-		}
-	}
-
 	shell.EOF(func(c *ishell.Context) {
 		c.Stop()
-		cleanup()
 	})
 
 	shell.Interrupt(func(c *ishell.Context, count int, input string) {
 		if count > 1 {
 			c.Stop()
-			cleanup()
 		} else {
 			c.Println("Received SIGINT. Interrupt again to exit, or use ^D, quit, or exit")
 		}
@@ -233,7 +223,7 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 			return
 		}
 
-		if newRoot, err := processBatchQuery(query, dEnv, root, batcher); err != nil {
+		if newRoot, err := processQuery(query, dEnv, root); err != nil {
 			shell.Println(color.RedString(err.Error()))
 		} else if newRoot != nil {
 			root = newRoot
@@ -550,6 +540,14 @@ func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert
 	return result.Root, nil
 }
 
+type stats struct {
+	numRowsInserted int
+	numRowsUpdated int
+	numErrorsIgnored int
+}
+var batchEditStats stats
+var displayStrLen int
+
 // Executes a SQL insert statement in batch mode and returns the new root value (which is usually unchanged) or an
 // error. No output is written to the console in batch mode.
 func sqlInsertBatch(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, batcher *dsql.SqlBatcher) (*doltdb.RootValue, error) {
@@ -557,20 +555,23 @@ func sqlInsertBatch(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.I
 	if err != nil {
 		return nil, fmt.Errorf("Error inserting rows: %v", err.Error())
 	}
+	mergeResultIntoStats(result, &batchEditStats)
 
-	cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
-	if result.NumRowsUpdated > 0 {
-		cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-	}
-	if result.NumErrorsIgnored > 0 {
-		cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
-	}
+	displayStr := fmt.Sprintf("Rows inserted: %d, Updated: %d, Errors: %d",
+		batchEditStats.numRowsInserted, batchEditStats.numRowsUpdated, batchEditStats.numErrorsIgnored)
+	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 
 	if result.Root != nil {
 		root = result.Root
 	}
 
 	return root, nil
+}
+
+func mergeResultIntoStats(result *dsql.InsertResult, stats *stats) {
+	stats.numRowsInserted += result.NumRowsInserted
+	stats.numRowsUpdated += result.NumRowsUpdated
+	stats.numErrorsIgnored += result.NumErrorsIgnored
 }
 
 // Executes a SQL update statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
