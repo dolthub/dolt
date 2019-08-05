@@ -4,6 +4,10 @@ Dolt lets users collaborate on databases in the same way they collaborate on
 source code. Dolt is a relational database combined with the version control
 concepts of Git.
 
+# We also built DoltHub
+
+DoltHub is GitHub for Dolt, a place on the internet to share Dolt repositories. https://wwww.dolthub.com
+
 # Getting Started
 
 ## Installation
