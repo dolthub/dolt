@@ -315,7 +315,7 @@ func TestExecuteInsert(t *testing.T) {
 			sqlStatement, _ := sqlparser.Parse(tt.query)
 			s := sqlStatement.(*sqlparser.Insert)
 
-			result, err := ExecuteInsert(ctx, dEnv.DoltDB, root, s, tt.query)
+			result, err := ExecuteInsert(ctx, dEnv.DoltDB, root, s)
 
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
@@ -334,7 +334,7 @@ func TestExecuteInsert(t *testing.T) {
 
 			for _, expectedRow := range tt.insertedValues {
 				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
-				assert.True(t, ok, "Row not found: %v", expectedRow)
+				require.True(t, ok, "Row not found: %v", expectedRow)
 				eq, diff := rowsEqual(expectedRow, foundRow)
 				assert.True(t, eq, "Rows not equals, found diff %v", diff)
 			}
