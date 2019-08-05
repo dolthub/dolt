@@ -541,10 +541,11 @@ func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert
 }
 
 type stats struct {
-	numRowsInserted int
-	numRowsUpdated int
+	numRowsInserted  int
+	numRowsUpdated   int
 	numErrorsIgnored int
 }
+
 var batchEditStats stats
 var displayStrLen int
 

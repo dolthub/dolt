@@ -42,10 +42,10 @@ var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 // until the batch is Committed. The InsertResult returned similarly doesn't have a Root set, since the root isn't
 // modified by this function.
 func ExecuteBatchInsert(
-		ctx context.Context,
-		root *doltdb.RootValue,
-		s *sqlparser.Insert,
-		batcher *SqlBatcher,
+	ctx context.Context,
+	root *doltdb.RootValue,
+	s *sqlparser.Insert,
+	batcher *SqlBatcher,
 ) (*InsertResult, error) {
 
 	tableName := s.Table.Name.String()
@@ -136,10 +136,10 @@ func ExecuteBatchInsert(
 
 // ExecuteInsert executes the given select insert statement and returns the result.
 func ExecuteInsert(
-		ctx context.Context,
-		db *doltdb.DoltDB,
-		root *doltdb.RootValue,
-		s *sqlparser.Insert,
+	ctx context.Context,
+	db *doltdb.DoltDB,
+	root *doltdb.RootValue,
+	s *sqlparser.Insert,
 ) (*InsertResult, error) {
 
 	batcher := NewSqlBatcher(db, root)

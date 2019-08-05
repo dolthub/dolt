@@ -16,9 +16,10 @@ package sqltestutil
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"reflect"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/google/uuid"
 

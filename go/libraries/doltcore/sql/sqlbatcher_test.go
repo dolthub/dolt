@@ -17,20 +17,22 @@ package sql
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"testing"
+
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"math/rand"
-	"testing"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 func TestSqlBatchInserts(t *testing.T) {
-	insertStatements := []string {
+	insertStatements := []string{
 		`insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
 		`insert into people values
@@ -51,8 +53,9 @@ func TestSqlBatchInserts(t *testing.T) {
 	// Shuffle the inserts so that different tables are interleaved. We're not giving a seed here, so this is
 	// deterministic.
 	rand.Shuffle(len(insertStatements),
-		func(i, j int) { insertStatements[i], insertStatements[j] = insertStatements[j], insertStatements[i]
-	})
+		func(i, j int) {
+			insertStatements[i], insertStatements[j] = insertStatements[j], insertStatements[i]
+		})
 
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
@@ -118,7 +121,7 @@ func TestSqlBatchInserts(t *testing.T) {
 		newAppsRow(11, 9),
 	)
 
-  allPeopleRows = GetAllRows(root, PeopleTableName)
+	allPeopleRows = GetAllRows(root, PeopleTableName)
 	allEpsRows = GetAllRows(root, EpisodesTableName)
 	allAppearanceRows = GetAllRows(root, AppearancesTableName)
 
@@ -134,8 +137,8 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 		`insert ignore into people values
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, '00000000-0000-0000-0000-000000000008', 677)`,
 	}
-	numRowsUpdated := []int{1,0}
-	numErrorsIgnored := []int{0,1}
+	numRowsUpdated := []int{1, 0}
+	numErrorsIgnored := []int{0, 1}
 
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
@@ -235,9 +238,9 @@ func containsRow(rs []row.Row, r row.Row) bool {
 
 func newPeopleRow(id int, first, last string) row.Row {
 	vals := row.TaggedValues{
-		IdTag:        types.Int(id),
-		FirstTag:     types.String(first),
-		LastTag:      types.String(last),
+		IdTag:    types.Int(id),
+		FirstTag: types.String(first),
+		LastTag:  types.String(last),
 	}
 
 	return row.New(types.Format_7_18, PeopleTestSchema, vals)

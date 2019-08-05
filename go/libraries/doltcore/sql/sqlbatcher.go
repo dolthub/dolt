@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -47,8 +48,8 @@ type SqlBatcher struct {
 // Returns a new SqlBatcher for the given environment and root value.
 func NewSqlBatcher(db *doltdb.DoltDB, root *doltdb.RootValue) *SqlBatcher {
 	batcher := &SqlBatcher{
-		db:      db,
-		root:    root,
+		db:   db,
+		root: root,
 	}
 	batcher.resetState()
 	return batcher
@@ -87,8 +88,8 @@ type InsertOptions struct {
 }
 
 type BatchInsertResult struct {
-	RowInserted  bool
-	RowUpdated   bool
+	RowInserted bool
+	RowUpdated  bool
 }
 
 func (b *SqlBatcher) Insert(ctx context.Context, tableName string, r row.Row, opt InsertOptions) (*BatchInsertResult, error) {
@@ -155,7 +156,7 @@ func (b *SqlBatcher) GetSchema(ctx context.Context, tableName string) (schema.Sc
 
 	sch := table.GetSchema(ctx)
 	b.schemas[tableName] = sch
-	return sch,  nil
+	return sch, nil
 }
 
 func (b *SqlBatcher) getEditor(ctx context.Context, tableName string) (*types.MapEditor, error) {

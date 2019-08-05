@@ -16,9 +16,10 @@ package integration_tests
 
 import (
 	"context"
-	"github.com/src-d/go-mysql-server/sql"
 	"os"
 	"testing"
+
+	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20176,7 +20177,7 @@ func TestJoin(t *testing.T) {
 		`select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
 						from daily_summary d join symbols t on d.Symbol = t.Symbol`)
 	// TODO: fix me
-						//order by d.symbol, country, date`)
+	//order by d.symbol, country, date`)
 	require.NoError(t, err)
 	assert.Equal(t, 5210, len(rows))
 
