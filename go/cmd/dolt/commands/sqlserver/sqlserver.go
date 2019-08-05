@@ -40,7 +40,7 @@ Currently, only SELECT statements are operational, as support for other statemen
 still being developed.
 `
 var sqlServerSynopsis = []string{
-	"[-a <host>] [-p <port>] [-u <user>] [-w <password>] [-t <timeout>] [-l <loglevel>] [-r]",
+	"[-H <host>] [-P <port>] [-u <user>] [-p <password>] [-t <timeout>] [-l <loglevel>] [-r]",
 }
 
 func SqlServer(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -51,10 +51,10 @@ func sqlServerImpl(commandStr string, args []string, dEnv *env.DoltEnv, serverCo
 	serverConfig := DefaultServerConfig()
 
 	ap := argparser.NewArgParser()
-	ap.SupportsString(hostFlag, "a", "Host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host))
-	ap.SupportsUint(portFlag, "p", "Port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port))
+	ap.SupportsString(hostFlag, "H", "Host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host))
+	ap.SupportsUint(portFlag, "P", "Port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port))
 	ap.SupportsString(userFlag, "u", "User", fmt.Sprintf("Defines the server user (default `%v`)", serverConfig.User))
-	ap.SupportsString(passwordFlag, "w", "Password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password))
+	ap.SupportsString(passwordFlag, "p", "Password", fmt.Sprintf("Defines the server password (default `%v`)", serverConfig.Password))
 	ap.SupportsInt(timeoutFlag, "t", "Connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.Timeout))
 	ap.SupportsFlag(readonlyFlag, "r", "Disables modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel))
