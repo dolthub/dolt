@@ -14,7 +14,7 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/dustin/go-humanize v1.0.0
-	github.com/edsrzf/mmap-go v1.0.0-20181222142022-904c4ced31cd
+	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
 	github.com/gizak/termui/v3 v3.1.0
@@ -66,3 +66,4 @@ replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-2019062523590
 // For local development, clone vitess into $GOPATH/src like so: git clone git@github.com:liquidata-inc/vitess.git vitess.io/vitess
 // Then use this local override:
 //replace vitess.io/vitess => ../../../../../vitess.io/vitess
+
