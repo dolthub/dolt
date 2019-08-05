@@ -19,10 +19,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-
 	"github.com/google/uuid"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
