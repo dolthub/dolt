@@ -145,7 +145,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	s.NoError(err)
 
 	numChildChunks := 0
-	_ = l.WalkRefs(types.Format_7_18, func(r types.Ref) error {
+	_ = l.WalkRefs(db.Format(), func(r types.Ref) error {
 		numChildChunks++
 		return nil
 	})

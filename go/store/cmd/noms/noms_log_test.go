@@ -49,13 +49,14 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	s.NoError(err)
 	defer sp.Close()
 
-	sp.GetDatabase(context.Background()).CommitValue(context.Background(), sp.GetDataset(context.Background()), types.Float(i))
+	db := sp.GetDatabase(context.Background())
+	db.CommitValue(context.Background(), sp.GetDataset(context.Background()), types.Float(i))
 	s.NoError(err)
 
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
 	res, _ := s.MustRun(main, []string{"log", str})
-	h, err := commit.Hash(types.Format_7_18)
+	h, err := commit.Hash(db.Format())
 	s.NoError(err)
 	s.Contains(res, h.String())
 }
@@ -80,7 +81,7 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 	db := sp.GetDatabase(context.Background())
 	ds := sp.GetDataset(context.Background())
 	for i := 0; i < 3; i++ {
-		data, err := types.NewStruct(types.Format_7_18, "", types.StructData{
+		data, err := types.NewStruct(db.Format(), "", types.StructData{
 			"bar": types.Float(i),
 		})
 		s.NoError(err)
@@ -163,20 +164,21 @@ func (s *nomsLogTestSuite) TestNArg() {
 	s.NoError(err)
 	defer sp.Close()
 
-	ds, err := sp.GetDatabase(context.Background()).GetDataset(context.Background(), dsName)
+	db := sp.GetDatabase(context.Background())
+	ds, err := db.GetDataset(context.Background(), dsName)
 	s.NoError(err)
 
 	ds, err = addCommit(ds, "1")
 	s.NoError(err)
-	h1, err := mustHead(ds).Hash(types.Format_7_18)
+	h1, err := mustHead(ds).Hash(db.Format())
 	s.NoError(err)
 	ds, err = addCommit(ds, "2")
 	s.NoError(err)
-	h2, err := mustHead(ds).Hash(types.Format_7_18)
+	h2, err := mustHead(ds).Hash(db.Format())
 	s.NoError(err)
 	ds, err = addCommit(ds, "3")
 	s.NoError(err)
-	h3, err := mustHead(ds).Hash(types.Format_7_18)
+	h3, err := mustHead(ds).Hash(db.Format())
 	s.NoError(err)
 
 	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, dsName)
@@ -206,7 +208,7 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 
 	s.NoError(err)
 
-	meta, err := types.NewStruct(types.Format_7_18, "Meta", map[string]types.Value{
+	meta, err := types.NewStruct(db.Format(), "Meta", map[string]types.Value{
 		"longNameForTest": types.String("Yoo"),
 		"test2":           types.String("Hoo"),
 	})
