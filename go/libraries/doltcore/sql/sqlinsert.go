@@ -25,7 +25,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -39,23 +38,18 @@ type InsertResult struct {
 var ErrMissingPrimaryKeys = errors.New("One or more primary key columns missing from insert statement")
 var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 
-// ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
-func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
+// ExecuteInsertBatch executes the given insert statement in batch mode and returns the result. The table is not changed
+// until the batch is Committed. The InsertResult returned similarly doesn't have a Root set, since the root isn't
+// modified by this function.
+func ExecuteBatchInsert(
+	ctx context.Context,
+	root *doltdb.RootValue,
+	s *sqlparser.Insert,
+	batcher *SqlBatcher,
+) (*InsertResult, error) {
+
 	tableName := s.Table.Name.String()
-	if has, err := root.HasTable(ctx, tableName); err != nil {
-		return nil, err
-	} else if !has {
-		return errInsert("Unknown table %v", tableName)
-	}
-
-	table, _, err := root.GetTable(ctx, tableName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	tableSch, err := table.GetSchema(ctx)
-
+	tableSch, err := batcher.GetSchema(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -74,13 +68,13 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		for i, colName := range s.Columns {
 			for _, c := range cols {
 				if c.Name == colName.String() {
-					return errInsert("Repeated column: '%v'", c.Name)
+					return nil, fmt.Errorf("Repeated column: '%v'", c.Name)
 				}
 			}
 
 			col, ok := tableSch.GetAllCols().GetByName(colName.String())
 			if !ok {
-				return errInsert(UnknownColumnErrFmt, colName)
+				return nil, fmt.Errorf(UnknownColumnErrFmt, colName)
 			}
 			cols[i] = col
 		}
@@ -93,29 +87,21 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		var err error
 		rows, err = prepareInsertVals(root.VRW().Format(), cols, &queryRows, tableSch)
 		if err != nil {
-			return &InsertResult{}, err
+			return nil, err
 		}
 	case *sqlparser.Select:
-		return errInsert("Insert as select not supported")
+		return nil, fmt.Errorf("Insert as select not supported")
 	case *sqlparser.ParenSelect:
-		return errInsert("Parenthesized select expressions in insert not supported")
+		return nil, fmt.Errorf("Parenthesized select expressions in insert not supported")
 	case *sqlparser.Union:
-		return errInsert("Union not supported")
+		return nil, fmt.Errorf("Union not supported")
 	default:
-		return errInsert("Unrecognized type for insertRows: %v", queryRows)
+		return nil, fmt.Errorf("Unrecognized type for insert: %v", queryRows)
 	}
 
 	// Perform the insert
-	rowData, err := table.GetRowData(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	me := rowData.Edit()
 	var result InsertResult
-
-	insertedPKHashes := make(map[hash.Hash]struct{})
+	opt := InsertOptions{replace}
 	for _, r := range rows {
 		if has, err := row.IsValid(r, tableSch); err != nil {
 			return nil, err
@@ -127,74 +113,59 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 				col, constraint, err := row.GetInvalidConstraint(r, tableSch)
 
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf(ConstraintFailedFmt, "unknown", "unknown")
 				}
 
-				return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
+				return nil, fmt.Errorf(ConstraintFailedFmt, col.Name, constraint)
 			}
 		}
 
-		key, err := r.NomsMapKey(tableSch).Value(ctx)
-
+		insertResult, err := batcher.Insert(ctx, tableName, r, opt)
 		if err != nil {
-			return nil, err
-		}
-
-		rv, _, err := rowData.MaybeGet(ctx, key)
-
-		if err != nil {
-			return nil, err
-		}
-
-		rowExists := rv != nil
-		h, err := key.Hash(root.VRW().Format())
-
-		if err != nil {
-			return nil, err
-		}
-
-		_, rowInserted := insertedPKHashes[h]
-
-		if rowExists || rowInserted {
-			if replace {
-				result.NumRowsUpdated += 1
-			} else if ignore {
+			if ignore {
 				result.NumErrorsIgnored += 1
 				continue
 			} else {
-				return errInsert("Duplicate primary key: '%v'", getPrimaryKeyString(r, tableSch))
+				return nil, err
 			}
 		}
-		me.Set(key, r.NomsMapValue(tableSch))
 
-		h, err = key.Hash(root.VRW().Format())
-
-		if err != nil {
-			return nil, err
+		if insertResult.RowInserted {
+			result.NumRowsInserted++
 		}
-
-		insertedPKHashes[h] = struct{}{}
-	}
-	newMap, err := me.Map(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	table, err = table.UpdateRows(ctx, newMap)
-
-	if err != nil {
-		return nil, err
-	}
-
-	result.NumRowsInserted = int(newMap.Len() - rowData.Len())
-	result.Root, err = root.PutTable(ctx, db, tableName, table)
-
-	if err != nil {
-		return nil, err
+		if insertResult.RowUpdated {
+			result.NumRowsUpdated++
+		}
 	}
 
 	return &result, nil
+}
+
+// ExecuteInsert executes the given select insert statement and returns the result.
+func ExecuteInsert(
+	ctx context.Context,
+	db *doltdb.DoltDB,
+	root *doltdb.RootValue,
+	s *sqlparser.Insert,
+) (*InsertResult, error) {
+
+	batcher := NewSqlBatcher(db, root)
+	insertResult, err := ExecuteBatchInsert(ctx, root, s, batcher)
+	if err != nil {
+		return nil, err
+	}
+
+	newRoot, err := batcher.Commit(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &InsertResult{
+		Root:             newRoot,
+		NumRowsInserted:  insertResult.NumRowsInserted,
+		NumRowsUpdated:   insertResult.NumRowsUpdated,
+		NumErrorsIgnored: insertResult.NumErrorsIgnored,
+	}, nil
 }
 
 // Returns a primary key summary of the row given

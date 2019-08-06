@@ -48,10 +48,10 @@ func TestServerArgs(t *testing.T) {
 	serverController := CreateServerController()
 	go func() {
 		sqlServerImpl("dolt sql-server", []string{
-			"-a", "localhost",
-			"-p", "15200",
+			"-H", "localhost",
+			"-P", "15200",
 			"-u", "username",
-			"-w", "password",
+			"-p", "password",
 			"-t", "5",
 			"-l", "info",
 			"-r",
@@ -72,10 +72,10 @@ func TestServerBadArgs(t *testing.T) {
 	env := createEnvWithSeedData(t)
 
 	tests := [][]string{
-		{"-a", "127.0.0.0.1"},
-		{"-a", "loclahost"},
-		{"-p", "300"},
-		{"-p", "90000"},
+		{"-H", "127.0.0.0.1"},
+		{"-H", "loclahost"},
+		{"-P", "300"},
+		{"-P", "90000"},
 		{"-u", ""},
 		{"-t", "-1"},
 		{"-l", "everything"},

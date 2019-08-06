@@ -118,6 +118,12 @@ teardown() {
     [[ "$output" =~ "Error creating reader" ]] || false
 }
 
+@test "try to create a table with dolt table import with a bad file name" {
+    run dolt table import -c test `batshelper bad.data`
+    skip "This panics right now with: panic: Unsupported table format should have failed before reaching here."
+    [ "$status" -eq 1 ]
+}
+
 @test "create a table with two primary keys from csv import" {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]

@@ -15,11 +15,13 @@
 package sqltestutil
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -46,16 +48,16 @@ const (
 )
 
 const (
-	episodeIdTag = iota
-	epNameTag
-	epAirDateTag
-	epRatingTag
+	EpisodeIdTag = iota
+	EpNameTag
+	EpAirDateTag
+	EpRatingTag
 )
 
 const (
-	appCharacterTag = iota
-	appEpTag
-	appCommentsTag
+	AppCharacterTag = iota
+	AppEpTag
+	AppCommentsTag
 )
 
 const (
@@ -73,11 +75,11 @@ var PeopleTableName = "people"
 
 var EpisodesTestSchema = createEpisodesTestSchema()
 var untypedEpisodesSch, _ = untyped.UntypeUnkeySchema(EpisodesTestSchema)
-var episodesTableName = "episodes"
+var EpisodesTableName = "episodes"
 
 var AppearancesTestSchema = createAppearancesTestSchema()
 var untypedAppearacesSch, _ = untyped.UntypeUnkeySchema(AppearancesTestSchema)
-var appearancesTableName = "appearances"
+var AppearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
@@ -96,19 +98,19 @@ func createPeopleTestSchema() schema.Schema {
 
 func createEpisodesTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("id", episodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("name", epNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("air_date", epAirDateTag, types.IntKind, false),
-		schema.NewColumn("rating", epRatingTag, types.FloatKind, false),
+		schema.NewColumn("id", EpisodeIdTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("name", EpNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("air_date", EpAirDateTag, types.IntKind, false),
+		schema.NewColumn("rating", EpRatingTag, types.FloatKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
 
 func createAppearancesTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
-		schema.NewColumn("character_id", appCharacterTag, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("episode_id", appEpTag, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("comments", appCommentsTag, types.StringKind, false),
+		schema.NewColumn("character_id", AppCharacterTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("episode_id", AppEpTag, types.IntKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("comments", AppCommentsTag, types.StringKind, false),
 	)
 	return schema.SchemaFromCols(colColl)
 }
@@ -134,10 +136,10 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 	vals := row.TaggedValues{
-		episodeIdTag: types.Int(id),
-		epNameTag:    types.String(name),
-		epAirDateTag: types.Int(airdate),
-		epRatingTag:  types.Float(rating),
+		EpisodeIdTag: types.Int(id),
+		EpNameTag:    types.String(name),
+		EpAirDateTag: types.Int(airdate),
+		EpRatingTag:  types.Float(rating),
 	}
 
 	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
@@ -151,9 +153,9 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 
 func newAppsRow(charId, epId int, comment string) row.Row {
 	vals := row.TaggedValues{
-		appCharacterTag: types.Int(charId),
-		appEpTag:        types.Int(epId),
-		appCommentsTag:  types.String(comment),
+		AppCharacterTag: types.Int(charId),
+		AppEpTag:        types.Int(epId),
+		AppCommentsTag:  types.String(comment),
 	}
 
 	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
@@ -201,7 +203,7 @@ var Ep1 = newEpsRow(1, "Simpsons Roasting On an Open Fire", 629953200, 8.0)
 var Ep2 = newEpsRow(2, "Bart the Genius", 632372400, 9.0)
 var Ep3 = newEpsRow(3, "Homer's Odyssey", 632977200, 7.0)
 var Ep4 = newEpsRow(4, "There's No Disgrace Like Home", 633582000, 8.5)
-var allEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
+var AllEpsRows = Rs(Ep1, Ep2, Ep3, Ep4)
 
 // These are made up, not the actual show data
 var app1 = newAppsRow(homerId, 1, "Homer is great in this one")
@@ -290,9 +292,49 @@ func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 	return mutated
 }
 
+func GetAllRows(root *doltdb.RootValue, tableName string) ([]row.Row, error) {
+	ctx := context.Background()
+	table, _, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rowData, err := table.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sch, err := table.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var rows []row.Row
+	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+
+		if err != nil {
+			return false, err
+		}
+
+		rows = append(rows, r)
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+
+	return rows, nil
+}
+
 // Creates a test database with the test data set in it
 func CreateTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
-	dtestutils.CreateTestTable(t, dEnv, episodesTableName, EpisodesTestSchema, allEpsRows...)
-	dtestutils.CreateTestTable(t, dEnv, appearancesTableName, AppearancesTestSchema, AllAppsRows...)
+	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema, AllEpsRows...)
+	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema, AllAppsRows...)
 }
