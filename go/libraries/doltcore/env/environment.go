@@ -38,9 +38,9 @@ import (
 )
 
 const (
-	DefaultLoginUrl       = "https://dolthub.awsdev.ld-corp.com/settings/credentials"
-	DefaultRemotesApiHost = "dolthub.com"
-	DefaultRemotesApiPort = "8080"
+	DefaultLoginUrl       = "https://beta.dolthub.com/settings/credentials"
+	DefaultRemotesApiHost = "doltremoteapi.beta.dolthub.com"
+	DefaultRemotesApiPort = "443"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
