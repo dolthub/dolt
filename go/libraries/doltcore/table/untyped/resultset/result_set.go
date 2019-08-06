@@ -163,7 +163,7 @@ func NewFromColumns(schemas map[string]schema.Schema, columns ...ColWithSchema) 
 	var err error
 
 	cols := make([]schema.Column, len(columns))
-	for i, _ := range columns {
+	for i := 0; i < len(columns); i++ {
 		col := columns[i].Col
 		col.Tag = uint64(i)
 		cols[i] = col
@@ -229,11 +229,15 @@ func concatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
 	cols := make([]schema.Column, 0)
 	var itag uint64
 	for _, col := range srcSchemas {
-		col.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		err := col.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			cols = append(cols, schema.NewColumn(col.Name, itag, col.Kind, false))
 			itag++
-			return false
+			return false, nil
 		})
+
+		if err != nil {
+			return nil, err
+		}
 	}
 	colCollection, err := schema.NewColCollection(cols...)
 	if err != nil {
@@ -248,58 +252,93 @@ type CrossProductRowCallback func(r row.Row)
 // CrossProduct computes the cross-product of the table results given, calling the given callback once for each row in
 // the result set. The resultant rows will have the schema of this result set, and will have (N * M * ... X) rows, one
 // for every possible combination of entries in the table results given.
-func (rss *ResultSetSchema) CrossProduct(nbf *types.NomsBinFormat, tables []*TableResult, cb CrossProductRowCallback) {
+func (rss *ResultSetSchema) CrossProduct(nbf *types.NomsBinFormat, tables []*TableResult, cb CrossProductRowCallback) error {
 	// special case: no tables means no rows
 	if len(tables) == 0 {
-		return
+		return nil
 	}
 
-	emptyRow := RowWithSchema{row.New(nbf, rss.destSch, row.TaggedValues{}), rss.destSch}
-	rss.cph(emptyRow, tables, cb)
+	r, err := row.New(nbf, rss.destSch, row.TaggedValues{})
+
+	if err != nil {
+		return err
+	}
+
+	emptyRow := RowWithSchema{r, rss.destSch}
+	err = rss.cph(emptyRow, tables, cb)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Recursive helper function for CrossProduct
-func (rss *ResultSetSchema) cph(r RowWithSchema, tables []*TableResult, cb CrossProductRowCallback) {
+func (rss *ResultSetSchema) cph(r RowWithSchema, tables []*TableResult, cb CrossProductRowCallback) error {
 	if len(tables) == 0 {
 		cb(r.Row)
-		return
+		return nil
 	}
 
 	table := tables[0]
 	itr := table.Iterator()
 	for r2 := itr.NextRow(); r2 != nil; r2 = itr.NextRow() {
-		partialRow := rss.combineRows(r, RowWithSchema{r2, table.Schema})
-		rss.cph(partialRow, tables[1:], cb)
+		partialRow, err := rss.combineRows(r, RowWithSchema{r2, table.Schema})
+
+		if err != nil {
+			return err
+		}
+
+		err = rss.cph(partialRow, tables[1:], cb)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // CombineRows writes all values from r2 into r1 and returns it. r1 must have the same schema as the result set.
-func (rss *ResultSetSchema) combineRows(r1 RowWithSchema, r2 RowWithSchema) RowWithSchema {
-	if !schema.SchemasAreEqual(r1.Schema, rss.destSch) {
-		panic("Cannot call CombineRows on a row with a different schema than the result set schema")
+func (rss *ResultSetSchema) combineRows(r1 RowWithSchema, r2 RowWithSchema) (RowWithSchema, error) {
+	if eq, err := schema.SchemasAreEqual(r1.Schema, rss.destSch); err != nil {
+		return RowWithSchema{}, err
+	} else if !eq {
+		return RowWithSchema{}, errors.New("Cannot call CombineRows on a row with a different schema than the result set schema")
 	}
 
 	fieldMapping, ok := rss.mapping[r2.Schema]
 	if !ok {
-		panic(fmt.Sprintf("Unrecognized schema %v", r2.Schema))
+		return RowWithSchema{}, fmt.Errorf("unrecognized schema %v", r2.Schema)
 	}
 
-	r2.Row.IterCols(func(tag uint64, val types.Value) (stop bool) {
+	_, err := r2.Row.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
 		mappedTag, ok := fieldMapping.SrcToDest[tag]
 		if ok {
 			if err := r1.SetColVal(mappedTag, val); err != nil {
-				panic(err)
+				return false, err
 			}
 		}
-		return false
+		return false, nil
 	})
-	return r1
+
+	if err != nil {
+		return RowWithSchema{}, err
+	}
+
+	return r1, nil
 }
 
 // CombineRows writes all values from other rows into r1 and returns it. r1 must have the same schema as the result set.
-func (rss *ResultSetSchema) combineAllRows(r1 RowWithSchema, rows ...RowWithSchema) RowWithSchema {
+func (rss *ResultSetSchema) combineAllRows(r1 RowWithSchema, rows ...RowWithSchema) (RowWithSchema, error) {
 	for _, r2 := range rows {
-		r1 = rss.combineRows(r1, r2)
+		var err error
+		r1, err = rss.combineRows(r1, r2)
+
+		if err != nil {
+			return RowWithSchema{}, err
+		}
 	}
-	return r1
+	return r1, nil
 }

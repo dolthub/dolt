@@ -47,13 +47,31 @@ func (db *Database) Tables() map[string]sql.Table {
 	ctx := context.Background()
 
 	tables := make(map[string]sql.Table)
-	tableNames := db.root.GetTableNames(ctx)
+	tableNames, err := db.root.GetTableNames(ctx)
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
+
 	for _, name := range tableNames {
-		table, ok := db.root.GetTable(ctx, name)
+		table, ok, err := db.root.GetTable(ctx, name)
+
+		// TODO: fix panics
+		if err != nil {
+			panic(err)
+		}
+
 		if !ok {
 			panic("Error loading table " + name)
 		}
-		tables[name] = &DoltTable{name: name, table: table, sch: table.GetSchema(ctx)}
+
+		sch, err := table.GetSchema(ctx)
+		// TODO: fix panics
+		if err != nil {
+			panic(err)
+		}
+		tables[name] = &DoltTable{name: name, table: table, sch: sch}
 	}
 
 	return tables

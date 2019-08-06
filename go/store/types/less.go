@@ -27,14 +27,30 @@ import (
 
 type kindAndHash interface {
 	Kind() NomsKind
-	Hash(*NomsBinFormat) hash.Hash
+	Hash(*NomsBinFormat) (hash.Hash, error)
 }
 
-func valueLess(nbf *NomsBinFormat, v1, v2 kindAndHash) bool {
+func valueLess(nbf *NomsBinFormat, v1, v2 kindAndHash) (bool, error) {
 	switch v2.Kind() {
+	case UnknownKind:
+		return false, ErrUnknownType
+
 	case BoolKind, FloatKind, StringKind:
-		return false
+		return false, nil
+
 	default:
-		return v1.Hash(nbf).Less(v2.Hash(nbf))
+		h1, err := v1.Hash(nbf)
+
+		if err != nil {
+			return false, err
+		}
+
+		h2, err := v2.Hash(nbf)
+
+		if err != nil {
+			return false, err
+		}
+
+		return h1.Less(h2), nil
 	}
 }

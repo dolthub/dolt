@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nbs
+package atomicerr
 
 import (
 	"sync"
@@ -24,16 +24,25 @@ type AtomicError struct {
 	val  *atomic.Value
 }
 
-func NewAtomicError() *AtomicError {
+func New() *AtomicError {
 	return &AtomicError{&sync.Once{}, &atomic.Value{}}
 }
 
-func (ae *AtomicError) SetIfError(err error) {
+func (ae *AtomicError) SetIfError(err error) bool {
 	if err != nil {
 		ae.once.Do(func() {
 			ae.val.Store(err)
 		})
+
+		return true
 	}
+
+	return false
+}
+
+func (ae *AtomicError) SetIfErrAndCheck(err error) bool {
+	ae.SetIfError(err)
+	return ae.IsSet()
 }
 
 func (ae *AtomicError) IsSet() bool {

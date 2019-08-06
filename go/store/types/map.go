@@ -23,11 +23,14 @@ package types
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"sort"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
+
+var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")
 
 var EmptyMap Map
 
@@ -39,21 +42,51 @@ func newMap(seq orderedSequence) Map {
 	return Map{seq}
 }
 
-func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) {
+func mapHashValueBytes(item sequenceItem, rv *rollingValueHasher) error {
 	entry := item.(mapEntry)
-	hashValueBytes(entry.key, rv)
-	hashValueBytes(entry.value, rv)
-}
+	err := hashValueBytes(entry.key, rv)
 
-func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) Map {
-	entries := buildMapData(vrw.Format(), kv)
-	ch := newEmptyMapSequenceChunker(ctx, vrw)
-
-	for _, entry := range entries.entries {
-		ch.Append(ctx, entry)
+	if err != nil {
+		return err
 	}
 
-	return newMap(ch.Done(ctx).(orderedSequence))
+	err = hashValueBytes(entry.value, rv)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) (Map, error) {
+	entries, err := buildMapData(vrw.Format(), kv)
+
+	if err != nil {
+		return EmptyMap, err
+	}
+
+	ch, err := newEmptyMapSequenceChunker(ctx, vrw)
+
+	if err != nil {
+		return EmptyMap, err
+	}
+
+	for _, entry := range entries.entries {
+		_, err := ch.Append(ctx, entry)
+
+		if err != nil {
+			return EmptyMap, err
+		}
+	}
+
+	seq, err := ch.Done(ctx)
+
+	if err != nil {
+		return EmptyMap, err
+	}
+
+	return newMap(seq.(orderedSequence)), nil
 }
 
 // NewStreamingMap takes an input channel of values and returns a output
@@ -63,10 +96,12 @@ func NewMap(ctx context.Context, vrw ValueReadWriter, kv ...Value) Map {
 // input channel out of order will result in a panic. Once the input channel is
 // closed by the caller, a finished Map will be sent to the output channel. See
 // graph_builder.go for building collections with values that are not in order.
-func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value) <-chan Map {
+func NewStreamingMap(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, kvs <-chan Value) <-chan Map {
 	d.PanicIfTrue(vrw == nil)
 	return newStreamingMap(vrw, kvs, func(vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
-		go readMapInput(ctx, vrw, kvs, outChan)
+		go func() {
+			readMapInput(ctx, vrw, ae, kvs, outChan)
+		}()
 	})
 }
 
@@ -78,53 +113,83 @@ func newStreamingMap(vrw ValueReadWriter, kvs <-chan Value, readFunc streamingMa
 	return outChan
 }
 
-func readMapInput(ctx context.Context, vrw ValueReadWriter, kvs <-chan Value, outChan chan<- Map) {
+func readMapInput(ctx context.Context, vrw ValueReadWriter, ae *atomicerr.AtomicError, kvs <-chan Value, outChan chan<- Map) {
 	defer close(outChan)
-	ch := newEmptyMapSequenceChunker(ctx, vrw)
+
+	ch, err := newEmptyMapSequenceChunker(ctx, vrw)
+
+	if ae.SetIfError(err) {
+		return
+	}
+
 	var lastK Value
 	nextIsKey := true
 	var k Value
 	for v := range kvs {
 		if nextIsKey {
 			k = v
-			d.PanicIfFalse(lastK == nil || lastK.Less(vrw.Format(), k))
+
+			if lastK != nil {
+				isLess, err := lastK.Less(vrw.Format(), k)
+
+				if ae.SetIfError(err) {
+					return
+				}
+
+				if !isLess {
+					ae.SetIfError(ErrKeysNotOrdered)
+					return
+				}
+			}
 			lastK = k
 			nextIsKey = false
 			continue
 		}
-		ch.Append(ctx, mapEntry{key: k, value: v})
+		_, err := ch.Append(ctx, mapEntry{key: k, value: v})
+
+		if ae.SetIfError(err) {
+			return
+		}
+
 		nextIsKey = true
 	}
-	outChan <- newMap(ch.Done(ctx).(orderedSequence))
+
+	seq, err := ch.Done(ctx)
+
+	if ae.SetIfError(err) {
+		return
+	}
+
+	outChan <- newMap(seq.(orderedSequence))
 }
 
 // Diff computes the diff from |last| to |m| using the top-down algorithm,
 // which completes as fast as possible while taking longer to return early
 // results than left-to-right.
-func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) Diff(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffTopDown(ctx, last.orderedSequence, m.orderedSequence, changes, closeChan)
+	orderedSequenceDiffTopDown(ctx, last.orderedSequence, m.orderedSequence, ae, changes, closeChan)
 }
 
 // DiffHybrid computes the diff from |last| to |m| using a hybrid algorithm
 // which balances returning results early vs completing quickly, if possible.
-func (m Map) DiffHybrid(ctx context.Context, last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) DiffHybrid(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffBest(ctx, last.orderedSequence, m.orderedSequence, changes, closeChan)
+	orderedSequenceDiffBest(ctx, last.orderedSequence, m.orderedSequence, ae, changes, closeChan)
 }
 
 // DiffLeftRight computes the diff from |last| to |m| using a left-to-right
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
-func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueChanged, closeChan <-chan struct{}) {
+func (m Map) DiffLeftRight(ctx context.Context, last Map, ae *atomicerr.AtomicError, changes chan<- ValueChanged, closeChan <-chan struct{}) {
 	if m.Equals(last) {
 		return
 	}
-	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, changes, closeChan)
+	orderedSequenceDiffLeftRight(ctx, last.orderedSequence, m.orderedSequence, ae, changes, closeChan)
 }
 
 // Collection interface
@@ -134,130 +199,209 @@ func (m Map) asSequence() sequence {
 }
 
 // Value interface
-func (m Map) Value(ctx context.Context) Value {
-	return m
+func (m Map) Value(ctx context.Context) (Value, error) {
+	return m, nil
 }
 
-func (m Map) WalkValues(ctx context.Context, cb ValueCallback) {
-	iterAll(ctx, m, func(v Value, idx uint64) {
-		cb(v)
+func (m Map) WalkValues(ctx context.Context, cb ValueCallback) error {
+	err := iterAll(ctx, m, func(v Value, idx uint64) error {
+		return cb(v)
 	})
+
+	return err
 }
 
-func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value) {
-	cur := newCursorAt(ctx, m.orderedSequence, emptyKey, false, last)
-	if !cur.valid() {
-		return nil, nil
+func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value, error) {
+	cur, err := newCursorAt(ctx, m.orderedSequence, emptyKey, false, last)
+
+	if err != nil {
+		return nil, nil, err
 	}
-	entry := cur.current().(mapEntry)
-	return entry.key, entry.value
+
+	if !cur.valid() {
+		return nil, nil, nil
+	}
+
+	currItem, err := cur.current()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	entry := currItem.(mapEntry)
+	return entry.key, entry.value, nil
 }
 
 func (m Map) Format() *NomsBinFormat {
 	return m.format()
 }
 
-func (m Map) First(ctx context.Context) (Value, Value) {
+func (m Map) First(ctx context.Context) (Value, Value, error) {
 	return m.firstOrLast(ctx, false)
 }
 
-func (m Map) Last(ctx context.Context) (Value, Value) {
+func (m Map) Last(ctx context.Context) (Value, Value, error) {
 	return m.firstOrLast(ctx, true)
 }
 
-func (m Map) At(ctx context.Context, idx uint64) (key, value Value) {
+func (m Map) At(ctx context.Context, idx uint64) (key, value Value, err error) {
 	if idx >= m.Len() {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur := newCursorAtIndex(ctx, m.orderedSequence, idx)
-	entry := cur.current().(mapEntry)
-	return entry.key, entry.value
+	cur, err := newCursorAtIndex(ctx, m.orderedSequence, idx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	item, err := cur.current()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	entry := item.(mapEntry)
+	return entry.key, entry.value, nil
 }
 
-func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool) {
-	cur := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
-	if !cur.valid() {
-		return nil, false
+func (m Map) MaybeGet(ctx context.Context, key Value) (v Value, ok bool, err error) {
+	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+
+	if err != nil {
+		return nil, false, err
 	}
-	entry := cur.current().(mapEntry)
+
+	if !cur.valid() {
+		return nil, false, nil
+	}
+
+	item, err := cur.current()
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	entry := item.(mapEntry)
+
 	if !entry.key.Equals(key) {
-		return nil, false
+		return nil, false, nil
 	}
 
-	return entry.value, true
+	return entry.value, true, nil
 }
 
-func (m Map) Has(ctx context.Context, key Value) bool {
-	cur := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+func (m Map) Has(ctx context.Context, key Value) (bool, error) {
+	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+
+	if err != nil {
+		return false, err
+	}
+
 	if !cur.valid() {
-		return false
+		return false, nil
 	}
-	entry := cur.current().(mapEntry)
-	return entry.key.Equals(key)
+
+	item, err := cur.current()
+
+	if err != nil {
+		return false, err
+	}
+
+	entry := item.(mapEntry)
+	return entry.key.Equals(key), nil
 }
 
-func (m Map) Get(ctx context.Context, key Value) Value {
-	v, _ := m.MaybeGet(ctx, key)
-	return v
-}
+type mapIterCallback func(key, value Value) (stop bool, err error)
 
-type mapIterCallback func(key, value Value) (stop bool)
+func (m Map) Iter(ctx context.Context, cb mapIterCallback) error {
+	cur, err := newCursorAt(ctx, m.orderedSequence, emptyKey, false, false)
 
-func (m Map) Iter(ctx context.Context, cb mapIterCallback) {
-	cur := newCursorAt(ctx, m.orderedSequence, emptyKey, false, false)
-	cur.iter(ctx, func(v interface{}) bool {
+	if err != nil {
+		return err
+	}
+
+	return cur.iter(ctx, func(v interface{}) (bool, error) {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
 	})
 }
 
 // Any returns true if cb() return true for any of the items in the map.
-func (m Map) Any(ctx context.Context, cb func(k, v Value) bool) (yep bool) {
-	m.Iter(ctx, func(k, v Value) bool {
+func (m Map) Any(ctx context.Context, cb func(k, v Value) bool) (yep bool, err error) {
+	err = m.Iter(ctx, func(k, v Value) (bool, error) {
 		if cb(k, v) {
 			yep = true
-			return true
+			return true, nil
 		}
-		return false
+		return false, nil
 	})
-	return
+
+	return yep, err
 }
 
-func (m Map) Iterator(ctx context.Context) MapIterator {
+func (m Map) Iterator(ctx context.Context) (MapIterator, error) {
 	return m.IteratorAt(ctx, 0)
 }
 
-func (m Map) IteratorAt(ctx context.Context, pos uint64) MapIterator {
-	return &mapIterator{
-		cursor: newCursorAtIndex(ctx, m.orderedSequence, pos),
+func (m Map) IteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
+	cur, err := newCursorAtIndex(ctx, m.orderedSequence, pos)
+
+	if err != nil {
+		return nil, err
 	}
+
+	return &mapIterator{
+		cursor: cur,
+	}, nil
 }
 
-func (m Map) IteratorFrom(ctx context.Context, key Value) MapIterator {
-	return &mapIterator{
-		cursor: newCursorAtValue(ctx, m.orderedSequence, key, false, false),
+func (m Map) IteratorFrom(ctx context.Context, key Value) (MapIterator, error) {
+	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+
+	if err != nil {
+		return nil, err
 	}
+
+	return &mapIterator{cursor: cur}, nil
 }
 
-type mapIterAllCallback func(key, value Value)
+type mapIterAllCallback func(key, value Value) error
 
-func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) {
+func (m Map) IterAll(ctx context.Context, cb mapIterAllCallback) error {
 	var k Value
-	iterAll(ctx, m, func(v Value, idx uint64) {
+	err := iterAll(ctx, m, func(v Value, idx uint64) error {
 		if k != nil {
-			cb(k, v)
+			err := cb(k, v)
+
+			if err != nil {
+				return err
+			}
+
 			k = nil
 		} else {
 			k = v
 		}
+
+		return nil
 	})
+
+	if err != nil {
+		return err
+	}
+
 	d.PanicIfFalse(k == nil)
+	return nil
 }
 
-func (m Map) IterFrom(ctx context.Context, start Value, cb mapIterCallback) {
-	cur := newCursorAtValue(ctx, m.orderedSequence, start, false, false)
-	cur.iter(ctx, func(v interface{}) bool {
+func (m Map) IterFrom(ctx context.Context, start Value, cb mapIterCallback) error {
+	cur, err := newCursorAtValue(ctx, m.orderedSequence, start, false, false)
+
+	if err != nil {
+		return err
+	}
+
+	return cur.iter(ctx, func(v interface{}) (bool, error) {
 		entry := v.(mapEntry)
 		return cb(entry.key, entry.value)
 	})
@@ -267,9 +411,9 @@ func (m Map) Edit() *MapEditor {
 	return NewMapEditor(m)
 }
 
-func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
+func buildMapData(nbf *NomsBinFormat, values []Value) (mapEntrySlice, error) {
 	if len(values) == 0 {
-		return mapEntrySlice{}
+		return mapEntrySlice{}, nil
 	}
 
 	if len(values)%2 != 0 {
@@ -292,7 +436,12 @@ func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
 		nbf,
 	}
 
-	sort.Stable(kvs)
+	err := SortWithErroringLess(kvs)
+
+	if err != nil {
+		return mapEntrySlice{}, err
+	}
+
 	last := kvs.entries[0]
 	for i := 1; i < kvs.Len(); i++ {
 		kv := kvs.entries[i]
@@ -306,31 +455,52 @@ func buildMapData(nbf *NomsBinFormat, values []Value) mapEntrySlice {
 	return mapEntrySlice{
 		append(uniqueSorted.entries, last),
 		uniqueSorted.nbf,
-	}
+	}, nil
 }
 
 func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
-	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64) {
+	return func(level uint64, items []sequenceItem) (Collection, orderedKey, uint64, error) {
 		d.PanicIfFalse(level == 0)
 		mapData := make([]mapEntry, len(items))
 
 		var lastKey Value
 		for i, v := range items {
 			entry := v.(mapEntry)
-			d.PanicIfFalse(lastKey == nil || lastKey.Less(vrw.Format(), entry.key))
+
+			if lastKey != nil {
+				isLess, err := lastKey.Less(vrw.Format(), entry.key)
+
+				if err != nil {
+					return nil, orderedKey{}, 0, err
+				}
+
+				d.PanicIfFalse(isLess)
+			}
+
 			lastKey = entry.key
 			mapData[i] = entry
 		}
 
-		m := newMap(newMapLeafSequence(vrw, mapData...))
+		seq, err := newMapLeafSequence(vrw, mapData...)
+
+		if err != nil {
+			return nil, orderedKey{}, 0, err
+		}
+
+		m := newMap(seq)
 		var key orderedKey
 		if len(mapData) > 0 {
-			key = newOrderedKey(mapData[len(mapData)-1].key, vrw.Format())
+			key, err = newOrderedKey(mapData[len(mapData)-1].key, vrw.Format())
+
+			if err != nil {
+				return nil, orderedKey{}, 0, err
+			}
 		}
-		return m, key, uint64(len(items))
+
+		return m, key, uint64(len(items)), nil
 	}
 }
 
-func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) *sequenceChunker {
+func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
 	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
 }

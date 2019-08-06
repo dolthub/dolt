@@ -31,7 +31,7 @@ import (
 // sorted order.
 type SetIterator interface {
 	// Next returns subsequent values from a set. It returns nil, when no objects remain.
-	Next(ctx context.Context) Value
+	Next(ctx context.Context) (Value, error)
 
 	// SkipTo(v) advances to and returns the next value in the iterator >= v.
 	// Note: if the iterator has already returned the value being skipped to, it will return the next
@@ -47,7 +47,7 @@ type SetIterator interface {
 	//   i.skipTo(20) -- returns nil
 	// If there are no values left in the iterator that are >= v,
 	// the iterator will skip to the end of the sequence and return nil.
-	SkipTo(ctx context.Context, v Value) Value
+	SkipTo(ctx context.Context, v Value) (Value, error)
 }
 
 type setIterator struct {
@@ -56,34 +56,62 @@ type setIterator struct {
 	currentValue Value
 }
 
-func (si *setIterator) Next(ctx context.Context) Value {
+func (si *setIterator) Next(ctx context.Context) (Value, error) {
 	if si.cursor.valid() {
-		si.currentValue = si.cursor.current().(Value)
-		si.cursor.advance(ctx)
+		item, err := si.cursor.current()
+
+		if err != nil {
+			return nil, err
+		}
+
+		si.currentValue = item.(Value)
+		_, err = si.cursor.advance(ctx)
+
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		si.currentValue = nil
 	}
-	return si.currentValue
+	return si.currentValue, nil
 }
 
-func (si *setIterator) SkipTo(ctx context.Context, v Value) Value {
+func (si *setIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
 	if si.cursor.valid() {
-		if compareValue(si.s.format(), v, si.currentValue) <= 0 {
+		if cmp, err := compareValue(si.s.format(), v, si.currentValue); err != nil {
+			return nil, err
+		} else if cmp <= 0 {
 			return si.Next(ctx)
 		}
 
-		si.cursor = newCursorAtValue(ctx, si.s.orderedSequence, v, true, false)
+		var err error
+		si.cursor, err = newCursorAtValue(ctx, si.s.orderedSequence, v, true, false)
+
+		if err != nil {
+			return nil, err
+		}
+
 		if si.cursor.valid() {
-			si.currentValue = si.cursor.current().(Value)
-			si.cursor.advance(ctx)
+			item, err := si.cursor.current()
+
+			if err != nil {
+				return nil, err
+			}
+
+			si.currentValue = item.(Value)
+			_, err = si.cursor.advance(ctx)
+
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			si.currentValue = nil
 		}
 	} else {
 		si.currentValue = nil
 	}
-	return si.currentValue
+	return si.currentValue, nil
 }
 
 // iterState contains iterator and it's current value
@@ -92,22 +120,35 @@ type iterState struct {
 	v Value
 }
 
-func (st *iterState) Next(ctx context.Context) Value {
+func (st *iterState) Next(ctx context.Context) (Value, error) {
 	if st.v == nil {
-		return nil
+		return nil, nil
 	}
+
 	v := st.v
-	st.v = st.i.Next(ctx)
-	return v
+	var err error
+	st.v, err = st.i.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil
 }
 
-func (st *iterState) SkipTo(ctx context.Context, v Value) Value {
+func (st *iterState) SkipTo(ctx context.Context, v Value) (Value, error) {
 	if st.v == nil || v == nil {
 		st.v = nil
-		return nil
+		return nil, nil
 	}
-	st.v = st.i.SkipTo(ctx, v)
-	return st.v
+	var err error
+	st.v, err = st.i.SkipTo(ctx, v)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return st.v, nil
 }
 
 // UnionIterator combines the results from two other iterators. The values from Next() are returned in
@@ -119,20 +160,43 @@ type UnionIterator struct {
 }
 
 // NewUnionIterator creates a union iterator from two other SetIterators.
-func NewUnionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) SetIterator {
+func NewUnionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) (SetIterator, error) {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
-	a := iterState{i: iterA, v: iterA.Next(ctx)}
-	b := iterState{i: iterB, v: iterB.Next(ctx)}
-	return &UnionIterator{aState: a, bState: b, nbf: nbf}
+	aVal, err := iterA.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	bVal, err := iterB.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	a := iterState{i: iterA, v: aVal}
+	b := iterState{i: iterB, v: bVal}
+	return &UnionIterator{aState: a, bState: b, nbf: nbf}, nil
 }
 
-func (u *UnionIterator) Next(ctx context.Context) Value {
-	switch compareValue(u.nbf, u.aState.v, u.bState.v) {
+func (u *UnionIterator) Next(ctx context.Context) (Value, error) {
+	cmp, err := compareValue(u.nbf, u.aState.v, u.bState.v)
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch cmp {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
-		u.aState.Next(ctx)
+		_, err := u.aState.Next(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return u.bState.Next(ctx)
 	case 1:
 		return u.bState.Next(ctx)
@@ -140,25 +204,48 @@ func (u *UnionIterator) Next(ctx context.Context) Value {
 	panic("Unreachable")
 }
 
-func (u *UnionIterator) SkipTo(ctx context.Context, v Value) Value {
+func (u *UnionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
 	didAdvance := false
-	if compareValue(u.nbf, u.aState.v, v) < 0 {
+	if cmp, err := compareValue(u.nbf, u.aState.v, v); err != nil {
+		return nil, err
+	} else if cmp < 0 {
 		didAdvance = true
-		u.aState.SkipTo(ctx, v)
+		_, err := u.aState.SkipTo(ctx, v)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	if compareValue(u.nbf, u.bState.v, v) < 0 {
+	if cmp, err := compareValue(u.nbf, u.bState.v, v); err != nil {
+		return nil, err
+	} else if cmp < 0 {
 		didAdvance = true
-		u.bState.SkipTo(ctx, v)
+		_, err := u.bState.SkipTo(ctx, v)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 	if !didAdvance {
 		return u.Next(ctx)
 	}
-	switch compareValue(u.nbf, u.aState.v, u.bState.v) {
+	cmp, err := compareValue(u.nbf, u.aState.v, u.bState.v)
+
+	if err != nil {
+		return nil, err
+	}
+
+	switch cmp {
 	case -1:
 		return u.aState.Next(ctx)
 	case 0:
-		u.aState.Next(ctx)
+		_, err := u.aState.Next(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return u.bState.Next(ctx)
 	case 1:
 		return u.bState.Next(ctx)
@@ -175,53 +262,120 @@ type IntersectionIterator struct {
 }
 
 // NewIntersectionIterator creates a intersect iterator from two other SetIterators.
-func NewIntersectionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) SetIterator {
+func NewIntersectionIterator(ctx context.Context, nbf *NomsBinFormat, iterA, iterB SetIterator) (SetIterator, error) {
 	d.PanicIfTrue(iterA == nil)
 	d.PanicIfTrue(iterB == nil)
-	a := iterState{i: iterA, v: iterA.Next(ctx)}
-	b := iterState{i: iterB, v: iterB.Next(ctx)}
-	return &IntersectionIterator{aState: a, bState: b, nbf: nbf}
+	aVal, err := iterA.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	bVal, err := iterB.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	a := iterState{i: iterA, v: aVal}
+	b := iterState{i: iterB, v: bVal}
+	return &IntersectionIterator{aState: a, bState: b, nbf: nbf}, nil
 }
 
-func (i *IntersectionIterator) Next(ctx context.Context) Value {
+func (i *IntersectionIterator) Next(ctx context.Context) (Value, error) {
 	for cont := true; cont; {
-		switch compareValue(i.nbf, i.aState.v, i.bState.v) {
+		cmp, err := compareValue(i.nbf, i.aState.v, i.bState.v)
+
+		if err != nil {
+			return nil, err
+		}
+
+		switch cmp {
 		case -1:
-			i.aState.SkipTo(ctx, i.bState.v)
+			_, err := i.aState.SkipTo(ctx, i.bState.v)
+
+			if err != nil {
+				return nil, err
+			}
 		case 0:
 			cont = false
 		case 1:
-			i.bState.SkipTo(ctx, i.aState.v)
+			_, err := i.bState.SkipTo(ctx, i.aState.v)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	// we only get here if aState and bState are equal
 	res := i.aState.v
-	i.aState.Next(ctx)
-	i.bState.Next(ctx)
-	return res
+	_, err := i.aState.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = i.bState.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
-func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) Value {
+func (i *IntersectionIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
-	if compareValue(i.nbf, v, i.aState.v) >= 0 {
-		i.aState.SkipTo(ctx, v)
+	if cmp, err := compareValue(i.nbf, v, i.aState.v); err != nil {
+		return nil, err
+	} else if cmp >= 0 {
+		_, err := i.aState.SkipTo(ctx, v)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	if compareValue(i.nbf, v, i.bState.v) >= 0 {
-		i.bState.SkipTo(ctx, v)
+
+	if cmp, err := compareValue(i.nbf, v, i.bState.v); err != nil {
+		return nil, err
+	} else if cmp >= 0 {
+		_, err := i.bState.SkipTo(ctx, v)
+
+		if err != nil {
+			return nil, err
+		}
 	}
+
 	return i.Next(ctx)
 }
 
 // considers nil max value, return -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
-func compareValue(nbf *NomsBinFormat, v1, v2 Value) int {
+func compareValue(nbf *NomsBinFormat, v1, v2 Value) (int, error) {
 	if v1 == nil && v2 == nil {
-		return 0
+		return 0, nil
 	}
-	if v2 == nil || (v1 != nil && v1.Less(nbf, v2)) {
-		return -1
+
+	if v2 == nil {
+		return -1, nil
 	}
-	if v1 == nil || (v2 != nil && v2.Less(nbf, v1)) {
-		return 1
+
+	if v1 != nil {
+		if isLess, err := v1.Less(nbf, v2); err != nil {
+			return 0, err
+		} else if isLess {
+			return -1, nil
+		}
 	}
-	return 0
+
+	if v1 == nil {
+		return 1, nil
+	}
+
+	if isLess, err := v2.Less(nbf, v1); err != nil {
+		return 0, err
+	} else if isLess {
+		return 1, nil
+	}
+
+	return 0, nil
 }

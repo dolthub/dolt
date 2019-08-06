@@ -68,7 +68,8 @@ func nomsMapNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
-	applyMapEdits(ctx, db, sp, types.NewMap(ctx, db), nil, args)
+	m, err := types.NewMap(ctx, db)
+	applyMapEdits(ctx, db, sp, m, nil, args)
 	return 0
 }
 

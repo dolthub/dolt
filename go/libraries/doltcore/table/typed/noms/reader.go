@@ -20,7 +20,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -32,10 +31,14 @@ type NomsMapReader struct {
 }
 
 // NewNomsMapReader creates a NomsMapReader for a given noms types.Map
-func NewNomsMapReader(ctx context.Context, m types.Map, sch schema.Schema) *NomsMapReader {
-	itr := m.Iterator(ctx)
+func NewNomsMapReader(ctx context.Context, m types.Map, sch schema.Schema) (*NomsMapReader, error) {
+	itr, err := m.Iterator(ctx)
 
-	return &NomsMapReader{sch, itr}
+	if err != nil {
+		return nil, err
+	}
+
+	return &NomsMapReader{sch, itr}, nil
 }
 
 // GetSchema gets the schema of the rows that this reader will return
@@ -46,12 +49,7 @@ func (nmr *NomsMapReader) GetSchema() schema.Schema {
 // ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (nmr *NomsMapReader) ReadRow(ctx context.Context) (row.Row, error) {
-	var key types.Value
-	var val types.Value
-	err := pantoerr.PanicToError("Error reading next value", func() error {
-		key, val = nmr.itr.Next(ctx)
-		return nil
-	})
+	key, val, err := nmr.itr.Next(ctx)
 
 	if err != nil {
 		return nil, err
@@ -59,7 +57,7 @@ func (nmr *NomsMapReader) ReadRow(ctx context.Context) (row.Row, error) {
 		return nil, io.EOF
 	}
 
-	return row.FromNoms(nmr.sch, key.(types.Tuple), val.(types.Tuple)), nil
+	return row.FromNoms(nmr.sch, key.(types.Tuple), val.(types.Tuple))
 }
 
 // Close should release resources being held

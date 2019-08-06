@@ -25,6 +25,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/liquidata-inc/dolt/go/store/d"
+
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -36,7 +38,9 @@ type CommitIterator struct {
 
 // NewCommitIterator initializes a new CommitIterator with the first commit to be printed.
 func NewCommitIterator(db datas.Database, commit types.Struct) *CommitIterator {
-	cr := types.NewRef(commit, db.Format())
+	cr, err := types.NewRef(commit, db.Format())
+	d.PanicIfError(err)
+
 	return &CommitIterator{db: db, branches: branchList{branch{cr: cr, commit: commit}}}
 }
 
@@ -66,9 +70,16 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	// If this commit has parents, then a branch is splitting. Create a branch for each of the parents
 	// and splice that into the iterators list of branches.
 	branches := branchList{}
-	parents := commitRefsFromSet(ctx, br.commit.Get(datas.ParentsField).(types.Set))
+	pFld, ok, err := br.commit.MaybeGet(datas.ParentsField)
+	d.PanicIfError(err)
+	d.PanicIfFalse(ok)
+
+	parents := commitRefsFromSet(ctx, pFld.(types.Set))
 	for _, p := range parents {
-		b := branch{cr: p, commit: iter.db.ReadValue(ctx, p.TargetHash()).(types.Struct)}
+		v, err := iter.db.ReadValue(ctx, p.TargetHash())
+		d.PanicIfError(err)
+
+		b := branch{cr: p, commit: v.(types.Struct)}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)
@@ -175,8 +186,10 @@ func (bl branchList) RemoveBranches(indexes []int) branchList {
 
 func commitRefsFromSet(ctx context.Context, set types.Set) []types.Ref {
 	res := []types.Ref{}
-	set.IterAll(ctx, func(v types.Value) {
+	_ = set.IterAll(ctx, func(v types.Value) error {
 		res = append(res, v.(types.Ref))
+		return nil
 	})
+
 	return res
 }

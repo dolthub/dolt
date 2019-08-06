@@ -30,6 +30,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/dolt/go/store/config"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/types"
 	"github.com/liquidata-inc/dolt/go/store/util/verbose"
 )
@@ -59,7 +60,9 @@ func runDs(ctx context.Context, args []string) int {
 		util.CheckError(err)
 		defer db.Close()
 
-		oldCommitRef, errBool := set.MaybeHeadRef()
+		oldCommitRef, errBool, err := set.MaybeHeadRef()
+		d.PanicIfError(err)
+
 		if !errBool {
 			util.CheckError(fmt.Errorf("Dataset %v not found", set.ID()))
 		}
@@ -84,8 +87,9 @@ func runDs(ctx context.Context, args []string) int {
 			return 1
 		}
 
-		dss.IterAll(ctx, func(k, v types.Value) {
+		_ = dss.IterAll(ctx, func(k, v types.Value) error {
 			fmt.Println(k)
+			return nil
 		})
 	}
 	return 0

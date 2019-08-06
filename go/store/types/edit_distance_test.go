@@ -28,8 +28,9 @@ import (
 )
 
 func assertDiff(assert *assert.Assertions, last []uint64, current []uint64, expect []Splice) {
-	actual := calcSplices(uint64(len(last)), uint64(len(current)), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
-		func(i uint64, j uint64) bool { return last[i] == current[j] })
+	actual, err := calcSplices(uint64(len(last)), uint64(len(current)), DEFAULT_MAX_SPLICE_MATRIX_SIZE,
+		func(i uint64, j uint64) (bool, error) { return last[i] == current[j], nil })
+	assert.NoError(err)
 	assert.Equal(expect, actual, "splices are different: \nexpect: %v\nactual: %v\n", expect, actual)
 }
 

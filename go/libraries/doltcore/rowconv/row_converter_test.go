@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -39,7 +40,9 @@ var srcCols, _ = schema.NewColCollection(
 var srcSch = schema.SchemaFromCols(srcCols)
 
 func TestRowConverter(t *testing.T) {
-	mapping := TypedToUntypedMapping(srcSch)
+	mapping, err := TypedToUntypedMapping(srcSch)
+
+	assert.NoError(t, err)
 
 	rConv, err := NewRowConverter(mapping)
 
@@ -48,7 +51,7 @@ func TestRowConverter(t *testing.T) {
 	}
 
 	id, _ := uuid.NewRandom()
-	inRow := row.New(types.Format_7_18, srcSch, row.TaggedValues{
+	inRow, err := row.New(types.Format_7_18, srcSch, row.TaggedValues{
 		0: types.UUID(id),
 		1: types.Float(1.25),
 		2: types.Uint(12345678),
@@ -58,11 +61,12 @@ func TestRowConverter(t *testing.T) {
 		6: types.NullValue,
 	})
 
+	assert.NoError(t, err)
 	results, _ := GetRowConvTransformFunc(rConv)(inRow, pipeline.ImmutableProperties{})
 	outData := results[0].RowData
 
 	destSch := mapping.DestSch
-	expected := row.New(types.Format_7_18, destSch, row.TaggedValues{
+	expected, err := row.New(types.Format_7_18, destSch, row.TaggedValues{
 		0: types.String(id.String()),
 		1: types.String("1.25"),
 		2: types.String("12345678"),
@@ -71,6 +75,8 @@ func TestRowConverter(t *testing.T) {
 		5: types.String("string string string"),
 		6: types.NullValue,
 	})
+
+	assert.NoError(t, err)
 
 	if !row.AreEqual(outData, expected, destSch) {
 		t.Error("\n", row.Fmt(context.Background(), expected, destSch), "!=\n", row.Fmt(context.Background(), outData, destSch))

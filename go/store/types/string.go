@@ -32,33 +32,35 @@ import (
 type String string
 
 // Value interface
-func (s String) Value(ctx context.Context) Value {
-	return s
+func (s String) Value(ctx context.Context) (Value, error) {
+	return s, nil
 }
 
 func (s String) Equals(other Value) bool {
 	return s == other
 }
 
-func (s String) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (s String) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if s2, ok := other.(String); ok {
-		return s < s2
+		return s < s2, nil
 	}
-	return StringKind < other.Kind()
+	return StringKind < other.Kind(), nil
 }
 
-func (s String) Hash(nbf *NomsBinFormat) hash.Hash {
+func (s String) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(s, nbf)
 }
 
-func (s String) WalkValues(ctx context.Context, cb ValueCallback) {
+func (s String) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return nil
 }
 
-func (s String) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+func (s String) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	return nil
 }
 
-func (s String) typeOf() *Type {
-	return StringType
+func (s String) typeOf() (*Type, error) {
+	return StringType, nil
 }
 
 func (s String) Kind() NomsKind {
@@ -69,16 +71,28 @@ func (s String) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-func (s String) writeTo(w nomsWriter, nbf *NomsBinFormat) {
-	StringKind.writeTo(w, nbf)
+func (s String) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	err := StringKind.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
 	w.writeString(string(s))
+
+	return nil
 }
 
-func (s String) valueBytes(nbf *NomsBinFormat) []byte {
+func (s String) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
 	// We know the size of the buffer here so allocate it once.
 	// StringKind, Length (UVarint), UTF-8 encoded string
 	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))
 	w := binaryNomsWriter{buff, 0}
-	s.writeTo(&w, nbf)
-	return buff[:w.offset]
+	err := s.writeTo(&w, nbf)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buff[:w.offset], nil
 }

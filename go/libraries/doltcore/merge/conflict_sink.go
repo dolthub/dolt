@@ -62,17 +62,21 @@ const (
 	sourceColTag = schema.ReservedTagMin + 1
 )
 
-func NewConflictSink(wr io.WriteCloser, sch schema.Schema, colSep string) *ConflictSink {
+func NewConflictSink(wr io.WriteCloser, sch schema.Schema, colSep string) (*ConflictSink, error) {
 	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(opColTag, "op", "source")
 	outSch, err := untyped.UntypedSchemaUnion(additionalCols, sch)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	ttw := tabular.NewTextTableWriter(wr, outSch)
+	ttw, err := tabular.NewTextTableWriter(wr, outSch)
 
-	return &ConflictSink{outSch, ttw}
+	if err != nil {
+		return nil, err
+	}
+
+	return &ConflictSink{outSch, ttw}, nil
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -113,14 +117,23 @@ func (cs *ConflictSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 		}
 	}
 
-	cs.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := cs.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if val, ok := r.GetColVal(tag); ok {
 			taggedVals[tag] = types.String(colorFunc(string(val.(types.String))))
 		}
-		return false
+		return false, nil
 	})
 
-	r = row.New(r.Format(), cs.sch, taggedVals)
+	if err != nil {
+		return err
+	}
+
+	r, err = row.New(r.Format(), cs.sch, taggedVals)
+
+	if err != nil {
+		return err
+	}
+
 	return cs.ttw.WriteRow(context.TODO(), r)
 }
 

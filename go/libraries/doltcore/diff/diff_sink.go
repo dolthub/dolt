@@ -45,15 +45,20 @@ type ColorDiffSink struct {
 // NewColorDiffSink returns a ColorDiffSink that uses  the writer and schema given to print its output. numHeaderRows
 // will change how many rows of output are considered part of the table header. Use 1 for diffs where the schemas are
 // the same between the two table revisions, and 2 for when they differ.
-func NewColorDiffSink(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) *ColorDiffSink {
+func NewColorDiffSink(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) (*ColorDiffSink, error) {
 	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(diffColTag, diffColName)
 	outSch, err := untyped.UntypedSchemaUnion(additionalCols, sch)
 	if err != nil {
 		panic(err)
 	}
 
-	ttw := tabular.NewTextTableWriterWithNumHeaderRows(wr, outSch, numHeaderRows)
-	return &ColorDiffSink{outSch, ttw}
+	ttw, err := tabular.NewTextTableWriterWithNumHeaderRows(wr, outSch, numHeaderRows)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &ColorDiffSink{outSch, ttw}, nil
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -80,12 +85,16 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 		}
 	}
 
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if val, ok := r.GetColVal(tag); ok {
 			taggedVals[tag] = val.(types.String)
 		}
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return err
+	}
 
 	taggedVals[diffColTag] = types.String("   ")
 	colorColumns := true
@@ -109,7 +118,7 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 	}
 
 	// Color the columns as appropriate. Some rows will be all colored.
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		var colorFunc ColorFunc
 		if colorColumns {
 			if dt, ok := colDiffs[col.Name]; ok {
@@ -131,10 +140,19 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 			taggedVals[tag] = types.String(colorFunc(string(taggedVals[tag].(types.String))))
 		}
 
-		return false
+		return false, nil
 	})
 
-	r = row.New(r.Format(), cds.sch, taggedVals)
+	if err != nil {
+		return err
+	}
+
+	r, err = row.New(r.Format(), cds.sch, taggedVals)
+
+	if err != nil {
+		return err
+	}
+
 	return cds.ttw.WriteRow(context.TODO(), r)
 }
 

@@ -77,7 +77,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 	if asTr.rowBuffer == nil {
 		asTr.processRow(r, outChan, badRowChan)
 	} else if asTr.numSamples <= 0 || len(asTr.rowBuffer) < asTr.numSamples {
-		r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool) {
+		_, err := r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 			if !types.IsNull(val) {
 				strVal := val.(types.String)
 				printWidth := StringWidth(string(strVal))
@@ -86,12 +86,18 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 				if printWidth > asTr.printWidths[tag] {
 					asTr.printWidths[tag] = printWidth
 				}
+
 				if numRunes > asTr.maxRunes[tag] {
 					asTr.maxRunes[tag] = numRunes
 				}
 			}
-			return false
+			return false, nil
 		})
+
+		if err != nil {
+			badRowChan <- &pipeline.TransformRowFailure{Row: r.Row, TransformName: "fwt", Details: err.Error()}
+			return
+		}
 
 		asTr.rowBuffer = append(asTr.rowBuffer, r)
 	} else {
@@ -101,7 +107,12 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 
 func (asTr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
 	if asTr.fwtTr == nil {
-		fwtSch := NewFWTSchemaWithWidths(asTr.sch, asTr.printWidths, asTr.maxRunes)
+		fwtSch, err := NewFWTSchemaWithWidths(asTr.sch, asTr.printWidths, asTr.maxRunes)
+
+		if err != nil {
+			panic(err)
+		}
+
 		asTr.fwtTr = NewFWTTransformer(fwtSch, asTr.tooLngBhv)
 	}
 
@@ -118,6 +129,7 @@ func (asTr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps
 	}
 
 	asTr.rowBuffer = nil
+	return
 }
 
 func (asTr *AutoSizingFWTTransformer) processRow(rowWithProps pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure) {

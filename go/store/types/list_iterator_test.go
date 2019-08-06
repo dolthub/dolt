@@ -33,15 +33,21 @@ func TestListIterator(t *testing.T) {
 	vrw := newTestValueStore()
 
 	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
-	l := NewList(context.Background(), vrw, numbers...)
-	i := l.Iterator(context.Background())
-	vs := iterToSlice(i)
+	l, err := NewList(context.Background(), vrw, numbers...)
+	assert.NoError(err)
+	i, err := l.Iterator(context.Background())
+	assert.NoError(err)
+	vs, err := iterToSlice(i)
+	assert.NoError(err)
 	assert.True(vs.Equals(numbers), "Expected: %v != actual: %v", numbers, vs)
 
-	i = l.IteratorAt(context.Background(), 3)
-	vs = iterToSlice(i)
+	i, err = l.IteratorAt(context.Background(), 3)
+	assert.NoError(err)
+	vs, err = iterToSlice(i)
+	assert.NoError(err)
 	assert.True(vs.Equals(numbers[3:]), "Expected: %v != actual: %v", numbers, vs)
 
-	i = l.IteratorAt(context.Background(), l.Len())
+	i, err = l.IteratorAt(context.Background(), l.Len())
+	assert.NoError(err)
 	assert.Nil(i.Next(context.Background()))
 }

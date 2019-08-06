@@ -61,8 +61,9 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
-	r1 := db.WriteValue(context.Background(), value)
-	_, err := db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
+	r1, err := db.WriteValue(context.Background(), value)
+	s.NoError(err)
+	_, err = db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 	s.NoError(err)
 
 	return r1
@@ -83,7 +84,8 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	sp := s.spec(str)
 	defer sp.Close()
-	list := types.NewList(context.Background(), sp.GetDatabase(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
+	list, err := types.NewList(context.Background(), sp.GetDatabase(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
+	s.NoError(err)
 	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
 	test.EqualsIgnoreHashes(s.T(), res3, res)
@@ -117,12 +119,14 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	// Put a value into the db, get its raw serialization, then deserialize it and ensure it comes
 	// out to same thing.
 	test := func(in types.Value) {
-		r1 := db.WriteValue(context.Background(), in)
+		r1, err := db.WriteValue(context.Background(), in)
+		s.NoError(err)
 		db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))
-		out := types.DecodeValue(ch, db)
+		out, err := types.DecodeValue(ch, db)
+		s.NoError(err)
 		s.True(out.Equals(in))
 	}
 
@@ -130,17 +134,20 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	test(types.String("hello"))
 
 	// Ref (one child chunk)
-	test(db.WriteValue(context.Background(), types.Float(42)))
+	test(mustValue(db.WriteValue(context.Background(), types.Float(42))))
 
 	// Prolly tree with multiple child chunks
 	items := make([]types.Value, 10000)
 	for i := 0; i < len(items); i++ {
 		items[i] = types.Float(i)
 	}
-	l := types.NewList(context.Background(), db, items...)
+	l, err := types.NewList(context.Background(), db, items...)
+	s.NoError(err)
+
 	numChildChunks := 0
-	l.WalkRefs(types.Format_7_18, func(r types.Ref) {
+	_ = l.WalkRefs(types.Format_7_18, func(r types.Ref) error {
 		numChildChunks++
+		return nil
 	})
 	s.True(numChildChunks > 0)
 	test(l)

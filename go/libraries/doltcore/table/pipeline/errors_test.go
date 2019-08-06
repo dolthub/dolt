@@ -17,6 +17,8 @@ package pipeline
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -24,9 +26,10 @@ import (
 
 func TestTransformRowFailure(t *testing.T) {
 	_, sch := untyped.NewUntypedSchema("a", "b", "c")
-	r := untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"1", "2", "3"})
+	r, err := untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"1", "2", "3"})
 
-	var err error
+	assert.NoError(t, err)
+
 	err = &TransformRowFailure{r, "transform_name", "details"}
 
 	if !IsTransformFailure(err) {

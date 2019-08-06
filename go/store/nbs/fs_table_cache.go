@@ -30,6 +30,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+
 	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
 )
 
@@ -105,7 +107,7 @@ func (ftc *fsTableCache) init(concurrency int) error {
 		})
 	}()
 
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 	wg := sync.WaitGroup{}
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {

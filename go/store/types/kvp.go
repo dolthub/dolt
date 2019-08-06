@@ -37,7 +37,7 @@ func (kvps KVPSort) Len() int {
 }
 
 // Less returns a bool representing whether the key at index i is less than the key at index j
-func (kvps KVPSort) Less(i, j int) bool {
+func (kvps KVPSort) Less(i, j int) (bool, error) {
 	return kvps.Values[i].Key.Less(kvps.NBF, kvps.Values[j].Key)
 }
 

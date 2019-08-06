@@ -21,14 +21,18 @@
 
 package types
 
-import "sort"
-
 type setLeafSequence struct {
 	leafSequence
 }
 
-func newSetLeafSequence(vrw ValueReadWriter, vs ...Value) orderedSequence {
-	return setLeafSequence{newLeafSequenceFromValues(SetKind, vrw, vs...)}
+func newSetLeafSequence(vrw ValueReadWriter, vs ...Value) (orderedSequence, error) {
+	seq, err := newLeafSequenceFromValues(SetKind, vrw, vs...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return setLeafSequence{seq}, nil
 }
 
 func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
@@ -37,12 +41,36 @@ func (sl setLeafSequence) getCompareFn(other sequence) compareFn {
 
 // orderedSequence interface
 
-func (sl setLeafSequence) getKey(idx int) orderedKey {
-	return newOrderedKey(sl.getItem(idx).(Value), sl.format())
+func (sl setLeafSequence) getKey(idx int) (orderedKey, error) {
+	item, err := sl.getItem(idx)
+
+	if err != nil {
+		return orderedKey{}, err
+	}
+
+	return newOrderedKey(item.(Value), sl.format())
 }
 
-func (sl setLeafSequence) search(key orderedKey) int {
-	return sort.Search(int(sl.Len()), func(i int) bool {
-		return !sl.getKey(i).Less(sl.format(), key)
+func (sl setLeafSequence) search(key orderedKey) (int, error) {
+	n, err := SearchWithErroringLess(int(sl.Len()), func(i int) (b bool, e error) {
+		k, err := sl.getKey(i)
+
+		if err != nil {
+			return false, err
+		}
+
+		isLess, err := k.Less(sl.format(), key)
+
+		if err != nil {
+			return false, err
+		}
+
+		return !isLess, nil
 	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return n, nil
 }

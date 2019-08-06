@@ -27,14 +27,14 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
-type newSequenceChunkerFn func(cur *sequenceCursor, vrw ValueReadWriter) *sequenceChunker
+type newSequenceChunkerFn func(cur *sequenceCursor, vrw ValueReadWriter) (*sequenceChunker, error)
 
-func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequenceChunkerFn) sequence {
+func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequenceChunkerFn) (sequence, error) {
 	if fst.numLeaves() == 0 {
-		return snd
+		return snd, nil
 	}
 	if snd.numLeaves() == 0 {
-		return fst
+		return fst, nil
 	}
 
 	// concat works by tricking the sequenceChunker into resuming chunking at a
@@ -44,9 +44,27 @@ func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequen
 	if vrw != snd.valueReadWriter() {
 		d.Panic("cannot concat sequences from different databases")
 	}
-	chunker := newSequenceChunker(newCursorAtIndex(ctx, fst, fst.numLeaves()), vrw)
 
-	for cur, ch := newCursorAtIndex(ctx, snd, 0), chunker; ch != nil; ch = ch.parent {
+	cur, err := newCursorAtIndex(ctx, fst, fst.numLeaves())
+
+	if err != nil {
+		return nil, err
+	}
+
+	chunker, err := newSequenceChunker(cur, vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ch := chunker
+	cur, err = newCursorAtIndex(ctx, snd, 0)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for ; ch != nil; ch = ch.parent {
 		// Note that if snd is shallower than fst, then higher chunkers will have
 		// their cursors set to nil. This has the effect of "dropping" the final
 		// item in each of those sequences.
@@ -56,7 +74,11 @@ func concat(ctx context.Context, fst, snd sequence, newSequenceChunker newSequen
 			if cur != nil && ch.parent == nil {
 				// If fst is shallower than snd, its cur will have a parent whereas the
 				// chunker to snd won't. In that case, create a parent for fst.
-				ch.createParent(ctx)
+				err := ch.createParent(ctx)
+
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}

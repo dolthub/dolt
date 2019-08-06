@@ -34,21 +34,41 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(tbl *DoltTable, ctx *sql.Context) *doltTableRowIter {
-	rowData := tbl.table.GetRowData(ctx.Context)
-	mapIter := rowData.Iterator(ctx.Context)
-	return &doltTableRowIter{table: tbl, rowData: rowData, ctx: ctx, nomsIter: mapIter}
+func newRowIterator(tbl *DoltTable, ctx *sql.Context) (*doltTableRowIter, error) {
+	rowData, err := tbl.table.GetRowData(ctx.Context)
+
+	if err != nil {
+		return nil, err
+	}
+
+	mapIter, err := rowData.Iterator(ctx.Context)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &doltTableRowIter{table: tbl, rowData: rowData, ctx: ctx, nomsIter: mapIter}, nil
 }
 
 // Next returns the next row in this row iterator, or an io.EOF error if there aren't any more.
 func (itr *doltTableRowIter) Next() (sql.Row, error) {
-	key, val := itr.nomsIter.Next(itr.ctx.Context)
+	key, val, err := itr.nomsIter.Next(itr.ctx.Context)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if key == nil && val == nil {
 		return nil, io.EOF
 	}
 
-	doltRow := row.FromNoms(itr.table.sch, key.(types.Tuple), val.(types.Tuple))
-	return doltRowToSqlRow(doltRow, itr.table.sch), nil
+	doltRow, err := row.FromNoms(itr.table.sch, key.(types.Tuple), val.(types.Tuple))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return doltRowToSqlRow(doltRow, itr.table.sch)
 }
 
 // Close required by sql.RowIter interface
@@ -57,22 +77,26 @@ func (itr *doltTableRowIter) Close() error {
 }
 
 // Returns a SQL row representation for the dolt row given.
-func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) sql.Row {
+func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 	colVals := make(sql.Row, sch.GetAllCols().Size())
 
 	i := 0
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		value, _ := doltRow.GetColVal(tag)
 		colVals[i] = doltColValToSqlColVal(value)
 		i++
-		return false
+		return false, nil
 	})
 
-	return sql.NewRow(colVals...)
+	if err != nil {
+		return nil, err
+	}
+
+	return sql.NewRow(colVals...), nil
 }
 
 // Returns a Dolt row representation for SQL row given
-func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Schema) row.Row {
+func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Schema) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
 	for i, val := range r {
 		if val != nil {

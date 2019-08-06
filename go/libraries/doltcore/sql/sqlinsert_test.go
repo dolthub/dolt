@@ -30,6 +30,14 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func mustRow(r row.Row, err error) row.Row {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 func TestExecuteInsert(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -70,7 +78,7 @@ func TestExecuteInsert(t *testing.T) {
 			name: "insert one row, null values",
 			query: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", null, null, null)`,
-			insertedValues: []row.Row{row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")})},
+			insertedValues: []row.Row{mustRow(row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")}))},
 			expectedResult: InsertResult{NumRowsInserted: 1},
 		},
 		{
@@ -268,8 +276,8 @@ func TestExecuteInsert(t *testing.T) {
 					(7, "Maggie", "Simpson"),
 					(8, "Milhouse", "Van Houten")`,
 			insertedValues: []row.Row{
-				row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")}),
-				row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(8), FirstTag: types.String("Milhouse"), LastTag: types.String("Van Houten")}),
+				mustRow(row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(7), FirstTag: types.String("Maggie"), LastTag: types.String("Simpson")})),
+				mustRow(row.New(types.Format_7_18, PeopleTestSchema, row.TaggedValues{IdTag: types.Int(8), FirstTag: types.String("Milhouse"), LastTag: types.String("Van Houten")})),
 			},
 			expectedResult: InsertResult{NumRowsInserted: 2},
 		},
@@ -329,11 +337,15 @@ func TestExecuteInsert(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 			assert.Equal(t, tt.expectedResult.NumRowsUpdated, result.NumRowsUpdated)
 
-			table, ok := result.Root.GetTable(ctx, PeopleTableName)
+			table, ok, err := result.Root.GetTable(ctx, PeopleTableName)
+			assert.NoError(t, err)
 			assert.True(t, ok)
 
 			for _, expectedRow := range tt.insertedValues {
-				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
+				v, err := expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx)
+				assert.NoError(t, err)
+				foundRow, ok, err := table.GetRow(ctx, v.(types.Tuple), PeopleTestSchema)
+				require.NoError(t, err)
 				require.True(t, ok, "Row not found: %v", expectedRow)
 				eq, diff := rowsEqual(expectedRow, foundRow)
 				assert.True(t, eq, "Rows not equals, found diff %v", diff)
@@ -344,14 +356,24 @@ func TestExecuteInsert(t *testing.T) {
 
 func rowsEqual(expected, actual row.Row) (bool, string) {
 	er, ar := make(map[uint64]types.Value), make(map[uint64]types.Value)
-	expected.IterCols(func(t uint64, v types.Value) bool {
+	_, err := expected.IterCols(func(t uint64, v types.Value) (bool, error) {
 		er[t] = v
-		return false
+		return false, nil
 	})
-	actual.IterCols(func(t uint64, v types.Value) bool {
+
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = actual.IterCols(func(t uint64, v types.Value) (bool, error) {
 		ar[t] = v
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		panic(err)
+	}
+
 	opts := cmp.Options{cmp.AllowUnexported(), dtestutils.FloatComparer}
 	eq := cmp.Equal(er, ar, opts)
 	var diff string

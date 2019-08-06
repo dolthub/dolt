@@ -63,11 +63,22 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errUpdate("Unsupported update statement %v", query)
 	}
 
-	if !root.HasTable(ctx, tableName) {
+	has, err := root.HasTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !has {
 		return errUpdate("Unknown table '%s'", tableName)
 	}
-	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema(ctx)
+
+	table, _, err := root.GetTable(ctx, tableName)
+	tableSch, err := table.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	setVals := make(map[uint64]*RowValGetter)
 	schemas := map[string]schema.Schema{tableName: tableSch}
@@ -120,9 +131,18 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 	// Perform the update
 	var result UpdateResult
-	rowData := table.GetRowData(ctx)
+	rowData, err := table.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	me := rowData.Edit()
-	rowReader := noms.NewNomsMapReader(ctx, rowData, tableSch)
+	rowReader, err := noms.NewNomsMapReader(ctx, rowData, tableSch)
+
+	if err != nil {
+		return nil, err
+	}
 
 	for {
 		r, err := rowReader.ReadRow(ctx)
@@ -153,13 +173,24 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 			}
 		}
 
-		if !row.IsValid(r, tableSch) {
-			col, constraint := row.GetInvalidConstraint(r, tableSch)
+		if isv, err := row.IsValid(r, tableSch); err != nil {
+			return nil, err
+		} else if !isv {
+			col, constraint, err := row.GetInvalidConstraint(r, tableSch)
+
+			if err != nil {
+				return nil, err
+			}
+
 			return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
 		}
 
 		tvs := r.NomsMapKey(tableSch).(row.TupleVals)
-		key := tvs.Value(ctx)
+		key, err := tvs.Value(ctx)
+
+		if err != nil {
+			return nil, err
+		}
 
 		if anyColChanged {
 			result.NumRowsUpdated += 1
@@ -169,9 +200,25 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 		me.Set(key, r.NomsMapValue(tableSch))
 	}
-	table = table.UpdateRows(ctx, me.Map(ctx))
 
-	result.Root = root.PutTable(ctx, db, tableName, table)
+	m, err := me.Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	table, err = table.UpdateRows(ctx, m)
+
+	if err != nil {
+		return nil, err
+	}
+
+	result.Root, err = root.PutTable(ctx, db, tableName, table)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return &result, nil
 }
 

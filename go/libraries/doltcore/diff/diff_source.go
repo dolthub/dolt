@@ -89,7 +89,11 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		return nil, pipeline.NoProps, io.EOF
 	}
 
-	diffs := rdRd.ad.GetDiffs(1, time.Second)
+	diffs, err := rdRd.ad.GetDiffs(1, time.Second)
+
+	if err != nil {
+		return nil, pipeline.ImmutableProperties{}, err
+	}
 
 	if len(diffs) == 0 {
 		if rdRd.ad.isDone {
@@ -115,12 +119,22 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		}
 
 		if d.OldValue != nil {
-			oldRow := row.FromNoms(originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
+			oldRow, err := row.FromNoms(originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
+
 			mappedOld, _ = rdRd.oldConv.Convert(oldRow)
 		}
 
 		if d.NewValue != nil {
-			newRow := row.FromNoms(originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
+			newRow, err := row.FromNoms(originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
+
 			mappedNew, _ = rdRd.newConv.Convert(newRow)
 		}
 
@@ -129,7 +143,7 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		if d.OldValue != nil && d.NewValue != nil {
 			oldColDiffs := make(map[string]DiffChType)
 			newColDiffs := make(map[string]DiffChType)
-			outCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+			err := outCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				oldVal, _ := mappedOld.GetColVal(tag)
 				newVal, _ := mappedNew.GetColVal(tag)
 
@@ -147,8 +161,12 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 					newColDiffs[col.Name] = DiffAdded
 				}
 
-				return false
+				return false, nil
 			})
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
 
 			oldProps = map[string]interface{}{DiffTypeProp: DiffModifiedOld, CollChangesProp: oldColDiffs}
 			newProps = map[string]interface{}{DiffTypeProp: DiffModifiedNew, CollChangesProp: newColDiffs}

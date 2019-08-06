@@ -72,25 +72,31 @@ func (xlsxw *XLSXWriter) WriteRow(ctx context.Context, r row.Row) error {
 	var xlStr [][]string
 	var rowStr [][][]string
 
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val, ok := r.GetColVal(tag)
 		if ok && !types.IsNull(val) {
 			if val.Kind() == types.StringKind {
 				colValStrs[0] = string(val.(types.String))
 			} else {
-				colValStrs[0] = types.EncodedValue(ctx, val)
+				colValStrs[0], err = types.EncodedValue(ctx, val)
+
+				if err != nil {
+					return false, err
+				}
 			}
 		}
 
 		xlStr = append(xlStr, colValStrs)
 		rowStr = append(rowStr, xlStr)
 		i++
-		return false
+		return false, nil
 	})
 
-	err := iohelp.WritePrimIfNoErr(xlsxw.bWr, rowStr, nil)
+	if err != nil {
+		return err
+	}
 
-	return err
+	return iohelp.WritePrimIfNoErr(xlsxw.bWr, rowStr, nil)
 }
 
 // Close should flush all writes, release resources being held

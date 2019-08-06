@@ -51,7 +51,7 @@ func (coll *KVPCollection) Iterator() *KVPCollItr {
 // DestructiveMerge merges two KVPCollections into a new collection.  This KVPCollection and the
 // collection it is being merged with will no longer be valid once this method is called.  A
 // new KVPCollection will be returned which holds the merged collections.
-func (left *KVPCollection) DestructiveMerge(right *KVPCollection) *KVPCollection {
+func (left *KVPCollection) DestructiveMerge(right *KVPCollection) (*KVPCollection, error) {
 	if left.buffSize != right.buffSize {
 		panic("Cannot merge collections with varying buffer sizes.")
 	}
@@ -68,7 +68,13 @@ func (left *KVPCollection) DestructiveMerge(right *KVPCollection) *KVPCollection
 
 	for !done {
 		currItr, otherItr = rItr, lItr
-		if lItr.Less(rItr) {
+		isLess, err := lItr.Less(rItr)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if isLess {
 			currItr, otherItr = lItr, rItr
 		}
 
@@ -81,5 +87,5 @@ func (left *KVPCollection) DestructiveMerge(right *KVPCollection) *KVPCollection
 	}
 
 	resBuilder.MoveRemaining(otherItr)
-	return resBuilder.Build()
+	return resBuilder.Build(), nil
 }

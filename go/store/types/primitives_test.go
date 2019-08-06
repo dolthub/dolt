@@ -55,6 +55,6 @@ func TestPrimitivesType(t *testing.T) {
 	}
 
 	for _, d := range data {
-		assert.True(t, TypeOf(d.v).Equals(MakePrimitiveType(d.k)))
+		assert.True(t, mustType(TypeOf(d.v)).Equals(mustType(MakePrimitiveType(d.k))))
 	}
 }

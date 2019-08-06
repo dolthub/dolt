@@ -19,11 +19,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/store/types"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func TestDecodeXLSXRows(t *testing.T) {
@@ -47,7 +48,9 @@ func TestDecodeXLSXRows(t *testing.T) {
 	taggedVals[uint64(2)], _ = doltcore.StringToValue("otori", types.StringKind)
 	taggedVals[uint64(3)], _ = doltcore.StringToValue("24", types.StringKind)
 
-	newRow := row.New(types.Format_7_18, sch, taggedVals)
+	newRow, err := row.New(types.Format_7_18, sch, taggedVals)
+
+	assert.NoError(t, err)
 
 	if !reflect.DeepEqual(decoded[0], newRow) {
 		t.Log("error!")

@@ -97,21 +97,32 @@ func runMerge(ctx context.Context, args []string) int {
 	util.CheckErrorNoUsage(err)
 	close(pc)
 
-	leftHeadRef, ok := leftDS.MaybeHeadRef()
+	leftHeadRef, ok, err := leftDS.MaybeHeadRef()
+	d.PanicIfError(err)
 
 	if !ok {
 		fmt.Fprintln(os.Stderr, args[1]+" has no head value.")
 		return 1
 	}
 
-	rightHeadRef, ok := rightDS.MaybeHeadRef()
+	rightHeadRef, ok, err := rightDS.MaybeHeadRef()
+	d.PanicIfError(err)
 
 	if !ok {
 		fmt.Fprintln(os.Stderr, args[2]+" has no head value.")
 		return 1
 	}
 
-	_, err = db.SetHead(ctx, outDS, db.WriteValue(ctx, datas.NewCommit(merged, types.NewSet(ctx, db, leftHeadRef, rightHeadRef), types.EmptyStruct(db.Format()))))
+	s, err := types.NewSet(ctx, db, leftHeadRef, rightHeadRef)
+	d.PanicIfError(err)
+
+	cm, err := datas.NewCommit(merged, s, types.EmptyStruct(db.Format()))
+	d.PanicIfError(err)
+
+	ref, err := db.WriteValue(ctx, cm)
+	d.PanicIfError(err)
+
+	_, err = db.SetHead(ctx, outDS, ref)
 	d.PanicIfError(err)
 
 	if !verbose.Quiet() {
@@ -151,40 +162,55 @@ func resolveDatasets(ctx context.Context, db datas.Database, leftName, rightName
 }
 
 func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value, err error) {
-	leftRef, ok := leftDS.MaybeHeadRef()
+	leftRef, ok, err := leftDS.MaybeHeadRef()
+	d.PanicIfError(err)
 	checkIfTrue(!ok, "Dataset %s has no data", leftDS.ID())
-	rightRef, ok := rightDS.MaybeHeadRef()
+	rightRef, ok, err := rightDS.MaybeHeadRef()
+	d.PanicIfError(err)
 	checkIfTrue(!ok, "Dataset %s has no data", rightDS.ID())
 	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, db)
 	checkIfTrue(!ok, "Datasets %s and %s have no common ancestor", leftDS.ID(), rightDS.ID())
 
-	leftHead, ok := leftDS.MaybeHeadValue()
+	leftHead, ok, err := leftDS.MaybeHeadValue()
+	d.PanicIfError(err)
 
 	if !ok {
 		return nil, nil, nil, err
 	}
 
-	rightHead, ok := rightDS.MaybeHeadValue()
+	rightHead, ok, err := rightDS.MaybeHeadValue()
+	d.PanicIfError(err)
 
 	if !ok {
 		return nil, nil, nil, err
 	}
 
-	return leftHead, rightHead, ancestorCommit.Get(datas.ValueField), nil
+	vfld, ok, err := ancestorCommit.MaybeGet(datas.ValueField)
+	d.PanicIfError(err)
+	d.PanicIfFalse(ok)
+	return leftHead, rightHead, vfld, nil
 
 }
 
 func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
-	aRef, found := datas.FindCommonAncestor(ctx, r1, r2, vr)
+	aRef, found, err := datas.FindCommonAncestor(ctx, r1, r2, vr)
+	d.PanicIfError(err)
 	if !found {
 		return
 	}
-	v := vr.ReadValue(ctx, aRef.TargetHash())
+	v, err := vr.ReadValue(ctx, aRef.TargetHash())
+	d.PanicIfError(err)
 	if v == nil {
 		panic(aRef.TargetHash().String() + " not found")
 	}
-	if !datas.IsCommit(v) {
-		panic("Not a commit: " + types.EncodedValueMaxLines(ctx, v, 10) + "  ...")
+
+	isCm, err := datas.IsCommit(v)
+	d.PanicIfError(err)
+
+	if !isCm {
+		str, err := types.EncodedValueMaxLines(ctx, v, 10)
+		d.PanicIfError(err)
+		panic("Not a commit: " + str + "  ...")
 	}
 	return v.(types.Struct), true
 }

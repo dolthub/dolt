@@ -98,20 +98,37 @@ func TestTupleValsLess(t *testing.T) {
 			lesserTplVals := test.lesserTVs.NomsTupleForTags(types.Format_7_18, test.tags, true)
 			greaterTplVals := test.greaterTVs.NomsTupleForTags(types.Format_7_18, test.tags, true)
 
-			lessLTGreater := lesserTplVals.Less(types.Format_7_18, greaterTplVals)
-			greaterLTLess := greaterTplVals.Less(types.Format_7_18, lesserTplVals)
+			lessLTGreater, err := lesserTplVals.Less(types.Format_7_18, greaterTplVals)
+			assert.NoError(t, err)
+			greaterLTLess, err := greaterTplVals.Less(types.Format_7_18, lesserTplVals)
+			assert.NoError(t, err)
 
 			assert.True(t, test.areEqual && !lessLTGreater || !test.areEqual && lessLTGreater)
 			assert.True(t, !greaterLTLess)
 
-			lesserTpl := lesserTplVals.Value(ctx)
-			greaterTpl := greaterTplVals.Value(ctx)
+			lesserTpl, err := lesserTplVals.Value(ctx)
+			assert.NoError(t, err)
+			greaterTpl, err := greaterTplVals.Value(ctx)
+			assert.NoError(t, err)
+
+			lesserLess, err := lesserTpl.Less(types.Format_7_18, greaterTpl)
+			assert.NoError(t, err)
+			greaterLess, err := greaterTpl.Less(types.Format_7_18, lesserTpl)
+			assert.NoError(t, err)
 
 			// needs to match with the types.Tuple Less implementation.
-			assert.True(t, lessLTGreater == lesserTpl.Less(types.Format_7_18, greaterTpl))
-			assert.True(t, greaterLTLess == greaterTpl.Less(types.Format_7_18, lesserTpl))
+			assert.True(t, lessLTGreater == lesserLess)
+			assert.True(t, greaterLTLess == greaterLess)
 		})
 	}
+}
+
+func mustTuple(tpl types.Tuple, err error) types.Tuple {
+	if err != nil {
+		panic(err)
+	}
+
+	return tpl
 }
 
 func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
@@ -127,19 +144,33 @@ func TestTaggedTuple_NomsTupleForTags(t *testing.T) {
 		encodeNulls bool
 		want        types.Tuple
 	}{
-		{[]uint64{}, true, types.NewTuple(types.Format_7_18)},
-		{[]uint64{1}, true, types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1"))},
-		{[]uint64{0, 1, 2}, true, types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"), types.Uint(1), types.String("1"), types.Uint(2), types.String("2"))},
-		{[]uint64{2, 1, 0}, true, types.NewTuple(types.Format_7_18, types.Uint(2), types.String("2"), types.Uint(1), types.String("1"), types.Uint(0), types.String("0"))},
-		{[]uint64{1, 3}, true, types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1"), types.Uint(3), types.NullValue)},
-		{[]uint64{1, 3}, false, types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1"))},
+		{[]uint64{}, true, mustTuple(types.NewTuple(types.Format_7_18))},
+		{[]uint64{1}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1")))},
+		{[]uint64{0, 1, 2}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"), types.Uint(1), types.String("1"), types.Uint(2), types.String("2")))},
+		{[]uint64{2, 1, 0}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(2), types.String("2"), types.Uint(1), types.String("1"), types.Uint(0), types.String("0")))},
+		{[]uint64{1, 3}, true, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1"), types.Uint(3), types.NullValue))},
+		{[]uint64{1, 3}, false, mustTuple(types.NewTuple(types.Format_7_18, types.Uint(1), types.String("1")))},
 		//{[]uint64{0, 1, 2}, types.NewTuple(types.Uint(0), types.String("0"), )},
 		//{map[uint64]types.Value{}, []uint64{}, types.NewTuple()},
 		//{map[uint64]types.Value{}, []uint64{}, types.NewTuple()},
 	}
 	for _, test := range tests {
-		if got := tt.NomsTupleForTags(types.Format_7_18, test.tags, test.encodeNulls).Value(ctx); !reflect.DeepEqual(got, test.want) {
-			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", types.EncodedValue(ctx, got), types.EncodedValue(ctx, test.want))
+		if got, err := tt.NomsTupleForTags(types.Format_7_18, test.tags, test.encodeNulls).Value(ctx); err != nil {
+			t.Error(err)
+		} else if !reflect.DeepEqual(got, test.want) {
+			gotStr, err := types.EncodedValue(ctx, got)
+
+			if err != nil {
+				t.Error(err)
+			}
+
+			wantStr, err := types.EncodedValue(ctx, test.want)
+
+			if err != nil {
+				t.Error(err)
+			}
+
+			t.Errorf("TaggedValues.NomsTupleForTags() = %v, want %v", gotStr, wantStr)
 		}
 	}
 }
@@ -151,14 +182,16 @@ func TestTaggedTuple_Iter(t *testing.T) {
 		3: types.String("3")}
 
 	var sum uint64
-	tt.Iter(func(tag uint64, val types.Value) (stop bool) {
+	_, err := tt.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
 		sum += tag
 		tagStr := strconv.FormatUint(tag, 10)
 		if !types.String(tagStr).Equals(val) {
 			t.Errorf("Unexpected value for tag %d: %s", sum, string(val.(types.String)))
 		}
-		return false
+		return false, nil
 	})
+
+	assert.NoError(t, err)
 
 	if sum != 6 {
 		t.Error("Did not iterate all tags.")
@@ -184,7 +217,19 @@ func TestTaggedTuple_Get(t *testing.T) {
 		if ok != test.found {
 			t.Errorf("expected to be found: %v, found: %v", ok, test.found)
 		} else if !reflect.DeepEqual(got, test.want) {
-			t.Errorf("TaggedValues.Get() = %s, want %s", types.EncodedValue(context.Background(), got), types.EncodedValue(context.Background(), test.want))
+			gotStr, err := types.EncodedValue(context.Background(), got)
+
+			if err != nil {
+				t.Error(err)
+			}
+
+			wantStr, err := types.EncodedValue(context.Background(), test.want)
+
+			if err != nil {
+				t.Error(err)
+			}
+
+			t.Errorf("TaggedValues.Get() = %s, want %s", gotStr, wantStr)
 		}
 	}
 }
@@ -216,20 +261,22 @@ func TestParseTaggedTuple(t *testing.T) {
 		want TaggedValues
 	}{
 		{
-			types.NewTuple(types.Format_7_18),
+			mustTuple(types.NewTuple(types.Format_7_18)),
 			TaggedValues{},
 		},
 		{
-			types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0")),
+			mustTuple(types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"))),
 			TaggedValues{0: types.String("0")},
 		},
 		{
-			types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"), types.Uint(5), types.Uint(5), types.Uint(60), types.Int(60)),
+			mustTuple(types.NewTuple(types.Format_7_18, types.Uint(0), types.String("0"), types.Uint(5), types.Uint(5), types.Uint(60), types.Int(60))),
 			TaggedValues{0: types.String("0"), 5: types.Uint(5), 60: types.Int(60)},
 		},
 	}
 	for _, test := range tests {
-		if got := ParseTaggedValues(test.tpl); !reflect.DeepEqual(got, test.want) {
+		if got, err := ParseTaggedValues(test.tpl); err != nil {
+			t.Error(err)
+		} else if !reflect.DeepEqual(got, test.want) {
 			t.Errorf("ParseTaggedValues() = %v, want %v", got, test.want)
 		}
 	}

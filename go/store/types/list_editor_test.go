@@ -29,7 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func listOfInts(vrw ValueReadWriter, vals ...int) List {
+func listOfInts(vrw ValueReadWriter, vals ...int) (List, error) {
 	vs := ValueSlice{}
 	for _, v := range vals {
 		vs = append(vs, Float(v))
@@ -38,7 +38,7 @@ func listOfInts(vrw ValueReadWriter, vals ...int) List {
 }
 
 func testEditor(vrw ValueReadWriter, vals ...int) *ListEditor {
-	return NewListEditor(listOfInts(vrw, vals...))
+	return NewListEditor(mustList(listOfInts(vrw, vals...)))
 }
 
 func edit(le *ListEditor, idx, remove int, insert ...int) {
@@ -53,7 +53,9 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 	assert.Equal(t, uint64(len(expectItems)), le.Len())
 
 	for i, v := range expectItems {
-		assert.Equal(t, Float(v), le.Get(context.Background(), uint64(i)))
+		item, err := le.Get(context.Background(), uint64(i))
+		assert.NoError(t, err)
+		assert.Equal(t, Float(v), item)
 	}
 
 	actualEditCount := 0
@@ -63,7 +65,11 @@ func assertState(t *testing.T, vrw ValueReadWriter, le *ListEditor, expectItems 
 
 	assert.Equal(t, expectEditCount, actualEditCount)
 
-	assert.True(t, listOfInts(vrw, expectItems...).Equals(le.List(context.Background())))
+	l, err := listOfInts(vrw, expectItems...)
+	assert.NoError(t, err)
+	l2, err := le.List(context.Background())
+	assert.NoError(t, err)
+	assert.True(t, l.Equals(l2))
 }
 
 func TestListEditorBasic(t *testing.T) {
@@ -107,10 +113,15 @@ func TestListEditorBasic(t *testing.T) {
 		le := testEditor(vrw, 0, 1, 2)
 		le.Append(NullValue)
 		le.Append(Float(4))
-		l := le.List(context.Background())
+		l, err := le.List(context.Background())
+		assert.NoError(t, err)
 
-		assert.True(t, IsNull(l.Get(context.Background(), 3)))
-		assert.True(t, l.Get(context.Background(), 4).Equals(Float(4)))
+		v3, err := l.Get(context.Background(), 3)
+		assert.NoError(t, err)
+		assert.True(t, IsNull(v3))
+		v4, err := l.Get(context.Background(), 4)
+		assert.NoError(t, err)
+		assert.True(t, v4.Equals(Float(4)))
 	})
 }
 
@@ -237,15 +248,19 @@ func TestListSpliceFuzzer(t *testing.T) {
 
 	for i := 0; i < rounds; i++ {
 		tl := newTestList(startCount)
-		le := tl.toList(vrw).Edit()
+		l, err := tl.toList(vrw)
+		assert.NoError(t, err)
+		le := l.Edit()
 
 		for j := 0; j < splices; j++ {
 			idx, removed, insert := nextRandomSplice(len(tl))
 			tl = tl.Splice(int(idx), int(removed), insert...)
 			le.Splice(idx, removed, AsValuables(insert)...)
 		}
-		expect := tl.toList(vrw)
-		actual := le.List(context.Background())
+		expect, err := tl.toList(vrw)
+		assert.NoError(t, err)
+		actual, err := le.List(context.Background())
+		assert.NoError(t, err)
 		assert.True(t, expect.Equals(actual))
 	}
 }

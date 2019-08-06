@@ -32,11 +32,11 @@ type Row interface {
 	NomsMapValue(sch schema.Schema) types.Valuable
 
 	// Iterates over all the columns in the row. Columns that have no value set will not be visited.
-	IterCols(cb func(tag uint64, val types.Value) (stop bool)) bool
+	IterCols(cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error)
 
 	// Iterates over all columns in the schema, using the value for the row. Columns that have no value set in this row
 	// will still be visited, and receive a nil value.
-	IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool)) bool
+	IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error)
 
 	// Returns the value for the column with the tag given, and a success bool. The value will be null if the row
 	// doesn't contain a value for that tag.
@@ -75,36 +75,41 @@ func GetFieldByNameWithDefault(colName string, defVal types.Value, r Row, sch sc
 }
 
 // IsValid returns whether the row given matches the types and satisfies all the constraints of the schema given.
-func IsValid(r Row, sch schema.Schema) bool {
-	column, constraint := findInvalidCol(r, sch)
-	return column == nil && constraint == nil
+func IsValid(r Row, sch schema.Schema) (bool, error) {
+	column, constraint, err := findInvalidCol(r, sch)
+
+	if err != nil {
+		return false, err
+	}
+
+	return column == nil && constraint == nil, nil
 }
 
 // GetInvalidCol returns the first column in the schema that fails a constraint, or nil if none do.
-func GetInvalidCol(r Row, sch schema.Schema) *schema.Column {
-	badCol, _ := findInvalidCol(r, sch)
-	return badCol
+func GetInvalidCol(r Row, sch schema.Schema) (*schema.Column, error) {
+	badCol, _, err := findInvalidCol(r, sch)
+	return badCol, err
 }
 
 // GetInvalidConstraint returns the failed constraint for the row given (previously identified by IsValid) along with
 // the column with that constraint. Note that if there is a problem with the row besides the constraint, the constraint
 // return value will be nil.
-func GetInvalidConstraint(r Row, sch schema.Schema) (*schema.Column, schema.ColConstraint) {
+func GetInvalidConstraint(r Row, sch schema.Schema) (*schema.Column, schema.ColConstraint, error) {
 	return findInvalidCol(r, sch)
 }
 
 // Returns the first encountered invalid column and its constraint, or nil if the row is valid. Column will always be
 // set if the row is invalid. Constraint will be set if the first encountered problem is a constraint failure.
-func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstraint) {
+func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstraint, error) {
 	allCols := sch.GetAllCols()
 
 	var badCol *schema.Column
 	var badCnst schema.ColConstraint
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val, colSet := r.GetColVal(tag)
 		if colSet && !types.IsNull(val) && val.Kind() != col.Kind {
 			badCol = &col
-			return true
+			return true, nil
 		}
 
 		if len(col.Constraints) > 0 {
@@ -112,15 +117,19 @@ func findInvalidCol(r Row, sch schema.Schema) (*schema.Column, schema.ColConstra
 				if !cnst.SatisfiesConstraint(val) {
 					badCol = &col
 					badCnst = cnst
-					return true
+					return true, nil
 				}
 			}
 		}
 
-		return false
+		return false, nil
 	})
 
-	return badCol, badCnst
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return badCol, badCnst, nil
 }
 
 func AreEqual(row1, row2 Row, sch schema.Schema) bool {
@@ -142,12 +151,16 @@ func AreEqual(row1, row2 Row, sch schema.Schema) bool {
 	return true
 }
 
-func GetTaggedVals(row Row) TaggedValues {
+func GetTaggedVals(row Row) (TaggedValues, error) {
 	taggedVals := make(TaggedValues)
-	row.IterCols(func(tag uint64, val types.Value) (stop bool) {
+	_, err := row.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
 		taggedVals[tag] = val
-		return false
+		return false, nil
 	})
 
-	return taggedVals
+	if err != nil {
+		return nil, err
+	}
+
+	return taggedVals, nil
 }

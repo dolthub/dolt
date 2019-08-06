@@ -25,6 +25,8 @@ package types
 import (
 	"context"
 
+	"github.com/liquidata-inc/dolt/go/store/d"
+
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
@@ -46,7 +48,7 @@ func newType(desc TypeDesc) *Type {
 }
 
 // Describe generate text that should parse into the struct being described.
-func (t *Type) Describe(ctx context.Context) (out string) {
+func (t *Type) Describe(ctx context.Context) (string, error) {
 	return EncodedValue(ctx, t)
 }
 
@@ -55,8 +57,12 @@ func (t *Type) TargetKind() NomsKind {
 }
 
 // Value interface
-func (t *Type) Value(ctx context.Context) Value {
-	return t
+func (t *Type) Value(ctx context.Context) (Value, error) {
+	if t.Kind() == UnknownKind {
+		return nil, ErrUnknownType
+	}
+
+	return t, nil
 }
 
 func (t *Type) Equals(other Value) (res bool) {
@@ -66,38 +72,54 @@ func (t *Type) Equals(other Value) (res bool) {
 	}
 
 	if otherType, ok := other.(*Type); ok {
-		return t.TargetKind() == otherType.TargetKind() && t.Hash(Format_7_18) == other.Hash(Format_7_18)
+		h, err := t.Hash(Format_7_18)
+
+		// TODO - fix panics
+		d.PanicIfError(err)
+
+		oh, err := other.Hash(Format_7_18)
+
+		// TODO - fix panics
+		d.PanicIfError(err)
+
+		return t.TargetKind() == otherType.TargetKind() && h == oh
 	}
 
 	return false
 }
 
-func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (res bool) {
+func (t *Type) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	return valueLess(nbf, t, other.(Value))
 }
 
-func (t *Type) Hash(nbf *NomsBinFormat) hash.Hash {
+func (t *Type) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(t, nbf)
 }
 
-func (t *Type) writeTo(w nomsWriter, nbf *NomsBinFormat) {
-	TypeKind.writeTo(w, nbf)
-	t.writeToAsType(w, map[string]*Type{}, nbf)
+func (t *Type) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	err := TypeKind.writeTo(w, nbf)
+
+	if err != nil {
+		return err
+	}
+
+	return t.writeToAsType(w, map[string]*Type{}, nbf)
 }
 
-func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type, nbf *NomsBinFormat) {
-	t.Desc.writeTo(w, nbf, t, seensStructs)
+func (t *Type) writeToAsType(w nomsWriter, seensStructs map[string]*Type, nbf *NomsBinFormat) error {
+	return t.Desc.writeTo(w, nbf, t, seensStructs)
 }
 
-func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) {
-	t.Desc.walkValues(cb)
+func (t *Type) WalkValues(ctx context.Context, cb ValueCallback) error {
+	return t.Desc.walkValues(cb)
 }
 
-func (t *Type) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+func (t *Type) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+	return nil
 }
 
-func (t *Type) typeOf() *Type {
-	return TypeType
+func (t *Type) typeOf() (*Type, error) {
+	return TypeType, nil
 }
 
 func (t *Type) Kind() NomsKind {
@@ -110,8 +132,14 @@ func (t *Type) valueReadWriter() ValueReadWriter {
 
 // TypeOf returns the type describing the value. This is not an exact type but
 // often a simplification of the concrete type.
-func TypeOf(v Value) *Type {
-	return simplifyType(v.typeOf(), false)
+func TypeOf(v Value) (*Type, error) {
+	t, err := v.typeOf()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return simplifyType(t, false)
 }
 
 // HasStructCycles determines if the type contains any struct cycles.

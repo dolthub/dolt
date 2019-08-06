@@ -23,8 +23,8 @@ package types
 
 import (
 	"context"
-	"sort"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
@@ -48,25 +48,37 @@ func (se *SetEditor) Kind() NomsKind {
 	return SetKind
 }
 
-func (se *SetEditor) Value(ctx context.Context) Value {
+func (se *SetEditor) Value(ctx context.Context) (Value, error) {
 	return se.Set(ctx)
 }
 
-func (se *SetEditor) Set(ctx context.Context) Set {
+func (se *SetEditor) Set(ctx context.Context) (Set, error) {
 	if len(se.edits.edits) == 0 {
-		return se.s // no edits
+		return se.s, nil // no edits
 	}
 
 	seq := se.s.orderedSequence
 	vrw := seq.valueReadWriter()
 
-	se.normalize()
+	err := se.normalize()
 
+	if err != nil {
+		return EmptySet, err
+	}
+
+	ae := atomicerr.New()
 	cursChan := make(chan chan *sequenceCursor)
 	editChan := make(chan setEdit)
 
 	go func() {
+		defer close(cursChan)
+		defer close(editChan)
+
 		for i, edit := range se.edits.edits {
+			if ae.IsSet() {
+				break
+			}
+
 			if i+1 < len(se.edits.edits) && se.edits.edits[i+1].value.Equals(edit.value) {
 				continue // next edit supercedes this one
 			}
@@ -78,23 +90,39 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 			cursChan <- cc
 
 			go func() {
-				cc <- newCursorAtValue(ctx, seq, edit.value, true, false)
+				cur, err := newCursorAtValue(ctx, seq, edit.value, true, false)
+
+				if err != nil {
+					ae.SetIfError(err)
+					return
+				}
+
+				cc <- cur
 			}()
 
 			editChan <- edit
 		}
-		close(cursChan)
-		close(editChan)
 	}()
 
 	var ch *sequenceChunker
 	for cc := range cursChan {
+		if ae.IsSet() {
+			//drain
+			continue
+		}
+
 		cur := <-cc
 		edit := <-editChan
 
 		exists := false
 		if cur.idx < cur.seq.seqLen() {
-			v := cur.current().(Value)
+			item, err := cur.current()
+
+			if ae.SetIfErrAndCheck(err) {
+				continue
+			}
+
+			v := item.(Value)
 			if v.Equals(edit.value) {
 				exists = true
 			}
@@ -108,89 +136,134 @@ func (se *SetEditor) Set(ctx context.Context) Set {
 			continue // already non-present
 		}
 
+		var err error
 		if ch == nil {
-			ch = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+			ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
 		} else {
-			ch.advanceTo(ctx, cur)
+			err = ch.advanceTo(ctx, cur)
+		}
+
+		if ae.SetIfErrAndCheck(err) {
+			continue
 		}
 
 		if edit.insert {
-			ch.Append(ctx, edit.value)
+			_, err = ch.Append(ctx, edit.value)
 		} else {
-			ch.Skip(ctx)
+			err = ch.Skip(ctx)
+		}
+
+		if ae.SetIfErrAndCheck(err) {
+			continue
 		}
 	}
 
+	if ae.IsSet() {
+		return EmptySet, ae.Get()
+	}
+
 	if ch == nil {
-		return se.s // no edits required application
+		return se.s, nil // no edits required application
 	}
 
-	return newSet(ch.Done(ctx).(orderedSequence))
+	chSeq, err := ch.Done(ctx)
+
+	if err != nil {
+		return EmptySet, err
+	}
+
+	return newSet(chSeq.(orderedSequence)), nil
 }
 
-func (se *SetEditor) Insert(vs ...Value) *SetEditor {
-	sort.Stable(ValueSort{vs, se.s.format()})
+func (se *SetEditor) Insert(vs ...Value) (*SetEditor, error) {
+	SortWithErroringLess(ValueSort{vs, se.s.format()})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
-		se.edit(v, true)
+		err := se.edit(v, true)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	return se
+	return se, nil
 }
 
-func (se *SetEditor) Remove(vs ...Value) *SetEditor {
-	sort.Stable(ValueSort{vs, se.s.format()})
+func (se *SetEditor) Remove(vs ...Value) (*SetEditor, error) {
+	SortWithErroringLess(ValueSort{vs, se.s.format()})
 	for _, v := range vs {
 		d.PanicIfTrue(v == nil)
-		se.edit(v, false)
+		err := se.edit(v, false)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	return se
+	return se, nil
 }
 
-func (se *SetEditor) Has(ctx context.Context, v Value) bool {
-	if idx, found := se.findEdit(v); found {
-		return se.edits.edits[idx].insert
+func (se *SetEditor) Has(ctx context.Context, v Value) (bool, error) {
+	if idx, found, err := se.findEdit(v); err != nil {
+		return false, err
+	} else if found {
+		return se.edits.edits[idx].insert, nil
 	}
 
 	return se.s.Has(ctx, v)
 }
 
-func (se *SetEditor) edit(v Value, insert bool) {
+func (se *SetEditor) edit(v Value, insert bool) error {
 	if len(se.edits.edits) == 0 {
 		se.edits.edits = append(se.edits.edits, setEdit{v, insert})
-		return
+		return nil
 	}
 
 	final := se.edits.edits[len(se.edits.edits)-1]
 	if final.value.Equals(v) {
 		se.edits.edits[len(se.edits.edits)-1] = setEdit{v, insert}
-		return // update the last edit
+		return nil // update the last edit
 	}
 
 	se.edits.edits = append(se.edits.edits, setEdit{v, insert})
 
-	if se.normalized && final.value.Less(se.s.format(), v) {
+	isLess, err := final.value.Less(se.s.format(), v)
+
+	if err != nil {
+		return err
+	}
+
+	if se.normalized && isLess {
 		// fast-path: edits take place in key-order
-		return
+		return nil
 	}
 
 	// de-normalize
 	se.normalized = false
+	return nil
 }
 
 // Find the edit position of the last edit for a given key
-func (se *SetEditor) findEdit(v Value) (idx int, found bool) {
-	se.normalize()
+func (se *SetEditor) findEdit(v Value) (int, bool, error) {
+	err := se.normalize()
 
-	idx = sort.Search(len(se.edits.edits), func(i int) bool {
-		return !se.edits.edits[i].value.Less(se.s.format(), v)
+	if err != nil {
+		return 0, false, err
+	}
+
+	var found bool
+	idx, err := SearchWithErroringLess(len(se.edits.edits), func(i int) (bool, error) {
+		return se.edits.edits[i].value.Less(se.s.format(), v)
 	})
 
+	if err != nil {
+		return 0, false, err
+	}
+
 	if idx == len(se.edits.edits) {
-		return
+		return idx, found, nil
 	}
 
 	if !se.edits.edits[idx].value.Equals(v) {
-		return
+		return idx, found, nil
 	}
 
 	// advance to final edit position where kv.key == k
@@ -200,17 +273,23 @@ func (se *SetEditor) findEdit(v Value) (idx int, found bool) {
 	idx--
 
 	found = true
-	return
+	return idx, found, nil
 }
 
-func (se *SetEditor) normalize() {
+func (se *SetEditor) normalize() error {
 	if se.normalized {
-		return
+		return nil
 	}
 
-	sort.Stable(se.edits)
+	err := SortWithErroringLess(se.edits)
+
+	if err != nil {
+		return err
+	}
+
 	// TODO: GC duplicate keys over some threshold of collectable memory?
 	se.normalized = true
+	return nil
 }
 
 type setEdit struct {
@@ -225,6 +304,6 @@ type setEditSlice struct {
 
 func (ses setEditSlice) Len() int      { return len(ses.edits) }
 func (ses setEditSlice) Swap(i, j int) { ses.edits[i], ses.edits[j] = ses.edits[j], ses.edits[i] }
-func (ses setEditSlice) Less(i, j int) bool {
+func (ses setEditSlice) Less(i, j int) (bool, error) {
 	return ses.edits[i].value.Less(ses.nbf, ses.edits[j].value)
 }

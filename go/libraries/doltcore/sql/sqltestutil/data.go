@@ -70,15 +70,15 @@ const (
 )
 
 var PeopleTestSchema = createPeopleTestSchema()
-var untypedPeopleSch = untyped.UntypeUnkeySchema(PeopleTestSchema)
+var untypedPeopleSch, _ = untyped.UntypeUnkeySchema(PeopleTestSchema)
 var PeopleTableName = "people"
 
 var EpisodesTestSchema = createEpisodesTestSchema()
-var untypedEpisodesSch = untyped.UntypeUnkeySchema(EpisodesTestSchema)
+var untypedEpisodesSch, _ = untyped.UntypeUnkeySchema(EpisodesTestSchema)
 var EpisodesTableName = "episodes"
 
 var AppearancesTestSchema = createAppearancesTestSchema()
-var untypedAppearacesSch = untyped.UntypeUnkeySchema(AppearancesTestSchema)
+var untypedAppearacesSch, _ = untyped.UntypeUnkeySchema(AppearancesTestSchema)
 var AppearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
@@ -125,7 +125,13 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 		RatingTag:    types.Float(rating),
 	}
 
-	return row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
@@ -136,7 +142,13 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 		EpRatingTag:  types.Float(rating),
 	}
 
-	return row.New(types.Format_7_18, EpisodesTestSchema, vals)
+	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 func newAppsRow(charId, epId int, comment string) row.Row {
@@ -146,7 +158,13 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 		AppCommentsTag:  types.String(comment),
 	}
 
-	return row.New(types.Format_7_18, AppearancesTestSchema, vals)
+	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
@@ -162,7 +180,13 @@ func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, 
 		NumEpisodesTag: types.Uint(numEpisodes),
 	}
 
-	return row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // 6 characters
@@ -268,20 +292,43 @@ func MutateRow(r row.Row, tagsAndVals ...interface{}) row.Row {
 	return mutated
 }
 
-func GetAllRows(root *doltdb.RootValue, tableName string) []row.Row {
+func GetAllRows(root *doltdb.RootValue, tableName string) ([]row.Row, error) {
 	ctx := context.Background()
-	table, _ := root.GetTable(ctx, tableName)
-	rowData := table.GetRowData(ctx)
-	sch := table.GetSchema(ctx)
+	table, _, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rowData, err := table.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sch, err := table.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	var rows []row.Row
-	rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-		r := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		r, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
+
+		if err != nil {
+			return false, err
+		}
+
 		rows = append(rows, r)
-		return false
+		return false, nil
 	})
 
-	return rows
+	if err != nil {
+		return nil, err
+	}
+
+	return rows, nil
 }
 
 // Creates a test database with the test data set in it

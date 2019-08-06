@@ -31,6 +31,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -213,7 +214,7 @@ func TestGetMany(t *testing.T) {
 	sort.Sort(getRecordByPrefix(getBatch))
 
 	wg := &sync.WaitGroup{}
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
 	tr.getMany(context.Background(), getBatch, chunkChan, wg, ae, &Stats{})
@@ -379,7 +380,7 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	sort.Sort(getRecordByPrefix(getBatch))
 
-	ae := NewAtomicError()
+	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
 	chunkChan := make(chan *chunks.Chunk, len(getBatch))
 	tr.getMany(context.Background(), getBatch, chunkChan, wg, ae, &Stats{})

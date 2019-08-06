@@ -29,6 +29,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 )
 
@@ -38,7 +40,7 @@ var ErrNoChunkSource = errors.New("no chunk source")
 func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkReader, p tablePersister, rl chan struct{}, stats *Stats) *persistingChunkSource {
 	t1 := time.Now()
 
-	ccs := &persistingChunkSource{ae: NewAtomicError(), mt: mt}
+	ccs := &persistingChunkSource{ae: atomicerr.New(), mt: mt}
 	ccs.wg.Add(1)
 	rl <- struct{}{}
 	go func() {
@@ -75,7 +77,7 @@ func newPersistingChunkSource(ctx context.Context, mt *memTable, haver chunkRead
 }
 
 type persistingChunkSource struct {
-	ae *AtomicError
+	ae *atomicerr.AtomicError
 	mu sync.RWMutex
 	mt *memTable
 
@@ -121,7 +123,7 @@ func (ccs *persistingChunkSource) get(ctx context.Context, h addr, stats *Stats)
 	return cr.get(ctx, h, stats)
 }
 
-func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	cr := ccs.getReader()
 
 	if cr == nil {
@@ -249,7 +251,7 @@ func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]by
 	return nil, nil
 }
 
-func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	return true
 }
 

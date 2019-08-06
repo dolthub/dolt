@@ -92,32 +92,69 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 
 	switch show.Type {
 	case "create table":
-		tableName, err := resolveTable(show.Table.Name.String(), root.GetTableNames(ctx), NewAliases())
+		tblNames, err := root.GetTableNames(ctx)
+
 		if err != nil {
 			return nil, nil, err
 		}
 
-		table, _ := root.GetTable(ctx, tableName)
+		tableName, err := resolveTable(show.Table.Name.String(), tblNames, NewAliases())
 
-		sch := table.GetSchema(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		table, _, err := root.GetTable(ctx, tableName)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		sch, err := table.GetSchema(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
 		schemaStr := SchemaAsCreateStmt(tableName, sch)
 
 		resultSch := showCreateTableSchema()
-		rows := toRows(root.VRW().Format(), ([][]string{{tableName, schemaStr}}), resultSch)
+		rows, err := toRows(root.VRW().Format(), ([][]string{{tableName, schemaStr}}), resultSch)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
 		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 
 		return p, resultSch, nil
 
 	case "columns":
-		tableName, err := resolveTable(show.OnTable.Name.String(), root.GetTableNames(ctx), NewAliases())
+		tblNames, err := root.GetTableNames(ctx)
+
 		if err != nil {
 			return nil, nil, err
 		}
 
-		table, _ := root.GetTable(ctx, tableName)
+		tableName, err := resolveTable(show.OnTable.Name.String(), tblNames, NewAliases())
 
-		tableSch := table.GetSchema(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		table, _, err := root.GetTable(ctx, tableName)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		tableSch, err := table.GetSchema(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
 		rows := schemaAsShowColumnRows(root.VRW().Format(), tableSch)
 
 		source := pipeline.SourceFuncForRows(rows)
@@ -125,9 +162,19 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		return p, showColumnsSchema(), nil
 
 	case "tables":
-		tableNames := root.GetTableNames(ctx)
+		tableNames, err := root.GetTableNames(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
 		sch := showTablesSchema()
-		rows := toRows(root.VRW().Format(), transpose(tableNames), sch)
+		rows, err := toRows(root.VRW().Format(), transpose(tableNames), sch)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
 		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 		return p, sch, nil
@@ -140,16 +187,27 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 func schemaAsShowColumnRows(nbf *types.NomsBinFormat, tableSch schema.Schema) []row.Row {
 	rs := make([]row.Row, tableSch.GetAllCols().Size())
 	i := 0
-	tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
-		rs[i] = describeColumn(nbf, col)
+	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		rs[i], err = describeColumn(nbf, col)
 		i++
-		return false
+
+		if err != nil {
+			return false, err
+		}
+
+		return false, nil
 	})
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
+
 	return rs
 }
 
 // describeColumn returns a row describing the column given, using the schema from showColumnsSchema
-func describeColumn(nbf *types.NomsBinFormat, col schema.Column) row.Row {
+func describeColumn(nbf *types.NomsBinFormat, col schema.Column) (row.Row, error) {
 	nullStr := "NO"
 	if col.IsNullable() {
 		nullStr = "YES"
@@ -180,14 +238,19 @@ func transpose(ss []string) [][]string {
 }
 
 // Returns a new result set row with the schema given from the 2D array of row values given.
-func toRows(nbf *types.NomsBinFormat, ss [][]string, sch schema.Schema) []row.Row {
+func toRows(nbf *types.NomsBinFormat, ss [][]string, sch schema.Schema) ([]row.Row, error) {
 	rows := make([]row.Row, len(ss))
 	for i, r := range ss {
 		taggedVals := make(row.TaggedValues)
 		for tag, col := range r {
 			taggedVals[uint64(tag)] = types.String(col)
 		}
-		rows[i] = row.New(nbf, sch, taggedVals)
+		var err error
+		rows[i], err = row.New(nbf, sch, taggedVals)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	return rows
+	return rows, nil
 }

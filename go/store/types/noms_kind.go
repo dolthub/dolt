@@ -52,27 +52,52 @@ const (
 	UintKind
 	NullKind
 	TupleKind
+
+	UnknownKind NomsKind = 255
 )
 
+var SupportedKinds = map[NomsKind]struct{}{
+	BoolKind:   {},
+	FloatKind:  {},
+	StringKind: {},
+	BlobKind:   {},
+	ValueKind:  {},
+	ListKind:   {},
+	MapKind:    {},
+	RefKind:    {},
+	SetKind:    {},
+	StructKind: {},
+	CycleKind:  {},
+	TypeKind:   {},
+	UnionKind:  {},
+	hashKind:   {},
+	UUIDKind:   {},
+	IntKind:    {},
+	UintKind:   {},
+	NullKind:   {},
+	TupleKind:  {},
+}
+
 var KindToString = map[NomsKind]string{
-	BlobKind:   "Blob",
-	BoolKind:   "Bool",
-	CycleKind:  "Cycle",
-	ListKind:   "List",
-	MapKind:    "Map",
-	FloatKind:  "Float",
-	RefKind:    "Ref",
-	SetKind:    "Set",
-	StructKind: "Struct",
-	StringKind: "String",
-	TypeKind:   "Type",
-	UnionKind:  "Union",
-	ValueKind:  "Value",
-	UUIDKind:   "UUID",
-	IntKind:    "Int",
-	UintKind:   "Uint",
-	NullKind:   "Null",
-	TupleKind:  "Tuple",
+	UnknownKind: "unknown",
+	BlobKind:    "Blob",
+	BoolKind:    "Bool",
+	CycleKind:   "Cycle",
+	ListKind:    "List",
+	MapKind:     "Map",
+	FloatKind:   "Float",
+	RefKind:     "Ref",
+	SetKind:     "Set",
+	StructKind:  "Struct",
+	StringKind:  "String",
+	TypeKind:    "Type",
+	UnionKind:   "Union",
+	ValueKind:   "Value",
+	UUIDKind:    "UUID",
+	IntKind:     "Int",
+	UintKind:    "Uint",
+	NullKind:    "Null",
+	TupleKind:   "Tuple",
 }
 
 // String returns the name of the kind.
@@ -95,6 +120,11 @@ func isKindOrderedByValue(k NomsKind) bool {
 	return k <= StringKind || k >= UUIDKind
 }
 
-func (k NomsKind) writeTo(w nomsWriter, nbf *NomsBinFormat) {
+func (k NomsKind) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	if k == UnknownKind {
+		return ErrUnknownType
+	}
+
 	w.writeUint8(uint8(k))
+	return nil
 }

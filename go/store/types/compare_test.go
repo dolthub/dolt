@@ -25,13 +25,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
-
-	"github.com/stretchr/testify/assert"
 )
 
 const uint32Size = 4
@@ -215,7 +214,7 @@ func minByte(a, b byte) byte {
 }
 
 // encodeKeys() serializes a list of keys to the byte slice |bs|.
-func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte, []Value) {
+func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte, []Value, error) {
 	// All ldb keys start with a 4-byte collection id that serves as a namespace
 	// that keeps them separate from other collections.
 	idHolder := [4]byte{}
@@ -231,19 +230,25 @@ func encodeKeys(bs []byte, colId uint32, opKind NomsKind, keys []Value) ([]byte,
 
 	valuesToEncode := ValueSlice{}
 	for _, gk := range keys {
-		bs = encodeGraphKey(bs, gk)
+		var err error
+		bs, err = encodeGraphKey(bs, gk)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
 		if !isKindOrderedByValue(gk.Kind()) {
 			valuesToEncode = append(valuesToEncode, gk)
 		}
 	}
-	return bs, valuesToEncode
+	return bs, valuesToEncode, nil
 }
 
-func encodeGraphKey(bs []byte, v Value) []byte {
+func encodeGraphKey(bs []byte, v Value) ([]byte, error) {
 	return encodeForGraph(bs, v, false)
 }
 
-func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
+func encodeForGraph(bs []byte, v Value, asValue bool) ([]byte, error) {
 	// Note: encToSlice() and append() will both grow the backing store of |bs|
 	// as necessary. Always call them when writing to |bs|.
 	if asValue || isKindOrderedByValue(v.Kind()) {
@@ -251,7 +256,12 @@ func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
 		// noms-kind(1-byte), serialization-len(4-bytes), serialization(n-bytes)
 		buf := [initialBufferSize]byte{}
 		uint32buf := [4]byte{}
-		encodedVal := encToSlice(v, buf[:])
+		encodedVal, err := encToSlice(v, buf[:])
+
+		if err != nil {
+			return nil, err
+		}
+
 		binary.BigEndian.PutUint32(uint32buf[:], uint32(len(encodedVal)))
 		bs = append(bs, uint8(v.Kind()))
 		bs = append(bs, uint32buf[:]...)
@@ -259,18 +269,28 @@ func encodeForGraph(bs []byte, v Value, asValue bool) []byte {
 	} else {
 		// if we're encoding hash values, we know the length, so we can leave that out
 		bs = append(bs, uint8(v.Kind()))
-		h := v.Hash(Format_7_18)
+		h, err := v.Hash(Format_7_18)
+
+		if err != nil {
+			return nil, err
+		}
+
 		bs = append(bs, h[:]...)
 	}
-	return bs
+	return bs, nil
 }
 
 // Note that, if 'v' are prolly trees, any in-memory child chunks will be written to vw at this time.
-func encToSlice(v Value, initBuf []byte) []byte {
+func encToSlice(v Value, initBuf []byte) ([]byte, error) {
 	// TODO: Are there enough calls to this that it's worth re-using a nomsWriter?
 	w := &binaryNomsWriter{initBuf, 0}
-	v.writeTo(w, Format_7_18)
-	return w.data()
+	err := v.writeTo(w, Format_7_18)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return w.data(), nil
 }
 
 var prefix = []byte{0x01, 0x02, 0x03, 0x04}
@@ -286,7 +306,7 @@ func TestCompareTotalOrdering(t *testing.T) {
 		String("a"), String("b"), String("c"),
 
 		// The order of these are done by the hash.
-		NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3)),
+		mustValue(NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))),
 		BoolType,
 
 		// Value - values cannot be value
@@ -299,10 +319,12 @@ func TestCompareTotalOrdering(t *testing.T) {
 			if i == j {
 				assert.True(vi.Equals(vj))
 			} else if i < j {
-				x := vi.Less(Format_7_18, vj)
+				x, err := vi.Less(Format_7_18, vj)
+				assert.NoError(err)
 				assert.True(x)
 			} else {
-				x := vi.Less(Format_7_18, vj)
+				x, err := vi.Less(Format_7_18, vj)
+				assert.NoError(err)
 				assert.False(x)
 			}
 		}
@@ -317,21 +339,32 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 	nums := ValueSlice{Float(1), Float(2), Float(3)}
 	words := ValueSlice{String("k1"), String("v1")}
 
-	blob := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{1, 2, 3}))
-	nList := NewList(context.Background(), vrw, nums...)
-	nMap := NewMap(context.Background(), vrw, words...)
-	nRef := NewRef(blob, Format_7_18)
-	nSet := NewSet(context.Background(), vrw, nums...)
-	nStruct := NewStruct(Format_7_18, "teststruct", map[string]Value{"f1": Float(1)})
+	blob, err := NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{1, 2, 3}))
+	assert.NoError(err)
+	nList, err := NewList(context.Background(), vrw, nums...)
+	assert.NoError(err)
+	nMap, err := NewMap(context.Background(), vrw, words...)
+	assert.NoError(err)
+	nRef, err := NewRef(blob, Format_7_18)
+	assert.NoError(err)
+	nSet, err := NewSet(context.Background(), vrw, nums...)
+	assert.NoError(err)
+	nStruct, err := NewStruct(Format_7_18, "teststruct", map[string]Value{"f1": Float(1)})
+	assert.NoError(err)
 
 	vals := ValueSlice{Bool(true), Float(19), String("hellow"), blob, nList, nMap, nRef, nSet, nStruct}
-	sort.Sort(ValueSort{vals, Format_7_18})
+	err = SortWithErroringLess(ValueSort{vals, Format_7_18})
+	assert.NoError(err)
 
 	for i, v1 := range vals {
 		for j, v2 := range vals {
 			iBytes := [1024]byte{}
 			jBytes := [1024]byte{}
-			res := compareEncodedKey(encodeGraphKey(iBytes[:0], v1), encodeGraphKey(jBytes[:0], v2))
+			bytes1, err := encodeGraphKey(iBytes[:0], v1)
+			assert.NoError(err)
+			bytes2, err := encodeGraphKey(jBytes[:0], v2)
+			assert.NoError(err)
+			res := compareEncodedKey(bytes1, bytes2)
 			expectedRes := compareInts(i, j)
 
 			assert.Equal(expectedRes, res, "%d:%d", i, j)
@@ -378,8 +411,10 @@ func TestCompareEncodedKeys(t *testing.T) {
 	bs1 := [initialBufferSize]byte{}
 	bs2 := [initialBufferSize]byte{}
 
-	e1, _ := encodeKeys(bs1[:0], 0x01020304, MapKind, k1)
-	e2, _ := encodeKeys(bs2[:0], 0x01020304, MapKind, k2)
+	e1, _, err := encodeKeys(bs1[:0], 0x01020304, MapKind, k1)
+	assert.NoError(err)
+	e2, _, err := encodeKeys(bs2[:0], 0x01020304, MapKind, k2)
+	assert.NoError(err)
 	assert.Equal(-1, compareEncodedKeys(e1, e2))
 }
 

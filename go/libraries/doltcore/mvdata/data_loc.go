@@ -131,14 +131,34 @@ func (dl *DataLocation) IsFileType() bool {
 
 func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, tblName string) (rdCl table.TableReadCloser, sorted bool, err error) {
 	if dl.Format == DoltDB {
-		tbl, ok := root.GetTable(ctx, dl.Path)
+		tbl, ok, err := root.GetTable(ctx, dl.Path)
+
+		if err != nil {
+			return nil, false, err
+		}
 
 		if !ok {
 			return nil, false, doltdb.ErrTableNotFound
 		}
 
-		sch := tbl.GetSchema(ctx)
-		rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), sch)
+		sch, err := tbl.GetSchema(ctx)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		rowData, err := tbl.GetRowData(ctx)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		rd, err := noms.NewNomsMapReader(ctx, rowData, sch)
+
+		if err != nil {
+			return nil, false, err
+		}
+
 		return rd, true, nil
 	} else {
 		exists, isDir := fs.Exists(dl.Path)
@@ -171,10 +191,10 @@ func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue
 	panic("Unsupported table format should have failed before reaching here. ")
 }
 
-func (dl *DataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) bool {
+func (dl *DataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	if dl.IsFileType() {
 		exists, _ := fs.Exists(dl.Path)
-		return exists
+		return exists, nil
 	}
 
 	if dl.Format == DoltDB {
@@ -196,7 +216,12 @@ func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, mvOpts 
 		if sortedInput {
 			return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
 		} else {
-			m := types.NewMap(ctx, root.VRW())
+			m, err := types.NewMap(ctx, root.VRW())
+
+			if err != nil {
+				return nil, err
+			}
+
 			return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
 		}
 
@@ -221,13 +246,22 @@ func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, mvOpts *Mo
 	switch dl.Format {
 	case DoltDB:
 		tableName := dl.Path
-		tbl, ok := root.GetTable(ctx, tableName)
+		tbl, ok, err := root.GetTable(ctx, tableName)
+
+		if err != nil {
+			return nil, err
+		}
 
 		if !ok {
 			return nil, errors.New("Could not find table " + tableName)
 		}
 
-		m := tbl.GetRowData(ctx)
+		m, err := tbl.GetRowData(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
 		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
 
 	case CsvFile, PsvFile, JsonFile, XlsxFile, SqlFile:

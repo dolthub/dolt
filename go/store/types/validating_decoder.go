@@ -44,12 +44,22 @@ type DecodedChunk struct {
 // Decode decodes c and checks that the hash of the resulting value
 // matches c.Hash(). It returns a DecodedChunk holding both c and a pointer to
 // the decoded Value.
-func (vbs *ValidatingDecoder) Decode(c *chunks.Chunk) DecodedChunk {
+func (vbs *ValidatingDecoder) Decode(c *chunks.Chunk) (DecodedChunk, error) {
 	h := c.Hash()
-	v := decodeFromBytesWithValidation(c.Data(), vbs.vs)
+	v, err := decodeFromBytesWithValidation(c.Data(), vbs.vs)
 
-	if getHash(v, vbs.vs.Format()) != h {
+	if err != nil {
+		return DecodedChunk{}, err
+	}
+
+	vh, err := getHash(v, vbs.vs.Format())
+
+	if err != nil {
+		return DecodedChunk{}, err
+	}
+
+	if vh != h {
 		d.Panic("Invalid hash found")
 	}
-	return DecodedChunk{c, &v}
+	return DecodedChunk{c, &v}, nil
 }

@@ -32,9 +32,9 @@ import (
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/nbs/benchmarks/gen"
 )
 
@@ -93,7 +93,7 @@ func (src *dataSource) PrimeFilesystemCache() error {
 	bufData := bufio.NewReaderSize(src.data, 10*humanize.MiByte)
 	tuples := make(chan offsetTuple, 16)
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	go func() {
 		err := src.readTuples(tuples)
 		ae.SetIfError(err)
@@ -124,7 +124,7 @@ func (src *dataSource) ReadChunks(chunkChan chan<- *chunks.Chunk) error {
 	bufData := bufio.NewReaderSize(src.data, humanize.MiByte)
 	tuples := make(chan offsetTuple, 1024)
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	go func() {
 		err := src.readTuples(tuples)
 		ae.SetIfError(err)

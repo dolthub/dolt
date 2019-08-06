@@ -251,7 +251,13 @@ func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx contex
 		localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
 		localCommit, _ := dEnv.DoltDB.Resolve(ctx, localCommitSpec)
 
-		h, err = dEnv.DoltDB.WriteRootValue(ctx, localCommit.GetRootValue())
+		root, err := localCommit.GetRootValue()
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to get root").AddCause(err).Build()
+		}
+
+		h, err = dEnv.DoltDB.WriteRootValue(ctx, root)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to write to database.").AddCause(err).Build()

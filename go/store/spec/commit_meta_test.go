@@ -49,7 +49,7 @@ func TestCreateCommitMetaStructBasic(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), "", "", nil, nil)
 	assert.NoError(err)
 	assert.False(isEmptyStruct(meta))
-	assert.Equal("Struct Meta {\n  date: String,\n}", types.TypeOf(meta).Describe(context.Background()))
+	assert.Equal("Struct Meta {\n  date: String,\n}", mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
 }
 
 func TestCreateCommitMetaStructFromFlags(t *testing.T) {
@@ -61,12 +61,12 @@ func TestCreateCommitMetaStructFromFlags(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), "", "", nil, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
-		types.TypeOf(meta).Describe(context.Background()))
-	assert.Equal(types.String(commitMetaDate), meta.Get("date"))
-	assert.Equal(types.String(commitMetaMessage), meta.Get("message"))
-	assert.Equal(types.String("v1"), meta.Get("k1"))
-	assert.Equal(types.String("v2"), meta.Get("k2"))
-	assert.Equal(types.String("v3"), meta.Get("k3"))
+		mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
+	assert.Equal(types.String(commitMetaDate), mustGetValue(meta.MaybeGet("date")))
+	assert.Equal(types.String(commitMetaMessage), mustGetValue(meta.MaybeGet("message")))
+	assert.Equal(types.String("v1"), mustGetValue(meta.MaybeGet("k1")))
+	assert.Equal(types.String("v2"), mustGetValue(meta.MaybeGet("k2")))
+	assert.Equal(types.String("v3"), mustGetValue(meta.MaybeGet("k3")))
 }
 
 func TestCreateCommitMetaStructFromArgs(t *testing.T) {
@@ -78,12 +78,12 @@ func TestCreateCommitMetaStructFromArgs(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
-		types.TypeOf(meta).Describe(context.Background()))
-	assert.Equal(types.String(dateArg), meta.Get("date"))
-	assert.Equal(types.String(messageArg), meta.Get("message"))
-	assert.Equal(types.String("v1"), meta.Get("k1"))
-	assert.Equal(types.String("v2"), meta.Get("k2"))
-	assert.Equal(types.String("v3"), meta.Get("k3"))
+		mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
+	assert.Equal(types.String(dateArg), mustGetValue(meta.MaybeGet("date")))
+	assert.Equal(types.String(messageArg), mustGetValue(meta.MaybeGet("message")))
+	assert.Equal(types.String("v1"), mustGetValue(meta.MaybeGet("k1")))
+	assert.Equal(types.String("v2"), mustGetValue(meta.MaybeGet("k2")))
+	assert.Equal(types.String("v3"), mustGetValue(meta.MaybeGet("k3")))
 }
 
 func TestCreateCommitMetaStructFromFlagsAndArgs(t *testing.T) {
@@ -100,13 +100,13 @@ func TestCreateCommitMetaStructFromFlagsAndArgs(t *testing.T) {
 	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  k4: String,\n  message: String,\n}",
-		types.TypeOf(meta).Describe(context.Background()))
-	assert.Equal(types.String(dateArg), meta.Get("date"))
-	assert.Equal(types.String(messageArg), meta.Get("message"))
-	assert.Equal(types.String("v1"), meta.Get("k1"))
-	assert.Equal(types.String("v2"), meta.Get("k2"))
-	assert.Equal(types.String("v3"), meta.Get("k3"))
-	assert.Equal(types.String("v4p4"), meta.Get("k4"))
+		mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
+	assert.Equal(types.String(dateArg), mustGetValue(meta.MaybeGet("date")))
+	assert.Equal(types.String(messageArg), mustGetValue(meta.MaybeGet("message")))
+	assert.Equal(types.String("v1"), mustGetValue(meta.MaybeGet("k1")))
+	assert.Equal(types.String("v2"), mustGetValue(meta.MaybeGet("k2")))
+	assert.Equal(types.String("v3"), mustGetValue(meta.MaybeGet("k3")))
+	assert.Equal(types.String("v4p4"), mustGetValue(meta.MaybeGet("k4")))
 }
 
 func TestCreateCommitMetaStructBadDate(t *testing.T) {

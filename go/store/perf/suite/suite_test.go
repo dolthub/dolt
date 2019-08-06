@@ -53,8 +53,11 @@ func (s *testSuite) TestNonEmptyPaths() {
 func (s *testSuite) TestDatabase() {
 	assert := s.NewAssert()
 	val := types.Bool(true)
-	r := s.Database.WriteValue(context.Background(), val)
-	assert.True(s.Database.ReadValue(context.Background(), r.TargetHash()).Equals(val))
+	r, err := s.Database.WriteValue(context.Background(), val)
+	assert.NoError(err)
+	v2, err := s.Database.ReadValue(context.Background(), r.TargetHash())
+	assert.NoError(err)
+	assert.True(v2.Equals(val))
 }
 
 func (s *testSuite) TestTempFile() {
@@ -206,14 +209,16 @@ func runTestSuite(t *testing.T, mem bool) {
 	sp, err := spec.ForDataset(ldbDir + "::ds")
 	assert.NoError(err)
 	defer sp.Close()
-	headVal, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
+	headVal, ok, err := sp.GetDataset(context.Background()).MaybeHeadValue()
+	assert.NoError(err)
 	assert.True(ok)
 	head := headVal.(types.Struct)
 
 	// These tests mostly assert that the structure of the results is correct. Specific values are hard.
 
 	getOrFail := func(s types.Struct, f string) types.Value {
-		val, ok := s.MaybeGet(f)
+		val, ok, err := s.MaybeGet(f)
+		assert.NoError(err)
 		assert.True(ok)
 		return val
 	}
@@ -239,10 +244,10 @@ func runTestSuite(t *testing.T, mem bool) {
 	assert.True(ok)
 	assert.Equal(*perfRepeatFlag, int(reps.Len()))
 
-	reps.IterAll(context.Background(), func(rep types.Value, _ uint64) {
+	err = reps.IterAll(context.Background(), func(rep types.Value, _ uint64) error {
 		i := 0
 
-		rep.(types.Map).IterAll(context.Background(), func(k, timesVal types.Value) {
+		err := rep.(types.Map).IterAll(context.Background(), func(k, timesVal types.Value) error {
 			if assert.True(i < len(expectedTests)) {
 				assert.Equal(expectedTests[i], string(k.(types.String)))
 			}
@@ -259,10 +264,16 @@ func runTestSuite(t *testing.T, mem bool) {
 			}
 
 			i++
+
+			return nil
 		})
 
+		assert.NoError(err)
 		assert.Equal(i, len(expectedTests))
+		return nil
 	})
+
+	assert.NoError(err)
 }
 
 func TestPrefixFlag(t *testing.T) {
@@ -292,7 +303,8 @@ func TestPrefixFlag(t *testing.T) {
 	sp, err = spec.ForDataset(ldbDir + "::foo/my-prefix/test")
 	assert.NoError(err)
 	defer sp.Close()
-	_, ok = sp.GetDataset(context.Background()).MaybeHeadValue()
+	_, ok, err = sp.GetDataset(context.Background()).MaybeHeadValue()
+	assert.NoError(err)
 	assert.True(ok)
 }
 

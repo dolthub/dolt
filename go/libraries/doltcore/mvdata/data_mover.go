@@ -255,7 +255,7 @@ func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error)
 		foundPKCols := 0
 		var updatedCols []schema.Column
 
-		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			if keyColSet.Contains(col.Name) {
 				foundPKCols++
 				col.IsPartOfPK = true
@@ -266,8 +266,12 @@ func addPrimaryKey(sch schema.Schema, explicitKey string) (schema.Schema, error)
 			}
 
 			updatedCols = append(updatedCols, col)
-			return false
+			return false, nil
 		})
+
+		if err != nil {
+			return nil, err
+		}
 
 		if keyColSet.Size() != foundPKCols {
 			return nil, errors.New("could not find all pks: " + explicitKey)

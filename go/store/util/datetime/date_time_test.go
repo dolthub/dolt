@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/marshal"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -53,6 +54,11 @@ func TestBasics(t *testing.T) {
 	assert.True(dt.Equal(dt2.Time))
 }
 
+func mustStruct(st types.Struct, err error) types.Struct {
+	d.PanicIfError(err)
+	return st
+}
+
 func TestUnmarshal(t *testing.T) {
 	assert := assert.New(t)
 
@@ -64,15 +70,15 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	for _, name := range []string{"DateTime", "Date", "xxx", ""} {
-		test(types.NewStruct(types.Format_7_18, name, types.StructData{
+		test(mustStruct(types.NewStruct(types.Format_7_18, name, types.StructData{
 			"secSinceEpoch": types.Float(42),
-		}), time.Unix(42, 0))
+		})), time.Unix(42, 0))
 	}
 
-	test(types.NewStruct(types.Format_7_18, "", types.StructData{
+	test(mustStruct(types.NewStruct(types.Format_7_18, "", types.StructData{
 		"secSinceEpoch": types.Float(42),
 		"extra":         types.String("field"),
-	}), time.Unix(42, 0))
+	})), time.Unix(42, 0))
 }
 
 func TestUnmarshalInvalid(t *testing.T) {
@@ -85,16 +91,16 @@ func TestUnmarshalInvalid(t *testing.T) {
 	}
 
 	test(types.Float(42))
-	test(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{}))
-	test(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{})))
+	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
 		"secSinceEpoch": types.String(42),
-	}))
-	test(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+	})))
+	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
 		"SecSinceEpoch": types.Float(42),
-	}))
-	test(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+	})))
+	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
 		"msSinceEpoch": types.Float(42),
-	}))
+	})))
 }
 
 func TestMarshal(t *testing.T) {
@@ -106,10 +112,11 @@ func TestMarshal(t *testing.T) {
 	test := func(dt DateTime, expected float64) {
 		v, err := marshal.Marshal(context.Background(), vs, dt)
 		assert.NoError(err)
-
-		assert.True(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+		st, err := types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
 			"secSinceEpoch": types.Float(expected),
-		}).Equals(v))
+		})
+		assert.NoError(err)
+		assert.True(st.Equals(v))
 	}
 
 	test(DateTime{time.Unix(0, 0)}, 0)
@@ -128,11 +135,15 @@ func TestMarshalType(t *testing.T) {
 	defer vs.Close()
 
 	dt := DateTime{time.Unix(0, 0)}
-	typ := marshal.MustMarshalType(types.Format_7_18, dt)
+	typ, err := marshal.MarshalType(types.Format_7_18, dt)
+	assert.NoError(err)
 	assert.Equal(DateTimeType, typ)
 
-	v := marshal.MustMarshal(context.Background(), vs, dt)
-	assert.Equal(typ, types.TypeOf(v))
+	v, err := marshal.Marshal(context.Background(), vs, dt)
+	assert.NoError(err)
+	typ2, err := types.TypeOf(v)
+	assert.NoError(err)
+	assert.Equal(typ, typ2)
 }
 
 func newTestValueStore() *types.ValueStore {
@@ -177,18 +188,22 @@ func TestHRSComment(t *testing.T) {
 	vs := newTestValueStore()
 
 	dt := Now()
-	mdt := marshal.MustMarshal(context.Background(), vs, dt)
+	mdt, err := marshal.Marshal(context.Background(), vs, dt)
+	a.NoError(err)
 
 	exp := dt.Format(time.RFC3339)
-	s1 := types.EncodedValue(context.Background(), mdt)
+	s1, err := types.EncodedValue(context.Background(), mdt)
+	a.NoError(err)
 	a.True(strings.Contains(s1, "{ // "+exp))
 
 	RegisterHRSCommenter(time.UTC)
 	exp = dt.In(time.UTC).Format((time.RFC3339))
-	s1 = types.EncodedValue(context.Background(), mdt)
+	s1, err = types.EncodedValue(context.Background(), mdt)
+	a.NoError(err)
 	a.True(strings.Contains(s1, "{ // "+exp))
 
 	types.UnregisterHRSCommenter(datetypename, hrsEncodingName)
-	s1 = types.EncodedValue(context.Background(), mdt)
+	s1, err = types.EncodedValue(context.Background(), mdt)
+	a.NoError(err)
 	a.False(strings.Contains(s1, "{ // 20"))
 }

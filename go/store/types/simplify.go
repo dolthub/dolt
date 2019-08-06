@@ -54,9 +54,9 @@ import (
 //       struct{foo?:number,bar:string|blob,baz?:bool}
 //
 // All the above rules are applied recursively.
-func simplifyType(t *Type, intersectStructs bool) *Type {
+func simplifyType(t *Type, intersectStructs bool) (*Type, error) {
 	if t.Desc.isSimplifiedForSure() {
-		return t
+		return t, nil
 	}
 
 	// 1. Clone tree because we are going to mutate it
@@ -68,19 +68,28 @@ func simplifyType(t *Type, intersectStructs bool) *Type {
 	namedStructs := map[string]structInfo{}
 
 	clone := cloneTypeTreeAndReplaceNamedStructs(t, namedStructs)
-	folded := foldUnions(clone, typeset{}, intersectStructs)
+	folded, err := foldUnions(clone, typeset{}, intersectStructs)
+
+	if err != nil {
+		return nil, err
+	}
 
 	for name, info := range namedStructs {
 		if len(info.sources) == 0 {
 			d.PanicIfTrue(name == "")
 			info.instance.Desc = CycleDesc(name)
 		} else {
-			fields := foldStructTypesFieldsOnly(name, info.sources, typeset{}, intersectStructs)
+			fields, err := foldStructTypesFieldsOnly(name, info.sources, typeset{}, intersectStructs)
+
+			if err != nil {
+				return nil, err
+			}
+
 			info.instance.Desc = StructDesc{name, fields}
 		}
 	}
 
-	return folded
+	return folded, nil
 }
 
 // typeset is a helper that aggregates the unique set of input types for this algorithm, flattening
@@ -178,7 +187,9 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 	return rec(t)
 }
 
-func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) *Type {
+func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) (*Type, error) {
+	var err error
+
 	kind := t.TargetKind()
 	switch kind {
 	case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, CycleKind, UUIDKind, IntKind, UintKind, NullKind:
@@ -187,17 +198,25 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) *Type {
 	case ListKind, MapKind, RefKind, SetKind, TupleKind:
 		elemTypes := t.Desc.(CompoundDesc).ElemTypes
 		for i, et := range elemTypes {
-			elemTypes[i] = foldUnions(et, seenStructs, intersectStructs)
+			elemTypes[i], err = foldUnions(et, seenStructs, intersectStructs)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 
 	case StructKind:
 		if seenStructs.has(t) {
-			return t
+			return t, nil
 		}
 		seenStructs.add(t)
 		fields := t.Desc.(StructDesc).fields
 		for i, f := range fields {
-			fields[i].Type = foldUnions(f.Type, seenStructs, intersectStructs)
+			fields[i].Type, err = foldUnions(f.Type, seenStructs, intersectStructs)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 
 	case UnionKind:
@@ -211,17 +230,17 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) *Type {
 		}
 		if len(ts) == 0 {
 			t.Desc = CompoundDesc{UnionKind, nil}
-			return t
+			return t, nil
 		}
 		return foldUnionImpl(ts, seenStructs, intersectStructs)
 
 	default:
 		panic("Unknown noms kind")
 	}
-	return t
+	return t, nil
 }
 
-func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) *Type {
+func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) (*Type, error) {
 	type how struct {
 		k NomsKind
 		n string
@@ -256,42 +275,58 @@ func foldUnionImpl(ts typeset, seenStructs typeset, intersectStructs bool) *Type
 		}
 
 		var r *Type
+		var err error
 		switch h.k {
 		case ListKind, RefKind, SetKind, TupleKind:
-			r = foldCompoundTypesForUnion(h.k, ts, seenStructs, intersectStructs)
+			r, err = foldCompoundTypesForUnion(h.k, ts, seenStructs, intersectStructs)
 		case MapKind:
-			r = foldMapTypesForUnion(ts, seenStructs, intersectStructs)
+			r, err = foldMapTypesForUnion(ts, seenStructs, intersectStructs)
 		case StructKind:
-			r = foldStructTypes(h.n, ts, seenStructs, intersectStructs)
+			r, err = foldStructTypes(h.n, ts, seenStructs, intersectStructs)
 		}
+
+		if err != nil {
+			return nil, err
+		}
+
 		out = append(out, r)
 	}
 
 	for i, t := range out {
-		out[i] = foldUnions(t, seenStructs, intersectStructs)
+		var err error
+		out[i], err = foldUnions(t, seenStructs, intersectStructs)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if len(out) == 1 {
-		return out[0]
+		return out[0], nil
 	}
 
 	sort.Sort(out)
 
-	return newType(CompoundDesc{UnionKind, out})
+	return newType(CompoundDesc{UnionKind, out}), nil
 }
 
-func foldCompoundTypesForUnion(k NomsKind, ts, seenStructs typeset, intersectStructs bool) *Type {
+func foldCompoundTypesForUnion(k NomsKind, ts, seenStructs typeset, intersectStructs bool) (*Type, error) {
 	elemTypes := make(typeset, len(ts))
 	for t := range ts {
 		d.PanicIfFalse(t.TargetKind() == k)
 		elemTypes.add(t.Desc.(CompoundDesc).ElemTypes[0])
 	}
 
-	elemType := foldUnionImpl(elemTypes, seenStructs, intersectStructs)
+	elemType, err := foldUnionImpl(elemTypes, seenStructs, intersectStructs)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return makeCompoundType(k, elemType)
 }
 
-func foldMapTypesForUnion(ts, seenStructs typeset, intersectStructs bool) *Type {
+func foldMapTypesForUnion(ts, seenStructs typeset, intersectStructs bool) (*Type, error) {
 	keyTypes := make(typeset, len(ts))
 	valTypes := make(typeset, len(ts))
 	for t := range ts {
@@ -301,13 +336,22 @@ func foldMapTypesForUnion(ts, seenStructs typeset, intersectStructs bool) *Type 
 		valTypes.add(elemTypes[1])
 	}
 
-	kt := foldUnionImpl(keyTypes, seenStructs, intersectStructs)
-	vt := foldUnionImpl(valTypes, seenStructs, intersectStructs)
+	kt, err := foldUnionImpl(keyTypes, seenStructs, intersectStructs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	vt, err := foldUnionImpl(valTypes, seenStructs, intersectStructs)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return makeCompoundType(MapKind, kt, vt)
 }
 
-func foldStructTypesFieldsOnly(name string, ts, seenStructs typeset, intersectStructs bool) structTypeFields {
+func foldStructTypesFieldsOnly(name string, ts, seenStructs typeset, intersectStructs bool) (structTypeFields, error) {
 	fieldset := make([]structTypeFields, len(ts))
 	i := 0
 	for t := range ts {
@@ -320,12 +364,17 @@ func foldStructTypesFieldsOnly(name string, ts, seenStructs typeset, intersectSt
 	return simplifyStructFields(fieldset, seenStructs, intersectStructs)
 }
 
-func foldStructTypes(name string, ts, seenStructs typeset, intersectStructs bool) *Type {
-	fields := foldStructTypesFieldsOnly(name, ts, seenStructs, intersectStructs)
-	return newType(StructDesc{name, fields})
+func foldStructTypes(name string, ts, seenStructs typeset, intersectStructs bool) (*Type, error) {
+	fields, err := foldStructTypesFieldsOnly(name, ts, seenStructs, intersectStructs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newType(StructDesc{name, fields}), nil
 }
 
-func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectStructs bool) structTypeFields {
+func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectStructs bool) (structTypeFields, error) {
 	// We gather all the fields/types into allFields. If the number of
 	// times a field name is present is less that then number of types we
 	// are simplifying then the field must be optional.
@@ -361,10 +410,21 @@ func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectS
 	fields := make(structTypeFields, len(allFields))
 	i := 0
 	for name, fti := range allFields {
-		nt := makeUnionType(fti.ts...)
+		nt, err := makeUnionType(fti.ts...)
+
+		if err != nil {
+			return nil, err
+		}
+
+		t, err := foldUnions(nt, seenStructs, intersectStructs)
+
+		if err != nil {
+			return nil, err
+		}
+
 		fields[i] = StructField{
 			Name:     name,
-			Type:     foldUnions(nt, seenStructs, intersectStructs),
+			Type:     t,
 			Optional: !(intersectStructs && fti.anyNonOptional) && fti.count < count,
 		}
 		i++
@@ -372,5 +432,5 @@ func simplifyStructFields(in []structTypeFields, seenStructs typeset, intersectS
 
 	sort.Sort(fields)
 
-	return fields
+	return fields, nil
 }

@@ -36,29 +36,47 @@ type ValueStats interface {
 	String() string
 }
 
-func WriteValueStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) {
+func WriteValueStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) error {
 	switch v.Kind() {
 	case BoolKind, FloatKind, StringKind, RefKind, StructKind, TypeKind, TupleKind:
-		writeUnchunkedValueStats(w, v, vr)
+		return writeUnchunkedValueStats(w, v, vr)
 	case BlobKind, ListKind, MapKind, SetKind:
-		writePtreeStats(ctx, w, v, vr)
+		return writePtreeStats(ctx, w, v, vr)
 	}
+
+	return nil
 }
 
-func writeUnchunkedValueStats(w io.Writer, v Value, vr ValueReader) {
-	fmt.Fprintf(w, "Kind: %s\nCompressedSize: %s\n", v.Kind().String(), humanize.Bytes(compressedSize(vr.Format(), v)))
+func writeUnchunkedValueStats(w io.Writer, v Value, vr ValueReader) error {
+	cmpSize, err := compressedSize(vr.Format(), v)
+
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(w, "Kind: %s\nCompressedSize: %s\n", v.Kind().String(), humanize.Bytes(cmpSize))
+	return err
 }
 
 const treeRowFormat = "%5s%20s%20s%20s\n"
 
 var treeLevelHeader = fmt.Sprintf(treeRowFormat, "Level", "Nodes", "Values/Node", "Size/Node")
 
-func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) {
+func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) error {
 	totalCompressedSize := uint64(0)
 	totalChunks := uint64(0)
 
-	fmt.Fprintf(w, "Kind: %s\n", v.Kind().String())
-	fmt.Fprintf(w, treeLevelHeader)
+	_, err := fmt.Fprintf(w, "Kind: %s\n", v.Kind().String())
+
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintf(w, treeLevelHeader)
+
+	if err != nil {
+		return err
+	}
 
 	level := int64(v.(Collection).asSequence().treeLevel())
 	nodes := ValueSlice{v}
@@ -72,49 +90,83 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 		for _, n := range nodes {
 			chunkCount++
 			if level > 0 {
-				n.WalkRefs(vr.Format(), func(r Ref) {
+				err := n.WalkRefs(vr.Format(), func(r Ref) error {
 					children = append(children, r)
+					return nil
 				})
+
+				if err != nil {
+					return err
+				}
 			}
 
 			s := n.(Collection).asSequence()
 			valueCount += uint64(s.seqLen())
 
-			h := n.Hash(vr.Format())
+			h, err := n.Hash(vr.Format())
+
+			if err != nil {
+				return err
+			}
+
 			if !visited.Has(h) {
 				// Indexed Ptrees can share nodes within the same tree level. Only count each unique value once
-				byteSize += compressedSize(vr.Format(), n)
+				cmpSize, err := compressedSize(vr.Format(), n)
+
+				if err != nil {
+					return err
+				}
+
+				byteSize += cmpSize
 				visited.Insert(h)
 			}
 		}
 
-		printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
+		err := printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
 
-		nodes = loadNextLevel(ctx, children, vr)
+		if err != nil {
+			return err
+		}
+
+		nodes, err = loadNextLevel(ctx, children, vr)
+
+		if err != nil {
+			return err
+		}
+
 		level--
 		totalCompressedSize += byteSize
 		totalChunks += chunkCount
 	}
+
+	return nil
 }
 
-func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) {
+func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) error {
 	avgItems := float64(values) / float64(chunks)
 	avgSize := byteSize / chunks
 
-	fmt.Fprintf(w, treeRowFormat,
+	_, err := fmt.Fprintf(w, treeRowFormat,
 		fmt.Sprintf("%d", level),
 		humanize.Comma(int64(chunks)),
 		fmt.Sprintf("%.1f", avgItems),
 		humanize.Bytes(avgSize))
+
+	return err
 }
 
-func compressedSize(nbf *NomsBinFormat, v Value) uint64 {
-	chunk := EncodeValue(v, nbf)
+func compressedSize(nbf *NomsBinFormat, v Value) (uint64, error) {
+	chunk, err := EncodeValue(v, nbf)
+
+	if err != nil {
+		return 0, err
+	}
+
 	compressed := snappy.Encode(nil, chunk.Data())
-	return uint64(len(compressed))
+	return uint64(len(compressed)), nil
 }
 
-func loadNextLevel(ctx context.Context, refs RefSlice, vr ValueReader) ValueSlice {
+func loadNextLevel(ctx context.Context, refs RefSlice, vr ValueReader) (ValueSlice, error) {
 	hs := make(hash.HashSlice, len(refs))
 	for i, r := range refs {
 		hs[i] = r.TargetHash()

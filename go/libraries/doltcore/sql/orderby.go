@@ -47,26 +47,32 @@ func (rs *RowSorter) Init(resolver TagResolver) error {
 
 // Less returns whether rLeft < rRight.
 // Init() must be called before use.
-func (rs *RowSorter) Less(rLeft, rRight row.Row) bool {
+func (rs *RowSorter) Less(rLeft, rRight row.Row) (bool, error) {
 	for _, ob := range rs.orderBys {
 		leftVal := ob.rowValGetter.Get(rLeft)
 		rightVal := ob.rowValGetter.Get(rRight)
 
 		// MySQL behavior is that nulls sort first in asc, last in desc
 		if types.IsNull(leftVal) {
-			return ob.direction.lessVal(true)
+			return ob.direction.lessVal(true), nil
 		} else if types.IsNull(rightVal) {
-			return ob.direction.lessVal(false)
+			return ob.direction.lessVal(false), nil
 		}
 
-		if leftVal.Less(rs.nbf, rightVal) {
-			return ob.direction.lessVal(true)
-		} else if rightVal.Less(rs.nbf, leftVal) {
-			return ob.direction.lessVal(false)
+		if lftLtRt, err := leftVal.Less(rs.nbf, rightVal); err != nil {
+			return false, err
+		} else if lftLtRt {
+			return ob.direction.lessVal(true), nil
+		} else {
+			if rtLtLft, err := rightVal.Less(rs.nbf, leftVal); err != nil {
+				return false, err
+			} else if rtLtLft {
+				return ob.direction.lessVal(false), nil
+			}
 		}
 	}
 
-	return false
+	return false, nil
 }
 
 type orderDirection bool
@@ -125,27 +131,47 @@ func createRowSorter(nbf *types.NomsBinFormat, statement *SelectStatement, order
 }
 
 // Boolean lesser function for rows. Returns whether rLeft < rRight
-type rowLesserFn func(rLeft row.Row, rRight row.Row) bool
+type rowLesserFn func(rLeft row.Row, rRight row.Row) (bool, error)
 
 // Returns a sorting transform for the rowLesserFn given. The transform will necessarily block until it receives all
 // input rows before sending rows to the rest of the pipeline.
 func newSortingTransform(lesser rowLesserFn) pipeline.TransformFunc {
 	rows := make([]pipeline.RowWithProps, 0)
 
-	sortAndWrite := func(outChan chan<- pipeline.RowWithProps) {
+	var err error
+	sortAndWrite := func(outChan chan<- pipeline.RowWithProps) error {
 		sort.Slice(rows, func(i, j int) bool {
-			return lesser(rows[i].Row, rows[j].Row)
+			if err != nil {
+				return false
+			}
+
+			var isLess bool
+			isLess, err = lesser(rows[i].Row, rows[j].Row)
+
+			if err != nil {
+				return false
+			}
+
+			return isLess
 		})
 		for _, r := range rows {
 			outChan <- r
 		}
+
+		return err
 	}
 
 	return func(inChan <-chan pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
 		for {
 			select {
 			case <-stopChan:
-				sortAndWrite(outChan)
+				sortErr := sortAndWrite(outChan)
+
+				// TODO: fix panics
+				if sortErr != nil {
+					panic(sortErr)
+				}
+
 				return
 			default:
 			}
@@ -155,12 +181,24 @@ func newSortingTransform(lesser rowLesserFn) pipeline.TransformFunc {
 				if ok {
 					rows = append(rows, r)
 				} else {
-					sortAndWrite(outChan)
+					sortErr := sortAndWrite(outChan)
+
+					// TODO: fix panics
+					if sortErr != nil {
+						panic(sortErr)
+					}
+
 					return
 				}
 
 			case <-stopChan:
-				sortAndWrite(outChan)
+				sortErr := sortAndWrite(outChan)
+
+				// TODO: fix panics
+				if sortErr != nil {
+					panic(sortErr)
+				}
+
 				return
 			}
 		}

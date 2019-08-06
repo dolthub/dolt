@@ -15,7 +15,6 @@
 package dtestutils
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/google/uuid"
@@ -55,7 +54,7 @@ var typedColColl, _ = schema.NewColCollection(
 )
 
 var TypedSchema = schema.SchemaFromCols(typedColColl)
-var UntypedSchema = untyped.UntypeSchema(TypedSchema)
+var UntypedSchema, _ = untyped.UntypeSchema(TypedSchema)
 var TypedRows []row.Row
 var UntypedRows []row.Row
 
@@ -70,22 +69,29 @@ func init() {
 			IsMarriedTag: types.Bool(MaritalStatus[i]),
 		}
 
-		marriedStr := "true"
-		if !MaritalStatus[i] {
-			marriedStr = "false"
+		r, err := row.New(types.Format_7_18, TypedSchema, taggedVals)
+
+		if err != nil {
+			panic(err)
 		}
 
-		TypedRows = append(TypedRows, row.New(types.Format_7_18, TypedSchema, taggedVals))
+		TypedRows = append(TypedRows, r)
 
 		taggedVals = row.TaggedValues{
-			IdTag:        types.String(UUIDS[i].String()),
+			IdTag:        types.UUID(uuid.MustParse(UUIDS[i].String())),
 			NameTag:      types.String(Names[i]),
-			AgeTag:       types.String(strconv.FormatUint(Ages[i], 10)),
+			AgeTag:       types.Uint(Ages[i]),
 			TitleTag:     types.String(Titles[i]),
-			IsMarriedTag: types.String(marriedStr),
+			IsMarriedTag: types.Bool(MaritalStatus[i]),
 		}
 
-		UntypedRows = append(UntypedRows, row.New(types.Format_7_18, UntypedSchema, taggedVals))
+		r, err = row.New(types.Format_7_18, TypedSchema, taggedVals)
+
+		if err != nil {
+			panic(err)
+		}
+
+		UntypedRows = append(UntypedRows, r)
 	}
 }
 
@@ -103,7 +109,13 @@ func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *str
 		TitleTag:     titleVal,
 	}
 
-	return row.New(types.Format_7_18, TypedSchema, taggedVals)
+	r, err := row.New(types.Format_7_18, TypedSchema, taggedVals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 func CreateTestDataTable(typed bool) (*table.InMemTable, schema.Schema) {
@@ -150,13 +162,22 @@ func ConvertToSchema(sch schema.Schema, rs ...row.Row) []row.Row {
 	newRows := make([]row.Row, len(rs))
 	for i, r := range rs {
 		taggedVals := make(row.TaggedValues)
-		r.IterCols(func(tag uint64, val types.Value) (stop bool) {
+		_, err := r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
 			if _, ok := sch.GetAllCols().GetByTag(tag); ok {
 				taggedVals[tag] = val
 			}
-			return false
+			return false, nil
 		})
-		newRows[i] = row.New(types.Format_7_18, sch, taggedVals)
+
+		if err != nil {
+			panic(err)
+		}
+
+		newRows[i], err = row.New(types.Format_7_18, sch, taggedVals)
+
+		if err != nil {
+			panic(err)
+		}
 	}
 	return newRows
 }

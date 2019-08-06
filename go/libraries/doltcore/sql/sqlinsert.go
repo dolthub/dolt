@@ -103,12 +103,19 @@ func ExecuteBatchInsert(
 	var result InsertResult
 	opt := InsertOptions{replace}
 	for _, r := range rows {
-		if !row.IsValid(r, tableSch) {
+		if has, err := row.IsValid(r, tableSch); err != nil {
+			return nil, err
+		} else if !has {
 			if ignore {
 				result.NumErrorsIgnored += 1
 				continue
 			} else {
-				col, constraint := row.GetInvalidConstraint(r, tableSch)
+				col, constraint, err := row.GetInvalidConstraint(r, tableSch)
+
+				if err != nil {
+					return nil, fmt.Errorf(ConstraintFailedFmt, "unknown", "unknown")
+				}
+
 				return nil, fmt.Errorf(ConstraintFailedFmt, col.Name, constraint)
 			}
 		}
@@ -165,7 +172,7 @@ func ExecuteInsert(
 func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
 	var sb strings.Builder
 	first := true
-	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if !first {
 			sb.WriteString(", ")
 		}
@@ -179,8 +186,13 @@ func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
 		}
 
 		first = false
-		return false
+		return false, nil
 	})
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
 
 	return sb.String()
 }
@@ -190,15 +202,19 @@ func prepareInsertVals(nbf *types.NomsBinFormat, cols []schema.Column, values *s
 
 	// Lack of primary keys is its own special kind of failure that we can detect before creating any rows
 	allKeysFound := true
-	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		for _, insertCol := range cols {
 			if insertCol.Tag == tag {
-				return false
+				return false, nil
 			}
 		}
 		allKeysFound = false
-		return true
+		return true, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	if !allKeysFound {
 		return nil, ErrMissingPrimaryKeys
@@ -301,7 +317,7 @@ func makeRow(nbf *types.NomsBinFormat, columns []schema.Column, tableSch schema.
 		}
 	}
 
-	return row.New(nbf, tableSch, taggedVals), nil
+	return row.New(nbf, tableSch, taggedVals)
 }
 
 // Returns an error result with return type to match ExecuteInsert

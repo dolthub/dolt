@@ -108,11 +108,27 @@ func (b *SqlBatcher) Insert(ctx context.Context, tableName string, r row.Row, op
 		return nil, err
 	}
 
-	key := r.NomsMapKey(sch).Value(ctx)
+	key, err := r.NomsMapKey(sch).Value(ctx)
 
-	rowExists := rowData.Get(ctx, key) != nil
+	if err != nil {
+		return nil, err
+	}
+
+	keyVal, _, err := rowData.MaybeGet(ctx, key)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rowExists := keyVal != nil
 	hashes := b.getHashes(ctx, tableName)
-	rowAlreadyTouched := hashes[key.Hash(b.root.VRW().Format())]
+	h, err := key.Hash(b.root.VRW().Format())
+
+	if err != nil {
+		return nil, err
+	}
+
+	rowAlreadyTouched := hashes[h]
 
 	if rowExists || rowAlreadyTouched {
 		if !opt.Replace {
@@ -121,7 +137,13 @@ func (b *SqlBatcher) Insert(ctx context.Context, tableName string, r row.Row, op
 	}
 
 	ed.Set(key, r.NomsMapValue(sch))
-	hashes[key.Hash(b.root.VRW().Format())] = true
+	h, err = key.Hash(b.root.VRW().Format())
+
+	if err != nil {
+		return nil, err
+	}
+
+	hashes[h] = true
 
 	return &BatchInsertResult{RowInserted: !rowExists, RowUpdated: rowExists || rowAlreadyTouched}, nil
 }
@@ -133,11 +155,18 @@ func (b *SqlBatcher) GetTable(ctx context.Context, tableName string) (*doltdb.Ta
 		return table, nil
 	}
 
-	if !b.root.HasTable(ctx, tableName) {
+	if has, err := b.root.HasTable(ctx, tableName); err != nil {
+		return nil, err
+	} else if !has {
 		return nil, fmt.Errorf("Unknown table %v", tableName)
 	}
 
-	table, _ := b.root.GetTable(ctx, tableName)
+	table, _, err := b.root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
 	b.tables[tableName] = table
 	return table, nil
 }
@@ -154,7 +183,12 @@ func (b *SqlBatcher) GetSchema(ctx context.Context, tableName string) (schema.Sc
 		return nil, err
 	}
 
-	sch := table.GetSchema(ctx)
+	sch, err := table.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	b.schemas[tableName] = sch
 	return sch, nil
 }
@@ -184,7 +218,12 @@ func (b *SqlBatcher) getRowData(ctx context.Context, tableName string) (types.Ma
 		return types.EmptyMap, err
 	}
 
-	rowData := table.GetRowData(ctx)
+	rowData, err := table.GetRowData(ctx)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
 	b.rowData[tableName] = rowData
 	return rowData, nil
 }
@@ -205,10 +244,25 @@ func (b *SqlBatcher) Commit(ctx context.Context) (*doltdb.RootValue, error) {
 	root := b.root
 
 	for tableName, ed := range b.editors {
-		newMap := ed.Map(ctx)
+		newMap, err := ed.Map(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
 		table := b.tables[tableName]
-		table = table.UpdateRows(ctx, newMap)
-		root = root.PutTable(ctx, b.db, tableName, table)
+		table, err = table.UpdateRows(ctx, newMap)
+
+		if err != nil {
+			return nil, err
+		}
+
+		root, err = root.PutTable(ctx, b.db, tableName, table)
+
+		if err != nil {
+			return nil, err
+		}
+
 	}
 
 	b.root = root

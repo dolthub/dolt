@@ -18,12 +18,15 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 func TestCommitMetaToAndFromNomsStruct(t *testing.T) {
 	cm, _ := NewCommitMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
-	cmSt := cm.toNomsStruct(types.Format_7_18)
+	cmSt, err := cm.toNomsStruct(types.Format_7_18)
+	assert.NoError(t, err)
 	result, err := commitMetaFromNomsSt(cmSt)
 
 	if err != nil {

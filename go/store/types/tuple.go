@@ -29,7 +29,10 @@ import (
 )
 
 func EmptyTuple(nbf *NomsBinFormat) Tuple {
-	return NewTuple(nbf)
+	t, err := NewTuple(nbf)
+	d.PanicIfError(err)
+
+	return t
 }
 
 type TupleIterator struct {
@@ -39,16 +42,20 @@ type TupleIterator struct {
 	nbf   *NomsBinFormat
 }
 
-func (itr *TupleIterator) Next() (uint64, Value) {
+func (itr *TupleIterator) Next() (uint64, Value, error) {
 	if itr.pos < itr.count {
 		valPos := itr.pos
-		val := itr.dec.readValue(itr.nbf)
+		val, err := itr.dec.readValue(itr.nbf)
+
+		if err != nil {
+			return 0, nil, err
+		}
 
 		itr.pos++
-		return valPos, val
+		return valPos, val, nil
 	}
 
-	return itr.count, nil
+	return itr.count, nil, nil
 }
 
 func (itr *TupleIterator) HasMore() bool {
@@ -68,42 +75,66 @@ type Tuple struct {
 }
 
 // readTuple reads the data provided by a decoder and moves the decoder forward.
-func readTuple(nbf *NomsBinFormat, dec *valueDecoder) Tuple {
+func readTuple(nbf *NomsBinFormat, dec *valueDecoder) (Tuple, error) {
 	start := dec.pos()
-	skipTuple(nbf, dec)
+	err := skipTuple(nbf, dec)
+
+	if err != nil {
+		return EmptyTuple(nbf), err
+	}
 	end := dec.pos()
-	return Tuple{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}
+	return Tuple{valueImpl{dec.vrw, nbf, dec.byteSlice(start, end), nil}}, nil
 }
 
-func skipTuple(nbf *NomsBinFormat, dec *valueDecoder) {
+func skipTuple(nbf *NomsBinFormat, dec *valueDecoder) error {
 	dec.skipKind()
 	count := dec.readCount()
 	for i := uint64(0); i < count; i++ {
-		dec.skipValue(nbf)
+		err := dec.skipValue(nbf)
+
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) {
+func walkTuple(nbf *NomsBinFormat, r *refWalker, cb RefCallback) error {
 	r.skipKind()
 	count := r.readCount()
 	for i := uint64(0); i < count; i++ {
-		r.walkValue(nbf, cb)
+		err := r.walkValue(nbf, cb)
+
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
-func NewTuple(nbf *NomsBinFormat, values ...Value) Tuple {
+func NewTuple(nbf *NomsBinFormat, values ...Value) (Tuple, error) {
 	var vrw ValueReadWriter
 	w := newBinaryNomsWriter()
-	TupleKind.writeTo(&w, nbf)
+	err := TupleKind.writeTo(&w, nbf)
+
+	if err != nil {
+		return EmptyTuple(nbf), err
+	}
+
 	numVals := len(values)
 	w.writeCount(uint64(numVals))
 	for i := 0; i < numVals; i++ {
 		if vrw == nil {
 			vrw = values[i].(valueReadWriter).valueReadWriter()
 		}
-		values[i].writeTo(&w, nbf)
+		err := values[i].writeTo(&w, nbf)
+
+		if err != nil {
+			return EmptyTuple(nbf), err
+		}
 	}
-	return Tuple{valueImpl{vrw, nbf, w.data(), nil}}
+
+	return Tuple{valueImpl{vrw, nbf, w.data(), nil}}, nil
 }
 
 func (t Tuple) Empty() bool {
@@ -115,35 +146,70 @@ func (t Tuple) Format() *NomsBinFormat {
 }
 
 // Value interface
-func (t Tuple) Value(ctx context.Context) Value {
-	return t
+func (t Tuple) Value(ctx context.Context) (Value, error) {
+	return t, nil
 }
 
-func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) {
+func (t Tuple) WalkValues(ctx context.Context, cb ValueCallback) error {
 	dec, count := t.decoderSkipToFields()
 	for i := uint64(0); i < count; i++ {
-		cb(dec.readValue(t.format()))
+		v, err := dec.readValue(t.format())
+
+		if err != nil {
+			return err
+		}
+
+		err = cb(v)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
-func (t Tuple) typeOf() *Type {
+func (t Tuple) typeOf() (*Type, error) {
 	dec, count := t.decoderSkipToFields()
 	ts := make(typeSlice, 0, count)
 	var lastType *Type
 	for i := uint64(0); i < count; i++ {
 		if lastType != nil {
 			offset := dec.offset
-			if dec.isValueSameTypeForSure(t.format(), lastType) {
+			is, err := dec.isValueSameTypeForSure(t.format(), lastType)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if is {
 				continue
 			}
 			dec.offset = offset
 		}
 
-		lastType = dec.readTypeOfValue(t.format())
+		var err error
+		lastType, err = dec.readTypeOfValue(t.format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		if lastType.Kind() == UnknownKind {
+			// if any of the elements are unknown, return unknown
+			return nil, ErrUnknownType
+		}
+
 		ts = append(ts, lastType)
 	}
 
-	return makeCompoundType(TupleKind, makeUnionType(ts...))
+	ut, err := makeUnionType(ts...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return makeCompoundType(TupleKind, ut)
 }
 
 func (t Tuple) decoderSkipToFields() (valueDecoder, uint64) {
@@ -159,35 +225,55 @@ func (t Tuple) Len() uint64 {
 	return count
 }
 
-func (t Tuple) Iterator() *TupleIterator {
+func (t Tuple) Iterator() (*TupleIterator, error) {
 	return t.IteratorAt(0)
 }
 
-func (t Tuple) IteratorAt(pos uint64) *TupleIterator {
+func (t Tuple) IteratorAt(pos uint64) (*TupleIterator, error) {
 	dec, count := t.decoderSkipToFields()
 
 	for i := uint64(0); i < pos; i++ {
-		dec.skipValue(t.format())
+		err := dec.skipValue(t.format())
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return &TupleIterator{dec, count, pos, t.format()}
+	return &TupleIterator{dec, count, pos, t.format()}, nil
 }
 
 // IterFields iterates over the fields, calling cb for every field in the tuple until cb returns false
-func (t Tuple) IterFields(cb func(index uint64, value Value) (stop bool)) {
-	itr := t.Iterator()
+func (t Tuple) IterFields(cb func(index uint64, value Value) (stop bool, err error)) error {
+	itr, err := t.Iterator()
+
+	if err != nil {
+		return err
+	}
+
 	for itr.HasMore() {
-		i, curr := itr.Next()
-		stop := cb(i, curr)
+		i, curr, err := itr.Next()
+
+		if err != nil {
+			return err
+		}
+
+		stop, err := cb(i, curr)
+
+		if err != nil {
+			return err
+		}
 
 		if stop {
 			break
 		}
 	}
+
+	return nil
 }
 
 // Get returns the value of a field in the tuple. If the tuple does not a have a field at the index then this panics
-func (t Tuple) Get(n uint64) Value {
+func (t Tuple) Get(n uint64) (Value, error) {
 	dec, count := t.decoderSkipToFields()
 
 	if n >= count {
@@ -195,17 +281,25 @@ func (t Tuple) Get(n uint64) Value {
 	}
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue(t.format())
+		err := dec.skipValue(t.format())
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	v := dec.readValue(t.format())
-	return v
+	return dec.readValue(t.format())
 }
 
 // Set returns a new tuple where the field at index n is set to value. Attempting to use Set on an index that is outside
 // of the bounds will cause a panic.  Use Append to add additional values, not Set.
-func (t Tuple) Set(n uint64, v Value) Tuple {
-	prolog, head, tail, count, found := t.splitFieldsAt(n)
+func (t Tuple) Set(n uint64, v Value) (Tuple, error) {
+	prolog, head, tail, count, found, err := t.splitFieldsAt(n)
+
+	if err != nil {
+		return EmptyTuple(t.nbf), err
+	}
+
 	if !found {
 		d.Panic("Cannot set tuple value at index %d as it is outside the range [0,%d]", n, count-1)
 	}
@@ -215,13 +309,17 @@ func (t Tuple) Set(n uint64, v Value) Tuple {
 
 	w.writeCount(count)
 	w.writeRaw(head)
-	v.writeTo(&w, t.format())
+	err = v.writeTo(&w, t.format())
+
+	if err != nil {
+		return EmptyTuple(t.nbf), err
+	}
 	w.writeRaw(tail)
 
-	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}
+	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}, nil
 }
 
-func (t Tuple) Append(v Value) Tuple {
+func (t Tuple) Append(v Value) (Tuple, error) {
 	dec := t.decoder()
 	dec.skipKind()
 	prolog := dec.buff[:dec.offset]
@@ -232,34 +330,47 @@ func (t Tuple) Append(v Value) Tuple {
 	w.writeRaw(prolog)
 	w.writeCount(count + 1)
 	w.writeRaw(dec.buff[fieldsOffset:])
-	v.writeTo(&w, t.format())
+	err := v.writeTo(&w, t.format())
 
-	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}
+	if err != nil {
+		return EmptyTuple(t.nbf), err
+	}
+
+	return Tuple{valueImpl{t.vrw, t.format(), w.data(), nil}}, nil
 }
 
 // splitFieldsAt splits the buffer into two parts. The fields coming before the field we are looking for
 // and the fields coming after it.
-func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64, found bool) {
+func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64, found bool, err error) {
 	dec := t.decoder()
 	dec.skipKind()
 	prolog = dec.buff[:dec.offset]
 	count = dec.readCount()
 
 	if n >= count {
-		return nil, nil, nil, count, false
+		return nil, nil, nil, count, false, nil
 	}
 
 	found = true
 	fieldsOffset := dec.offset
 
 	for i := uint64(0); i < n; i++ {
-		dec.skipValue(t.format())
+		err := dec.skipValue(t.format())
+
+		if err != nil {
+			return nil, nil, nil, 0, false, err
+		}
 	}
 
 	head = dec.buff[fieldsOffset:dec.offset]
 
 	if n != count-1 {
-		dec.skipValue(t.format())
+		err := dec.skipValue(t.format())
+
+		if err != nil {
+			return nil, nil, nil, 0, false, err
+		}
+
 		tail = dec.buff[dec.offset:len(dec.buff)]
 	}
 
@@ -290,26 +401,45 @@ func (t Tuple) splitFieldsAt(n uint64) (prolog, head, tail []byte, count uint64,
 	return false
 }*/
 
-func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if otherTuple, ok := other.(Tuple); ok {
-		itr := t.Iterator()
-		otherItr := otherTuple.Iterator()
+		itr, err := t.Iterator()
+
+		if err != nil {
+			return false, err
+		}
+
+		otherItr, err := otherTuple.Iterator()
+
+		if err != nil {
+			return false, err
+		}
+
 		for itr.HasMore() {
 			if !otherItr.HasMore() {
 				// equal up til the end of other. other is shorter, therefore it is less
-				return false
+				return false, nil
 			}
 
-			_, currVal := itr.Next()
-			_, currOthVal := otherItr.Next()
+			_, currVal, err := itr.Next()
+
+			if err != nil {
+				return false, err
+			}
+
+			_, currOthVal, err := otherItr.Next()
+
+			if err != nil {
+				return false, err
+			}
 
 			if !currVal.Equals(currOthVal) {
 				return currVal.Less(nbf, currOthVal)
 			}
 		}
 
-		return itr.Len() < otherItr.Len()
+		return itr.Len() < otherItr.Len(), nil
 	}
 
-	return TupleKind < other.Kind()
+	return TupleKind < other.Kind(), nil
 }

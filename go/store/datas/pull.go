@@ -30,9 +30,9 @@ import (
 
 	"github.com/golang/snappy"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -167,7 +167,7 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
 	found := make(chan *chunks.Chunk)
 
-	ae := nbs.NewAtomicError()
+	ae := atomicerr.New()
 	go func() {
 		defer close(found)
 		err := srcDB.chunkStore().GetMany(ctx, batch.HashSet(), found)
@@ -207,12 +207,18 @@ func putChunks(ctx context.Context, sinkDB Database, hashes hash.HashSlice, need
 			return hash.HashSlice{}, err
 		}
 
-		types.WalkRefs(*c, sinkDB.Format(), func(r types.Ref) {
+		err = types.WalkRefs(*c, sinkDB.Format(), func(r types.Ref) error {
 			if !nextLevel.Has(r.TargetHash()) {
 				uniqueOrdered = append(uniqueOrdered, r.TargetHash())
 				nextLevel.Insert(r.TargetHash())
 			}
+
+			return nil
 		})
+
+		if err != nil {
+			return hash.HashSlice{}, err
+		}
 	}
 
 	return uniqueOrdered, nil

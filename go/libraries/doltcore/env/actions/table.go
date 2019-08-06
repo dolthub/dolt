@@ -28,7 +28,12 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	tbls := AllTables(ctx, roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
+	tbls, err := AllTables(ctx, roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
+
+	if err != nil {
+		return err
+	}
+
 	return checkoutTables(ctx, dEnv, roots, tbls)
 
 }
@@ -50,10 +55,18 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 	staged := roots[StagedRoot]
 	head := roots[HeadRoot]
 	for _, tblName := range tbls {
-		tbl, ok := staged.GetTable(ctx, tblName)
+		tbl, ok, err := staged.GetTable(ctx, tblName)
+
+		if err != nil {
+			return err
+		}
 
 		if !ok {
-			tbl, ok = head.GetTable(ctx, tblName)
+			tbl, ok, err = head.GetTable(ctx, tblName)
+
+			if err != nil {
+				return err
+			}
 
 			if !ok {
 				unknown = append(unknown, tblName)
@@ -61,7 +74,11 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 			}
 		}
 
-		currRoot = currRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+		currRoot, err = currRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(unknown) > 0 {

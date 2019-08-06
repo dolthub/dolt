@@ -63,7 +63,12 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
-	tblNames := root.GetTableNames(context.TODO())
+	tblNames, err := root.GetTableNames(context.TODO())
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
+	}
+
 	sort.Strings(tblNames)
 
 	if len(tblNames) == 0 {
@@ -74,7 +79,12 @@ func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.Ver
 	cli.Printf("Tables in %s:\n", label)
 	for _, tbl := range tblNames {
 		if verbose {
-			h, _ := root.GetTableHash(context.TODO(), tbl)
+			h, _, err := root.GetTableHash(context.TODO(), tbl)
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+			}
+
 			cli.Printf("\t%-32s %s\n", tbl, h.String())
 		} else {
 			cli.Println("\t", tbl)

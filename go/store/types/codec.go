@@ -33,39 +33,65 @@ import (
 const initialBufferSize = 2048
 
 type valueBytes interface {
-	valueBytes(*NomsBinFormat) []byte
+	valueBytes(*NomsBinFormat) ([]byte, error)
 }
 
-func EncodeValue(v Value, nbf *NomsBinFormat) chunks.Chunk {
+func EncodeValue(v Value, nbf *NomsBinFormat) (chunks.Chunk, error) {
 	switch v := v.(type) {
 	case valueBytes:
-		return chunks.NewChunk(v.valueBytes(nbf))
+		bytes, err := v.valueBytes(nbf)
+
+		if err != nil {
+			return chunks.EmptyChunk, err
+		}
+
+		return chunks.NewChunk(bytes), nil
+
 	case *Type:
+		if v.Kind() == UnknownKind {
+			return chunks.EmptyChunk, ErrUnknownType
+		}
+
 		w := newBinaryNomsWriter()
-		v.writeTo(&w, nbf)
-		return chunks.NewChunk(w.data())
+		err := v.writeTo(&w, nbf)
+
+		if err != nil {
+			return chunks.EmptyChunk, err
+		}
+
+		return chunks.NewChunk(w.data()), nil
 	}
 
-	panic("unreachable")
+	return chunks.EmptyChunk, ErrUnknownType
 }
 
-func decodeFromBytes(data []byte, vrw ValueReadWriter) Value {
+func decodeFromBytes(data []byte, vrw ValueReadWriter) (Value, error) {
 	dec := newValueDecoder(data, vrw)
-	v := dec.readValue(vrw.Format())
+	v, err := dec.readValue(vrw.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
-	return v
+	return v, nil
 }
 
-func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) Value {
+func decodeFromBytesWithValidation(data []byte, vrw ValueReadWriter) (Value, error) {
 	r := binaryNomsReader{data, 0}
 	dec := newValueDecoderWithValidation(r, vrw)
-	v := dec.readValue(vrw.Format())
+	v, err := dec.readValue(vrw.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
 	d.PanicIfFalse(dec.pos() == uint32(len(data)))
-	return v
+	return v, nil
 }
 
 // DecodeValue decodes a value from a chunk source. It is an error to provide an empty chunk.
-func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) Value {
+func DecodeValue(c chunks.Chunk, vrw ValueReadWriter) (Value, error) {
 	d.PanicIfTrue(c.IsEmpty())
 	return decodeFromBytes(c.Data(), vrw)
 }

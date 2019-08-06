@@ -20130,10 +20130,12 @@ func TestCreateTables(t *testing.T) {
 	root, err = sqletestutil.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	table, _ := root.GetTable(ctx, "daily_summary")
+	table, _, err := root.GetTable(ctx, "daily_summary")
+	assert.NoError(t, err)
 	assert.NotNil(t, table)
 
-	table, _ = root.GetTable(ctx, "symbols")
+	table, _, err = root.GetTable(ctx, "symbols")
+	assert.NoError(t, err)
 	assert.NotNil(t, table)
 }
 
@@ -20149,11 +20151,17 @@ func TestInserts(t *testing.T) {
 	root, err = sqletestutil.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	table, _ := root.GetTable(ctx, "daily_summary")
-	assert.Equal(t, uint64(7953), table.GetRowData(ctx).Len())
+	table, _, err := root.GetTable(ctx, "daily_summary")
+	assert.NoError(t, err)
+	rowData, err := table.GetRowData(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(7953), rowData.Len())
 
-	table, _ = root.GetTable(ctx, "symbols")
-	assert.Equal(t, uint64(6879), table.GetRowData(ctx).Len())
+	table, _, err = root.GetTable(ctx, "symbols")
+	assert.NoError(t, err)
+	rowData, err = table.GetRowData(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(6879), rowData.Len())
 }
 
 func TestJoin(t *testing.T) {
