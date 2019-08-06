@@ -199,7 +199,7 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	p := newFakeTablePersister()
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, c, defaultMemTableSize)
 	assert.NoError(err)
 	defer store.Close()
 

@@ -139,7 +139,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	}
 	l := types.NewList(context.Background(), db, items...)
 	numChildChunks := 0
-	l.WalkRefs(types.Format_Default, func(r types.Ref) {
+	l.WalkRefs(db.Format(), func(r types.Ref) {
 		numChildChunks++
 	})
 	s.True(numChildChunks > 0)
