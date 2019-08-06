@@ -27,7 +27,7 @@ type NomsKind uint8
 // All supported kinds of Noms types are enumerated here.
 // The ordering of these (especially Bool, Float and String) is important for ordering of values.
 const (
-	BoolKind    NomsKind = iota
+	BoolKind NomsKind = iota
 	FloatKind
 	StringKind
 	BlobKind

@@ -227,7 +227,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		if exists, err := mvOpts.Dest.Exists(context.TODO(), root, dEnv.FS); err != nil {
 			cli.Println(color.RedString(err.Error()))
 			return 1
-		} else if exists{
+		} else if exists {
 			cli.PrintErrln(color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
 			return 1
 		}

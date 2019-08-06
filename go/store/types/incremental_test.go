@@ -125,7 +125,7 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected,err:= NewMap(context.Background(), vs, getTestVals(vs)...)
+	expected, err := NewMap(context.Background(), vs, getTestVals(vs)...)
 	assert.NoError(err)
 	ref, err := vs.WriteValue(context.Background(), expected)
 	assert.NoError(err)

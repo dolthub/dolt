@@ -24,9 +24,10 @@ package nomdl
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"strings"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 
@@ -160,21 +161,21 @@ func TestStructTypes(t *testing.T) {
 
 	assertParseType(t, `Struct S {
                 x: Float
-        }`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{ "x": types.FloaTType, })))
+        }`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,
-	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{ "x": types.FloaTType })))
+	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,
 	        y: String
-	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{ "x": types.FloaTType, "y": types.StringType})))
+	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType, "y": types.StringType})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,
 	        y: String,
-	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{ "x": types.FloaTType, "y": types.StringType})))
+	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType, "y": types.StringType})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,

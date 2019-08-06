@@ -224,7 +224,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_MergeTheirs() {
 	b := kvs{"k1", "k-too", "k2", "k-two"}
 	exp := kvs{"k1", "k-too", "k2", "k-two"}
 
-	merged, err := ThreeWay(context.Background(),  mustValue(s.create(a)), mustValue(s.create(b)), mustValue(s.create(p)), s.vs, Theirs, nil)
+	merged, err := ThreeWay(context.Background(), mustValue(s.create(a)), mustValue(s.create(b)), mustValue(s.create(p)), s.vs, Theirs, nil)
 	if s.NoError(err) {
 		expected, err := s.create(exp)
 		s.NoError(err)

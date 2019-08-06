@@ -77,7 +77,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 	if asTr.rowBuffer == nil {
 		asTr.processRow(r, outChan, badRowChan)
 	} else if asTr.numSamples <= 0 || len(asTr.rowBuffer) < asTr.numSamples {
-		 _, err := r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		_, err := r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 			if !types.IsNull(val) {
 				strVal := val.(types.String)
 				printWidth := StringWidth(string(strVal))
@@ -94,10 +94,10 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 			return false, nil
 		})
 
-		 if err != nil {
-			 badRowChan <- &pipeline.TransformRowFailure{r.Row, "fwt", err.Error()}
-			 return
-		 }
+		if err != nil {
+			badRowChan <- &pipeline.TransformRowFailure{r.Row, "fwt", err.Error()}
+			return
+		}
 
 		asTr.rowBuffer = append(asTr.rowBuffer, r)
 	} else {

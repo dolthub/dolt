@@ -23,9 +23,10 @@ package main
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"os"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/suite"
 
@@ -125,7 +126,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	s.True(ok)
 	h, err := value.Hash(types.Format_7_18)
 	s.NoError(err)
-	s.True(h== ref.TargetHash(), "commit.value hash == writevalue hash")
+	s.True(h == ref.TargetHash(), "commit.value hash == writevalue hash")
 
 	metaVal, ok, err := commit.MaybeGet(datas.MetaField)
 	s.NoError(err)

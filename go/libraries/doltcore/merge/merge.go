@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 
@@ -199,11 +200,9 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 			return nil, nil, err
 		}
 
-
 		if err != nil {
 			return nil, nil, err
 		}
-
 
 		if err != nil {
 			return nil, nil, err

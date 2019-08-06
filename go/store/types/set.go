@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
 )

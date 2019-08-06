@@ -153,7 +153,6 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 		updates++
 	}
 
-
 	tbl, err = tbl.UpdateRows(context.Background(), m)
 
 	if err != nil {

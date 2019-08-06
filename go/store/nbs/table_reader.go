@@ -26,10 +26,11 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"sort"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/golang/snappy"
 

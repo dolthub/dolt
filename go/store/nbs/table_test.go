@@ -25,10 +25,11 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sort"
 	"sync"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/stretchr/testify/assert"
 

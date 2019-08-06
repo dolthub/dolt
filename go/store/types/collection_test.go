@@ -22,8 +22,9 @@
 package types
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 type collectionTestSuite struct {

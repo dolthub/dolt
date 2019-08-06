@@ -35,7 +35,7 @@ import (
 var EmptyStructType, _ = MakeStructType("")
 
 func EmptyStruct(nbf *NomsBinFormat) Struct {
-	es, _ :=  newStruct(nbf, "", nil, nil)
+	es, _ := newStruct(nbf, "", nil, nil)
 	return es
 }
 

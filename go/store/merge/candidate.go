@@ -23,6 +23,7 @@ package merge
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/d"

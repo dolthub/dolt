@@ -168,7 +168,6 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 				return nil, pipeline.ImmutableProperties{}, err
 			}
 
-
 			if baseRow != nil {
 				if mergeRow != nil && r != nil {
 					cr.bufferedRows[2] = pipeline.NewRowWithProps(baseRow, map[string]interface{}{mergeVersionProp: BaseVersion})

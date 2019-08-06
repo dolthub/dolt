@@ -122,7 +122,7 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 			}
 		}
 
-		err :=printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
+		err := printTreeLevel(w, uint64(level), valueCount, chunkCount, byteSize)
 
 		if err != nil {
 			return err
@@ -142,7 +142,7 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 	return nil
 }
 
-func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) error{
+func printTreeLevel(w io.Writer, level, values, chunks, byteSize uint64) error {
 	avgItems := float64(values) / float64(chunks)
 	avgSize := byteSize / chunks
 

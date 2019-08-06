@@ -326,7 +326,7 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		case sqlparser.InStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				set := right.(types.Set)
-				has, err :=  set.Has(context.Background(), left)
+				has, err := set.Has(context.Background(), left)
 
 				if err != nil {
 					panic(err)

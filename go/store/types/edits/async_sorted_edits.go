@@ -15,8 +15,9 @@
 package edits
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sort"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -67,7 +68,7 @@ type AsyncSortedEdits struct {
 	sortConcurrency  int
 	asyncConcurrency int
 
-	ae 		   *atomicerr.AtomicError
+	ae         *atomicerr.AtomicError
 	sortChan   chan types.KVPSlice
 	resultChan chan types.KVPSlice
 	doneChan   chan bool
@@ -102,7 +103,7 @@ func NewAsyncSortedEdits(nbf *types.NomsBinFormat, sliceSize, asyncConcurrency, 
 		sliceSize:        sliceSize,
 		asyncConcurrency: asyncConcurrency,
 		sortConcurrency:  sortConcurrency,
-		ae:				  ae,
+		ae:               ae,
 		sortChan:         sortChan,
 		resultChan:       resChan,
 		doneChan:         doneChan,
@@ -158,13 +159,13 @@ func (ase *AsyncSortedEdits) FinishedEditing() (types.EditProvider, error) {
 
 	ase.wait()
 
-	if err := ase.ae.Get(); err != nil{
+	if err := ase.ae.Get(); err != nil {
 		return nil, err
 	}
 
 	ase.Sort()
 
-	if err := ase.ae.Get(); err != nil{
+	if err := ase.ae.Get(); err != nil {
 		return nil, err
 	}
 

@@ -25,12 +25,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"net/url"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"

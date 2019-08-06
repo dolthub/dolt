@@ -96,7 +96,7 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tbl *doltdb.Ta
 
 			if has, err := row.IsValid(r, tblSch); err != nil {
 				return false, err
-			} else if !has{
+			} else if !has {
 				return false, table.NewBadRow(r)
 			}
 

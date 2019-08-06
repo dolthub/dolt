@@ -27,10 +27,11 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"hash/crc32"
 	"io"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 )

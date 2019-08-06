@@ -25,11 +25,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"math/rand"
 	"sync"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -161,7 +162,7 @@ func newTestMapFromMap(m Map) testMap {
 		return nil
 	})
 
-	d.PanicIfError(err);
+	d.PanicIfError(err)
 
 	return testMap{mapEntrySlice{entries, Format_7_18}, Float(-0)}
 }
@@ -293,7 +294,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 				d.PanicIfError(err)
 				return idx == v2.Len()
 			},
-			prependOne: func() (Collection, error){
+			prependOne: func() (Collection, error) {
 				dup := make([]mapEntry, length+1)
 				dup[0] = mapEntry{Float(-1), Float(-2)}
 				copy(dup[1:], elems.entries.entries)
@@ -429,7 +430,7 @@ func getTestRefToValueOrderMap(scale int, vrw ValueReadWriter) testMap {
 	})
 }
 
-func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modified []Value, err error)  {
+func accumulateMapDiffChanges(m1, m2 Map) (added []Value, removed []Value, modified []Value, err error) {
 	ae := atomicerr.New()
 	changes := make(chan ValueChanged)
 	go func() {
@@ -558,7 +559,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	_, err = vs.Commit(context.Background(), rt, rt)
 	assert.NoError(t, err)
 
-	ref, err :=  NewRef(m, Format_7_18)
+	ref, err := NewRef(m, Format_7_18)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(3), ref.Height())
 	assert.Equal(t, 105, cs.Reads)
@@ -1302,7 +1303,7 @@ func TestMapIterAll(t *testing.T) {
 		assert.NoError(err)
 		idx := uint64(0)
 
-		err = m.IterAll(context.Background(), func(k, v Value) error{
+		err = m.IterAll(context.Background(), func(k, v Value) error {
 			assert.True(tm.entries.entries[idx].key.Equals(k))
 			assert.True(tm.entries.entries[idx].value.Equals(v))
 			idx++
@@ -1399,7 +1400,7 @@ func testMapOrder(assert *assert.Assertions, vrw ValueReadWriter, keyType, value
 	m, err := NewMap(context.Background(), vrw, tuples...)
 	assert.NoError(err)
 	i := 0
-	err = m.IterAll(context.Background(), func(key, value Value) error{
+	err = m.IterAll(context.Background(), func(key, value Value) error {
 		hi, err := expectOrdering[i].Hash(Format_7_18)
 		assert.NoError(err)
 		kh, err := key.Hash(Format_7_18)
@@ -1704,14 +1705,14 @@ func TestMapChunks(t *testing.T) {
 	c1 := getChunks(l1)
 	assert.Len(c1, 0)
 
-	ref1, err :=NewRef(Float(0), Format_7_18)
+	ref1, err := NewRef(Float(0), Format_7_18)
 	assert.NoError(err)
 	l2, err := NewMap(context.Background(), vrw, ref1, Float(1))
 	assert.NoError(err)
 	c2 := getChunks(l2)
 	assert.Len(c2, 1)
 
-	ref2, err :=NewRef(Float(1), Format_7_18)
+	ref2, err := NewRef(Float(1), Format_7_18)
 	assert.NoError(err)
 	l3, err := NewMap(context.Background(), vrw, Float(0), ref2)
 	assert.NoError(err)
@@ -1873,7 +1874,7 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 	for i, keyOrValue := range kvs {
 		if i%2 == 0 {
 			assert.True(m.Has(context.Background(), keyOrValue))
-			retrievedVal, ok, err :=m.MaybeGet(context.Background(), keyOrValue)
+			retrievedVal, ok, err := m.MaybeGet(context.Background(), keyOrValue)
 			assert.True(ok)
 			assert.NoError(err)
 			assert.True(v.Equals(retrievedVal))
@@ -1906,7 +1907,7 @@ func TestMapRemoveLastWhenNotLoaded(t *testing.T) {
 			return EmptyMap, err
 		}
 
-		v, err :=  vs.ReadValue(context.Background(), ref.TargetHash())
+		v, err := vs.ReadValue(context.Background(), ref.TargetHash())
 
 		if err != nil {
 			return EmptyMap, err

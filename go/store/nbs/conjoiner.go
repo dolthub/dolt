@@ -24,10 +24,11 @@ package nbs
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 )
 
 type conjoiner interface {

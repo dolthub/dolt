@@ -25,10 +25,10 @@ func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, err
 	cols := make([]*sql.Column, sch.GetAllCols().Size())
 
 	var i int
-	 err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		cols[i] = doltColToSqlCol(tableName, col)
 		i++
-		return false ,nil
+		return false, nil
 	})
 
 	return cols, err

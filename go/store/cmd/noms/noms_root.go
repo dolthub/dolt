@@ -24,9 +24,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"os"
 	"strings"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	flag "github.com/juju/gnuflag"
 
@@ -161,7 +162,7 @@ func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool
 		return false
 	}
 
-	yep, err :=  r.(types.Map).Any(ctx, func(k, v types.Value) bool {
+	yep, err := r.(types.Map).Any(ctx, func(k, v types.Value) bool {
 		if !datas.IsRefOfCommitType(nbf, mustType(types.TypeOf(v))) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false

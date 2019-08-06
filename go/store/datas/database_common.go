@@ -408,7 +408,7 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 	var initialHead types.Ref
 	if r, hasHead, err := currentDatasets.MaybeGet(ctx, datasetID); err != nil {
 
-	} else if!hasHead {
+	} else if !hasHead {
 		return nil
 	} else {
 		initialHead = r.(types.Ref)

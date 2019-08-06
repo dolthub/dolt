@@ -202,7 +202,7 @@ var emptyInterface = reflect.TypeOf((*interface{})(nil)).Elem()
 var marshalerInterface = reflect.TypeOf((*Marshaler)(nil)).Elem()
 var structNameMarshalerInterface = reflect.TypeOf((*StructNameMarshaler)(nil)).Elem()
 
-type  encoderFunc func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error)
+type encoderFunc func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error)
 
 func boolEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 	return types.Bool(v.Bool()), nil
@@ -250,7 +250,7 @@ func typeEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[strin
 	case reflect.Bool:
 		return boolEncoder, nil
 	case reflect.Float64, reflect.Float32:
-		return float64Encoder,nil
+		return float64Encoder, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return intEncoder, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
@@ -583,7 +583,6 @@ func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 	if !embedded {
 		sort.Sort(fields)
 	}
-
 
 	return fields, knownShape, originalFieldIndex, err
 }

@@ -25,9 +25,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"math"
 	"math/rand"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/golang/snappy"
 

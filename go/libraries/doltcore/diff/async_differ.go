@@ -17,15 +17,16 @@ package diff
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type AsyncDiffer struct {
-	ae *atomicerr.AtomicError
+	ae         *atomicerr.AtomicError
 	stopChan   chan struct{}
 	diffChan   chan diff.Difference
 	bufferSize int

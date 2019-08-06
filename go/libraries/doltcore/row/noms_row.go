@@ -16,6 +16,7 @@ package row
 
 import (
 	"errors"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )

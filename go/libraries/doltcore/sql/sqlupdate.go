@@ -63,7 +63,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errUpdate("Unsupported update statement %v", query)
 	}
 
-	has, err :=root.HasTable(ctx, tableName)
+	has, err := root.HasTable(ctx, tableName)
 
 	if err != nil {
 		return nil, err

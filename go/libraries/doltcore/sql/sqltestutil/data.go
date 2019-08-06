@@ -328,7 +328,6 @@ func GetAllRows(root *doltdb.RootValue, tableName string) ([]row.Row, error) {
 		return nil, err
 	}
 
-
 	return rows, nil
 }
 

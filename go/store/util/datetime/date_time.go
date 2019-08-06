@@ -45,7 +45,7 @@ type DateTime struct {
 // DateTimeType is the Noms type used to represent date time objects in Noms.
 // The field secSinceEpoch may contain fractions in cases where seconds are
 // not sufficient.
-var DateTimeType, _= types.MakeStructTypeFromFields(datetypename, types.FieldMap{
+var DateTimeType, _ = types.MakeStructTypeFromFields(datetypename, types.FieldMap{
 	"secSinceEpoch": types.FloaTType,
 })
 

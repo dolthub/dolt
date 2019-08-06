@@ -23,12 +23,13 @@ package perf
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/stretchr/testify/assert"
 
@@ -50,7 +51,6 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	in := make(chan types.Value, 16)
 	ae := atomicerr.New()
 	out := types.NewStreamingList(context.Background(), s.Database, ae, in)
-
 
 	for i := 0; i < 1e7; i++ {
 		in <- types.Float(s.r.Int63())
@@ -98,7 +98,7 @@ func (s *perfSuite) Test03Read10mNumbers() {
 }
 
 func (s *perfSuite) Test04Read10mStructs() {
-	s.headList("BuildList10mStructs").IterAll(context.Background(), func(v types.Value, index uint64) error { return nil})
+	s.headList("BuildList10mStructs").IterAll(context.Background(), func(v types.Value, index uint64) error { return nil })
 }
 
 func (s *perfSuite) Test05Concat10mValues2kTimes() {

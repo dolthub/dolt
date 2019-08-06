@@ -250,7 +250,7 @@ func TestIntersectionIterator(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Panics(func() {
-	_, _ = it2.SkipTo(context.Background(), nil)
+		_, _ = it2.SkipTo(context.Background(), nil)
 	})
 	assert.Equal(Float(30), mustValue(it2.SkipTo(context.Background(), Float(5))))
 	assert.Equal(Float(60), mustValue(it2.SkipTo(context.Background(), Float(60))))
@@ -316,7 +316,7 @@ func (ui *UnionTestIterator) SkipTo(ctx context.Context, v Value) (Value, error)
 func NewUnionTestIterator(i1, i2 SetIterator, cntr *int) (SetIterator, error) {
 	ui, err := NewUnionIterator(context.Background(), Format_7_18, i1, i2)
 
-	if err  != nil {
+	if err != nil {
 		return nil, err
 	}
 

@@ -23,10 +23,11 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"math/rand"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -122,7 +123,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 			validate: func(v2 Collection) bool {
 				l2 := v2.(List)
 				out := ValueSlice{}
-				err := l2.IterAll(context.Background(), func(v Value, index uint64) error{
+				err := l2.IterAll(context.Background(), func(v Value, index uint64) error {
 					out = append(out, v)
 					return nil
 				})
@@ -336,7 +337,7 @@ func TestListAppend(t *testing.T) {
 	}
 
 	listToSimple := func(cl List) (simple testList) {
-		err := cl.IterAll(context.Background(), func(v Value, offset uint64) error{
+		err := cl.IterAll(context.Background(), func(v Value, offset uint64) error {
 			simple = append(simple, v)
 			return nil
 		})
@@ -465,13 +466,13 @@ func TestListInsertStart(t *testing.T) {
 	assert.NoError(err)
 	cl2, err := cl.Edit().Insert(0, Float(42)).List(context.Background())
 	assert.NoError(err)
-	cl3 , err := cl2.Edit().Insert(0, Float(43)).List(context.Background())
+	cl3, err := cl2.Edit().Insert(0, Float(43)).List(context.Background())
 	assert.NoError(err)
-	cl4 , err := cl3.Edit().Insert(0, getTestList().AsValuables()...).List(context.Background())
+	cl4, err := cl3.Edit().Insert(0, getTestList().AsValuables()...).List(context.Background())
 	assert.NoError(err)
-	cl5 , err := cl4.Edit().Insert(0, Float(44), Float(45)).List(context.Background())
+	cl5, err := cl4.Edit().Insert(0, Float(44), Float(45)).List(context.Background())
 	assert.NoError(err)
-	cl6 , err := cl5.Edit().Insert(0, getTestList().AsValuables()...).List(context.Background())
+	cl6, err := cl5.Edit().Insert(0, getTestList().AsValuables()...).List(context.Background())
 	assert.NoError(err)
 
 	expected := getTestList()
@@ -517,19 +518,19 @@ func TestListInsertMiddle(t *testing.T) {
 	vrw := newTestValueStore()
 
 	cl, err := getTestList().toList(vrw)
-	assert.NoError( err)
+	assert.NoError(err)
 	cl2, err := cl.Edit().Insert(100, Float(42)).List(context.Background())
-	assert.NoError( err)
+	assert.NoError(err)
 	cl3, err := cl2.Edit().Insert(200, Float(43)).List(context.Background())
-	assert.NoError( err)
+	assert.NoError(err)
 	cl4, err := cl3.Edit().Insert(300, getTestList().AsValuables()...).List(context.Background())
-	assert.NoError( err)
+	assert.NoError(err)
 	cl5, err := cl4.Edit().Insert(400, Float(44), Float(45)).List(context.Background())
-	assert.NoError( err)
+	assert.NoError(err)
 	cl6, err := cl5.Edit().Insert(500, getTestList().AsValuables()...).List(context.Background())
-	assert.NoError( err)
+	assert.NoError(err)
 	cl7, err := cl6.Edit().Insert(600, Float(100)).List(context.Background())
-	assert.NoError( err)
+	assert.NoError(err)
 
 	expected := getTestList()
 	assert.Equal(expected, testListFromNomsList(cl))
@@ -597,7 +598,7 @@ func TestListInsertRanges(t *testing.T) {
 
 	// Compare list length, which doesn't require building a new list every iteration, so the increment can be smaller.
 	for incr, i := 10, 0; i < len(testList); i += incr {
-		l, err :=whole.Edit().Insert(uint64(i), testList[0:incr].AsValuables()...).List(context.Background())
+		l, err := whole.Edit().Insert(uint64(i), testList[0:incr].AsValuables()...).List(context.Background())
 		assert.NoError(err)
 		assert.Equal(len(testList)+incr, int(l.Len()))
 	}
@@ -1205,7 +1206,7 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 
 	mseq, err := newListMetaSequence(1, []metaTuple{m1, m3}, vrw)
 	assert.NoError(err)
-	l1 := newList(mseq)     // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
+	l1 := newList(mseq) // [1, 2, 3][9, 10, 11, 12, 13, 14, 15]
 	mseq, err = newListMetaSequence(1, []metaTuple{m1, m2, m3}, vrw)
 	assert.NoError(err)
 	l2 := newList(mseq) // [1, 2, 3][4, 5, 6, 7, 8][9, 10, 11, 12, 13, 14, 15]

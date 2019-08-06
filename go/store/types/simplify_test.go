@@ -246,7 +246,7 @@ func TestSimplifyType(t *testing.T) {
 					false,
 				},
 			}),
-		))
+			))
 
 		{
 			// Create pointer cycle manually.

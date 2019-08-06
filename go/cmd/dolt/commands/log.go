@@ -140,7 +140,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 			cli.PrintErrln("error: failed to get commit hash")
 			return 1
 		}
-		loggerFunc(meta,pHashes,cmHash)
+		loggerFunc(meta, pHashes, cmHash)
 	}
 
 	return 0

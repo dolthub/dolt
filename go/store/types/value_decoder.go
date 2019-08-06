@@ -23,7 +23,7 @@ package types
 
 import (
 	"errors"
-  
+
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 

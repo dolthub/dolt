@@ -128,10 +128,10 @@ func TestContainCommonSupertype(t *testing.T) {
 		{
 			mustType(MakeMapType(
 				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
-					mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType})))),
+				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType})))),
 			mustType(MakeMapType(
 				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
-					mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})))),
+				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})))),
 			true,
 		},
 
@@ -139,7 +139,7 @@ func TestContainCommonSupertype(t *testing.T) {
 		{
 			mustType(MakeMapType(
 				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
-					mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType})))),
+				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType})))),
 			mustType(MakeMapType(
 				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
 				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})))),
@@ -153,14 +153,14 @@ func TestContainCommonSupertype(t *testing.T) {
 		// struct{b:Bool} & struct{b?:Bool} -> true
 		{
 			mustType(MakeStructType("", StructField{"b", BoolType, false})),
-				mustType(MakeStructType("", StructField{"b", BoolType, true})),
+			mustType(MakeStructType("", StructField{"b", BoolType, true})),
 			true,
 		},
 
 		// struct{a?:Bool} & struct{b?:Bool} -> false
 		{
 			mustType(MakeStructType("", StructField{"a", BoolType, true})),
-				mustType(MakeStructType("", StructField{"b", BoolType, true})),
+			mustType(MakeStructType("", StructField{"b", BoolType, true})),
 			false,
 		},
 

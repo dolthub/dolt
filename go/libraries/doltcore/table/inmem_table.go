@@ -67,7 +67,7 @@ func (imt *InMemTable) AppendRow(r row.Row) error {
 				return err
 			}
 
-			return NewBadRow(r, col.Name+":"+ encValStr+" is not valid.")
+			return NewBadRow(r, col.Name+":"+encValStr+" is not valid.")
 		}
 	}
 

@@ -95,7 +95,7 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 		tblNames, err = actions.AllTables(context.TODO(), root)
 
 		if err != nil {
-			 return errhand.BuildDError("unable to read tables").AddCause(err).Build()
+			return errhand.BuildDError("unable to read tables").AddCause(err).Build()
 		}
 	}
 
@@ -103,7 +103,7 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 		verr := func() errhand.VerboseError {
 			if has, err := root.HasTable(context.TODO(), tblName); err != nil {
 				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
-			} else if !has{
+			} else if !has {
 				return errhand.BuildDError("error: unknown table '%s'", tblName).Build()
 			}
 
@@ -125,8 +125,6 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 
 			cnfWr, err := merge.NewConflictSink(iohelp.NopWrCloser(cli.CliOut), cnfRd.GetSchema(), " | ")
 			defer cnfWr.Close()
-
-
 
 			nullPrinter := nullprinter.NewNullPrinter(cnfRd.GetSchema())
 			fwtTr := fwt.NewAutoSizingFWTTransformer(cnfRd.GetSchema(), fwt.HashFillWhenTooLong, 1000)

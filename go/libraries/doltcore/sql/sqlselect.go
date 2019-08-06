@@ -458,7 +458,7 @@ func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string
 		panic(errors.New(tableName + " does not exist."))
 	}
 
-	sch, err :=  tbl.GetSchema(ctx)
+	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		panic(err)

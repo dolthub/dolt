@@ -24,9 +24,10 @@ package diff
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
-	"sync/atomic"
 
 	humanize "github.com/dustin/go-humanize"
 
@@ -191,7 +192,7 @@ func diffSummaryStructs(ae *atomicerr.AtomicError, ch chan<- diffSummaryProgress
 	if ae.SetIfError(err) {
 		return
 	}
-	
+
 	size1 := uint64(t1.Desc.(types.StructDesc).Len())
 	size2 := uint64(t2.Desc.(types.StructDesc).Len())
 	diffSummaryValueChanged(ae, ch, size1, size2, func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {

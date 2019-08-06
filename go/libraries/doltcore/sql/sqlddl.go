@@ -69,7 +69,7 @@ func ExecuteDrop(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue,
 	for _, tableName := range tablesToDrop {
 		if has, err := root.HasTable(ctx, tableName); err != nil {
 			return nil, err
-		} else if!has{
+		} else if !has {
 			if ddl.IfExists {
 				continue
 			} else {

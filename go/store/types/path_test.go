@@ -337,7 +337,7 @@ func TestPathParseSuccess(t *testing.T) {
 		assert.Equal(expectStr, p.String())
 	}
 
-	h, err:= Float(42).Hash(Format_7_18) // arbitrary hash
+	h, err := Float(42).Hash(Format_7_18) // arbitrary hash
 	assert.NoError(err)
 
 	test(".foo")

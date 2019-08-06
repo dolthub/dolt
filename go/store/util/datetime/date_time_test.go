@@ -23,10 +23,11 @@ package datetime
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 

@@ -83,7 +83,7 @@ func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				verr = errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 			}
 
-			if ok && verr == nil{
+			if ok && verr == nil {
 				has, err := working.HasTable(context.TODO(), new)
 
 				if err != nil {

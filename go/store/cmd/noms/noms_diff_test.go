@@ -89,7 +89,7 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 
 	r3 := spec.CreateHashSpecString("nbs", s.DBDir, mustHeadRef(ds).TargetHash()) + ".value"
 
-	l, err  = types.NewList(context.Background(), db, types.Float(1), types.Float(222), types.Float(4))
+	l, err = types.NewList(context.Background(), db, types.Float(1), types.Float(222), types.Float(4))
 	s.NoError(err)
 	ds, err = db.CommitValue(context.Background(), ds, l)
 	s.NoError(err)

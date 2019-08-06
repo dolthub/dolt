@@ -17,6 +17,7 @@ package noms
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -44,7 +45,7 @@ type NomsMapUpdater struct {
 
 	mapChan chan types.EditProvider
 	resChan chan updateMapRes
-	ae *atomicerr.AtomicError
+	ae      *atomicerr.AtomicError
 
 	result *updateMapRes
 }

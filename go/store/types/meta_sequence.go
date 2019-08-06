@@ -23,6 +23,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -310,7 +311,7 @@ func (ms metaSequence) readTuple(dec *valueDecoder) (metaTuple, error) {
 	offsets[metaTuplePartRef] = start
 	err := dec.skipRef()
 
-	if err  != nil {
+	if err != nil {
 		return metaTuple{}, err
 	}
 

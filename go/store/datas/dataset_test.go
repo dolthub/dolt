@@ -23,8 +23,9 @@ package datas
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 
@@ -32,7 +33,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-func mustGetValue(v types.Value, found bool, err error) types.Value{
+func mustGetValue(v types.Value, found bool, err error) types.Value {
 	d.PanicIfError(err)
 	d.PanicIfFalse(found)
 	return v

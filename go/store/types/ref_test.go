@@ -71,7 +71,7 @@ func TestRefInMap(t *testing.T) {
 	assert.NoError(err)
 	r, err := NewRef(m, Format_7_18)
 	assert.NoError(err)
-	m, err  = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
+	m, err = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
 	assert.NoError(err)
 	r2, ok, err := m.MaybeGet(context.Background(), Float(0))
 	assert.NoError(err)

@@ -16,8 +16,9 @@ package rowconv
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/google/uuid"
 

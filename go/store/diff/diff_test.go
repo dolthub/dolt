@@ -25,10 +25,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"strings"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 

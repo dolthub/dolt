@@ -473,7 +473,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 		numHeaderRows = 2
 	}
 
-	sink, err:= diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+	sink, err := diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
 
 	if err != nil {
 		return errhand.BuildDError("").AddCause(err).Build()

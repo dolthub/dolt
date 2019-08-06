@@ -23,8 +23,9 @@ package diff
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sync/atomic"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )

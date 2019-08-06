@@ -102,7 +102,7 @@ func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 // primary keys. Meant for use in result sets.
 func UnkeySchema(sch schema.Schema) (schema.Schema, error) {
 	var cols []schema.Column
-	 err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.IsPartOfPK = false
 		col.Constraints = nil
 		cols = append(cols, col)

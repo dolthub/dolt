@@ -91,7 +91,6 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 		return false, nil
 	})
 
-
 	if err != nil {
 		return nil, err
 	}

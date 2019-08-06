@@ -24,10 +24,11 @@ package types
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"runtime"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
@@ -145,7 +146,7 @@ func (b Blob) CopyReadAhead(ctx context.Context, w io.Writer, chunkSize uint64, 
 				buff := make([]byte, blockLength)
 				n, err := b.ReadAt(ctx, buff, int64(start))
 
-				if err != nil && err != io.EOF{
+				if err != nil && err != io.EOF {
 					ae.SetIfError(err)
 				} else if n > 0 {
 					bc <- buff

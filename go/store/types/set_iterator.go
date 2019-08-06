@@ -362,7 +362,7 @@ func compareValue(nbf *NomsBinFormat, v1, v2 Value) (int, error) {
 	if v1 != nil {
 		if isLess, err := v1.Less(nbf, v2); err != nil {
 			return 0, err
-		} else if isLess{
+		} else if isLess {
 			return -1, nil
 		}
 	}

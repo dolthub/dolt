@@ -163,7 +163,7 @@ func (di *doltIndex) Expressions() []string {
 
 // Returns the expression strings needed for this index to work. This needs to match the implementation in the sql
 // engine, which requires $table.$column
-func primaryKeytoIndexStrings(tableName string, sch schema.Schema)([]string, error) {
+func primaryKeytoIndexStrings(tableName string, sch schema.Schema) ([]string, error) {
 	colNames := make([]string, sch.GetPKCols().Size())
 	var i int
 	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {

@@ -23,8 +23,9 @@ package diff
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/dustin/go-humanize"
 

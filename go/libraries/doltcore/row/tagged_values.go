@@ -58,7 +58,7 @@ func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) 
 		}
 	}
 
-	return types.TupleKind < other.Kind() ,nil
+	return types.TupleKind < other.Kind(), nil
 }
 
 func (tt TaggedValues) NomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64, encodeNulls bool) TupleVals {

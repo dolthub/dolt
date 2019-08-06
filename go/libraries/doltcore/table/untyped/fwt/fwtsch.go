@@ -35,7 +35,7 @@ type FWTSchema struct {
 func NewFWTSchema(sch schema.Schema, fldToWidth map[string]int) (*FWTSchema, error) {
 	allCols := sch.GetAllCols()
 	tagToWidth := make(map[uint64]int, allCols.Size())
-	 err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tagToWidth[tag] = 0
 		return false, nil
 	})

@@ -25,9 +25,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"io"
 	"os"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
 

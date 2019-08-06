@@ -49,7 +49,6 @@ func (sw *sortWrapper) Swap(i, j int) {
 	sw.data.Swap(i, j)
 }
 
-
 func SortWithErroringLess(data SortData) error {
 	sw := &sortWrapper{data, nil}
 	sort.Stable(sw)

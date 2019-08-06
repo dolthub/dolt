@@ -26,8 +26,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"os"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	flag "github.com/juju/gnuflag"
 

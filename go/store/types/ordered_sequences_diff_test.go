@@ -23,8 +23,9 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"

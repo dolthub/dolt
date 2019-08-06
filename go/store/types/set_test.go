@@ -25,10 +25,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"math/rand"
 	"sync"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -236,7 +237,7 @@ func (suite *setTestSuite) TestStreamingSetOrder() {
 	}
 
 	testFunc := func() {
-	outChan := newStreamingSet(vs, vChan, readInput)
+		outChan := newStreamingSet(vs, vChan, readInput)
 		<-outChan
 	}
 	suite.Panics(testFunc)
@@ -250,7 +251,7 @@ func (suite *setTestSuite) TestStreamingSet2() {
 	var s1, s2 Set
 	var err1, err2 error
 	go func() {
-		s1,err1 = suite.createStreamingSet(vs)
+		s1, err1 = suite.createStreamingSet(vs)
 		wg.Done()
 	}()
 	go func() {
@@ -782,7 +783,7 @@ func TestSetIter(t *testing.T) {
 
 	s, err := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3), Float(4))
 	assert.NoError(err)
-	acc , err := NewSet(context.Background(), vs)
+	acc, err := NewSet(context.Background(), vs)
 	err = s.Iter(context.Background(), func(v Value) (bool, error) {
 		_, ok := v.(Float)
 		assert.True(ok)

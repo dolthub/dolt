@@ -23,8 +23,9 @@ package types
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/util/functions"
@@ -421,7 +422,6 @@ func doFastForward(ctx context.Context, allowPastEnd bool, a *sequenceCursor, b 
 	d.PanicIfFalse(b.valid())
 	aHasMore = true
 	bHasMore = true
-
 
 	for aHasMore && bHasMore {
 		equals, err := isCurrentEqual(a, b)

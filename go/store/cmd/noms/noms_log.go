@@ -175,10 +175,10 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 		if m, ok, err := commit.MaybeGet(datas.MetaField); err != nil {
 			panic(err)
 		} else if ok {
-				meta := m.(types.Struct)
-				t, err := types.TypeOf(meta)
-				d.PanicIfError(err)
-				t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
+			meta := m.(types.Struct)
+			t, err := types.TypeOf(meta)
+			d.PanicIfError(err)
+			t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
 				maxLen = max(maxLen, len(name))
 			})
 		}

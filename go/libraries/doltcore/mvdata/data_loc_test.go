@@ -16,9 +16,10 @@ package mvdata
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -164,7 +165,7 @@ func TestExists(t *testing.T) {
 	for _, loc := range testLocations {
 		if exists, err := loc.Exists(context.Background(), root, fs); err != nil {
 			t.Error(err)
-		} else if exists{
+		} else if exists {
 			t.Error("Shouldn't exist before creation")
 		}
 

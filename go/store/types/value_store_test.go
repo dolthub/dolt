@@ -207,7 +207,7 @@ func TestFlushOrder(t *testing.T) {
 
 	ml1r, err := vs.WriteValue(context.Background(), ml1)
 	assert.NoError(err)
-	ml2r, err :=  vs.WriteValue(context.Background(), ml2)
+	ml2r, err := vs.WriteValue(context.Background(), ml2)
 	assert.NoError(err)
 	ccs.expect(ml1r, ml2r)
 	l, err := NewList(context.Background(), vs, ml1r, ml2r)
@@ -274,9 +274,9 @@ func TestTolerateTopDown(t *testing.T) {
 	assert.NoError(err)
 	str, err := vs.WriteValue(context.Background(), ST) // ST into bufferedChunks
 	assert.NoError(err)
-	_, err = vs.WriteValue(context.Background(), S)         // S into bufferedChunks
+	_, err = vs.WriteValue(context.Background(), S) // S into bufferedChunks
 	assert.NoError(err)
-	_, err = vs.WriteValue(context.Background(), ML)        // ML into bufferedChunks AND withBufferedChunks
+	_, err = vs.WriteValue(context.Background(), ML) // ML into bufferedChunks AND withBufferedChunks
 	assert.NoError(err)
 
 	// At this point, ValueStore believes ST is a standalone chunk, and that ML -> S

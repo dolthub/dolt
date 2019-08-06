@@ -347,7 +347,7 @@ func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipelin
 	}
 
 	outSch := schema.UnkeyedSchemaFromCols(colColl)
-	untypedSch, err :=untyped.UntypeUnkeySchema(outSch)
+	untypedSch, err := untyped.UntypeUnkeySchema(outSch)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to create untyped schema").AddCause(err).Build()
@@ -403,7 +403,7 @@ func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow
 
 		if has, err := conflicts.Has(ctx, v); err != nil {
 			panic(err)
-		} else if has{
+		} else if has {
 			inRow, err = inRow.SetColVal(cnfTag, confLabel, outSch)
 
 			if err != nil {

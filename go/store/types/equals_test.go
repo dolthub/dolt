@@ -33,7 +33,7 @@ func TestValueEquals(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	values := []func() (Value, error) {
+	values := []func() (Value, error){
 		func() (Value, error) { return Bool(false), nil },
 		func() (Value, error) { return Bool(true), nil },
 		func() (Value, error) { return Float(0), nil },
@@ -101,7 +101,7 @@ func TestValueEquals(t *testing.T) {
 			assert.NoError(err)
 			v2, err := f2()
 			assert.NoError(err)
-			assert.Equal(v1.Equals(v2), i==j)
+			assert.Equal(v1.Equals(v2), i == j)
 		}
 
 		v, err := f1()

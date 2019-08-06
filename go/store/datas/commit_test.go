@@ -23,8 +23,9 @@ package datas
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 
@@ -136,9 +137,9 @@ func TestNewCommit(t *testing.T) {
 	assertTypeEquals(et2, at2)
 
 	// Now commit a String
-	commit3 , err:= NewCommit(types.String("Hi"), mustSet(types.NewSet(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18)))), types.EmptyStruct(types.Format_7_18))
+	commit3, err := NewCommit(types.String("Hi"), mustSet(types.NewSet(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18)))), types.EmptyStruct(types.Format_7_18))
 	assert.NoError(err)
-	at3 , err:= types.TypeOf(commit3)
+	at3, err := types.TypeOf(commit3)
 	assert.NoError(err)
 	et3 := nomdl.MustParseType(`Struct Commit {
                 meta: Struct {},

@@ -24,6 +24,7 @@ package types
 import (
 	"bytes"
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 

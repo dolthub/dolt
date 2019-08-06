@@ -20157,7 +20157,7 @@ func TestInserts(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(7953), rowData.Len())
 
-	table, _, err= root.GetTable(ctx, "symbols")
+	table, _, err = root.GetTable(ctx, "symbols")
 	assert.NoError(t, err)
 	rowData, err = table.GetRowData(ctx)
 	assert.NoError(t, err)

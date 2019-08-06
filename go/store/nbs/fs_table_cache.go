@@ -23,13 +23,14 @@ package nbs
 
 import (
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
 )

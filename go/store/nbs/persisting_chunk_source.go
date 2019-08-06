@@ -25,10 +25,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"sync"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 )

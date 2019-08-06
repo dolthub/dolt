@@ -131,7 +131,7 @@ func TestFromNoms(t *testing.T) {
 		)
 		assert.NoError(t, err)
 
-		vals, err:= types.NewTuple(types.Format_7_18)
+		vals, err := types.NewTuple(types.Format_7_18)
 		assert.NoError(t, err)
 
 		expectedRow, err := New(types.Format_7_18, sch, TaggedValues{

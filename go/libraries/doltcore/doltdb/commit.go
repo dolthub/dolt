@@ -198,7 +198,6 @@ func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) 
 		return nil, err
 	}
 
-
 	return &Commit{cm1.vrw, ancestorSt}, nil
 }
 
@@ -208,7 +207,6 @@ func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw types.V
 	if err != nil {
 		return types.Ref{}, err
 	}
-
 
 	if !ok {
 		return types.Ref{}, ErrNoCommonAnscestor

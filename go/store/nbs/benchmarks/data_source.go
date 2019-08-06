@@ -26,9 +26,10 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"os"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"

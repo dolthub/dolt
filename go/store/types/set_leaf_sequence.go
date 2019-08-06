@@ -67,7 +67,7 @@ func (sl setLeafSequence) search(key orderedKey) (int, error) {
 
 		return !isLess, nil
 	})
-	
+
 	if err != nil {
 		return 0, err
 	}

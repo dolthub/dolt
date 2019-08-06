@@ -24,11 +24,12 @@ package spec
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/hash"
 
 	"github.com/stretchr/testify/assert"
 
@@ -64,7 +65,7 @@ func mustHash(h hash.Hash, err error) hash.Hash {
 	return h
 }
 
-func mustGetValue(v types.Value, found bool, err error) types.Value{
+func mustGetValue(v types.Value, found bool, err error) types.Value {
 	d.PanicIfError(err)
 	d.PanicIfFalse(found)
 	return v

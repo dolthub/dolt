@@ -484,7 +484,6 @@ func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types
 		return types.Ref{}, err
 	}
 
-
 	if targetVal == nil {
 		_, err = vrw.WriteValue(ctx, val)
 

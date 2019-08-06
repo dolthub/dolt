@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -35,7 +36,7 @@ type NomsMapCreator struct {
 	lastPK  types.LesserValuable
 	kvsChan chan<- types.Value
 	mapChan <-chan types.Map
-	ae *atomicerr.AtomicError
+	ae      *atomicerr.AtomicError
 
 	result *types.Map
 }
@@ -46,7 +47,7 @@ func NewNomsMapCreator(ctx context.Context, vrw types.ValueReadWriter, sch schem
 	kvsChan := make(chan types.Value)
 	mapChan := types.NewStreamingMap(ctx, vrw, ae, kvsChan)
 
-	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, ae, nil }
+	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, ae, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes

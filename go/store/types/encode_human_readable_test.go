@@ -25,10 +25,11 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/util/writers"
 	"strings"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/util/writers"
 
 	"github.com/stretchr/testify/assert"
 

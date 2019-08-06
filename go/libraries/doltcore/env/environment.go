@@ -227,7 +227,7 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinForma
 		return err
 	}
 
-	rootHash, err :=  root.HashOf()
+	rootHash, err := root.HashOf()
 
 	if err != nil {
 		return err

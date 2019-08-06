@@ -16,6 +16,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 )
 
@@ -24,7 +25,7 @@ import (
 type EditProvider interface {
 	// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 	// in key sorted order
-	Next() (*KVP,error)
+	Next() (*KVP, error)
 
 	// NumEdits returns the number of KVPs representing the edits that will be provided when calling next
 	NumEdits() int64
@@ -346,8 +347,6 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 			if ae.SetIfError(err) {
 				return
 			}
-
-
 
 			if nextEdit != nil {
 				isLess, err := edit.Key.Less(nbf, nextEdit.Key)

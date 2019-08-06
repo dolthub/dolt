@@ -189,7 +189,6 @@ func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
 		return false, nil
 	})
 
-
 	// TODO: fix panics
 	if err != nil {
 		panic(err)

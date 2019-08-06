@@ -223,7 +223,6 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-
 	if conflicts.Size() > 0 {
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
@@ -272,12 +271,11 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 			return nil, err
 		}
 
-		changedHash, _, err:= changedRoot.GetTableHash(ctx, tblName)
+		changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
 
 		if err != nil {
 			return nil, err
 		}
-
 
 		if oldHash == changedHash {
 			resultMap[tblName] = newHash

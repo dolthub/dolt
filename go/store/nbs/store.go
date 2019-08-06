@@ -24,12 +24,13 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"os"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"

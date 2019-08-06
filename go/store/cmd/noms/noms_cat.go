@@ -20,13 +20,14 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"hash/crc32"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/golang/snappy"
 	flag "github.com/juju/gnuflag"

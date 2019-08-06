@@ -24,12 +24,13 @@ package nbs
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"io/ioutil"
 	"os"
 	"sync"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"

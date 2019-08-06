@@ -85,7 +85,7 @@ func (ds Dataset) MaybeHead() (types.Struct, bool) {
 // If not, it returns an empty Ref and 'false'.
 func (ds Dataset) MaybeHeadRef() (types.Ref, bool, error) {
 	if ds.head == nil {
-		return types.Ref{}, false ,nil
+		return types.Ref{}, false, nil
 	}
 	ref, err := types.NewRef(ds.head, ds.Database().Format())
 

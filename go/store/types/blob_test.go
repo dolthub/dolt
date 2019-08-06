@@ -24,12 +24,13 @@ package types
 import (
 	"bytes"
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/d"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"strings"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -210,11 +211,11 @@ func TestBlobFromReaderThatReturnsDataAndError(t *testing.T) {
 	vrw := newTestValueStore()
 	tr := &testReader{buf: &bytes.Buffer{}}
 
-	b,err := NewBlob(context.Background(), vrw, tr)
+	b, err := NewBlob(context.Background(), vrw, tr)
 	assert.NoError(err)
 
 	actual := &bytes.Buffer{}
-	_, err =io.Copy(actual, b.Reader(context.Background()))
+	_, err = io.Copy(actual, b.Reader(context.Background()))
 	assert.NoError(err)
 
 	assert.True(bytes.Equal(actual.Bytes(), tr.buf.Bytes()))
@@ -308,7 +309,7 @@ func TestBlobNewParallel(t *testing.T) {
 		readers[i] = bytes.NewBuffer(data[i*size : (i+1)*size])
 	}
 
-	b,err = NewBlob(context.Background(), vrw, readers...)
+	b, err = NewBlob(context.Background(), vrw, readers...)
 	assert.NoError(err)
 	assert.Equal(data, readAll(b))
 }

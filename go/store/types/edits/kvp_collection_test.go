@@ -16,11 +16,13 @@ package edits
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )

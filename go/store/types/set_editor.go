@@ -23,6 +23,7 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
@@ -96,7 +97,7 @@ func (se *SetEditor) Set(ctx context.Context) (Set, error) {
 					return
 				}
 
-				cc <-  cur
+				cc <- cur
 			}()
 
 			editChan <- edit
@@ -210,7 +211,7 @@ func (se *SetEditor) Has(ctx context.Context, v Value) (bool, error) {
 	return se.s.Has(ctx, v)
 }
 
-func (se *SetEditor) edit(v Value, insert bool) error{
+func (se *SetEditor) edit(v Value, insert bool) error {
 	if len(se.edits.edits) == 0 {
 		se.edits.edits = append(se.edits.edits, setEdit{v, insert})
 		return nil
@@ -285,7 +286,6 @@ func (se *SetEditor) normalize() error {
 	if err != nil {
 		return err
 	}
-
 
 	// TODO: GC duplicate keys over some threshold of collectable memory?
 	se.normalized = true

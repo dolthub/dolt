@@ -189,7 +189,7 @@ func (root *RootValue) GetTableNames(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (root *RootValue) getTableMap() (types.Map, error){
+func (root *RootValue) getTableMap() (types.Map, error) {
 	val, found, err := root.valueSt.MaybeGet(tablesKey)
 
 	if err != nil {
@@ -250,7 +250,7 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
-func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, table *Table) (*RootValue,error) {
+func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, table *Table) (*RootValue, error) {
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}

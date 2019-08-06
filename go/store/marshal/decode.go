@@ -548,7 +548,7 @@ func arrayDecoder(t reflect.Type) (decoderFunc, error) {
 		}
 		init.RLock()
 		defer init.RUnlock()
-		return iterListOrSlice(ctx, nbf, list, t, func(v types.Value, i uint64) error{
+		return iterListOrSlice(ctx, nbf, list, t, func(v types.Value, i uint64) error {
 			return decoder(ctx, nbf, v, rv.Index(int(i)))
 		})
 	}

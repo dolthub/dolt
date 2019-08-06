@@ -362,7 +362,7 @@ func TestCompareDifferentPrimitiveTypes(t *testing.T) {
 			jBytes := [1024]byte{}
 			bytes1, err := encodeGraphKey(iBytes[:0], v1)
 			assert.NoError(err)
-			bytes2, err :=encodeGraphKey(jBytes[:0], v2)
+			bytes2, err := encodeGraphKey(jBytes[:0], v2)
 			assert.NoError(err)
 			res := compareEncodedKey(bytes1, bytes2)
 			expectedRes := compareInts(i, j)

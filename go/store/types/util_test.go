@@ -111,7 +111,7 @@ func leafDiffCount(c1, c2 Collection) int {
 	d.PanicIfError(err)
 
 	for _, l := range leaves1 {
-		h, err :=l.Hash(Format_7_18)
+		h, err := l.Hash(Format_7_18)
 		d.PanicIfError(err)
 		hashes[h]++
 	}
