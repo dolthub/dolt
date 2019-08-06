@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"io"
 	"os"
 
@@ -54,7 +55,11 @@ func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrenc
 		r, err := os.Open(filePath)
 		util.CheckErrorNoUsage(err)
 		defer r.Close()
-		r.Seek(int64(i)*chunkSize, 0)
+		_, err = r.Seek(int64(i)*chunkSize, 0)
+
+		// TODO: fix panics
+		d.PanicIfError(err)
+
 		limit := chunkSize
 		if i == len(readers)-1 {
 			limit += fileSize % chunkSize // adjust size of last slice to include the final bytes.
@@ -71,7 +76,10 @@ func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrenc
 	}
 	defer db.Close()
 
-	blob := types.NewBlob(ctx, db, readers...)
+	blob, err := types.NewBlob(ctx, db, readers...)
+
+	// TODO: fix panics
+	d.PanicIfError(err)
 
 	_, err = db.CommitValue(ctx, ds, blob)
 	if err != nil {

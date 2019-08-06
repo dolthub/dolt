@@ -74,7 +74,9 @@ func TestEmptyInMemoryRepoCreation(t *testing.T) {
 		t.Fatal("Could not find commit")
 	}
 
-	cs2, _ := NewCommitSpec(commit.HashOf().String(), "")
+	h, err := commit.HashOf()
+	assert.NoError(t, err)
+	cs2, _ := NewCommitSpec(h.String(), "")
 	_, err = ddb.Resolve(context.Background(), cs2)
 
 	if err != nil {
@@ -147,32 +149,36 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Couldn't find commit")
 		}
 
-		meta := commit.GetCommitMeta()
+		meta, err := commit.GetCommitMeta()
+		assert.NoError(t, err)
 
 		if meta.Name != committerName || meta.Email != committerEmail {
 			t.Error("Unexpected metadata")
 		}
 
-		root := commit.GetRootValue()
+		root, err := commit.GetRootValue()
 
-		if len(root.GetTableNames(context.Background())) != 0 {
+		assert.NoError(t, err)
+
+		names, err := root.GetTableNames(context.Background())
+		assert.NoError(t, err)
+		if len(names) != 0 {
 			t.Fatal("There should be no tables in empty db")
 		}
 
 		tSchema := createTestSchema()
-		rowData, _ := createTestRowData(ddb.db, tSchema)
+		rowData, _ := createTestRowData(t, ddb.db, tSchema)
 		tbl, err = createTestTable(ddb.db, tSchema, rowData)
 
 		if err != nil {
 			t.Fatal("Failed to create test table with data")
 		}
 
-		root = root.PutTable(context.Background(), ddb, "test", tbl)
-		valHash, err = ddb.WriteRootValue(context.Background(), root)
+		root, err = root.PutTable(context.Background(), ddb, "test", tbl)
+		assert.NoError(t, err)
 
-		if err != nil {
-			t.Fatal("Failed to write value")
-		}
+		valHash, err = ddb.WriteRootValue(context.Background(), root)
+		assert.NoError(t, err)
 	}
 
 	// reopen the db and commit the value.  Perform a couple checks for
@@ -188,18 +194,27 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Failled to commit")
 		}
 
-		if commit.NumParents() != 1 {
+		numParents, err := commit.NumParents()
+		assert.NoError(t, err)
+
+		if numParents != 1 {
 			t.Error("Unexpected ancestry")
 		}
 
-		root := commit.GetRootValue()
-		readTable, ok := root.GetTable(context.Background(), "test")
+		root, err := commit.GetRootValue()
+		assert.NoError(t, err)
+
+		readTable, ok, err := root.GetTable(context.Background(), "test")
+		assert.NoError(t, err)
 
 		if !ok {
 			t.Error("Could not retrieve test table")
 		}
 
-		if !readTable.HasTheSameSchema(tbl) {
+		has, err := readTable.HasTheSameSchema(tbl)
+		assert.NoError(t, err)
+
+		if !has {
 			t.Error("Unexpected schema")
 		}
 	}

@@ -100,7 +100,9 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		root, verr = GetWorkingWithVErr(dEnv)
 
 		if verr == nil {
-			if root.HasConflicts(context.TODO()) {
+			if has, err := root.HasConflicts(context.TODO()); err != nil {
+				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
+			} else if has {
 				cli.Println("error: Merging is not possible because you have unmerged files.")
 				cli.Println("hint: Fix them up in the work tree, and then use 'dolt add <table>'")
 				cli.Println("hint: as appropriate to mark resolution and make a commit.")
@@ -113,7 +115,9 @@ func Merge(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				return 1
 			}
 
-			verr = mergeBranch(dEnv, dref)
+			if verr == nil {
+				verr = mergeBranch(dEnv, dref)
+			}
 		}
 	}
 
@@ -147,12 +151,24 @@ func mergeBranch(dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
 		return verr
 	}
 
-	if cm1.HashOf() == cm2.HashOf() {
+	h1, err := cm1.HashOf()
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+	}
+
+	h2, err := cm2.HashOf()
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+	}
+
+	if h1 == h2 {
 		cli.Println("Everything up-to-date")
 		return nil
 	}
 
-	cli.Println("Updating", cm1.HashOf().String()+".."+cm2.HashOf().String())
+	cli.Println("Updating", h1.String()+".."+h2.String())
 
 	if ok, err := cm1.CanFastForwardTo(context.TODO(), cm2); ok {
 		return executeFFMerge(dEnv, cm2)
@@ -167,7 +183,13 @@ func mergeBranch(dEnv *env.DoltEnv, dref ref.DoltRef) errhand.VerboseError {
 func executeFFMerge(dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {
 	cli.Println("Fast-forward")
 
-	h, err := dEnv.DoltDB.WriteRootValue(context.Background(), cm2.GetRootValue())
+	rv, err := cm2.GetRootValue()
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
+	}
+
+	h, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
 
 	if err != nil {
 		return errhand.BuildDError("Failed to write database").AddCause(err).Build()
@@ -211,7 +233,13 @@ func executeMerge(dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commit, dref ref.DoltRef) 
 		}
 	}
 
-	err = dEnv.RepoState.StartMerge(dref, cm2.HashOf().String())
+	h2, err := cm2.HashOf()
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to hash commit").AddCause(err).Build()
+	}
+
+	err = dEnv.RepoState.StartMerge(dref, h2.String())
 
 	if err != nil {
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()

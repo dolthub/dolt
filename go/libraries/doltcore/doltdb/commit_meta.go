@@ -62,7 +62,9 @@ func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
-	if v, ok := st.MaybeGet(k); ok {
+	if v, ok, err := st.MaybeGet(k); err != nil {
+		return nil, err
+	} else if ok {
 		return v, nil
 	}
 
@@ -102,7 +104,7 @@ func commitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	}, nil
 }
 
-func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) types.Struct {
+func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
 	metadata := types.StructData{
 		commitMetaNameKey:      types.String(cm.Name),
 		commitMetaEmailKey:     types.String(cm.Email),

@@ -96,8 +96,10 @@ func runSync(ctx context.Context, args []string) int {
 		lastProgressCh <- last
 	}()
 
-	sourceRef := types.NewRef(sourceObj, sourceStore.Format())
-	sinkRef, sinkExists := sinkDataset.MaybeHeadRef()
+	sourceRef, err := types.NewRef(sourceObj, sourceStore.Format())
+	util.CheckError(err)
+	sinkRef, sinkExists, err := sinkDataset.MaybeHeadRef()
+	util.CheckError(err)
 	nonFF := false
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()

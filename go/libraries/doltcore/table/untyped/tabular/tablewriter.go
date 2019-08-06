@@ -49,21 +49,26 @@ type TextTableWriter struct {
 
 // NewTextTableWriter writes rows to the given WriteCloser based on the Schema provided, with a single table header row.
 // The schema must contain only string type columns.
-func NewTextTableWriter(wr io.WriteCloser, sch schema.Schema) *TextTableWriter {
+func NewTextTableWriter(wr io.WriteCloser, sch schema.Schema) (*TextTableWriter, error) {
 	return NewTextTableWriterWithNumHeaderRows(wr, sch, 1)
 }
 
 // NewTextTableWriterWithNumHeaderRows writes rows to the given WriteCloser based on the Schema provided, with the
 // first numHeaderRows rows in the table header. The schema must contain only string type columns.
-func NewTextTableWriterWithNumHeaderRows(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) *TextTableWriter {
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+func NewTextTableWriterWithNumHeaderRows(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) (*TextTableWriter, error) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Kind != types.StringKind {
-			panic("Only string typed columns can be used to print a table")
+			errors.New("only string typed columns can be used to print a table")
 		}
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
+
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
-	return &TextTableWriter{wr, bwr, sch, nil, numHeaderRows, 0}
+	return &TextTableWriter{wr, bwr, sch, nil, numHeaderRows, 0}, nil
 }
 
 // writeTableHeader writes a table header with the column names given in the row provided, which is assumed to be
@@ -75,12 +80,12 @@ func (ttw *TextTableWriter) writeTableHeader(r row.Row) error {
 	var colnames strings.Builder
 	separator.WriteString("+")
 	colnames.WriteString("|")
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		separator.WriteString("-")
 		colnames.WriteString(" ")
 		colNameVal, ok := r.GetColVal(tag)
 		if !ok {
-			panic("No column name value for tag " + string(tag))
+			return false, errors.New("No column name value for tag " + string(tag))
 		}
 		colName := string(colNameVal.(types.String))
 
@@ -93,8 +98,12 @@ func (ttw *TextTableWriter) writeTableHeader(r row.Row) error {
 		colnames.WriteString(colName)
 		separator.WriteString("-+")
 		colnames.WriteString(" |")
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return err
+	}
 
 	ttw.lastWritten = &r
 
@@ -129,7 +138,7 @@ func (ttw *TextTableWriter) writeTableFooter() error {
 
 	var separator strings.Builder
 	separator.WriteString("+")
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		separator.WriteString("-")
 		val, ok := (*ttw.lastWritten).GetColVal(tag)
 		if !ok {
@@ -142,8 +151,12 @@ func (ttw *TextTableWriter) writeTableFooter() error {
 			separator.WriteString("-")
 		}
 		separator.WriteString("-+")
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return err
+	}
 
 	return iohelp.WriteLine(ttw.bWr, separator.String())
 }
@@ -163,20 +176,18 @@ func (ttw *TextTableWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := ttw.sch.GetAllCols()
 
 	var rowVals strings.Builder
-	var err error
 	rowVals.WriteString("|")
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		rowVals.WriteString(" ")
 		val, _ := r.GetColVal(tag)
 		if !types.IsNull(val) && val.Kind() == types.StringKind {
 			rowVals.WriteString(string(val.(types.String)))
 		} else {
-			err = errors.New(fmt.Sprintf("Non-string value encountered: %v", val))
-			return true
+			return false, errors.New(fmt.Sprintf("Non-string value encountered: %v", val))
 		}
 
 		rowVals.WriteString(" |")
-		return false
+		return false, nil
 	})
 
 	if err != nil {

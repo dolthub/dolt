@@ -33,7 +33,7 @@ func TestNewUntypedSchema(t *testing.T) {
 	}
 
 	i := 0
-	sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Name != colNames[i] {
 			t.Error("Unexpected name")
 		}
@@ -51,11 +51,11 @@ func TestNewUntypedSchema(t *testing.T) {
 		}
 
 		i++
-		return false
+		return false, nil
 	})
 	assert.Equal(t, 1, i, "Exactly one PK column expected")
 
-	sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Name != colNames[i] {
 			t.Error("Unexpected name")
 		}
@@ -69,13 +69,14 @@ func TestNewUntypedSchema(t *testing.T) {
 		}
 
 		i++
-		return false
+		return false, nil
 	})
 
 	name := "Billy Bob"
 	city := "Fargo"
 	blurb := "Billy Bob is a scholar."
-	r := NewRowFromStrings(types.Format_7_18, sch, []string{name, city, blurb})
+	r, err := NewRowFromStrings(types.Format_7_18, sch, []string{name, city, blurb})
+	assert.NoError(t, err)
 
 	nameVal, _ := r.GetColVal(nameToTag["name"])
 
@@ -137,10 +138,14 @@ func TestUntypedSchemaUnion(t *testing.T) {
 
 		if (err != nil) != test.expectErr {
 			t.Error(i, "expected err:", test.expectErr, "received err:", err != nil)
-		} else if err == nil && !schema.SchemasAreEqual(union, untypedSch) {
-			actualJson, _ := encoding.MarshalAsJson(untypedSch)
-			expectedJson, _ := encoding.MarshalAsJson(union)
-			t.Error(i, "\nexpected:\n", expectedJson, "\nactual:\n", actualJson)
+		} else if err == nil {
+			if eq, err := schema.SchemasAreEqual(union, untypedSch); err != nil {
+				t.Error(err)
+			} else if !eq {
+				actualJson, _ := encoding.MarshalAsJson(untypedSch)
+				expectedJson, _ := encoding.MarshalAsJson(union)
+				t.Error(i, "\nexpected:\n", expectedJson, "\nactual:\n", actualJson)
+			}
 		}
 	}
 }

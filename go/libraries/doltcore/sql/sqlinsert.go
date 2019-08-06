@@ -42,11 +42,23 @@ var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
 // ExecuteSelect executes the given select query and returns the resultant rows accompanied by their output schema.
 func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, s *sqlparser.Insert, query string) (*InsertResult, error) {
 	tableName := s.Table.Name.String()
-	if !root.HasTable(ctx, tableName) {
+	if has, err := root.HasTable(ctx, tableName); err != nil {
+		return nil, err
+	} else if !has {
 		return errInsert("Unknown table %v", tableName)
 	}
-	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema(ctx)
+
+	table, _, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	tableSch, err := table.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	// Parser supports overwrite on insert with both the replace keyword (from MySQL) as well as the ignore keyword
 	replace := s.Action == sqlparser.ReplaceStr
@@ -94,26 +106,54 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	// Perform the insert
-	rowData := table.GetRowData(ctx)
+	rowData, err := table.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	me := rowData.Edit()
 	var result InsertResult
 
 	insertedPKHashes := make(map[hash.Hash]struct{})
 	for _, r := range rows {
-		if !row.IsValid(r, tableSch) {
+		if has, err := row.IsValid(r, tableSch); err != nil {
+			return nil, err
+		} else if !has {
 			if ignore {
 				result.NumErrorsIgnored += 1
 				continue
 			} else {
-				col, constraint := row.GetInvalidConstraint(r, tableSch)
+				col, constraint, err := row.GetInvalidConstraint(r, tableSch)
+
+				if err != nil {
+					return nil, err
+				}
+
 				return nil, errFmt(ConstraintFailedFmt, col.Name, constraint)
 			}
 		}
 
-		key := r.NomsMapKey(tableSch).Value(ctx)
+		key, err := r.NomsMapKey(tableSch).Value(ctx)
 
-		rowExists := rowData.Get(ctx, key) != nil
-		_, rowInserted := insertedPKHashes[key.Hash(root.VRW().Format())]
+		if err != nil {
+			return nil, err
+		}
+
+		rv, _, err := rowData.MaybeGet(ctx, key)
+
+		if err != nil {
+			return nil, err
+		}
+
+		rowExists := rv != nil
+		h, err := key.Hash(root.VRW().Format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		_, rowInserted := insertedPKHashes[h]
 
 		if rowExists || rowInserted {
 			if replace {
@@ -127,13 +167,33 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		}
 		me.Set(key, r.NomsMapValue(tableSch))
 
-		insertedPKHashes[key.Hash(root.VRW().Format())] = struct{}{}
+		h, err = key.Hash(root.VRW().Format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		insertedPKHashes[h] = struct{}{}
 	}
-	newMap := me.Map(ctx)
-	table = table.UpdateRows(ctx, newMap)
+	newMap, err := me.Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	table, err = table.UpdateRows(ctx, newMap)
+
+	if err != nil {
+		return nil, err
+	}
 
 	result.NumRowsInserted = int(newMap.Len() - rowData.Len())
-	result.Root = root.PutTable(ctx, db, tableName, table)
+	result.Root, err = root.PutTable(ctx, db, tableName, table)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return &result, nil
 }
 
@@ -141,7 +201,7 @@ func ExecuteInsert(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
 	var sb strings.Builder
 	first := true
-	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if !first {
 			sb.WriteString(", ")
 		}
@@ -155,8 +215,14 @@ func getPrimaryKeyString(r row.Row, tableSch schema.Schema) string {
 		}
 
 		first = false
-		return false
+		return false, nil
 	})
+
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
 
 	return sb.String()
 }
@@ -166,15 +232,19 @@ func prepareInsertVals(nbf *types.NomsBinFormat, cols []schema.Column, values *s
 
 	// Lack of primary keys is its own special kind of failure that we can detect before creating any rows
 	allKeysFound := true
-	tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := tableSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		for _, insertCol := range cols {
 			if insertCol.Tag == tag {
-				return false
+				return false, nil
 			}
 		}
 		allKeysFound = false
-		return true
+		return true, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	if !allKeysFound {
 		return nil, ErrMissingPrimaryKeys
@@ -277,7 +347,7 @@ func makeRow(nbf *types.NomsBinFormat, columns []schema.Column, tableSch schema.
 		}
 	}
 
-	return row.New(nbf, tableSch, taggedVals), nil
+	return row.New(nbf, tableSch, taggedVals)
 }
 
 // Returns an error result with return type to match ExecuteInsert

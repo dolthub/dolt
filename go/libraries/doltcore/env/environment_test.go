@@ -17,6 +17,7 @@ package env
 import (
 	"context"
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"path/filepath"
 	"testing"
 
@@ -126,7 +127,8 @@ func TestRepoDirNoLocal(t *testing.T) {
 		t.Error("File doesn't exist.  There should be an error if the directory doesn't exist.")
 	}
 
-	dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
+	err := dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
+	require.NoError(t, err)
 
 	if !dEnv.HasLocalConfig() {
 		t.Error("Failed to create local config file")

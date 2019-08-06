@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -34,16 +35,18 @@ type NomsMapCreator struct {
 	lastPK  types.LesserValuable
 	kvsChan chan<- types.Value
 	mapChan <-chan types.Map
+	ae *atomicerr.AtomicError
 
 	result *types.Map
 }
 
 // NewNomsMapCreator creates a new NomsMapCreator.
 func NewNomsMapCreator(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) *NomsMapCreator {
+	ae := atomicerr.New()
 	kvsChan := make(chan types.Value)
-	mapChan := types.NewStreamingMap(ctx, vrw, kvsChan)
+	mapChan := types.NewStreamingMap(ctx, vrw, ae, kvsChan)
 
-	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, nil}
+	return &NomsMapCreator{sch, vrw, nil, kvsChan, mapChan, ae, nil }
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -55,30 +58,51 @@ func (nmc *NomsMapCreator) GetSchema() schema.Schema {
 // written before it.
 func (nmc *NomsMapCreator) WriteRow(ctx context.Context, r row.Row) error {
 	if nmc.kvsChan == nil {
-		panic("Attempting to write after closing.")
+		return errors.New("writing to NomsMapCreator after closing")
 	}
 
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("panic occured when writing: %v", r)
-			}
-		}()
+	if err := nmc.ae.Get(); err != nil {
+		return err
+	}
 
+	err := func() error {
 		pk := r.NomsMapKey(nmc.sch)
 		fieldVals := r.NomsMapValue(nmc.sch)
-		if nmc.lastPK == nil || nmc.lastPK.Less(nmc.vrw.Format(), pk) {
-			pkVal := pk.Value(ctx)
+
+		isOK := nmc.lastPK == nil
+		if !isOK {
+			var err error
+			isOK, err = nmc.lastPK.Less(nmc.vrw.Format(), pk)
+
+			if err != nil {
+				return err
+			}
+		}
+
+		if isOK {
+			pkVal, err := pk.Value(ctx)
+
+			if err != nil {
+				return err
+			}
+
+			fv, err := fieldVals.Value(ctx)
+
+			if err != nil {
+				return err
+			}
 
 			nmc.kvsChan <- pkVal
-			nmc.kvsChan <- fieldVals.Value(ctx)
+			nmc.kvsChan <- fv
 			nmc.lastPK = pk
+
+			return nil
 		} else {
-			err = errors.New("Input was not sorted by the primary key")
+			return errors.New("Input was not sorted by the primary key")
 		}
 	}()
 
+	nmc.ae.SetIfError(err)
 	return err
 }
 

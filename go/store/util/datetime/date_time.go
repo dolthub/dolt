@@ -45,7 +45,7 @@ type DateTime struct {
 // DateTimeType is the Noms type used to represent date time objects in Noms.
 // The field secSinceEpoch may contain fractions in cases where seconds are
 // not sufficient.
-var DateTimeType = types.MakeStructTypeFromFields(datetypename, types.FieldMap{
+var DateTimeType, _= types.MakeStructTypeFromFields(datetypename, types.FieldMap{
 	"secSinceEpoch": types.FloaTType,
 })
 
@@ -67,7 +67,7 @@ func Now() DateTime {
 // MarshalNoms makes DateTime implement marshal.Marshaler and it makes
 // DateTime marshal into a Noms struct with type DateTimeType.
 func (dt DateTime) MarshalNoms(vrw types.ValueReadWriter) (types.Value, error) {
-	return dateTimeTemplate.NewStruct(vrw.Format(), []types.Value{types.Float(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)}), nil
+	return dateTimeTemplate.NewStruct(vrw.Format(), []types.Value{types.Float(float64(dt.Unix()) + float64(dt.Nanosecond())*1e-9)})
 }
 
 // MarshalNomsType makes DateTime implement marshal.TypeMarshaler and it
@@ -99,7 +99,9 @@ type DateTimeCommenter struct {
 
 func (c DateTimeCommenter) Comment(ctx context.Context, v types.Value) string {
 	if s, ok := v.(types.Struct); ok {
-		if secsV, ok := s.MaybeGet("secSinceEpoch"); ok {
+		if secsV, ok, err := s.MaybeGet("secSinceEpoch"); err != nil {
+			panic(err)
+		} else if ok {
 			if secsF, ok := secsV.(types.Float); ok {
 				s, frac := math.Modf(float64(secsF))
 				dt := time.Unix(int64(s), int64(frac*1e9))

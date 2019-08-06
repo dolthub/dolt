@@ -152,11 +152,13 @@ func validateIter(numCols int, colColl *ColCollection, t *testing.T) {
 		t.Error("missing data")
 	}
 
-	colColl.Iter(func(tag uint64, col Column) (stop bool) {
+	err := colColl.Iter(func(tag uint64, col Column) (stop bool, err error) {
 		if col.Name != strconv.FormatUint(tag, 10) || col.Tag != tag {
 			t.Errorf("tag:%d - %v", tag, col)
 		}
 
-		return false
+		return false, nil
 	})
+
+	assert.NoError(t, err)
 }

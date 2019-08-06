@@ -52,17 +52,25 @@ Bill Billerson, 32, Senior Dufus
 Rob Robertson, 25, Dufus
 John Johnson, 21, Intern Dufus`
 
+func mustRow(r row.Row, err error) row.Row {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 func TestReader(t *testing.T) {
 	colNames := []string{"name", "age", "title"}
 	_, sch := untyped.NewUntypedSchema(colNames...)
 	goodExpectedRows := []row.Row{
-		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
-		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"}),
-		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern Dufus"}),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern Dufus"})),
 	}
 	badExpectedRows := []row.Row{
-		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"}),
-		untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"}),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"})),
 	}
 
 	tests := []struct {
@@ -102,7 +110,9 @@ func TestReader(t *testing.T) {
 			t.Error("Unexpected bad rows count. expected:", expectedBad, "actual:", numBad)
 		}
 
-		if !row.IsValid(rows[0], sch) {
+		if isv, err := row.IsValid(rows[0], sch); err != nil {
+			t.Fatal(err)
+		} else if !isv {
 			t.Fatal("Invalid Row for expected schema")
 		} else if len(rows) != len(test.expectedRows) {
 			t.Error("Did not receive the correct number of rows. expected: ", len(test.expectedRows), "actual:", len(rows))

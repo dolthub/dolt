@@ -223,9 +223,14 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	if mvOpts.Operation == mvdata.OverwriteOp && !force && mvOpts.Dest.Exists(context.TODO(), root, dEnv.FS) {
-		cli.PrintErrln(color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
-		return 1
+	if mvOpts.Operation == mvdata.OverwriteOp && !force {
+		if exists, err := mvOpts.Dest.Exists(context.TODO(), root, dEnv.FS); err != nil {
+			cli.Println(color.RedString(err.Error()))
+			return 1
+		} else if exists{
+			cli.PrintErrln(color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
+			return 1
+		}
 	}
 
 	if mvOpts.Src.Format == mvdata.SqlFile {

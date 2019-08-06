@@ -40,15 +40,25 @@ func NewNullPrinter(sch schema.Schema) *NullPrinter {
 func (np *NullPrinter) ProcessRow(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
 	taggedVals := make(row.TaggedValues)
 
-	inRow.IterSchema(np.Sch, func(tag uint64, val types.Value) (stop bool) {
+	_, err := inRow.IterSchema(np.Sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if !types.IsNull(val) {
 			taggedVals[tag] = val
 		} else {
 			taggedVals[tag] = types.String(PRINTED_NULL)
 		}
 
-		return false
+		return false, nil
 	})
 
-	return []*pipeline.TransformedRowResult{{RowData: row.New(inRow.Format(), np.Sch, taggedVals)}}, ""
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	r, err := row.New(inRow.Format(), np.Sch, taggedVals)
+
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	return []*pipeline.TransformedRowResult{{RowData: r}}, ""
 }

@@ -341,7 +341,13 @@ func processTableExpression(ctx context.Context, root *doltdb.RootValue, selectS
 			return errFmt("Selects without a table are not supported: %v", nodeToString(te))
 		}
 
-		canonicalTableName, err := resolveTable(tableName, root.GetTableNames(ctx), NewAliases())
+		tblNames, err := root.GetTableNames(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		canonicalTableName, err := resolveTable(tableName, tblNames, NewAliases())
 		if err != nil {
 			return err
 		}
@@ -441,8 +447,24 @@ func resultSetColumnName(expr sqlparser.Expr) string {
 
 // Gets the schema for the table name given. Will cause a panic if the table doesn't exist.
 func mustGetSchema(ctx context.Context, root *doltdb.RootValue, tableName string) schema.Schema {
-	tbl, _ := root.GetTable(ctx, tableName)
-	return tbl.GetSchema(ctx)
+	tbl, found, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		panic(err)
+	}
+
+	if !found {
+		// TODO: fix panics (get rid of must functions)
+		panic(errors.New(tableName + " does not exist."))
+	}
+
+	sch, err :=  tbl.GetSchema(ctx)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return sch
 }
 
 // Binds the tag numbers used by the various components in the statement to those provided by the given resolver.
@@ -599,9 +621,24 @@ func createWhereFn(statement *SelectStatement) pipeline.TransformRowFunc {
 // Creates a pipeline to return results from a single table.
 func createSingleTablePipeline(ctx context.Context, root *doltdb.RootValue, statement *SelectStatement, tableName string, isTerminal bool) (*pipeline.Pipeline, error) {
 	tblSch := statement.inputSchemas[tableName]
-	tbl, _ := root.GetTable(ctx, tableName)
+	tbl, _, err := root.GetTable(ctx, tableName)
 
-	rd := noms.NewNomsMapReader(ctx, tbl.GetRowData(ctx), tblSch)
+	if err != nil {
+		return nil, err
+	}
+
+	rowData, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rd, err := noms.NewNomsMapReader(ctx, rowData, tblSch)
+
+	if err != nil {
+		return nil, err
+	}
+
 	rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
 	p := pipeline.NewPartialPipeline(rdProcFunc)
 	p.RunAfter(func() { rd.Close(ctx) })
@@ -630,7 +667,13 @@ func createOutputSchemaMappingTransform(nbf *types.NomsBinFormat, selectStmt *Se
 				taggedVals[uint64(i)] = val
 			}
 		}
-		r := row.New(nbf, selectStmt.ResultSetSchema, taggedVals)
+		r, err := row.New(nbf, selectStmt.ResultSetSchema, taggedVals)
+
+		// TODO: fix panics
+		if err != nil {
+			panic(err)
+		}
+
 		return []*pipeline.TransformedRowResult{{RowData: r, PropertyUpdates: nil}}, ""
 	}
 

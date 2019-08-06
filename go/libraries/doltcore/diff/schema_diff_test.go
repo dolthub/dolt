@@ -15,6 +15,7 @@
 package diff
 
 import (
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
 
@@ -46,7 +47,8 @@ func TestDiffSchemas(t *testing.T) {
 
 	oldSch := schema.SchemaFromCols(oldColColl)
 	newSch := schema.SchemaFromCols(newColColl)
-	diffs := DiffSchemas(oldSch, newSch)
+	diffs, err := DiffSchemas(oldSch, newSch)
+	assert.NoError(t, err)
 
 	expected := map[uint64]SchemaDifference{
 		0: {SchDiffNone, 0, &oldCols[0], &newCols[0]},

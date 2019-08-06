@@ -34,35 +34,35 @@ func TestHandleRow(t *testing.T) {
 		{
 			name: "already fixed width",
 			inputRows: rs(
-				testRow("12345", "12345"),
-				testRow("12345", "12345"),
+				testRow(t, "12345", "12345"),
+				testRow(t, "12345", "12345"),
 			),
 			expectedRows: rs(
-				testRow("12345", "12345"),
-				testRow("12345", "12345"),
+				testRow(t, "12345", "12345"),
+				testRow(t, "12345", "12345"),
 			),
 		},
 		{
 			name: "pad right",
 			inputRows: rs(
-				testRow("a", "a"),
-				testRow("12345", "12345"),
+				testRow(t, "a", "a"),
+				testRow(t, "12345", "12345"),
 			),
 			expectedRows: rs(
-				testRow("a    ", "a    "),
-				testRow("12345", "12345"),
+				testRow(t, "a    ", "a    "),
+				testRow(t, "12345", "12345"),
 			),
 		},
 		// This could be a lot better, but it's exactly as broken as the MySQL shell so we're leaving it as is.
 		{
 			name: "embedded newlines",
 			inputRows: rs(
-				testRow("aaaaa\naaaaa", "a"),
-				testRow("12345", "12345\n12345"),
+				testRow(t, "aaaaa\naaaaa", "a"),
+				testRow(t, "12345", "12345\n12345"),
 			),
 			expectedRows: rs(
-				testRow("aaaaa\naaaaa", "a          "),
-				testRow("12345      ", "12345\n12345"),
+				testRow(t, "aaaaa\naaaaa", "a          "),
+				testRow(t, "12345      ", "12345\n12345"),
 			),
 		},
 	}
@@ -99,9 +99,11 @@ func testSchema() schema.Schema {
 	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
-func testRow(col1, col2 string) pipeline.RowWithProps {
+func testRow(t *testing.T, col1, col2 string) pipeline.RowWithProps {
 	taggedVals := row.TaggedValues{0: types.String(col1), 1: types.String(col2)}
-	return pipeline.RowWithProps{Row: row.New(types.Format_7_18, testSchema(), taggedVals), Props: pipeline.NoProps}
+	r, err := row.New(types.Format_7_18, testSchema(), taggedVals)
+	assert.NoError(t, err)
+	return pipeline.RowWithProps{Row: r, Props: pipeline.NoProps}
 }
 
 func rs(rs ...pipeline.RowWithProps) []pipeline.RowWithProps {

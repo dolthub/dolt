@@ -42,7 +42,13 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 	for i := range values {
 		taggedVals[uint64(i)] = values[i]
 	}
-	return row.New(types.Format_7_18, sch, taggedVals)
+	r, err := row.New(types.Format_7_18, sch, taggedVals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // AddColumnToSchema returns a new schema by adding the given column to the given schema. Will panic on an invalid
@@ -60,12 +66,16 @@ func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 // primary column must remain.
 func RemoveColumnFromSchema(sch schema.Schema, tagToRemove uint64) schema.Schema {
 	var newCols []schema.Column
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if tag != tagToRemove {
 			newCols = append(newCols, col)
 		}
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		panic(err)
+	}
 
 	columns, err := schema.NewColCollection(newCols...)
 	if err != nil {

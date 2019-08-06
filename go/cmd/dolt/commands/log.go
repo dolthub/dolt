@@ -120,7 +120,27 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	}
 
 	for _, comm := range commits {
-		loggerFunc(comm.GetCommitMeta(), comm.ParentHashes(context.TODO()), comm.HashOf())
+		meta, err := comm.GetCommitMeta()
+
+		if err != nil {
+			cli.PrintErrln("error: failed to get commit metadata")
+			return 1
+		}
+
+		pHashes, err := comm.ParentHashes(context.TODO())
+
+		if err != nil {
+			cli.PrintErrln("error: failed to get parent hashes")
+			return 1
+		}
+
+		cmHash, err := comm.HashOf()
+
+		if err != nil {
+			cli.PrintErrln("error: failed to get commit hash")
+			return 1
+		}
+		loggerFunc(meta,pHashes,cmHash)
 	}
 
 	return 0

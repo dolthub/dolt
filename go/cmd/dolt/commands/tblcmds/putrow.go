@@ -117,23 +117,54 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	tbl, ok := root.GetTable(context.TODO(), prArgs.TableName)
+	tbl, ok, err := root.GetTable(context.TODO(), prArgs.TableName)
+
+	if err != nil {
+		cli.PrintErrln(color.RedString("error: failed to read tables: " + err.Error()))
+		return 1
+	}
 
 	if !ok {
 		cli.PrintErrln(color.RedString("Unknown table %s", prArgs.TableName))
 		return 1
 	}
 
-	sch := tbl.GetSchema(context.TODO())
+	sch, err := tbl.GetSchema(context.TODO())
+
+	if err != nil {
+		cli.PrintErrln(color.RedString("error: failed to read schema: " + err.Error()))
+		return 1
+	}
+
 	row, verr := createRow(fmt, sch, prArgs)
 
 	if verr == nil {
-		me := tbl.GetRowData(context.TODO()).Edit()
-		updated := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map(context.TODO())
-		tbl = tbl.UpdateRows(context.Background(), updated)
-		root = root.PutTable(context.Background(), dEnv.DoltDB, prArgs.TableName, tbl)
+		m, err := tbl.GetRowData(context.TODO())
 
-		verr = commands.UpdateWorkingWithVErr(dEnv, root)
+		if err != nil {
+			verr = errhand.BuildDError("error: failed to get row data.").AddCause(err).Build()
+		} else {
+			me := m.Edit()
+			updated, err := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map(context.TODO())
+
+			if err != nil {
+				verr = errhand.BuildDError("error: failed to modify table").AddCause(err).Build()
+			} else {
+				tbl, err = tbl.UpdateRows(context.Background(), updated)
+
+				if err != nil {
+					verr = errhand.BuildDError("error: failed to update rows").AddCause(err).Build()
+				} else {
+					root, err = root.PutTable(context.Background(), dEnv.DoltDB, prArgs.TableName, tbl)
+
+					if err != nil {
+						verr = errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()
+					} else {
+						verr = commands.UpdateWorkingWithVErr(dEnv, root)
+					}
+				}
+			}
+		}
 	}
 
 	if verr != nil {
@@ -162,7 +193,12 @@ func createRow(nbf *types.NomsBinFormat, sch schema.Schema, prArgs *putRowArgs) 
 		return nil, bdr.Build()
 	}
 
-	untypedSch := untyped.UntypeSchema(sch)
+	untypedSch, err := untyped.UntypeSchema(sch)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to get schemas").AddCause(err).Build()
+	}
+
 	mapping, err := rowconv.TagMapping(untypedSch, sch)
 
 	if err != nil {
@@ -175,14 +211,19 @@ func createRow(nbf *types.NomsBinFormat, sch schema.Schema, prArgs *putRowArgs) 
 		return nil, errhand.BuildDError("failed to create row converter").AddCause(err).Build()
 	}
 
-	untypedRow := row.New(nbf, untypedSch, untypedTaggedVals)
+	untypedRow, err := row.New(nbf, untypedSch, untypedTaggedVals)
+
+	if err != nil {
+		return nil, errhand.BuildDError("").AddCause(err).Build()
+	}
+
 	typedRow, err := rconv.Convert(untypedRow)
 
 	if err != nil {
 		return nil, errhand.BuildDError("inserted row does not match schema").AddCause(err).Build()
 	}
 
-	if col := row.GetInvalidCol(typedRow, sch); col != nil {
+	if col, _ := row.GetInvalidCol(typedRow, sch); col != nil {
 		bdr := errhand.BuildDError("Missing required fields.")
 		bdr.AddDetails("The value for the column %s is not valid", col.Name)
 		return nil, bdr.Build()

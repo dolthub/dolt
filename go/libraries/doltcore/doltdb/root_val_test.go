@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -28,55 +29,70 @@ func TestTableDiff(t *testing.T) {
 	cs, _ := NewCommitSpec("head", "master")
 	cm, _ := ddb.Resolve(context.Background(), cs)
 
-	root := cm.GetRootValue()
-	added, modified, removed := root.TableDiff(context.Background(), root)
+	root, err := cm.GetRootValue()
+	assert.NoError(t, err)
+	added, modified, removed, err := root.TableDiff(context.Background(), root)
+	assert.NoError(t, err)
 
 	if len(added)+len(modified)+len(removed) != 0 {
 		t.Error("Bad table diff when comparing two repos")
 	}
 
 	sch := createTestSchema()
-	tbl1, _ := createTestTable(ddb.ValueReadWriter(), sch, types.NewMap(context.Background(), ddb.ValueReadWriter()))
+	m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
+	assert.NoError(t, err)
 
-	root2 := root.PutTable(context.Background(), ddb, "tbl1", tbl1)
+	tbl1, err := createTestTable(ddb.ValueReadWriter(), sch, m)
+	assert.NoError(t, err)
 
-	added, modified, removed = root2.TableDiff(context.Background(), root)
+	root2, err := root.PutTable(context.Background(), ddb, "tbl1", tbl1)
+	assert.NoError(t, err)
+
+	added, modified, removed, err = root2.TableDiff(context.Background(), root)
+	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "tbl1" || len(modified)+len(removed) != 0 {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	added, modified, removed = root.TableDiff(context.Background(), root2)
+	added, modified, removed, err = root.TableDiff(context.Background(), root2)
+	assert.NoError(t, err)
 
 	if len(removed) != 1 || removed[0] != "tbl1" || len(modified)+len(added) != 0 {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	rowData, _ := createTestRowData(ddb.ValueReadWriter(), sch)
+	rowData, _ := createTestRowData(t, ddb.ValueReadWriter(), sch)
 	tbl1Updated, _ := createTestTable(ddb.ValueReadWriter(), sch, rowData)
 
-	root3 := root.PutTable(context.Background(), ddb, "tbl1", tbl1Updated)
+	root3, err := root.PutTable(context.Background(), ddb, "tbl1", tbl1Updated)
+	assert.NoError(t, err)
 
-	added, modified, removed = root3.TableDiff(context.Background(), root2)
-
-	if len(modified) != 1 || modified[0] != "tbl1" || len(added)+len(removed) != 0 {
-		t.Error("Bad table diff after adding a single table")
-	}
-
-	added, modified, removed = root2.TableDiff(context.Background(), root3)
+	added, modified, removed, err = root3.TableDiff(context.Background(), root2)
+	assert.NoError(t, err)
 
 	if len(modified) != 1 || modified[0] != "tbl1" || len(added)+len(removed) != 0 {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	root4 := root3.PutTable(context.Background(), ddb, "tbl2", tbl1)
+	added, modified, removed, err = root2.TableDiff(context.Background(), root3)
+	assert.NoError(t, err)
 
-	added, modified, removed = root2.TableDiff(context.Background(), root4)
+	if len(modified) != 1 || modified[0] != "tbl1" || len(added)+len(removed) != 0 {
+		t.Error("Bad table diff after adding a single table")
+	}
+
+	root4, err := root3.PutTable(context.Background(), ddb, "tbl2", tbl1)
+	assert.NoError(t, err)
+
+	added, modified, removed, err = root2.TableDiff(context.Background(), root4)
+	assert.NoError(t, err)
 	if len(modified) != 1 || modified[0] != "tbl1" || len(removed) != 1 || removed[0] != "tbl2" || +len(added) != 0 {
 		t.Error("Bad table diff after adding a second table")
 	}
 
-	added, modified, removed = root4.TableDiff(context.Background(), root2)
+	added, modified, removed, err = root4.TableDiff(context.Background(), root2)
+	assert.NoError(t, err)
 	if len(modified) != 1 || modified[0] != "tbl1" || len(added) != 1 || added[0] != "tbl2" || +len(removed) != 0 {
 		t.Error("Bad table diff after adding a second table")
 	}

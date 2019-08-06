@@ -24,6 +24,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"os"
 	"strings"
 
@@ -88,7 +89,8 @@ func runRoot(ctx context.Context, args []string) int {
 	db, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 	defer db.Close()
-	if !validate(ctx, db.Format(), db.ReadValue(ctx, h)) {
+	v, err := db.ReadValue(ctx, h)
+	if !validate(ctx, db.Format(), v) {
 		return 1
 	}
 
@@ -124,18 +126,50 @@ Continue?`)
 	return 0
 }
 
+func mustType(t *types.Type, err error) *types.Type {
+	d.PanicIfError(err)
+	return t
+}
+
+func mustString(str string, err error) string {
+	d.PanicIfError(err)
+	return str
+}
+
+func mustValue(v types.Value, err error) types.Value {
+	d.PanicIfError(err)
+	return v
+}
+
+func mustGetValue(v types.Value, ok bool, err error) types.Value {
+	d.PanicIfError(err)
+	d.PanicIfFalse(ok)
+	return v
+}
+
+func mustSet(s types.Set, err error) types.Set {
+	d.PanicIfError(err)
+	return s
+}
+
 func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool {
-	rootType := types.MakeMapType(types.StringType, types.MakeRefType(types.ValueType))
-	if !types.IsValueSubtypeOf(nbf, r, rootType) {
-		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", rootType.Describe(ctx), types.TypeOf(r).Describe(ctx))
+	rootType := mustType(types.MakeMapType(types.StringType, mustType(types.MakeRefType(types.ValueType))))
+	if isSub, err := types.IsValueSubtypeOf(nbf, r, rootType); err != nil {
+		panic(err)
+	} else if !isSub {
+		fmt.Fprintf(os.Stderr, "Root of database must be %s, but you specified: %s\n", mustString(rootType.Describe(ctx)), mustString(mustType(types.TypeOf(r)).Describe(ctx)))
 		return false
 	}
 
-	return r.(types.Map).Any(ctx, func(k, v types.Value) bool {
-		if !datas.IsRefOfCommitType(nbf, types.TypeOf(v)) {
+	yep, err :=  r.(types.Map).Any(ctx, func(k, v types.Value) bool {
+		if !datas.IsRefOfCommitType(nbf, mustType(types.TypeOf(v))) {
 			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
 			return false
 		}
 		return true
 	})
+
+	d.PanicIfError(err)
+
+	return yep
 }

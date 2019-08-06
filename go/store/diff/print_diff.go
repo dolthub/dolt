@@ -23,6 +23,7 @@ package diff
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 
 	"github.com/dustin/go-humanize"
@@ -50,10 +51,16 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 	// diff and return. This is needed because the code below assumes that the
 	// values being compared have a parent.
 	if !ShouldDescend(v1, v2) {
-		line(ctx, w, DEL, nil, v1)
+		err := line(ctx, w, DEL, nil, v1)
+
+		if err != nil {
+			return err
+		}
+
 		return line(ctx, w, ADD, nil, v2)
 	}
 
+	ae := atomicerr.New()
 	dChan := make(chan Difference, 16)
 	stopChan := make(chan struct{})
 	stopDiff := func() {
@@ -65,8 +72,9 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 	// From here on, we can assume that every Difference will have at least one
 	// element in the Path
 	go func() {
-		Diff(ctx, v1, v2, dChan, stopChan, leftRight, nil)
-		close(dChan)
+		defer close(dChan)
+
+		Diff(ctx, ae, v1, v2, dChan, stopChan, leftRight, nil)
 	}()
 
 	var lastParentPath types.Path
@@ -74,19 +82,31 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 	firstTime := true
 
 	for d := range dChan {
+		if ae.IsSet() {
+			break
+		}
+
 		parentPath := d.Path[:len(d.Path)-1]
 		parentPathChanged := !parentPath.Equals(lastParentPath)
 		lastParentPath = parentPath
 		if parentPathChanged && wroteHdr {
 			err = writeFooter(w, &wroteHdr)
+
+			if ae.SetIfError(err) {
+				break
+			}
 		}
 		if parentPathChanged || firstTime {
 			firstTime = false
 			err = writeHeader(w, parentPath, &wroteHdr)
+
+			if ae.SetIfError(err) {
+				break
+			}
 		}
 
 		lastPart := d.Path[len(d.Path)-1]
-		parentEl := parentPath.Resolve(ctx, v1, nil)
+		parentEl, err := parentPath.Resolve(ctx, v1, nil)
 
 		var key types.Value
 		var pfunc printFunc = line
@@ -100,7 +120,11 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 				// is a ref to the key. We need the actual key, not a ref to it.
 				hip1 := hip
 				hip1.IntoKey = true
-				key = hip1.Resolve(ctx, parent, nil)
+				key, err = hip1.Resolve(ctx, parent, nil)
+
+				if ae.SetIfError(err) {
+					break
+				}
 			} else {
 				panic("unexpected Path type")
 			}
@@ -124,8 +148,11 @@ func PrintDiff(ctx context.Context, w io.Writer, v1, v2 types.Value, leftRight b
 			break
 		}
 	}
+
 	err = writeFooter(w, &wroteHdr)
-	return
+	ae.SetIfError(err)
+
+	return ae.Get()
 }
 
 func writeHeader(w io.Writer, p types.Path, wroteHdr *bool) error {
@@ -154,10 +181,24 @@ func line(ctx context.Context, w io.Writer, op prefixOp, key, val types.Value) e
 	}
 	pw := &writers.PrefixWriter{Dest: w, PrefixFunc: genPrefix, NeedsPrefix: true}
 	if key != nil {
-		writeEncodedValue(ctx, pw, key)
-		write(w, []byte(": "))
+		err := writeEncodedValue(ctx, pw, key)
+
+		if err != nil {
+			return err
+		}
+
+		err = write(w, []byte(": "))
+
+		if err != nil {
+			return err
+		}
 	}
-	writeEncodedValue(ctx, pw, val)
+	err := writeEncodedValue(ctx, pw, val)
+
+	if err != nil {
+		return err
+	}
+
 	return write(w, []byte("\n"))
 }
 
@@ -166,9 +207,24 @@ func field(ctx context.Context, w io.Writer, op prefixOp, name, val types.Value)
 		return []byte(op)
 	}
 	pw := &writers.PrefixWriter{Dest: w, PrefixFunc: genPrefix, NeedsPrefix: true}
-	write(pw, []byte(name.(types.String)))
-	write(w, []byte(": "))
-	writeEncodedValue(ctx, pw, val)
+	err := write(pw, []byte(name.(types.String)))
+
+	if err != nil {
+		return err
+	}
+
+	err = write(w, []byte(": "))
+
+	if err != nil {
+		return err
+	}
+
+	err = writeEncodedValue(ctx, pw, val)
+
+	if err != nil {
+		return err
+	}
+
 	return write(w, []byte("\n"))
 }
 
@@ -176,8 +232,19 @@ func writeEncodedValue(ctx context.Context, w io.Writer, v types.Value) error {
 	if v.Kind() != types.BlobKind {
 		return types.WriteEncodedValue(ctx, w, v)
 	}
-	write(w, []byte("Blob ("))
-	write(w, []byte(humanize.Bytes(v.(types.Blob).Len())))
+
+	err := write(w, []byte("Blob ("))
+
+	if err != nil {
+		return err
+	}
+
+	err = write(w, []byte(humanize.Bytes(v.(types.Blob).Len())))
+
+	if err != nil {
+		return err
+	}
+
 	return write(w, []byte(")"))
 }
 

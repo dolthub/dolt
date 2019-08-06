@@ -44,42 +44,23 @@ func MarshalType(nbf *types.NomsBinFormat, v interface{}) (nt *types.Type, err e
 }
 
 // MarshalTypeOpt is like MarshalType but with additional options.
-func MarshalTypeOpt(nbf *types.NomsBinFormat, v interface{}, opt Opt) (nt *types.Type, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			switch r := r.(type) {
-			case *UnsupportedTypeError, *InvalidTagError:
-				err = r.(error)
-			case *marshalNomsError:
-				err = r.err
-			default:
-				panic(r)
-			}
-		}
-	}()
-	nt = MustMarshalTypeOpt(nbf, v, opt)
-	return
-}
-
-// MustMarshalType computes a Noms type from a Go type or panics if there is an
-// error.
-func MustMarshalType(nbf *types.NomsBinFormat, v interface{}) (nt *types.Type) {
-	return MustMarshalTypeOpt(nbf, v, Opt{})
-}
-
-// MustMarshalTypeOpt is like MustMarshalType but provides additional options.
-func MustMarshalTypeOpt(nbf *types.NomsBinFormat, v interface{}, opt Opt) (nt *types.Type) {
+func MarshalTypeOpt(nbf *types.NomsBinFormat, v interface{}, opt Opt) (*types.Type, error) {
 	rv := reflect.ValueOf(v)
 	tags := nomsTags{
 		set: opt.Set,
 	}
-	nt = encodeType(nbf, rv.Type(), map[string]reflect.Type{}, tags)
 
-	if nt == nil {
-		panic(&UnsupportedTypeError{Type: rv.Type()})
+	nt, err := encodeType(nbf, rv.Type(), map[string]reflect.Type{}, tags)
+
+	if err != nil {
+		return nil, err
 	}
 
-	return
+	if nt == nil {
+		return nil, &UnsupportedTypeError{Type: rv.Type()}
+	}
+
+	return nt, err
 }
 
 // TypeMarshaler is an interface types can implement to provide their own
@@ -94,17 +75,17 @@ type TypeMarshaler interface {
 var typeOfTypesType = reflect.TypeOf((*types.Type)(nil))
 var typeMarshalerInterface = reflect.TypeOf((*TypeMarshaler)(nil)).Elem()
 
-func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) *types.Type {
+func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) (*types.Type, error) {
 	if t.Implements(typeMarshalerInterface) {
 		v := reflect.Zero(t)
 		typ, err := v.Interface().(TypeMarshaler).MarshalNomsType()
 		if err != nil {
-			panic(&marshalNomsError{err})
+			return nil, &marshalNomsError{err}
 		}
 		if typ == nil {
-			panic(fmt.Errorf("nil result from %s.MarshalNomsType", t))
+			return nil, fmt.Errorf("nil result from %s.MarshalNomsType", t)
 		}
-		return typ
+		return typ, nil
 	}
 
 	if t.Implements(marshalerInterface) {
@@ -112,60 +93,70 @@ func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 		// different each time MarshalNoms is called and is handled further up the
 		// stack.
 		err := fmt.Errorf("cannot marshal type which implements %s, perhaps implement %s for %s", marshalerInterface, typeMarshalerInterface, t)
-		panic(&marshalNomsError{err})
+		return nil, &marshalNomsError{err}
 	}
 
 	if t.Implements(nomsValueInterface) {
 		if t == typeOfTypesType {
-			return types.TypeType
+			return types.TypeType, nil
 		}
 
 		// Use Name because List and Blob are convertible to each other on Go.
 		switch t.Name() {
 		case "Blob":
-			return types.BlobType
+			return types.BlobType, nil
 		case "Bool":
-			return types.BoolType
+			return types.BoolType, nil
 		case "List":
 			return types.MakeListType(types.ValueType)
 		case "Map":
 			return types.MakeMapType(types.ValueType, types.ValueType)
 		case "Float":
-			return types.FloaTType
+			return types.FloaTType, nil
 		case "Ref":
 			return types.MakeRefType(types.ValueType)
 		case "Set":
 			return types.MakeSetType(types.ValueType)
 		case "String":
-			return types.StringType
+			return types.StringType, nil
 		case "Value":
-			return types.ValueType
+			return types.ValueType, nil
 		}
 
-		err := fmt.Errorf("cannot marshal type %s, it requires type parameters", t)
-		panic(&marshalNomsError{err})
+		return nil, fmt.Errorf("cannot marshal type %s, it requires type parameters", t)
 	}
 
 	switch t.Kind() {
 	case reflect.Bool:
-		return types.BoolType
+		return types.BoolType, nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
-		return types.FloaTType
+		return types.FloaTType, nil
 	case reflect.String:
-		return types.StringType
+		return types.StringType, nil
 	case reflect.Struct:
 		return structEncodeType(nbf, t, seenStructs)
 	case reflect.Array, reflect.Slice:
-		elemType := encodeType(nbf, t.Elem(), seenStructs, nomsTags{})
+		elemType, err := encodeType(nbf, t.Elem(), seenStructs, nomsTags{})
+
+		if err != nil {
+			return nil, err
+		}
+
 		if elemType == nil {
 			break
 		}
+
 		if shouldEncodeAsSet(t, tags) {
 			return types.MakeSetType(elemType)
 		}
 		return types.MakeListType(elemType)
 	case reflect.Map:
-		keyType := encodeType(nbf, t.Key(), seenStructs, nomsTags{})
+		keyType, err := encodeType(nbf, t.Key(), seenStructs, nomsTags{})
+
+		if err != nil {
+			return nil, err
+		}
+
 		if keyType == nil {
 			break
 		}
@@ -174,14 +165,19 @@ func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 			return types.MakeSetType(keyType)
 		}
 
-		valueType := encodeType(nbf, t.Elem(), seenStructs, nomsTags{})
+		valueType, err := encodeType(nbf, t.Elem(), seenStructs, nomsTags{})
+
+		if err != nil {
+			return nil, err
+		}
+
 		if valueType != nil {
 			return types.MakeMapType(keyType, valueType)
 		}
 	}
 
 	// This will be reported as an error at a different layer.
-	return nil
+	return nil, nil
 }
 
 // structEncodeType returns the Noms types.Type if it can be determined from the
@@ -189,16 +185,20 @@ func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 // the type but we also need to look at the value. In these cases this returns
 // nil and we have to wait until we have a value to be able to determine the
 // type.
-func structEncodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) *types.Type {
+func structEncodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) (*types.Type, error) {
 	name := getStructName(t)
 	if name != "" {
 		if _, ok := seenStructs[name]; ok {
-			return types.MakeCycleType(name)
+			return types.MakeCycleType(name), nil
 		}
 		seenStructs[name] = t
 	}
 
-	fields, knownShape, _ := typeFields(nbf, t, seenStructs, true, false)
+	fields, knownShape, _, err := typeFields(nbf, t, seenStructs, true, false)
+
+	if err != nil {
+		return nil, err
+	}
 
 	var structType *types.Type
 	if knownShape {
@@ -210,8 +210,12 @@ func structEncodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[
 				Optional: fs.omitEmpty,
 			}
 		}
-		structType = types.MakeStructType(getStructName(t), structTypeFields...)
+		structType, err = types.MakeStructType(getStructName(t), structTypeFields...)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return structType
+	return structType, err
 }

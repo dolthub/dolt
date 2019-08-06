@@ -47,29 +47,36 @@ func (ps PatchSort) Len() int {
 
 var vals = map[types.DiffChangeType]int{types.DiffChangeRemoved: 0, types.DiffChangeModified: 1, types.DiffChangeAdded: 2}
 
-func (ps PatchSort) Less(i, j int) bool {
+func (ps PatchSort) Less(i, j int) (bool, error) {
 	if ps.patch[i].Path.Equals(ps.patch[j].Path) {
-		return vals[ps.patch[i].ChangeType] < vals[ps.patch[j].ChangeType]
+		return vals[ps.patch[i].ChangeType] < vals[ps.patch[j].ChangeType], nil
 	}
 	return pathIsLess(ps.nbf, ps.patch[i].Path, ps.patch[j].Path)
 }
 
 // Utility methods on path
 // TODO: Should these be on types.Path & types.PathPart?
-func pathIsLess(nbf *types.NomsBinFormat, p1, p2 types.Path) bool {
+func pathIsLess(nbf *types.NomsBinFormat, p1, p2 types.Path) (bool, error) {
 	for i, pp1 := range p1 {
 		if len(p2) == i {
-			return false // p1 > p2
+			return false, nil // p1 > p2
 		}
-		switch pathPartCompare(nbf, pp1, p2[i]) {
+
+		idx, err := pathPartCompare(nbf, pp1, p2[i])
+
+		if err != nil {
+			return false, err
+		}
+
+		switch idx {
 		case -1:
-			return true // p1 < p2
+			return true, nil // p1 < p2
 		case 1:
-			return false // p1 > p2
+			return false, nil // p1 > p2
 		}
 	}
 
-	return len(p2) > len(p1) // if true p1 < p2, else p1 == p2
+	return len(p2) > len(p1), nil // if true p1 < p2, else p1 == p2
 }
 
 func fieldPathCompare(pp types.FieldPath, o types.PathPart) int {
@@ -90,26 +97,28 @@ func fieldPathCompare(pp types.FieldPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func indexPathCompare(nbf *types.NomsBinFormat, pp types.IndexPath, o types.PathPart) int {
+func indexPathCompare(nbf *types.NomsBinFormat, pp types.IndexPath, o types.PathPart) (int, error) {
 	switch opp := o.(type) {
 	case types.FieldPath:
-		return 1
+		return 1, nil
 	case types.IndexPath:
 		if pp.Index.Equals(opp.Index) {
 			if pp.IntoKey == opp.IntoKey {
-				return 0
+				return 0, nil
 			}
 			if pp.IntoKey {
-				return -1
+				return -1, nil
 			}
-			return 1
+			return 1, nil
 		}
-		if pp.Index.Less(nbf, opp.Index) {
-			return -1
+		if isLess, err := pp.Index.Less(nbf, opp.Index); err != nil {
+			return 0, err
+		} else if isLess {
+			return -1, nil
 		}
-		return 1
+		return 1, nil
 	case types.HashIndexPath:
-		return -1
+		return -1, nil
 	}
 	panic("unreachable")
 }
@@ -139,14 +148,14 @@ func hashIndexPathCompare(pp types.HashIndexPath, o types.PathPart) int {
 	panic("unreachable")
 }
 
-func pathPartCompare(nbf *types.NomsBinFormat, pp, pp2 types.PathPart) int {
+func pathPartCompare(nbf *types.NomsBinFormat, pp, pp2 types.PathPart) (int, error) {
 	switch pp1 := pp.(type) {
 	case types.FieldPath:
-		return fieldPathCompare(pp1, pp2)
+		return fieldPathCompare(pp1, pp2), nil
 	case types.IndexPath:
 		return indexPathCompare(nbf, pp1, pp2)
 	case types.HashIndexPath:
-		return hashIndexPathCompare(pp1, pp2)
+		return hashIndexPathCompare(pp1, pp2), nil
 	}
 	panic("unreachable")
 }

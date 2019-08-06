@@ -105,7 +105,12 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 	for _, arg := range args {
 		if cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.Head.Ref.String()); err == nil {
 			if cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs); err == nil {
-				roots[i] = cm.GetRootValue()
+				roots[i], err = cm.GetRootValue()
+
+				if err != nil {
+					return nil, nil, nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
+				}
+
 				i++
 				continue
 			}
@@ -129,9 +134,21 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 
 	for ; i < len(args); i++ {
 		tbl := args[i]
-		if !(roots[0].HasTable(context.TODO(), tbl) || roots[1].HasTable(context.TODO(), tbl)) {
+		has0, err := roots[0].HasTable(context.TODO(), tbl)
+
+		if err != nil {
+			return nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
+		}
+
+		has1, err := roots[1].HasTable(context.TODO(), tbl)
+
+		if err != nil {
+			return nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
+		}
+
+		if !(has0 || has1) {
 			verr := errhand.BuildDError("error: Unknown table: '%s'", tbl).Build()
-			return nil, nil, args, verr
+			return nil, nil, nil, verr
 		}
 
 		tables = append(tables, tbl)
@@ -154,26 +171,64 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()
 	}
 
-	r := cm.GetRootValue()
+	r, err := cm.GetRootValue()
 
-	return cm.HashOf().String(), r, nil
+	if err != nil {
+		return "", nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
+	}
+
+	h, err := cm.HashOf()
+
+	if err != nil {
+		return "", nil, errhand.BuildDError("error: failed to get commit hash").AddCause(err).Build()
+	}
+
+	return h.String(), r, nil
 }
 
 func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv) errhand.VerboseError {
+	var err error
 	if len(tblNames) == 0 {
-		tblNames = actions.AllTables(context.TODO(), r1, r2)
+		tblNames, err = actions.AllTables(context.TODO(), r1, r2)
+	}
+
+	if err != nil {
+		return errhand.BuildDError("error: unable to read tables").AddCause(err).Build()
 	}
 
 	for _, tblName := range tblNames {
-		tbl1, ok1 := r1.GetTable(context.TODO(), tblName)
-		tbl2, ok2 := r2.GetTable(context.TODO(), tblName)
+		tbl1, ok1, err := r1.GetTable(context.TODO(), tblName)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
+		}
+
+		tbl2, ok2, err := r2.GetTable(context.TODO(), tblName)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
+		}
 
 		if !ok1 && !ok2 {
 			bdr := errhand.BuildDError("Table could not be found.")
 			bdr.AddDetails("The table %s does not exist.", tblName)
 			cli.PrintErrln(bdr.Build())
-		} else if tbl1 != nil && tbl2 != nil && tbl1.HashOf() == tbl2.HashOf() {
-			continue
+		} else if tbl1 != nil && tbl2 != nil {
+			h1, err := tbl1.HashOf()
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get table hash").Build()
+			}
+
+			h2, err := tbl2.HashOf()
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get table hash").Build()
+			}
+
+			if h1 == h2 {
+				continue
+			}
 		}
 
 		printTableDiffSummary(tblName, tbl1, tbl2)
@@ -186,19 +241,58 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 		var sch2 schema.Schema
 		var sch1Hash hash.Hash
 		var sch2Hash hash.Hash
-		rowData1 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
-		rowData2 := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+		rowData1, err := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+
+		if err != nil {
+			return errhand.BuildDError("").AddCause(err).Build()
+		}
+
+		rowData2, err := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+
+		if err != nil {
+			return errhand.BuildDError("").AddCause(err).Build()
+		}
 
 		if ok1 {
-			sch1 = tbl1.GetSchema(context.TODO())
-			sch1Hash = tbl1.GetSchemaRef().TargetHash()
-			rowData1 = tbl1.GetRowData(context.TODO())
+			sch1, err = tbl1.GetSchema(context.TODO())
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
+			}
+
+			schRef, err := tbl1.GetSchemaRef()
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get schema ref").AddCause(err).Build()
+			}
+
+			sch1Hash = schRef.TargetHash()
+			rowData1, err = tbl1.GetRowData(context.TODO())
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
+			}
 		}
 
 		if ok2 {
-			sch2 = tbl2.GetSchema(context.TODO())
-			sch2Hash = tbl2.GetSchemaRef().TargetHash()
-			rowData2 = tbl2.GetRowData(context.TODO())
+			sch2, err = tbl2.GetSchema(context.TODO())
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
+			}
+
+			schRef, err := tbl2.GetSchemaRef()
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get schema ref").AddCause(err).Build()
+			}
+
+			sch2Hash = schRef.TargetHash()
+			rowData2, err = tbl2.GetRowData(context.TODO())
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
+			}
 		}
 
 		var verr errhand.VerboseError
@@ -220,7 +314,12 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 }
 
 func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errhand.VerboseError {
-	diffs := diff.DiffSchemas(sch1, sch2)
+	diffs, err := diff.DiffSchemas(sch1, sch2)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
+	}
+
 	tags := make([]uint64, 0, len(diffs))
 
 	for tag := range diffs {
@@ -274,26 +373,39 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errha
 	return nil
 }
 
-func dumbDownSchema(in schema.Schema) schema.Schema {
+func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	allCols := in.GetAllCols()
 
 	dumbCols := make([]schema.Column, 0, allCols.Size())
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Name = strconv.FormatUint(tag, 10)
 		col.Constraints = nil
 		dumbCols = append(dumbCols, col)
 
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	dumbColColl, _ := schema.NewColCollection(dumbCols...)
 
-	return schema.SchemaFromCols(dumbColColl)
+	return schema.SchemaFromCols(dumbColColl), nil
 }
 
 func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.VerboseError {
-	dumbNewSch := dumbDownSchema(newSch)
-	dumbOldSch := dumbDownSchema(oldSch)
+	dumbNewSch, err := dumbDownSchema(newSch)
+
+	if err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	}
+
+	dumbOldSch, err := dumbDownSchema(oldSch)
+
+	if err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	}
 
 	untypedUnionSch, err := untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 
@@ -332,7 +444,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 
 	oldColNames := make(map[uint64]string)
 	newColNames := make(map[uint64]string)
-	untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err = untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		oldCol, oldOk := oldSch.GetAllCols().GetByTag(tag)
 		newCol, newOk := newSch.GetAllCols().GetByTag(tag)
 
@@ -348,8 +460,12 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 			newColNames[tag] = ""
 		}
 
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to map columns to tags").Build()
+	}
 
 	schemasEqual := reflect.DeepEqual(oldColNames, newColNames)
 	numHeaderRows := 1
@@ -357,7 +473,12 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 		numHeaderRows = 2
 	}
 
-	sink := diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+	sink, err:= diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+
+	if err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	}
+
 	defer sink.Close()
 
 	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
@@ -377,10 +498,28 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src.NextDiff), sinkProcFunc, transforms, badRowCallback)
 
 	if schemasEqual {
-		p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames))
+		schRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
+
+		if err != nil {
+
+		}
+
+		p.InjectRow(fwtStageName, schRow)
 	} else {
-		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, oldColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
-		p.InjectRowWithProps(fwtStageName, untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames), map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
+		newSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, oldColNames)
+
+		if err != nil {
+
+		}
+
+		p.InjectRowWithProps(fwtStageName, newSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
+		oldSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
+
+		if err != nil {
+
+		}
+
+		p.InjectRowWithProps(fwtStageName, oldSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
 	}
 
 	p.Start()
@@ -403,7 +542,20 @@ func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
 	} else if tbl2 == nil {
 		bold.Println("added table")
 	} else {
-		bold.Printf("--- a/%s @ %s\n", tblName, tbl1.HashOf().String())
-		bold.Printf("+++ b/%s @ %s\n", tblName, tbl2.HashOf().String())
+		h1, err := tbl1.HashOf()
+
+		if err != nil {
+			panic(err)
+		}
+
+		bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
+
+		h2, err := tbl2.HashOf()
+
+		if err != nil {
+			panic(err)
+		}
+
+		bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 	}
 }

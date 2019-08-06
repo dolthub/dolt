@@ -115,35 +115,22 @@ func Marshal(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (typ
 
 // MarshalOpt is like Marshal but provides additional options.
 func MarshalOpt(ctx context.Context, vrw types.ValueReadWriter, v interface{}, opt Opt) (nomsValue types.Value, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			switch r := r.(type) {
-			case *UnsupportedTypeError, *InvalidTagError:
-				err = r.(error)
-			case *marshalNomsError:
-				err = r.err
-			default:
-				panic(r)
-			}
-		}
-	}()
-	nomsValue = MustMarshalOpt(ctx, vrw, v, opt)
-	return
-}
-
-// MustMarshal marshals a Go value to a Noms value using the same rules as
-// Marshal(). Panics on failure.
-func MustMarshal(ctx context.Context, vrw types.ValueReadWriter, v interface{}) types.Value {
-	return MustMarshalOpt(ctx, vrw, v, Opt{})
+	nomsValue, err = marshalOpt(ctx, vrw, v, opt)
+	return nomsValue, err
 }
 
 // MustMarshalOpt is like MustMarshal, but with additional options.
-func MustMarshalOpt(ctx context.Context, vrw types.ValueReadWriter, v interface{}, opt Opt) types.Value {
+func marshalOpt(ctx context.Context, vrw types.ValueReadWriter, v interface{}, opt Opt) (types.Value, error) {
 	rv := reflect.ValueOf(v)
 	nt := nomsTags{
 		set: opt.Set,
 	}
-	encoder := typeEncoder(vrw.Format(), rv.Type(), map[string]reflect.Type{}, nt)
+	encoder, err := typeEncoder(vrw.Format(), rv.Type(), map[string]reflect.Type{}, nt)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return encoder(ctx, rv, vrw)
 }
 
@@ -215,61 +202,61 @@ var emptyInterface = reflect.TypeOf((*interface{})(nil)).Elem()
 var marshalerInterface = reflect.TypeOf((*Marshaler)(nil)).Elem()
 var structNameMarshalerInterface = reflect.TypeOf((*StructNameMarshaler)(nil)).Elem()
 
-type encoderFunc func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value
+type  encoderFunc func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error)
 
-func boolEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.Bool(v.Bool())
+func boolEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
+	return types.Bool(v.Bool()), nil
 }
 
-func float64Encoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.Float(v.Float())
+func float64Encoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
+	return types.Float(v.Float()), nil
 }
 
-func intEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.Float(float64(v.Int()))
+func intEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
+	return types.Float(float64(v.Int())), nil
 }
 
-func uintEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.Float(float64(v.Uint()))
+func uintEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
+	return types.Float(float64(v.Uint())), nil
 }
 
-func stringEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return types.String(v.String())
+func stringEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
+	return types.String(v.String()), nil
 }
 
-func nomsValueEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
-	return v.Interface().(types.Value)
+func nomsValueEncoder(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
+	return v.Interface().(types.Value), nil
 }
 
 func marshalerEncoder(t reflect.Type) encoderFunc {
-	return func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+	return func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 		val, err := v.Interface().(Marshaler).MarshalNoms(vrw)
 		if err != nil {
-			panic(&marshalNomsError{err})
+			return nil, &marshalNomsError{err}
 		}
 		if val == nil {
-			panic(fmt.Errorf("nil result from %s.MarshalNoms", t.String()))
+			return nil, fmt.Errorf("nil result from %s.MarshalNoms", t.String())
 		}
-		return val
+		return val, nil
 	}
 }
 
-func typeEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) encoderFunc {
+func typeEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, tags nomsTags) (encoderFunc, error) {
 	if t.Implements(marshalerInterface) {
-		return marshalerEncoder(t)
+		return marshalerEncoder(t), nil
 	}
 
 	switch t.Kind() {
 	case reflect.Bool:
-		return boolEncoder
+		return boolEncoder, nil
 	case reflect.Float64, reflect.Float32:
-		return float64Encoder
+		return float64Encoder,nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return intEncoder
+		return intEncoder, nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		return uintEncoder
+		return uintEncoder, nil
 	case reflect.String:
-		return stringEncoder
+		return stringEncoder, nil
 	case reflect.Struct:
 		return structEncoder(nbf, t, seenStructs)
 	case reflect.Slice, reflect.Array:
@@ -283,19 +270,25 @@ func typeEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[strin
 		}
 		return mapEncoder(nbf, t, seenStructs)
 	case reflect.Interface:
-		return func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+		return func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 			// Get the dynamic type.
 			v2 := reflect.ValueOf(v.Interface())
-			return typeEncoder(nbf, v2.Type(), seenStructs, tags)(ctx, v2, vrw)
-		}
+			encFunc, err := typeEncoder(nbf, v2.Type(), seenStructs, tags)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return encFunc(ctx, v2, vrw)
+		}, nil
 	case reflect.Ptr:
 		// Allow implementations of types.Value (like *types.Type)
 		if t.Implements(nomsValueInterface) {
-			return nomsValueEncoder
+			return nomsValueEncoder, nil
 		}
 		fallthrough
 	default:
-		panic(&UnsupportedTypeError{Type: t})
+		return nil, &UnsupportedTypeError{Type: t}
 	}
 }
 
@@ -307,20 +300,25 @@ func getStructName(t reflect.Type) string {
 	return strings.Title(t.Name())
 }
 
-func structEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func structEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) (encoderFunc, error) {
 	if t.Implements(nomsValueInterface) {
-		return nomsValueEncoder
+		return nomsValueEncoder, nil
 	}
 
 	e := encoderCache.get(t)
 	if e != nil {
-		return e
+		return e, nil
 	}
 
 	structName := getStructName(t)
 
 	seenStructs[t.Name()] = t
-	fields, knownShape, originalFieldIndex := typeFields(nbf, t, seenStructs, false, false)
+	fields, knownShape, originalFieldIndex, err := typeFields(nbf, t, seenStructs, false, false)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if knownShape {
 		fieldNames := make([]string, len(fields))
 		for i, f := range fields {
@@ -328,49 +326,70 @@ func structEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[str
 		}
 
 		structTemplate := types.MakeStructTemplate(structName, fieldNames)
-		e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+		e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 			values := make(types.ValueSlice, len(fields))
 			for i, f := range fields {
-				values[i] = f.encoder(ctx, v.FieldByIndex(f.index), vrw)
+				var err error
+				values[i], err = f.encoder(ctx, v.FieldByIndex(f.index), vrw)
+
+				if err != nil {
+					return nil, err
+				}
 			}
 			return structTemplate.NewStruct(nbf, values)
 		}
 	} else if originalFieldIndex == nil {
 		// Slower path: cannot precompute the Noms type since there are Noms collections,
 		// but at least there are a set number of fields.
-		e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+		e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 			data := make(types.StructData, len(fields))
 			for _, f := range fields {
 				fv := v.FieldByIndex(f.index)
 				if !fv.IsValid() || f.omitEmpty && isEmptyValue(fv) {
 					continue
 				}
-				data[f.name] = f.encoder(ctx, fv, vrw)
+				var err error
+				data[f.name], err = f.encoder(ctx, fv, vrw)
+
+				if err != nil {
+					return nil, err
+				}
 			}
 			return types.NewStruct(nbf, structName, data)
 		}
 	} else {
 		// Slowest path - we are extending some other struct. We need to start with the
 		// type of that struct and extend.
-		e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+		e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 			fv := v.FieldByIndex(originalFieldIndex)
 			ret := fv.Interface().(types.Struct)
 			if ret.IsZeroValue() {
-				ret = types.NewStruct(nbf, structName, nil)
+				var err error
+				ret, err = types.NewStruct(nbf, structName, nil)
+
+				if err != nil {
+					return nil, err
+				}
 			}
 			for _, f := range fields {
 				fv := v.FieldByIndex(f.index)
 				if !fv.IsValid() || f.omitEmpty && isEmptyValue(fv) {
 					continue
 				}
-				ret = ret.Set(f.name, f.encoder(ctx, fv, vrw))
+
+				encVal, err := f.encoder(ctx, fv, vrw)
+				ret, err = ret.Set(f.name, encVal)
+
+				if err != nil {
+					return nil, err
+				}
 			}
-			return ret
+			return ret, nil
 		}
 	}
 
 	encoderCache.set(t, e)
-	return e
+	return e, nil
 }
 
 func isEmptyValue(v reflect.Value) bool {
@@ -434,7 +453,7 @@ func (c *encoderCacheT) set(t reflect.Type, e encoderFunc) {
 	c.m[t] = e
 }
 
-func getTags(f reflect.StructField) (tags nomsTags) {
+func getTags(f reflect.StructField) (tags nomsTags, err error) {
 	reflectTags := f.Tag.Get("noms")
 	if reflectTags == "-" {
 		tags.skip = true
@@ -452,7 +471,7 @@ func getTags(f reflect.StructField) (tags nomsTags) {
 	}
 
 	if !types.IsValidStructFieldName(tags.name) {
-		panic(&InvalidTagError{"Invalid struct field name: " + tags.name})
+		return nomsTags{}, &InvalidTagError{"Invalid struct field name: " + tags.name}
 	}
 
 	for i := 1; i < len(tagsSlice); i++ {
@@ -464,28 +483,35 @@ func getTags(f reflect.StructField) (tags nomsTags) {
 		case "set":
 			tags.set = true
 		default:
-			panic(&InvalidTagError{"Unrecognized tag: " + tag})
+			return nomsTags{}, &InvalidTagError{"Unrecognized tag: " + tag}
 		}
 	}
 	return
 }
 
-func validateField(f reflect.StructField, t reflect.Type) {
+func validateField(f reflect.StructField, t reflect.Type) error {
 	// PkgPath is the package path that qualifies a lower case (unexported)
 	// field name. It is empty for upper case (exported) field names.
 	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
 	if f.PkgPath != "" && !f.Anonymous { // unexported
-		panic(&UnsupportedTypeError{t, "Non exported fields are not supported"})
+		return &UnsupportedTypeError{t, "Non exported fields are not supported"}
 	}
+
+	return nil
 }
 
-func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, knownShape bool, originalFieldIndex []int) {
+func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type, computeType, embedded bool) (fields fieldSlice, knownShape bool, originalFieldIndex []int, err error) {
 	knownShape = true
 	for i := 0; i < t.NumField(); i++ {
 		index := make([]int, 1)
 		index[0] = i
 		f := t.Field(i)
-		tags := getTags(f)
+		tags, err := getTags(f)
+
+		if err != nil {
+			return nil, false, nil, err
+		}
+
 		if tags.skip {
 			continue
 		}
@@ -496,7 +522,12 @@ func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 		}
 
 		if f.Anonymous && f.PkgPath == "" && !tags.hasName {
-			embeddedFields, embeddedKnownShape, embeddedOriginalFieldIndex := typeFields(nbf, f.Type, seenStructs, computeType, true)
+			embeddedFields, embeddedKnownShape, embeddedOriginalFieldIndex, err := typeFields(nbf, f.Type, seenStructs, computeType, true)
+
+			if err != nil {
+				return nil, false, nil, err
+			}
+
 			if embeddedOriginalFieldIndex != nil {
 				originalFieldIndex = append(index, embeddedOriginalFieldIndex...)
 			}
@@ -511,9 +542,20 @@ func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 		}
 
 		var nt *types.Type
-		validateField(f, t)
+		err = validateField(f, t)
+
+		if err != nil {
+			return nil, false, nil, err
+		}
+
 		if computeType {
-			nt = encodeType(nbf, f.Type, seenStructs, tags)
+			var err error
+			nt, err = encodeType(nbf, f.Type, seenStructs, tags)
+
+			if err != nil {
+				return nil, false, nil, err
+			}
+
 			if nt == nil {
 				knownShape = false
 			}
@@ -523,9 +565,15 @@ func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 			knownShape = false
 		}
 
+		encFunc, err := typeEncoder(nbf, f.Type, seenStructs, tags)
+
+		if err != nil {
+			return nil, false, nil, err
+		}
+
 		fields = append(fields, field{
 			name:      tags.name,
-			encoder:   typeEncoder(nbf, f.Type, seenStructs, tags),
+			encoder:   encFunc,
 			index:     index,
 			nomsType:  nt,
 			omitEmpty: tags.omitEmpty,
@@ -535,15 +583,15 @@ func typeFields(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 	if !embedded {
 		sort.Sort(fields)
 	}
-	// If embedded then the fields gets sorted once we return to the caller.
 
-	return
+
+	return fields, knownShape, originalFieldIndex, err
 }
 
-func listEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func listEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) (encoderFunc, error) {
 	e := encoderCache.get(t)
 	if e != nil {
-		return e
+		return e, nil
 	}
 
 	var elemEncoder encoderFunc
@@ -551,26 +599,37 @@ func listEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[strin
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 		init.RLock()
 		defer init.RUnlock()
 		values := make([]types.Value, v.Len())
 		for i := 0; i < v.Len(); i++ {
-			values[i] = elemEncoder(ctx, v.Index(i), vrw)
+			var err error
+			values[i], err = elemEncoder(ctx, v.Index(i), vrw)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 		return types.NewList(ctx, vrw, values...)
 	}
 
 	encoderCache.set(t, e)
-	elemEncoder = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
-	return e
+	var err error
+	elemEncoder, err = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return e, nil
 }
 
 // Encode set from array or slice
-func setFromListEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setFromListEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) (encoderFunc, error) {
 	e := setEncoderCache.get(t)
 	if e != nil {
-		return e
+		return e, nil
 	}
 
 	var elemEncoder encoderFunc
@@ -578,25 +637,37 @@ func setFromListEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs ma
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 		init.RLock()
 		defer init.RUnlock()
 		values := make([]types.Value, v.Len())
 		for i := 0; i < v.Len(); i++ {
-			values[i] = elemEncoder(ctx, v.Index(i), vrw)
+			var err error
+			values[i], err = elemEncoder(ctx, v.Index(i), vrw)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 		return types.NewSet(ctx, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
-	elemEncoder = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
-	return e
+
+	var err error
+	elemEncoder, err = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return e, err
 }
 
-func setEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func setEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) (encoderFunc, error) {
 	e := setEncoderCache.get(t)
 	if e != nil {
-		return e
+		return e, nil
 	}
 
 	var encoder encoderFunc
@@ -604,25 +675,37 @@ func setEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 		init.RLock()
 		defer init.RUnlock()
 		values := make([]types.Value, v.Len())
 		for i, k := range v.MapKeys() {
-			values[i] = encoder(ctx, k, vrw)
+			var err error
+			values[i], err = encoder(ctx, k, vrw)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 		return types.NewSet(ctx, vrw, values...)
 	}
 
 	setEncoderCache.set(t, e)
-	encoder = typeEncoder(nbf, t.Key(), seenStructs, nomsTags{})
-	return e
+
+	var err error
+	encoder, err = typeEncoder(nbf, t.Key(), seenStructs, nomsTags{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return e, nil
 }
 
-func mapEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) encoderFunc {
+func mapEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string]reflect.Type) (encoderFunc, error) {
 	e := encoderCache.get(t)
 	if e != nil {
-		return e
+		return e, nil
 	}
 
 	var keyEncoder encoderFunc
@@ -631,22 +714,44 @@ func mapEncoder(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 	var init sync.RWMutex
 	init.Lock()
 	defer init.Unlock()
-	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) types.Value {
+	e = func(ctx context.Context, v reflect.Value, vrw types.ValueReadWriter) (types.Value, error) {
 		init.RLock()
 		defer init.RUnlock()
 		keys := v.MapKeys()
 		kvs := make([]types.Value, 2*len(keys))
 		for i, k := range keys {
-			kvs[2*i] = keyEncoder(ctx, k, vrw)
-			kvs[2*i+1] = valueEncoder(ctx, v.MapIndex(k), vrw)
+			var err error
+			kvs[2*i], err = keyEncoder(ctx, k, vrw)
+
+			if err != nil {
+				return nil, err
+			}
+
+			kvs[2*i+1], err = valueEncoder(ctx, v.MapIndex(k), vrw)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 		return types.NewMap(ctx, vrw, kvs...)
 	}
 
 	encoderCache.set(t, e)
-	keyEncoder = typeEncoder(nbf, t.Key(), seenStructs, nomsTags{})
-	valueEncoder = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
-	return e
+
+	var err error
+	keyEncoder, err = typeEncoder(nbf, t.Key(), seenStructs, nomsTags{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	valueEncoder, err = typeEncoder(nbf, t.Elem(), seenStructs, nomsTags{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return e, nil
 }
 
 func shouldEncodeAsSet(t reflect.Type, tags nomsTags) bool {

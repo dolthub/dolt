@@ -42,38 +42,46 @@ func ColFromName(sch Schema, name string) (Column, bool) {
 }
 
 // ExtractAllColNames returns a map of tag to column name, with one map entry for every column in the schema.
-func ExtractAllColNames(sch Schema) map[uint64]string {
+func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 	colNames := make(map[uint64]string)
-	sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		colNames[tag] = col.Name
-		return false
+		return false, nil
 	})
 
-	return colNames
+	if err != nil {
+		return nil, err
+	}
+
+	return colNames, nil
 }
 
 // SchemasArEqual tests equality of two schemas.
-func SchemasAreEqual(sch1, sch2 Schema) bool {
+func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
 	all1 := sch1.GetAllCols()
 	all2 := sch2.GetAllCols()
 
 	if all1.Size() != all2.Size() {
-		return false
+		return false, nil
 	}
 
 	areEqual := true
-	all1.Iter(func(tag uint64, col1 Column) (stop bool) {
+	err := all1.Iter(func(tag uint64, col1 Column) (stop bool, err error) {
 		col2, ok := all2.GetByTag(tag)
 
 		if !ok || !col1.Equals(col2) {
 			areEqual = false
-			return true
+			return true, nil
 		}
 
-		return false
+		return false, nil
 	})
 
-	return areEqual
+	if err != nil {
+		return false, err
+	}
+
+	return areEqual, nil
 }
 
 var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))

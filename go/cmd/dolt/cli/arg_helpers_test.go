@@ -23,6 +23,22 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func mustValue(v types.Value, err error) types.Value {
+	if err != nil {
+		panic(err)
+	}
+
+	return v
+}
+
+func mustString(str string, err error) string {
+	if err != nil {
+		panic(err)
+	}
+
+	return str
+}
+
 func TestParseKeyValues(t *testing.T) {
 	ctx := context.Background()
 
@@ -59,7 +75,7 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"robertson"},
 			[]types.Value{
-				row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
 			},
 			false,
 		},
@@ -68,7 +84,7 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"last", "robertson"},
 			[]types.Value{
-				row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
 			},
 			false,
 		},
@@ -82,7 +98,7 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"last", "last"},
 			[]types.Value{
-				row.TaggedValues{lnColTag: types.String("last")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx),
+				mustValue(row.TaggedValues{lnColTag: types.String("last")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
 			},
 			false,
 		},
@@ -90,8 +106,8 @@ func TestParseKeyValues(t *testing.T) {
 			singleKeySch,
 			[]string{"last", "robertson", "johnson"},
 			[]types.Value{
-				row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx),
-				row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForTags(types.Format_7_18, singleKeyColColl.Tags, true).Value(ctx)),
 			},
 			false,
 		},
@@ -106,8 +122,8 @@ func TestParseKeyValues(t *testing.T) {
 			sch,
 			[]string{"last", "robertson", "johnson"},
 			[]types.Value{
-				row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx),
-				row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("johnson")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
 			},
 			false,
 		},
@@ -115,8 +131,8 @@ func TestParseKeyValues(t *testing.T) {
 			sch,
 			[]string{"first,last", "robert,robertson", "john,johnson"},
 			[]types.Value{
-				row.TaggedValues{lnColTag: types.String("robertson"), fnColTag: types.String("robert")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx),
-				row.TaggedValues{lnColTag: types.String("johnson"), fnColTag: types.String("john")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx),
+				mustValue(row.TaggedValues{lnColTag: types.String("robertson"), fnColTag: types.String("robert")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
+				mustValue(row.TaggedValues{lnColTag: types.String("johnson"), fnColTag: types.String("john")}.NomsTupleForTags(types.Format_7_18, testKeyColColl.Tags, true).Value(ctx)),
 			},
 			false,
 		},
@@ -146,7 +162,7 @@ func TestParseKeyValues(t *testing.T) {
 				}
 
 				if !currActual.Equals(currExpected) {
-					t.Error("actual:", types.EncodedValue(context.Background(), currActual), "!= expected:", types.EncodedValue(context.Background(), currExpected))
+					t.Error("actual:", mustString(types.EncodedValue(context.Background(), currActual)), "!= expected:", mustString(types.EncodedValue(context.Background(), currExpected)))
 				}
 			}
 		}

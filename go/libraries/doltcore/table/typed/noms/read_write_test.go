@@ -16,6 +16,7 @@ package noms
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/google/uuid"
@@ -57,7 +58,7 @@ var titles = []string{"Senior Dufus", "Dufus", ""}
 var updatedIndices = []bool{false, true, true}
 var updatedAges = []uint{0, 26, 20}
 
-func createRows(onlyUpdated, updatedAge bool) []row.Row {
+func createRows(t *testing.T, onlyUpdated, updatedAge bool) []row.Row {
 	rows := make([]row.Row, 0, len(names))
 	for i := 0; i < len(names); i++ {
 		if !onlyUpdated || updatedIndices[i] {
@@ -72,7 +73,11 @@ func createRows(onlyUpdated, updatedAge bool) []row.Row {
 				ageColTag:   types.Uint(age),
 				titleColTag: types.String(titles[i]),
 			}
-			rows = append(rows, row.New(types.Format_7_18, sch, rowVals))
+
+			r, err := row.New(types.Format_7_18, sch, rowVals)
+			assert.NoError(t, err)
+
+			rows = append(rows, r)
 		}
 	}
 
@@ -82,15 +87,15 @@ func createRows(onlyUpdated, updatedAge bool) []row.Row {
 func TestReadWrite(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 
-	rows := createRows(false, false)
+	rows := createRows(t, false, false)
 
 	initialMapVal := testNomsMapCreator(t, db, rows)
 	testReadAndCompare(t, initialMapVal, rows)
 
-	updatedRows := createRows(true, true)
+	updatedRows := createRows(t, true, true)
 	updatedMap := testNomsMapUpdate(t, db, initialMapVal, updatedRows)
 
-	expectedRows := createRows(false, true)
+	expectedRows := createRows(t, false, true)
 	testReadAndCompare(t, updatedMap, expectedRows)
 }
 
@@ -125,15 +130,11 @@ func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *
 		t.Error("Should give error for having already been closed")
 	}
 
-	func() {
-		defer func() {
-			if r := recover(); r == nil {
-				t.Error("Should panic when writing a row after closing.")
-			}
-		}()
+	err = nwc.WriteRow(context.Background(), rows[0])
 
-		nwc.WriteRow(context.Background(), rows[0])
-	}()
+	if err == nil {
+		t.Error("Should give error for writing after closing.")
+	}
 
 	mapVal := nwc.GetMap()
 
@@ -145,7 +146,9 @@ func testNomsWriteCloser(t *testing.T, nwc NomsMapWriteCloser, rows []row.Row) *
 }
 
 func testReadAndCompare(t *testing.T, initialMapVal *types.Map, expectedRows []row.Row) {
-	mr := NewNomsMapReader(context.Background(), *initialMapVal, sch)
+	mr, err := NewNomsMapReader(context.Background(), *initialMapVal, sch)
+	assert.NoError(t, err)
+
 	actualRows, numBad, err := table.ReadAllRows(context.Background(), mr, true)
 
 	if err != nil {

@@ -67,7 +67,9 @@ func ExecuteDrop(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue,
 
 	var filtered []string
 	for _, tableName := range tablesToDrop {
-		if !root.HasTable(ctx, tableName) {
+		if has, err := root.HasTable(ctx, tableName); err != nil {
+			return nil, err
+		} else if!has{
 			if ddl.IfExists {
 				continue
 			} else {
@@ -105,10 +107,22 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return nil, nil, errFmt("Invalid table name: '%v'", tableName)
 	}
 
-	if root.HasTable(ctx, tableName) {
+	if has, err := root.HasTable(ctx, tableName); err != nil {
+		return nil, nil, err
+	} else if has {
 		if ddl.IfNotExists {
-			table, _ := root.GetTable(ctx, tableName)
-			sch := table.GetSchema(ctx)
+			table, _, err := root.GetTable(ctx, tableName)
+
+			if err != nil {
+				return nil, nil, err
+			}
+
+			sch, err := table.GetSchema(ctx)
+
+			if err != nil {
+				return nil, nil, err
+			}
+
 			return root, sch, nil
 		}
 		return nil, nil, errFmt("Table '%v' already exists", tableName)
@@ -122,8 +136,23 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), sch)
-	tbl := doltdb.NewTable(ctx, root.VRW(), schVal, types.NewMap(ctx, root.VRW()))
-	root = root.PutTable(ctx, db, tableName, tbl)
+	m, err := types.NewMap(ctx, root.VRW())
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, m)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root, err = root.PutTable(ctx, db, tableName, tbl)
+
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return root, sch, nil
 }
@@ -178,7 +207,9 @@ func validateTable(ctx context.Context, root *doltdb.RootValue, tableName string
 		return errFmt("Invalid table name: '%v'", tableName)
 	}
 
-	if !root.HasTable(ctx, tableName) {
+	if has, err := root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if !has {
 		return errFmt(UnknownTableErrFmt, tableName)
 	}
 
@@ -206,7 +237,11 @@ func executeAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 
 // renameColumn renames the column named. Returns the new root value and new schema, or an error if one occurs.
 func renameColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, fromCol, toCol sqlparser.ColIdent) (*doltdb.RootValue, error) {
-	table, _ := root.GetTable(ctx, tableName)
+	table, _, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
 
 	updatedTable, err := alterschema.RenameColumn(ctx, db, table, fromCol.String(), toCol.String())
 	if err != nil {
@@ -218,12 +253,16 @@ func renameColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 		return nil, err
 	}
 
-	return root.PutTable(ctx, db, tableName, updatedTable), nil
+	return root.PutTable(ctx, db, tableName, updatedTable)
 }
 
 // dropColumn drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.
 func dropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, col sqlparser.ColIdent) (*doltdb.RootValue, error) {
-	table, _ := root.GetTable(ctx, tableName)
+	table, _, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
 
 	updatedTable, err := alterschema.DropColumn(ctx, db, table, col.String())
 	if err != nil {
@@ -233,13 +272,23 @@ func dropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, 
 		return nil, err
 	}
 
-	return root.PutTable(ctx, db, tableName, updatedTable), nil
+	return root.PutTable(ctx, db, tableName, updatedTable)
 }
 
 // addColumn adds the column given to the table named. Returns the new root value and new schema, or an error if one occurs.
 func addColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, error) {
-	table, _ := root.GetTable(ctx, tableName)
-	sch := table.GetSchema(ctx)
+	table, _, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sch, err := table.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	tag := schema.AutoGenerateTag(sch)
 
 	colDef := spec.Columns[0]
@@ -261,7 +310,7 @@ func addColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, t
 		return nil, err
 	}
 
-	return root.PutTable(ctx, db, tableName, updatedTable), nil
+	return root.PutTable(ctx, db, tableName, updatedTable)
 }
 
 // getSchema returns the schema corresponding to the TableSpec given

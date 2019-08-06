@@ -29,8 +29,24 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 		return nil, nil, err
 	}
 
-	root := cm1.GetRootValue()
-	tblNames := AllTables(ctx, root, cm2.GetRootValue())
+	root, err := cm1.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	rv, err := cm2.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tblNames, err := AllTables(ctx, root, rv)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	tblToStats := make(map[string]*merge.MergeStats)
 
 	// need to validate merges can be done on all tables before starting the actual merges.
@@ -43,8 +59,16 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
-			root = root.PutTable(ctx, ddb, tblName, mergedTable)
-		} else if root.HasTable(ctx, tblName) {
+
+			var err error
+			root, err = root.PutTable(ctx, ddb, tblName, mergedTable)
+
+			if err != nil {
+				return nil, nil, err
+			}
+		} else if has, err := root.HasTable(ctx, tblName); err != nil {
+			return nil, nil, err
+		} else if has {
 			tblToStats[tblName] = &merge.MergeStats{Operation: merge.TableRemoved}
 			root, err = root.RemoveTables(ctx, tblName)
 
@@ -65,24 +89,38 @@ func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfl
 	headRoot, err = dEnv.HeadRoot(ctx)
 
 	if err != nil {
-		return
+		return nil, nil, nil, err
 	}
 
 	stagedRoot, err = dEnv.StagedRoot(ctx)
 
 	if err != nil {
-		return
+		return nil, nil, nil, err
 	}
 
 	workingRoot, err = dEnv.WorkingRoot(ctx)
 
 	if err != nil {
-		return
+		return nil, nil, nil, err
 	}
 
-	headInConflict = headRoot.TablesInConflict(ctx)
-	stagedInConflict = stagedRoot.TablesInConflict(ctx)
-	workingInConflict = workingRoot.TablesInConflict(ctx)
+	headInConflict, err = headRoot.TablesInConflict(ctx)
 
-	return
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	stagedInConflict, err = stagedRoot.TablesInConflict(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	workingInConflict, err = workingRoot.TablesInConflict(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return workingInConflict, stagedInConflict, headInConflict, err
 }

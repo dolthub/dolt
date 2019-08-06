@@ -151,7 +151,14 @@ func Select(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		if verr == nil {
 			if cm != nil {
 				args = args[1:]
-				root = cm.GetRootValue()
+
+				var err error
+				root, err = cm.GetRootValue()
+
+				if err != nil {
+					cli.PrintErrln(color.RedString("error: failed to get root value: " + err.Error()))
+					return 1
+				}
 			}
 
 			if len(args) == 0 {
@@ -199,12 +206,24 @@ func newArgParser() *argparser.ArgParser {
 // Runs the selection pipeline and prints the table of resultant values, returning any error encountered.
 func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseError {
 	var verr errhand.VerboseError
-	if !root.HasTable(context.TODO(), selArgs.tblName) {
+	if has, err := root.HasTable(context.TODO(), selArgs.tblName); err != nil {
+		return errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
+	} else if !has {
 		return errhand.BuildDError("error: unknown table '%s'", selArgs.tblName).Build()
 	}
 
-	tbl, _ := root.GetTable(context.TODO(), selArgs.tblName)
-	tblSch := tbl.GetSchema(context.TODO())
+	tbl, _, err := root.GetTable(context.TODO(), selArgs.tblName)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read to get table '%s'", selArgs.tblName).AddCause(err).Build()
+	}
+
+	tblSch, err := tbl.GetSchema(context.TODO())
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
+	}
+
 	whereFn, err := parseWhere(tblSch, selArgs.whereClause)
 
 	if err != nil {
@@ -213,14 +232,24 @@ func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseErro
 
 	selTrans := &selectTransform{nil, whereFn, selArgs.limit, 0}
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
-	sch := maybeAddCnfColTransform(transforms, tbl, tblSch)
+	sch, err := maybeAddCnfColTransform(transforms, tbl, tblSch)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to setup pipeline").AddCause(err).Build()
+	}
+
 	outSch, verr := addMapTransform(selArgs, sch, transforms)
 
 	if verr != nil {
 		return verr
 	}
 
-	p := createPipeline(tbl, tblSch, outSch, transforms)
+	p, err := createPipeline(tbl, tblSch, outSch, transforms)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to setup pipeline").AddCause(err).Build()
+	}
+
 	selTrans.p = p
 
 	p.Start()
@@ -235,12 +264,32 @@ func printTable(root *doltdb.RootValue, selArgs *SelectArgs) errhand.VerboseErro
 
 // Creates a pipeline to select and print rows from the table given. Adds a fixed-width printing transform to the
 // collection of transformations given.
-func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schema, transforms *pipeline.TransformCollection) *pipeline.Pipeline {
-	colNames := schema.ExtractAllColNames(outSch)
+func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schema, transforms *pipeline.TransformCollection) (*pipeline.Pipeline, error) {
+	colNames, err := schema.ExtractAllColNames(outSch)
+
+	if err != nil {
+		return nil, err
+	}
+
 	addSizingTransform(outSch, transforms)
 
-	rd := noms.NewNomsMapReader(context.TODO(), tbl.GetRowData(context.TODO()), tblSch)
-	wr := tabular.NewTextTableWriter(iohelp.NopWrCloser(cli.CliOut), outSch)
+	rowData, err := tbl.GetRowData(context.TODO())
+
+	if err != nil {
+		return nil, err
+	}
+
+	rd, err := noms.NewNomsMapReader(context.TODO(), rowData, tblSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	wr, err := tabular.NewTextTableWriter(iohelp.NopWrCloser(cli.CliOut), outSch)
+
+	if err != nil {
+		return nil, err
+	}
 
 	badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
 		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.TODO(), tff.Row, outSch)))
@@ -255,9 +304,15 @@ func createPipeline(tbl *doltdb.Table, tblSch schema.Schema, outSch schema.Schem
 	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(tbl.Format(), outSch, colNames))
+	r, err := untyped.NewRowFromTaggedStrings(tbl.Format(), outSch, colNames)
 
-	return p
+	if err != nil {
+		return nil, err
+	}
+
+	p.InjectRow(fwtStageName, r)
+
+	return p, nil
 }
 
 func addSizingTransform(outSch schema.Schema, transforms *pipeline.TransformCollection) {
@@ -292,10 +347,16 @@ func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipelin
 	}
 
 	outSch := schema.UnkeyedSchemaFromCols(colColl)
-	mapping, err := rowconv.TagMapping(sch, untyped.UntypeUnkeySchema(outSch))
+	untypedSch, err :=untyped.UntypeUnkeySchema(outSch)
 
 	if err != nil {
-		panic(err)
+		return nil, errhand.BuildDError("error: failed to create untyped schema").AddCause(err).Build()
+	}
+
+	mapping, err := rowconv.TagMapping(sch, untypedSch)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to create mapping").AddCause(err).Build()
 	}
 
 	rConv, _ := rowconv.NewRowConverter(mapping)
@@ -305,8 +366,10 @@ func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipelin
 	return mapping.DestSch, nil
 }
 
-func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltdb.Table, tblSch schema.Schema) schema.Schema {
-	if tbl.HasConflicts() {
+func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltdb.Table, tblSch schema.Schema) (schema.Schema, error) {
+	if has, err := tbl.HasConflicts(); err == nil {
+		return nil, err
+	} else if has {
 		// this is so much code to add a column
 		const transCnfSetName = "set cnf col"
 
@@ -318,10 +381,10 @@ func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltd
 		cnfTransform := pipeline.NewNamedTransform(transCnfSetName, CnfTransformer(tblSch, schWithConf, confData))
 		transColl.AppendTransforms(cnfTransform)
 
-		return schWithConf
+		return schWithConf, nil
 	}
 
-	return tblSch
+	return tblSch, nil
 }
 
 var confLabel = types.String(" ! ")
@@ -332,15 +395,26 @@ func CnfTransformer(inSch, outSch schema.Schema, conflicts types.Map) func(inRow
 		ctx := context.TODO()
 		key := inRow.NomsMapKey(inSch)
 
-		var err error
-		if conflicts.Has(ctx, key.Value(ctx)) {
-			inRow, err = inRow.SetColVal(cnfTag, confLabel, outSch)
-		} else {
-			inRow, err = inRow.SetColVal(cnfTag, noConfLabel, outSch)
-		}
+		v, err := key.Value(ctx)
 
 		if err != nil {
 			panic(err)
+		}
+
+		if has, err := conflicts.Has(ctx, v); err != nil {
+			panic(err)
+		} else if has{
+			inRow, err = inRow.SetColVal(cnfTag, confLabel, outSch)
+
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			inRow, err = inRow.SetColVal(cnfTag, noConfLabel, outSch)
+
+			if err != nil {
+				panic(err)
+			}
 		}
 
 		return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""

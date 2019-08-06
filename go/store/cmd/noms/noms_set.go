@@ -70,7 +70,9 @@ func nomsSetNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
-	applySetEdits(ctx, sp, types.NewSet(ctx, db), nil, types.DiffChangeAdded, args)
+	s, err := types.NewSet(ctx, db)
+	d.PanicIfError(err)
+	applySetEdits(ctx, sp, s, nil, types.DiffChangeAdded, args)
 	return 0
 }
 
@@ -108,7 +110,9 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		if types.ValueCanBePathIndex(vv) {
 			pp = types.NewIndexPath(vv)
 		} else {
-			pp = types.NewHashIndexPath(vv.Hash(db.Format()))
+			h, err := vv.Hash(db.Format())
+			d.PanicIfError(err)
+			pp = types.NewHashIndexPath(h)
 		}
 		d := diff.Difference{
 			Path: append(basePath, pp),

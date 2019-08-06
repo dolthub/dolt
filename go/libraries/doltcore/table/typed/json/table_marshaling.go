@@ -84,24 +84,30 @@ func TableFromJSON(ctx context.Context, fp string, vrw types.ValueReadWriter, sc
 	}
 
 	var rowMap types.Map
-	me := types.NewMap(ctx, vrw).Edit()
+	m, err := types.NewMap(ctx, vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	me := m.Edit()
+
 	for _, row := range tblRows {
 		me = me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch))
 	}
-	rowMap = me.Map(ctx)
+
+	rowMap, err = me.Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl := doltdb.NewTable(ctx, vrw, schemaVal, rowMap)
-	if err != nil {
-		return nil, err
-	}
-
-	return tbl, nil
-
+	return doltdb.NewTable(ctx, vrw, schemaVal, rowMap)
 }
 
 func convToRow(nbf *types.NomsBinFormat, sch schema.Schema, rowMap map[string]interface{}) (row.Row, error) {
@@ -131,5 +137,5 @@ func convToRow(nbf *types.NomsBinFormat, sch schema.Schema, rowMap map[string]in
 		}
 
 	}
-	return row.New(nbf, sch, taggedVals), nil
+	return row.New(nbf, sch, taggedVals)
 }

@@ -142,16 +142,15 @@ func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) 
 		}
 	}
 
-	var err error
 	convFuncs := make(map[uint64]doltcore.ConvFunc)
-	sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		convFunc := doltcore.GetConvFunc(types.StringKind, col.Kind)
 		if convFunc == nil {
-			err = ColumnError{col.Name, "Conversion from string to " + col.KindString() + "is not defined."}
-			return true
+			return false, ColumnError{col.Name, "Conversion from string to " + col.KindString() + "is not defined."}
 		}
+
 		convFuncs[tag] = convFunc
-		return false
+		return false, nil
 	})
 
 	if err != nil {
@@ -165,13 +164,19 @@ func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) 
 			val, err := convFuncs[k](types.String(v))
 
 			if err != nil {
-
+				return nil, err
 			}
 
 			taggedVals[k] = val
 		}
 
-		pkVals = append(pkVals, taggedVals.NomsTupleForTags(nbf, pkCols.Tags, true).Value(context.TODO()))
+		tpl, err := taggedVals.NomsTupleForTags(nbf, pkCols.Tags, true).Value(context.TODO())
+
+		if err != nil {
+			return nil, err
+		}
+
+		pkVals = append(pkVals, tpl)
 	}
 
 	return pkVals, nil

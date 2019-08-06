@@ -16,8 +16,8 @@ package alterschema
 
 import (
 	"context"
-
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"errors"
+	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -37,7 +37,11 @@ const (
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
 func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
-	sch := tbl.GetSchema(ctx)
+	sch, err := tbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	if err := validateNewColumn(ctx, tbl, tag, newColName, colKind, nullable, defaultVal); err != nil {
 		return nil, err
@@ -60,31 +64,44 @@ func updateTableWithNewSchema(ctx context.Context, db *doltdb.DoltDB, tbl *doltd
 		return nil, err
 	}
 
-	rowData := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if defaultVal == nil {
-		newTable := doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
-		return newTable, nil
+		return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
 	}
 
 	me := rowData.Edit()
 
-	var updateErr error
-	rowData.Iter(ctx, func(k, v types.Value) (stop bool) {
-		oldRow, _ := tbl.GetRow(ctx, k.(types.Tuple), newSchema)
+	err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
+		oldRow, _, err := tbl.GetRow(ctx, k.(types.Tuple), newSchema)
+		if err != nil {
+			return false, err
+		}
+
 		newRow, err := oldRow.SetColVal(tag, defaultVal, newSchema)
 		if err != nil {
-			updateErr = err
-			return true
+			return false, err
 		}
 
 		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
-		return false
+		return false, nil
 	})
-	if updateErr != nil {
-		return nil, updateErr
+
+	if err != nil {
+		return nil, err
 	}
 
-	return doltdb.NewTable(ctx, vrw, newSchemaVal, me.Map(ctx)), nil
+	m, err := me.Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return doltdb.NewTable(ctx, vrw, newSchemaVal, m)
 }
 
 // createNewSchema Creates a new schema with a column as specified by the params.
@@ -106,31 +123,40 @@ func createNewSchema(sch schema.Schema, tag uint64, newColName string, colKind t
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
 func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) error {
-	var err error
-	sch := tbl.GetSchema(ctx)
-	cols := sch.GetAllCols()
-	cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool) {
-		if currColTag == tag {
-			err = errhand.BuildDError("A column with the tag %d already exists.", tag).Build()
-			return true
-		} else if currCol.Name == newColName {
-			err = errhand.BuildDError("A column with the name %s already exists.", newColName).Build()
-			return true
-		}
+	sch, err := tbl.GetSchema(ctx)
 
-		return false
-	})
 	if err != nil {
 		return err
 	}
 
-	if !nullable && defaultVal == nil && tbl.GetRowData(ctx).Len() > 0 {
-		return errhand.BuildDError("When adding a column that may not be null to a table with existing " +
-			"rows, a default value must be provided.").Build()
+	cols := sch.GetAllCols()
+	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
+		if currColTag == tag {
+			return false, fmt.Errorf("A column with the tag %d already exists.", tag)
+		} else if currCol.Name == newColName {
+
+			return true, fmt.Errorf("A column with the name %s already exists.", newColName)
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	rd, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if !nullable && defaultVal == nil && rd.Len() > 0 {
+		return errors.New("When adding a column that may not be null to a table with existing rows, a default value must be provided.")
 	}
 
 	if !types.IsNull(defaultVal) && defaultVal.Kind() != colKind {
-		return errhand.BuildDError("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[colKind]).Build()
+		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[colKind])
 	}
 
 	return nil

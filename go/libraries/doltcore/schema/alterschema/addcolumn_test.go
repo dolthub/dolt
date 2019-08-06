@@ -239,7 +239,8 @@ func TestAddColumnToTable(t *testing.T) {
 
 			root, err := dEnv.WorkingRoot(ctx)
 			assert.NoError(t, err)
-			tbl, _ := root.GetTable(ctx, tableName)
+			tbl, _, err := root.GetTable(ctx, tableName)
+			assert.NoError(t, err)
 
 			updatedTable, err := AddColumnToTable(ctx, dEnv.DoltDB, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal)
 			if len(tt.expectedErr) > 0 {
@@ -250,15 +251,26 @@ func TestAddColumnToTable(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			require.Equal(t, tt.expectedSchema, updatedTable.GetSchema(ctx))
+			sch, err := updatedTable.GetSchema(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetRowData(ctx)
+			require.NoError(t, err)
+
 			var foundRows []row.Row
-			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
-				return false
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				tpl, err := row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple))
+
+				if err != nil {
+					return false, err
+				}
+
+				foundRows = append(foundRows, tpl)
+				return false, nil
 			})
 
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
 		})
 	}

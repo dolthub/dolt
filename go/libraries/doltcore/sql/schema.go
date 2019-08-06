@@ -42,7 +42,7 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 	})
 
 	firstPK := true
-	sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if firstPK {
 			sb.WriteString(",\n  primary key (")
 			firstPK = false
@@ -50,8 +50,13 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 			sb.WriteRune(',')
 		}
 		sb.WriteString(QuoteIdentifier(col.Name))
-		return false
+		return false, nil
 	})
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
 
 	sb.WriteString(")\n);")
 	return sb.String()

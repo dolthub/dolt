@@ -38,8 +38,12 @@ type TableDiffs struct {
 	Tables      []string
 }
 
-func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) *TableDiffs {
-	added, modified, removed := newer.TableDiff(ctx, older)
+func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
+	added, modified, removed, err := newer.TableDiff(ctx, older)
+
+	if err != nil {
+		return nil, err
+	}
 
 	var tbls []string
 	tbls = append(tbls, added...)
@@ -60,7 +64,7 @@ func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) *TableDi
 		tblToType[tbl] = RemovedTable
 	}
 
-	return &TableDiffs{len(added), len(modified), len(removed), tblToType, tbls}
+	return &TableDiffs{len(added), len(modified), len(removed), tblToType, tbls}, err
 }
 
 func (td *TableDiffs) Len() int {
@@ -86,8 +90,17 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 		return nil, nil, RootValueUnreadable{WorkingRoot, err}
 	}
 
-	stagedDiffs := NewTableDiffs(ctx, stagedRoot, headRoot)
-	notStagedDiffs := NewTableDiffs(ctx, workingRoot, stagedRoot)
+	stagedDiffs, err := NewTableDiffs(ctx, stagedRoot, headRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	notStagedDiffs, err := NewTableDiffs(ctx, workingRoot, stagedRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return stagedDiffs, notStagedDiffs, nil
 }

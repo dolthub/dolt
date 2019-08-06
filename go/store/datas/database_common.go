@@ -434,7 +434,9 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 			return err
 		}
 
-		if r, hasHead, err := currentDatasets.MaybeGet(ctx, datasetID); err != nil {
+		var r types.Value
+		var hasHead bool
+		if r, hasHead, err = currentDatasets.MaybeGet(ctx, datasetID); err != nil {
 			return err
 		} else if !hasHead || (hasHead && !initialHead.Equals(r)) {
 			err = ErrMergeNeeded

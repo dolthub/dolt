@@ -116,7 +116,11 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	// start an interactive shell
-	root = runShell(dEnv, root)
+	root, err := runShell(dEnv, root)
+
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
+	}
 
 	// If the SQL session wrote a new root value, update the working set with it
 	if root != nil {
@@ -127,7 +131,7 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 // runShell starts a SQL shell. Returns when the user exits the shell with the root value resulting from any queries.
-func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
+func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	// start the doltsql shell
@@ -152,7 +156,13 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	shell := ishell.NewUninterpreted(&shellConf)
 	shell.SetMultiPrompt("      -> ")
 	// TODO: update completer on create / drop / alter statements
-	shell.CustomCompleter(newCompleter(dEnv))
+	completer, err := newCompleter(dEnv)
+
+	if err != nil {
+		return nil, err
+	}
+
+	shell.CustomCompleter(completer)
 
 	shell.EOF(func(c *ishell.Context) {
 		c.Stop()
@@ -192,29 +202,48 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	shell.Run()
 	_ = iohelp.WriteLine(cli.CliOut, "Bye")
 
-	return root
+	return root, nil
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
-func newCompleter(dEnv *env.DoltEnv) *sqlCompleter {
+func newCompleter(dEnv *env.DoltEnv) (*sqlCompleter, error) {
 	var completionWords []string
 
 	root, err := dEnv.WorkingRoot(context.TODO())
 	if err != nil {
-		return &sqlCompleter{}
+		return &sqlCompleter{}, nil
 	}
 
-	tableNames := root.GetTableNames(context.TODO())
+	tableNames, err := root.GetTableNames(context.TODO())
+
+	if err != nil {
+		return nil, err
+	}
+
 	completionWords = append(completionWords, tableNames...)
 	var columnNames []string
 	for _, tableName := range tableNames {
-		tbl, _ := root.GetTable(context.TODO(), tableName)
-		sch := tbl.GetSchema(context.TODO())
-		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		tbl, _, err := root.GetTable(context.TODO(), tableName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		sch, err := tbl.GetSchema(context.TODO())
+
+		if err != nil {
+			return nil, err
+		}
+
+		err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			completionWords = append(completionWords, col.Name)
 			columnNames = append(columnNames, col.Name)
-			return false
+			return false, nil
 		})
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	completionWords = append(completionWords, dsql.CommonKeywords...)
@@ -222,7 +251,7 @@ func newCompleter(dEnv *env.DoltEnv) *sqlCompleter {
 	return &sqlCompleter{
 		allWords:    completionWords,
 		columnNames: columnNames,
-	}
+	}, nil
 }
 
 type sqlCompleter struct {
@@ -352,7 +381,11 @@ func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
 func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	var chanErr error
 	doltSch := dsqle.SqlSchemaToDoltSchema(sqlSch)
-	untypedSch := untyped.UntypeUnkeySchema(doltSch)
+	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
+
+	if err != nil {
+		return err
+	}
 
 	rowChannel := make(chan row.Row)
 	p := pipeline.NewPartialPipeline(pipeline.InFuncForChannel(rowChannel))
@@ -367,7 +400,13 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 					taggedVals[uint64(i)] = types.String(fmt.Sprintf("%v", col))
 				}
 			}
-			rowChannel <- row.New(nbf, untypedSch, taggedVals)
+
+			var r row.Row
+			r, chanErr = row.New(nbf, untypedSch, taggedVals)
+
+			if chanErr == nil {
+				rowChannel <- r
+			}
 		}
 	}()
 
@@ -380,7 +419,12 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
 
-	wr := tabular.NewTextTableWriter(cliWr, untypedSch)
+	wr, err := tabular.NewTextTableWriter(cliWr, untypedSch)
+
+	if err != nil {
+		return err
+	}
+
 	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
@@ -391,13 +435,26 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 		return true
 	})
 
+	colNames, err := schema.ExtractAllColNames(untypedSch)
+
+	if err != nil {
+		return err
+	}
+
+	r, err := untyped.NewRowFromTaggedStrings(nbf, untypedSch, colNames)
+
+	if err != nil {
+		return err
+	}
+
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(nbf, untypedSch, schema.ExtractAllColNames(untypedSch)))
+	p.InjectRow(fwtStageName, r)
 
 	p.Start()
 	if err := p.Wait(); err != nil {
 		return errFmt("error processing results: %v", err)
 	}
+
 	if chanErr != io.EOF {
 		return errFmt("error processing results: %v", chanErr)
 	}
@@ -417,7 +474,12 @@ func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untyped
 	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
 
-	wr := tabular.NewTextTableWriter(cliWr, untypedSch)
+	wr, err := tabular.NewTextTableWriter(cliWr, untypedSch)
+
+	if err != nil {
+		return err
+	}
+
 	p.RunAfter(func() { wr.Close(context.TODO()) })
 
 	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
@@ -428,8 +490,20 @@ func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untyped
 		return true
 	})
 
+	colNames, err := schema.ExtractAllColNames(untypedSch)
+
+	if err != nil {
+		return err
+	}
+
+	r, err := untyped.NewRowFromTaggedStrings(nbf, untypedSch, colNames)
+
+	if err != nil {
+		return err
+	}
+
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, untyped.NewRowFromTaggedStrings(nbf, untypedSch, schema.ExtractAllColNames(untypedSch)))
+	p.InjectRow(fwtStageName, r)
 
 	p.Start()
 	if err := p.Wait(); err != nil {

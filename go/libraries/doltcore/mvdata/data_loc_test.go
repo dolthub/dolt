@@ -16,6 +16,7 @@ package mvdata
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"testing"
 
@@ -72,7 +73,11 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
 	commit, _ := ddb.Resolve(context.Background(), cs)
-	root := commit.GetRootValue()
+	root, err := commit.GetRootValue()
+
+	if err != nil {
+		panic(err)
+	}
 
 	return ddb, root, fs
 }
@@ -121,6 +126,14 @@ var fakeFields, _ = schema.NewColCollection(
 	schema.NewColumn("b", 1, types.StringKind, false),
 )
 
+func mustRow(r row.Row, err error) row.Row {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 var fakeSchema schema.Schema
 var imt *table.InMemTable
 var imtRows []row.Row
@@ -129,9 +142,9 @@ func init() {
 	fakeSchema = schema.SchemaFromCols(fakeFields)
 
 	imtRows = []row.Row{
-		row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")}),
-		row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("b"), 1: types.String("2")}),
-		row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("c"), 1: types.String("3")}),
+		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("a"), 1: types.String("1")})),
+		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("b"), 1: types.String("2")})),
+		mustRow(row.New(types.Format_7_18, fakeSchema, row.TaggedValues{0: types.String("c"), 1: types.String("3")})),
 	}
 
 	imt = table.NewInMemTableWithData(fakeSchema, imtRows)
@@ -149,19 +162,28 @@ func TestExists(t *testing.T) {
 	ddb, root, fs := createRootAndFS()
 
 	for _, loc := range testLocations {
-		if loc.Exists(context.Background(), root, fs) {
+		if exists, err := loc.Exists(context.Background(), root, fs); err != nil {
+			t.Error(err)
+		} else if exists{
 			t.Error("Shouldn't exist before creation")
 		}
 
 		if loc.Format == DoltDB {
 			schVal, _ := encoding.MarshalAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
-			tbl := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, types.NewMap(context.Background(), ddb.ValueReadWriter()))
-			root = root.PutTable(context.Background(), ddb, loc.Path, tbl)
+			m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
+			assert.NoError(t, err)
+			tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m)
+			assert.NoError(t, err)
+			root, err = root.PutTable(context.Background(), ddb, loc.Path, tbl)
+			assert.NoError(t, err)
 		} else {
-			fs.WriteFile(loc.Path, []byte("test"))
+			err := fs.WriteFile(loc.Path, []byte("test"))
+			assert.NoError(t, err)
 		}
 
-		if !loc.Exists(context.Background(), root, fs) {
+		if exists, err := loc.Exists(context.Background(), root, fs); err != nil {
+			t.Error(err)
+		} else if !exists {
 			t.Error("Should already exist after creation")
 		}
 	}
@@ -220,8 +242,10 @@ func TestCreateRdWr(t *testing.T) {
 				t.Fatal("Unable ta update table")
 			}
 
-			tbl := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
-			root = root.PutTable(context.Background(), ddb, test.dl.Path, tbl)
+			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
+			assert.NoError(t, err)
+			root, err = root.PutTable(context.Background(), ddb, test.dl.Path, tbl)
+			assert.NoError(t, err)
 		}
 
 		// TODO (oo): fix this for json path test

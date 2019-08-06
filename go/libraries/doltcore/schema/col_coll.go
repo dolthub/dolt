@@ -125,12 +125,16 @@ func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
 }
 
 // Iter iterates over all the columns in the supplied ordering
-func (cc *ColCollection) Iter(cb func(tag uint64, col Column) (stop bool)) {
+func (cc *ColCollection) Iter(cb func(tag uint64, col Column) (stop bool, err error)) error {
 	for _, col := range cc.cols {
-		if stop := cb(col.Tag, col); stop {
+		if stop, err := cb(col.Tag, col); err != nil {
+			return err
+		} else if stop {
 			break
 		}
 	}
+
+	return nil
 }
 
 // IterInSortOrder iterates over all the columns from lowest tag to highest tag.

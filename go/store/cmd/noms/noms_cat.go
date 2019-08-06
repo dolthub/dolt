@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"hash/crc32"
 	"io"
 	"io/ioutil"
@@ -158,7 +159,9 @@ func runCat(ctx context.Context, args []string) int {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
 		db := sp.GetDatabase(ctx)
-		value := types.DecodeValue(chunk, db)
+		value, err := types.DecodeValue(chunk, db)
+
+		d.PanicIfError(err)
 
 		fmt.Printf("        chunk[%d].raw.len:     %d\n", cidx, len(currCD.compressed))
 

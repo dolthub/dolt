@@ -17,7 +17,7 @@ package noms
 import (
 	"context"
 	"errors"
-	"fmt"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -44,6 +44,7 @@ type NomsMapUpdater struct {
 
 	mapChan chan types.EditProvider
 	resChan chan updateMapRes
+	ae *atomicerr.AtomicError
 
 	result *updateMapRes
 }
@@ -54,14 +55,26 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		panic("NomsMapUpdater requires a schema with a primary key.")
 	}
 
+	ae := atomicerr.New()
 	mapChan := make(chan types.EditProvider, 1)
 	resChan := make(chan updateMapRes)
 
 	go func() {
 		var totalStats types.AppliedEditStats
 		for edits := range mapChan {
+			if ae.IsSet() {
+				continue // drain
+			}
+
 			var stats types.AppliedEditStats
-			m, stats = types.ApplyEdits(ctx, edits, m)
+			var err error
+
+			m, stats, err = types.ApplyEdits(ctx, edits, m)
+
+			if ae.SetIfError(err) {
+				continue
+			}
+
 			totalStats = totalStats.Add(stats)
 
 			if statsCB != nil {
@@ -72,7 +85,7 @@ func NewNomsMapUpdater(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		resChan <- updateMapRes{m, nil}
 	}()
 
-	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(vrw.Format()), mapChan, resChan, nil}
+	return &NomsMapUpdater{sch, vrw, 0, types.CreateEditAccForMapEdits(vrw.Format()), mapChan, resChan, ae, nil}
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -83,17 +96,14 @@ func (nmu *NomsMapUpdater) GetSchema() schema.Schema {
 // WriteRow will write a row to a table
 func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 	if nmu.acc == nil {
-		panic("Attempting to write after closing.")
+		return errors.New("Attempting to write after closing.")
 	}
 
-	var err error
-	func() {
-		defer func() {
-			if r := recover(); r != nil {
-				err = fmt.Errorf("panic occured when writing: %v", r)
-			}
-		}()
+	if err := nmu.ae.Get(); err != nil {
+		return err
+	}
 
+	err := func() error {
 		pk := r.NomsMapKey(nmu.sch)
 		fieldVals := r.NomsMapValue(nmu.sch)
 
@@ -101,12 +111,24 @@ func (nmu *NomsMapUpdater) WriteRow(ctx context.Context, r row.Row) error {
 		nmu.count++
 
 		if nmu.count%maxEdits == 0 {
-			nmu.mapChan <- nmu.acc.FinishedEditing()
+			edits, err := nmu.acc.FinishedEditing()
+
+			if err != nil {
+				return err
+			}
+
+			nmu.mapChan <- edits
 			nmu.acc = types.CreateEditAccForMapEdits(nmu.vrw.Format())
 		}
+
+		return nil
 	}()
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Close should flush all writes, release resources being held
@@ -115,7 +137,13 @@ func (nmu *NomsMapUpdater) Close(ctx context.Context) error {
 		return errors.New("Already closed.")
 	}
 
-	nmu.mapChan <- nmu.acc.FinishedEditing()
+	edits, err := nmu.acc.FinishedEditing()
+
+	if err != nil {
+		return err
+	}
+
+	nmu.mapChan <- edits
 	nmu.acc = nil
 
 	close(nmu.mapChan)

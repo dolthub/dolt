@@ -64,15 +64,34 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if verr == nil {
 			force := apr.Contains(forceParam)
-			tbl := doltdb.NewTable(context.Background(), root.VRW(), schVal, types.NewMap(context.TODO(), root.VRW()))
+			m, err := types.NewMap(context.TODO(), root.VRW())
+
+			if err != nil {
+				return commands.HandleVErrAndExitCode(errhand.BuildDError("").AddCause(err).Build(), nil)
+			}
+
+			tbl, err := doltdb.NewTable(context.Background(), root.VRW(), schVal, m)
+
+			if err != nil {
+				return commands.HandleVErrAndExitCode(errhand.BuildDError("").AddCause(err).Build(), nil)
+			}
+
 			for i := 0; i < apr.NArg() && verr == nil; i++ {
 				tblName := apr.Arg(i)
-				if !force && root.HasTable(context.TODO(), tblName) {
+				has, err := root.HasTable(context.TODO(), tblName)
+
+				if err != nil {
+
+				} else if !force && has {
 					bdr := errhand.BuildDError("table '%s' already exists.", tblName)
 					bdr.AddDetails("Use -f to overwrite the table with the specified schema and empty row data.")
 					verr = bdr.AddDetails("aborting").Build()
 				} else {
-					root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
+					root, err = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
+
+					if err != nil {
+						verr = errhand.BuildDError("error: failed to write table back to database.").AddCause(err).Build()
+					}
 				}
 			}
 

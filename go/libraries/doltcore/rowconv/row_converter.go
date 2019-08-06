@@ -21,7 +21,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -42,7 +41,9 @@ func newIdentityConverter(mapping *FieldMapping) *RowConverter {
 
 // NewRowConverter creates a a row converter from a given FieldMapping.
 func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
-	if !isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest) {
+	if nec, err := isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest); err != nil {
+		return nil, err
+	} else if !nec {
 		return newIdentityConverter(mapping), nil
 	}
 
@@ -73,49 +74,42 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 	}
 
 	outTaggedVals := make(row.TaggedValues, len(rc.SrcToDest))
-	err := pantoerr.PanicToError("error converting row", func() error {
-		var convErr error
-		inRow.IterCols(func(tag uint64, val types.Value) (stop bool) {
-			convFunc, ok := rc.ConvFuncs[tag]
+	_, err := inRow.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
+		convFunc, ok := rc.ConvFuncs[tag]
 
-			if ok {
-				outTag := rc.SrcToDest[tag]
-				outVal, err := convFunc(val)
+		if ok {
+			outTag := rc.SrcToDest[tag]
+			outVal, err := convFunc(val)
 
-				if err != nil {
-					convErr = err
-					return true
-				}
-
-				outTaggedVals[outTag] = outVal
+			if err != nil {
+				return false, err
 			}
 
-			return false
-		})
+			outTaggedVals[outTag] = outVal
+		}
 
-		return convErr
+		return false, nil
 	})
+
 
 	if err != nil {
 		return nil, err
 	}
 
-	outRow := row.New(inRow.Format(), rc.DestSch, outTaggedVals)
-
-	return outRow, nil
+	return row.New(inRow.Format(), rc.DestSch, outTaggedVals)
 }
 
-func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) bool {
+func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bool, error) {
 	srcCols := srcSch.GetAllCols()
 	destCols := destSch.GetAllCols()
 
 	if len(destToSrc) != srcCols.Size() || len(destToSrc) != destCols.Size() {
-		return true
+		return true, nil
 	}
 
 	for k, v := range destToSrc {
 		if k != v {
-			return true
+			return true, nil
 		}
 
 		srcCol, srcOk := srcCols.GetByTag(v)
@@ -126,11 +120,11 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) boo
 		}
 
 		if srcCol.IsPartOfPK != destCol.IsPartOfPK {
-			return true
+			return true, nil
 		}
 
 		if srcCol.Kind != destCol.Kind {
-			return true
+			return true, nil
 		}
 	}
 
@@ -138,22 +132,26 @@ func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) boo
 	destPKCols := destSch.GetPKCols()
 
 	if srcPKCols.Size() != destPKCols.Size() {
-		return true
+		return true, nil
 	}
 
 	i := 0
-	destPKCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := destPKCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		srcPKCol := srcPKCols.GetByIndex(i)
 
 		if srcPKCol.Tag != col.Tag {
-			return true
+			return true, nil
 		}
 
 		i++
-		return false
+		return false, nil
 	})
 
-	return false
+	if err != nil {
+		return false, err
+	}
+
+	return false, nil
 }
 
 // GetRowConvTranformFunc can be used to wrap a RowConverter and use that RowConverter in a pipeline.
@@ -170,9 +168,16 @@ func GetRowConvTransformFunc(rc *RowConverter) func(row.Row, pipeline.ReadableMa
 				return nil, err.Error()
 			}
 
-			if !row.IsValid(outRow, rc.DestSch) {
-				col := row.GetInvalidCol(outRow, rc.DestSch)
-				return nil, "invalid column: " + col.Name
+			if isv, err := row.IsValid(outRow, rc.DestSch); err != nil {
+				return nil, err.Error()
+			} else if !isv {
+				col, err := row.GetInvalidCol(outRow, rc.DestSch)
+
+				if err != nil {
+					return nil, "invalid column"
+				} else {
+					return nil, "invalid column: " + col.Name
+				}
 			}
 
 			return []*pipeline.TransformedRowResult{{RowData: outRow, PropertyUpdates: nil}}, ""

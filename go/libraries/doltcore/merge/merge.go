@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -54,15 +55,61 @@ func NewMerger(ctx context.Context, commit, mergeCommit *doltdb.Commit, vrw type
 }
 
 func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.Table, *MergeStats, error) {
-	root := merger.commit.GetRootValue()
-	mergeRoot := merger.mergeCommit.GetRootValue()
-	ancRoot := merger.ancestor.GetRootValue()
+	root, err := merger.commit.GetRootValue()
 
-	tbl, ok := root.GetTable(ctx, tblName)
-	mergeTbl, mergeOk := mergeRoot.GetTable(ctx, tblName)
-	ancTbl, ancOk := ancRoot.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	if ok && mergeOk && tbl.HashOf() == mergeTbl.HashOf() {
+	mergeRoot, err := merger.mergeCommit.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ancRoot, err := merger.ancestor.GetRootValue()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tbl, ok, err := root.GetTable(ctx, tblName)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeTbl, mergeOk, err := mergeRoot.GetTable(ctx, tblName)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ancTbl, ancOk, err := ancRoot.GetTable(ctx, tblName)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	h, err := tbl.HashOf()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mh, err := mergeTbl.HashOf()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	anch, err := ancTbl.HashOf()
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if ok && mergeOk && h == mh {
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
@@ -76,23 +123,47 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		}
 	}
 
-	if tbl.HashOf() == ancTbl.HashOf() {
+	if h == anch {
 		return mergeTbl, &MergeStats{Operation: TableModified}, nil
-	} else if mergeTbl.HashOf() == ancTbl.HashOf() {
+	} else if mh == anch {
 		return tbl, &MergeStats{Operation: TableUnmodified}, nil
 	}
 
-	tblSchema := tbl.GetSchema(ctx)
-	mergeTblSchema := mergeTbl.GetSchema(ctx)
+	tblSchema, err := tbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeTblSchema, err := mergeTbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
 	schemaUnion, err := typed.TypedSchemaUnion(tblSchema, mergeTblSchema)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	rows := tbl.GetRowData(ctx)
-	mergeRows := mergeTbl.GetRowData(ctx)
-	ancRows := ancTbl.GetRowData(ctx)
+	rows, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergeRows, err := mergeTbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ancRows, err := ancTbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
 
 	mergedRowData, conflicts, stats, err := mergeTableData(ctx, schemaUnion, rows, mergeRows, ancRows, merger.vrw)
 
@@ -106,11 +177,48 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	mergedTable := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData)
+	mergedTable, err := doltdb.NewTable(ctx, merger.vrw, schUnionVal, mergedRowData)
+
+	if err != nil {
+		return nil, nil, err
+	}
 
 	if conflicts.Len() > 0 {
-		schemas := doltdb.NewConflict(ancTbl.GetSchemaRef(), tbl.GetSchemaRef(), mergeTbl.GetSchemaRef())
-		mergedTable = mergedTable.SetConflicts(ctx, schemas, conflicts)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		asr, err := ancTbl.GetSchemaRef()
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		sr, err := tbl.GetSchemaRef()
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		msr, err := mergeTbl.GetSchemaRef()
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		schemas := doltdb.NewConflict(asr, sr, msr)
+		mergedTable, err = mergedTable.SetConflicts(ctx, schemas, conflicts)
 	}
 
 	return mergedTable, stats, nil
@@ -124,18 +232,19 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 
 func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {
 	//changeChan1, changeChan2 := make(chan diff.Difference, 32), make(chan diff.Difference, 32)
+	ae := atomicerr.New()
 	changeChan, mergeChangeChan := make(chan types.ValueChanged, 32), make(chan types.ValueChanged, 32)
 	stopChan, mergeStopChan := make(chan struct{}, 1), make(chan struct{}, 1)
 
 	go func() {
 		//diff.Diff(rows1, ancRows, changeChan1, stopChan1, true, dontDescend)
-		rows.Diff(ctx, ancRows, changeChan, stopChan)
+		rows.Diff(ctx, ancRows, ae, changeChan, stopChan)
 		close(changeChan)
 	}()
 
 	go func() {
 		//diff.Diff(rows2, ancRows, changeChan2, stopChan2, true, dontDescend)
-		mergeRows.Diff(ctx, ancRows, mergeChangeChan, mergeStopChan)
+		mergeRows.Diff(ctx, ancRows, ae, mergeChangeChan, mergeStopChan)
 		close(mergeChangeChan)
 	}()
 
@@ -143,53 +252,115 @@ func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, anc
 	defer stopAndDrain(mergeStopChan, mergeChangeChan)
 
 	conflictValChan := make(chan types.Value)
-	conflictMapChan := types.NewStreamingMap(ctx, vrw, conflictValChan)
+	conflictMapChan := types.NewStreamingMap(ctx, vrw, ae, conflictValChan)
 	mapEditor := rows.Edit()
-
 	stats := &MergeStats{Operation: TableModified}
-	var change, mergeChange types.ValueChanged
-	for {
-		// Get the next change from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value. Generally, though, this allows us to proceed through both diffs in (key) order, considering the "current" change from both diffs at the same time.
-		if change.Key == nil {
-			change = <-changeChan
-		}
-		if mergeChange.Key == nil {
-			mergeChange = <-mergeChangeChan
-		}
 
-		key, mergeKey := change.Key, mergeChange.Key
+	f := func() error {
+		defer close(conflictValChan)
 
-		// Both channels are producing zero values, so we're done.
-		if key == nil && mergeKey == nil {
-			break
-		}
-
-		if key != nil && (mergeKey == nil || key.Less(vrw.Format(), mergeKey)) {
-			// change will already be in the map
-			change = types.ValueChanged{}
-		} else if mergeKey != nil && (key == nil || mergeKey.Less(vrw.Format(), key)) {
-			applyChange(mapEditor, stats, mergeChange)
-			mergeChange = types.ValueChanged{}
-		} else {
-			r, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
-			mergedRow, isConflict := rowMerge(ctx, vrw.Format(), sch, r, mergeRow, ancRow)
-
-			if isConflict {
-				stats.Conflicts++
-				conflictTuple := doltdb.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
-				addConflict(conflictValChan, key, conflictTuple)
-			} else {
-				applyChange(mapEditor, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
+		var change, mergeChange types.ValueChanged
+		for {
+			if ae.IsSet() {
+				break
 			}
 
-			change = types.ValueChanged{}
-			mergeChange = types.ValueChanged{}
+			// Get the next change from both a and b. If either diff(a, parent) or diff(b, parent) is complete, aChange or bChange will get an empty types.ValueChanged containing a nil Value. Generally, though, this allows us to proceed through both diffs in (key) order, considering the "current" change from both diffs at the same time.
+			if change.Key == nil {
+				change = <-changeChan
+			}
+			if mergeChange.Key == nil {
+				mergeChange = <-mergeChangeChan
+			}
+
+			key, mergeKey := change.Key, mergeChange.Key
+
+			// Both channels are producing zero values, so we're done.
+			if key == nil && mergeKey == nil {
+				break
+			}
+
+			var err error
+			var processed bool
+			if key != nil {
+				mkNilOrKeyLess := mergeKey == nil
+				if !mkNilOrKeyLess {
+					mkNilOrKeyLess, err = key.Less(vrw.Format(), mergeKey)
+
+					if err != nil {
+						return err
+					}
+				}
+
+				if mkNilOrKeyLess {
+					// change will already be in the map
+					change = types.ValueChanged{}
+					processed = true
+				}
+			}
+
+			if !processed && mergeKey != nil {
+				keyNilOrMKLess := key == nil
+				if !keyNilOrMKLess {
+					keyNilOrMKLess, err = mergeKey.Less(vrw.Format(), key)
+
+					if err != nil {
+						return err
+					}
+				}
+
+				if keyNilOrMKLess {
+					applyChange(mapEditor, stats, mergeChange)
+					mergeChange = types.ValueChanged{}
+					processed = true
+				}
+			}
+
+			if !processed {
+				r, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
+				mergedRow, isConflict, err := rowMerge(ctx, vrw.Format(), sch, r, mergeRow, ancRow)
+
+				if err != nil {
+					return err
+				}
+
+				if isConflict {
+					stats.Conflicts++
+					conflictTuple, err := doltdb.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
+
+					if err != nil {
+						return err
+					}
+
+					addConflict(conflictValChan, key, conflictTuple)
+				} else {
+					applyChange(mapEditor, stats, types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: r, NewValue: mergedRow})
+				}
+
+				change = types.ValueChanged{}
+				mergeChange = types.ValueChanged{}
+			}
 		}
+
+		return nil
 	}
 
-	close(conflictValChan)
+	err := f()
+
+	if err != nil {
+		return types.EmptyMap, types.EmptyMap, nil, err
+	}
+
+	if err := ae.Get(); err != nil {
+		return types.EmptyMap, types.EmptyMap, nil, err
+	}
+
 	conflicts := <-conflictMapChan
-	mergedData := mapEditor.Map(ctx)
+	mergedData, err := mapEditor.Map(ctx)
+
+	if err != nil {
+		return types.EmptyMap, types.EmptyMap, nil, err
+	}
 
 	return mergedData, conflicts, stats, nil
 }
@@ -213,25 +384,39 @@ func applyChange(me *types.MapEditor, stats *MergeStats, change types.ValueChang
 	}
 }
 
-func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool) {
+func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, error) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
 		if r.Equals(mergeRow) {
 			// same row added to both
-			return r, false
+			return r, false, nil
 		}
 	} else if r == nil && mergeRow == nil {
 		// same row removed from both
-		return nil, false
+		return nil, false, nil
 	} else if r == nil || mergeRow == nil {
 		// removed from one and modified in another
-		return nil, true
+		return nil, true, nil
 	} else {
-		baseVals = row.ParseTaggedValues(baseRow.(types.Tuple))
+		var err error
+		baseVals, err = row.ParseTaggedValues(baseRow.(types.Tuple))
+
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
-	rowVals := row.ParseTaggedValues(r.(types.Tuple))
-	mergeVals := row.ParseTaggedValues(mergeRow.(types.Tuple))
+	rowVals, err := row.ParseTaggedValues(r.(types.Tuple))
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	mergeVals, err := row.ParseTaggedValues(mergeRow.(types.Tuple))
+
+	if err != nil {
+		return nil, false, err
+	}
 
 	processTagFunc := func(tag uint64) (resultVal types.Value, isConflict bool) {
 		baseVal, _ := baseVals.Get(tag)
@@ -258,19 +443,28 @@ func rowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, 
 	resultVals := make(row.TaggedValues)
 
 	var isConflict bool
-	sch.GetNonPKCols().Iter(func(tag uint64, _ schema.Column) (stop bool) {
+	err = sch.GetNonPKCols().Iter(func(tag uint64, _ schema.Column) (stop bool, err error) {
 		var val types.Value
 		val, isConflict = processTagFunc(tag)
 		resultVals[tag] = val
 
-		return isConflict
+		return isConflict, nil
 	})
 
+	if err != nil {
+		return nil, false, err
+	}
+
 	if isConflict {
-		return nil, true
+		return nil, true, nil
 	}
 
 	tpl := resultVals.NomsTupleForTags(nbf, sch.GetNonPKCols().SortedTags, false)
+	v, err := tpl.Value(ctx)
 
-	return tpl.Value(ctx), false
+	if err != nil {
+		return nil, false, err
+	}
+
+	return v, false, nil
 }

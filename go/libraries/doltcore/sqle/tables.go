@@ -68,8 +68,21 @@ func (t *DoltTable) String() string {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	schema := t.table.GetSchema(context.TODO())
-	return doltSchemaToSqlSchema(t.name, schema)
+	// TODO: fix panics
+	sch, err := t.table.GetSchema(context.TODO())
+
+	if err != nil {
+		panic(err)
+	}
+
+	// TODO: fix panics
+	sqlSch, err := doltSchemaToSqlSchema(t.name, sch)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return sqlSch
 }
 
 // Returns the partitions for this table. We return a single partition, but could potentially get more performance by
@@ -80,7 +93,7 @@ func (t *DoltTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 
 // Returns the table rows for the partition given (all rows of the table).
 func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return newRowIterator(t, ctx), nil
+	return newRowIterator(t, ctx)
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.

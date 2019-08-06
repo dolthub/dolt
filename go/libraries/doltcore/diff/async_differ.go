@@ -17,6 +17,7 @@ package diff
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/diff"
@@ -24,6 +25,7 @@ import (
 )
 
 type AsyncDiffer struct {
+	ae *atomicerr.AtomicError
 	stopChan   chan struct{}
 	diffChan   chan diff.Difference
 	bufferSize int
@@ -32,6 +34,7 @@ type AsyncDiffer struct {
 
 func NewAsyncDiffer(bufferedDiffs int) *AsyncDiffer {
 	return &AsyncDiffer{
+		atomicerr.New(),
 		make(chan struct{}),
 		make(chan diff.Difference, bufferedDiffs),
 		bufferedDiffs,
@@ -51,7 +54,7 @@ func (ad *AsyncDiffer) Start(ctx context.Context, v1, v2 types.Map) {
 			// Ignore a panic from Diff...
 			recover()
 		}()
-		diff.Diff(ctx, v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
+		diff.Diff(ctx, ad.ae, v2, v1, ad.diffChan, ad.stopChan, true, tableDontDescendLists)
 	}()
 }
 
@@ -69,7 +72,11 @@ func (ad *AsyncDiffer) Close() {
 	close(ad.stopChan)
 }
 
-func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) []*diff.Difference {
+func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, error) {
+	if err := ad.ae.Get(); err != nil {
+		return nil, err
+	}
+
 	diffs := make([]*diff.Difference, 0, ad.bufferSize)
 	timeoutChan := time.After(timeout)
 	if !ad.isDone {
@@ -80,24 +87,28 @@ func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) []*diff.Dif
 					diffs = append(diffs, &d)
 
 					if numDiffs != 0 && numDiffs == len(diffs) {
-						return diffs
+						return diffs, nil
 					}
 				} else {
 					ad.isDone = true
-					return diffs
+					return diffs, nil
 				}
 
 			case <-timeoutChan:
-				return diffs
+				return diffs, nil
 			}
 		}
 	}
 
-	return diffs
+	return diffs, nil
 }
 
 func (ad *AsyncDiffer) ReadAll() ([]*diff.Difference, error) {
-	diffs := ad.GetDiffs(0, 5*time.Minute)
+	diffs, err := ad.GetDiffs(0, 5*time.Minute)
+
+	if err != nil {
+		return nil, err
+	}
 
 	if !ad.isDone {
 		return nil, errors.New("Unable to read the diffs in a reasonable amount of time")

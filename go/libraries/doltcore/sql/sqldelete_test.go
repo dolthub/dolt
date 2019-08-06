@@ -139,7 +139,8 @@ func TestExecuteDelete(t *testing.T) {
 
 			assert.Equal(t, tt.expectedResult.NumRowsDeleted, result.NumRowsDeleted)
 
-			table, ok := result.Root.GetTable(context.Background(), PeopleTableName)
+			table, ok, err := result.Root.GetTable(context.Background(), PeopleTableName)
+			assert.NoError(t, err)
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows are deleted
@@ -147,7 +148,9 @@ func TestExecuteDelete(t *testing.T) {
 				deletedIdx := FindRowIndex(r, tt.deletedRows)
 
 				key := r.NomsMapKey(PeopleTestSchema)
-				_, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), PeopleTestSchema)
+				v, err := key.Value(ctx)
+				_, ok, err := table.GetRow(ctx, v.(types.Tuple), PeopleTestSchema)
+				assert.NoError(t, err)
 				if deletedIdx >= 0 {
 					assert.False(t, ok, "Row not deleted: %v", r)
 				} else {

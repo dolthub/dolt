@@ -89,11 +89,29 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	confItr := confData.Iterator(ctx)
+	confItr, err := confData.Iterator(ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	baseConv, err := rowconv.NewRowConverter(baseMapping)
+
+	if err != nil {
+		return nil, err
+	}
+
 	conv, err := rowconv.NewRowConverter(mapping)
+
+	if err != nil {
+		return nil, err
+	}
+
 	mergeConv, err := rowconv.NewRowConverter(mergeMapping)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return &ConflictReader{
 		confItr,
@@ -115,17 +133,41 @@ func (cr *ConflictReader) GetSchema() schema.Schema {
 func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.ImmutableProperties, error) {
 	for {
 		if cr.currIdx == 0 {
-			key, value := cr.confItr.Next(ctx)
+			key, value, err := cr.confItr.Next(ctx)
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
 
 			if key == nil {
 				return nil, pipeline.NoProps, io.EOF
 			}
 
 			keyTpl := key.(types.Tuple)
-			conflict := doltdb.ConflictFromTuple(value.(types.Tuple))
-			baseRow := createRow(keyTpl, conflict.Base, cr.baseConv)
-			r := createRow(keyTpl, conflict.Value, cr.conv)
-			mergeRow := createRow(keyTpl, conflict.MergeValue.(types.Tuple), cr.mergeConv)
+			conflict, err := doltdb.ConflictFromTuple(value.(types.Tuple))
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
+
+			baseRow, err := createRow(keyTpl, conflict.Base, cr.baseConv)
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
+
+			r, err := createRow(keyTpl, conflict.Value, cr.conv)
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
+
+			mergeRow, err := createRow(keyTpl, conflict.MergeValue.(types.Tuple), cr.mergeConv)
+
+			if err != nil {
+				return nil, pipeline.ImmutableProperties{}, err
+			}
+
 
 			if baseRow != nil {
 				if mergeRow != nil && r != nil {
@@ -166,20 +208,24 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 	}
 }
 
-func createRow(key types.Tuple, nonKey types.Value, rowConv *rowconv.RowConverter) row.Row {
+func createRow(key types.Tuple, nonKey types.Value, rowConv *rowconv.RowConverter) (row.Row, error) {
 	if types.IsNull(nonKey) {
-		return nil
+		return nil, nil
 	}
 
-	srcData := row.FromNoms(rowConv.SrcSch, key, nonKey.(types.Tuple))
+	srcData, err := row.FromNoms(rowConv.SrcSch, key, nonKey.(types.Tuple))
+
+	if err != nil {
+		return nil, err
+	}
+
 	row, err := rowConv.Convert(srcData)
 
 	if err != nil {
-		// bug or corrupt?
-		panic("conversion error.")
+		return nil, err
 	}
 
-	return row
+	return row, nil
 }
 
 // Close should release resources being held

@@ -144,7 +144,13 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 			cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
 
 			if err == nil {
-				commitStr = cm.HashOf().String()
+				h, err :=cm.HashOf()
+
+				if err != nil {
+					return HandleVErrAndExitCode(errhand.BuildDError("error: failed to hash commit").AddCause(err).Build(), nil)
+				}
+
+				commitStr = h.String()
 			}
 		}
 

@@ -326,7 +326,9 @@ func TestExecuteDrop(t *testing.T) {
 
 			require.NotNil(t, updatedRoot)
 			for _, tableName := range tt.tableNames {
-				assert.False(t, updatedRoot.HasTable(ctx, tableName))
+				has, err := updatedRoot.HasTable(ctx, tableName)
+				assert.NoError(t, err)
+				assert.False(t, has)
 			}
 		})
 	}
@@ -415,19 +417,27 @@ func TestAddColumn(t *testing.T) {
 			}
 
 			assert.NotNil(t, updatedRoot)
-			table, _ := updatedRoot.GetTable(ctx, PeopleTableName)
-			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
+			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			assert.NoError(t, err)
+			sch, err := table.GetSchema(ctx)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedSchema, sch)
 
-			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetRowData(ctx)
+			assert.NoError(t, err)
 			var foundRows []row.Row
-			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
-				return false
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				r, err := row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple))
+				assert.NoError(t, err)
+				foundRows = append(foundRows, r)
+				return false, nil
 			})
 
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
 		})
 	}
@@ -550,19 +560,29 @@ func TestDropColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			table, _ := updatedRoot.GetTable(ctx, PeopleTableName)
-			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
+			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			assert.NoError(t, err)
+			sch, err := table.GetSchema(ctx)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedSchema, sch)
 
-			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetRowData(ctx)
+			assert.NoError(t, err)
 			var foundRows []row.Row
-			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
-				return false
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				updatedSch, err := updatedTable.GetSchema(ctx)
+				assert.NoError(t, err)
+				r, err := row.FromNoms(updatedSch, key.(types.Tuple), value.(types.Tuple))
+				assert.NoError(t, err)
+				foundRows = append(foundRows, r)
+				return false, nil
 			})
 
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
 		})
 	}
@@ -676,19 +696,28 @@ func TestRenameColumn(t *testing.T) {
 			}
 
 			require.NotNil(t, updatedRoot)
-			table, _ := updatedRoot.GetTable(ctx, PeopleTableName)
-			assert.Equal(t, tt.expectedSchema, table.GetSchema(ctx))
+			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			assert.NoError(t, err)
+			sch, err := table.GetSchema(ctx)
+			assert.Equal(t, tt.expectedSchema, sch)
 
-			updatedTable, ok := updatedRoot.GetTable(ctx, "people")
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetRowData(ctx)
+			assert.NoError(t, err)
 			var foundRows []row.Row
-			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(updatedTable.GetSchema(ctx), key.(types.Tuple), value.(types.Tuple)))
-				return false
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				updatedSch, err := updatedTable.GetSchema(ctx)
+				assert.NoError(t, err)
+				r, err := row.FromNoms(updatedSch, key.(types.Tuple), value.(types.Tuple))
+				assert.NoError(t, err)
+				foundRows = append(foundRows, r)
+				return false, nil
 			})
 
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
 		})
 	}
@@ -771,18 +800,28 @@ func TestRenameTable(t *testing.T) {
 			}
 			require.NotNil(t, updatedRoot)
 
-			assert.False(t, updatedRoot.HasTable(ctx, tt.oldTableName))
-			newTable, ok := updatedRoot.GetTable(ctx, tt.newTableName)
+			has, err := updatedRoot.HasTable(ctx, tt.oldTableName)
+			require.NoError(t, err)
+			assert.False(t, has)
+			newTable, ok, err := updatedRoot.GetTable(ctx, tt.newTableName)
+			require.NoError(t, err)
 			require.True(t, ok)
 
-			require.Equal(t, tt.expectedSchema, newTable.GetSchema(ctx))
+			sch, err := newTable.GetSchema(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData := newTable.GetRowData(ctx)
+			rowData, err := newTable.GetRowData(ctx)
+			require.NoError(t, err)
 			var foundRows []row.Row
-			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
-				return false
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				r, err := row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple))
+				require.NoError(t, err)
+				foundRows = append(foundRows, r)
+				return false, nil
 			})
+
+			require.NoError(t, err)
 
 			// Some test cases deal with rows declared in a different order than noms returns them, so use an order-
 			// insensitive comparison here.

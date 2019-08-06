@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/google/uuid"
@@ -32,23 +33,34 @@ var id1, _ = uuid.NewRandom()
 var id2, _ = uuid.NewRandom()
 var id3, _ = uuid.NewRandom()
 
-func createTestRowData(vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
+func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
+	var err error
 	rows := make([]row.Row, 4)
-	rows[0] = row.New(types.Format_7_18, sch, row.TaggedValues{
+	rows[0], err = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)})
-	rows[1] = row.New(types.Format_7_18, sch, row.TaggedValues{
+	assert.NoError(t, err)
+	rows[1], err = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)})
-	rows[2] = row.New(types.Format_7_18, sch, row.TaggedValues{
+	assert.NoError(t, err)
+	rows[2], err = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)})
-	rows[3] = row.New(types.Format_7_18, sch, row.TaggedValues{
+	assert.NoError(t, err)
+	rows[3], err = row.New(types.Format_7_18, sch, row.TaggedValues{
 		idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)})
+	assert.NoError(t, err)
 
-	ed := types.NewMap(context.Background(), vrw).Edit()
+	m, err := types.NewMap(context.Background(), vrw)
+	assert.NoError(t, err)
+	ed := m.Edit()
+
 	for _, r := range rows {
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
 	}
 
-	return ed.Map(context.Background()), rows
+	m, err = ed.Map(context.Background())
+	assert.NoError(t, err)
+
+	return m, rows
 }
 
 func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
@@ -58,7 +70,7 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 		return nil, err
 	}
 
-	tbl := NewTable(context.Background(), vrw, schemaVal, rowData)
+	tbl, err := NewTable(context.Background(), vrw, schemaVal, rowData)
 
 	return tbl, nil
 }
@@ -67,8 +79,9 @@ func TestTables(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 
 	tSchema := createTestSchema()
-	rowData, rows := createTestRowData(db, tSchema)
+	rowData, rows := createTestRowData(t, db, tSchema)
 	tbl, err := createTestTable(db, tSchema, rowData)
+	assert.NoError(t, err)
 
 	if err != nil {
 		t.Fatal("Failed to create table.")
@@ -83,7 +96,8 @@ func TestTables(t *testing.T) {
 	badUUID, _ := uuid.NewRandom()
 	ids := []types.Value{types.UUID(id0), types.UUID(id1), types.UUID(id2), types.UUID(id3), types.UUID(badUUID)}
 
-	readRow0, ok := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: ids[0]}, tSchema)
+	readRow0, ok, err := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: ids[0]}, tSchema)
+	assert.NoError(t, err)
 
 	if !ok {
 		t.Error("Could not find row 0 in table")
@@ -91,14 +105,16 @@ func TestTables(t *testing.T) {
 		t.Error(row.Fmt(context.Background(), readRow0, tSchema), "!=", row.Fmt(context.Background(), rows[0], tSchema))
 	}
 
-	_, ok = tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
+	_, ok, err = tbl.GetRowByPKVals(context.Background(), row.TaggedValues{idTag: types.UUID(badUUID)}, tSchema)
+	assert.NoError(t, err)
 
 	if ok {
 		t.Error("GetRow should have returned false.")
 	}
 
 	idItr := SingleColPKItr(types.Format_7_18, idTag, ids)
-	readRows, missing := tbl.GetRows(context.Background(), idItr, -1, tSchema)
+	readRows, missing, err := tbl.GetRows(context.Background(), idItr, -1, tSchema)
+	assert.NoError(t, err)
 
 	if len(readRows) != len(rows) {
 		t.Error("Did not find all the expected rows")

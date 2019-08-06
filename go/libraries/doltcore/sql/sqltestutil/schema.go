@@ -60,7 +60,13 @@ func NewResultSetRow(colVals ...types.Value) row.Row {
 	}
 	sch := schema.UnkeyedSchemaFromCols(collection)
 
-	return row.New(types.Format_7_18, sch, taggedVals)
+	r, err := row.New(types.Format_7_18, sch, taggedVals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Creates a new row with the values given, using ascending tag numbers starting at 0.
@@ -88,7 +94,13 @@ func NewRow(colVals ...types.Value) row.Row {
 
 	sch := schema.SchemaFromCols(colColl)
 
-	return row.New(types.Format_7_18, sch, taggedVals)
+	r, err := row.New(types.Format_7_18, sch, taggedVals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
@@ -151,7 +163,13 @@ func ConcatRows(schemasAndRows ...interface{}) row.Row {
 		panic(err.Error())
 	}
 
-	return row.New(types.Format_7_18, schema.UnkeyedSchemaFromCols(colCol), taggedVals)
+	r, err := row.New(types.Format_7_18, schema.UnkeyedSchemaFromCols(colCol), taggedVals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Rewrites the tag numbers for the row given to begin at zero and be contiguous, just like result set schemas. We don't
@@ -170,7 +188,13 @@ func CompressRow(sch schema.Schema, r row.Row) row.Row {
 	})
 
 	// call to compress schema is a no-op in most cases
-	return row.New(types.Format_7_18, CompressSchema(sch), compressedRow)
+	r, err := row.New(types.Format_7_18, CompressSchema(sch), compressedRow)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Compresses each of the rows given ala compressRow

@@ -47,23 +47,46 @@ func NewInMemTableWithDataAndValidationType(sch schema.Schema, rows []row.Row) *
 
 // AppendRow appends a row.  Appended rows must be valid for the table's schema. Sorts rows as they are inserted.
 func (imt *InMemTable) AppendRow(r row.Row) error {
-	if !row.IsValid(r, imt.sch) {
-		col := row.GetInvalidCol(r, imt.sch)
+	if isv, err := row.IsValid(r, imt.sch); err != nil {
+		return err
+	} else if !isv {
+		col, err := row.GetInvalidCol(r, imt.sch)
+
+		if err != nil {
+			return err
+		}
+
 		val, ok := r.GetColVal(col.Tag)
 
 		if !ok {
 			return NewBadRow(r, col.Name+" is missing")
 		} else {
-			return NewBadRow(r, col.Name+":"+types.EncodedValue(context.Background(), val)+" is not valid.")
+			encValStr, err := types.EncodedValue(context.Background(), val)
+
+			if err != nil {
+				return err
+			}
+
+			return NewBadRow(r, col.Name+":"+ encValStr+" is not valid.")
 		}
 	}
 
-	// If we are going to pipe these into noms, they need to be sorted.
 	imt.rows = append(imt.rows, r)
+
+	var err error
+	// If we are going to pipe these into noms, they need to be sorted.
 	sort.Slice(imt.rows, func(i, j int) bool {
+		if err != nil {
+			return false
+		}
+
 		iRow := imt.rows[i]
 		jRow := imt.rows[j]
-		return iRow.NomsMapKey(imt.sch).Less(r.Format(), jRow.NomsMapKey(imt.sch))
+
+		isLess := false
+		isLess, err = iRow.NomsMapKey(imt.sch).Less(r.Format(), jRow.NomsMapKey(imt.sch))
+
+		return isLess
 	})
 
 	return nil

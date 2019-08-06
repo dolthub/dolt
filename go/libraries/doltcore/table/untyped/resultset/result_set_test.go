@@ -28,15 +28,39 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func mustSchema(sch schema.Schema, err error) schema.Schema {
+	if err != nil {
+		panic(err)
+	}
+
+	return sch
+}
+
+func mustRow(r row.Row, err error) row.Row {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
+func mustRowWithSchema(r RowWithSchema, err error) RowWithSchema {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 func TestConcatSchemas(t *testing.T) {
 	t.Run("Test concat all schemas", func(t *testing.T) {
 		colColl := getAllSchemaColumns(t)
 
 		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
 		sch, _ := concatSchemas(
-			untyped.UnkeySchema(peopleTestSchema),
-			untyped.UnkeySchema(episodesTestSchema),
-			untyped.UnkeySchema(appearancesTestSchema))
+			mustSchema(untyped.UnkeySchema(peopleTestSchema)),
+			mustSchema(untyped.UnkeySchema(episodesTestSchema)),
+			mustSchema(untyped.UnkeySchema(appearancesTestSchema)))
 
 		assert.Equal(t, expectedSch, sch)
 	})
@@ -58,8 +82,8 @@ func TestConcatSchemas(t *testing.T) {
 
 		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
 		sch, _ := concatSchemas(
-			untyped.UnkeySchema(peopleTestSchema),
-			untyped.UnkeySchema(appearancesTestSchema))
+			mustSchema(untyped.UnkeySchema(peopleTestSchema)),
+			mustSchema(untyped.UnkeySchema(appearancesTestSchema)))
 		assert.Equal(t, expectedSch, sch)
 	})
 
@@ -76,7 +100,8 @@ func TestConcatSchemas(t *testing.T) {
 		)
 
 		expectedSch := schema.UnkeyedSchemaFromCols(colColl)
-		sch, _ := concatSchemas(untyped.UnkeySchema(peopleTestSchema))
+		sch, err := concatSchemas(mustSchema(untyped.UnkeySchema(peopleTestSchema)))
+		assert.NoError(t, err)
 		assert.Equal(t, expectedSch, sch)
 	})
 }
@@ -393,10 +418,10 @@ func TestNewFromColumns(t *testing.T) {
 		}
 
 		expectedResult := rs(
-			newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag)),
-			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag)),
-			newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
-			newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag)),
+			mustRow(newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag))),
+			mustRow(newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(homer, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(homer, firstTag), mustGetColVal(homer, lastTag))),
+			mustRow(newResultSetRow(mustGetColVal(ep1, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep1, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag))),
+			mustRow(newResultSetRow(mustGetColVal(ep2, episodeIdTag), mustGetColVal(marge, idTag), mustGetColVal(ep2, epNameTag), mustGetColVal(marge, firstTag), mustGetColVal(marge, lastTag))),
 		)
 
 		result := getCrossProduct(rss, tables)
@@ -414,7 +439,7 @@ func getCrossProduct(rss *ResultSetSchema, tables []*TableResult) []row.Row {
 }
 
 // Creates a new row for a result set specified by the given values
-func newResultSetRow(colVals ...types.Value) row.Row {
+func newResultSetRow(colVals ...types.Value) (row.Row, error) {
 
 	taggedVals := make(row.TaggedValues)
 	cols := make([]schema.Column, len(colVals))
@@ -483,7 +508,8 @@ func TestNewFromDestSchema(t *testing.T) {
 	colColl := getAllSchemaColumns(t)
 
 	t.Run("Untyped schema", func(t *testing.T) {
-		expectedSch := untyped.UntypeUnkeySchema(schema.UnkeyedSchemaFromCols(colColl))
+		expectedSch, err := untyped.UntypeUnkeySchema(schema.UnkeyedSchemaFromCols(colColl))
+		assert.NoError(t, err)
 		sch, _ := concatSchemas(untypedPeopleSch, untypedEpisodesSch, untypedAppearacesSch)
 		assert.Equal(t, expectedSch, sch)
 	})
@@ -501,12 +527,17 @@ func TestCombineRows(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema, episodesTestSchema, appearancesTestSchema)
 		assert.Nil(t, err)
 
-		r := RowWithSchema{row.New(types.Format_7_18, rss.destSch, nil), rss.destSch}
-		r = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
-		r = rss.combineRows(r, RowWithSchema{ep1, episodesTestSchema})
-		r = rss.combineRows(r, RowWithSchema{app1, appearancesTestSchema})
+		tmp, err := row.New(types.Format_7_18, rss.destSch, nil)
+		assert.NoError(t, err)
+		r := RowWithSchema{tmp, rss.destSch}
+		r, err = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
+		assert.NoError(t, err)
+		r, err = rss.combineRows(r, RowWithSchema{ep1, episodesTestSchema})
+		assert.NoError(t, err)
+		r, err = rss.combineRows(r, RowWithSchema{app1, appearancesTestSchema})
+		assert.NoError(t, err)
 
-		expectedRow := row.New(types.Format_7_18, rss.destSch, row.TaggedValues{
+		expectedRow, err := row.New(types.Format_7_18, rss.destSch, row.TaggedValues{
 			0: mustGetColVal(homer, idTag),
 			1: mustGetColVal(homer, firstTag),
 			2: mustGetColVal(homer, lastTag),
@@ -524,6 +555,7 @@ func TestCombineRows(t *testing.T) {
 			14: mustGetColVal(app1, appCommentsTag),
 		})
 
+		assert.NoError(t, err)
 		assert.Equal(t, expectedRow, r.Row)
 	})
 
@@ -532,12 +564,17 @@ func TestCombineRows(t *testing.T) {
 		assert.Nil(t, err)
 
 		// combine the rows in the opposite order that their schemas were declared
-		r := RowWithSchema{row.New(types.Format_7_18, rss.destSch, nil), rss.destSch}
-		r = rss.combineRows(r, RowWithSchema{app1, appearancesTestSchema})
-		r = rss.combineRows(r, RowWithSchema{ep1, episodesTestSchema})
-		r = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
+		tmp, err := row.New(types.Format_7_18, rss.destSch, nil)
+		assert.NoError(t, err)
+		r := RowWithSchema{tmp, rss.destSch}
+		r, err = rss.combineRows(r, RowWithSchema{app1, appearancesTestSchema})
+		assert.NoError(t, err)
+		r, err = rss.combineRows(r, RowWithSchema{ep1, episodesTestSchema})
+		assert.NoError(t, err)
+		r, err = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
+		assert.NoError(t, err)
 
-		expectedRow := row.New(types.Format_7_18, rss.destSch, row.TaggedValues{
+		expectedRow, err := row.New(types.Format_7_18, rss.destSch, row.TaggedValues{
 			0: mustGetColVal(homer, idTag),
 			1: mustGetColVal(homer, firstTag),
 			2: mustGetColVal(homer, lastTag),
@@ -555,6 +592,7 @@ func TestCombineRows(t *testing.T) {
 			14: mustGetColVal(app1, appCommentsTag),
 		})
 
+		assert.NoError(t, err)
 		assert.Equal(t, expectedRow, r.Row)
 	})
 
@@ -562,10 +600,13 @@ func TestCombineRows(t *testing.T) {
 		rss, err := newFromSourceSchemas(peopleTestSchema)
 		assert.Nil(t, err)
 
-		r := RowWithSchema{row.New(types.Format_7_18, rss.destSch, nil), rss.destSch}
-		r = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
+		tmp, err := row.New(types.Format_7_18, rss.destSch, nil)
+		assert.NoError(t, err)
+		r := RowWithSchema{tmp, rss.destSch}
+		r, err = rss.combineRows(r, RowWithSchema{homer, peopleTestSchema})
+		assert.NoError(t, err)
 
-		expectedRow := row.New(types.Format_7_18, rss.destSch, row.TaggedValues{
+		expectedRow, err := row.New(types.Format_7_18, rss.destSch, row.TaggedValues{
 			0: mustGetColVal(homer, idTag),
 			1: mustGetColVal(homer, firstTag),
 			2: mustGetColVal(homer, lastTag),
@@ -574,6 +615,7 @@ func TestCombineRows(t *testing.T) {
 			5: mustGetColVal(homer, ratingTag),
 		})
 
+		assert.NoError(t, err)
 		assert.Equal(t, expectedRow, r.Row)
 	})
 }
@@ -589,16 +631,16 @@ func TestCrossProduct(t *testing.T) {
 			newTableResultForTest(rs(app1, app2), appearancesTestSchema),
 		}
 
-		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(types.Format_7_18, rss.destSch, nil)}
+		resultRow := RowWithSchema{Schema: rss.destSch, Row: mustRow(row.New(types.Format_7_18, rss.destSch, nil))}
 		expectedResult := rs(
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema}).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}, RowWithSchema{app2, appearancesTestSchema})).Row,
 		)
 
 		result := getCrossProduct(rss, tables)
@@ -615,9 +657,9 @@ func TestCrossProduct(t *testing.T) {
 			newTableResultForTest(rs(app1), appearancesTestSchema),
 		}
 
-		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(types.Format_7_18, rss.destSch, nil)}
+		resultRow := RowWithSchema{Schema: rss.destSch, Row: mustRow(row.New(types.Format_7_18, rss.destSch, nil))}
 		expectedResult := rs(
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema}).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}, RowWithSchema{app1, appearancesTestSchema})).Row,
 		)
 
 		result := getCrossProduct(rss, tables)
@@ -633,12 +675,12 @@ func TestCrossProduct(t *testing.T) {
 			newTableResultForTest(rs(ep1, ep2), episodesTestSchema),
 		}
 
-		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(types.Format_7_18, rss.destSch, nil)}
+		resultRow := RowWithSchema{Schema: rss.destSch, Row: mustRow(row.New(types.Format_7_18, rss.destSch, nil))}
 		expectedResult := rs(
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema}).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep1, episodesTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}, RowWithSchema{ep2, episodesTestSchema})).Row,
 		)
 
 		result := getCrossProduct(rss, tables)
@@ -653,11 +695,11 @@ func TestCrossProduct(t *testing.T) {
 			newTableResultForTest(rs(homer, marge, bart), peopleTestSchema),
 		}
 
-		resultRow := RowWithSchema{Schema: rss.destSch, Row: row.New(types.Format_7_18, rss.destSch, nil)}
+		resultRow := RowWithSchema{Schema: rss.destSch, Row: mustRow(row.New(types.Format_7_18, rss.destSch, nil))}
 		expectedResult := rs(
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema}).Row,
-			rss.combineAllRows(resultRow.Copy(), RowWithSchema{bart, peopleTestSchema}).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{homer, peopleTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{marge, peopleTestSchema})).Row,
+			mustRowWithSchema(rss.combineAllRows(resultRow.Copy(), RowWithSchema{bart, peopleTestSchema})).Row,
 		)
 
 		result := getCrossProduct(rss, tables)
@@ -736,15 +778,15 @@ const (
 )
 
 var peopleTestSchema = createPeopleTestSchema()
-var untypedPeopleSch = untyped.UntypeUnkeySchema(peopleTestSchema)
+var untypedPeopleSch = mustSchema(untyped.UntypeUnkeySchema(peopleTestSchema))
 var peopleTableName = "people"
 
 var episodesTestSchema = createEpisodesTestSchema()
-var untypedEpisodesSch = untyped.UntypeUnkeySchema(episodesTestSchema)
+var untypedEpisodesSch = mustSchema(untyped.UntypeUnkeySchema(episodesTestSchema))
 var episodesTableName = "episodes"
 
 var appearancesTestSchema = createAppearancesTestSchema()
-var untypedAppearacesSch = untyped.UntypeUnkeySchema(appearancesTestSchema)
+var untypedAppearacesSch = mustSchema(untyped.UntypeUnkeySchema(appearancesTestSchema))
 var appearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
@@ -791,7 +833,7 @@ func newPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 		ratingTag:    types.Float(rating),
 	}
 
-	return row.New(types.Format_7_18, peopleTestSchema, vals)
+	return mustRow(row.New(types.Format_7_18, peopleTestSchema, vals))
 }
 
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
@@ -802,7 +844,7 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 		epRatingTag:  types.Float(rating),
 	}
 
-	return row.New(types.Format_7_18, episodesTestSchema, vals)
+	return mustRow(row.New(types.Format_7_18, episodesTestSchema, vals))
 }
 
 func newAppsRow(charId, epId int, comment string) row.Row {
@@ -812,7 +854,7 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 		appCommentsTag:  types.String(comment),
 	}
 
-	return row.New(types.Format_7_18, appearancesTestSchema, vals)
+	return mustRow(row.New(types.Format_7_18, appearancesTestSchema, vals))
 }
 
 // 6 characters

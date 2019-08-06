@@ -169,6 +169,5 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 		}
 	}
 
-	r := row.New(csvr.nbf, sch, taggedVals)
-	return r, nil
+	return row.New(csvr.nbf, sch, taggedVals)
 }

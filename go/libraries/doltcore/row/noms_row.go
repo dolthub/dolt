@@ -15,6 +15,7 @@
 package row
 
 import (
+	"errors"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -25,25 +26,31 @@ type nomsRow struct {
 	nbf   *types.NomsBinFormat
 }
 
-func (nr nomsRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool)) bool {
-	stopped := false
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) bool {
+func (nr nomsRow) IterSchema(sch schema.Schema, cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (bool, error) {
 		value, _ := nr.GetColVal(tag)
-		stopped = cb(tag, value)
-		return stopped
+		return cb(tag, value)
 	})
 
-	return stopped
+	return false, err
 }
 
-func (nr nomsRow) IterCols(cb func(tag uint64, val types.Value) (stop bool)) bool {
-	stopped := nr.key.Iter(cb)
+func (nr nomsRow) IterCols(cb func(tag uint64, val types.Value) (bool, error)) (bool, error) {
+	stopped, err := nr.key.Iter(cb)
 
-	if !stopped {
-		stopped = nr.value.Iter(cb)
+	if err != nil {
+		return false, err
 	}
 
-	return stopped
+	if !stopped {
+		stopped, err = nr.value.Iter(cb)
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return stopped, nil
 }
 
 func (nr nomsRow) GetColVal(tag uint64) (types.Value, bool) {
@@ -80,24 +87,28 @@ func (nr nomsRow) Format() *types.NomsBinFormat {
 	return nr.nbf
 }
 
-func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) Row {
+func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) (Row, error) {
 	allCols := sch.GetAllCols()
 
 	keyVals := make(TaggedValues)
 	nonKeyVals := make(TaggedValues)
 
-	colVals.Iter(func(tag uint64, val types.Value) (stop bool) {
+	_, err := colVals.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
-			panic("Trying to set a value on an unknown tag is a bug.  Validation should happen upstream.")
+			return false, errors.New("Trying to set a value on an unknown tag is a bug.  Validation should happen upstream.")
 		} else if col.IsPartOfPK {
 			keyVals[tag] = val
 		} else {
 			nonKeyVals[tag] = val
 		}
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	return fromTaggedVals(nbf, sch, keyVals, nonKeyVals)
 }
@@ -106,47 +117,64 @@ func New(nbf *types.NomsBinFormat, sch schema.Schema, colVals TaggedValues) Row 
 // and generates a row.  When a schema adds or removes columns from the non-key portion of the row, the schema will be
 // updated, but the rows will not be touched.  So the non-key portion of the row may contain values that are not in the
 // schema (The keys must match the schema though).
-func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKeyVals TaggedValues) Row {
+func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKeyVals TaggedValues) (Row, error) {
 	allCols := sch.GetAllCols()
 
-	keyVals.Iter(func(tag uint64, val types.Value) (stop bool) {
+	_, err := keyVals.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
 		col, ok := allCols.GetByTag(tag)
 
 		if !ok {
-			panic("Trying to set a value on an unknown tag is a bug for the key.  Validation should happen upstream. col:" + col.Name)
+			return false, errors.New("Trying to set a value on an unknown tag is a bug for the key.  Validation should happen upstream. col:" + col.Name)
 		} else if !col.IsPartOfPK {
-			panic("writing columns that are not part of the primary key to pk values. col:" + col.Name)
+			return false, errors.New("writing columns that are not part of the primary key to pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
-			panic("bug.  Setting a value to an incorrect kind. col: " + col.Name)
+			return false, errors.New("bug.  Setting a value to an incorrect kind. col: " + col.Name)
 		}
 
-		return false
+		return false, nil
 	})
 
+	if err != nil {
+		return nil, err
+	}
+
 	filteredVals := make(TaggedValues, len(nonKeyVals))
-	nonKeyVals.Iter(func(tag uint64, val types.Value) (stop bool) {
+	_, err = nonKeyVals.Iter(func(tag uint64, val types.Value) (stop bool, err error) {
 		col, ok := allCols.GetByTag(tag)
 		if !ok {
-			return false
+			return false, nil
 		}
 
 		if col.IsPartOfPK {
-			panic("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
+			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
-			panic("bug.  Setting a value to an incorrect kind. col:" + col.Name)
+			return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
 		} else {
 			filteredVals[tag] = val
 		}
 
-		return false
+		return false, nil
 	})
 
-	return nomsRow{keyVals, filteredVals, nbf}
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsRow{keyVals, filteredVals, nbf}, nil
 }
 
-func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) Row {
-	key := ParseTaggedValues(nomsKey)
-	val := ParseTaggedValues(nomsVal)
+func FromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error) {
+	key, err := ParseTaggedValues(nomsKey)
+
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := ParseTaggedValues(nomsVal)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return fromTaggedVals(nomsKey.Format(), sch, key, val)
 }

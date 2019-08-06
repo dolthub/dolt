@@ -23,6 +23,7 @@ package main
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,7 +55,9 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
 	res, _ := s.MustRun(main, []string{"log", str})
-	s.Contains(res, commit.Hash(types.Format_7_18).String())
+	h, err := commit.Hash(types.Format_7_18)
+	s.NoError(err)
+	s.Contains(res, h.String())
 }
 
 func (s *nomsLogTestSuite) TestNomsLog() {
@@ -77,9 +80,10 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 	db := sp.GetDatabase(context.Background())
 	ds := sp.GetDataset(context.Background())
 	for i := 0; i < 3; i++ {
-		data := types.NewStruct(types.Format_7_18, "", types.StructData{
+		data, err := types.NewStruct(types.Format_7_18, "", types.StructData{
 			"bar": types.Float(i),
 		})
+		s.NoError(err)
 		ds, err = db.CommitValue(context.Background(), ds, data)
 		s.NoError(err)
 	}
@@ -102,12 +106,22 @@ func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) 
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(context.Background(), vrw, mustHeadRef(parentDs))
+	p, err := types.NewSet(context.Background(), vrw, mustHeadRef(parentDs))
+
+	if err != nil {
+		return datas.Dataset{}, err
+	}
+
 	return newDs.Database().Commit(context.Background(), newDs, types.String(v), datas.CommitOptions{Parents: p})
 }
 
 func mergeDatasets(vrw types.ValueReadWriter, ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
-	p := types.NewSet(context.Background(), vrw, mustHeadRef(ds1), mustHeadRef(ds2))
+	p, err := types.NewSet(context.Background(), vrw, mustHeadRef(ds1), mustHeadRef(ds2))
+
+	if err != nil {
+		return datas.Dataset{}, err
+	}
+
 	return ds1.Database().Commit(context.Background(), ds1, types.String(v), datas.CommitOptions{Parents: p})
 }
 
@@ -121,7 +135,9 @@ func mustHead(ds datas.Dataset) types.Struct {
 }
 
 func mustHeadRef(ds datas.Dataset) types.Ref {
-	hr, ok := ds.MaybeHeadRef()
+	hr, ok, err := ds.MaybeHeadRef()
+	d.PanicIfError(err)
+
 	if !ok {
 		panic("no head")
 	}
@@ -130,7 +146,9 @@ func mustHeadRef(ds datas.Dataset) types.Ref {
 }
 
 func mustHeadValue(ds datas.Dataset) types.Value {
-	val, ok := ds.MaybeHeadValue()
+	val, ok, err := ds.MaybeHeadValue()
+	d.PanicIfError(err)
+
 	if !ok {
 		panic("no head")
 	}
@@ -149,14 +167,17 @@ func (s *nomsLogTestSuite) TestNArg() {
 	s.NoError(err)
 
 	ds, err = addCommit(ds, "1")
-	h1 := mustHead(ds).Hash(types.Format_7_18)
+	s.NoError(err)
+	h1, err := mustHead(ds).Hash(types.Format_7_18)
 	s.NoError(err)
 	ds, err = addCommit(ds, "2")
 	s.NoError(err)
-	h2 := mustHead(ds).Hash(types.Format_7_18)
+	h2, err := mustHead(ds).Hash(types.Format_7_18)
+	s.NoError(err)
 	ds, err = addCommit(ds, "3")
 	s.NoError(err)
-	h3 := mustHead(ds).Hash(types.Format_7_18)
+	h3, err := mustHead(ds).Hash(types.Format_7_18)
+	s.NoError(err)
 
 	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, dsName)
 	res, _ := s.MustRun(main, []string{"log", "-n1", dsSpec})
@@ -185,10 +206,11 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 
 	s.NoError(err)
 
-	meta := types.NewStruct(types.Format_7_18, "Meta", map[string]types.Value{
+	meta, err := types.NewStruct(types.Format_7_18, "Meta", map[string]types.Value{
 		"longNameForTest": types.String("Yoo"),
 		"test2":           types.String("Hoo"),
 	})
+	s.NoError(err)
 	ds, err = db.Commit(context.Background(), ds, types.String("1"), datas.CommitOptions{Meta: meta})
 	s.NoError(err)
 
@@ -350,7 +372,11 @@ func (s *nomsLogTestSuite) TestTruncation() {
 		for _, v := range l {
 			nv = append(nv, types.String(v))
 		}
-		return types.NewList(context.Background(), db, nv...)
+
+		lst, err := types.NewList(context.Background(), db, nv...)
+		s.NoError(err)
+
+		return lst
 	}
 
 	t, err := db.GetDataset(context.Background(), "truncate")

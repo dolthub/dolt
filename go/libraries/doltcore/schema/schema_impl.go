@@ -63,22 +63,19 @@ func ValidateForInsert(sch Schema) error {
 
 	colNames := make(map[string]bool)
 	colTags := make(map[uint64]bool)
-	var err error
 
-	sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
 		if _, ok := colTags[tag]; ok {
-			err = ErrColTagCollision
-			return true
+			return true, ErrColTagCollision
 		}
 		colTags[tag] = true
 
 		if _, ok := colNames[col.Name]; ok {
-			err = ErrColNameCollision
-			return true
+			return true, ErrColNameCollision
 		}
 		colNames[col.Name] = true
 
-		return false
+		return false, nil
 	})
 
 	return err
@@ -154,7 +151,7 @@ func (si *schemaImpl) GetPKCols() *ColCollection {
 
 func (si *schemaImpl) String() string {
 	var b strings.Builder
-	writeColFn := func(tag uint64, col Column) (stop bool) {
+	writeColFn := func(tag uint64, col Column) (stop bool, err error) {
 		b.WriteString("tag: ")
 		b.WriteString(strconv.FormatUint(tag, 10))
 		b.WriteString(", name: ")
@@ -162,12 +159,22 @@ func (si *schemaImpl) String() string {
 		b.WriteString(", type: ")
 		b.WriteString(col.KindString())
 		b.WriteString(",\n")
-		return false
+		return false, nil
 	}
 	b.WriteString("pkCols: [")
-	si.pkCols.Iter(writeColFn)
+	err := si.pkCols.Iter(writeColFn)
+
+	if err != nil {
+		return err.Error()
+	}
+
 	b.WriteString("]\nnonPkCols: [")
-	si.nonPKCols.Iter(writeColFn)
+	err = si.nonPKCols.Iter(writeColFn)
+
+	if err != nil {
+		return err.Error()
+	}
+
 	b.WriteString("]")
 	return b.String()
 }

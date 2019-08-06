@@ -17,7 +17,6 @@ package doltdb
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -37,178 +36,336 @@ type RootValue struct {
 func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
 	values := make([]types.Value, 2*len(tables))
 
-	err := pantoerr.PanicToError("unable to read values from noms", func() error {
-		index := 0
-		for k, v := range tables {
-			values[index] = types.String(k)
-			valForHash := vrw.ReadValue(ctx, v)
+	index := 0
+	for k, v := range tables {
+		values[index] = types.String(k)
+		valForHash, err := vrw.ReadValue(ctx, v)
 
-			if valForHash == nil {
-				return ErrHashNotFound
-			}
-
-			values[index+1] = types.NewRef(valForHash, vrw.Format())
-			index += 2
+		if err != nil {
+			return nil, err
 		}
 
-		return nil
-	})
+		if valForHash == nil {
+			return nil, ErrHashNotFound
+		}
+
+		values[index+1], err = types.NewRef(valForHash, vrw.Format())
+
+		if err != nil {
+			return nil, err
+		}
+
+		index += 2
+	}
+
+	tblMap, err := types.NewMap(ctx, vrw, values...)
 
 	if err != nil {
 		return nil, err
 	}
 
-	tblMap := types.NewMap(ctx, vrw, values...)
-	return newRootFromTblMap(vrw, tblMap), nil
+	return newRootFromTblMap(vrw, tblMap)
 }
 
 func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
 	return &RootValue{vrw, st}
 }
 
-func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) *RootValue {
-	return newRootFromTblMap(vrw, types.NewMap(ctx, vrw))
+func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
+	m, err := types.NewMap(ctx, vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newRootFromTblMap(vrw, m)
 }
 
-func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) *RootValue {
+func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) (*RootValue, error) {
 	sd := types.StructData{
 		tablesKey: tblMap,
 	}
 
-	st := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
+	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
 
-	return newRootValue(vrw, st)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRootValue(vrw, st), err
 }
 
 func (root *RootValue) VRW() types.ValueReadWriter {
 	return root.vrw
 }
 
-func (root *RootValue) HasTable(ctx context.Context, tName string) bool {
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
+func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
+	val, found, err := root.valueSt.MaybeGet(tablesKey)
+
+	if err != nil {
+		return false, err
+	}
+
+	if !found {
+		return false, nil
+	}
+
+	tableMap := val.(types.Map)
 	return tableMap.Has(ctx, types.String(tName))
 }
 
-func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Struct, bool) {
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	tVal := tableMap.Get(ctx, types.String(tName))
+func (root *RootValue) getTableSt(ctx context.Context, tName string) (*types.Struct, bool, error) {
+	tableMap, err := root.getTableMap()
 
-	if tVal == nil {
-		return nil, false
+	if err != nil {
+		return nil, false, err
+	}
+
+	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+
+	if tVal == nil || !found {
+		return nil, false, nil
 	}
 
 	tValRef := tVal.(types.Ref)
-	tableStruct := tValRef.TargetValue(ctx, root.vrw).(types.Struct)
-	return &tableStruct, true
+	val, err := tValRef.TargetValue(ctx, root.vrw)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	tableStruct := val.(types.Struct)
+	return &tableStruct, true, nil
 }
 
-func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool) {
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	tVal := tableMap.Get(ctx, types.String(tName))
+func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Hash, bool, error) {
+	tableMap, err := root.getTableMap()
 
-	if tVal == nil {
-		return hash.Hash{}, false
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+
+	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+
+	if tVal == nil || !found {
+		return hash.Hash{}, false, nil
 	}
 
 	tValRef := tVal.(types.Ref)
-	return tValRef.TargetHash(), true
+	return tValRef.TargetHash(), true, nil
 }
 
 // GetTable will retrieve a table by name
-func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool) {
-	if st, ok := root.getTableSt(ctx, tName); ok {
-		return &Table{root.vrw, *st}, true
+func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool, error) {
+	if st, ok, err := root.getTableSt(ctx, tName); err != nil {
+		return nil, false, err
+	} else if ok {
+		return &Table{root.vrw, *st}, true, nil
 	}
 
-	return nil, false
+	return nil, false, nil
 }
 
 // GetTableNames retrieves the lists of all tables for a RootValue
-func (root *RootValue) GetTableNames(ctx context.Context) []string {
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
+func (root *RootValue) GetTableNames(ctx context.Context) ([]string, error) {
+	tableMap, err := root.getTableMap()
+
+	if err != nil {
+		return nil, err
+	}
+
 	numTables := int(tableMap.Len())
 	names := make([]string, 0, numTables)
 
-	tableMap.Iter(ctx, func(key, _ types.Value) (stop bool) {
+	err = tableMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
 		names = append(names, string(key.(types.String)))
-		return false
+		return false, nil
 	})
 
-	return names
+	if err != nil {
+		return nil, err
+	}
+
+	return names, nil
 }
 
-func (root *RootValue) TablesInConflict(ctx context.Context) []string {
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
+func (root *RootValue) getTableMap() (types.Map, error){
+	val, found, err := root.valueSt.MaybeGet(tablesKey)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	if !found || val == nil {
+		return types.EmptyMap, err
+	}
+
+	tableMap := val.(types.Map)
+	return tableMap, err
+}
+
+func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
+	tableMap, err := root.getTableMap()
+
+	if err != nil {
+		return nil, err
+	}
+
 	numTables := int(tableMap.Len())
 	names := make([]string, 0, numTables)
 
-	tableMap.Iter(ctx, func(key, tblRefVal types.Value) (stop bool) {
-		tblVal := tblRefVal.(types.Ref).TargetValue(ctx, root.vrw)
+	err = tableMap.Iter(ctx, func(key, tblRefVal types.Value) (stop bool, err error) {
+		tblVal, err := tblRefVal.(types.Ref).TargetValue(ctx, root.vrw)
+
+		if err != nil {
+			return false, err
+		}
+
 		tblSt := tblVal.(types.Struct)
 		tbl := &Table{root.vrw, tblSt}
-		if tbl.HasConflicts() {
+		if has, err := tbl.HasConflicts(); err != nil {
+			return false, err
+		} else if has {
 			names = append(names, string(key.(types.String)))
 		}
 
-		return false
+		return false, nil
 	})
 
-	return names
+	if err != nil {
+		return nil, err
+	}
+
+	return names, nil
 }
 
-func (root *RootValue) HasConflicts(ctx context.Context) bool {
-	cnfTbls := root.TablesInConflict(ctx)
+func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
+	cnfTbls, err := root.TablesInConflict(ctx)
 
-	return len(cnfTbls) > 0
+	if err != nil {
+		return false, err
+	}
+
+	return len(cnfTbls) > 0, nil
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
-func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, table *Table) *RootValue {
+func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, table *Table) (*RootValue,error) {
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
 	rootValSt := root.valueSt
-	tableRef := writeValAndGetRef(ctx, ddb.ValueReadWriter(), table.tableStruct)
+	tableRef, err := writeValAndGetRef(ctx, ddb.ValueReadWriter(), table.tableStruct)
 
-	tableMap := rootValSt.Get(tablesKey).(types.Map)
+	if err != nil {
+		return nil, err
+	}
+
+	tableMap, err := root.getTableMap()
+
+	if err != nil {
+		return nil, err
+	}
+
 	tMapEditor := tableMap.Edit()
 	tMapEditor = tMapEditor.Set(types.String(tName), tableRef)
 
-	rootValSt = rootValSt.Set(tablesKey, tMapEditor.Map(ctx))
-	return newRootValue(root.vrw, rootValSt)
+	m, err := tMapEditor.Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rootValSt, err = rootValSt.Set(tablesKey, m)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newRootValue(root.vrw, rootValSt), nil
 }
 
 // HashOf gets the hash of the root value
-func (root *RootValue) HashOf() hash.Hash {
+func (root *RootValue) HashOf() (hash.Hash, error) {
 	return root.valueSt.Hash(root.vrw.Format())
 }
 
 // TableDiff returns the slices of tables added, modified, and removed when compared with another root value.  Tables
 // In this instance that are not in the other instance are considered added, and tables in the other instance and not
 // this instance are considered removed.
-func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, modified, removed []string) {
+func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, modified, removed []string, err error) {
 	added = []string{}
 	modified = []string{}
 	removed = []string{}
 
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	otherMap := other.valueSt.Get(tablesKey).(types.Map)
+	tableMap, err := root.getTableMap()
 
-	itr1 := tableMap.Iterator(ctx)
-	itr2 := otherMap.Iterator(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
-	pk1, val1 := itr1.Next(ctx)
-	pk2, val2 := itr2.Next(ctx)
+	otherMap, err := other.getTableMap()
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	itr1, err := tableMap.Iterator(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	itr2, err := otherMap.Iterator(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	pk1, val1, err := itr1.Next(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	pk2, val2, err := itr2.Next(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	for pk1 != nil || pk2 != nil {
 		if pk1 == nil || pk2 == nil || !pk1.Equals(pk2) {
-			if pk2 == nil || (pk1 != nil && pk1.Less(root.vrw.Format(), pk2)) {
+			var pk2IsNilOrGreater bool
+			if pk1 == nil {
+				pk2IsNilOrGreater = false
+			} else {
+				pk2IsNilOrGreater = pk2 == nil
+
+				if !pk2IsNilOrGreater {
+					pk2IsNilOrGreater, err = pk1.Less(root.vrw.Format(), pk2)
+
+					if err != nil {
+						return nil, nil, nil, err
+					}
+				}
+			}
+
+			if pk2IsNilOrGreater {
 				added = append(added, string(pk1.(types.String)))
-				pk1, val1 = itr1.Next(ctx)
+				pk1, val1, err = itr1.Next(ctx)
+
+				if err != nil {
+					return nil, nil, nil, err
+				}
 			} else {
 				removed = append(removed, string(pk2.(types.String)))
-				pk2, val2 = itr2.Next(ctx)
+				pk2, val2, err = itr2.Next(ctx)
+
+				if err != nil {
+					return nil, nil, nil, err
+				}
 			}
 		} else {
 			//tblSt1 := val1.(types.Ref).TargetValue(root.vrw)
@@ -220,45 +377,96 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 				modified = append(modified, string(pk1.(types.String)))
 			}
 
-			pk1, val1 = itr1.Next(ctx)
-			pk2, val2 = itr2.Next(ctx)
+			pk1, val1, err = itr1.Next(ctx)
+
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			pk2, val2, err = itr2.Next(ctx)
+
+			if err != nil {
+				return nil, nil, nil, err
+			}
 		}
 	}
 
-	return added, modified, removed
+	return added, modified, removed, nil
 }
 
-func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []string, other *RootValue) *RootValue {
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
-	otherMap := other.valueSt.Get(tablesKey).(types.Map)
+func (root *RootValue) UpdateTablesFromOther(ctx context.Context, tblNames []string, other *RootValue) (*RootValue, error) {
+	tableMap, err := root.getTableMap()
+
+	if err != nil {
+		return nil, err
+	}
+
+	otherMap, err := other.getTableMap()
+
+	if err != nil {
+		return nil, err
+	}
 
 	me := tableMap.Edit()
 	for _, tblName := range tblNames {
 		key := types.String(tblName)
-		if val, ok := otherMap.MaybeGet(ctx, key); ok {
+		if val, ok, err := otherMap.MaybeGet(ctx, key); err != nil {
+			return nil, err
+		} else if ok {
 			me = me.Set(key, val)
-		} else if _, ok := tableMap.MaybeGet(ctx, key); ok {
+		} else if _, ok, err := tableMap.MaybeGet(ctx, key); err != nil {
+			return nil, err
+		} else if ok {
 			me = me.Remove(key)
 		}
 	}
 
-	rootValSt := root.valueSt.Set(tablesKey, me.Map(ctx))
-	return newRootValue(root.vrw, rootValSt)
+	m, err := me.Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rootValSt, err := root.valueSt.Set(tablesKey, m)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return newRootValue(root.vrw, rootValSt), nil
 }
 
 func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*RootValue, error) {
-	tableMap := root.valueSt.Get(tablesKey).(types.Map)
+	tableMap, err := root.getTableMap()
+
+	if err != nil {
+		return nil, err
+	}
+
 	me := tableMap.Edit()
 	for _, tbl := range tables {
 		key := types.String(tbl)
 
-		if tableMap.Has(ctx, key) {
+		if has, err := tableMap.Has(ctx, key); err != nil {
+			return nil, err
+		} else if has {
 			me = me.Remove(key)
 		} else {
 			return nil, ErrTableNotFound
 		}
 	}
 
-	rootValSt := root.valueSt.Set(tablesKey, me.Map(ctx))
+	m, err := me.Map(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rootValSt, err := root.valueSt.Set(tablesKey, m)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return newRootValue(root.vrw, rootValSt), nil
 }

@@ -24,8 +24,6 @@ package diff
 import (
 	"context"
 	"fmt"
-	"sort"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -43,14 +41,14 @@ import (
 // one is applied in order. When done in combination with the stack, this enables
 // all Differences that change a particular node to be applied to that node
 // before it gets assigned back to it's parent.
-func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patch Patch) types.Value {
+func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patch Patch) (types.Value, error) {
 	if len(patch) == 0 {
-		return root
+		return root, nil
 	}
 
 	var lastPath types.Path
 	stack := patchStack{}
-	sort.Sort(PatchSort{patch, nbf})
+	types.SortWithErroringLess(PatchSort{patch, nbf})
 
 	// Push the element on the stack that corresponds to the root
 	// node.
@@ -70,7 +68,12 @@ func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patc
 		// stack early and set the idx to be the len(p) - 1.
 		// Otherwise, if the paths are different we can call commonPrefixCount()
 		if len(p) > 0 && p.Equals(lastPath) {
-			stack.pop(ctx)
+			_, err := stack.pop(ctx)
+
+			if err != nil {
+				return nil, err
+			}
+
 			idx = len(p) - 1
 		} else {
 			idx = commonPrefixCount(lastPath, p)
@@ -82,7 +85,11 @@ func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patc
 		// referenced by this p. Popping an element on the stack, folds that
 		// value into it's parent.
 		for idx < stack.Len()-1 {
-			stack.pop(ctx)
+			_, err := stack.pop(ctx)
+
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		// tail is the part of the current path that has not yet been pushed
@@ -92,7 +99,12 @@ func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patc
 		for i, pp := range tail {
 			top := stack.top()
 			parent := top.newestValue()
-			oldValue := pp.Resolve(ctx, parent, nil)
+			oldValue, err := pp.Resolve(ctx, parent, nil)
+
+			if err != nil {
+				return nil, err
+			}
+
 			var newValue types.Value
 			if i == len(tail)-1 { // last pathPart in this path
 				newValue = oldValue
@@ -115,16 +127,21 @@ func Apply(ctx context.Context, nbf *types.NomsBinFormat, root types.Value, patc
 	// stack and return the new root.
 	var newRoot stackElem
 	for stack.Len() > 0 {
-		newRoot = stack.pop(ctx)
+		var err error
+		newRoot, err = stack.pop(ctx)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	return newRoot.newValue
+	return newRoot.newValue, nil
 }
 
 // updateNode handles the actual update of a node. It uses 'pp' to get the
 // information that it needs to update 'parent' with 'newVal'. 'oldVal' is also
 // passed in so that Sets can be updated correctly. This function is used by
 // the patchStack Pop() function to merge values into a new graph.
-func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent types.Value) types.Value {
+func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent types.Value) (types.Value, error) {
 	d.PanicIfTrue(parent == nil)
 	switch part := top.pathPart.(type) {
 	case types.FieldPath:
@@ -146,16 +163,17 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				if realIdx > el.Len() {
-					nv = el.Edit().Append(top.newValue).List(ctx)
+					return el.Edit().Append(top.newValue).List(ctx)
 				} else {
-					nv = el.Edit().Insert(realIdx, top.newValue).List(ctx)
+					return el.Edit().Insert(realIdx, top.newValue).List(ctx)
 				}
+
 			case types.DiffChangeRemoved:
-				nv = el.Edit().RemoveAt(realIdx).List(ctx)
+				return el.Edit().RemoveAt(realIdx).List(ctx)
 			case types.DiffChangeModified:
-				nv = el.Edit().Set(realIdx, top.newValue).List(ctx)
+				return el.Edit().Set(realIdx, top.newValue).List(ctx)
 			}
-			return nv
+			return nv, nil
 		case types.Map:
 			switch top.changeType {
 			case types.DiffChangeAdded:
@@ -165,34 +183,90 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 			case types.DiffChangeModified:
 				if part.IntoKey {
 					newPart := types.IndexPath{Index: part.Index}
-					ov := newPart.Resolve(ctx, parent, nil)
+					ov, err := newPart.Resolve(ctx, parent, nil)
+
+					if err != nil {
+						return nil, err
+					}
+
 					return el.Edit().Remove(part.Index).Set(top.newValue, ov).Map(ctx)
 				}
 				return el.Edit().Set(part.Index, top.newValue).Map(ctx)
 			}
 		case types.Set:
 			if top.oldValue != nil {
-				el = el.Edit().Remove(top.oldValue).Set(ctx)
+				se, err := el.Edit().Remove(top.oldValue)
+
+				if err != nil {
+					return nil, err
+				}
+
+				el, err = se.Set(ctx)
+
+				if err != nil {
+					return nil, err
+				}
 			}
+
 			if top.newValue != nil {
-				el = el.Edit().Insert(top.newValue).Set(ctx)
+				se, err := el.Edit().Insert(top.newValue)
+
+				if err != nil {
+					return nil, err
+				}
+
+				el, err = se.Set(ctx)
+
+				if err != nil {
+					return nil, err
+				}
 			}
-			return el
+
+			return el, nil
 		}
 	case types.HashIndexPath:
 		switch el := parent.(type) {
 		case types.Set:
 			switch top.changeType {
 			case types.DiffChangeAdded:
-				return el.Edit().Insert(top.newValue).Set(ctx)
+				se, err := el.Edit().Insert(top.newValue)
+
+				if err != nil {
+					return nil, err
+				}
+
+				return se.Set(ctx)
 			case types.DiffChangeRemoved:
-				return el.Edit().Remove(top.oldValue).Set(ctx)
+				se, err := el.Edit().Remove(top.oldValue)
+
+				if err != nil {
+					return nil, err
+				}
+
+				return se.Set(ctx)
 			case types.DiffChangeModified:
-				return el.Edit().Remove(top.oldValue).Insert(top.newValue).Set(ctx)
+				se, err := el.Edit().Remove(top.oldValue)
+
+				if err != nil {
+					return nil, err
+				}
+
+				se, err = se.Insert(top.newValue)
+
+				if err != nil {
+					return nil, err
+				}
+
+				return se.Set(ctx)
 			}
 		case types.Map:
 			keyPart := types.HashIndexPath{Hash: part.Hash, IntoKey: true}
-			k := keyPart.Resolve(ctx, parent, nil)
+			k, err := keyPart.Resolve(ctx, parent, nil)
+
+			if err != nil {
+				return nil, err
+			}
+
 			switch top.changeType {
 			case types.DiffChangeAdded:
 				k := top.newKeyValue
@@ -201,7 +275,13 @@ func (stack *patchStack) updateNode(ctx context.Context, top *stackElem, parent 
 				return el.Edit().Remove(k).Map(ctx)
 			case types.DiffChangeModified:
 				if part.IntoKey {
-					v := el.Get(ctx, k)
+					v, found, err := el.MaybeGet(ctx, k)
+
+					if err != nil {
+						return nil, err
+					}
+
+					d.PanicIfFalse(found)
 					return el.Edit().Remove(k).Set(top.newValue, v).Map(ctx)
 				}
 				return el.Edit().Set(k, top.newValue).Map(ctx)
@@ -267,15 +347,21 @@ func (stack *patchStack) top() *stackElem {
 
 // pop applies the change to the graph. When an element is 'pop'ed from the stack,
 // this function uses the pathPart to merge that value into it's parent.
-func (stack *patchStack) pop(ctx context.Context) stackElem {
+func (stack *patchStack) pop(ctx context.Context) (stackElem, error) {
 	top := stack.top()
 	stack.vals = stack.vals[:len(stack.vals)-1]
 	if stack.Len() > 0 {
 		newTop := stack.top()
 		parent := newTop.newestValue()
-		newTop.newValue = stack.updateNode(ctx, top, parent)
+
+		var err error
+		newTop.newValue, err = stack.updateNode(ctx, top, parent)
+
+		if err != nil {
+			return stackElem{}, err
+		}
 	}
-	return *top
+	return *top, nil
 }
 
 func (stack *patchStack) Len() int {

@@ -17,7 +17,6 @@ package alterschema
 import (
 	"context"
 	"errors"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -29,7 +28,12 @@ func DropColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, c
 		panic("invalid parameters")
 	}
 
-	tblSch := tbl.GetSchema(ctx)
+	tblSch, err := tbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	allCols := tblSch.GetAllCols()
 
 	if col, ok := allCols.GetByName(colName); !ok {
@@ -39,12 +43,16 @@ func DropColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, c
 	}
 
 	cols := make([]schema.Column, 0)
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Name != colName {
 			cols = append(cols, col)
 		}
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	colColl, err := schema.NewColCollection(cols...)
 	if err != nil {
@@ -60,7 +68,17 @@ func DropColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, c
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData(ctx))
+	rd, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return newTable, nil
 }

@@ -68,15 +68,15 @@ const (
 )
 
 var PeopleTestSchema = createPeopleTestSchema()
-var untypedPeopleSch = untyped.UntypeUnkeySchema(PeopleTestSchema)
+var untypedPeopleSch, _ = untyped.UntypeUnkeySchema(PeopleTestSchema)
 var PeopleTableName = "people"
 
 var EpisodesTestSchema = createEpisodesTestSchema()
-var untypedEpisodesSch = untyped.UntypeUnkeySchema(EpisodesTestSchema)
+var untypedEpisodesSch, _ = untyped.UntypeUnkeySchema(EpisodesTestSchema)
 var episodesTableName = "episodes"
 
 var AppearancesTestSchema = createAppearancesTestSchema()
-var untypedAppearacesSch = untyped.UntypeUnkeySchema(AppearancesTestSchema)
+var untypedAppearacesSch, _ = untyped.UntypeUnkeySchema(AppearancesTestSchema)
 var appearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
@@ -123,7 +123,13 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 		RatingTag:    types.Float(rating),
 	}
 
-	return row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
@@ -134,7 +140,13 @@ func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
 		epRatingTag:  types.Float(rating),
 	}
 
-	return row.New(types.Format_7_18, EpisodesTestSchema, vals)
+	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 func newAppsRow(charId, epId int, comment string) row.Row {
@@ -144,7 +156,13 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 		appCommentsTag:  types.String(comment),
 	}
 
-	return row.New(types.Format_7_18, AppearancesTestSchema, vals)
+	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
@@ -160,7 +178,13 @@ func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, 
 		NumEpisodesTag: types.Uint(numEpisodes),
 	}
 
-	return row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 // 6 characters

@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
 
@@ -67,9 +68,12 @@ func TestPutRow(t *testing.T) {
 
 		if result == 0 {
 			root, _ := dEnv.WorkingRoot(context.Background())
-			tbl, _ := root.GetTable(context.Background(), tableName)
-			sch := tbl.GetSchema(context.Background())
-			row, exists := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
+			tbl, _, err := root.GetTable(context.Background(), tableName)
+			assert.NoError(t, err)
+			sch, err := tbl.GetSchema(context.Background())
+			assert.NoError(t, err)
+			row, exists, err := tbl.GetRowByPKVals(context.Background(), row.TaggedValues{dtestutils.IdTag: expectedId}, sch)
+			assert.NoError(t, err)
 
 			if !exists {
 				t.Fatal("Could not find row")

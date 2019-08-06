@@ -16,11 +16,13 @@ package row
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestFmt(t *testing.T) {
-	r := newTestRow()
+	r, err := newTestRow()
+	assert.NoError(t, err)
 
 	expected := `first:"rick" | last:"astley" | age:53 | address:"123 Fake St" | title:null_value | `
 	actual := Fmt(context.Background(), r, sch)

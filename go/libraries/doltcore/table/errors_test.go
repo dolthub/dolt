@@ -15,6 +15,7 @@
 package table
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -25,9 +26,11 @@ import (
 func TestBadRow(t *testing.T) {
 	cols, _ := schema.NewColCollection(schema.NewColumn("id", 0, types.IntKind, true))
 	sch := schema.SchemaFromCols(cols)
-	emptyRow := row.New(types.Format_7_18, sch, row.TaggedValues{})
+	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
 
-	err := NewBadRow(emptyRow, "details")
+	assert.NoError(t, err)
+
+	err = NewBadRow(emptyRow, "details")
 
 	if !IsBadRow(err) {
 		t.Error("Should be a bad row error")

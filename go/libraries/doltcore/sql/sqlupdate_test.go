@@ -348,7 +348,8 @@ func TestExecuteUpdate(t *testing.T) {
 			assert.Equal(t, tt.expectedResult.NumRowsUnchanged, result.NumRowsUnchanged)
 			assert.Equal(t, tt.expectedResult.NumErrorsIgnored, result.NumErrorsIgnored)
 
-			table, ok := result.Root.GetTable(ctx, PeopleTableName)
+			table, ok, err := result.Root.GetTable(ctx, PeopleTableName)
+			require.NoError(t, err)
 			assert.True(t, ok)
 
 			// make sure exactly the expected rows were updated
@@ -360,7 +361,10 @@ func TestExecuteUpdate(t *testing.T) {
 					expectedRow = tt.updatedRows[updatedIdx]
 				}
 
-				foundRow, ok := table.GetRow(ctx, expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx).(types.Tuple), PeopleTestSchema)
+				k, err := expectedRow.NomsMapKey(PeopleTestSchema).Value(ctx)
+				require.NoError(t, err)
+				foundRow, ok, err := table.GetRow(ctx, k.(types.Tuple), PeopleTestSchema)
+				require.NoError(t, err)
 				assert.True(t, ok, "Row not found: %v", expectedRow)
 				eq, diff := rowsEqual(expectedRow, foundRow)
 				assert.True(t, eq, "Rows not equals, found diff %v", diff)

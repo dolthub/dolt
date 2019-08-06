@@ -40,8 +40,12 @@ type SchemaDifference struct {
 }
 
 // DiffSchemas compares two schemas by looking at column's with the same tag.
-func DiffSchemas(sch1, sch2 schema.Schema) map[uint64]SchemaDifference {
-	colPairMap := pairColumns(sch1, sch2)
+func DiffSchemas(sch1, sch2 schema.Schema) (map[uint64]SchemaDifference, error) {
+	colPairMap, err := pairColumns(sch1, sch2)
+
+	if err != nil {
+		return nil, err
+	}
 
 	diffs := make(map[uint64]SchemaDifference)
 	for tag, colPair := range colPairMap {
@@ -56,18 +60,22 @@ func DiffSchemas(sch1, sch2 schema.Schema) map[uint64]SchemaDifference {
 		}
 	}
 
-	return diffs
+	return diffs, nil
 }
 
 // pairColumns loops over both sets of columns pairing columns with the same tag.
-func pairColumns(sch1, sch2 schema.Schema) map[uint64][2]*schema.Column {
+func pairColumns(sch1, sch2 schema.Schema) (map[uint64][2]*schema.Column, error) {
 	colPairMap := make(map[uint64][2]*schema.Column)
-	sch1.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch1.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		colPairMap[tag] = [2]*schema.Column{&col, nil}
-		return false
+		return false, nil
 	})
 
-	sch2.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	if err != nil {
+		return nil, err
+	}
+
+	err = sch2.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if pair, ok := colPairMap[tag]; ok {
 			pair[1] = &col
 			colPairMap[tag] = pair
@@ -75,8 +83,8 @@ func pairColumns(sch1, sch2 schema.Schema) map[uint64][2]*schema.Column {
 			colPairMap[tag] = [2]*schema.Column{nil, &col}
 		}
 
-		return false
+		return false, nil
 	})
 
-	return colPairMap
+	return colPairMap, nil
 }

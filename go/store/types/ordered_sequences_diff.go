@@ -298,7 +298,7 @@ func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, cur
 						return false
 					}
 				} else {
-					lmv, err := getMapValue(currentCur)
+					lmv, err := getMapValue(lastCur)
 
 					if ae.SetIfError(err) {
 						return false

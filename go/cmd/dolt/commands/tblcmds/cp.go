@@ -63,7 +63,12 @@ func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			var cm *doltdb.Commit
 			cm, verr = commands.ResolveCommitWithVErr(dEnv, apr.Arg(0), dEnv.RepoState.Head.Ref.String())
 			if verr == nil {
-				root = cm.GetRootValue()
+				var err error
+				root, err = cm.GetRootValue()
+
+				if err != nil {
+					verr = errhand.BuildDError("error: failed to get root value").AddCause(err).Build()
+				}
 			}
 
 			old, new = apr.Arg(1), apr.Arg(2)
@@ -72,16 +77,30 @@ func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		if verr == nil {
-			tbl, ok := root.GetTable(context.TODO(), old)
-			if ok {
-				if !force && working.HasTable(context.TODO(), new) {
+			tbl, ok, err := root.GetTable(context.TODO(), old)
+
+			if err != nil {
+				verr = errhand.BuildDError("error: failed to get table").AddCause(err).Build()
+			}
+
+			if ok && verr == nil{
+				has, err := working.HasTable(context.TODO(), new)
+
+				if err != nil {
+					verr = errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
+				} else if !force && has {
 					verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
 				} else {
-					working = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
-					verr = commands.UpdateWorkingWithVErr(dEnv, working)
+					working, err = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
+
+					if err != nil {
+						verr = errhand.BuildDError("error; failed to write tables back to database").Build()
+					} else {
+						verr = commands.UpdateWorkingWithVErr(dEnv, working)
+					}
 				}
-			} else {
-				verr = errhand.BuildDError("Table '%s' not found in root %s", old, root.HashOf().String()).Build()
+			} else if verr == nil {
+				verr = errhand.BuildDError("Table '%s' not found in root", old).Build()
 			}
 		}
 	}

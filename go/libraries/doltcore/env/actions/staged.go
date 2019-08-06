@@ -43,7 +43,12 @@ func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool)
 		return err
 	}
 
-	tbls := AllTables(ctx, staged, working)
+	tbls, err := AllTables(ctx, staged, working)
+
+	if err != nil {
+		return err
+	}
+
 	return stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
 }
 
@@ -57,9 +62,15 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	if !allowConflicts {
 		var inConflict []string
 		for _, tblName := range tbls {
-			tbl, _ := working.GetTable(ctx, tblName)
+			tbl, _, err := working.GetTable(ctx, tblName)
 
-			if tbl.NumRowsInConflict(ctx) > 0 {
+			if err != nil {
+				return err
+			}
+
+			if num, err := tbl.NumRowsInConflict(ctx); err != nil {
+				return err
+			} else if num > 0 {
 				if !allowConflicts {
 					inConflict = append(inConflict, tblName)
 				}
@@ -72,14 +83,38 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	}
 
 	for _, tblName := range tbls {
-		tbl, _ := working.GetTable(ctx, tblName)
+		tbl, _, err := working.GetTable(ctx, tblName)
 
-		if tbl.HasConflicts() && tbl.NumRowsInConflict(ctx) == 0 {
-			working = working.PutTable(ctx, dEnv.DoltDB, tblName, tbl.ClearConflicts())
+		if err != nil {
+			return err
+		}
+
+		has, err := tbl.HasConflicts()
+
+		if has {
+			if num, err := tbl.NumRowsInConflict(ctx); err != nil {
+				return err
+			} else if num == 0 {
+				clrTbl, err := tbl.ClearConflicts()
+
+				if err != nil {
+					return err
+				}
+
+				working, err = working.PutTable(ctx, dEnv.DoltDB, tblName, clrTbl)
+
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
 
-	staged = staged.UpdateTablesFromOther(ctx, tbls, working)
+	staged, err = staged.UpdateTablesFromOther(ctx, tbls, working)
+
+	if err != nil {
+		return err
+	}
 
 	if wh, err := dEnv.DoltDB.WriteRootValue(ctx, working); err == nil {
 		if sh, err := dEnv.DoltDB.WriteRootValue(ctx, staged); err == nil {
@@ -97,14 +132,19 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 	return doltdb.ErrNomsIO
 }
 
-func AllTables(ctx context.Context, roots ...*doltdb.RootValue) []string {
+func AllTables(ctx context.Context, roots ...*doltdb.RootValue) ([]string, error) {
 	allTblNames := make([]string, 0, 16)
 	for _, root := range roots {
-		allTblNames = append(allTblNames, root.GetTableNames(ctx)...)
-		allTblNames = append(allTblNames, root.GetTableNames(ctx)...)
+		tblNames, err := root.GetTableNames(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		allTblNames = append(allTblNames, tblNames...)
 	}
 
-	return set.Unique(allTblNames)
+	return set.Unique(allTblNames), nil
 }
 
 func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootValue) error {
@@ -112,7 +152,9 @@ func ValidateTables(ctx context.Context, tbls []string, roots ...*doltdb.RootVal
 	for _, tbl := range tbls {
 		found := false
 		for _, root := range roots {
-			if root.HasTable(ctx, tbl) {
+			if has, err := root.HasTable(ctx, tbl); err != nil {
+				return err
+			} else if has {
 				found = true
 				break
 			}
