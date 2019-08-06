@@ -6,7 +6,7 @@ concepts of Git.
 
 # We also built DoltHub
 
-DoltHub is GitHub for Dolt, a place on the internet to share Dolt repositories. https://wwww.dolthub.com
+DoltHub is GitHub for Dolt, a place on the internet to share Dolt repositories. https://www.dolthub.com
 
 # Getting Started
 
