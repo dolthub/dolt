@@ -28,11 +28,9 @@ import (
 	"io"
 	"os"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-
 	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
-
 	"github.com/liquidata-inc/dolt/go/store/config"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/types"
 	"github.com/liquidata-inc/dolt/go/store/util/profile"
 )

@@ -28,12 +28,11 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-
 	flag "github.com/juju/gnuflag"
 
 	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/dolt/go/store/config"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/spec"
 	"github.com/liquidata-inc/dolt/go/store/util/verbose"

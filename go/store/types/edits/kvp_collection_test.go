@@ -23,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
-
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 

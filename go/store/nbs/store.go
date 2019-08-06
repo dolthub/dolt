@@ -30,12 +30,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-
 	"cloud.google.com/go/storage"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/blobstore"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"

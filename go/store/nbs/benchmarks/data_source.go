@@ -29,11 +29,10 @@ import (
 	"io"
 	"os"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-
 	"github.com/dustin/go-humanize"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs/benchmarks/gen"

@@ -26,10 +26,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/liquidata-inc/dolt/go/store/d"
-
 	"github.com/stretchr/testify/suite"
 
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/spec"
 	"github.com/liquidata-inc/dolt/go/store/types"

@@ -25,10 +25,9 @@ import (
 	"context"
 	"io"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-
 	"github.com/dustin/go-humanize"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/types"
 	"github.com/liquidata-inc/dolt/go/store/util/writers"
 )
