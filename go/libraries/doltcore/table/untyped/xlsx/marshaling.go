@@ -67,7 +67,13 @@ func decodeXLSXRows(nbf *types.NomsBinFormat, xlData [][][]string, sch schema.Sc
 					return nil, err
 				}
 			}
-			rows = append(rows, row.New(nbf, sch, taggedVals))
+			r, err := row.New(nbf, sch, taggedVals)
+
+			if err != nil {
+				return nil, err
+			}
+
+			rows = append(rows, r)
 			fmt.Println(rows)
 		}
 

@@ -49,7 +49,7 @@ var annotationRe = regexp.MustCompile(`^([a-z]+)(\(([\w\-"']*)\))?`)
 type Path []PathPart
 
 type PathPart interface {
-	Resolve(ctx context.Context, v Value, vr ValueReader) Value
+	Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error)
 	String() string
 }
 
@@ -166,16 +166,22 @@ func constructPath(p Path, str string) (Path, error) {
 
 // Resolve resolves a path relative to some value.
 // A ValueReader is required to resolve paths that contain the @target annotation.
-func (p Path) Resolve(ctx context.Context, v Value, vr ValueReader) (resolved Value) {
-	resolved = v
+func (p Path) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
+	resolved := v
 	for _, part := range p {
 		if resolved == nil {
 			break
 		}
-		resolved = part.Resolve(ctx, resolved, vr)
+
+		var err error
+		resolved, err = part.Resolve(ctx, resolved, vr)
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return
+	return resolved, nil
 }
 
 func (p Path) Equals(o Path) bool {
@@ -219,20 +225,22 @@ func NewFieldPath(name string) FieldPath {
 	return FieldPath{name}
 }
 
-func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
+func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
 	switch v := v.(type) {
 	case Struct:
-		if sv, ok := v.MaybeGet(fp.Name); ok {
-			return sv
+		if sv, ok, err := v.MaybeGet(fp.Name); err != nil {
+			return nil, err
+		} else if ok {
+			return sv, nil
 		}
 	case *Type:
 		if desc, ok := v.Desc.(StructDesc); ok {
 			if df, _ := desc.Field(fp.Name); df != nil {
-				return df
+				return df, nil
 			}
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func (fp FieldPath) String() string {
@@ -257,10 +265,6 @@ func NewIndexPath(idx Value) IndexPath {
 	return newIndexPath(idx, false)
 }
 
-func NewIndexIntoKeyPath(idx Value) IndexPath {
-	return newIndexPath(idx, true)
-}
-
 func ValueCanBePathIndex(v Value) bool {
 	k := v.Kind()
 	return k == StringKind || k == BoolKind || k == FloatKind
@@ -271,47 +275,57 @@ func newIndexPath(idx Value, intoKey bool) IndexPath {
 	return IndexPath{idx, intoKey}
 }
 
-func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
-	seqIndex := func(getter func(i uint64) Value) Value {
+func (ip IndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
+	seqIndex := func(getter func(i uint64) (Value, error)) (Value, error) {
 		n, ok := ip.Index.(Float)
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		f := float64(n)
 		if f != math.Trunc(f) {
-			return nil
+			return nil, nil
 		}
 		ai, ok := getAbsoluteIndex(v, int64(f))
 		if !ok {
-			return nil
+			return nil, nil
 		}
 		if ip.IntoKey {
-			return Float(ai)
+			return Float(ai), nil
 		}
 		return getter(ai)
 	}
 
 	switch v := v.(type) {
 	case List:
-		return seqIndex(func(i uint64) Value { return v.Get(ctx, i) })
+		return seqIndex(func(i uint64) (Value, error) { return v.Get(ctx, i) })
 	case *Type:
 		if cd, ok := v.Desc.(CompoundDesc); ok {
-			return seqIndex(func(i uint64) Value { return cd.ElemTypes[i] })
+			return seqIndex(func(i uint64) (Value, error) { return cd.ElemTypes[i], nil })
 		}
 	case Map:
 		if !ip.IntoKey {
-			return v.Get(ctx, ip.Index)
+			v, _, err := v.MaybeGet(ctx, ip.Index)
+			return v, err
 		}
-		if v.Has(ctx, ip.Index) {
-			return ip.Index
+
+		if has, err := v.Has(ctx, ip.Index); err != nil {
+			return nil, err
+		} else if has {
+			return ip.Index, nil
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (ip IndexPath) String() (str string) {
-	str = fmt.Sprintf("[%s]", EncodedIndexValue(context.Background(), ip.Index))
+	valStr, err := EncodedIndexValue(context.Background(), ip.Index)
+
+	if err != nil {
+		return "error: " + err.Error()
+	}
+
+	str = fmt.Sprintf("[%s]", valStr)
 	if ip.IntoKey {
 		str += "@key"
 	}
@@ -341,42 +355,73 @@ func NewHashIndexPath(h hash.Hash) HashIndexPath {
 	return newHashIndexPath(h, false)
 }
 
-func NewHashIndexIntoKeyPath(h hash.Hash) HashIndexPath {
-	return newHashIndexPath(h, true)
-}
-
 func newHashIndexPath(h hash.Hash, intoKey bool) HashIndexPath {
 	d.PanicIfTrue(h.IsEmpty())
 	return HashIndexPath{h, intoKey}
 }
 
-func (hip HashIndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (res Value) {
+func (hip HashIndexPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
 	var seq orderedSequence
-	var getCurrentValue func(cur *sequenceCursor) Value
+	var getCurrentValue func(cur *sequenceCursor) (Value, error)
 
 	switch v := v.(type) {
 	case Set:
 		// Unclear what the behavior should be if |hip.IntoKey| is true, but ignoring it for sets is arguably correct.
 		seq = v.orderedSequence
-		getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(Value) }
+		getCurrentValue = func(cur *sequenceCursor) (Value, error) {
+			item, err := cur.current()
+
+			if err != nil {
+				return nil, err
+			}
+
+			return item.(Value), nil
+		}
 	case Map:
 		seq = v.orderedSequence
 		if hip.IntoKey {
-			getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(mapEntry).key }
+			getCurrentValue = func(cur *sequenceCursor) (Value, error) {
+				item, err := cur.current()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return item.(mapEntry).key, nil
+			}
 		} else {
-			getCurrentValue = func(cur *sequenceCursor) Value { return cur.current().(mapEntry).value }
+			getCurrentValue = func(cur *sequenceCursor) (Value, error) {
+				item, err := cur.current()
+
+				if err != nil {
+					return nil, err
+				}
+
+				return item.(mapEntry).value, nil
+			}
 		}
 	default:
-		return nil
+		return nil, nil
 	}
 
-	cur := newCursorAt(ctx, seq, orderedKeyFromHash(hip.Hash), false, false)
+	cur, err := newCursorAt(ctx, seq, orderedKeyFromHash(hip.Hash), false, false)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if !cur.valid() {
-		return nil
+		return nil, nil
 	}
 
-	if getCurrentKey(cur).h != hip.Hash {
-		return nil
+	currKey, err := getCurrentKey(cur)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if currKey.h != hip.Hash {
+		return nil, nil
 	}
 
 	return getCurrentValue(cur)
@@ -463,7 +508,7 @@ Switch:
 type TypeAnnotation struct {
 }
 
-func (ann TypeAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
+func (ann TypeAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
 	return TypeOf(v)
 }
 
@@ -475,14 +520,14 @@ func (ann TypeAnnotation) String() string {
 type TargetAnnotation struct {
 }
 
-func (ann TargetAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
+func (ann TargetAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
 	if vr == nil {
 		d.Panic("@target annotation requires a database to resolve against")
 	}
 	if r, ok := v.(Ref); ok {
 		return r.TargetValue(ctx, vr)
 	} else {
-		return nil
+		return nil, nil
 	}
 }
 
@@ -505,10 +550,10 @@ func NewAtAnnotation(idx int64) AtAnnotation {
 	return AtAnnotation{idx, false}
 }
 
-func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Value {
+func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) (Value, error) {
 	ai, ok := getAbsoluteIndex(v, ann.Index)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
 	switch v := v.(type) {
@@ -519,18 +564,24 @@ func (ann AtAnnotation) Resolve(ctx context.Context, v Value, vr ValueReader) Va
 	case Set:
 		return v.At(ctx, ai)
 	case Map:
-		k, mapv := v.At(ctx, ai)
-		if ann.IntoKey {
-			return k
+		k, mapv, err := v.At(ctx, ai)
+
+		if err != nil {
+			return nil, err
 		}
-		return mapv
+
+		if ann.IntoKey {
+			return k, nil
+		}
+
+		return mapv, nil
 	case *Type:
 		if cd, ok := v.Desc.(CompoundDesc); ok {
-			return cd.ElemTypes[ai]
+			return cd.ElemTypes[ai], nil
 		}
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (ann AtAnnotation) String() (str string) {

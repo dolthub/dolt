@@ -69,13 +69,18 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 		allCols := outSch.GetAllCols()
 		numCols := allCols.Size()
 		colNames := make([]string, 0, numCols)
-		allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+		err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			colNames = append(colNames, col.Name)
-			return false
+			return false, nil
 		})
 
+		if err != nil {
+			wr.Close()
+			return nil, err
+		}
+
 		headerLine := strings.Join(colNames, delimStr)
-		err := iohelp.WriteLine(bwr, headerLine)
+		err = iohelp.WriteLine(bwr, headerLine)
 
 		if err != nil {
 			wr.Close()
@@ -97,24 +102,31 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 
 	i := 0
 	colValStrs := make([]string, allCols.Size())
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		val, ok := r.GetColVal(tag)
 		if ok && !types.IsNull(val) {
 			if val.Kind() == types.StringKind {
 				colValStrs[i] = string(val.(types.String))
 			} else {
-				colValStrs[i] = types.EncodedValue(ctx, val)
+				var err error
+				colValStrs[i], err = types.EncodedValue(ctx, val)
+
+				if err != nil {
+					return false, err
+				}
 			}
 		}
 
 		i++
-		return false
+		return false, nil
 	})
 
-	rowStr := strings.Join(colValStrs, csvw.delimStr)
-	err := iohelp.WriteLine(csvw.bWr, rowStr)
+	if err != nil {
+		return err
+	}
 
-	return err
+	rowStr := strings.Join(colValStrs, csvw.delimStr)
+	return iohelp.WriteLine(csvw.bWr, rowStr)
 }
 
 // Close should flush all writes, release resources being held

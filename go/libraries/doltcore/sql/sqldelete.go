@@ -59,11 +59,23 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return errDelete("Unsupported update statement %v", query)
 	}
 
-	if !root.HasTable(ctx, tableName) {
+	if has, err := root.HasTable(ctx, tableName); err != nil {
+		return nil, err
+	} else if !has {
 		return errDelete("Unknown table '%s'", tableName)
 	}
-	table, _ := root.GetTable(ctx, tableName)
-	tableSch := table.GetSchema(ctx)
+	table, _, err := root.GetTable(ctx, tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	tableSch, err := table.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	rss := resultset.Identity(tableName, tableSch)
 
 	// TODO: support aliases
@@ -77,9 +89,18 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 
 	// Perform the delete
 	var result DeleteResult
-	rowData := table.GetRowData(ctx)
+	rowData, err := table.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	me := rowData.Edit()
-	rowReader := noms.NewNomsMapReader(ctx, rowData, tableSch)
+	rowReader, err := noms.NewNomsMapReader(ctx, rowData, tableSch)
+
+	if err != nil {
+		return nil, err
+	}
 
 	for {
 		r, err := rowReader.ReadRow(ctx)
@@ -98,9 +119,24 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		me.Remove(r.NomsMapKey(tableSch))
 	}
 
-	table = table.UpdateRows(ctx, me.Map(ctx))
+	m, err := me.Map(ctx)
 
-	result.Root = root.PutTable(ctx, db, tableName, table)
+	if err != nil {
+		return nil, err
+	}
+
+	table, err = table.UpdateRows(ctx, m)
+
+	if err != nil {
+		return nil, err
+	}
+
+	result.Root, err = root.PutTable(ctx, db, tableName, table)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return &result, nil
 }
 

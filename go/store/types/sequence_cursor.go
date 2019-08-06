@@ -50,25 +50,34 @@ func (cur *sequenceCursor) length() int {
 	return cur.seqLen
 }
 
-func (cur *sequenceCursor) getItem(idx int) sequenceItem {
+func (cur *sequenceCursor) getItem(idx int) (sequenceItem, error) {
 	return cur.seq.getItem(idx)
 }
 
 // sync loads the sequence that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
-func (cur *sequenceCursor) sync(ctx context.Context) {
+func (cur *sequenceCursor) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
-	cur.seq = cur.parent.getChildSequence(ctx)
+
+	var err error
+	cur.seq, err = cur.parent.getChildSequence(ctx)
+
+	if err != nil {
+		return err
+	}
+
 	cur.seqLen = cur.seq.seqLen()
+
+	return nil
 }
 
 // getChildSequence retrieves the child at the current cursor position.
-func (cur *sequenceCursor) getChildSequence(ctx context.Context) sequence {
+func (cur *sequenceCursor) getChildSequence(ctx context.Context) (sequence, error) {
 	return cur.seq.getChildSequence(ctx, cur.idx)
 }
 
 // current returns the value at the current cursor position
-func (cur *sequenceCursor) current() sequenceItem {
+func (cur *sequenceCursor) current() (sequenceItem, error) {
 	d.PanicIfFalse(cur.valid())
 	return cur.getItem(cur.idx)
 }
@@ -85,62 +94,103 @@ func (cur *sequenceCursor) atLastItem() bool {
 	return cur.idx == cur.length()-1
 }
 
-func (cur *sequenceCursor) advance(ctx context.Context) bool {
+func (cur *sequenceCursor) advance(ctx context.Context) (bool, error) {
 	return cur.advanceMaybeAllowPastEnd(ctx, true)
 }
 
-func (cur *sequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) bool {
+func (cur *sequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) (bool, error) {
 	if cur.idx < cur.length()-1 {
 		cur.idx++
-		return true
+		return true, nil
 	}
+
 	if cur.idx == cur.length() {
-		return false
+		return false, nil
 	}
-	if cur.parent != nil && cur.parent.advanceMaybeAllowPastEnd(ctx, false) {
-		// at end of current leaf chunk and there are more
-		cur.sync(ctx)
-		cur.idx = 0
-		return true
+
+	if cur.parent != nil {
+		ok, err := cur.parent.advanceMaybeAllowPastEnd(ctx, false)
+
+		if err != nil {
+			return false, err
+		}
+
+		if ok {
+			// at end of current leaf chunk and there are more
+			err := cur.sync(ctx)
+
+			if err != nil {
+				return false, err
+			}
+
+			cur.idx = 0
+			return true, nil
+		}
 	}
+
 	if allowPastEnd {
 		cur.idx++
 	}
-	return false
+
+	return false, nil
 }
 
-func (cur *sequenceCursor) retreat(ctx context.Context) bool {
+func (cur *sequenceCursor) retreat(ctx context.Context) (bool, error) {
 	return cur.retreatMaybeAllowBeforeStart(ctx, true)
 }
 
-func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) bool {
+func (cur *sequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) (bool, error) {
 	if cur.idx > 0 {
 		cur.idx--
-		return true
+		return true, nil
 	}
+
 	if cur.idx == -1 {
-		return false
+		return false, nil
 	}
+
 	d.PanicIfFalse(0 == cur.idx)
-	if cur.parent != nil && cur.parent.retreatMaybeAllowBeforeStart(ctx, false) {
-		cur.sync(ctx)
-		cur.idx = cur.length() - 1
-		return true
+
+	if cur.parent != nil {
+		ok, err := cur.parent.retreatMaybeAllowBeforeStart(ctx, false)
+
+		if err != nil {
+			return false, err
+		}
+
+		if ok {
+			err := cur.sync(ctx)
+
+			if err != nil {
+				return false, err
+			}
+
+			cur.idx = cur.length() - 1
+			return true, nil
+		}
 	}
+
 	if allowBeforeStart {
 		cur.idx--
 	}
-	return false
+
+	return false, nil
 }
 
-type cursorIterCallback func(item interface{}) bool
+type cursorIterCallback func(item interface{}) (bool, error)
 
 func (cur *sequenceCursor) String() string {
-	if cur.parent == nil {
-		return fmt.Sprintf("%s (%d): %d", newMap(cur.seq.(orderedSequence)).Hash(cur.seq.format()).String(), cur.seq.seqLen(), cur.idx)
+	m, err := newMap(cur.seq.(orderedSequence)).Hash(cur.seq.format())
+
+	if err != nil {
+		return fmt.Sprintf("error: %s", err.Error())
 	}
 
-	return fmt.Sprintf("%s (%d): %d -- %s", newMap(cur.seq.(orderedSequence)).Hash(cur.seq.format()).String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
+	if cur.parent == nil {
+		return fmt.Sprintf("%s (%d): %d", m.String(), cur.seq.seqLen(), cur.idx)
+	}
+
+	return fmt.Sprintf("%s (%d): %d -- %s", m.String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
 }
 
 func (cur *sequenceCursor) compare(other *sequenceCursor) int {
@@ -161,10 +211,32 @@ func (cur *sequenceCursor) compare(other *sequenceCursor) int {
 }
 
 // iter iterates forward from the current position
-func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) {
-	for cur.valid() && !cb(cur.getItem(cur.idx)) {
-		cur.advance(ctx)
+func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) error {
+	for cur.valid() {
+		item, err := cur.getItem(cur.idx)
+
+		if err != nil {
+			return err
+		}
+
+		stop, err := cb(item)
+
+		if err != nil {
+			return err
+		}
+
+		if stop {
+			return nil
+		}
+
+		_, err = cur.advance(ctx)
+
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 // newCursorAtIndex creates a new cursor over seq positioned at idx.
@@ -172,17 +244,29 @@ func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) {
 // Implemented by searching down the tree to the leaf sequence containing idx. Each
 // sequence cursor includes a back pointer to its parent so that it can follow the path
 // to the next leaf chunk when the cursor exhausts the entries in the current chunk.
-func newCursorAtIndex(ctx context.Context, seq sequence, idx uint64) *sequenceCursor {
+func newCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*sequenceCursor, error) {
 	var cur *sequenceCursor
 	for {
 		cur = newSequenceCursor(cur, seq, 0)
-		idx = idx - advanceCursorToOffset(cur, idx)
-		cs := cur.getChildSequence(ctx)
+		delta, err := advanceCursorToOffset(cur, idx)
+
+		if err != nil {
+			return nil, err
+		}
+
+		idx = idx - delta
+
+		cs, err := cur.getChildSequence(ctx)
+
+		if err != nil {
+			return nil, err
+		}
+
 		if cs == nil {
 			break
 		}
 		seq = cs
 	}
 	d.PanicIfTrue(cur == nil)
-	return cur
+	return cur, nil
 }

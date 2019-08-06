@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/spec"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -48,7 +49,8 @@ func (s *nomsCommitTestSuite) setupDataset(name string, doCommit bool) (sp spec.
 	s.NoError(err)
 
 	v := types.String("testcommit")
-	ref = sp.GetDatabase(context.Background()).WriteValue(context.Background(), v)
+	ref, err = sp.GetDatabase(context.Background()).WriteValue(context.Background(), v)
+	s.NoError(err)
 
 	if doCommit {
 		_, err = sp.GetDatabase(context.Background()).CommitValue(context.Background(), sp.GetDataset(context.Background()), ref)
@@ -86,11 +88,20 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
-	value := commit.Get(datas.ValueField)
-	s.True(value.Hash(types.Format_7_18) == ref.TargetHash(), "commit.value hash == writevalue hash")
+	value, ok, err := commit.MaybeGet(datas.ValueField)
+	s.NoError(err)
+	s.True(ok)
+	h, err := value.Hash(types.Format_7_18)
+	s.NoError(err)
+	s.True(h == ref.TargetHash(), "commit.value hash == writevalue hash")
 
-	meta := commit.Get(datas.MetaField).(types.Struct)
-	s.NotEmpty(meta.Get("date"))
+	meta, ok, err := commit.MaybeGet(datas.MetaField)
+	s.NoError(err)
+	s.True(ok)
+	d, ok, err := meta.(types.Struct).MaybeGet("date")
+	s.NoError(err)
+	s.True(ok)
+	s.NotEmpty(d)
 }
 
 func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
@@ -109,16 +120,28 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
-	value := commit.Get(datas.ValueField)
-	s.True(value.Hash(types.Format_7_18) == ref.TargetHash(), "commit.value hash == writevalue hash")
+	value, ok, err := commit.MaybeGet(datas.ValueField)
+	s.NoError(err)
+	s.True(ok)
+	h, err := value.Hash(types.Format_7_18)
+	s.NoError(err)
+	s.True(h == ref.TargetHash(), "commit.value hash == writevalue hash")
 
-	meta := commit.Get(datas.MetaField).(types.Struct)
-	s.NotEmpty(meta.Get("date"))
+	metaVal, ok, err := commit.MaybeGet(datas.MetaField)
+	s.NoError(err)
+	s.True(ok)
+	meta := metaVal.(types.Struct)
+	d, ok, err := meta.MaybeGet("date")
+	s.NoError(err)
+	s.True(ok)
+	s.NotEmpty(d)
 }
 
 func structFieldEqual(old, now types.Struct, field string) bool {
-	oldValue, oldOk := old.MaybeGet(field)
-	nowValue, nowOk := now.MaybeGet(field)
+	oldValue, oldOk, err := old.MaybeGet(field)
+	d.PanicIfError(err)
+	nowValue, nowOk, err := now.MaybeGet(field)
+	d.PanicIfError(err)
 	return oldOk && nowOk && nowValue.Equals(oldValue)
 }
 
@@ -127,7 +150,8 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 	sp, ref := s.setupDataset(dsName, true)
 	defer sp.Close()
 
-	_, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
+	_, ok, err := sp.GetDataset(context.Background()).MaybeHeadValue()
+	s.NoError(err)
 	s.True(ok, "should have a commit")
 
 	cliOptions := []string{"commit"}
@@ -136,8 +160,8 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 	}
 	cliOptions = append(cliOptions, dsName+".value", sp.String())
 
-	stdoutString, stderrString, err := s.Run(main, cliOptions)
-	s.Nil(err)
+	stdoutString, stderrString, errI := s.Run(main, cliOptions)
+	s.Nil(errI)
 	s.Empty(stderrString)
 	if allowDuplicate {
 		s.NotContains(stdoutString, "Commit aborted")
@@ -149,9 +173,14 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	value, ok := sp.GetDataset(context.Background()).MaybeHeadValue()
+	value, ok, err := sp.GetDataset(context.Background()).MaybeHeadValue()
+	s.NoError(err)
 	s.True(ok, "should still have a commit")
-	s.True(value.Hash(types.Format_7_18) == ref.Hash(types.Format_7_18), "commit.value hash == previous commit hash")
+	valH, err := value.Hash(types.Format_7_18)
+	s.NoError(err)
+	refH, err := ref.Hash(types.Format_7_18)
+	s.NoError(err)
+	s.True(valH == refH, "commit.value hash == previous commit hash")
 }
 
 func (s *nomsCommitTestSuite) TestNomsCommitDuplicate() {
@@ -166,10 +195,13 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	dsHead, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
-	metaOld := dsHead.Get(datas.MetaField).(types.Struct)
+	metaOldVal, ok, err := dsHead.MaybeGet(datas.MetaField)
+	s.NoError(err)
+	s.True(ok)
+	metaOld := metaOldVal.(types.Struct)
 
-	stdoutString, stderrString, err := s.Run(main, []string{"commit", "--allow-dupe=1", "--message=foo", dsName + ".value", sp.String()})
-	s.Nil(err)
+	stdoutString, stderrString, errI := s.Run(main, []string{"commit", "--allow-dupe=1", "--message=foo", dsName + ".value", sp.String()})
+	s.Nil(errI)
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 
@@ -178,12 +210,18 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	dsHead, ok = sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
-	metaNew := dsHead.Get(datas.MetaField).(types.Struct)
+	metaNewVal, ok, err := dsHead.MaybeGet(datas.MetaField)
+	s.NoError(err)
+	s.True(ok)
+	metaNew := metaNewVal.(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "message"), "message didn't change")
-	s.True(metaNew.Get("message").Equals(types.String("foo")), "message wasn't set")
+	msgVal, ok, err := metaNew.MaybeGet("message")
+	s.NoError(err)
+	s.True(ok)
+	s.True(msgVal.Equals(types.String("foo")), "message wasn't set")
 
 	metaOld = metaNew
 
@@ -196,12 +234,19 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 
 	dsHead, ok = sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
-	metaNew = dsHead.Get(datas.MetaField).(types.Struct)
+	metaNewVal, ok, err = dsHead.MaybeGet(datas.MetaField)
+	s.NoError(err)
+	s.True(ok)
+	metaNew = metaNewVal.(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
 	s.False(structFieldEqual(metaOld, metaNew, "message"), "message didn't change")
-	s.True(metaNew.Get("message").Equals(types.String("bar")), "message wasn't set")
+
+	msgVal, ok, err = metaNew.MaybeGet("message")
+	s.NoError(err)
+	s.True(ok)
+	s.True(msgVal.Equals(types.String("bar")), "message wasn't set")
 }
 
 func (s *nomsCommitTestSuite) TestNomsCommitHashNotFound() {

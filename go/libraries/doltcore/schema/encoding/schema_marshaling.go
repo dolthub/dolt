@@ -94,19 +94,23 @@ type schemaData struct {
 	Columns []encodedColumn `noms:"columns" json:"columns"`
 }
 
-func toSchemaData(sch schema.Schema) schemaData {
+func toSchemaData(sch schema.Schema) (schemaData, error) {
 	allCols := sch.GetAllCols()
 	encCols := make([]encodedColumn, allCols.Size())
 
 	i := 0
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		encCols[i] = encodeColumn(col)
 		i++
 
-		return false
+		return false, nil
 	})
 
-	return schemaData{encCols}
+	if err != nil {
+		return schemaData{}, err
+	}
+
+	return schemaData{encCols}, nil
 }
 
 func (sd schemaData) decodeSchema() (schema.Schema, error) {
@@ -128,7 +132,12 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 
 // MarshalAsNomsValue takes a Schema and converts it to a types.Value
 func MarshalAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
-	sd := toSchemaData(sch)
+	sd, err := toSchemaData(sch)
+
+	if err != nil {
+		return types.EmptyStruct(vrw.Format()), err
+	}
+
 	val, err := marshal.Marshal(ctx, vrw, sd)
 
 	if err != nil {
@@ -156,7 +165,12 @@ func UnmarshalNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal
 
 // MarshalAsJson takes a Schema and returns a string containing it's json encoding
 func MarshalAsJson(sch schema.Schema) (string, error) {
-	sd := toSchemaData(sch)
+	sd, err := toSchemaData(sch)
+
+	if err != nil {
+		return "", err
+	}
+
 	jsonStr, err := json.MarshalIndent(sd, "", "  ")
 
 	if err != nil {

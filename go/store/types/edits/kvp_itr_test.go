@@ -16,36 +16,53 @@ package edits
 
 import (
 	"context"
-	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // IsInOrder iterates over every value and validates that they are returned in key order.  This is intended for testing.
-func IsInOrder(itr types.EditProvider) (bool, int) {
-	prev := itr.Next()
+func IsInOrder(itr types.EditProvider) (bool, int, error) {
+	prev, err := itr.Next()
+
+	if err != nil {
+		return false, 0, err
+	}
 
 	if prev == nil {
-		return true, 0
+		return true, 0, nil
 	}
 
 	count := 1
 
 	for {
-		curr := itr.Next()
+		curr, err := itr.Next()
+
+		if err != nil {
+			return false, 0, err
+		}
 
 		if curr == nil {
 			break
-		} else if curr.Key.Less(types.Format_7_18, prev.Key) {
-			return false, count
+		} else {
+			isLess, err := curr.Key.Less(types.Format_7_18, prev.Key)
+
+			if err != nil {
+				return false, 0, err
+			}
+
+			if isLess {
+				return false, count, nil
+			}
 		}
 
 		count++
 		prev = curr
 	}
 
-	return true, count
+	return true, count, nil
 }
 
 func TestKVPSliceSort(t *testing.T) {
@@ -72,15 +89,21 @@ func TestKVPSliceSort(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		IsInOrder(NewItr(types.Format_7_18, NewKVPCollection(types.Format_7_18, test.kvps)))
-		sort.Stable(types.KVPSort{Values: test.kvps, NBF: types.Format_7_18})
+		_, _, err := IsInOrder(NewItr(types.Format_7_18, NewKVPCollection(types.Format_7_18, test.kvps)))
+		assert.NoError(t, err)
+		err = types.SortWithErroringLess(types.KVPSort{Values: test.kvps, NBF: types.Format_7_18})
+		assert.NoError(t, err)
 
 		if len(test.kvps) != len(test.expSorted) {
 			t.Error("bad length")
 		}
 
 		for i := 0; i < len(test.kvps); i++ {
-			if !test.kvps[i].Key.Value(ctx).Equals(test.expSorted[i].Key.Value(ctx)) {
+			val, err := test.kvps[i].Key.Value(ctx)
+			assert.NoError(t, err)
+			expVal, err := test.expSorted[i].Key.Value(ctx)
+			assert.NoError(t, err)
+			if !val.Equals(expVal) {
 				t.Error("value at", i, "does not match expected.")
 			}
 		}

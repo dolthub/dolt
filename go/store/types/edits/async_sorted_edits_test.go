@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -71,7 +73,9 @@ func testASE(t *testing.T, rng *rand.Rand) {
 		asyncSorted.AddEdit(kvp.Key, kvp.Val)
 	}
 
-	itr := asyncSorted.FinishedEditing()
+	itr, err := asyncSorted.FinishedEditing()
+
+	assert.NoError(t, err)
 
 	if asyncSorted.Size() != int64(numKVPs) {
 		t.Error("Invalid count", asyncSorted.Size(), "!=", numKVPs)
@@ -81,7 +85,9 @@ func testASE(t *testing.T, rng *rand.Rand) {
 		t.Error("Invalid itr count", itr.NumEdits(), "!=", numKVPs)
 	}
 
-	inOrder, count := IsInOrder(itr)
+	inOrder, count, err := IsInOrder(itr)
+
+	assert.NoError(t, err)
 
 	if count != numKVPs {
 		t.Error("Invalid count", count, "!=", numKVPs)

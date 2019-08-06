@@ -32,20 +32,27 @@ import (
 	"github.com/golang/snappy"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func mustChunk(chunk chunks.Chunk, err error) chunks.Chunk {
+	d.PanicIfError(err)
+	return chunk
+}
+
 func TestWriteChunks(t *testing.T) {
 	chunks := []chunks.Chunk{
-		types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "), types.Format_7_18),
-		types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "), types.Format_7_18),
-		types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the "), types.Format_7_18),
-		types.EncodeValue(types.String("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly "), types.Format_7_18),
-		types.EncodeValue(types.String("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing "), types.Format_7_18),
-		types.EncodeValue(types.String("funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires "), types.Format_7_18),
-		types.EncodeValue(types.String("a strong moral principle to prevent me from deliberately stepping into the street, and methodically "), types.Format_7_18),
-		types.EncodeValue(types.String("knocking people’s hats off—then, I account it high time to get to sea as soon as I can."), types.Format_7_18),
+		mustChunk(types.EncodeValue(types.String("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "), types.Format_7_18)),
+		mustChunk(types.EncodeValue(types.String("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "), types.Format_7_18)),
+		mustChunk(types.EncodeValue(types.String("part of the world. It is a way I have of driving off the spleen and regulating the "), types.Format_7_18)),
+		mustChunk(types.EncodeValue(types.String("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly "), types.Format_7_18)),
+		mustChunk(types.EncodeValue(types.String("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing "), types.Format_7_18)),
+		mustChunk(types.EncodeValue(types.String("funeral I meet; and especially whenever my hypos get such an upper hand of me, that it requires "), types.Format_7_18)),
+		mustChunk(types.EncodeValue(types.String("a strong moral principle to prevent me from deliberately stepping into the street, and methodically "), types.Format_7_18)),
+		mustChunk(types.EncodeValue(types.String("knocking people’s hats off—then, I account it high time to get to sea as soon as I can."), types.Format_7_18)),
 	}
 
 	name, data, err := WriteChunks(chunks)
@@ -250,7 +257,7 @@ func (crg chunkReaderGroup) hasMany(addrs []hasRecord) (bool, error) {
 	return true, nil
 }
 
-func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *AtomicError, stats *Stats) bool {
+func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	for _, haver := range crg {
 		remaining := haver.getMany(ctx, reqs, foundChunks, wg, ae, stats)
 

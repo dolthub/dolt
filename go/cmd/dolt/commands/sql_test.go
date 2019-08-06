@@ -141,7 +141,9 @@ func TestCreateTable(t *testing.T) {
 			dEnv := dtestutils.CreateTestEnv()
 			working, err := dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
-			assert.False(t, working.HasTable(context.Background(), tableName), "table exists before creating it")
+			has, err := working.HasTable(context.Background(), tableName)
+			assert.NoError(t, err)
+			assert.False(t, has, "table exists before creating it")
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
@@ -151,9 +153,13 @@ func TestCreateTable(t *testing.T) {
 			working, err = dEnv.WorkingRoot(context.Background())
 			assert.Nil(t, err, "Unexpected error")
 			if test.expectedRes == 0 {
-				assert.True(t, working.HasTable(context.Background(), tableName), "table doesn't exist after creating it")
+				has, err := working.HasTable(context.Background(), tableName)
+				assert.NoError(t, err)
+				assert.True(t, has, "table doesn't exist after creating it")
 			} else {
-				assert.False(t, working.HasTable(context.Background(), tableName), "table shouldn't exist after error")
+				has, err := working.HasTable(context.Background(), tableName)
+				assert.NoError(t, err)
+				assert.False(t, has, "table shouldn't exist after error")
 			}
 		})
 	}
@@ -323,10 +329,14 @@ func TestInsert(t *testing.T) {
 
 				// Assert that all expected IDs exist after the insert
 				for _, expectedid := range test.expectedIds {
-					table, _ := root.GetTable(context.Background(), tableName)
+					table, _, err := root.GetTable(context.Background(), tableName)
+					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags(types.Format_7_18, []uint64{dtestutils.IdTag}, true)
-					_, ok := table.GetRow(context.Background(), key.Value(context.Background()).(types.Tuple), dtestutils.TypedSchema)
+					kv, err := key.Value(context.Background())
+					assert.NoError(t, err)
+					_, ok, err := table.GetRow(context.Background(), kv.(types.Tuple), dtestutils.TypedSchema)
+					assert.NoError(t, err)
 					assert.True(t, ok, "expected id not found")
 				}
 			}
@@ -395,10 +405,14 @@ func TestUpdate(t *testing.T) {
 
 				// Assert that all rows have been updated
 				for i, expectedid := range test.expectedIds {
-					table, _ := root.GetTable(context.Background(), tableName)
+					table, _, err := root.GetTable(context.Background(), tableName)
+					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags(types.Format_7_18, []uint64{dtestutils.IdTag}, true)
-					row, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), dtestutils.TypedSchema)
+					kv, err := key.Value(ctx)
+					assert.NoError(t, err)
+					row, ok, err := table.GetRow(ctx, kv.(types.Tuple), dtestutils.TypedSchema)
+					assert.NoError(t, err)
 					assert.True(t, ok, "expected id not found")
 					ageVal, _ := row.GetColVal(dtestutils.AgeTag)
 					assert.Equal(t, test.expectedAges[i], uint(ageVal.(types.Uint)))
@@ -461,10 +475,14 @@ func TestDelete(t *testing.T) {
 
 				// Assert that all rows have been deleted
 				for _, expectedid := range test.deletedIds {
-					table, _ := root.GetTable(context.Background(), tableName)
+					table, _, err := root.GetTable(context.Background(), tableName)
+					assert.NoError(t, err)
 					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
 					key := taggedVals.NomsTupleForTags(types.Format_7_18, []uint64{dtestutils.IdTag}, true)
-					_, ok := table.GetRow(ctx, key.Value(ctx).(types.Tuple), dtestutils.TypedSchema)
+					kv, err := key.Value(ctx)
+					assert.NoError(t, err)
+					_, ok, err := table.GetRow(ctx, kv.(types.Tuple), dtestutils.TypedSchema)
+					assert.NoError(t, err)
 					assert.False(t, ok, "row not deleted")
 				}
 			}

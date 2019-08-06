@@ -81,18 +81,22 @@ func TestWriter(t *testing.T) {
 
 	rows := make([]row.Row, len(ages))
 	for i := range ages {
-		rows[i] = row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		var err error
+		rows[i], err = row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String(names[i]),
 			ageColTag:   types.String(ages[i]),
 			titleColTag: types.String(titles[i]),
 		})
+
+		assert.NoError(t, err)
 	}
 
 	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
 
 	t.Run("Test single header row", func(t *testing.T) {
 		var stringWr StringBuilderCloser
-		tableWr := NewTextTableWriter(&stringWr, outSch)
+		tableWr, err := NewTextTableWriter(&stringWr, outSch)
+		assert.NoError(t, err)
 
 		var expectedTableString = `
 +----------------+--------+-----------------------------------+
@@ -108,16 +112,20 @@ func TestWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			tableWr.WriteRow(context.Background(), r)
+			err = tableWr.WriteRow(context.Background(), r)
+			assert.NoError(t, err)
 		}
-		tableWr.Close(context.Background())
+
+		err = tableWr.Close(context.Background())
+		assert.NoError(t, err)
 
 		assert.Equal(t, expectedTableString, stringWr.String())
 	})
 
 	t.Run("Test multiple header rows", func(t *testing.T) {
 		var stringWr StringBuilderCloser
-		tableWr := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 3)
+		tableWr, err := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 3)
+		assert.NoError(t, err)
 
 		var expectedTableString = `
 +----------------+--------+-----------------------------------+
@@ -133,16 +141,19 @@ func TestWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			tableWr.WriteRow(context.Background(), r)
+			err := tableWr.WriteRow(context.Background(), r)
+			assert.NoError(t, err)
 		}
-		tableWr.Close(context.Background())
+		err = tableWr.Close(context.Background())
+		assert.NoError(t, err)
 
 		assert.Equal(t, expectedTableString, stringWr.String())
 	})
 
 	t.Run("Test no header rows", func(t *testing.T) {
 		var stringWr StringBuilderCloser
-		tableWr := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 0)
+		tableWr, err := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 0)
+		assert.NoError(t, err)
 
 		var expectedTableString = `
 +----------------+--------+-----------------------------------+
@@ -157,16 +168,19 @@ func TestWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			tableWr.WriteRow(context.Background(), r)
+			err := tableWr.WriteRow(context.Background(), r)
+			assert.NoError(t, err)
 		}
-		tableWr.Close(context.Background())
+		err = tableWr.Close(context.Background())
+		assert.NoError(t, err)
 
 		assert.Equal(t, expectedTableString, stringWr.String())
 	})
 
 	t.Run("Test more header rows than data", func(t *testing.T) {
 		var stringWr StringBuilderCloser
-		tableWr := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 100)
+		tableWr, err := NewTextTableWriterWithNumHeaderRows(&stringWr, outSch, 100)
+		assert.NoError(t, err)
 
 		var expectedTableString = `
 +----------------+--------+-----------------------------------+
@@ -181,9 +195,11 @@ func TestWriter(t *testing.T) {
 		expectedTableString = strings.Replace(expectedTableString, "\n", "", 1)
 
 		for _, r := range rows {
-			tableWr.WriteRow(context.Background(), r)
+			err := tableWr.WriteRow(context.Background(), r)
+			assert.NoError(t, err)
 		}
-		tableWr.Close(context.Background())
+		err = tableWr.Close(context.Background())
+		assert.NoError(t, err)
 
 		assert.Equal(t, expectedTableString, stringWr.String())
 	})
@@ -232,18 +248,22 @@ func TestEastAsianLanguages(t *testing.T) {
 
 	rows := make([]row.Row, len(ages))
 	for i := range ages {
-		rows[i] = row.New(types.Format_7_18, rowSch, row.TaggedValues{
+		var err error
+		rows[i], err = row.New(types.Format_7_18, rowSch, row.TaggedValues{
 			nameColTag:  types.String(names[i]),
 			ageColTag:   types.String(ages[i]),
 			titleColTag: types.String(titles[i]),
 		})
+
+		assert.NoError(t, err)
 	}
 
 	_, outSch := untyped.NewUntypedSchema(nameColName, ageColName, titleColName)
 
 	t.Run("Test single header row", func(t *testing.T) {
 		var stringWr StringBuilderCloser
-		tableWr := NewTextTableWriter(&stringWr, outSch)
+		tableWr, err := NewTextTableWriter(&stringWr, outSch)
+		assert.NoError(t, err)
 
 		var expectedTableString = `
 +----------------+--------+-----------------------------------+

@@ -73,12 +73,18 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	root, tbl, verr := getRootAndTable(dEnv, rmArgs.TableName)
 
 	if verr == nil {
-		pkVals, err := cli.ParseKeyValues(root.VRW().Format(), tbl.GetSchema(context.TODO()), rmArgs.PKs)
+		sch, err := tbl.GetSchema(context.TODO())
 
 		if err != nil {
-			verr = errhand.BuildDError("error parsing keys to delete").AddCause(err).Build()
+			verr = errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
 		} else {
-			verr = updateTableWithRowsRemoved(root, tbl, rmArgs.TableName, pkVals, dEnv)
+			pkVals, err := cli.ParseKeyValues(root.VRW().Format(), sch, rmArgs.PKs)
+
+			if err != nil {
+				verr = errhand.BuildDError("error parsing keys to delete").AddCause(err).Build()
+			} else {
+				verr = updateTableWithRowsRemoved(root, tbl, rmArgs.TableName, pkVals, dEnv)
+			}
 		}
 	}
 
@@ -97,7 +103,11 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 		return nil, nil, errhand.BuildDError("Unable to get working value for the dolt data repository.").Build()
 	}
 
-	tbl, ok := root.GetTable(context.TODO(), tblName)
+	tbl, ok, err := root.GetTable(context.TODO(), tblName)
+
+	if err != nil {
+		return nil, nil, errhand.BuildDError("error: failde to get tables").AddCause(err).Build()
+	}
 
 	if !ok {
 		return nil, nil, errhand.BuildDError("Unknown table %s", tblName).Build()
@@ -107,42 +117,55 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 }
 
 func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblName string, pkVals []types.Value, dEnv *env.DoltEnv) errhand.VerboseError {
-	m := tbl.GetRowData(context.TODO())
+	m, err := tbl.GetRowData(context.TODO())
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get row data").Build()
+	}
 
 	updates := 0
 	for _, pk := range pkVals {
-		_, ok := m.MaybeGet(context.TODO(), pk)
+		_, ok, err := m.MaybeGet(context.TODO(), pk)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to read from database").Build()
+		}
 
 		if !ok {
-			cli.PrintErrln(color.YellowString(`No row with pk equal to %s was found.`, types.EncodedValue(context.TODO(), pk)))
+			str, err := types.EncodedValue(context.TODO(), pk)
+
+			if err != nil {
+				panic(err)
+			}
+
+			cli.PrintErrln(color.YellowString(`No row with pk equal to %s was found.`, str))
 			continue
 		}
 
-		verr := errhand.PanicToVError("Failed to remove the row from the table.", func() errhand.VerboseError {
-			me := m.Edit()
-			me.Remove(pk)
-			m = me.Map(context.TODO())
-			return nil
-		})
+		me := m.Edit()
+		me.Remove(pk)
+		m, err = me.Map(context.TODO())
 
-		if verr != nil {
-			return verr
+		if err != nil {
+			return errhand.BuildDError("error: failed to remove row from table").Build()
 		}
 
 		updates++
 	}
 
-	verr := errhand.PanicToVError("Failed to update the table.", func() errhand.VerboseError {
-		tbl = tbl.UpdateRows(context.Background(), m)
-		root = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
-		return nil
-	})
+	tbl, err = tbl.UpdateRows(context.Background(), m)
 
-	if verr != nil {
-		return verr
+	if err != nil {
+		return errhand.BuildDError("error: failed to update the table").AddCause(err).Build()
 	}
 
-	verr = commands.UpdateWorkingWithVErr(dEnv, root)
+	root, err = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to update the table").AddCause(err).Build()
+	}
+
+	verr := commands.UpdateWorkingWithVErr(dEnv, root)
 
 	if verr == nil {
 		cli.Printf("Removed %d rows\n", updates)

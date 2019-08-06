@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -61,7 +63,10 @@ func TestKVPCollItr(t *testing.T) {
 			for _, expRes := range test.itrResults {
 				kvp, buff, done := itr.nextForDestructiveMerge()
 
-				if !kvp.Key.Value(ctx).Equals(types.Uint(expRes.keyVal)) {
+				kval, err := kvp.Key.Value(ctx)
+				assert.NoError(t, err)
+
+				if !kval.Equals(types.Uint(expRes.keyVal)) {
 					t.Error("unexpected result")
 				}
 

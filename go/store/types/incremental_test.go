@@ -36,11 +36,11 @@ func getTestVals(vrw ValueReadWriter) []Value {
 		Bool(true),
 		Float(1),
 		String("hi"),
-		NewBlob(context.Background(), vrw, bytes.NewReader([]byte("hi"))),
+		mustBlob(NewBlob(context.Background(), vrw, bytes.NewReader([]byte("hi")))),
 		// compoundBlob
-		NewSet(context.Background(), vrw, String("hi")),
-		NewList(context.Background(), vrw, String("hi")),
-		NewMap(context.Background(), vrw, String("hi"), String("hi")),
+		mustValue(NewSet(context.Background(), vrw, String("hi"))),
+		mustList(NewList(context.Background(), vrw, String("hi"))),
+		mustValue(NewMap(context.Background(), vrw, String("hi"), String("hi"))),
 	}
 }
 
@@ -58,14 +58,18 @@ func TestIncrementalLoadList(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewList(context.Background(), vs, getTestVals(vs)...)
-	hash := vs.WriteValue(context.Background(), expected).TargetHash()
+	expected, err := NewList(context.Background(), vs, getTestVals(vs)...)
+	assert.NoError(err)
+	ref, err := vs.WriteValue(context.Background(), expected)
+	assert.NoError(err)
+	hash := ref.TargetHash()
 	rt, err := vs.Root(context.Background())
 	assert.NoError(err)
 	_, err = vs.Commit(context.Background(), rt, rt)
 	assert.NoError(err)
 
-	actualVar := vs.ReadValue(context.Background(), hash)
+	actualVar, err := vs.ReadValue(context.Background(), hash)
+	assert.NoError(err)
 	actual := actualVar.(List)
 
 	expectedCount := cs.Reads
@@ -73,14 +77,18 @@ func TestIncrementalLoadList(t *testing.T) {
 	// There will be one read per chunk.
 	chunkReads := make([]int, expected.Len())
 	for i := uint64(0); i < expected.Len(); i++ {
-		v := actual.Get(context.Background(), i)
-		assert.True(expected.Get(context.Background(), i).Equals(v))
+		v, err := actual.Get(context.Background(), i)
+		assert.NoError(err)
+		v2, err := expected.Get(context.Background(), i)
+		assert.NoError(err)
+		assert.True(v2.Equals(v))
 
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
-		_ = actual.Get(context.Background(), i)
+		_, err = actual.Get(context.Background(), i)
+		assert.NoError(err)
 		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
 	}
 }
@@ -91,19 +99,24 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewSet(context.Background(), vs, getTestVals(vs)...)
-	ref := vs.WriteValue(context.Background(), expected).TargetHash()
+	expected, err := NewSet(context.Background(), vs, getTestVals(vs)...)
+	assert.NoError(err)
+	ref, err := vs.WriteValue(context.Background(), expected)
+	refHash := ref.TargetHash()
 
-	actualVar := vs.ReadValue(context.Background(), ref)
+	actualVar, err := vs.ReadValue(context.Background(), refHash)
+	assert.NoError(err)
 	actual := actualVar.(Set)
 
 	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
-	actual.Iter(context.Background(), func(v Value) (stop bool) {
+	err = actual.Iter(context.Background(), func(v Value) (bool, error) {
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount, cs.Reads)
-		return
+		return false, nil
 	})
+
+	assert.NoError(err)
 }
 
 func SkipTestIncrementalLoadMap(t *testing.T) {
@@ -112,20 +125,25 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	cs := ts.NewView()
 	vs := NewValueStore(cs)
 
-	expected := NewMap(context.Background(), vs, getTestVals(vs)...)
-	ref := vs.WriteValue(context.Background(), expected).TargetHash()
+	expected, err := NewMap(context.Background(), vs, getTestVals(vs)...)
+	assert.NoError(err)
+	ref, err := vs.WriteValue(context.Background(), expected)
+	assert.NoError(err)
+	refHash := ref.TargetHash()
 
-	actualVar := vs.ReadValue(context.Background(), ref)
+	actualVar, err := vs.ReadValue(context.Background(), refHash)
+	assert.NoError(err)
 	actual := actualVar.(Map)
 
 	expectedCount := cs.Reads
 	assert.Equal(1, expectedCount)
-	actual.Iter(context.Background(), func(k, v Value) (stop bool) {
+	err = actual.Iter(context.Background(), func(k, v Value) (bool, error) {
 		expectedCount += isEncodedOutOfLine(k)
 		expectedCount += isEncodedOutOfLine(v)
 		assert.Equal(expectedCount, cs.Reads)
-		return
+		return false, nil
 	})
+	assert.NoError(err)
 }
 
 func SkipTestIncrementalAddRef(t *testing.T) {
@@ -135,22 +153,28 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	vs := NewValueStore(cs)
 
 	expectedItem := Float(42)
-	ref := vs.WriteValue(context.Background(), expectedItem)
+	ref, err := vs.WriteValue(context.Background(), expectedItem)
+	assert.NoError(err)
 
-	expected := NewList(context.Background(), vs, ref)
-	ref = vs.WriteValue(context.Background(), expected)
-	actualVar := vs.ReadValue(context.Background(), ref.TargetHash())
+	expected, err := NewList(context.Background(), vs, ref)
+	assert.NoError(err)
+	ref, err = vs.WriteValue(context.Background(), expected)
+	assert.NoError(err)
+	actualVar, err := vs.ReadValue(context.Background(), ref.TargetHash())
+	assert.NoError(err)
 
 	assert.Equal(1, cs.Reads)
 	assert.True(expected.Equals(actualVar))
 
 	actual := actualVar.(List)
-	actualItem := actual.Get(context.Background(), 0)
+	actualItem, err := actual.Get(context.Background(), 0)
+	assert.NoError(err)
 	assert.Equal(2, cs.Reads)
 	assert.True(expectedItem.Equals(actualItem))
 
 	// do it again to make sure caching works.
-	actualItem = actual.Get(context.Background(), 0)
+	actualItem, err = actual.Get(context.Background(), 0)
+	assert.NoError(err)
 	assert.Equal(2, cs.Reads)
 	assert.True(expectedItem.Equals(actualItem))
 }

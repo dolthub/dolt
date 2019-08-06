@@ -43,10 +43,20 @@ type Dataset struct {
 	head types.Value
 }
 
-func newDataset(db Database, id string, head types.Value) Dataset {
+func newDataset(db Database, id string, head types.Value) (Dataset, error) {
+	headNilOrIsCommit := head == nil
+	if !headNilOrIsCommit {
+		var err error
+		headNilOrIsCommit, err = IsCommit(head)
+
+		if err != nil {
+			return Dataset{}, err
+		}
+	}
+
 	// precondition checks
-	d.PanicIfFalse(head == nil || IsCommit(head))
-	return Dataset{db, id, head}
+	d.PanicIfFalse(headNilOrIsCommit)
+	return Dataset{db, id, head}, nil
 }
 
 // Database returns the Database object in which this Dataset is stored.
@@ -73,11 +83,17 @@ func (ds Dataset) MaybeHead() (types.Struct, bool) {
 // MaybeHeadRef returns the Ref of the current Head Commit of this Dataset,
 // which contains the current root of the Dataset's value tree, if available.
 // If not, it returns an empty Ref and 'false'.
-func (ds Dataset) MaybeHeadRef() (types.Ref, bool) {
+func (ds Dataset) MaybeHeadRef() (types.Ref, bool, error) {
 	if ds.head == nil {
-		return types.Ref{}, false
+		return types.Ref{}, false, nil
 	}
-	return types.NewRef(ds.head, ds.Database().Format()), true
+	ref, err := types.NewRef(ds.head, ds.Database().Format())
+
+	if err != nil {
+		return types.Ref{}, false, err
+	}
+
+	return ref, true, nil
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.
@@ -87,11 +103,11 @@ func (ds Dataset) HasHead() bool {
 
 // MaybeHeadValue returns the Value field of the current head Commit, if
 // available. If not it returns nil and 'false'.
-func (ds Dataset) MaybeHeadValue() (types.Value, bool) {
+func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 	if c, ok := ds.MaybeHead(); ok {
-		return c.Get(ValueField), true
+		return c.MaybeGet(ValueField)
 	}
-	return nil, false
+	return nil, false, nil
 }
 
 func IsValidDatasetName(name string) bool {

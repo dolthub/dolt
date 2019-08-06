@@ -79,19 +79,27 @@ func TestRenameTable(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			assert.False(t, updatedRoot.HasTable(ctx, tt.tableName))
-			newTable, ok := updatedRoot.GetTable(ctx, tt.newTableName)
+			has, err := updatedRoot.HasTable(ctx, tt.tableName)
+			require.NoError(t, err)
+			assert.False(t, has)
+			newTable, ok, err := updatedRoot.GetTable(ctx, tt.newTableName)
+			require.NoError(t, err)
 			require.True(t, ok)
 
-			require.Equal(t, tt.expectedSchema, newTable.GetSchema(ctx))
+			sch, err := newTable.GetSchema(ctx)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData := newTable.GetRowData(ctx)
+			rowData, err := newTable.GetRowData(ctx)
+			require.NoError(t, err)
 			var foundRows []row.Row
-			rowData.Iter(ctx, func(key, value types.Value) (stop bool) {
-				foundRows = append(foundRows, row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple)))
-				return false
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				tpl, err := row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple))
+				foundRows = append(foundRows, tpl)
+				return false, err
 			})
 
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
 		})
 	}

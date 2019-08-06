@@ -58,12 +58,22 @@ func (i *DoltIndexDriver) LoadAll(db, table string) ([]sql.Index, error) {
 		panic("Unexpected db: " + db)
 	}
 
-	tbl, ok := i.db.root.GetTable(context.TODO(), table)
+	tbl, ok, err := i.db.root.GetTable(context.TODO(), table)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if !ok {
 		panic(fmt.Sprintf("No table found with name %s", table))
 	}
 
-	sch := tbl.GetSchema(context.TODO())
+	sch, err := tbl.GetSchema(context.TODO())
+
+	if err != nil {
+		return nil, err
+	}
+
 	return []sql.Index{&doltIndex{sch, table, i.db, i}}, nil
 }
 
@@ -90,11 +100,15 @@ func keyColsToTuple(sch schema.Schema, key []interface{}) (row.TaggedValues, err
 
 	var i int
 	taggedVals := make(row.TaggedValues)
-	sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		taggedVals[tag] = keyColToValue(key[i], col)
 		i++
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	return taggedVals, nil
 }
@@ -137,20 +151,32 @@ func (di *doltIndex) Table() string {
 }
 
 func (di *doltIndex) Expressions() []string {
-	return primaryKeytoIndexStrings(di.tableName, di.sch)
+	strs, err := primaryKeytoIndexStrings(di.tableName, di.sch)
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
+
+	return strs
 }
 
 // Returns the expression strings needed for this index to work. This needs to match the implementation in the sql
 // engine, which requires $table.$column
-func primaryKeytoIndexStrings(tableName string, sch schema.Schema) []string {
+func primaryKeytoIndexStrings(tableName string, sch schema.Schema) ([]string, error) {
 	colNames := make([]string, sch.GetPKCols().Size())
 	var i int
-	sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		colNames[i] = tableName + "." + col.Name
 		i++
-		return true
+		return true, nil
 	})
-	return colNames
+
+	if err != nil {
+		return nil, err
+	}
+
+	return colNames, nil
 }
 
 func (di *doltIndex) Driver() string {
@@ -230,13 +256,23 @@ func (i *indexLookupRowIterAdapter) Next() (sql.Row, error) {
 	}
 
 	i.i++
-	table, _ := i.indexLookup.idx.db.root.GetTable(i.ctx.Context, i.indexLookup.idx.tableName)
-	r, ok := table.GetRowByPKVals(i.ctx.Context, i.indexLookup.key, i.indexLookup.idx.sch)
+	table, _, err := i.indexLookup.idx.db.root.GetTable(i.ctx.Context, i.indexLookup.idx.tableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	r, ok, err := table.GetRowByPKVals(i.ctx.Context, i.indexLookup.key, i.indexLookup.idx.sch)
+
+	if err != nil {
+		return nil, err
+	}
+
 	if !ok {
 		return nil, io.EOF
 	}
 
-	return doltRowToSqlRow(r, i.indexLookup.idx.sch), nil
+	return doltRowToSqlRow(r, i.indexLookup.idx.sch)
 }
 
 func (*indexLookupRowIterAdapter) Close() error {

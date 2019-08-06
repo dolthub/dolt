@@ -123,18 +123,50 @@ func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.C
 		idx++
 	}
 
+	var sortErr error
+	var metaI, metaJ *doltdb.CommitMeta
 	sort.Slice(uniqueCommits, func(i, j int) bool {
-		return uniqueCommits[i].GetCommitMeta().Timestamp > uniqueCommits[j].GetCommitMeta().Timestamp
+		if sortErr != nil {
+			return false
+		}
+
+		metaI, sortErr = uniqueCommits[i].GetCommitMeta()
+
+		if sortErr != nil {
+			return false
+		}
+
+		metaJ, sortErr = uniqueCommits[j].GetCommitMeta()
+
+		if sortErr != nil {
+			return false
+		}
+
+		return metaI.Timestamp > metaJ.Timestamp
 	})
+
+	if sortErr != nil {
+		return nil, sortErr
+	}
 
 	return uniqueCommits, nil
 }
 
 func AddCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
-	hash := commit.HashOf()
+	hash, err := commit.HashOf()
+
+	if err != nil {
+		return err
+	}
+
 	hashToCommit[hash] = commit
 
-	numParents := commit.NumParents()
+	numParents, err := commit.NumParents()
+
+	if err != nil {
+		return err
+	}
+
 	for i := 0; i < numParents && len(hashToCommit) != n; i++ {
 		parentCommit, err := ddb.ResolveParent(ctx, commit, i)
 

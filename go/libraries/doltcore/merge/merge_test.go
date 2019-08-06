@@ -29,6 +29,30 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func mustTuple(tpl types.Tuple, err error) types.Tuple {
+	if err != nil {
+		panic(err)
+	}
+
+	return tpl
+}
+
+func mustString(str string, err error) string {
+	if err != nil {
+		panic(err)
+	}
+
+	return str
+}
+
+func mustGetValue(val types.Value, _ bool, err error) types.Value {
+	if err != nil {
+		panic(err)
+	}
+
+	return val
+}
+
 type RowMergeTest struct {
 	name                  string
 	row, mergeRow, ancRow types.Value
@@ -63,7 +87,7 @@ func valsToTestTuple(vals []types.Value, includePrimaryKeys bool) types.Value {
 		}
 	}
 
-	return types.NewTuple(types.Format_7_18, tplVals...)
+	return mustTuple(types.NewTuple(types.Format_7_18, tplVals...))
 }
 
 func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []types.Value, expectCnf bool) RowMergeTest {
@@ -171,9 +195,9 @@ func TestRowMerge(t *testing.T) {
 		),
 		createRowMergeStruct(
 			"modify row where initial value wasn't given",
-			[]types.Value{types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("a"))},
-			[]types.Value{types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("b"))},
-			[]types.Value{types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.NullValue)},
+			[]types.Value{mustTuple(types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("a")))},
+			[]types.Value{mustTuple(types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.String("b")))},
+			[]types.Value{mustTuple(types.NewTuple(types.Format_7_18, types.String("one"), types.Uint(2), types.NullValue))},
 			nil,
 			true,
 		),
@@ -181,8 +205,9 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualResult, isConflict := rowMerge(context.Background(), types.Format_7_18, test.sch, test.row, test.mergeRow, test.ancRow)
-			assert.Equal(t, test.expectedResult, actualResult, "expected "+types.EncodedValue(context.Background(), test.expectedResult)+"got "+types.EncodedValue(context.Background(), actualResult))
+			actualResult, isConflict, err := rowMerge(context.Background(), types.Format_7_18, test.sch, test.row, test.mergeRow, test.ancRow)
+			assert.NoError(t, err)
+			assert.Equal(t, test.expectedResult, actualResult, "expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+"got "+mustString(types.EncodedValue(context.Background(), actualResult)))
 			assert.Equal(t, test.expectConflict, isConflict)
 		})
 	}
@@ -227,7 +252,7 @@ func init() {
 	keyTag := types.Uint(idTag)
 
 	for i, id := range uuids {
-		keyTuples[i] = types.NewTuple(types.Format_7_18, keyTag, id)
+		keyTuples[i] = mustTuple(types.NewTuple(types.Format_7_18, keyTag, id))
 	}
 }
 
@@ -248,7 +273,7 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		panic(err)
 	}
 
-	initialRows := types.NewMap(context.Background(), vrw,
+	initialRows, err := types.NewMap(context.Background(), vrw,
 		keyTuples[0], valsToTestTupleWithoutPks([]types.Value{types.String("person 1"), types.String("dufus")}),
 		keyTuples[1], valsToTestTupleWithoutPks([]types.Value{types.String("person 2"), types.NullValue}),
 		keyTuples[2], valsToTestTupleWithoutPks([]types.Value{types.String("person 3"), types.NullValue}),
@@ -259,6 +284,10 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person 8"), types.String("miss")}),
 		keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person 9"), types.NullValue}),
 	)
+
+	if err != nil {
+		panic(err)
+	}
 
 	updateRowEditor := initialRows.Edit()                                                                                          // leave 0 as is
 	updateRowEditor.Remove(keyTuples[1])                                                                                           // remove 1 from both
@@ -271,7 +300,11 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	updateRowEditor.Set(keyTuples[11], valsToTestTupleWithoutPks([]types.Value{types.String("person twelve"), types.NullValue}))   // add 11 in both without difference
 	updateRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue})) // add 12 in both with differences
 
-	updatedRows := updateRowEditor.Map(context.Background())
+	updatedRows, err := updateRowEditor.Map(context.Background())
+
+	if err != nil {
+		panic(err)
+	}
 
 	mergeRowEditor := initialRows.Edit()                                                                                                 // leave 0 as is
 	mergeRowEditor.Remove(keyTuples[1])                                                                                                  // remove 1 from both
@@ -284,42 +317,87 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 	mergeRowEditor.Set(keyTuples[11], valsToTestTupleWithoutPks([]types.Value{types.String("person twelve"), types.NullValue}))          // add 11 in both without difference
 	mergeRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue})) // add 12 in both with differences
 
-	mergeRows := mergeRowEditor.Map(context.Background())
+	mergeRows, err := mergeRowEditor.Map(context.Background())
 
-	expectedRows := types.NewMap(context.Background(), vrw,
-		keyTuples[0], initialRows.Get(context.Background(), keyTuples[0]), // unaltered
-		keyTuples[4], updatedRows.Get(context.Background(), keyTuples[4]), // modified in updated
-		keyTuples[5], mergeRows.Get(context.Background(), keyTuples[5]), // modified in merged
+	if err != nil {
+		panic(err)
+	}
+
+	expectedRows, err := types.NewMap(context.Background(), vrw,
+		keyTuples[0], mustGetValue(initialRows.MaybeGet(context.Background(), keyTuples[0])), // unaltered
+		keyTuples[4], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[4])), // modified in updated
+		keyTuples[5], mustGetValue(mergeRows.MaybeGet(context.Background(), keyTuples[5])), // modified in merged
 		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("dr")}), // modified in both with no overlap
-		keyTuples[7], updatedRows.Get(context.Background(), keyTuples[7]), // modify both with the same value
-		keyTuples[8], updatedRows.Get(context.Background(), keyTuples[8]), // conflict
-		keyTuples[9], updatedRows.Get(context.Background(), keyTuples[9]), // added in update
-		keyTuples[10], mergeRows.Get(context.Background(), keyTuples[10]), // added in merge
-		keyTuples[11], updatedRows.Get(context.Background(), keyTuples[11]), // added same in both
-		keyTuples[12], updatedRows.Get(context.Background(), keyTuples[12]), // conflict
+		keyTuples[7], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[7])), // modify both with the same value
+		keyTuples[8], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[8])), // conflict
+		keyTuples[9], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[9])), // added in update
+		keyTuples[10], mustGetValue(mergeRows.MaybeGet(context.Background(), keyTuples[10])), // added in merge
+		keyTuples[11], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[11])), // added same in both
+		keyTuples[12], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[12])), // conflict
 	)
 
-	updateConflict := doltdb.NewConflict(initialRows.Get(context.Background(), keyTuples[8]), updatedRows.Get(context.Background(), keyTuples[8]), mergeRows.Get(context.Background(), keyTuples[8]))
+	updateConflict := doltdb.NewConflict(
+		mustGetValue(initialRows.MaybeGet(context.Background(), keyTuples[8])),
+		mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[8])),
+		mustGetValue(mergeRows.MaybeGet(context.Background(), keyTuples[8])))
 
 	addConflict := doltdb.NewConflict(
 		nil,
 		valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue}),
 		valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue}),
 	)
-	expectedConflicts := types.NewMap(context.Background(), vrw,
-		keyTuples[8], updateConflict.ToNomsList(vrw),
-		keyTuples[12], addConflict.ToNomsList(vrw),
+
+	expectedConflicts, err := types.NewMap(context.Background(), vrw,
+		keyTuples[8], mustTuple(updateConflict.ToNomsList(vrw)),
+		keyTuples[12], mustTuple(addConflict.ToNomsList(vrw)),
 	)
 
-	schVal, _ := encoding.MarshalAsNomsValue(context.Background(), vrw, sch)
-	tbl := doltdb.NewTable(context.Background(), vrw, schVal, initialRows)
-	updatedTbl := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows)
-	mergeTbl := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows)
+	if err != nil {
+		panic(err)
+	}
 
-	mRoot := masterHead.GetRootValue()
-	mRoot = mRoot.PutTable(context.Background(), ddb, tableName, tbl)
-	updatedRoot := mRoot.PutTable(context.Background(), ddb, tableName, updatedTbl)
-	mergeRoot := mRoot.PutTable(context.Background(), ddb, tableName, mergeTbl)
+	schVal, _ := encoding.MarshalAsNomsValue(context.Background(), vrw, sch)
+	tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, initialRows)
+
+	if err != nil {
+		panic(err)
+	}
+
+	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, updatedRows)
+
+	if err != nil {
+		panic(err)
+	}
+
+	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, schVal, mergeRows)
+
+	if err != nil {
+		panic(err)
+	}
+
+	mRoot, err := masterHead.GetRootValue()
+
+	if err != nil {
+		panic(err)
+	}
+
+	mRoot, err = mRoot.PutTable(context.Background(), ddb, tableName, tbl)
+
+	if err != nil {
+		panic(err)
+	}
+
+	updatedRoot, err := mRoot.PutTable(context.Background(), ddb, tableName, updatedTbl)
+
+	if err != nil {
+		panic(err)
+	}
+
+	mergeRoot, err := mRoot.PutTable(context.Background(), ddb, tableName, mergeTbl)
+
+	if err != nil {
+		panic(err)
+	}
 
 	masterHash, _ := ddb.WriteRootValue(context.Background(), mRoot)
 	hash, _ := ddb.WriteRootValue(context.Background(), updatedRoot)
@@ -349,19 +427,32 @@ func TestMergeCommits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tbl, _ := commit.GetRootValue().GetTable(context.Background(), tableName)
-	schRef := tbl.GetSchemaRef()
-	expected := doltdb.NewTable(context.Background(), vrw, schRef.TargetValue(context.Background(), vrw), expectedRows)
-	expected = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
-
 	if stats.Adds != 2 || stats.Deletes != 2 || stats.Modifications != 3 || stats.Conflicts != 2 {
 		t.Error("Actual stats differ from expected")
 	}
 
-	if merged.HashOf() != expected.HashOf() {
-		mergedRows := merged.GetRowData(context.Background())
+	root, err := commit.GetRootValue()
+	assert.NoError(t, err)
+	tbl, _, err := root.GetTable(context.Background(), tableName)
+	assert.NoError(t, err)
+	schRef, err := tbl.GetSchemaRef()
+	assert.NoError(t, err)
+	targVal, err := schRef.TargetValue(context.Background(), vrw)
+	assert.NoError(t, err)
+	expected, err := doltdb.NewTable(context.Background(), vrw, targVal, expectedRows)
+	assert.NoError(t, err)
+	expected, err = expected.SetConflicts(context.Background(), doltdb.NewConflict(schRef, schRef, schRef), expectedConflicts)
+	assert.NoError(t, err)
+
+	h, err := merged.HashOf()
+	assert.NoError(t, err)
+	eh, err := expected.HashOf()
+	assert.NoError(t, err)
+	if h == eh {
+		mergedRows, err := merged.GetRowData(context.Background())
+		assert.NoError(t, err)
 		if !mergedRows.Equals(expectedRows) {
-			t.Error(types.EncodedValue(context.Background(), mergedRows), "\n!=\n", types.EncodedValue(context.Background(), expectedRows))
+			t.Error(mustString(types.EncodedValue(context.Background(), mergedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedRows)))
 		}
 	}
 }

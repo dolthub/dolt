@@ -37,15 +37,21 @@ func TestWalkRefs(t *testing.T) {
 	runTest := func(v Value, t *testing.T) {
 		assert := assert.New(t)
 		expected := hash.HashSlice{}
-		v.WalkRefs(Format_7_18, func(r Ref) {
+		v.WalkRefs(Format_7_18, func(r Ref) error {
 			expected = append(expected, r.TargetHash())
+			return nil
 		})
-		WalkRefs(EncodeValue(v, Format_7_18), Format_7_18, func(r Ref) {
+		val, err := EncodeValue(v, Format_7_18)
+		assert.NoError(err)
+		err = WalkRefs(val, Format_7_18, func(r Ref) error {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
 				expected = expected[1:]
 			}
+
+			return nil
 		})
+		assert.NoError(err)
 		assert.Len(expected, 0)
 	}
 
@@ -53,28 +59,33 @@ func TestWalkRefs(t *testing.T) {
 		t.Parallel()
 		t.Run("Typed", func(t *testing.T) {
 			vrw := newTestValueStore()
-			s := NewStruct(Format_7_18, "", StructData{"n": Float(1)})
-			runTest(NewRef(NewMap(context.Background(), vrw, s, Float(2)), Format_7_18), t)
+			s, err := NewStruct(Format_7_18, "", StructData{"n": Float(1)})
+			assert.NoError(t, err)
+			runTest(mustRef(NewRef(mustMap(NewMap(context.Background(), vrw, s, Float(2))), Format_7_18)), t)
 		})
 		t.Run("OfValue", func(t *testing.T) {
-			runTest(ToRefOfValue(NewRef(Bool(false), Format_7_18), Format_7_18), t)
+			runTest(mustValue(ToRefOfValue(mustRef(NewRef(Bool(false), Format_7_18)), Format_7_18)), t)
 		})
 	})
 
 	t.Run("Struct", func(t *testing.T) {
 		t.Parallel()
 		data := StructData{
-			"ref": NewRef(Bool(false), Format_7_18),
+			"ref": mustRef(NewRef(Bool(false), Format_7_18)),
 			"num": Float(42),
 		}
-		runTest(NewStruct(Format_7_18, "nom", data), t)
+		st, err := NewStruct(Format_7_18, "nom", data)
+		assert.NoError(t, err)
+		runTest(st, t)
 	})
 
 	// must return a slice with an even number of elements
 	newValueSlice := func(r *rand.Rand) ValueSlice {
 		vs := make(ValueSlice, 256)
 		for i := range vs {
-			vs[i] = NewStruct(Format_7_18, "", StructData{"n": Float(r.Uint64())})
+			var err error
+			vs[i], err = NewStruct(Format_7_18, "", StructData{"n": Float(r.Uint64())})
+			assert.NoError(t, err)
 		}
 		return vs
 	}
@@ -85,14 +96,17 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			l := NewList(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
+			l, err := NewList(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
+			assert.NoError(t, err)
 			runTest(l, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			l := NewList(context.Background(), vrw, newValueSlice(r)...)
+			l, err := NewList(context.Background(), vrw, newValueSlice(r)...)
+			assert.NoError(t, err)
 			for l.sequence.isLeaf() {
-				l = l.Concat(context.Background(), NewList(context.Background(), vrw, newValueSlice(r)...))
+				l, err = l.Concat(context.Background(), mustList(NewList(context.Background(), vrw, newValueSlice(r)...)))
+				assert.NoError(t, err)
 			}
 			runTest(l, t)
 		})
@@ -104,16 +118,20 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			s := NewSet(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
+			s, err := NewSet(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
+			assert.NoError(t, err)
 			runTest(s, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			s := NewSet(context.Background(), vrw, newValueSlice(r)...)
+			s, err := NewSet(context.Background(), vrw, newValueSlice(r)...)
+			assert.NoError(t, err)
 			for s.isLeaf() {
 				e := s.Edit()
-				e = e.Insert(newValueSlice(r)...)
-				s = e.Set(context.Background())
+				e, err = e.Insert(newValueSlice(r)...)
+				assert.NoError(t, err)
+				s, err = e.Set(context.Background())
+				assert.NoError(t, err)
 			}
 			runTest(s, t)
 		})
@@ -125,19 +143,22 @@ func TestWalkRefs(t *testing.T) {
 		r := rand.New(rand.NewSource(0))
 
 		t.Run("OfRefs", func(t *testing.T) {
-			m := NewMap(context.Background(), vrw, vrw.WriteValue(context.Background(), Float(42)), vrw.WriteValue(context.Background(), Float(0)))
+			m, err := NewMap(context.Background(), vrw, mustValue(vrw.WriteValue(context.Background(), Float(42))), mustValue(vrw.WriteValue(context.Background(), Float(0))))
+			assert.NoError(t, err)
 			runTest(m, t)
 		})
 
 		t.Run("Chunked", func(t *testing.T) {
-			m := NewMap(context.Background(), vrw, newValueSlice(r)...)
+			m, err := NewMap(context.Background(), vrw, newValueSlice(r)...)
+			assert.NoError(t, err)
 			for m.isLeaf() {
 				e := m.Edit()
 				vs := newValueSlice(r)
 				for i := 0; i < len(vs); i += 2 {
 					e = e.Set(vs[i], vs[i+1])
 				}
-				m = e.Map(context.Background())
+				m, err = e.Map(context.Background())
+				assert.NoError(t, err)
 			}
 			runTest(m, t)
 		})
@@ -153,9 +174,12 @@ func TestWalkRefs(t *testing.T) {
 			r.Read(scratch)
 			return bytes.NewReader(scratch)
 		}
-		b := NewBlob(context.Background(), vrw, freshRandomBytes())
+		b, err := NewBlob(context.Background(), vrw, freshRandomBytes())
+		assert.NoError(t, err)
 		for b.sequence.isLeaf() {
-			b = b.Concat(context.Background(), NewBlob(context.Background(), vrw, freshRandomBytes()))
+			var err error
+			b, err = b.Concat(context.Background(), mustBlob(NewBlob(context.Background(), vrw, freshRandomBytes())))
+			assert.NoError(t, err)
 		}
 		runTest(b, t)
 	})

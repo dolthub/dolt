@@ -20,6 +20,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -126,7 +128,8 @@ func TestRepoDirNoLocal(t *testing.T) {
 		t.Error("File doesn't exist.  There should be an error if the directory doesn't exist.")
 	}
 
-	dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
+	err := dEnv.Config.CreateLocalConfig(map[string]string{"user.name": "bheni"})
+	require.NoError(t, err)
 
 	if !dEnv.HasLocalConfig() {
 		t.Error("Failed to create local config file")

@@ -130,19 +130,23 @@ func resolveColumnInTables(colName string, schemas map[string]schema.Schema) (Qu
 		}
 
 		if _, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName); ok && !foundCaseSensitiveMatch {
-			sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+			err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				if strings.ToLower(colName) == strings.ToLower(col.Name) {
 					if foundMatch {
 						ambiguous = true
-						return true
+						return true, nil
 					}
 					canonicalColumnName = col.Name
 					tableName = tbl
 					foundMatch = true
 				}
 
-				return false
+				return false, nil
 			})
+
+			if err != nil {
+				return QualifiedColumn{}, err
+			}
 		}
 	}
 
@@ -246,17 +250,25 @@ func resolveColumnsInStarExpr(selectExpr *sqlparser.StarExpr, tableNames []strin
 		}
 
 		tableSch := schemas[targetTable]
-		tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			columns = append(columns, QualifiedColumn{targetTable, col.Name})
-			return false
+			return false, nil
 		})
+
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		for _, tableName := range tableNames {
 			tableSch := schemas[tableName]
-			tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+			err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				columns = append(columns, QualifiedColumn{tableName, col.Name})
-				return false
+				return false, nil
 			})
+
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 

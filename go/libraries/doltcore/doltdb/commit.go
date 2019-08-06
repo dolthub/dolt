@@ -29,6 +29,9 @@ const (
 	rootValueField = "value"
 )
 
+var errCommitHasNoMeta = errors.New("commit has no metadata")
+var errHasNoRootValue = errors.New("no root value")
+
 // Commit contains information on a commit that was written to noms
 type Commit struct {
 	vrw      types.ValueReadWriter
@@ -36,99 +39,174 @@ type Commit struct {
 }
 
 // HashOf returns the hash of the commit
-func (c *Commit) HashOf() hash.Hash {
+func (c *Commit) HashOf() (hash.Hash, error) {
 	return c.commitSt.Hash(c.vrw.Format())
 }
 
 // GetCommitMeta gets the metadata associated with the commit
-func (c *Commit) GetCommitMeta() *CommitMeta {
-	metaVal := c.commitSt.Get(metaField)
+func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
+	metaVal, found, err := c.commitSt.MaybeGet(metaField)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !found {
+		return nil, errCommitHasNoMeta
+	}
 
 	if metaVal != nil {
 		if metaSt, ok := metaVal.(types.Struct); ok {
 			cm, err := commitMetaFromNomsSt(metaSt)
 
 			if err == nil {
-				return cm
+				return cm, nil
 			}
 		}
 	}
 
-	panic(c.HashOf().String() + " is a commit without the required metadata.")
+	h, err := c.HashOf()
+
+	if err != nil {
+		return nil, errCommitHasNoMeta
+	}
+
+	return nil, errors.New(h.String() + " is a commit without the required metadata.")
 }
 
-func (c *Commit) ParentHashes(ctx context.Context) []hash.Hash {
-	parentSet := c.getParents()
+func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
+	parentSet, err := c.getParents()
+
+	if err != nil {
+		return nil, err
+	}
 
 	hashes := make([]hash.Hash, 0, parentSet.Len())
-	parentSet.IterAll(ctx, func(parentVal types.Value) {
+	err = parentSet.IterAll(ctx, func(parentVal types.Value) error {
 		parentRef := parentVal.(types.Ref)
 		parentHash := parentRef.TargetHash()
 		hashes = append(hashes, parentHash)
+
+		return nil
 	})
 
-	return hashes
+	return hashes, err
 }
 
-func (c *Commit) getParents() types.Set {
-	if parVal := c.commitSt.Get(parentsField); parVal != nil {
-		return parVal.(types.Set)
+func (c *Commit) getParents() (types.Set, error) {
+	if parVal, found, err := c.commitSt.MaybeGet(parentsField); err != nil {
+		return types.EmptySet, err
+	} else if found && parVal != nil {
+		return parVal.(types.Set), nil
 	}
 
-	return types.EmptySet
+	return types.EmptySet, nil
 }
 
 // NumParents gets the number of parents a commit has.
-func (c *Commit) NumParents() int {
-	parents := c.getParents()
-	return int(parents.Len())
+func (c *Commit) NumParents() (int, error) {
+	parents, err := c.getParents()
+
+	if err != nil {
+		return 0, err
+	}
+
+	return int(parents.Len()), nil
 }
 
-func (c *Commit) getParent(ctx context.Context, idx int) *types.Struct {
-	parentSet := c.getParents()
+func (c *Commit) getParent(ctx context.Context, idx int) (*types.Struct, error) {
+	parentSet, err := c.getParents()
 
-	itr := parentSet.IteratorAt(ctx, uint64(idx))
-	parentVal := itr.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	itr, err := parentSet.IteratorAt(ctx, uint64(idx))
+
+	if err != nil {
+		return nil, err
+	}
+
+	parentVal, err := itr.Next(ctx)
+
+	if err != nil {
+		return nil, err
+	}
 
 	if parentVal == nil {
-		return nil
+		return nil, nil
 	}
 
 	parentRef := parentVal.(types.Ref)
-	parentSt := parentRef.TargetValue(ctx, c.vrw).(types.Struct)
-	return &parentSt
+	targVal, err := parentRef.TargetValue(ctx, c.vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	parentSt := targVal.(types.Struct)
+	return &parentSt, nil
 }
 
 // GetRootValue gets the RootValue of the commit.
-func (c *Commit) GetRootValue() *RootValue {
-	rootVal := c.commitSt.Get(rootValueField)
+func (c *Commit) GetRootValue() (*RootValue, error) {
+	rootVal, _, err := c.commitSt.MaybeGet(rootValueField)
+
+	if err != nil {
+		return nil, err
+	}
 
 	if rootVal != nil {
 		if rootSt, ok := rootVal.(types.Struct); ok {
-			return newRootValue(c.vrw, rootSt)
+			return newRootValue(c.vrw, rootSt), nil
 		}
 	}
 
-	panic(c.HashOf().String() + " is a commit without a value.")
+	return nil, errHasNoRootValue
 }
 
 var ErrNoCommonAnscestor = errors.New("no common anscestor")
 
 func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
-	ref1, ref2 := types.NewRef(cm1.commitSt, cm1.vrw.Format()), types.NewRef(cm2.commitSt, cm2.vrw.Format())
+	ref1, err := types.NewRef(cm1.commitSt, cm1.vrw.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
+	ref2, err := types.NewRef(cm2.commitSt, cm2.vrw.Format())
+
+	if err != nil {
+		return nil, err
+	}
+
 	ref, err := getCommitAncestorRef(ctx, ref1, ref2, cm1.vrw)
 
 	if err != nil {
 		return nil, err
 	}
 
-	ancestorSt, _ := ref.TargetValue(ctx, cm1.vrw).(types.Struct)
+	targetVal, err := ref.TargetValue(ctx, cm1.vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	ancestorSt := targetVal.(types.Struct)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return &Commit{cm1.vrw, ancestorSt}, nil
 }
 
 func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw types.ValueReadWriter) (types.Ref, error) {
-	ancestorRef, ok := datas.FindCommonAncestor(ctx, ref1, ref2, vrw)
+	ancestorRef, ok, err := datas.FindCommonAncestor(ctx, ref1, ref2, vrw)
+
+	if err != nil {
+		return types.Ref{}, err
+	}
 
 	if !ok {
 		return types.Ref{}, ErrNoCommonAnscestor

@@ -126,12 +126,25 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 	}
 
 	tblName := args[0]
-	if !root.HasTable(context.TODO(), tblName) {
+	if has, err := root.HasTable(context.TODO(), tblName); err != nil {
+		return errhand.BuildDError("error: could not read tables").AddCause(err).Build()
+	} else if !has {
 		return errhand.BuildDError("error: table '%s' not found", tblName).Build()
 	}
 
-	tbl, _ := root.GetTable(context.TODO(), tblName)
-	keysToResolve, err := cli.ParseKeyValues(root.VRW().Format(), tbl.GetSchema(context.TODO()), args[1:])
+	tbl, _, err := root.GetTable(context.TODO(), tblName)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
+	}
+
+	sch, err := tbl.GetSchema(context.TODO())
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
+	}
+
+	keysToResolve, err := cli.ParseKeyValues(root.VRW().Format(), sch, args[1:])
 
 	if err != nil {
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
@@ -150,9 +163,30 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 			cli.Println(key, "is not the primary key of a conflicting row")
 		}
 
-		if updatedTbl.HashOf() != tbl.HashOf() {
-			root := root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
+		updatedHash, err := updatedTbl.HashOf()
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+		}
+
+		hash, err := tbl.HashOf()
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
+		}
+
+		if hash == updatedHash {
+			root, err := root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
+
+			if err != nil {
+				return errhand.BuildDError("").AddCause(err).Build()
+			}
+
 			verr = commands.UpdateWorkingWithVErr(dEnv, root)
+
+			if verr != nil {
+				return verr
+			}
 		}
 	}
 

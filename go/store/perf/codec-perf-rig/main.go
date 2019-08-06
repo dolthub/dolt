@@ -83,7 +83,8 @@ func main() {
 
 			// Read
 			t1 = time.Now()
-			val, ok := ds.MaybeHeadValue()
+			val, ok, err := ds.MaybeHeadValue()
+			d.Chk.NoError(err)
 			d.Chk.True(ok)
 			col = val.(types.Collection)
 			readFns[i](col)
@@ -118,7 +119,8 @@ func main() {
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
-	blob := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
+	blob, err := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
+	d.Chk.NoError(err)
 	_, err = db.CommitValue(context.Background(), ds, blob)
 	d.Chk.NoError(err)
 	buildDuration := time.Since(t1)
@@ -127,7 +129,8 @@ func main() {
 	ds, err = db.GetDataset(context.Background(), "test")
 	d.Chk.NoError(err)
 	t1 = time.Now()
-	blobVal, ok := ds.MaybeHeadValue()
+	blobVal, ok, err := ds.MaybeHeadValue()
+	d.Chk.NoError(err)
 	d.Chk.True(ok)
 	blob = blobVal.(types.Blob)
 	buff := &bytes.Buffer{}
@@ -168,11 +171,15 @@ func createNumber(i uint64) types.Value {
 var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str"})
 
 func createStruct(i uint64) types.Value {
-	return structTemplate.NewStruct(types.Format_7_18, []types.Value{
+	st, err := structTemplate.NewStruct(types.Format_7_18, []types.Value{
 		types.Bool(i%2 == 0), // "bool"
 		types.Float(i),       // "num"
 		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)), // "str"
 	})
+
+	d.Chk.NoError(err)
+
+	return st
 }
 
 func buildList(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
@@ -181,20 +188,34 @@ func buildList(vrw types.ValueReadWriter, count uint64, createFn createValueFn) 
 		values[i] = createFn(i)
 	}
 
-	return types.NewList(context.Background(), vrw, values...)
+	l, err := types.NewList(context.Background(), vrw, values...)
+
+	d.Chk.NoError(err)
+
+	return l
 }
 
 func buildListIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	l := types.NewList(context.Background(), vrw).Edit()
+	l, err := types.NewList(context.Background(), vrw)
+
+	d.Chk.NoError(err)
+
+	le := l.Edit()
+
 	for i := uint64(0); i < count; i++ {
-		l.Append(createFn(i))
+		le.Append(createFn(i))
 	}
 
-	return l.List(context.Background())
+	l, err = le.List(context.Background())
+
+	d.Chk.NoError(err)
+
+	return l
 }
 
 func readList(c types.Collection) {
-	c.(types.List).IterAll(context.Background(), func(v types.Value, idx uint64) {
+	_ = c.(types.List).IterAll(context.Background(), func(v types.Value, idx uint64) error {
+		return nil
 	})
 }
 
@@ -204,20 +225,31 @@ func buildSet(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewSet(context.Background(), vrw, values...)
+	s, err := types.NewSet(context.Background(), vrw, values...)
+
+	d.Chk.NoError(err)
+
+	return s
 }
 
 func buildSetIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	s := types.NewSet(context.Background(), vrw).Edit()
+	s, err := types.NewSet(context.Background(), vrw)
+	d.Chk.NoError(err)
+
+	se := s.Edit()
 	for i := uint64(0); i < count; i++ {
-		s.Insert(createFn(i))
+		se.Insert(createFn(i))
 	}
 
-	return s.Set(context.Background())
+	s, err = se.Set(context.Background())
+	d.Chk.NoError(err)
+
+	return s
 }
 
 func readSet(c types.Collection) {
-	c.(types.Set).IterAll(context.Background(), func(v types.Value) {
+	_ = c.(types.Set).IterAll(context.Background(), func(v types.Value) error {
+		return nil
 	})
 }
 
@@ -227,20 +259,31 @@ func buildMap(vrw types.ValueReadWriter, count uint64, createFn createValueFn) t
 		values[i] = createFn(i)
 	}
 
-	return types.NewMap(context.Background(), vrw, values...)
+	m, err := types.NewMap(context.Background(), vrw, values...)
+
+	d.Chk.NoError(err)
+
+	return m
 }
 
 func buildMapIncrementally(vrw types.ValueReadWriter, count uint64, createFn createValueFn) types.Collection {
-	me := types.NewMap(context.Background(), vrw).Edit()
+	m, err := types.NewMap(context.Background(), vrw)
+	d.Chk.NoError(err)
+
+	me := m.Edit()
 
 	for i := uint64(0); i < count*2; i += 2 {
 		me.Set(createFn(i), createFn(i+1))
 	}
 
-	return me.Map(context.Background())
+	m, err = me.Map(context.Background())
+	d.Chk.NoError(err)
+
+	return m
 }
 
 func readMap(c types.Collection) {
-	c.(types.Map).IterAll(context.Background(), func(k types.Value, v types.Value) {
+	_ = c.(types.Map).IterAll(context.Background(), func(k types.Value, v types.Value) error {
+		return nil
 	})
 }

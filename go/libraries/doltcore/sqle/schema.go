@@ -21,17 +21,17 @@ import (
 )
 
 // doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.
-func doltSchemaToSqlSchema(tableName string, sch schema.Schema) sql.Schema {
+func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 	cols := make([]*sql.Column, sch.GetAllCols().Size())
 
 	var i int
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		cols[i] = doltColToSqlCol(tableName, col)
 		i++
-		return false
+		return false, nil
 	})
 
-	return cols
+	return cols, err
 }
 
 func SqlSchemaToDoltSchema(sqlSchema sql.Schema) schema.Schema {

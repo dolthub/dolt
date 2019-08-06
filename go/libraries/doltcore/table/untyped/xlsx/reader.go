@@ -64,14 +64,11 @@ func NewXLSXReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *XLSXFileInfo
 
 	decodedRows, err := decodeXLSXRows(nbf, data, sch)
 	if err != nil {
-		return nil, err
-	}
-	info.SetRows(decodedRows)
-
-	if err != nil {
 		r.Close()
 		return nil, err
 	}
+
+	info.SetRows(decodedRows)
 
 	return &XLSXReader{r, br, info, sch, 0}, nil
 }

@@ -47,7 +47,7 @@ func NewUntypedSchemaWithFirstTag(firstTag uint64, colNames ...string) (map[stri
 
 // NewRowFromStrings is a utility method that takes a schema for an untyped row, and a slice of strings and uses the strings
 // as the field values for the row by converting them to noms type.String
-func NewRowFromStrings(nbf *types.NomsBinFormat, sch schema.Schema, valStrs []string) row.Row {
+func NewRowFromStrings(nbf *types.NomsBinFormat, sch schema.Schema, valStrs []string) (row.Row, error) {
 	allCols := sch.GetAllCols()
 
 	taggedVals := make(row.TaggedValues)
@@ -66,7 +66,7 @@ func NewRowFromStrings(nbf *types.NomsBinFormat, sch schema.Schema, valStrs []st
 }
 
 // NewRowFromTaggedStrings takes an untyped schema and a map of column tag to string value and returns a row
-func NewRowFromTaggedStrings(nbf *types.NomsBinFormat, sch schema.Schema, taggedStrs map[uint64]string) row.Row {
+func NewRowFromTaggedStrings(nbf *types.NomsBinFormat, sch schema.Schema, taggedStrs map[uint64]string) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
 	for tag, valStr := range taggedStrs {
 		taggedVals[tag] = types.String(valStr)
@@ -77,50 +77,74 @@ func NewRowFromTaggedStrings(nbf *types.NomsBinFormat, sch schema.Schema, tagged
 
 // UntypeSchema takes a schema and returns a schema with the same columns, but with the types of each of those columns
 // as types.StringKind
-func UntypeSchema(sch schema.Schema) schema.Schema {
+func UntypeSchema(sch schema.Schema) (schema.Schema, error) {
 	var cols []schema.Column
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Kind = types.StringKind
 		cols = append(cols, col)
-		return false
+		return false, nil
 	})
 
-	colColl, _ := schema.NewColCollection(cols...)
+	if err != nil {
+		return nil, err
+	}
 
-	return schema.SchemaFromCols(colColl)
+	colColl, err := schema.NewColCollection(cols...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return schema.SchemaFromCols(colColl), nil
 }
 
 // UnkeySchema takes a schema and returns a schema with the same columns and types, but stripped of constraints and
 // primary keys. Meant for use in result sets.
-func UnkeySchema(sch schema.Schema) schema.Schema {
+func UnkeySchema(sch schema.Schema) (schema.Schema, error) {
 	var cols []schema.Column
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.IsPartOfPK = false
 		col.Constraints = nil
 		cols = append(cols, col)
-		return false
+		return false, nil
 	})
 
-	colColl, _ := schema.NewColCollection(cols...)
+	if err != nil {
+		return nil, err
+	}
 
-	return schema.UnkeyedSchemaFromCols(colColl)
+	colColl, err := schema.NewColCollection(cols...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
 
 // UntypeUnkeySchema takes a schema and returns a schema with the same columns, but stripped of constraints and primary
 // keys and using only string types. Meant for displaying output and tests.
-func UntypeUnkeySchema(sch schema.Schema) schema.Schema {
+func UntypeUnkeySchema(sch schema.Schema) (schema.Schema, error) {
 	var cols []schema.Column
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Kind = types.StringKind
 		col.IsPartOfPK = false
 		col.Constraints = nil
 		cols = append(cols, col)
-		return false
+		return false, nil
 	})
 
-	colColl, _ := schema.NewColCollection(cols...)
+	if err != nil {
+		return nil, err
+	}
 
-	return schema.UnkeyedSchemaFromCols(colColl)
+	colColl, err := schema.NewColCollection(cols...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
 
 // UntypedSchemaUnion takes an arbitrary number of schemas and provides the union of all of their key and non-key columns.
@@ -133,5 +157,5 @@ func UntypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
 		return nil, err
 	}
 
-	return UntypeSchema(unionSch), nil
+	return UntypeSchema(unionSch)
 }

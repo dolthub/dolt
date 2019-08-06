@@ -16,6 +16,8 @@ package types
 
 import (
 	"context"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 )
 
 // EditProvider is an interface which provides map edits as KVPs where each edit is a key and the new value
@@ -23,7 +25,7 @@ import (
 type EditProvider interface {
 	// Next returns the next KVP representing the next edit to be applied.  Next will always return KVPs
 	// in key sorted order
-	Next() *KVP
+	Next() (*KVP, error)
 
 	// NumEdits returns the number of KVPs representing the edits that will be provided when calling next
 	NumEdits() int64
@@ -33,8 +35,8 @@ type EditProvider interface {
 type EmptyEditProvider struct{}
 
 // Next will always return nil
-func (eep EmptyEditProvider) Next() *KVP {
-	return nil
+func (eep EmptyEditProvider) Next() (*KVP, error) {
+	return nil, nil
 }
 
 // NumEdits will always return 0
@@ -99,14 +101,14 @@ func (stats AppliedEditStats) Add(other AppliedEditStats) AppliedEditStats {
 
 // ApplyEdits applies all the edits to a given Map and returns the resulting map, and some statistics about the edits
 // that were applied.
-func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats) {
+func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEditStats, error) {
 	var stats AppliedEditStats
 
 	if edits.NumEdits() == 0 {
-		return m, stats // no edits
+		return m, stats, nil // no edits
 	}
 
-	seq := m.orderedSequence
+	var seq sequence = m.orderedSequence
 	vrw := seq.valueReadWriter()
 
 	numWorkers := int(edits.NumEdits()/batchSizeStart) + 1
@@ -115,16 +117,17 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 		numWorkers = maxWorkerCount
 	}
 
+	ae := atomicerr.New()
 	rc := make(chan chan mapWorkResult, 128)
 	wc := make(chan mapWork, 128)
 
 	// start worker threads
 	for i := 0; i < numWorkers; i++ {
-		go prepWorker(ctx, seq, wc)
+		go prepWorker(ctx, ae, seq.(orderedSequence), wc)
 	}
 
 	// asynchronously add mapWork to be done by the workers
-	go buildBatches(m.Format(), rc, wc, edits)
+	go buildBatches(m.Format(), ae, rc, wc, edits)
 
 	// wait for workers to return results and then process them
 	var ch *sequenceChunker
@@ -132,13 +135,24 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 		wrc, ok := <-rc
 
 		if ok {
-			workRes := <-wrc
+			workRes, workResOk := <-wrc
+
+			if !workResOk || ae.IsSet() {
+				// drain
+				continue
+			}
 
 			for i, cur := range workRes.seqCurs {
 				for _, kv := range workRes.cursorEntries[i] {
 					var existingValue Value
 					if cur.idx < cur.seq.seqLen() {
-						ckv := cur.current().(mapEntry)
+						currEnt, err := cur.current()
+
+						if ae.SetIfErrAndCheck(err) {
+							continue
+						}
+
+						ckv := currEnt.(mapEntry)
 						if ckv.key.Equals(kv.key) {
 							existingValue = ckv.value
 						}
@@ -155,20 +169,38 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 					}
 
 					if ch == nil {
-						ch = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+						var err error
+						ch, err = newSequenceChunker(ctx, cur, 0, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+
+						if ae.SetIfError(err) {
+							continue
+						}
 					} else {
-						ch.advanceTo(ctx, cur)
+						err := ch.advanceTo(ctx, cur)
+
+						if ae.SetIfError(err) {
+							continue
+						}
 					}
 
 					if existingValue != nil {
 						stats.Modifications++
-						ch.Skip(ctx)
+						err := ch.Skip(ctx)
+
+						if ae.SetIfError(err) {
+							continue
+						}
+
 					} else {
 						stats.Additions++
 					}
 
 					if kv.value != nil {
-						ch.Append(ctx, kv)
+						_, err := ch.Append(ctx, kv)
+
+						if ae.SetIfError(err) {
+							continue
+						}
 					}
 				}
 			}
@@ -177,58 +209,128 @@ func ApplyEdits(ctx context.Context, edits EditProvider, m Map) (Map, AppliedEdi
 		}
 	}
 
-	if ch == nil {
-		return m, stats // no edits required application
+	if ae.IsSet() {
+		return EmptyMap, AppliedEditStats{}, ae.Get()
 	}
 
-	return newMap(ch.Done(ctx).(orderedSequence)), stats
+	if ch == nil {
+		return m, stats, nil // no edits required application
+	}
+
+	seq, err := ch.Done(ctx)
+
+	if err != nil {
+		return EmptyMap, AppliedEditStats{}, err
+	}
+
+	return newMap(seq.(orderedSequence)), stats, nil
 }
 
 // prepWorker will wait for work to be read from a channel, then iterate over all of the edits finding the appropriate
 // cursor where the insertion should happen.  It attempts to reuse cursors when consecutive keys share the same
 // insertion point
-func prepWorker(ctx context.Context, seq orderedSequence, wc chan mapWork) {
+func prepWorker(ctx context.Context, ae *atomicerr.AtomicError, seq orderedSequence, wc chan mapWork) {
 	for work := range wc {
-		wRes := mapWorkResult{}
+		// In the case of an error drain wc
+		if !ae.IsSet() {
+			wRes, err := doWork(ctx, seq, work)
 
-		var cur *sequenceCursor
-		var curKey orderedKey
-
-		i := 0
-		for ; i < len(work.kvps); i++ {
-			edit := work.kvps[i]
-			key := edit.Key.Value(ctx)
-			ordKey := newOrderedKey(key, seq.format())
-
-			if cur == nil || !ordKey.Less(seq.format(), curKey) {
-				cur = newCursorAt(ctx, seq, ordKey, true, false)
-
-				if cur.valid() {
-					curKey = getCurrentKey(cur)
-				} else {
-					break
-				}
+			if err != nil {
+				ae.SetIfError(err)
+			} else {
+				work.resChan <- wRes
 			}
-
-			appendToWRes(ctx, &wRes, cur, key, edit.Val)
 		}
 
-		// All remaining edits get added at the end
-		for ; i < len(work.kvps); i++ {
-			edit := work.kvps[i]
-			key := edit.Key.Value(ctx)
-			appendToWRes(ctx, &wRes, cur, key, edit.Val)
-		}
-
-		work.resChan <- wRes
+		close(work.resChan)
 	}
 }
 
+func doWork(ctx context.Context, seq orderedSequence, work mapWork) (mapWorkResult, error) {
+	wRes := mapWorkResult{}
+
+	var cur *sequenceCursor
+	var curKey orderedKey
+
+	i := 0
+	for ; i < len(work.kvps); i++ {
+		edit := work.kvps[i]
+
+		key, err := edit.Key.Value(ctx)
+
+		if err != nil {
+			return mapWorkResult{}, err
+		}
+
+		ordKey, err := newOrderedKey(key, seq.format())
+
+		if err != nil {
+			return mapWorkResult{}, err
+		}
+
+		createCur := cur == nil
+		if cur != nil {
+			isLess, err := ordKey.Less(seq.format(), curKey)
+
+			if err != nil {
+				return mapWorkResult{}, err
+			}
+
+			createCur = !isLess
+		}
+
+		if createCur {
+			cur, err = newCursorAt(ctx, seq, ordKey, true, false)
+
+			if err != nil {
+				return mapWorkResult{}, err
+			}
+
+			if cur.valid() {
+				curKey, err = getCurrentKey(cur)
+
+				if err != nil {
+					return mapWorkResult{}, err
+				}
+			} else {
+				break
+			}
+		}
+
+		err = appendToWRes(ctx, &wRes, cur, key, edit.Val)
+
+		if err != nil {
+			return mapWorkResult{}, err
+		}
+	}
+
+	// All remaining edits get added at the end
+	for ; i < len(work.kvps); i++ {
+		edit := work.kvps[i]
+		key, err := edit.Key.Value(ctx)
+
+		if err != nil {
+			return mapWorkResult{}, err
+		}
+
+		err = appendToWRes(ctx, &wRes, cur, key, edit.Val)
+
+		if err != nil {
+			return mapWorkResult{}, err
+		}
+	}
+
+	return wRes, nil
+}
+
 // buildBatches iterates over the sorted edits building batches of work to be completed by the worker threads.
-func buildBatches(nbf *NomsBinFormat, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
+func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan mapWorkResult, wc chan mapWork, edits EditProvider) {
+	defer close(rc)
+	defer close(wc)
 
 	batchSize := batchSizeStart
-	nextEdit := edits.Next()
+	nextEdit, err := edits.Next()
+	ae.SetIfError(err)
 
 	for {
 		batch := make([]*KVP, 0, batchSize)
@@ -240,12 +342,24 @@ func buildBatches(nbf *NomsBinFormat, rc chan chan mapWorkResult, wc chan mapWor
 				break
 			}
 
-			nextEdit = edits.Next()
+			nextEdit, err = edits.Next()
 
-			if nextEdit != nil && !edit.Key.Less(nbf, nextEdit.Key) {
+			if ae.SetIfError(err) {
+				return
+			}
+
+			if nextEdit != nil {
+				isLess, err := edit.Key.Less(nbf, nextEdit.Key)
+
+				if ae.SetIfError(err) {
+					return
+				}
+
 				// keys are sorted, so if this key is not less than the next key then they are equal and the next
 				// value will take precedence
-				continue
+				if !isLess {
+					continue
+				}
 			}
 
 			batch = append(batch, edit)
@@ -265,22 +379,26 @@ func buildBatches(nbf *NomsBinFormat, rc chan chan mapWorkResult, wc chan mapWor
 			batchSize = batchSizeMax
 		}
 	}
-
-	close(rc)
-	close(wc)
 }
 
-func appendToWRes(ctx context.Context, wRes *mapWorkResult, cur *sequenceCursor, key Value, val Valuable) {
+func appendToWRes(ctx context.Context, wRes *mapWorkResult, cur *sequenceCursor, key Value, val Valuable) error {
 	var mEnt mapEntry
 	if val == nil {
 		mEnt = mapEntry{key, nil}
 	} else if v, ok := val.(Value); ok {
 		mEnt = mapEntry{key, v}
 	} else {
-		sv := val.Value(ctx)
+		sv, err := val.Value(ctx)
+
+		if err != nil {
+			return err
+		}
+
 		mEnt = mapEntry{key, sv}
 	}
 
 	wRes.seqCurs = append(wRes.seqCurs, cur)
 	wRes.cursorEntries = append(wRes.cursorEntries, []mapEntry{mEnt})
+
+	return nil
 }

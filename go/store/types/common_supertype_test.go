@@ -29,161 +29,165 @@ func TestContainCommonSupertype(t *testing.T) {
 		// bool & any -> true
 		{ValueType, StringType, true},
 		// ref<bool> & ref<bool> -> true
-		{MakeRefType(BoolType), MakeRefType(BoolType), true},
+		{mustType(MakeRefType(BoolType)), mustType(MakeRefType(BoolType)), true},
 		// ref<number> & ref<string> -> false
-		{MakeRefType(FloaTType), MakeRefType(StringType), false},
+		{mustType(MakeRefType(FloaTType)), mustType(MakeRefType(StringType)), false},
 		// set<bool> & set<bool> -> true
-		{MakeSetType(BoolType), MakeSetType(BoolType), true},
+		{mustType(MakeSetType(BoolType)), mustType(MakeSetType(BoolType)), true},
 		// set<bool> & set<string> -> false
-		{MakeSetType(BoolType), MakeSetType(StringType), false},
+		{mustType(MakeSetType(BoolType)), mustType(MakeSetType(StringType)), false},
 		// list<blob> & list<blob> -> true
-		{MakeListType(BlobType), MakeListType(BlobType), true},
+		{mustType(MakeListType(BlobType)), mustType(MakeListType(BlobType)), true},
 		// list<blob> & list<string> -> false
-		{MakeListType(BlobType), MakeListType(StringType), false},
+		{mustType(MakeListType(BlobType)), mustType(MakeListType(StringType)), false},
 		// list<blob|string|number> & list<string|bool> -> true
-		{MakeListType(MakeUnionType(BlobType, StringType, FloaTType)), MakeListType(MakeUnionType(StringType, BoolType)), true},
+		{mustType(MakeListType(mustType(MakeUnionType(BlobType, StringType, FloaTType)))), mustType(MakeListType(mustType(MakeUnionType(StringType, BoolType)))), true},
 		// list<blob|string> & list<number|bool> -> false
-		{MakeListType(MakeUnionType(BlobType, StringType)), MakeListType(MakeUnionType(FloaTType, BoolType)), false},
+		{mustType(MakeListType(mustType(MakeUnionType(BlobType, StringType)))), mustType(MakeListType(mustType(MakeUnionType(FloaTType, BoolType)))), false},
 
 		// map<bool,bool> & map<bool,bool> -> true
-		{MakeMapType(BoolType, BoolType), MakeMapType(BoolType, BoolType), true},
+		{mustType(MakeMapType(BoolType, BoolType)), mustType(MakeMapType(BoolType, BoolType)), true},
 		// map<bool,bool> & map<bool,string> -> false
-		{MakeMapType(BoolType, BoolType), MakeMapType(BoolType, StringType), false},
+		{mustType(MakeMapType(BoolType, BoolType)), mustType(MakeMapType(BoolType, StringType)), false},
 		// map<bool,bool> & map<string,bool> -> false
-		{MakeMapType(BoolType, BoolType), MakeMapType(StringType, BoolType), false},
+		{mustType(MakeMapType(BoolType, BoolType)), mustType(MakeMapType(StringType, BoolType)), false},
 		// map<bool,bool> & map<string,bool> -> false
-		{MakeMapType(BoolType, BoolType), MakeMapType(StringType, BoolType), false},
+		{mustType(MakeMapType(BoolType, BoolType)), mustType(MakeMapType(StringType, BoolType)), false},
 		// map<struct{foo:string},bool> & map<struct{foo:string,bar:string},bool> -> false
-		{MakeMapType(MakeStructTypeFromFields("", FieldMap{"foo": StringType}), BoolType),
-			MakeMapType(MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType}), BoolType), false},
+		{mustType(MakeMapType(mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})), BoolType)),
+			mustType(MakeMapType(mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType})), BoolType)), false},
 		// map<string|blob,string> & map<number|string,string> -> true
-		{MakeMapType(MakeUnionType(StringType, BlobType), StringType),
-			MakeMapType(MakeUnionType(FloaTType, StringType), StringType), true},
+		{mustType(MakeMapType(mustType(MakeUnionType(StringType, BlobType)), StringType)),
+			mustType(MakeMapType(mustType(MakeUnionType(FloaTType, StringType)), StringType)), true},
 		// map<blob|bool,string> & map<number|string,string> -> false
-		{MakeMapType(MakeUnionType(BlobType, BoolType), StringType),
-			MakeMapType(MakeUnionType(FloaTType, StringType), StringType), false},
+		{mustType(MakeMapType(mustType(MakeUnionType(BlobType, BoolType)), StringType)),
+			mustType(MakeMapType(mustType(MakeUnionType(FloaTType, StringType)), StringType)), false},
 
 		// bool & string|bool|blob -> true
-		{BoolType, MakeUnionType(StringType, BoolType, BlobType), true},
+		{BoolType, mustType(MakeUnionType(StringType, BoolType, BlobType)), true},
 		// string|bool|blob & blob -> true
-		{MakeUnionType(StringType, BoolType, BlobType), BlobType, true},
+		{mustType(MakeUnionType(StringType, BoolType, BlobType)), BlobType, true},
 		// string|bool|blob & number|blob|string -> true
-		{MakeUnionType(StringType, BoolType, BlobType), MakeUnionType(FloaTType, BlobType, StringType), true},
+		{mustType(MakeUnionType(StringType, BoolType, BlobType)), mustType(MakeUnionType(FloaTType, BlobType, StringType)), true},
 
 		// struct{foo:bool} & struct{foo:bool} -> true
-		{MakeStructTypeFromFields("", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": BoolType}), true},
+		{mustType(MakeStructTypeFromFields("", FieldMap{"foo": BoolType})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": BoolType})), true},
 		// struct{foo:bool} & struct{foo:number} -> false
-		{MakeStructTypeFromFields("", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": StringType}), false},
+		{mustType(MakeStructTypeFromFields("", FieldMap{"foo": BoolType})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})), false},
 		// struct{foo:bool} & struct{foo:bool,bar:number} -> true
-		{MakeStructTypeFromFields("", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": BoolType, "bar": FloaTType}), true},
+		{mustType(MakeStructTypeFromFields("", FieldMap{"foo": BoolType})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": BoolType, "bar": FloaTType})), true},
 		// struct{foo:ref<bool>} & struct{foo:ref<number>} -> false
-		{MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(BoolType)}),
-			MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(FloaTType)}), false},
+		{mustType(MakeStructTypeFromFields("", FieldMap{"foo": mustType(MakeRefType(BoolType))})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": mustType(MakeRefType(FloaTType))})), false},
 		// struct{foo:ref<bool>} & struct{foo:ref<number|bool>} -> true
-		{MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(BoolType)}),
-			MakeStructTypeFromFields("", FieldMap{"foo": MakeRefType(MakeUnionType(FloaTType, BoolType))}), true},
+		{mustType(MakeStructTypeFromFields("", FieldMap{"foo": mustType(MakeRefType(BoolType))})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": mustType(MakeRefType(mustType(MakeUnionType(FloaTType, BoolType))))})), true},
 		// struct A{foo:bool} & struct A{foo:bool, baz:string} -> true
-		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "baz": StringType}), true},
+		{mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType})),
+			mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "baz": StringType})), true},
 
 		// struct A{foo:bool, stuff:set<String|Blob>} & struct A{foo:bool, stuff:set<String>} -> true
-		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": MakeSetType(MakeUnionType(StringType, BlobType))}),
-			MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": MakeSetType(StringType)}), true},
+		{mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": mustType(MakeSetType(mustType(MakeUnionType(StringType, BlobType))))})),
+			mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": mustType(MakeSetType(StringType))})), true},
 		// struct A{stuff:set<String|Blob>} & struct A{foo:bool, stuff:set<Float>} -> false
-		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": MakeSetType(MakeUnionType(StringType, BlobType))}),
-			MakeStructTypeFromFields("A", FieldMap{"stuff": MakeSetType(FloaTType)}), false},
+		{mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType, "stuff": mustType(MakeSetType(mustType(MakeUnionType(StringType, BlobType))))})),
+			mustType(MakeStructTypeFromFields("A", FieldMap{"stuff": mustType(MakeSetType(FloaTType))})), false},
 
 		// struct A{foo:bool} & struct {foo:bool} -> true
-		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": BoolType}), true},
+		{mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": BoolType})), true},
 		// struct {foo:bool} & struct A{foo:bool} -> false
-		{MakeStructTypeFromFields("", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("A", FieldMap{"foo": BoolType}), true},
+		{mustType(MakeStructTypeFromFields("", FieldMap{"foo": BoolType})),
+			mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType})), true},
 		// struct A{foo:bool} & struct B{foo:bool} -> false
-		{MakeStructTypeFromFields("A", FieldMap{"foo": BoolType}),
-			MakeStructTypeFromFields("B", FieldMap{"foo": BoolType}), false},
+		{mustType(MakeStructTypeFromFields("A", FieldMap{"foo": BoolType})),
+			mustType(MakeStructTypeFromFields("B", FieldMap{"foo": BoolType})), false},
 		// map<string, struct A{foo:string}> & map<string, struct A{foo:string, bar:bool}> -> true
-		{MakeMapType(StringType, MakeStructTypeFromFields("A", FieldMap{"foo": StringType})),
-			MakeMapType(StringType, MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})), true},
+		{mustType(MakeMapType(StringType, mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType})))),
+			mustType(MakeMapType(StringType, mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})))), true},
 
 		// struct{foo: string} & struct{foo: string|blob} -> true
-		{MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": MakeUnionType(StringType, BlobType)}), true},
+		{mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": mustType(MakeUnionType(StringType, BlobType))})), true},
 
 		// struct{foo: string}|struct{foo: blob} & struct{foo: string|blob} -> true
-		{MakeUnionType(
-			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": BlobType}),
-		), MakeStructTypeFromFields("", FieldMap{"foo": MakeUnionType(StringType, BlobType)}), true},
+		{mustType(MakeUnionType(
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": BlobType}))),
+		), mustType(MakeStructTypeFromFields("", FieldMap{"foo": mustType(MakeUnionType(StringType, BlobType))})), true},
 		// struct{foo: string}|struct{foo: blob} & struct{foo: number|bool} -> false
-		{MakeUnionType(
-			MakeStructTypeFromFields("", FieldMap{"foo": StringType}),
-			MakeStructTypeFromFields("", FieldMap{"foo": BlobType}),
-		), MakeStructTypeFromFields("", FieldMap{"foo": MakeUnionType(FloaTType, BoolType)}), false},
+		{mustType(MakeUnionType(
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": BlobType}))),
+		), mustType(MakeStructTypeFromFields("", FieldMap{"foo": mustType(MakeUnionType(FloaTType, BoolType))})), false},
 
 		// map<struct{x:number, y:number}, struct A{foo:string}> & map<struct{x:number, y:number}, struct A{foo:string, bar:bool}> -> true
 		{
-			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
-				MakeStructTypeFromFields("A", FieldMap{"foo": StringType})),
-			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
-				MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})),
+			mustType(MakeMapType(
+				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
+				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType})))),
+			mustType(MakeMapType(
+				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
+				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})))),
 			true,
 		},
 
 		// map<struct{x:number, y:number}, struct A{foo:string}> & map<struct{x:number, y:number}, struct A{foo:string, bar:bool}> -> true
 		{
-			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
-				MakeStructTypeFromFields("A", FieldMap{"foo": StringType})),
-			MakeMapType(
-				MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType}),
-				MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})),
+			mustType(MakeMapType(
+				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
+				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType})))),
+			mustType(MakeMapType(
+				mustType(MakeStructTypeFromFields("", FieldMap{"x": FloaTType, "y": FloaTType})),
+				mustType(MakeStructTypeFromFields("A", FieldMap{"foo": StringType, "bar": BoolType})))),
 			true,
 		},
 
 		// struct A{self:A} & struct A{self:A, foo:Float} -> true
-		{MakeStructTypeFromFields("A", FieldMap{"self": MakeCycleType("A")}),
-			MakeStructTypeFromFields("A", FieldMap{"self": MakeCycleType("A"), "foo": FloaTType}), true},
+		{mustType(MakeStructTypeFromFields("A", FieldMap{"self": MakeCycleType("A")})),
+			mustType(MakeStructTypeFromFields("A", FieldMap{"self": MakeCycleType("A"), "foo": FloaTType})), true},
 
 		// struct{b:Bool} & struct{b?:Bool} -> true
 		{
-			MakeStructType("", StructField{"b", BoolType, false}),
-			MakeStructType("", StructField{"b", BoolType, true}),
+			mustType(MakeStructType("", StructField{"b", BoolType, false})),
+			mustType(MakeStructType("", StructField{"b", BoolType, true})),
 			true,
 		},
 
 		// struct{a?:Bool} & struct{b?:Bool} -> false
 		{
-			MakeStructType("", StructField{"a", BoolType, true}),
-			MakeStructType("", StructField{"b", BoolType, true}),
+			mustType(MakeStructType("", StructField{"a", BoolType, true})),
+			mustType(MakeStructType("", StructField{"b", BoolType, true})),
 			false,
 		},
 
 		// struct A {b: struct {a: Cycle<A>}} & struct {b: Struct A {b: struct {b: Cycle<A>}}} -> false
 		{
-			MakeStructType("A",
-				StructField{"a", MakeStructType("",
+			mustType(MakeStructType("A",
+				StructField{"a", mustType(MakeStructType("",
 					StructField{"a", MakeCycleType("A"), false},
-				), false},
-			),
-			MakeStructType("",
-				StructField{"a", MakeStructType("A",
-					StructField{"a", MakeStructType("",
+				)), false},
+			)),
+			mustType(MakeStructType("",
+				StructField{"a", mustType(MakeStructType("A",
+					StructField{"a", mustType(MakeStructType("",
 						StructField{"a", MakeCycleType("A"), false},
-					), false},
-				), false},
-			),
+					)), false},
+				)), false},
+			)),
 			true,
 		},
 	}
 
 	for i, c := range cases {
 		act := ContainCommonSupertype(Format_7_18, c.a, c.b)
-		assert.Equal(t, c.out, act, "Test case at position %d; \n\ta:%s\n\tb:%s", i, c.a.Describe(context.Background()), c.b.Describe(context.Background()))
+		aDesc, err := c.a.Describe(context.Background())
+		assert.NoError(t, err)
+		bDesc, err := c.b.Describe(context.Background())
+		assert.NoError(t, err)
+		assert.Equal(t, c.out, act, "Test case at position %d; \n\ta:%s\n\tb:%s", i, aDesc, bDesc)
 	}
 }

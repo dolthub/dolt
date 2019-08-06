@@ -204,10 +204,24 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return RootValueUnreadable{HeadRoot, err}
 	}
 
-	newRoot := cm.GetRootValue()
+	newRoot, err := cm.GetRootValue()
+
+	if err != nil {
+		return err
+	}
+
 	conflicts := set.NewStrSet([]string{})
-	wrkTblHashes := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
-	stgTblHashes := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
+	wrkTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
+
+	if err != nil {
+		return err
+	}
+
+	stgTblHashes, err := tblHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
+
+	if err != nil {
+		return err
+	}
 
 	if conflicts.Size() > 0 {
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
@@ -236,12 +250,32 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 
 var emptyHash = hash.Hash{}
 
-func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) map[string]hash.Hash {
+func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) (map[string]hash.Hash, error) {
 	resultMap := make(map[string]hash.Hash)
-	for _, tblName := range newRoot.GetTableNames(ctx) {
-		oldHash, _ := oldRoot.GetTableHash(ctx, tblName)
-		newHash, _ := newRoot.GetTableHash(ctx, tblName)
-		changedHash, _ := changedRoot.GetTableHash(ctx, tblName)
+	tblNames, err := newRoot.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, tblName := range tblNames {
+		oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		newHash, _, err := newRoot.GetTableHash(ctx, tblName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
+
+		if err != nil {
+			return nil, err
+		}
 
 		if oldHash == changedHash {
 			resultMap[tblName] = newHash
@@ -254,10 +288,25 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 		}
 	}
 
-	for _, tblName := range changedRoot.GetTableNames(ctx) {
+	tblNames, err = changedRoot.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, tblName := range tblNames {
 		if _, exists := resultMap[tblName]; !exists {
-			oldHash, _ := oldRoot.GetTableHash(ctx, tblName)
-			changedHash, _ := changedRoot.GetTableHash(ctx, tblName)
+			oldHash, _, err := oldRoot.GetTableHash(ctx, tblName)
+
+			if err != nil {
+				return nil, err
+			}
+
+			changedHash, _, err := changedRoot.GetTableHash(ctx, tblName)
+
+			if err != nil {
+				return nil, err
+			}
 
 			if oldHash == emptyHash {
 				resultMap[tblName] = changedHash
@@ -267,7 +316,7 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 		}
 	}
 
-	return resultMap
+	return resultMap, nil
 }
 
 func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, error) {
@@ -298,7 +347,9 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 
 	rootsWithTable := make([]RootType, 0, len(roots))
 	for rt, root := range roots {
-		if root.HasTable(ctx, table) {
+		if has, err := root.HasTable(ctx, table); err != nil {
+			return nil, err
+		} else if has {
 			rootsWithTable = append(rootsWithTable, rt)
 		}
 	}

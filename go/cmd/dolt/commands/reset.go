@@ -83,21 +83,41 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	// need to save the state of files that aren't tracked
 	untrackedTables := make(map[string]*doltdb.Table)
-	for _, tblName := range workingRoot.GetTableNames(ctx) {
-		untrackedTables[tblName], _ = workingRoot.GetTable(ctx, tblName)
+	wTblNames, err := workingRoot.GetTableNames(ctx)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read tables from the working set").AddCause(err).Build()
 	}
 
-	for _, tblName := range headRoot.GetTableNames(ctx) {
+	for _, tblName := range wTblNames {
+		untrackedTables[tblName], _, err = workingRoot.GetTable(ctx, tblName)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to read '%s' from the working set", tblName).AddCause(err).Build()
+		}
+	}
+
+	headTblNames, err := headRoot.GetTableNames(ctx)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read tables from head").AddCause(err).Build()
+	}
+
+	for _, tblName := range headTblNames {
 		delete(untrackedTables, tblName)
 	}
 
 	newWkRoot := headRoot
 	for tblName, tbl := range untrackedTables {
-		newWkRoot = newWkRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+		newWkRoot, err = newWkRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to write table back to database").Build()
+		}
 	}
 
 	// TODO: update working and staged in one repo_state write.
-	err := dEnv.UpdateWorkingRoot(ctx, newWkRoot)
+	err = dEnv.UpdateWorkingRoot(ctx, newWkRoot)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to update the working tables.").AddCause(err).Build()
@@ -116,7 +136,12 @@ func resetSoft(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, he
 	tbls := apr.Args()
 
 	if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
-		tbls = actions.AllTables(context.TODO(), stagedRoot, headRoot)
+		var err error
+		tbls, err = actions.AllTables(context.TODO(), stagedRoot, headRoot)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
+		}
 	}
 
 	verr := ValidateTablesWithVErr(tbls, stagedRoot, headRoot)
@@ -143,7 +168,11 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 		return
 	}
 
-	notStaged := actions.NewTableDiffs(context.TODO(), working, staged)
+	notStaged, err := actions.NewTableDiffs(context.TODO(), working, staged)
+
+	if err != nil {
+		return
+	}
 
 	if notStaged.NumRemoved+notStaged.NumModified > 0 {
 		cli.Println("Unstaged changes after reset:")
@@ -162,7 +191,11 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 }
 
 func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
-	updatedRoot := staged.UpdateTablesFromOther(context.TODO(), tbls, head)
+	updatedRoot, err := staged.UpdateTablesFromOther(context.TODO(), tbls, head)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to update tables").AddCause(err).Build()
+	}
 
 	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)
 }

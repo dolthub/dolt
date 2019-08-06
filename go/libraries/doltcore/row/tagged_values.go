@@ -32,17 +32,17 @@ func (tvs TupleVals) Kind() types.NomsKind {
 	return types.TupleKind
 }
 
-func (tvs TupleVals) Value(ctx context.Context) types.Value {
+func (tvs TupleVals) Value(ctx context.Context) (types.Value, error) {
 	return types.NewTuple(tvs.nbf, tvs.vs...)
 }
 
-func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) bool {
+func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) (bool, error) {
 	if other.Kind() == types.TupleKind {
 		if otherTVs, ok := other.(TupleVals); ok {
 			for i, val := range tvs.vs {
 				if i == len(otherTVs.vs) {
 					// equal up til the end of other. other is shorter, therefore it is less
-					return false
+					return false, nil
 				}
 
 				otherVal := otherTVs.vs[i]
@@ -52,13 +52,13 @@ func (tvs TupleVals) Less(nbf *types.NomsBinFormat, other types.LesserValuable) 
 				}
 			}
 
-			return len(tvs.vs) < len(otherTVs.vs)
+			return len(tvs.vs) < len(otherTVs.vs), nil
 		} else {
 			panic("not supported")
 		}
 	}
 
-	return types.TupleKind < other.Kind()
+	return types.TupleKind < other.Kind(), nil
 }
 
 func (tt TaggedValues) NomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64, encodeNulls bool) TupleVals {
@@ -90,17 +90,19 @@ func (tt TaggedValues) NomsTupleForTags(nbf *types.NomsBinFormat, tags []uint64,
 	return TupleVals{vals, nbf}
 }
 
-func (tt TaggedValues) Iter(cb func(tag uint64, val types.Value) (stop bool)) bool {
+func (tt TaggedValues) Iter(cb func(tag uint64, val types.Value) (stop bool, err error)) (bool, error) {
 	stop := false
-	for tag, val := range tt {
-		stop = cb(tag, val)
 
-		if stop {
+	var err error
+	for tag, val := range tt {
+		stop, err = cb(tag, val)
+
+		if stop || err != nil {
 			break
 		}
 	}
 
-	return stop
+	return stop, err
 }
 
 func (tt TaggedValues) Get(tag uint64) (types.Value, bool) {
@@ -130,15 +132,24 @@ func (tt TaggedValues) copy() TaggedValues {
 	return newTagToVal
 }
 
-func ParseTaggedValues(tpl types.Tuple) TaggedValues {
+func ParseTaggedValues(tpl types.Tuple) (TaggedValues, error) {
 	if tpl.Len()%2 != 0 {
 		panic("A tagged tuple must have an even column count.")
 	}
 
 	taggedTuple := make(TaggedValues, tpl.Len()/2)
 	for i := uint64(0); i < tpl.Len(); i += 2 {
-		tag := tpl.Get(i)
-		val := tpl.Get(i + 1)
+		tag, err := tpl.Get(i)
+
+		if err != nil {
+			return nil, err
+		}
+
+		val, err := tpl.Get(i + 1)
+
+		if err != nil {
+			return nil, err
+		}
 
 		if tag.Kind() != types.UintKind {
 			panic("Invalid tagged tuple must have uint tags.")
@@ -149,13 +160,19 @@ func ParseTaggedValues(tpl types.Tuple) TaggedValues {
 		}
 	}
 
-	return taggedTuple
+	return taggedTuple, nil
 }
 
 func (tt TaggedValues) String() string {
 	str := "{"
 	for k, v := range tt {
-		str += fmt.Sprintf("\n\t%d: %s", k, types.EncodedValue(context.Background(), v))
+		encStr, err := types.EncodedValue(context.Background(), v)
+
+		if err != nil {
+			return err.Error()
+		}
+
+		str += fmt.Sprintf("\n\t%d: %s", k, encStr)
 	}
 
 	str += "\n}"

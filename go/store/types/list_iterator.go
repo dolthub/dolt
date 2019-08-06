@@ -34,13 +34,27 @@ type ListIterator struct {
 
 // Next returns subsequent Values from a List, starting with the index at which the iterator was
 // created. If there are no more Values, Next() returns nil.
-func (li ListIterator) Next(ctx context.Context) (out Value) {
+func (li ListIterator) Next(ctx context.Context) (Value, error) {
 	if li.cursor == nil {
 		d.Panic("Cannot use a nil ListIterator")
 	}
+
+	var out Value
 	if li.cursor.valid() {
-		out = li.cursor.current().(Value)
-		li.cursor.advance(ctx)
+		currItem, err := li.cursor.current()
+
+		if err != nil {
+			return nil, err
+		}
+
+		out = currItem.(Value)
+
+		_, err = li.cursor.advance(ctx)
+
+		if err != nil {
+			return nil, err
+		}
 	}
-	return
+
+	return out, nil
 }

@@ -137,7 +137,7 @@ func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	destCols := destSch.GetAllCols()
 
 	srcToDest := make(map[uint64]uint64, destCols.Size())
-	destCols.Iter(func(destTag uint64, col schema.Column) (stop bool) {
+	err := destCols.Iter(func(destTag uint64, col schema.Column) (stop bool, err error) {
 		srcCol, ok := srcCols.GetByTag(destTag)
 
 		if ok {
@@ -145,8 +145,12 @@ func TagMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 			successes++
 		}
 
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	if successes == 0 {
 		return nil, ErrEmptyMapping
@@ -163,7 +167,7 @@ func NameMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 	destCols := destSch.GetAllCols()
 
 	srcToDest := make(map[uint64]uint64, destCols.Size())
-	destCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := destCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		inCol, ok := srcCols.GetByName(col.Name)
 
 		if ok {
@@ -171,8 +175,12 @@ func NameMapping(srcSch, destSch schema.Schema) (*FieldMapping, error) {
 			successes++
 		}
 
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	if successes == 0 {
 		return nil, ErrEmptyMapping
@@ -200,14 +208,18 @@ func MappingFromFile(mappingFile string, fs filesys.ReadableFS, inSch, outSch sc
 }
 
 // TypedToUntypedMapping takes a schema and creates a mapping to an untyped schema with all the same columns.
-func TypedToUntypedMapping(sch schema.Schema) *FieldMapping {
-	untypedSch := untyped.UntypeSchema(sch)
+func TypedToUntypedMapping(sch schema.Schema) (*FieldMapping, error) {
+	untypedSch, err := untyped.UntypeSchema(sch)
 
 	identityMap := make(map[uint64]uint64)
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		identityMap[tag] = tag
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	mapping, err := NewFieldMapping(sch, untypedSch, identityMap)
 
@@ -215,5 +227,5 @@ func TypedToUntypedMapping(sch schema.Schema) *FieldMapping {
 		panic(err)
 	}
 
-	return mapping
+	return mapping, nil
 }

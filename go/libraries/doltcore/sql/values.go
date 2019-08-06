@@ -242,7 +242,11 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		// TODO: surely there is a better way to do this without resorting to interface{}
 		ts := &chunks.TestStorage{}
 		vs := types.NewValueStore(ts.NewView())
-		set := types.NewSet(context.Background(), vs, vals...)
+		set, err := types.NewSet(context.Background(), vs, vals...)
+
+		if err != nil {
+			return nil, err
+		}
 
 		// TODO: better type checking (set type is not literally the underlying type)
 		getter := LiteralValueGetter(set)
@@ -277,19 +281,43 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 			}
 		case sqlparser.LessThanStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
-				return left.Less(nbf, right)
+				isLess, err := left.Less(nbf, right)
+
+				if err != nil {
+					panic(err)
+				}
+
+				return isLess
 			}
 		case sqlparser.GreaterThanStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
-				return right.Less(nbf, left)
+				isLess, err := right.Less(nbf, left)
+
+				if err != nil {
+					panic(err)
+				}
+
+				return isLess
 			}
 		case sqlparser.LessEqualStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
-				return left.Less(nbf, right) || left.Equals(right)
+				isLess, err := right.Less(nbf, left)
+
+				if err != nil {
+					panic(err)
+				}
+
+				return !isLess
 			}
 		case sqlparser.GreaterEqualStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
-				return right.Less(nbf, left) || right.Equals(left)
+				isLess, err := left.Less(nbf, right)
+
+				if err != nil {
+					panic(err)
+				}
+
+				return !isLess
 			}
 		case sqlparser.NotEqualStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
@@ -298,12 +326,24 @@ func getterFor(expr sqlparser.Expr, inputSchemas map[string]schema.Schema, alias
 		case sqlparser.InStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				set := right.(types.Set)
-				return set.Has(context.Background(), left)
+				has, err := set.Has(context.Background(), left)
+
+				if err != nil {
+					panic(err)
+				}
+
+				return has
 			}
 		case sqlparser.NotInStr:
 			predicate = func(nbf *types.NomsBinFormat, left, right types.Value) bool {
 				set := right.(types.Set)
-				return !set.Has(context.Background(), left)
+				has, err := set.Has(context.Background(), left)
+
+				if err != nil {
+					panic(err)
+				}
+
+				return !has
 			}
 		case sqlparser.NullSafeEqualStr:
 			return nil, errFmt("null safe equal operation not supported")

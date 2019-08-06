@@ -39,6 +39,54 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+func mustGetValue(val types.Value, found bool, err error) types.Value {
+	d.PanicIfError(err)
+	d.PanicIfFalse(found)
+	return val
+}
+
+func mustValue(val types.Value, err error) types.Value {
+	d.PanicIfError(err)
+	return val
+}
+
+func mustList(l types.List, err error) types.List {
+	d.PanicIfError(err)
+	return l
+}
+
+func mustStruct(st types.Struct, err error) types.Struct {
+	d.PanicIfError(err)
+	return st
+}
+
+func mustSet(s types.Set, err error) types.Set {
+	d.PanicIfError(err)
+	return s
+}
+
+func mustType(t *types.Type, err error) *types.Type {
+	d.PanicIfError(err)
+	return t
+}
+
+func mustBlob(b types.Blob, err error) types.Blob {
+	d.PanicIfError(err)
+	return b
+}
+
+func mustString(str string, err error) string {
+	d.PanicIfError(err)
+	return str
+}
+
+func mustMarshalType(nbf *types.NomsBinFormat, v interface{}) *types.Type {
+	t, err := MarshalType(nbf, v)
+	d.PanicIfError(err)
+
+	return t
+}
+
 func TestDecode(tt *testing.T) {
 	assert := assert.New(tt)
 	vs := newTestValueStore()
@@ -136,19 +184,23 @@ func TestDecode(tt *testing.T) {
 	}
 
 	var list types.List
-	list2 := types.NewList(context.Background(), vs, types.Float(42))
+	list2, err := types.NewList(context.Background(), vs, types.Float(42))
+	assert.NoError(err)
 	t(list2, &list, list2)
 
 	var m types.Map
-	map2 := types.NewMap(context.Background(), vs, types.Float(42), types.String("Hi"))
+	map2, err := types.NewMap(context.Background(), vs, types.Float(42), types.String("Hi"))
+	assert.NoError(err)
 	t(map2, &m, map2)
 
 	var set types.Set
-	set2 := types.NewSet(context.Background(), vs, types.String("Bye"))
+	set2, err := types.NewSet(context.Background(), vs, types.String("Bye"))
+	assert.NoError(err)
 	t(set2, &set, set2)
 
 	var blob types.Blob
-	blob2 := types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello"))
+	blob2, err := types.NewBlob(context.Background(), vs, bytes.NewBufferString("hello"))
+	assert.NoError(err)
 	t(blob2, &blob, blob2)
 
 	type TestStruct struct {
@@ -157,26 +209,27 @@ func TestDecode(tt *testing.T) {
 		C string
 	}
 	var ts TestStruct
-	t(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
+
+	t(mustValue(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"b": types.Bool(true),
 		"a": types.Float(42),
 		"c": types.String("hi"),
-	}), &ts, TestStruct{true, 42, "hi"})
+	})), &ts, TestStruct{true, 42, "hi"})
 	// again to test the caching
-	t(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
+	t(mustValue(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 		"b": types.Bool(false),
 		"a": types.Float(555),
 		"c": types.String("hello"),
-	}), &ts, TestStruct{false, 555, "hello"})
+	})), &ts, TestStruct{false, 555, "hello"})
 
 	var as struct {
 		X int32
 		Y bool
 	}
-	t(types.NewStruct(types.Format_7_18, "", types.StructData{
+	t(mustValue(types.NewStruct(types.Format_7_18, "", types.StructData{
 		"y": types.Bool(true),
 		"x": types.Float(42),
-	}), &as, struct {
+	})), &as, struct {
 		X int32
 		Y bool
 	}{
@@ -189,43 +242,43 @@ func TestDecode(tt *testing.T) {
 		B string
 	}
 	var t3 T3
-	t(types.NewStruct(types.Format_7_18, "T3", types.StructData{
+	t(mustValue(types.NewStruct(types.Format_7_18, "T3", types.StructData{
 		"b": types.String("abc"),
 		"a": types.Float(42),
-	}), &t3, T3{"abc"})
+	})), &t3, T3{"abc"})
 
 	// Case of struct name is not relevant when unmarshalling.
 	type aBc struct {
 		E bool
 	}
 	var t4 aBc
-	t(types.NewStruct(types.Format_7_18, "abc", types.StructData{
+	t(mustValue(types.NewStruct(types.Format_7_18, "abc", types.StructData{
 		"e": types.Bool(true),
-	}), &t4, aBc{true})
-	t(types.NewStruct(types.Format_7_18, "Abc", types.StructData{
+	})), &t4, aBc{true})
+	t(mustValue(types.NewStruct(types.Format_7_18, "Abc", types.StructData{
 		"e": types.Bool(false),
-	}), &t4, aBc{false})
+	})), &t4, aBc{false})
 
 	// Name of struct is irrelevant to unmarshalling structs.
 	type SomeOtherName struct {
 		A int
 	}
 	var t5 SomeOtherName
-	t(types.NewStruct(types.Format_7_18, "aeiou", types.StructData{
+	t(mustValue(types.NewStruct(types.Format_7_18, "aeiou", types.StructData{
 		"a": types.Float(42),
-	}), &t5, SomeOtherName{42})
+	})), &t5, SomeOtherName{42})
 
 	var t6 SomeOtherName
-	t(types.NewStruct(types.Format_7_18, "SomeOtherName", types.StructData{
+	t(mustValue(types.NewStruct(types.Format_7_18, "SomeOtherName", types.StructData{
 		"a": types.Float(42),
-	}), &t6, SomeOtherName{42})
+	})), &t6, SomeOtherName{42})
 
 	var t7 struct {
 		A int
 	}
-	t(types.NewStruct(types.Format_7_18, "SomeOtherName", types.StructData{
+	t(mustValue(types.NewStruct(types.Format_7_18, "SomeOtherName", types.StructData{
 		"a": types.Float(42),
-	}), &t7, struct{ A int }{42})
+	})), &t7, struct{ A int }{42})
 }
 
 func TestDecodeStructWithNomsValue(t *testing.T) {
@@ -244,19 +297,20 @@ func TestDecodeStructWithNomsValue(t *testing.T) {
 		Def types.List
 	}
 
-	v := types.NewStruct(types.Format_7_18, "T2", types.StructData{
-		"abc": types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
+	v := mustValue(types.NewStruct(types.Format_7_18, "T2", types.StructData{
+		"abc": mustValue(types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{
 			"a": types.Float(1),
 			"b": types.Bool(false),
 			"c": types.String("bye"),
-		}),
-		"def": types.NewList(context.Background(), vs, types.Float(42)),
-	})
+		})),
+		"def": mustValue(types.NewList(context.Background(), vs, types.Float(42))),
+	}))
 	var t2 T2
-	MustUnmarshal(context.Background(), types.Format_7_18, v, &t2)
+	err := Unmarshal(context.Background(), types.Format_7_18, v, &t2)
+	assert.NoError(t, err)
 	assert.IsType(t, T2{}, t2)
 	assert.Equal(t, TestStruct{false, 1, "bye"}, t2.Abc)
-	assert.True(t, t2.Def.Equals(types.NewList(context.Background(), vs, types.Float(42))))
+	assert.True(t, t2.Def.Equals(mustValue(types.NewList(context.Background(), vs, types.Float(42)))))
 }
 
 func TestDecodeNilPointer(t *testing.T) {
@@ -285,19 +339,19 @@ func TestDecodeTypeMismatch(t *testing.T) {
 	defer vs.Close()
 
 	var b bool
-	assertDecodeErrorMessage(t, types.Float(42), &b, "Cannot unmarshal Float into Go value of type bool")
+	assertDecodeErrorMessage(t, types.Float(42), &b, "Cannot unmarshal from: Float to: bool details: ")
 
 	var blob types.Blob
-	assertDecodeErrorMessage(t, types.NewList(context.Background(), vs), &blob, "Cannot unmarshal List<> into Go value of type types.Blob")
+	assertDecodeErrorMessage(t, mustValue(types.NewList(context.Background(), vs)), &blob, "Cannot unmarshal from: List<> to: types.Blob details: ")
 
 	type S struct {
 		X int
 	}
 	var s S
-	assertDecodeErrorMessage(t, types.String("hi!"), &s, "Cannot unmarshal String into Go value of type marshal.S, expected struct")
-	assertDecodeErrorMessage(t, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	assertDecodeErrorMessage(t, types.String("hi!"), &s, "Cannot unmarshal from: String to: marshal.S details: expected struct")
+	assertDecodeErrorMessage(t, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"x": types.String("hi"),
-	}), &s, "Cannot unmarshal String into Go value of type int")
+	})), &s, "Cannot unmarshal from: String to: int details: ")
 }
 
 func assertDecodeErrorMessage(t *testing.T, v types.Value, ptr interface{}, msg string) {
@@ -327,7 +381,7 @@ func TestDecodeInvalidTypes(tt *testing.T) {
 
 func TestDecodeOverflows(tt *testing.T) {
 	t := func(p interface{}, n float64, ts string) {
-		assertDecodeErrorMessage(tt, types.Float(n), p, fmt.Sprintf("Cannot unmarshal Float into Go value of type %s (%g does not fit in %s)", ts, n, ts))
+		assertDecodeErrorMessage(tt, types.Float(n), p, fmt.Sprintf("Cannot unmarshal from: Float to: %s details: (%g does not fit in %s)", ts, n, ts))
 	}
 
 	var ui8 uint8
@@ -361,9 +415,9 @@ func TestDecodeMissingField(t *testing.T) {
 		B bool
 	}
 	var s S
-	assertDecodeErrorMessage(t, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	assertDecodeErrorMessage(t, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"a": types.Float(42),
-	}), &s, "Cannot unmarshal Struct S {\n  a: Float,\n} into Go value of type marshal.S, missing field \"b\"")
+	})), &s, "Cannot unmarshal from: Struct S {\n  a: Float,\n} to: marshal.S details: missing field \"b\"")
 }
 
 func TestDecodeEmbeddedStruct(tt *testing.T) {
@@ -376,9 +430,9 @@ func TestDecodeEmbeddedStruct(tt *testing.T) {
 		EmbeddedStruct
 	}
 	var ts TestStruct
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"x": types.Float(1),
-	}), &ts)
+	})), &ts)
 	assert.NoError(err)
 	assert.Equal(TestStruct{EmbeddedStruct{1}}, ts)
 
@@ -387,10 +441,10 @@ func TestDecodeEmbeddedStruct(tt *testing.T) {
 		TestStruct
 	}
 	var ts2 OuterTest
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"x": types.Float(2),
 		"y": types.Bool(true),
-	}), &ts2)
+	})), &ts2)
 	assert.NoError(err)
 	assert.Equal(OuterTest{true, TestStruct{EmbeddedStruct{2}}}, ts2)
 }
@@ -406,9 +460,9 @@ func TestDecodeEmbeddedStructSkip(tt *testing.T) {
 		Y              int
 	}
 	ts := TestStruct{EmbeddedStruct: EmbeddedStruct{42}}
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"y": types.Float(2),
-	}), &ts)
+	})), &ts)
 	assert.NoError(err)
 	assert.Equal(TestStruct{EmbeddedStruct{42}, 2}, ts)
 }
@@ -424,12 +478,12 @@ func TestDecodeEmbeddedStructNamed(tt *testing.T) {
 		Y              int
 	}
 	ts := TestStruct{EmbeddedStruct: EmbeddedStruct{42}}
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"em": types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
+		"em": mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 			"x": types.Float(1),
-		}),
+		})),
 		"y": types.Float(2),
-	}), &ts)
+	})), &ts)
 	assert.NoError(err)
 	assert.Equal(TestStruct{EmbeddedStruct{1}, 2}, ts)
 }
@@ -445,9 +499,9 @@ func TestDecodeEmbeddedStructOriginal(tt *testing.T) {
 		EmbeddedStruct
 	}
 	var ts TestStruct
-	nomsStruct := types.NewStruct(types.Format_7_18, "S", types.StructData{
+	nomsStruct := mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"x": types.Float(1),
-	})
+	}))
 	err := Unmarshal(context.Background(), types.Format_7_18, nomsStruct, &ts)
 	assert.NoError(err)
 	expected := TestStruct{
@@ -476,24 +530,25 @@ func TestDecodeTaggingSkip(t *testing.T) {
 		B bool
 	}
 	var s S
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"b": types.Bool(true),
-	}), &s)
+	})), &s)
 	assert.NoError(err)
 	assert.Equal(S{0, true}, s)
 
 	var s2 S
-	Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"a": types.Float(42),
 		"b": types.Bool(true),
-	}), &s2)
+	})), &s2)
+	assert.NoError(err)
 	assert.Equal(S{0, true}, s2)
 
 	s3 := S{555, true}
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"a": types.Float(42),
 		"b": types.Bool(false),
-	}), &s3)
+	})), &s3)
 	assert.NoError(err)
 	assert.Equal(S{555, false}, s3)
 }
@@ -507,11 +562,11 @@ func TestDecodeNamedFields(t *testing.T) {
 		Ccc string
 	}
 	var s S
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"a":   types.Float(42),
 		"B":   types.Bool(true),
 		"ccc": types.String("Hi"),
-	}), &s)
+	})), &s)
 	assert.NoError(err)
 	assert.Equal(S{42, true, "Hi"}, s)
 }
@@ -521,9 +576,9 @@ func TestDecodeInvalidNamedFields(t *testing.T) {
 		A int `noms:"1a"`
 	}
 	var s S
-	assertDecodeErrorMessage(t, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	assertDecodeErrorMessage(t, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"a": types.Float(42),
-	}), &s, "Invalid struct field name: 1a")
+	})), &s, "Invalid struct field name: 1a")
 }
 
 func TestDecodeInvalidNomsType(t *testing.T) {
@@ -534,9 +589,9 @@ func TestDecodeInvalidNomsType(t *testing.T) {
 		A types.List
 	}
 	var s S
-	assertDecodeErrorMessage(t, types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"a": types.NewMap(context.Background(), vs, types.String("A"), types.Float(1)),
-	}), &s, "Cannot unmarshal Map<String, Float> into Go value of type types.List")
+	assertDecodeErrorMessage(t, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
+		"a": mustValue(types.NewMap(context.Background(), vs, types.String("A"), types.Float(1))),
+	})), &s, "Cannot unmarshal from: Map<String, Float> to: types.List details: ")
 }
 
 func TestDecodeNomsTypePtr(t *testing.T) {
@@ -552,15 +607,15 @@ func TestDecodeNomsTypePtr(t *testing.T) {
 	var s S
 
 	primitive := types.StringType
-	testUnmarshal(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": primitive}), &s, &S{primitive})
+	testUnmarshal(mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": primitive})), &s, &S{primitive})
 
-	complex := types.MakeStructType("Complex",
+	complex := mustType(types.MakeStructType("Complex",
 		types.StructField{
 			Name: "stuff",
 			Type: types.StringType,
 		},
-	)
-	testUnmarshal(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": complex}), &s, &S{complex})
+	))
+	testUnmarshal(mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": complex})), &s, &S{complex})
 }
 
 func ExampleUnmarshal() {
@@ -569,10 +624,10 @@ func ExampleUnmarshal() {
 		Male  bool
 	}
 	var rickon Person
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "Person", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "Person", types.StructData{
 		"given": types.String("Rickon"),
 		"male":  types.Bool(true),
-	}), &rickon)
+	})), &rickon)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -590,11 +645,11 @@ func TestDecodeSlice(t *testing.T) {
 
 	var s []string
 
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs, types.String("a"), types.String("b"), types.String("c")), &s)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
 	assert.NoError(err)
 	assert.Equal([]string{"a", "b", "c"}, s)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewSet(context.Background(), vs, types.String("a"), types.String("b"), types.String("c")), &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
 	assert.NoError(err)
 	assert.Equal([]string{"a", "b", "c"}, s)
 }
@@ -607,20 +662,20 @@ func TestDecodeSliceEmpty(t *testing.T) {
 
 	var s []string
 
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs), &s)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs)), &s)
 	assert.NoError(err)
 	assert.Equal([]string(nil), s)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewSet(context.Background(), vs), &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs)), &s)
 	assert.NoError(err)
 	assert.Equal([]string(nil), s)
 
 	s2 := []string{}
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs), &s2)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs)), &s2)
 	assert.NoError(err)
 	assert.Equal([]string{}, s2)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewSet(context.Background(), vs), &s2)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs)), &s2)
 	assert.NoError(err)
 	assert.Equal([]string{}, s2)
 }
@@ -633,12 +688,12 @@ func TestDecodeSliceReuse(t *testing.T) {
 
 	s := []string{"A", "B", "C", "D"}
 	s2 := s[1:3]
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs, types.String("a"), types.String("b")), &s)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.String("b"))), &s)
 	assert.NoError(err)
 	assert.Equal([]string{"a", "b"}, s)
 	assert.Equal([]string{"b", "C"}, s2)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewSet(context.Background(), vs, types.String("a"), types.String("b")), &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"))), &s)
 	assert.NoError(err)
 	assert.Equal([]string{"a", "b"}, s)
 	assert.Equal([]string{"b", "C"}, s2)
@@ -652,11 +707,11 @@ func TestDecodeArray(t *testing.T) {
 
 	s := [3]string{"", "", ""}
 
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs, types.String("a"), types.String("b"), types.String("c")), &s)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
 	assert.NoError(err)
 	assert.Equal([3]string{"a", "b", "c"}, s)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewSet(context.Background(), vs, types.String("a"), types.String("b"), types.String("c")), &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"), types.String("c"))), &s)
 	assert.NoError(err)
 	assert.Equal([3]string{"a", "b", "c"}, s)
 }
@@ -669,11 +724,11 @@ func TestDecodeArrayEmpty(t *testing.T) {
 
 	var s [0]string
 
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs), &s)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs)), &s)
 	assert.NoError(err)
 	assert.Equal([0]string{}, s)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewSet(context.Background(), vs), &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewSet(context.Background(), vs)), &s)
 	assert.NoError(err)
 	assert.Equal([0]string{}, s)
 }
@@ -688,15 +743,15 @@ func TestDecodeStructWithSlice(t *testing.T) {
 		List []int
 	}
 	var s S
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"list": types.NewList(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3)),
-	}), &s)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
+		"list": mustValue(types.NewList(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3))),
+	})), &s)
 	assert.NoError(err)
 	assert.Equal(S{[]int{1, 2, 3}}, s)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"list": types.NewSet(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3)),
-	}), &s)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
+		"list": mustValue(types.NewSet(context.Background(), vs, types.Float(1), types.Float(2), types.Float(3))),
+	})), &s)
 	assert.NoError(err)
 	assert.Equal(S{[]int{1, 2, 3}}, s)
 }
@@ -711,11 +766,11 @@ func TestDecodeStructWithArrayOfNomsValue(t *testing.T) {
 		List [1]types.Set
 	}
 	var s S
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"list": types.NewList(context.Background(), vs, types.NewSet(context.Background(), vs, types.Bool(true))),
-	}), &s)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewStruct(types.Format_7_18, "S", types.StructData{
+		"list": mustValue(types.NewList(context.Background(), vs, mustValue(types.NewSet(context.Background(), vs, types.Bool(true))))),
+	})), &s)
 	assert.NoError(err)
-	assert.Equal(S{[1]types.Set{types.NewSet(context.Background(), vs, types.Bool(true))}}, s)
+	assert.Equal(S{[1]types.Set{mustSet(types.NewSet(context.Background(), vs, types.Bool(true)))}}, s)
 }
 
 func TestDecodeWrongArrayLength(t *testing.T) {
@@ -723,7 +778,7 @@ func TestDecodeWrongArrayLength(t *testing.T) {
 	defer vs.Close()
 
 	var l [2]string
-	assertDecodeErrorMessage(t, types.NewList(context.Background(), vs, types.String("hi")), &l, "Cannot unmarshal List<String> into Go value of type [2]string, length does not match")
+	assertDecodeErrorMessage(t, mustValue(types.NewList(context.Background(), vs, types.String("hi"))), &l, "Cannot unmarshal from: List<String> to: [2]string details: length does not match")
 }
 
 func TestDecodeWrongArrayType(t *testing.T) {
@@ -731,7 +786,7 @@ func TestDecodeWrongArrayType(t *testing.T) {
 	defer vs.Close()
 
 	var l [1]string
-	assertDecodeErrorMessage(t, types.NewList(context.Background(), vs, types.Float(1)), &l, "Cannot unmarshal Float into Go value of type string")
+	assertDecodeErrorMessage(t, mustValue(types.NewList(context.Background(), vs, types.Float(1))), &l, "Cannot unmarshal from: Float to: string details: ")
 }
 
 func TestDecodeWrongSliceType(t *testing.T) {
@@ -739,7 +794,7 @@ func TestDecodeWrongSliceType(t *testing.T) {
 	defer vs.Close()
 
 	var l []string
-	assertDecodeErrorMessage(t, types.NewList(context.Background(), vs, types.Float(1)), &l, "Cannot unmarshal Float into Go value of type string")
+	assertDecodeErrorMessage(t, mustValue(types.NewList(context.Background(), vs, types.Float(1))), &l, "Cannot unmarshal from: Float to: string details: ")
 }
 
 func TestDecodeSliceWrongNomsType(t *testing.T) {
@@ -747,7 +802,7 @@ func TestDecodeSliceWrongNomsType(t *testing.T) {
 	defer vs.Close()
 
 	var l []string
-	assertDecodeErrorMessage(t, types.NewMap(context.Background(), vs, types.String("a"), types.Float(1)), &l, "Cannot unmarshal Map<String, Float> into Go value of type []string")
+	assertDecodeErrorMessage(t, mustValue(types.NewMap(context.Background(), vs, types.String("a"), types.Float(1))), &l, "Cannot unmarshal from: Map<String, Float> to: []string details: ")
 }
 
 func TestDecodeArrayWrongNomsType(t *testing.T) {
@@ -755,7 +810,7 @@ func TestDecodeArrayWrongNomsType(t *testing.T) {
 	defer vs.Close()
 
 	var l [1]string
-	assertDecodeErrorMessage(t, types.NewMap(context.Background(), vs, types.String("a"), types.Float(1)), &l, "Cannot unmarshal Map<String, Float> into Go value of type [1]string")
+	assertDecodeErrorMessage(t, mustValue(types.NewMap(context.Background(), vs, types.String("a"), types.Float(1))), &l, "Cannot unmarshal from: Map<String, Float> to: [1]string details: ")
 }
 
 func TestDecodeRecursive(t *testing.T) {
@@ -769,20 +824,20 @@ func TestDecodeRecursive(t *testing.T) {
 		Children []Node
 	}
 
-	v := types.NewStruct(types.Format_7_18, "Node", types.StructData{
-		"children": types.NewList(context.Background(),
+	v := mustStruct(types.NewStruct(types.Format_7_18, "Node", types.StructData{
+		"children": mustValue(types.NewList(context.Background(),
 			vs,
-			types.NewStruct(types.Format_7_18, "Node", types.StructData{
-				"children": types.NewList(context.Background(), vs),
+			mustStruct(types.NewStruct(types.Format_7_18, "Node", types.StructData{
+				"children": mustValue(types.NewList(context.Background(), vs)),
 				"value":    types.Float(2),
-			}),
-			types.NewStruct(types.Format_7_18, "Node", types.StructData{
-				"children": types.NewList(context.Background(), vs),
+			})),
+			mustStruct(types.NewStruct(types.Format_7_18, "Node", types.StructData{
+				"children": mustValue(types.NewList(context.Background(), vs)),
 				"value":    types.Float(3),
-			}),
-		),
+			})),
+		)),
 		"value": types.Float(1),
-	})
+	}))
 
 	var n Node
 	err := Unmarshal(context.Background(), types.Format_7_18, v, &n)
@@ -804,21 +859,22 @@ func TestDecodeMap(t *testing.T) {
 
 	var m map[string]int
 
-	testMap := types.NewMap(context.Background(),
+	testMap, err := types.NewMap(context.Background(),
 		vs,
 		types.String("a"), types.Float(1),
 		types.String("b"), types.Float(2),
 		types.String("c"), types.Float(3))
+	assert.NoError(err)
 	expectedMap := map[string]int{"a": 1, "b": 2, "c": 3}
-	err := Unmarshal(context.Background(), types.Format_7_18, testMap, &m)
+	err = Unmarshal(context.Background(), types.Format_7_18, testMap, &m)
 	assert.NoError(err)
 	assert.Equal(expectedMap, m)
 
 	m = map[string]int{"b": 2, "c": 333}
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewMap(context.Background(),
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(),
 		vs,
 		types.String("a"), types.Float(1),
-		types.String("c"), types.Float(3)), &m)
+		types.String("c"), types.Float(3))), &m)
 	assert.NoError(err)
 	assert.Equal(expectedMap, m)
 
@@ -827,10 +883,10 @@ func TestDecodeMap(t *testing.T) {
 	}
 
 	var m2 map[S]bool
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewMap(context.Background(),
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(),
 		vs,
-		types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("Yes")}), types.Bool(true),
-		types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("No")}), types.Bool(false)), &m2)
+		mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("Yes")})), types.Bool(true),
+		mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"n": types.String("No")})), types.Bool(false))), &m2)
 	assert.NoError(err)
 	assert.Equal(map[S]bool{S{"Yes"}: true, S{"No"}: false}, m2)
 }
@@ -842,12 +898,12 @@ func TestDecodeMapEmpty(t *testing.T) {
 	defer vs.Close()
 
 	var m map[string]int
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewMap(context.Background(), vs), &m)
+	err := Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs)), &m)
 	assert.NoError(err)
 	assert.Equal(map[string]int(nil), m)
 
 	m2 := map[string]int{}
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewMap(context.Background(), vs), &m2)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs)), &m2)
 	assert.NoError(err)
 	assert.Equal(map[string]int{}, m2)
 }
@@ -857,7 +913,7 @@ func TestDecodeMapWrongNomsType(t *testing.T) {
 	defer vs.Close()
 
 	var m map[string]int
-	assertDecodeErrorMessage(t, types.NewList(context.Background(), vs, types.String("a"), types.Float(1)), &m, "Cannot unmarshal List<Float | String> into Go value of type map[string]int")
+	assertDecodeErrorMessage(t, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.Float(1))), &m, "Cannot unmarshal from: List<Float | String> to: map[string]int details: ")
 }
 
 func TestDecodeOntoInterface(t *testing.T) {
@@ -879,19 +935,19 @@ func TestDecodeOntoInterface(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(true, i)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs, types.String("abc")), &i)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("abc"))), &i)
 	assert.NoError(err)
 	assert.Equal([]string{"abc"}, i)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewMap(context.Background(), vs, types.String("abc"), types.Float(1)), &i)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs, types.String("abc"), types.Float(1))), &i)
 	assert.NoError(err)
 	assert.Equal(map[string]float64{"abc": float64(1)}, i)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewList(context.Background(), vs, types.String("a"), types.Bool(true), types.Float(42)), &i)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewList(context.Background(), vs, types.String("a"), types.Bool(true), types.Float(42))), &i)
 	assert.NoError(err)
 	assert.Equal([]interface{}{"a", true, float64(42)}, i)
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewMap(context.Background(), vs, types.String("a"), types.Bool(true), types.Float(42), types.NewList(context.Background(), vs)), &i)
+	err = Unmarshal(context.Background(), types.Format_7_18, mustValue(types.NewMap(context.Background(), vs, types.String("a"), types.Bool(true), types.Float(42), mustValue(types.NewList(context.Background(), vs)))), &i)
 	assert.NoError(err)
 	assert.Equal(map[interface{}]interface{}{"a": true, float64(42): []interface{}(nil)}, i)
 }
@@ -907,7 +963,7 @@ func TestDecodeOntoNonSupportedInterface(t *testing.T) {
 func TestDecodeOntoInterfaceStruct(t *testing.T) {
 	// Not implemented because it requires Go 1.7.
 	var i interface{}
-	assertDecodeErrorMessage(t, types.NewStruct(types.Format_7_18, "", types.StructData{}), &i, "Cannot unmarshal Struct {} into Go value of type interface {}")
+	assertDecodeErrorMessage(t, mustStruct(types.NewStruct(types.Format_7_18, "", types.StructData{})), &i, "Cannot unmarshal from: Struct {} to: interface {} details: ")
 }
 
 func TestDecodeSet(t *testing.T) {
@@ -926,15 +982,15 @@ func TestDecodeSet(t *testing.T) {
 		G []int
 	}
 
-	ns := types.NewStruct(types.Format_7_18, "T", types.StructData{
-		"a": types.NewSet(context.Background(), vs, types.Float(0), types.Float(1), types.Float(2)),
-		"b": types.NewMap(context.Background(), vs, types.Float(3), types.EmptyStruct(types.Format_7_18), types.Float(4), types.EmptyStruct(types.Format_7_18), types.Float(5), types.EmptyStruct(types.Format_7_18)),
-		"c": types.NewSet(context.Background(), vs, types.String("0"), types.String("1"), types.String("2")),
-		"d": types.NewMap(context.Background(), vs, types.String("3"), types.EmptyStruct(types.Format_7_18), types.String("4"), types.EmptyStruct(types.Format_7_18), types.String("5"), types.EmptyStruct(types.Format_7_18)),
-		"e": types.NewSet(context.Background(), vs, types.Float(6), types.Float(7), types.Float(8)),
-		"f": types.NewSet(context.Background(), vs, types.Float(9), types.Float(10), types.Float(11)),
-		"g": types.NewList(context.Background(), vs, types.Float(12), types.Float(13), types.Float(14)),
-	})
+	ns := mustStruct(types.NewStruct(types.Format_7_18, "T", types.StructData{
+		"a": mustValue(types.NewSet(context.Background(), vs, types.Float(0), types.Float(1), types.Float(2))),
+		"b": mustValue(types.NewMap(context.Background(), vs, types.Float(3), types.EmptyStruct(types.Format_7_18), types.Float(4), types.EmptyStruct(types.Format_7_18), types.Float(5), types.EmptyStruct(types.Format_7_18))),
+		"c": mustValue(types.NewSet(context.Background(), vs, types.String("0"), types.String("1"), types.String("2"))),
+		"d": mustValue(types.NewMap(context.Background(), vs, types.String("3"), types.EmptyStruct(types.Format_7_18), types.String("4"), types.EmptyStruct(types.Format_7_18), types.String("5"), types.EmptyStruct(types.Format_7_18))),
+		"e": mustValue(types.NewSet(context.Background(), vs, types.Float(6), types.Float(7), types.Float(8))),
+		"f": mustValue(types.NewSet(context.Background(), vs, types.Float(9), types.Float(10), types.Float(11))),
+		"g": mustValue(types.NewList(context.Background(), vs, types.Float(12), types.Float(13), types.Float(14))),
+	}))
 
 	gs := T{}
 	assert.NoError(Unmarshal(context.Background(), types.Format_7_18, ns, &gs))
@@ -948,15 +1004,15 @@ func TestDecodeSet(t *testing.T) {
 		G: []int{12, 13, 14},
 	}, gs)
 
-	ns2 := types.NewStruct(types.Format_7_18, "T", types.StructData{
-		"a": types.NewSet(context.Background(), vs),
-		"b": types.NewMap(context.Background(), vs),
-		"c": types.NewSet(context.Background(), vs),
-		"d": types.NewMap(context.Background(), vs),
-		"e": types.NewSet(context.Background(), vs),
-		"f": types.NewSet(context.Background(), vs),
-		"g": types.NewList(context.Background(), vs),
-	})
+	ns2 := mustStruct(types.NewStruct(types.Format_7_18, "T", types.StructData{
+		"a": mustSet(types.NewSet(context.Background(), vs)),
+		"b": mustValue(types.NewMap(context.Background(), vs)),
+		"c": mustValue(types.NewSet(context.Background(), vs)),
+		"d": mustValue(types.NewMap(context.Background(), vs)),
+		"e": mustValue(types.NewSet(context.Background(), vs)),
+		"f": mustValue(types.NewSet(context.Background(), vs)),
+		"g": mustValue(types.NewList(context.Background(), vs)),
+	}))
 
 	gs2 := T{
 		A: map[int]struct{}{},
@@ -981,32 +1037,32 @@ func TestDecodeOpt(t *testing.T) {
 		wantError string
 	}{
 		{
-			types.NewSet(context.Background(), vs, types.String("a"), types.String("b")),
+			mustSet(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"))),
 			Opt{},
 			&[]string{},
 			&[]string{"a", "b"},
 			"",
 		},
 		{
-			types.NewSet(context.Background(), vs, types.String("a"), types.String("b")),
+			mustSet(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"))),
 			Opt{Set: true},
 			&[]string{},
 			&[]string{"a", "b"},
 			"",
 		},
 		{
-			types.NewSet(context.Background(), vs, types.String("a"), types.String("b")),
+			mustSet(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"))),
 			Opt{Set: true},
 			&map[string]struct{}{},
 			&map[string]struct{}{"a": struct{}{}, "b": struct{}{}},
 			"",
 		},
 		{
-			types.NewSet(context.Background(), vs, types.String("a"), types.String("b")),
+			mustSet(types.NewSet(context.Background(), vs, types.String("a"), types.String("b"))),
 			Opt{},
 			&map[string]struct{}{},
 			&map[string]struct{}{},
-			"Cannot unmarshal Set<String> into Go value of type map[string]struct {}, field missing \"set\" tag",
+			"Cannot unmarshal from: Set<String> to: map[string]struct {} details: field missing \"set\" tag",
 		},
 	}
 
@@ -1031,10 +1087,10 @@ func TestDecodeNamedSet(t *testing.T) {
 		A map[int]struct{} `noms:"foo,set"`
 	}
 
-	ns := types.NewStruct(types.Format_7_18, "T", types.StructData{
-		"a":   types.NewSet(context.Background(), vs, types.Float(0)),
-		"foo": types.NewSet(context.Background(), vs, types.Float(1)),
-	})
+	ns := mustStruct(types.NewStruct(types.Format_7_18, "T", types.StructData{
+		"a":   mustSet(types.NewSet(context.Background(), vs, types.Float(0))),
+		"foo": mustSet(types.NewSet(context.Background(), vs, types.Float(1))),
+	}))
 
 	gs := T{}
 	assert.NoError(Unmarshal(context.Background(), types.Format_7_18, ns, &gs))
@@ -1053,31 +1109,31 @@ func TestDecodeSetWrongMapType(t *testing.T) {
 		A map[int]int `noms:",set"`
 	}
 
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "T1", types.StructData{
-		"a": types.NewSet(context.Background(), vs, types.Float(0)),
-	}), &T1{})
+	err := Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "T1", types.StructData{
+		"a": mustSet(types.NewSet(context.Background(), vs, types.Float(0))),
+	})), &T1{})
 	assert.Error(err)
-	assert.Equal("Cannot unmarshal Set<Float> into Go value of type map[int]int", err.Error())
+	assert.Equal("Cannot unmarshal from: Set<Float> to: map[int]int details: ", err.Error())
 
 	type T2 struct {
 		A map[int]struct{}
 	}
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "T2", types.StructData{
-		"a": types.NewSet(context.Background(), vs, types.Float(0)),
-	}), &T2{})
+	err = Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "T2", types.StructData{
+		"a": mustSet(types.NewSet(context.Background(), vs, types.Float(0))),
+	})), &T2{})
 	assert.Error(err)
-	assert.Equal(`Cannot unmarshal Set<Float> into Go value of type map[int]struct {}, field missing "set" tag`, err.Error())
+	assert.Equal(`Cannot unmarshal from: Set<Float> to: map[int]struct {} details: field missing "set" tag`, err.Error())
 
 	type T3 struct {
 		A map[int]struct{} `noms:",set"`
 	}
 
-	err = Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "T3", types.StructData{
-		"a": types.NewMap(context.Background(), vs, types.Float(0), types.EmptyStruct(types.Format_7_18)),
-	}), &T3{})
+	err = Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "T3", types.StructData{
+		"a": mustValue(types.NewMap(context.Background(), vs, types.Float(0), types.EmptyStruct(types.Format_7_18))),
+	})), &T3{})
 	assert.Error(err)
-	assert.Equal(`Cannot unmarshal Map<Float, Struct {}> into Go value of type map[int]struct {}, field has "set" tag`, err.Error())
+	assert.Equal(`Cannot unmarshal from: Map<Float, Struct {}> to: map[int]struct {} details: field has "set" tag`, err.Error())
 }
 
 func TestDecodeOmitEmpty(t *testing.T) {
@@ -1099,11 +1155,11 @@ func TestDecodeOmitEmpty(t *testing.T) {
 		},
 	}
 	var actual S
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
-		"bar": types.NewStruct(types.Format_7_18, "", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
+		"bar": mustStruct(types.NewStruct(types.Format_7_18, "", types.StructData{
 			"baz": types.Float(42),
-		}),
-	}), &actual)
+		})),
+	})), &actual)
 	assert.NoError(err)
 	assert.Equal(expected, actual)
 }
@@ -1116,9 +1172,9 @@ func TestDecodeOriginal(t *testing.T) {
 		Bar types.Struct `noms:",original"`
 		Baz types.Struct `noms:",original"`
 	}
-	input := types.NewStruct(types.Format_7_18, "S", types.StructData{
+	input := mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"foo": types.Float(42),
-	})
+	}))
 	expected := S{
 		Foo: 42,
 		Bar: input,
@@ -1136,11 +1192,11 @@ func TestDecodeOriginalReceiveTypeError(t *testing.T) {
 	type S struct {
 		Foo types.Value `noms:",original"`
 	}
-	input := types.NewStruct(types.Format_7_18, "S", types.StructData{})
+	input := mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{}))
 	var actual S
 	err := Unmarshal(context.Background(), types.Format_7_18, input, &actual)
 	assert.Error(err)
-	assert.Equal(`Cannot unmarshal Struct S {} into Go value of type marshal.S, field with tag "original" must have type Struct`, err.Error())
+	assert.Equal(`Cannot unmarshal from: Struct S {} to: marshal.S details: field with tag "original" must have type Struct`, err.Error())
 }
 
 func TestDecodeCanSkipUnexportedField(t *testing.T) {
@@ -1151,9 +1207,9 @@ func TestDecodeCanSkipUnexportedField(t *testing.T) {
 		notExported bool `noms:"-"`
 	}
 	var s S
-	err := Unmarshal(context.Background(), types.Format_7_18, types.NewStruct(types.Format_7_18, "S", types.StructData{
+	err := Unmarshal(context.Background(), types.Format_7_18, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
 		"abc": types.Float(42),
-	}), &s)
+	})), &s)
 	assert.NoError(err)
 	assert.Equal(S{42, false}, s)
 }
@@ -1193,13 +1249,14 @@ func TestUnmarshalerPrimitiveSliceType(t *testing.T) {
 
 func (u *primitiveMapType) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
 	*u = primitiveMapType{}
-	v.(types.Set).IterAll(context.Background(), func(v types.Value) {
+	err := v.(types.Set).IterAll(context.Background(), func(v types.Value) error {
 		sv := v.(types.String)
 		spl := strings.Split(string(sv), ",")
 		d.PanicIfFalse(len(spl) == 2)
 		(*u)[spl[0]] = spl[1]
+		return nil
 	})
-	return nil
+	return err
 }
 
 func TestUnmarshalerPrimitiveMapType(t *testing.T) {
@@ -1208,7 +1265,8 @@ func TestUnmarshalerPrimitiveMapType(t *testing.T) {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	v := types.NewSet(context.Background(), vs, types.String("a,foo"), types.String("b,bar"))
+	v, err := types.NewSet(context.Background(), vs, types.String("a,foo"), types.String("b,bar"))
+	assert.NoError(err)
 	u := primitiveMapType{}
 	assert.NoError(Unmarshal(context.Background(), types.Format_7_18, v, &u))
 	assert.Equal(primitiveMapType(map[string]string{
@@ -1273,15 +1331,15 @@ func TestUnmarshalerComplexStructType(t *testing.T) {
 
 	s := "foo|bar"
 	r := regexp.MustCompile(s)
-	v := types.NewStruct(types.Format_7_18, "TestComplexStructType", types.StructData{
+	v := mustStruct(types.NewStruct(types.Format_7_18, "TestComplexStructType", types.StructData{
 		"p":       types.Float(43),
-		"ps":      types.NewList(context.Background(), vs, types.Float(2), types.Float(3)),
-		"pm":      types.NewMap(context.Background(), vs, types.String("x"), types.Float(101), types.String("y"), types.Float(102)),
+		"ps":      mustValue(types.NewList(context.Background(), vs, types.Float(2), types.Float(3))),
+		"pm":      mustValue(types.NewMap(context.Background(), vs, types.String("x"), types.Float(101), types.String("y"), types.Float(102))),
 		"pslice":  types.String("a,b,c"),
-		"pmap":    types.NewSet(context.Background(), vs, types.String("c,123"), types.String("d,456")),
+		"pmap":    mustValue(types.NewSet(context.Background(), vs, types.String("c,123"), types.String("d,456"))),
 		"pstruct": types.Float(5),
 		"b":       types.String(s),
-	})
+	}))
 	u := TestComplexStructType{}
 	assert.NoError(Unmarshal(context.Background(), types.Format_7_18, v, &u))
 	assert.Equal(TestComplexStructType{
@@ -1307,19 +1365,12 @@ func (u *returnsMarshalerError) UnmarshalNoms(ctx context.Context, nbf *types.No
 	return errors.New("foo bar baz")
 }
 
-func (u panicsMarshaler) UnmarshalNoms(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) error {
-	panic("panic")
-}
-
 func TestUnmarshalerError(t *testing.T) {
 	assert := assert.New(t)
 
 	m1 := returnsMarshalerError{}
 	err := Unmarshal(context.Background(), types.Format_7_18, types.EmptyStruct(types.Format_7_18), &m1)
 	assert.Equal(errors.New("foo bar baz"), err)
-
-	m2 := panicsMarshaler{}
-	assert.Panics(func() { Unmarshal(context.Background(), types.Format_7_18, types.EmptyStruct(types.Format_7_18), &m2) })
 }
 
 type notPointer struct {
@@ -1349,10 +1400,15 @@ func TestUnmarshalMustUnmarshal(t *testing.T) {
 
 	type TestStruct struct{ F1 int }
 
-	v := MustMarshal(context.Background(), vs, types.Float(1))
-	var out TestStruct
-	a.Panics(func() { MustUnmarshal(context.Background(), types.Format_7_18, v, &out) })
+	v, err := Marshal(context.Background(), vs, types.Float(1))
+	a.NoError(err)
 
-	v = MustMarshal(context.Background(), vs, TestStruct{2})
-	a.NotPanics(func() { MustUnmarshal(context.Background(), types.Format_7_18, v, &out) })
+	var out TestStruct
+	err = Unmarshal(context.Background(), types.Format_7_18, v, &out)
+	a.Error(err)
+
+	v, err = Marshal(context.Background(), vs, TestStruct{2})
+	a.NoError(err)
+	err = Unmarshal(context.Background(), types.Format_7_18, v, &out)
+	a.NoError(err)
 }

@@ -18,6 +18,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -46,7 +48,8 @@ func TestDiffSchemas(t *testing.T) {
 
 	oldSch := schema.SchemaFromCols(oldColColl)
 	newSch := schema.SchemaFromCols(newColColl)
-	diffs := DiffSchemas(oldSch, newSch)
+	diffs, err := DiffSchemas(oldSch, newSch)
+	assert.NoError(t, err)
 
 	expected := map[uint64]SchemaDifference{
 		0: {SchDiffNone, 0, &oldCols[0], &newCols[0]},

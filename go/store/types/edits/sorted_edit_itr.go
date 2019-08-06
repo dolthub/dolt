@@ -33,20 +33,30 @@ func NewSortedEditItr(nbf *types.NomsBinFormat, left, right *KVPCollection) *Sor
 }
 
 // Next returns the next KVP
-func (itr *SortedEditItr) Next() *types.KVP {
+func (itr *SortedEditItr) Next() (*types.KVP, error) {
 	if itr.done {
-		return nil
+		return nil, nil
 	}
 
 	lesser := itr.rightItr
-	if itr.leftItr.Less(itr.rightItr) {
+	isLess, err := itr.leftItr.Less(itr.rightItr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if isLess {
 		lesser = itr.leftItr
 	}
 
-	kvp := lesser.Next()
+	kvp, err := lesser.Next()
+
+	if err != nil {
+		return nil, err
+	}
 
 	itr.done = kvp == nil
-	return kvp
+	return kvp, nil
 }
 
 func (itr *SortedEditItr) NumEdits() int64 {
@@ -54,17 +64,23 @@ func (itr *SortedEditItr) NumEdits() int64 {
 }
 
 // Peek returns the next KVP without advancing
-func (itr *SortedEditItr) Peek() *types.KVP {
+func (itr *SortedEditItr) Peek() (*types.KVP, error) {
 	if itr.done {
-		return nil
+		return nil, nil
 	}
 
 	lesser := itr.rightItr
-	if itr.leftItr.Less(itr.rightItr) {
+	isLess, err := itr.leftItr.Less(itr.rightItr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if isLess {
 		lesser = itr.leftItr
 	}
 
-	return lesser.Peek()
+	return lesser.Peek(), nil
 }
 
 // Size returns the total number of elements this iterator will iterate over.

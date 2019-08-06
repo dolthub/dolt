@@ -77,16 +77,19 @@ func TestSqlBatchInserts(t *testing.T) {
 	}
 
 	// Before committing the batch, the database should be unchanged from its original state
-	allPeopleRows := GetAllRows(root, PeopleTableName)
-	allEpsRows := GetAllRows(root, EpisodesTableName)
-	allAppearanceRows := GetAllRows(root, AppearancesTableName)
+	allPeopleRows, err := GetAllRows(root, PeopleTableName)
+	require.NoError(t, err)
+	allEpsRows, err := GetAllRows(root, EpisodesTableName)
+	require.NoError(t, err)
+	allAppearanceRows, err := GetAllRows(root, AppearancesTableName)
+	require.NoError(t, err)
 
 	assert.ElementsMatch(t, AllPeopleRows, allPeopleRows)
 	assert.ElementsMatch(t, AllEpsRows, allEpsRows)
 	assert.ElementsMatch(t, AllAppsRows, allAppearanceRows)
 
 	// Now commit the batch and check for new rows
-	root, err := batcher.Commit(ctx)
+	root, err = batcher.Commit(ctx)
 	require.NoError(t, err)
 
 	var expectedPeople, expectedEpisodes, expectedAppearances []row.Row
@@ -121,9 +124,12 @@ func TestSqlBatchInserts(t *testing.T) {
 		newAppsRow(11, 9),
 	)
 
-	allPeopleRows = GetAllRows(root, PeopleTableName)
-	allEpsRows = GetAllRows(root, EpisodesTableName)
-	allAppearanceRows = GetAllRows(root, AppearancesTableName)
+	allPeopleRows, err = GetAllRows(root, PeopleTableName)
+	require.NoError(t, err)
+	allEpsRows, err = GetAllRows(root, EpisodesTableName)
+	require.NoError(t, err)
+	allAppearanceRows, err = GetAllRows(root, AppearancesTableName)
+	require.NoError(t, err)
 
 	assertRowSetsEqual(t, expectedPeople, allPeopleRows)
 	assertRowSetsEqual(t, expectedEpisodes, allEpsRows)
@@ -161,11 +167,12 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	}
 
 	// Before committing the batch, the database should be unchanged from its original state
-	allPeopleRows := GetAllRows(root, PeopleTableName)
+	allPeopleRows, err := GetAllRows(root, PeopleTableName)
+	assert.NoError(t, err)
 	assert.ElementsMatch(t, AllPeopleRows, allPeopleRows)
 
 	// Now commit the batch and check for new rows
-	root, err := batcher.Commit(ctx)
+	root, err = batcher.Commit(ctx)
 	require.NoError(t, err)
 
 	var expectedPeople []row.Row
@@ -175,7 +182,8 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 		NewPeopleRowWithOptionalFields(0, "Maggie", "Simpson", false, 1, 5.1, uuid.MustParse("00000000-0000-0000-0000-000000000007"), 677),
 	)
 
-	allPeopleRows = GetAllRows(root, PeopleTableName)
+	allPeopleRows, err = GetAllRows(root, PeopleTableName)
+	assert.NoError(t, err)
 	assertRowSetsEqual(t, expectedPeople, allPeopleRows)
 }
 
@@ -243,7 +251,13 @@ func newPeopleRow(id int, first, last string) row.Row {
 		LastTag:  types.String(last),
 	}
 
-	return row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
 func newEpsRow(id int, name string) row.Row {
@@ -252,14 +266,26 @@ func newEpsRow(id int, name string) row.Row {
 		EpNameTag:    types.String(name),
 	}
 
-	return row.New(types.Format_7_18, EpisodesTestSchema, vals)
+	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }
 
-func newAppsRow(charId, epId int) row.Row {
+func newAppsRow(charId int, epId int) row.Row {
 	vals := row.TaggedValues{
 		AppCharacterTag: types.Int(charId),
 		AppEpTag:        types.Int(epId),
 	}
 
-	return row.New(types.Format_7_18, AppearancesTestSchema, vals)
+	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
 }

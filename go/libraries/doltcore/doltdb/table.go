@@ -16,12 +16,12 @@ package doltdb
 
 import (
 	"context"
+	"errors"
 	"regexp"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/pantoerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -53,98 +53,177 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores the schema and the row data
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map) *Table {
-	schemaRef := writeValAndGetRef(ctx, vrw, schema)
-	rowDataRef := writeValAndGetRef(ctx, vrw, rowData)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, schema types.Value, rowData types.Map) (*Table, error) {
+	schemaRef, err := writeValAndGetRef(ctx, vrw, schema)
+
+	if err != nil {
+		return nil, err
+	}
+
+	rowDataRef, err := writeValAndGetRef(ctx, vrw, rowData)
+
+	if err != nil {
+		return nil, err
+	}
 
 	sd := types.StructData{
 		schemaRefKey: schemaRef,
 		tableRowsKey: rowDataRef,
 	}
 
-	tableStruct := types.NewStruct(vrw.Format(), tableStructName, sd)
-	return &Table{vrw, tableStruct}
+	tableStruct, err := types.NewStruct(vrw.Format(), tableStructName, sd)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{vrw, tableStruct}, nil
 }
 
 func (t *Table) Format() *types.NomsBinFormat {
 	return t.vrw.Format()
 }
 
-func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) *Table {
-	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflictData)
+func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) (*Table, error) {
+	conflictsRef, err := writeValAndGetRef(ctx, t.vrw, conflictData)
 
-	updatedSt := t.tableStruct.Set(conflictSchemasKey, schemas.ToNomsList(t.vrw))
-	updatedSt = updatedSt.Set(conflictsKey, conflictsRef)
+	if err != nil {
+		return nil, err
+	}
 
-	return &Table{t.vrw, updatedSt}
+	tpl, err := schemas.ToNomsList(t.vrw)
+
+	if err != nil {
+		return nil, err
+	}
+
+	updatedSt, err := t.tableStruct.Set(conflictSchemasKey, tpl)
+
+	if err != nil {
+		return nil, err
+	}
+
+	updatedSt, err = updatedSt.Set(conflictsKey, conflictsRef)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{t.vrw, updatedSt}, nil
 }
 
 func (t *Table) GetConflicts(ctx context.Context) (Conflict, types.Map, error) {
-	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
+	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
+
+	if err != nil {
+		return Conflict{}, types.EmptyMap, err
+	}
 
 	if !ok {
 		return Conflict{}, types.EmptyMap, ErrNoConflicts
 	}
 
-	schemas := ConflictFromTuple(schemasVal.(types.Tuple))
-	conflictsVal := t.tableStruct.Get(conflictsKey)
+	schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
+
+	if err != nil {
+		return Conflict{}, types.EmptyMap, err
+	}
+
+	conflictsVal, _, err := t.tableStruct.MaybeGet(conflictsKey)
+
+	if err != nil {
+		return Conflict{}, types.EmptyMap, err
+	}
 
 	confMap := types.EmptyMap
 	if conflictsVal != nil {
 		confMapRef := conflictsVal.(types.Ref)
-		confMap = confMapRef.TargetValue(ctx, t.vrw).(types.Map)
+		v, err := confMapRef.TargetValue(ctx, t.vrw)
+
+		if err != nil {
+			return Conflict{}, types.EmptyMap, err
+		}
+
+		confMap = v.(types.Map)
 	}
 
 	return schemas, confMap, nil
 }
 
-func (t *Table) HasConflicts() bool {
+func (t *Table) HasConflicts() (bool, error) {
 	if t == nil {
-		return false
+		return false, nil
 	}
 
-	_, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
+	_, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 
-	return ok
+	return ok, err
 }
 
-func (t *Table) NumRowsInConflict(ctx context.Context) uint64 {
+func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 	if t == nil {
-		return 0
+		return 0, nil
 	}
 
-	conflictsVal, ok := t.tableStruct.MaybeGet(conflictsKey)
+	conflictsVal, ok, err := t.tableStruct.MaybeGet(conflictsKey)
+
+	if err != nil {
+		return 0, err
+	}
 
 	if !ok {
-		return 0
+		return 0, nil
 	}
 
 	confMap := types.EmptyMap
 	if conflictsVal != nil {
 		confMapRef := conflictsVal.(types.Ref)
-		confMap = confMapRef.TargetValue(ctx, t.vrw).(types.Map)
+		v, err := confMapRef.TargetValue(ctx, t.vrw)
+
+		if err != nil {
+			return 0, err
+		}
+
+		confMap = v.(types.Map)
 	}
 
-	return confMap.Len()
+	return confMap.Len(), nil
 }
 
-func (t *Table) ClearConflicts() *Table {
-	tSt := t.tableStruct.Delete(conflictSchemasKey)
-	tSt = tSt.Delete(conflictsKey)
+func (t *Table) ClearConflicts() (*Table, error) {
+	tSt, err := t.tableStruct.Delete(conflictSchemasKey)
 
-	return &Table{t.vrw, tSt}
+	if err != nil {
+		return nil, err
+	}
+
+	tSt, err = tSt.Delete(conflictsKey)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{t.vrw, tSt}, nil
 }
 
 func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
-	schemasVal, ok := t.tableStruct.MaybeGet(conflictSchemasKey)
+	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	if ok {
-		schemas := ConflictFromTuple(schemasVal.(types.Tuple))
+		schemas, err := ConflictFromTuple(schemasVal.(types.Tuple))
+
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
 		baseRef := schemas.Base.(types.Ref)
 		valRef := schemas.Value.(types.Ref)
 		mergeRef := schemas.MergeValue.(types.Ref)
 
-		var err error
 		var baseSch, sch, mergeSch schema.Schema
 		if baseSch, err = refToSchema(ctx, t.vrw, baseRef); err == nil {
 			if sch, err = refToSchema(ctx, t.vrw, valRef); err == nil {
@@ -158,68 +237,112 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 }
 
 func refToSchema(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
-	var schema schema.Schema
-	err := pantoerr.PanicToErrorInstance(ErrNomsIO, func() error {
-		schemaVal := ref.TargetValue(ctx, vrw)
+	schemaVal, err := ref.TargetValue(ctx, vrw)
 
-		var err error
-		schema, err = encoding.UnmarshalNomsValue(ctx, vrw.Format(), schemaVal)
+	if err != nil {
+		return nil, err
+	}
 
-		if err != nil {
-			return err
-		}
+	schema, err := encoding.UnmarshalNomsValue(ctx, vrw.Format(), schemaVal)
 
-		return nil
-	})
+	if err != nil {
+		return nil, err
+	}
 
-	return schema, err
+	return schema, nil
 }
 
 // GetSchema will retrieve the schema being referenced from the table in noms and unmarshal it.
-func (t *Table) GetSchema(ctx context.Context) schema.Schema {
-	schemaRefVal := t.tableStruct.Get(schemaRefKey)
-	schemaRef := schemaRefVal.(types.Ref)
-	schema, _ := refToSchema(ctx, t.vrw, schemaRef)
+func (t *Table) GetSchema(ctx context.Context) (schema.Schema, error) {
+	schemaRefVal, _, err := t.tableStruct.MaybeGet(schemaRefKey)
 
-	return schema
+	if err != nil {
+		return nil, err
+	}
+
+	schemaRef := schemaRefVal.(types.Ref)
+	sch, _ := refToSchema(ctx, t.vrw, schemaRef)
+
+	return sch, nil
 }
 
-func (t *Table) GetSchemaRef() types.Ref {
-	return t.tableStruct.Get(schemaRefKey).(types.Ref)
+func (t *Table) GetSchemaRef() (types.Ref, error) {
+	v, _, err := t.tableStruct.MaybeGet(schemaRefKey)
+
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	if v == nil {
+		return types.Ref{}, errors.New("missing schema")
+	}
+
+	return v.(types.Ref), nil
 }
 
 // HasTheSameSchema tests the schema within 2 tables for equality
-func (t *Table) HasTheSameSchema(t2 *Table) bool {
-	schemaVal := t.tableStruct.Get(schemaRefKey)
+func (t *Table) HasTheSameSchema(t2 *Table) (bool, error) {
+	schemaVal, _, err := t.tableStruct.MaybeGet(schemaRefKey)
+
+	if err != nil {
+		return false, err
+	}
+
 	schemaRef := schemaVal.(types.Ref)
 
-	schema2Val := t2.tableStruct.Get(schemaRefKey)
+	schema2Val, _, err := t2.tableStruct.MaybeGet(schemaRefKey)
+
+	if err != nil {
+		return false, err
+	}
+
 	schema2Ref := schema2Val.(types.Ref)
 
-	return schemaRef.TargetHash() == schema2Ref.TargetHash()
+	return schemaRef.TargetHash() == schema2Ref.TargetHash(), nil
 }
 
 // HashOf returns the hash of the underlying table struct
-func (t *Table) HashOf() hash.Hash {
+func (t *Table) HashOf() (hash.Hash, error) {
 	return t.tableStruct.Hash(t.vrw.Format())
 }
 
-func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool) {
+func (t *Table) GetRowByPKVals(ctx context.Context, pkVals row.TaggedValues, sch schema.Schema) (row.Row, bool, error) {
 	pkTuple := pkVals.NomsTupleForTags(t.vrw.Format(), sch.GetPKCols().Tags, true)
-	return t.GetRow(ctx, pkTuple.Value(ctx).(types.Tuple), sch)
+	pkTupleVal, err := pkTuple.Value(ctx)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	return t.GetRow(ctx, pkTupleVal.(types.Tuple), sch)
 }
 
 // GetRow uses the noms DestRef containing the row data to lookup a row by primary key.  If a valid row exists with this pk
 // then the supplied TableRowFactory will be used to create a TableRow using the row data.
-func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (row.Row, bool) {
-	rowMap := t.GetRowData(ctx)
-	fieldsVal := rowMap.Get(ctx, pk)
+func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (row.Row, bool, error) {
+	rowMap, err := t.GetRowData(ctx)
 
-	if fieldsVal == nil {
-		return nil, false
+	if err != nil {
+		return nil, false, err
 	}
 
-	return row.FromNoms(sch, pk, fieldsVal.(types.Tuple)), true
+	fieldsVal, _, err := rowMap.MaybeGet(ctx, pk)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	if fieldsVal == nil {
+		return nil, false, nil
+	}
+
+	r, err := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	return r, true, nil
 }
 
 // GetRows takes in a PKItr which will supply a stream of primary keys to be pulled from the table.  Each key is
@@ -227,7 +350,7 @@ func (t *Table) GetRow(ctx context.Context, pk types.Tuple, sch schema.Schema) (
 // slice. If row data does not exist for a given pk it will be added to the missing slice.  The numPKs argument, if
 // known helps allocate the right amount of memory for the results, but if the number of pks being requested isn't
 // known then 0 can be used.
-func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value) {
+func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema.Schema) (rows []row.Row, missing []types.Value, err error) {
 	if numPKs < 0 {
 		numPKs = 0
 	}
@@ -235,36 +358,75 @@ func (t *Table) GetRows(ctx context.Context, pkItr PKItr, numPKs int, sch schema
 	rows = make([]row.Row, 0, numPKs)
 	missing = make([]types.Value, 0, numPKs)
 
-	rowMap := t.GetRowData(ctx)
+	rowMap, err := t.GetRowData(ctx)
 
-	for pk, ok := pkItr(); ok; pk, ok = pkItr() {
-		fieldsVal := rowMap.Get(ctx, pk)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for pk, ok, err := pkItr(); ok; pk, ok, err = pkItr() {
+		if err != nil {
+			return nil, nil, err
+		}
+
+		fieldsVal, _, err := rowMap.MaybeGet(ctx, pk)
+
+		if err != nil {
+			return nil, nil, err
+		}
 
 		if fieldsVal == nil {
 			missing = append(missing, pk)
 		} else {
-			r := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
+			r, err := row.FromNoms(sch, pk, fieldsVal.(types.Tuple))
+
+			if err != nil {
+				return nil, nil, err
+			}
+
 			rows = append(rows, r)
 		}
 	}
 
-	return rows, missing
+	return rows, missing, nil
 }
 
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
-func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) *Table {
-	rowDataRef := writeValAndGetRef(ctx, t.vrw, updatedRows)
-	updatedSt := t.tableStruct.Set(tableRowsKey, rowDataRef)
+func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
+	rowDataRef, err := writeValAndGetRef(ctx, t.vrw, updatedRows)
 
-	return &Table{t.vrw, updatedSt}
+	if err != nil {
+		return nil, err
+	}
+
+	updatedSt, err := t.tableStruct.Set(tableRowsKey, rowDataRef)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{t.vrw, updatedSt}, nil
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
-func (t *Table) GetRowData(ctx context.Context) types.Map {
-	rowMapRef := t.tableStruct.Get(tableRowsKey).(types.Ref)
-	rowMap := rowMapRef.TargetValue(ctx, t.vrw).(types.Map)
-	return rowMap
+func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
+	val, _, err := t.tableStruct.MaybeGet(tableRowsKey)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	rowMapRef := val.(types.Ref)
+
+	val, err = rowMapRef.TargetValue(ctx, t.vrw)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	rowMap := val.(types.Map)
+	return rowMap, nil
 }
 
 /*func (t *Table) ResolveConflicts(keys []map[uint64]string) (invalid, notFound []types.Value, tbl *Table, err error) {
@@ -315,7 +477,9 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 
 	confEdit := confData.Edit()
 	for _, pkTupleVal := range pkTuples {
-		if confData.Has(ctx, pkTupleVal) {
+		if has, err := confData.Has(ctx, pkTupleVal); err != nil {
+			return nil, nil, nil, err
+		} else if has {
 			removed++
 			confEdit.Remove(pkTupleVal)
 		} else {
@@ -327,9 +491,23 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 		return invalid, notFound, tbl, nil
 	}
 
-	conflicts := confEdit.Map(ctx)
-	conflictsRef := writeValAndGetRef(ctx, t.vrw, conflicts)
-	updatedSt := t.tableStruct.Set(conflictsKey, conflictsRef)
+	conflicts, err := confEdit.Map(ctx)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	conflictsRef, err := writeValAndGetRef(ctx, t.vrw, conflicts)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	updatedSt, err := t.tableStruct.Set(conflictsKey, conflictsRef)
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	return invalid, notFound, &Table{t.vrw, updatedSt}, nil
 }

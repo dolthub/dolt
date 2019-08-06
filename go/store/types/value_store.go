@@ -23,7 +23,10 @@ package types
 
 import (
 	"context"
+	"errors"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -36,15 +39,15 @@ import (
 // package that implements Value reading.
 type ValueReader interface {
 	Format() *NomsBinFormat
-	ReadValue(ctx context.Context, h hash.Hash) Value
-	ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice
+	ReadValue(ctx context.Context, h hash.Hash) (Value, error)
+	ReadManyValues(ctx context.Context, hashes hash.HashSlice) (ValueSlice, error)
 }
 
 // ValueWriter is an interface that knows how to write Noms Values, e.g.
 // datas/Database. Required to avoid import cycle between this package and the
 // package that implements Value writing.
 type ValueWriter interface {
-	WriteValue(ctx context.Context, v Value) Ref
+	WriteValue(ctx context.Context, v Value) (Ref, error)
 }
 
 // ValueReadWriter is an interface that knows how to read and write Noms
@@ -146,11 +149,14 @@ func (lvs *ValueStore) Format() *NomsBinFormat {
 // ReadValue reads and decodes a value from lvs. It is not considered an error
 // for the requested chunk to be empty; in this case, the function simply
 // returns nil.
-func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
+func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error) {
 	lvs.versOnce.Do(lvs.expectVersion)
 	if v, ok := lvs.decodedChunks.Get(h); ok {
-		d.PanicIfTrue(v == nil)
-		return v.(Value)
+		if v == nil {
+			return nil, errors.New("value present but empty")
+		}
+
+		return v.(Value), nil
 	}
 
 	chunk := func() chunks.Chunk {
@@ -166,29 +172,46 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) Value {
 		var err error
 		chunk, err = lvs.cs.Get(ctx, h)
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if chunk.IsEmpty() {
-		return nil
+		return nil, nil
 	}
 
-	v := DecodeValue(chunk, lvs)
-	d.PanicIfTrue(v == nil)
+	v, err := DecodeValue(chunk, lvs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if v == nil {
+		return nil, errors.New("decoded value is empty")
+	}
+
 	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
-	return v
+	return v, nil
 }
 
 // ReadManyValues reads and decodes Values indicated by |hashes| from lvs and
 // returns the found Values in the same order. Any non-present Values will be
 // represented by nil.
-func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) ValueSlice {
+func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice) (ValueSlice, error) {
 	lvs.versOnce.Do(lvs.expectVersion)
-	decode := func(h hash.Hash, chunk *chunks.Chunk) Value {
-		v := DecodeValue(*chunk, lvs)
-		d.PanicIfTrue(v == nil)
+	decode := func(h hash.Hash, chunk *chunks.Chunk) (Value, error) {
+		v, ferr := DecodeValue(*chunk, lvs)
+
+		if ferr != nil {
+			return nil, ferr
+		}
+
+		if v == nil {
+			return nil, errors.New("decoded value is empty")
+		}
+
 		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
-		return v
+		return v, nil
 	}
 
 	foundValues := make(map[hash.Hash]Value, len(hashes))
@@ -212,7 +235,13 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 			return chunks.EmptyChunk
 		}()
 		if !chunk.IsEmpty() {
-			foundValues[h] = decode(h, &chunk)
+			var err error
+			foundValues[h], err = decode(h, &chunk)
+
+			if err != nil {
+				return nil, err
+			}
+
 			continue
 		}
 
@@ -223,17 +252,30 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		// Request remaining hashes from ChunkStore, processing the found chunks as they come in.
 		foundChunks := make(chan *chunks.Chunk, 16)
 
+		ae := atomicerr.New()
 		go func() {
+			defer close(foundChunks)
 			err := lvs.cs.GetMany(ctx, remaining, foundChunks)
-
-			// TODO: fix panics
-			d.PanicIfError(err)
-
-			close(foundChunks)
+			ae.SetIfError(err)
 		}()
+
+		var err error
 		for c := range foundChunks {
+			if err != nil {
+				continue // continue to drain even if there is an error
+			}
+
 			h := c.Hash()
-			foundValues[h] = decode(h, c)
+
+			foundValues[h], err = decode(h, c)
+		}
+
+		if ae.IsSet() {
+			return nil, ae.Get()
+		}
+
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -241,23 +283,48 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	for i, h := range hashes {
 		rv[i] = foundValues[h]
 	}
-	return rv
+	return rv, nil
 }
 
 // WriteValue takes a Value, schedules it to be written it to lvs, and returns
 // an appropriately-typed types.Ref. v is not guaranteed to be actually
 // written until after Flush().
-func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) Ref {
+func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 	lvs.versOnce.Do(lvs.expectVersion)
 	d.PanicIfFalse(v != nil)
 
-	c := EncodeValue(v, lvs.nbf)
-	d.PanicIfTrue(c.IsEmpty())
+	c, err := EncodeValue(v, lvs.nbf)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
+	if c.IsEmpty() {
+		return Ref{}, errors.New("value encoded to empty chunk")
+	}
+
 	h := c.Hash()
-	height := maxChunkHeight(lvs.nbf, v) + 1
-	r := constructRef(lvs.nbf, h, TypeOf(v), height)
+	height, err := maxChunkHeight(lvs.nbf, v)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
+	height++
+	t, err := TypeOf(v)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
+	r, err := constructRef(lvs.nbf, h, t, height)
+
+	if err != nil {
+		return Ref{}, err
+	}
+
 	lvs.bufferChunk(ctx, v, c, height)
-	return r
+	return r, nil
 }
 
 // bufferChunk enqueues c (which is the serialization of v) within this
@@ -300,17 +367,13 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			return nil
 		}
 
-		var err error
-		WalkRefs(pending, lvs.nbf, func(grandchildRef Ref) {
-			if err != nil {
-				// as soon as an error occurs ignore the rest of the refs
-				return
-			}
-
+		err := WalkRefs(pending, lvs.nbf, func(grandchildRef Ref) error {
 			gch := grandchildRef.TargetHash()
 			if pending, present := lvs.bufferedChunks[gch]; present {
-				err = put(gch, pending)
+				return put(gch, pending)
 			}
+
+			return nil
 		})
 
 		if err != nil {
@@ -324,13 +387,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 	// Enforce invariant (1)
 	if height > 1 {
-		var err error
-		v.WalkRefs(lvs.nbf, func(childRef Ref) {
-			if err != nil {
-				// as soon as an error occurs ignore the rest of the refs
-				return
-			}
-
+		err := v.WalkRefs(lvs.nbf, func(childRef Ref) error {
 			childHash := childRef.TargetHash()
 			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
 				lvs.withBufferedChildren[h] = height
@@ -341,8 +398,10 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			}
 
 			if _, hasBufferedChildren := lvs.withBufferedChildren[childHash]; hasBufferedChildren {
-				err = putChildren(childHash)
+				return putChildren(childHash)
 			}
+
+			return nil
 		})
 
 		// TODO: fix panics
@@ -420,16 +479,12 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 
 		for parent := range lvs.withBufferedChildren {
 			if pending, present := lvs.bufferedChunks[parent]; present {
-				var err error
-				WalkRefs(pending, lvs.nbf, func(reachable Ref) {
-					if err != nil {
-						// as soon as an error occurs ignore the rest of the refs
-						return
+				err := WalkRefs(pending, lvs.nbf, func(reachable Ref) error {
+					if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
+						return put(reachable.TargetHash(), pending)
 					}
 
-					if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
-						err = put(reachable.TargetHash(), pending)
-					}
+					return nil
 				})
 
 				if err != nil {

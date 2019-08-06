@@ -76,7 +76,9 @@ func nomsListNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
-	applyListInserts(ctx, db, sp, types.NewList(ctx, db), nil, 0, args)
+	l, err := types.NewList(ctx, db)
+	d.PanicIfError(err)
+	applyListInserts(ctx, db, sp, l, nil, 0, args)
 	return 0
 }
 

@@ -39,12 +39,24 @@ type ThreeWayListMergeSuite struct {
 }
 
 func (s *ThreeWayListMergeSuite) SetupSuite() {
-	s.create = func(i seq) (val types.Value) {
+	s.create = func(i seq) (types.Value, error) {
 		if i != nil {
-			items := valsToTypesValues(s.create, i.items()...)
-			val = types.NewList(context.Background(), s.vs, items...)
+			items, err := valsToTypesValues(s.create, i.items()...)
+
+			if err != nil {
+				return nil, err
+			}
+
+			val, err := types.NewList(context.Background(), s.vs, items...)
+
+			if err != nil {
+				return nil, err
+			}
+
+			return val, nil
 		}
-		return
+
+		return nil, nil
 	}
 	s.typeStr = "List"
 }
@@ -125,34 +137,34 @@ func (s *ThreeWayListMergeSuite) TestThreeWayMerge_RemoveUpToOtherSideInsertionP
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_ConflictingAppends() {
 	a := append(p, 1)
 	b := append(p, 2)
-	s.tryThreeWayConflict(s.create(a), s.create(b), s.create(p), "Overlapping splices: 0 elements removed at 5; adding 1 elements")
-	s.tryThreeWayConflict(s.create(b), s.create(a), s.create(p), "Overlapping splices: 0 elements removed at 5; adding 1 elements")
+	s.tryThreeWayConflict(mustValue(s.create(a)), mustValue(s.create(b)), mustValue(s.create(p)), "Overlapping splices: 0 elements removed at 5; adding 1 elements")
+	s.tryThreeWayConflict(mustValue(s.create(b)), mustValue(s.create(a)), mustValue(s.create(p)), "Overlapping splices: 0 elements removed at 5; adding 1 elements")
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_OverlappingRemoves() {
 	a := p[:4]
 	b := p[:3]
-	s.tryThreeWayConflict(s.create(a), s.create(b), s.create(p), "Overlapping splices: 1 elements removed at 4")
-	s.tryThreeWayConflict(s.create(b), s.create(a), s.create(p), "Overlapping splices: 2 elements removed at 3")
+	s.tryThreeWayConflict(mustValue(s.create(a)), mustValue(s.create(b)), mustValue(s.create(p)), "Overlapping splices: 1 elements removed at 4")
+	s.tryThreeWayConflict(mustValue(s.create(b)), mustValue(s.create(a)), mustValue(s.create(p)), "Overlapping splices: 2 elements removed at 3")
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_SameRemoveAddPrefix() {
 	a := items{"a", "b", "c", 1}
 	b := items{"a", "b", "c", 1, 2}
-	s.tryThreeWayConflict(s.create(a), s.create(b), s.create(p), "Overlapping splices: 2 elements removed at 3; adding 1 elements")
-	s.tryThreeWayConflict(s.create(b), s.create(a), s.create(p), "Overlapping splices: 2 elements removed at 3; adding 2 elements")
+	s.tryThreeWayConflict(mustValue(s.create(a)), mustValue(s.create(b)), mustValue(s.create(p)), "Overlapping splices: 2 elements removed at 3; adding 1 elements")
+	s.tryThreeWayConflict(mustValue(s.create(b)), mustValue(s.create(a)), mustValue(s.create(p)), "Overlapping splices: 2 elements removed at 3; adding 2 elements")
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_RemoveSupersetAddPrefix() {
 	a := items{"a", "b", "c", 1, 2}
 	b := items{"a", "b", "c", "d", 1}
-	s.tryThreeWayConflict(s.create(a), s.create(b), s.create(p), "Overlapping splices: 2 elements removed at 3; adding 2 elements")
-	s.tryThreeWayConflict(s.create(b), s.create(a), s.create(p), "Overlapping splices: 1 elements removed at 4; adding 1 elements")
+	s.tryThreeWayConflict(mustValue(s.create(a)), mustValue(s.create(b)), mustValue(s.create(p)), "Overlapping splices: 2 elements removed at 3; adding 2 elements")
+	s.tryThreeWayConflict(mustValue(s.create(b)), mustValue(s.create(a)), mustValue(s.create(p)), "Overlapping splices: 1 elements removed at 4; adding 1 elements")
 }
 
 func (s *ThreeWayListMergeSuite) TestThreeWayMerge_RemoveOtherSideInsertionPoint() {
 	a := items{"a", "c", "d", "e"}
 	b := items{"a", 1, "b", "c", "d", "e"}
-	s.tryThreeWayConflict(s.create(a), s.create(b), s.create(p), "Overlapping splices: 1 elements removed at 1; adding 0 elements")
-	s.tryThreeWayConflict(s.create(b), s.create(a), s.create(p), "Overlapping splices: 0 elements removed at 1; adding 1 elements")
+	s.tryThreeWayConflict(mustValue(s.create(a)), mustValue(s.create(b)), mustValue(s.create(p)), "Overlapping splices: 1 elements removed at 1; adding 0 elements")
+	s.tryThreeWayConflict(mustValue(s.create(b)), mustValue(s.create(a)), mustValue(s.create(p)), "Overlapping splices: 0 elements removed at 1; adding 1 elements")
 }

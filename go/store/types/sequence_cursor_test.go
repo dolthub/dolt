@@ -35,8 +35,8 @@ type testSequence struct {
 }
 
 // sequence interface
-func (ts testSequence) getItem(idx int) sequenceItem {
-	return ts.items[idx]
+func (ts testSequence) getItem(idx int) (sequenceItem, error) {
+	return ts.items[idx], nil
 }
 
 func (ts testSequence) seqLen() int {
@@ -47,11 +47,11 @@ func (ts testSequence) numLeaves() uint64 {
 	return uint64(len(ts.items))
 }
 
-func (ts testSequence) cumulativeNumberOfLeaves(idx int) uint64 {
+func (ts testSequence) cumulativeNumberOfLeaves(idx int) (uint64, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) sequence {
+func (ts testSequence) getCompositeChildSequence(ctx context.Context, start uint64, length uint64) (sequence, error) {
 	panic("not reached")
 }
 
@@ -65,8 +65,8 @@ func (ts testSequence) Kind() NomsKind {
 
 func (ts testSequence) getCompareFn(other sequence) compareFn {
 	obl := other.(testSequence)
-	return func(idx, otherIdx int) bool {
-		return ts.items[idx] == obl.items[otherIdx]
+	return func(idx, otherIdx int) (bool, error) {
+		return ts.items[idx] == obl.items[otherIdx], nil
 	}
 }
 
@@ -74,7 +74,7 @@ func (ts testSequence) valueReadWriter() ValueReadWriter {
 	panic("not reached")
 }
 
-func (ts testSequence) writeTo(nomsWriter, *NomsBinFormat) {
+func (ts testSequence) writeTo(nomsWriter, *NomsBinFormat) error {
 	panic("not reached")
 }
 
@@ -82,9 +82,9 @@ func (ts testSequence) format() *NomsBinFormat {
 	return Format_7_18
 }
 
-func (ts testSequence) getChildSequence(ctx context.Context, idx int) sequence {
+func (ts testSequence) getChildSequence(ctx context.Context, idx int) (sequence, error) {
 	child := ts.items[idx]
-	return testSequence{child.([]interface{})}
+	return testSequence{child.([]interface{})}, nil
 }
 
 func (ts testSequence) isLeaf() bool {
@@ -95,31 +95,31 @@ func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) valueBytes(*NomsBinFormat) []byte {
+func (ts testSequence) valueBytes(*NomsBinFormat) ([]byte, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) valuesSlice(from, to uint64) []Value {
+func (ts testSequence) valuesSlice(from, to uint64) ([]Value, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) bool {
+func (ts testSequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) Hash(*NomsBinFormat) hash.Hash {
+func (ts testSequence) Hash(*NomsBinFormat) (hash.Hash, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) WalkValues(cb ValueCallback) {
+func (ts testSequence) WalkValues(cb ValueCallback) error {
 	panic("not reached")
 }
 
-func (ts testSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) {
+func (ts testSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	panic("not reached")
 }
 
-func (ts testSequence) typeOf() *Type {
+func (ts testSequence) typeOf() (*Type, error) {
 	panic("not reached")
 }
 
@@ -153,7 +153,9 @@ func TestTestCursor(t *testing.T) {
 		assert.Equal(expectParentIdx, cur.parent.indexInChunk())
 		assert.Equal(expectOk, cur.valid())
 		if cur.valid() {
-			assert.Equal(expectVal, cur.current())
+			seq, err := cur.current()
+			assert.NoError(err)
+			assert.Equal(expectVal, seq)
 		}
 	}
 

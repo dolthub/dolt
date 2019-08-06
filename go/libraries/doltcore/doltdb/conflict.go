@@ -35,10 +35,27 @@ func NewConflict(base, value, mergeValue types.Value) Conflict {
 	return Conflict{base, value, mergeValue}
 }
 
-func ConflictFromTuple(tpl types.Tuple) Conflict {
-	return Conflict{tpl.Get(0), tpl.Get(1), tpl.Get(2)}
+func ConflictFromTuple(tpl types.Tuple) (Conflict, error) {
+	base, err := tpl.Get(0)
+
+	if err != nil {
+		return Conflict{}, err
+	}
+
+	val, err := tpl.Get(1)
+
+	if err != nil {
+		return Conflict{}, err
+	}
+
+	mv, err := tpl.Get(2)
+
+	if err != nil {
+		return Conflict{}, err
+	}
+	return Conflict{base, val, mv}, nil
 }
 
-func (c Conflict) ToNomsList(vrw types.ValueReadWriter) types.Tuple {
+func (c Conflict) ToNomsList(vrw types.ValueReadWriter) (types.Tuple, error) {
 	return types.NewTuple(vrw.Format(), c.Base, c.Value, c.MergeValue)
 }

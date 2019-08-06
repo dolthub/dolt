@@ -61,7 +61,7 @@ var testKeyColColl, _ = schema.NewColCollection(testKeyCols...)
 var testNonKeyColColl, _ = schema.NewColCollection(testCols...)
 var sch, _ = schema.SchemaFromPKAndNonPKCols(testKeyColColl, testNonKeyColColl)
 
-func newTestRow() Row {
+func newTestRow() (Row, error) {
 	vals := TaggedValues{
 		fnColTag:    fnVal,
 		lnColTag:    lnVal,
@@ -74,13 +74,15 @@ func newTestRow() Row {
 }
 
 func TestItrRowCols(t *testing.T) {
-	r := newTestRow()
+	r, err := newTestRow()
+	assert.NoError(t, err)
 
 	itrVals := make(TaggedValues)
-	r.IterCols(func(tag uint64, val types.Value) (stop bool) {
+	_, err = r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
 		itrVals[tag] = val
-		return false
+		return false, nil
 	})
+	assert.NoError(t, err)
 
 	assert.Equal(t, TaggedValues{
 		lnColTag:    lnVal,
@@ -94,120 +96,147 @@ func TestItrRowCols(t *testing.T) {
 func TestFromNoms(t *testing.T) {
 	// New() will faithfully return null values in the row, but such columns won't ever be set when loaded from Noms.
 	// So we use a row here with no null values set to avoid this inconsistency.
-	expectedRow := New(types.Format_7_18, sch, TaggedValues{
+	expectedRow, err := New(types.Format_7_18, sch, TaggedValues{
 		fnColTag:   fnVal,
 		lnColTag:   lnVal,
 		addrColTag: addrVal,
 		ageColTag:  ageVal,
 	})
+	assert.NoError(t, err)
 
 	t.Run("all values specified", func(t *testing.T) {
-		keys := types.NewTuple(types.Format_7_18,
+		keys, err := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(types.Format_7_18,
+		assert.NoError(t, err)
+
+		vals, err := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), ageVal,
 			types.Uint(titleColTag), titleVal,
 		)
 
-		r := FromNoms(sch, keys, vals)
+		assert.NoError(t, err)
+		r, err := FromNoms(sch, keys, vals)
+
+		assert.NoError(t, err)
 		assert.Equal(t, expectedRow, r)
 	})
 
 	t.Run("only key", func(t *testing.T) {
-		keys := types.NewTuple(types.Format_7_18,
+		keys, err := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(types.Format_7_18)
+		assert.NoError(t, err)
 
-		expectedRow := New(types.Format_7_18, sch, TaggedValues{
+		vals, err := types.NewTuple(types.Format_7_18)
+		assert.NoError(t, err)
+
+		expectedRow, err := New(types.Format_7_18, sch, TaggedValues{
 			fnColTag: fnVal,
 			lnColTag: lnVal,
 		})
-		r := FromNoms(sch, keys, vals)
+		assert.NoError(t, err)
+		r, err := FromNoms(sch, keys, vals)
+		assert.NoError(t, err)
 		assert.Equal(t, expectedRow, r)
 	})
 
 	t.Run("additional tag not in schema is silently dropped", func(t *testing.T) {
-		keys := types.NewTuple(types.Format_7_18,
+		keys, err := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(types.Format_7_18,
+
+		assert.NoError(t, err)
+
+		vals, err := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), ageVal,
 			types.Uint(titleColTag), titleVal,
 			types.Uint(unusedTag), fnVal,
 		)
 
-		r := FromNoms(sch, keys, vals)
+		assert.NoError(t, err)
+
+		r, err := FromNoms(sch, keys, vals)
+		assert.NoError(t, err)
 		assert.Equal(t, expectedRow, r)
 	})
 
 	t.Run("bad type", func(t *testing.T) {
-		keys := types.NewTuple(types.Format_7_18,
+		keys, err := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(types.Format_7_18,
+		assert.NoError(t, err)
+		vals, err := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), fnVal,
 		)
+		assert.NoError(t, err)
 
-		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
-		})
+		_, err = FromNoms(sch, keys, vals)
+		assert.Error(t, err)
 	})
 
 	t.Run("key col set in vals", func(t *testing.T) {
-		keys := types.NewTuple(types.Format_7_18,
+		keys, err := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 		)
-		vals := types.NewTuple(types.Format_7_18,
+		assert.NoError(t, err)
+		vals, err := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(fnColTag), fnVal,
 		)
+		assert.NoError(t, err)
 
-		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
-		})
+		_, err = FromNoms(sch, keys, vals)
+		assert.Error(t, err)
 	})
 
 	t.Run("unknown tag in key", func(t *testing.T) {
-		keys := types.NewTuple(types.Format_7_18,
+		keys, err := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 			types.Uint(unusedTag), fnVal,
 		)
-		vals := types.NewTuple(types.Format_7_18,
+
+		assert.NoError(t, err)
+
+		vals, err := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(ageColTag), ageVal,
 			types.Uint(titleColTag), titleVal,
 		)
 
-		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
-		})
+		assert.NoError(t, err)
+
+		_, err = FromNoms(sch, keys, vals)
+		assert.Error(t, err)
 	})
 
 	t.Run("value tag in key", func(t *testing.T) {
-		keys := types.NewTuple(types.Format_7_18,
+		keys, err := types.NewTuple(types.Format_7_18,
 			types.Uint(fnColTag), fnVal,
 			types.Uint(lnColTag), lnVal,
 			types.Uint(ageColTag), ageVal,
 		)
-		vals := types.NewTuple(types.Format_7_18,
+
+		assert.NoError(t, err)
+
+		vals, err := types.NewTuple(types.Format_7_18,
 			types.Uint(addrColTag), addrVal,
 			types.Uint(titleColTag), titleVal,
 		)
 
-		assert.Panics(t, func() {
-			FromNoms(sch, keys, vals)
-		})
+		assert.NoError(t, err)
+
+		_, err = FromNoms(sch, keys, vals)
+		assert.Error(t, err)
 	})
 }
 
@@ -222,22 +251,29 @@ func TestSetColVal(t *testing.T) {
 
 		updatedVal := types.String("sanchez")
 
-		r := newTestRow()
-		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
+		r, err := newTestRow()
+		assert.NoError(t, err)
+		r2, err := New(types.Format_7_18, sch, expected)
+		assert.NoError(t, err)
+		assert.Equal(t, r, r2)
 
 		updated, err := r.SetColVal(lnColTag, updatedVal, sch)
 		assert.NoError(t, err)
 
 		// validate calling set does not mutate the original row
-		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
+		r3, err := New(types.Format_7_18, sch, expected)
+		assert.NoError(t, err)
+		assert.Equal(t, r, r3)
 		expected[lnColTag] = updatedVal
-		assert.Equal(t, updated, New(types.Format_7_18, sch, expected))
+		r4, err := New(types.Format_7_18, sch, expected)
+		assert.Equal(t, updated, r4)
 
 		// set to a nil value
 		updated, err = updated.SetColVal(titleColTag, nil, sch)
 		assert.NoError(t, err)
 		delete(expected, titleColTag)
-		assert.Equal(t, updated, New(types.Format_7_18, sch, expected))
+		r5, err := New(types.Format_7_18, sch, expected)
+		assert.Equal(t, updated, r5)
 	})
 
 	t.Run("invalid update", func(t *testing.T) {
@@ -248,33 +284,46 @@ func TestSetColVal(t *testing.T) {
 			addrColTag:  addrVal,
 			titleColTag: titleVal}
 
-		r := newTestRow()
+		r, err := newTestRow()
+		assert.NoError(t, err)
 
-		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
+		r2, err := New(types.Format_7_18, sch, expected)
+		assert.NoError(t, err)
+		assert.Equal(t, r, r2)
 
 		// SetColVal allows an incorrect type to be set for a column
 		updatedRow, err := r.SetColVal(lnColTag, types.Bool(true), sch)
 		assert.NoError(t, err)
 		// IsValid fails for the type problem
-		assert.False(t, IsValid(updatedRow, sch))
-		invalidCol := GetInvalidCol(updatedRow, sch)
+		isv, err := IsValid(updatedRow, sch)
+		assert.NoError(t, err)
+		assert.False(t, isv)
+		invalidCol, err := GetInvalidCol(updatedRow, sch)
+		assert.NoError(t, err)
 		assert.NotNil(t, invalidCol)
 		assert.Equal(t, uint64(lnColTag), invalidCol.Tag)
 
 		// validate calling set does not mutate the original row
-		assert.Equal(t, r, New(types.Format_7_18, sch, expected))
+		r3, err := New(types.Format_7_18, sch, expected)
+		assert.NoError(t, err)
+		assert.Equal(t, r, r3)
 	})
 }
 
 func TestConvToAndFromTuple(t *testing.T) {
 	ctx := context.Background()
 
-	r := newTestRow()
+	r, err := newTestRow()
+	assert.NoError(t, err)
 
 	keyTpl := r.NomsMapKey(sch).(TupleVals)
 	valTpl := r.NomsMapValue(sch).(TupleVals)
-
-	r2 := FromNoms(sch, keyTpl.Value(ctx).(types.Tuple), valTpl.Value(ctx).(types.Tuple))
+	keyVal, err := keyTpl.Value(ctx)
+	assert.NoError(t, err)
+	valVal, err := valTpl.Value(ctx)
+	assert.NoError(t, err)
+	r2, err := FromNoms(sch, keyVal.(types.Tuple), valVal.(types.Tuple))
+	assert.NoError(t, err)
 
 	fmt.Println(Fmt(context.Background(), r, sch))
 	fmt.Println(Fmt(context.Background(), r2, sch))

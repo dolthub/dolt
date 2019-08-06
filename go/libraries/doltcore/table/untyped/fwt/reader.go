@@ -122,7 +122,7 @@ func (fwtRd *FWTReader) parseRow(lineBytes []byte) (row.Row, error) {
 
 	i := 0
 	offset := 0
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		colWidth := fwtRd.fwtSch.TagToWidth[tag]
 
 		if colWidth > 0 {
@@ -131,8 +131,12 @@ func (fwtRd *FWTReader) parseRow(lineBytes []byte) (row.Row, error) {
 		}
 
 		i++
-		return false
+		return false, nil
 	})
 
-	return untyped.NewRowFromStrings(fwtRd.nbf, fwtRd.GetSchema(), fields), nil
+	if err != nil {
+		return nil, err
+	}
+
+	return untyped.NewRowFromStrings(fwtRd.nbf, fwtRd.GetSchema(), fields)
 }

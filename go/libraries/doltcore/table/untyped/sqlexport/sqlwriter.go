@@ -66,7 +66,13 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return err
 	}
 
-	return iohelp.WriteLine(w.wr, w.insertStatementForRow(r))
+	stmt, err := w.insertStatementForRow(r)
+
+	if err != nil {
+		return err
+	}
+
+	return iohelp.WriteLine(w.wr, stmt)
 }
 
 func (w *SqlExportWriter) maybeWriteDropCreate() error {
@@ -92,7 +98,7 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 	return nil
 }
 
-func (w *SqlExportWriter) insertStatementForRow(r row.Row) string {
+func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	var b strings.Builder
 	b.WriteString("INSERT INTO ")
 	b.WriteString(sql.QuoteIdentifier(w.tableName))
@@ -100,30 +106,39 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) string {
 
 	b.WriteString("(")
 	var seenOne bool
-	w.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err := w.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if seenOne {
 			b.WriteRune(',')
 		}
 		b.WriteString(sql.QuoteIdentifier(col.Name))
 		seenOne = true
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return "", err
+	}
+
 	b.WriteString(")")
 
 	b.WriteString(" VALUES (")
 	seenOne = false
-	r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool) {
+	_, err = r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if seenOne {
 			b.WriteRune(',')
 		}
 		b.WriteString(w.sqlString(val))
 		seenOne = true
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return "", err
+	}
 
 	b.WriteString(");")
 
-	return b.String()
+	return b.String(), nil
 }
 
 func (w *SqlExportWriter) dropCreateStatement() string {

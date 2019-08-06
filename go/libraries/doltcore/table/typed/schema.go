@@ -22,10 +22,14 @@ func TypedSchemaUnion(schemas ...schema.Schema) (schema.Schema, error) {
 	var allCols []schema.Column
 
 	for _, sch := range schemas {
-		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool) {
+		err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			allCols = append(allCols, col)
-			return false
+			return false, nil
 		})
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	allColColl, err := schema.NewColCollection(allCols...)

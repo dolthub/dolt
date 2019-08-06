@@ -58,18 +58,33 @@ func Mv(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		old := apr.Arg(0)
 		new := apr.Arg(1)
 		if verr == nil {
-			tbl, ok := working.GetTable(context.TODO(), old)
+			tbl, ok, err := working.GetTable(context.TODO(), old)
+
+			if err != nil {
+				verr = errhand.BuildDError("").Build()
+				return commands.HandleVErrAndExitCode(verr, usage)
+			}
+
 			if ok {
-				if !force && working.HasTable(context.TODO(), new) {
+				has, err := working.HasTable(context.TODO(), new)
+
+				if err != nil {
+					verr = errhand.BuildDError("error: failed to read tables from working set").AddCause(err).Build()
+				} else if !force && has {
 					verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
 				} else {
-					working = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
-					working, err := working.RemoveTables(context.TODO(), old)
+					working, err = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
 
 					if err != nil {
-						verr = errhand.BuildDError("Unable to remove '%s'", old).Build()
+						verr = errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()
 					} else {
-						verr = commands.UpdateWorkingWithVErr(dEnv, working)
+						working, err := working.RemoveTables(context.TODO(), old)
+
+						if err != nil {
+							verr = errhand.BuildDError("Unable to remove '%s'", old).Build()
+						} else {
+							verr = commands.UpdateWorkingWithVErr(dEnv, working)
+						}
 					}
 				}
 			} else {

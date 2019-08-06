@@ -110,8 +110,17 @@ func runLog(ctx context.Context, args []string) int {
 		path = types.MustParsePath(".value")
 	}
 
-	origCommit, ok := database.ReadValue(ctx, absPath.Hash).(types.Struct)
-	if !ok || !datas.IsCommit(origCommit) {
+	origCommitVal, err := database.ReadValue(ctx, absPath.Hash)
+	d.PanicIfError(err)
+	origCommit, ok := origCommitVal.(types.Struct)
+
+	isCm := false
+	if ok {
+		isCm, err = datas.IsCommit(origCommit)
+		d.PanicIfError(err)
+	}
+
+	if !isCm {
 		util.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 
@@ -163,16 +172,22 @@ func runLog(ctx context.Context, args []string) int {
 func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
 	maxMetaFieldNameLength := func(commit types.Struct) int {
 		maxLen := 0
-		if m, ok := commit.MaybeGet(datas.MetaField); ok {
+		if m, ok, err := commit.MaybeGet(datas.MetaField); err != nil {
+			panic(err)
+		} else if ok {
 			meta := m.(types.Struct)
-			types.TypeOf(meta).Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
+			t, err := types.TypeOf(meta)
+			d.PanicIfError(err)
+			t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
 				maxLen = max(maxLen, len(name))
 			})
 		}
 		return maxLen
 	}
 
-	hashStr := node.commit.Hash(db.Format()).String()
+	h, err := node.commit.Hash(db.Format())
+	d.PanicIfError(err)
+	hashStr := h.String()
 	if useColor {
 		hashStr = ansi.Color("commit "+hashStr, "red+h")
 	}
@@ -181,7 +196,10 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 
 	parentLabel := "Parent"
 	parentValue := "None"
-	parents := commitRefsFromSet(ctx, node.commit.Get(datas.ParentsField).(types.Set))
+	pFld, ok, err := node.commit.MaybeGet(datas.ParentsField)
+	d.PanicIfError(err)
+	d.PanicIfFalse(ok)
+	parents := commitRefsFromSet(ctx, pFld.(types.Set))
 	if len(parents) > 1 {
 		pstrings := make([]string, len(parents))
 		for i, p := range parents {
@@ -275,7 +293,9 @@ func genGraph(node LogNode, lineno int) string {
 }
 
 func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
-	if m, ok := node.commit.MaybeGet(datas.MetaField); ok {
+	if m, ok, err := node.commit.MaybeGet(datas.MetaField); err != nil {
+		panic(err)
+	} else if ok {
 		genPrefix := func(w *writers.PrefixWriter) []byte {
 			return []byte(genGraph(node, int(w.NumLines)))
 		}
@@ -283,17 +303,25 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 		mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 		pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
 
-		var err error
-		types.TypeOf(meta).Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
+		t, err := types.TypeOf(meta)
+		d.PanicIfError(err)
+		t.Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
 			if err != nil {
 				return
 			}
 
-			v := meta.Get(fieldName)
+			v, ok, err := meta.MaybeGet(fieldName)
+			d.PanicIfError(err)
+			d.PanicIfFalse(ok)
+
 			fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
+
+			vt, err := types.TypeOf(v)
+			d.PanicIfError(err)
+
 			// Encode dates as formatted string if this is a top-level meta
 			// field of type datetime.DateTimeType
-			if types.TypeOf(v).Equals(datetime.DateTimeType) {
+			if vt.Equals(datetime.DateTimeType) {
 				var dt datetime.DateTime
 				err = dt.UnmarshalNoms(ctx, node.commit.Format(), v)
 
@@ -323,7 +351,8 @@ func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLin
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	v := path.Resolve(ctx, node.commit, db)
+	v, err := path.Resolve(ctx, node.commit, db)
+	d.PanicIfError(err)
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
 	} else {
@@ -352,30 +381,50 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	parents := node.commit.Get(datas.ParentsField).(types.Set)
+	pVal, ok, err := node.commit.MaybeGet(datas.ParentsField)
+
+	d.PanicIfError(err)
+	d.PanicIfFalse(ok)
+
+	parents := pVal.(types.Set)
+
 	var parent types.Value
 	if parents.Len() > 0 {
-		parent = parents.First(ctx)
+		parent, err = parents.First(ctx)
+		d.PanicIfError(err)
 	}
 	if parent == nil {
 		_, err = fmt.Fprint(pw, "\n")
 		return 1, err
 	}
 
-	parentCommit := parent.(types.Ref).TargetValue(ctx, db).(types.Struct)
+	val, err := parent.(types.Ref).TargetValue(ctx, db)
+	parentCommit := val.(types.Struct)
+	d.PanicIfError(err)
+
 	var old, neu types.Value
 	functions.All(
-		func() { old = path.Resolve(ctx, parentCommit, db) },
-		func() { neu = path.Resolve(ctx, node.commit, db) },
+		func() {
+			old, err = path.Resolve(ctx, parentCommit, db)
+			d.PanicIfError(err)
+		},
+		func() {
+			neu, err = path.Resolve(ctx, node.commit, db)
+			d.PanicIfError(err)
+		},
 	)
 
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization
 	// of some of the code in PrintDiff() because it cannot tolerate nil parameters.
 	if neu == nil {
-		fmt.Fprintf(pw, "new (#%s%s) not found\n", node.commit.Hash(node.commit.Format()).String(), path.String())
+		h, err := node.commit.Hash(node.commit.Format())
+		d.PanicIfError(err)
+		fmt.Fprintf(pw, "new (#%s%s) not found\n", h.String(), path.String())
 	}
 	if old == nil {
-		fmt.Fprintf(pw, "old (#%s%s) not found\n", parentCommit.Hash(parentCommit.Format()).String(), path.String())
+		h, err := parentCommit.Hash(parentCommit.Format())
+		d.PanicIfError(err)
+		fmt.Fprintf(pw, "old (#%s%s) not found\n", h.String(), path.String())
 	}
 
 	if old != nil && neu != nil {

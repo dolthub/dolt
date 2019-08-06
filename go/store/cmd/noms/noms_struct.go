@@ -69,7 +69,9 @@ func nomsStructNew(ctx context.Context, dbStr string, name string, args []string
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
-	applyStructEdits(ctx, db, sp, types.NewStruct(db.Format(), name, nil), nil, args)
+	st, err := types.NewStruct(db.Format(), name, nil)
+	d.PanicIfError(err)
+	applyStructEdits(ctx, db, sp, st, nil, args)
 	return 0
 }
 
@@ -141,14 +143,17 @@ func applyStructEdits(ctx context.Context, db datas.Database, sp spec.Spec, root
 }
 
 func appplyPatch(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
-	baseVal := basePath.Resolve(ctx, rootVal, db)
+	baseVal, err := basePath.Resolve(ctx, rootVal, db)
+	util.CheckError(err)
 	if baseVal == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 	}
 
-	newRootVal := diff.Apply(ctx, db.Format(), rootVal, patch)
+	newRootVal, err := diff.Apply(ctx, db.Format(), rootVal, patch)
+	util.CheckError(err)
 	d.Chk.NotNil(newRootVal)
-	r := db.WriteValue(ctx, newRootVal)
+	r, err := db.WriteValue(ctx, newRootVal)
+	util.CheckError(err)
 	db.Flush(ctx)
 	newAbsPath := spec.AbsolutePath{
 		Hash: r.TargetHash(),

@@ -30,7 +30,12 @@ func RenameColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table,
 		panic("invalid parameters")
 	}
 
-	tblSch := tbl.GetSchema(ctx)
+	tblSch, err := tbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	allCols := tblSch.GetAllCols()
 
 	if _, ok := allCols.GetByName(newName); ok {
@@ -42,13 +47,17 @@ func RenameColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table,
 	}
 
 	cols := make([]schema.Column, 0)
-	allCols.Iter(func(tag uint64, col schema.Column) (stop bool) {
+	err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Name == oldName {
 			col.Name = newName
 		}
 		cols = append(cols, col)
-		return false
+		return false, nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	colColl, err := schema.NewColCollection(cols...)
 	if err != nil {
@@ -64,7 +73,17 @@ func RenameColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table,
 		return nil, err
 	}
 
-	newTable := doltdb.NewTable(ctx, vrw, schemaVal, tbl.GetRowData(ctx))
+	rd, err := tbl.GetRowData(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	newTable, err := doltdb.NewTable(ctx, vrw, schemaVal, rd)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return newTable, nil
 }

@@ -32,6 +32,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/store/cmd/noms/util"
 	"github.com/liquidata-inc/dolt/go/store/config"
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/spec"
 	"github.com/liquidata-inc/dolt/go/store/util/verbose"
@@ -78,16 +79,24 @@ func runCommit(ctx context.Context, args []string) int {
 		util.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}
 
-	oldCommitRef, oldCommitExists := ds.MaybeHeadRef()
+	oldCommitRef, oldCommitExists, err := ds.MaybeHeadRef()
+	d.PanicIfError(err)
+
 	if oldCommitExists {
-		head, ok := ds.MaybeHeadValue()
+		head, ok, err := ds.MaybeHeadValue()
+		d.PanicIfError(err)
 
 		if !ok {
 			fmt.Fprintln(os.Stdout, "Commit has no head value.")
 			return 1
 		}
 
-		if head.Hash(db.Format()) == value.Hash(db.Format()) && !allowDupe {
+		hh, err := head.Hash(db.Format())
+		d.PanicIfError(err)
+		vh, err := value.Hash(db.Format())
+		d.PanicIfError(err)
+
+		if hh == vh && !allowDupe {
 			fmt.Fprintf(os.Stdout, "Commit aborted - allow-dupe is set to off and this commit would create a duplicate\n")
 			return 0
 		}
@@ -99,7 +108,9 @@ func runCommit(ctx context.Context, args []string) int {
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})
 	util.CheckErrorNoUsage(err)
 
-	headRef, ok := ds.MaybeHeadRef()
+	headRef, ok, err := ds.MaybeHeadRef()
+
+	d.PanicIfError(err)
 
 	if !ok {
 		panic("commit succeeded, but dataset has no head ref")

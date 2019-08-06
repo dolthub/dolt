@@ -18,6 +18,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/google/uuid"
 )
 
@@ -28,45 +30,58 @@ const (
 
 func TestTupleEquality(t *testing.T) {
 	values := []Value{String("aoeu"), Int(-1234), Uint(1234)}
-	tpl := NewTuple(Format_7_18, values...)
+	tpl, err := NewTuple(Format_7_18, values...)
+	assert.NoError(t, err)
 
 	if !tpl.Equals(tpl) {
 		t.Error("Tuple not equal to itself")
 	}
 
 	id := UUID(uuid.MustParse(ZeroUUID))
-	tpl2 := tpl.Append(id)
+	tpl2, err := tpl.Append(id)
+	assert.NoError(t, err)
 	idIdx := tpl2.Len() - 1
 
 	if tpl.Equals(tpl2) {
 		t.Error("Tuples should not be equal")
 	}
 
-	tpl3 := tpl2.Set(idIdx, id).Set(0, String("aoeu")).Set(1, Int(-1234)).Set(2, Uint(1234))
+	temp, err := tpl2.Set(idIdx, id)
+	assert.NoError(t, err)
+	temp, err = temp.Set(0, String("aoeu"))
+	assert.NoError(t, err)
+	temp, err = temp.Set(1, Int(-1234))
+	assert.NoError(t, err)
+	tpl3, err := temp.Set(2, Uint(1234))
+	assert.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
-	tpl3 = tpl2.Set(0, String("aoeu"))
+	tpl3, err = tpl2.Set(0, String("aoeu"))
+	assert.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
-	tpl3 = tpl2.Set(1, Int(-1234))
+	tpl3, err = tpl2.Set(1, Int(-1234))
+	assert.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
-	tpl3 = tpl2.Set(2, Uint(1234))
+	tpl3, err = tpl2.Set(2, Uint(1234))
+	assert.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
 	}
 
-	tpl3 = tpl2.Set(idIdx, id)
+	tpl3, err = tpl2.Set(idIdx, id)
+	assert.NoError(t, err)
 
 	if !tpl2.Equals(tpl3) {
 		t.Error("")
@@ -76,13 +91,14 @@ func TestTupleEquality(t *testing.T) {
 		t.Error("")
 	}
 
-	idVal := tpl3.Get(idIdx)
+	idVal, err := tpl3.Get(idIdx)
+	assert.NoError(t, err)
 
 	if idVal.Kind() != UUIDKind {
 		t.Error("Unexpected type")
 	}
 
-	tpl3.IterFields(func(index uint64, value Value) (stop bool) {
+	err = tpl3.IterFields(func(index uint64, value Value) (stop bool, err error) {
 		equal := false
 		switch index {
 		case 0, 1, 2:
@@ -95,8 +111,10 @@ func TestTupleEquality(t *testing.T) {
 			t.Errorf("Unexpected tuple value at index %d", index)
 		}
 
-		return false
+		return false, nil
 	})
+
+	assert.NoError(t, err)
 }
 
 func TestTupleLess(t *testing.T) {
@@ -143,12 +161,18 @@ func TestTupleLess(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		tpl1 := NewTuple(Format_7_18, test.vals1...)
-		tpl2 := NewTuple(Format_7_18, test.vals2...)
-		actual := tpl1.Less(Format_7_18, tpl2)
+		tpl1, err := NewTuple(Format_7_18, test.vals1...)
+
+		assert.NoError(t, err)
+
+		tpl2, err := NewTuple(Format_7_18, test.vals2...)
+		assert.NoError(t, err)
+
+		actual, err := tpl1.Less(Format_7_18, tpl2)
+		assert.NoError(t, err)
 
 		if actual != test.expected {
-			t.Error("tpl1:", EncodedValue(context.Background(), tpl1), "tpl2:", EncodedValue(context.Background(), tpl2), "expected", test.expected, "actual:", actual)
+			t.Error("tpl1:", mustString(EncodedValue(context.Background(), tpl1)), "tpl2:", mustString(EncodedValue(context.Background(), tpl2)), "expected", test.expected, "actual:", actual)
 		}
 	}
 }

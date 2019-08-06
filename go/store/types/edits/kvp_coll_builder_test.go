@@ -17,6 +17,8 @@ package edits
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -30,7 +32,8 @@ func TestAddKVP(t *testing.T) {
 	itr := coll.Iterator()
 
 	for i := int64(0); i < coll.Size(); i++ {
-		kvp := itr.Next()
+		kvp, err := itr.Next()
+		assert.NoError(t, err)
 
 		if uint(kvp.Key.(types.Uint)) != uint(i) {
 			t.Error("enexpected value")
@@ -56,7 +59,8 @@ func TestMoveRemaining(t *testing.T) {
 	itr := result.Iterator()
 
 	for i := int64(0); i < result.Size(); i++ {
-		kvp := itr.Next()
+		kvp, err := itr.Next()
+		assert.NoError(t, err)
 
 		if uint(kvp.Key.(types.Uint)) != uint(i) {
 			t.Error("enexpected value")
@@ -76,7 +80,8 @@ func TestAddKVPAndMoveRemaining(t *testing.T) {
 	itr := result.Iterator()
 
 	for i := int64(0); i < result.Size(); i++ {
-		kvp := itr.Next()
+		kvp, err := itr.Next()
+		assert.NoError(t, err)
 
 		if uint(kvp.Key.(types.Uint)) != uint(i) {
 			t.Error("unexpected value")

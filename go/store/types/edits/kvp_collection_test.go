@@ -17,10 +17,12 @@ package edits
 import (
 	"context"
 	"math/rand"
-	"sort"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -28,16 +30,26 @@ func (coll *KVPCollection) String() string {
 	ctx := context.Background()
 
 	itr := coll.Iterator()
-	val := itr.Next()
+	val, err := itr.Next()
+	d.PanicIfError(err)
 
 	keys := make([]types.Value, coll.totalSize)
 	for i := 0; val != nil; i++ {
-		keys[i] = val.Key.Value(ctx)
-		val = itr.Next()
+		var err error
+		keys[i], err = val.Key.Value(ctx)
+		d.PanicIfError(err)
+
+		val, err = itr.Next()
+		d.PanicIfError(err)
 	}
 
-	tpl := types.NewTuple(types.Format_7_18, keys...)
-	return types.EncodedValue(ctx, tpl)
+	tpl, err := types.NewTuple(types.Format_7_18, keys...)
+	d.PanicIfError(err)
+
+	str, err := types.EncodedValue(ctx, tpl)
+	d.PanicIfError(err)
+
+	return str
 }
 
 func TestKVPCollection(t *testing.T) {
@@ -73,7 +85,8 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 
 	for len(colls) > 1 {
 		for i, coll := range colls {
-			inOrder, _ := IsInOrder(NewItr(types.Format_7_18, coll))
+			inOrder, _, err := IsInOrder(NewItr(types.Format_7_18, coll))
+			assert.NoError(t, err)
 			if !inOrder {
 				t.Fatal(i, "not in order")
 			}
@@ -87,7 +100,8 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 				s1 := colls[i].Size()
 				s2 := colls[j].Size()
 				//fmt.Print(colls[i].String(), "+", colls[j].String())
-				mergedColl := colls[i].DestructiveMerge(colls[j])
+				mergedColl, err := colls[i].DestructiveMerge(colls[j])
+				assert.NoError(t, err)
 
 				ms := mergedColl.Size()
 
@@ -103,7 +117,8 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 		colls = newColls
 	}
 
-	inOrder, numItems := IsInOrder(NewItr(types.Format_7_18, colls[0]))
+	inOrder, numItems, err := IsInOrder(NewItr(types.Format_7_18, colls[0]))
+	assert.NoError(t, err)
 	if !inOrder {
 		t.Fatal("collection not in order")
 	} else if numItems != numColls*size {
@@ -118,7 +133,7 @@ func createKVPColl(rng *rand.Rand, size int) *KVPCollection {
 		kvps[i] = types.KVP{Key: types.Uint(rng.Uint64() % 10000), Val: types.NullValue}
 	}
 
-	sort.Stable(types.KVPSort{Values: kvps, NBF: types.Format_7_18})
+	types.SortWithErroringLess(types.KVPSort{Values: kvps, NBF: types.Format_7_18})
 
 	return NewKVPCollection(types.Format_7_18, kvps)
 }

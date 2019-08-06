@@ -221,7 +221,18 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinForma
 	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
 	commit, _ := dEnv.DoltDB.Resolve(ctx, cs)
 
-	rootHash := commit.GetRootValue().HashOf()
+	root, err := commit.GetRootValue()
+
+	if err != nil {
+		return err
+	}
+
+	rootHash, err := root.HashOf()
+
+	if err != nil {
+		return err
+	}
+
 	dEnv.RepoState, err = CreateRepoState(dEnv.FS, "master", rootHash)
 
 	if err != nil {
@@ -263,7 +274,7 @@ func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 		return nil, err
 	}
 
-	return commit.GetRootValue(), nil
+	return commit.GetRootValue()
 }
 
 func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
@@ -304,10 +315,27 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 		return ErrMarshallingSchema
 	}
 
-	tbl := doltdb.NewTable(ctx, vrw, schVal, rows)
-	newRoot := root.PutTable(ctx, dEnv.DoltDB, tableName, tbl)
+	tbl, err := doltdb.NewTable(ctx, vrw, schVal, rows)
 
-	if root.HashOf() == newRoot.HashOf() {
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutTable(ctx, dEnv.DoltDB, tableName, tbl)
+
+	if err != nil {
+		return err
+	}
+
+	rootHash, err := root.HashOf()
+
+	if err != nil {
+		return err
+	}
+
+	newRootHash, err := newRoot.HashOf()
+
+	if rootHash == newRootHash {
 		return nil
 	}
 
@@ -325,7 +353,7 @@ func (dEnv *DoltEnv) GetTablesWithConflicts(ctx context.Context) ([]string, erro
 		return nil, err
 	}
 
-	return root.TablesInConflict(ctx), nil
+	return root.TablesInConflict(ctx)
 }
 
 func (dEnv *DoltEnv) IsUnchangedFromHead(ctx context.Context) (bool, error) {
@@ -335,8 +363,14 @@ func (dEnv *DoltEnv) IsUnchangedFromHead(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
-	headHash := root.HashOf().String()
-	if dEnv.RepoState.Working == headHash && dEnv.RepoState.Staged == headHash {
+	headHash, err := root.HashOf()
+
+	if err != nil {
+		return false, err
+	}
+
+	headHashStr := headHash.String()
+	if dEnv.RepoState.Working == headHashStr && dEnv.RepoState.Staged == headHashStr {
 		return true, nil
 	}
 

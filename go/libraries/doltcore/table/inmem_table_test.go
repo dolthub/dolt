@@ -40,27 +40,35 @@ var fields, _ = schema.NewColCollection(
 
 var rowSch = schema.SchemaFromCols(fields)
 
+func mustRow(r row.Row, err error) row.Row {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 // These are in noms-key-sorted order, since InMemoryTable.AppendRow sorts its rows. This should probably be done
 // programatically instead of hard-coded.
 var rows = []row.Row{
-	row.New(types.Format_7_18, rowSch, row.TaggedValues{
+	mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
 		nameTag:  types.String("Bill Billerson"),
 		ageTag:   types.Uint(32),
 		titleTag: types.String("Senior Dufus"),
 		greatTag: types.Bool(true),
-	}),
-	row.New(types.Format_7_18, rowSch, row.TaggedValues{
+	})),
+	mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
 		nameTag:  types.String("John Johnson"),
 		ageTag:   types.Uint(21),
 		titleTag: types.String("Intern Dufus"),
 		greatTag: types.Bool(true),
-	}),
-	row.New(types.Format_7_18, rowSch, row.TaggedValues{
+	})),
+	mustRow(row.New(types.Format_7_18, rowSch, row.TaggedValues{
 		nameTag:  types.String("Rob Robertson"),
 		ageTag:   types.Uint(25),
 		titleTag: types.String("Dufus"),
 		greatTag: types.Bool(false),
-	}),
+	})),
 }
 
 func TestInMemTable(t *testing.T) {

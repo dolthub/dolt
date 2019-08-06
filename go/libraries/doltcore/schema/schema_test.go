@@ -71,9 +71,9 @@ func TestSchema(t *testing.T) {
 
 	testSchema("SchemaFromPKAndNonPKCols", schFromPKAndNonPKCols, t)
 
-	if !SchemasAreEqual(schFromCols, schFromPKAndNonPKCols) {
-		t.Error("schemas should be equal")
-	}
+	eq, err := SchemasAreEqual(schFromCols, schFromPKAndNonPKCols)
+	assert.NoError(t, err)
+	assert.True(t, eq, "schemas should be equal")
 }
 
 func TestSchemaWithNoPKs(t *testing.T) {
@@ -124,7 +124,9 @@ func testSchema(method string, sch Schema, t *testing.T) {
 	validateCols(t, pkCols, sch.GetPKCols(), method+"GetPKCols")
 	validateCols(t, nonPkCols, sch.GetNonPKCols(), method+"GetNonPKCols")
 
-	extracted := ExtractAllColNames(sch)
+	extracted, err := ExtractAllColNames(sch)
+	assert.NoError(t, err)
+
 	expExt := map[uint64]string{
 		lnColTag:       lnColName,
 		fnColTag:       fnColName,
