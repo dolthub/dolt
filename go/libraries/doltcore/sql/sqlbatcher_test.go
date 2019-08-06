@@ -114,14 +114,14 @@ func TestSqlBatchInserts(t *testing.T) {
 
 	expectedAppearances = append(expectedAppearances, AllAppsRows...)
 	expectedAppearances = append(expectedAppearances,
-		newAppsRow(7, "5"),
-		newAppsRow(7, "6"),
-		newAppsRow(8, "7"),
-		newAppsRow(9, "8"),
-		newAppsRow(9, "9"),
-		newAppsRow(10, "5"),
-		newAppsRow(10, "6"),
-		newAppsRow(11, "9"),
+		newAppsRow(7, 5),
+		newAppsRow(7, 6),
+		newAppsRow(8, 7),
+		newAppsRow(9, 8),
+		newAppsRow(9, 9),
+		newAppsRow(10, 5),
+		newAppsRow(10, 6),
+		newAppsRow(11, 9),
 	)
 
 	allPeopleRows, err = GetAllRows(root, PeopleTableName)
@@ -266,7 +266,7 @@ func newEpsRow(id int, name string) row.Row {
 		EpNameTag:    types.String(name),
 	}
 
-	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_7_18, EpisodesTestSchema, vals)
 
 	if err != nil {
 		panic(err)
@@ -275,13 +275,13 @@ func newEpsRow(id int, name string) row.Row {
 	return r
 }
 
-func newAppsRow(charId int, epId string) row.Row {
+func newAppsRow(charId int, epId int) row.Row {
 	vals := row.TaggedValues{
 		AppCharacterTag: types.Int(charId),
-		AppEpTag:        types.String(epId),
+		AppEpTag:        types.Int(epId),
 	}
 
-	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
+	r, err := row.New(types.Format_7_18, AppearancesTestSchema, vals)
 
 	if err != nil {
 		panic(err)

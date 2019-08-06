@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -79,10 +80,28 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
+	var h hash.Hash
+	if ok {
+		h, err = tbl.HashOf()
+
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
 	mergeTbl, mergeOk, err := mergeRoot.GetTable(ctx, tblName)
 
 	if err != nil {
 		return nil, nil, err
+	}
+
+	var mh hash.Hash
+	if mergeOk {
+		mh, err = mergeTbl.HashOf()
+
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	ancTbl, ancOk, err := ancRoot.GetTable(ctx, tblName)
@@ -91,22 +110,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	h, err := tbl.HashOf()
+	var anch hash.Hash
+	if ancOk {
+		anch, err = ancTbl.HashOf()
 
-	if err != nil {
-		return nil, nil, err
-	}
-
-	mh, err := mergeTbl.HashOf()
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	anch, err := ancTbl.HashOf()
-
-	if err != nil {
-		return nil, nil, err
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	if ok && mergeOk && h == mh {

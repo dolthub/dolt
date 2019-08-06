@@ -367,7 +367,7 @@ func addMapTransform(selArgs *SelectArgs, sch schema.Schema, transforms *pipelin
 }
 
 func maybeAddCnfColTransform(transColl *pipeline.TransformCollection, tbl *doltdb.Table, tblSch schema.Schema) (schema.Schema, error) {
-	if has, err := tbl.HasConflicts(); err == nil {
+	if has, err := tbl.HasConflicts(); err != nil {
 		return nil, err
 	} else if has {
 		// this is so much code to add a column
