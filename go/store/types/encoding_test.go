@@ -649,7 +649,6 @@ func (bg bogusType) typeOf() (*Type, error) {
 }
 func (bg bogusType) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	panic("abc")
-	return nil
 }
 
 func TestBogusValueWithUnresolvedCycle(t *testing.T) {

@@ -58,7 +58,7 @@ func NewTextTableWriter(wr io.WriteCloser, sch schema.Schema) (*TextTableWriter,
 func NewTextTableWriterWithNumHeaderRows(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) (*TextTableWriter, error) {
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.Kind != types.StringKind {
-			errors.New("only string typed columns can be used to print a table")
+			return false, errors.New("only string typed columns can be used to print a table")
 		}
 		return false, nil
 	})

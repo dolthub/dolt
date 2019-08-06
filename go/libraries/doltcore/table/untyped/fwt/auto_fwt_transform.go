@@ -95,7 +95,7 @@ func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan
 		})
 
 		if err != nil {
-			badRowChan <- &pipeline.TransformRowFailure{r.Row, "fwt", err.Error()}
+			badRowChan <- &pipeline.TransformRowFailure{Row: r.Row, TransformName: "fwt", Details: err.Error()}
 			return
 		}
 
