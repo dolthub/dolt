@@ -2,12 +2,22 @@
 
 set -eo pipefail
 
+force=
+if [[ $# -gt 0 ]]; then
+    if [ "$1" = "-f" ]; then
+        force=`shift`
+    fi
+fi
+
 if [[ $# -ne 4 && $# -ne 2 ]]; then
-    echo "Usage: fix_commiter.sh TARGET_BRANCH WRONG_EMAIL [RIGHT_NAME RIGHT_EMAIL]" 1>&2
+    echo "Usage: fix_commiter.sh [-f] TARGET_BRANCH WRONG_EMAIL [RIGHT_NAME RIGHT_EMAIL]" 1>&2
     echo "  Example: fix_commiter.sh master nobody@github.com \"Aaron Son\" \"aaron@liquidata.co\"" 1>&2
     echo "  If RIGHT_NAME and RIGHT_EMAIL are ommitted, they are taken to be the current user from git config" 1>&2
     exit 1
 fi
+
+script_dir=$(dirname "$0")
+cd $script_dir/../../..
 
 target=$1
 wrongemail=$2
@@ -21,7 +31,7 @@ fi
 
 mergebase=`git merge-base HEAD "remotes/origin/$target"`
 
-exec git filter-branch --env-filter '
+exec git "$force" filter-branch --env-filter '
 OLD_EMAIL="'"$wrongemail"'"
 CORRECT_NAME="'"$rightname"'"
 CORRECT_EMAIL="'"$rightemail"'"
