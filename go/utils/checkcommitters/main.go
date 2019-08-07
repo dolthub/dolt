@@ -62,7 +62,7 @@ func main() {
 		if len(os.Args) != 4 {
 			PrintUsageAndExit()
 		}
-		HandleCheckAndExit(CheckPR(os.Args[2], os.Args[3]))
+		HandleCheckAndExit(Check("remotes/origin/"+os.Args[2], "remotes/origin/"+os.Args[3]))
 	} else if os.Args[1] == "-dir" {
 		if len(os.Args) > 3 {
 			PrintUsageAndExit()
@@ -71,7 +71,7 @@ func main() {
 		if len(os.Args) == 3 {
 			target = os.Args[2]
 		}
-		HandleCheckAndExit(CheckDir(target))
+		HandleCheckAndExit(Check("HEAD", "remotes/origin/"+target))
 	} else {
 		PrintUsageAndExit()
 	}
@@ -79,9 +79,9 @@ func main() {
 
 func HandleCheckAndExit(failed bool) {
 	if failed {
-		fmt.Printf("\n\nThis PR has non-whitelisted committers or authors.\n")
-		fmt.Printf("Please use git rebase or git filter-branch to ensure every commit\n")
-		fmt.Printf("is from a whitelisted committer and author.\n")
+		fmt.Printf("\nThis PR has non-whitelisted committers or authors.\n")
+		fmt.Printf("Please use ./utils/checkcommitters/fix_commiter.sh to make\n")
+		fmt.Printf("all commits from a whitelisted committer and author.\n")
 		os.Exit(1)
 	}
 }
@@ -98,26 +98,22 @@ func PrintUsageAndExit() {
 	os.Exit(1)
 }
 
-func CheckPR(pr, target string) bool {
-	mbc := exec.Command("git", "merge-base", "remotes/origin/"+pr, "remotes/origin/"+target)
+func Check(source, target string) bool {
+	mbc := exec.Command("git", "merge-base", source, target)
 	mbco, err := mbc.CombinedOutput()
 	if err != nil {
-		log.Fatalf("Error running `git merge-base remotes/origin/%s remotes/origin/%s` to find merge parent: %v\n", pr, target, err)
+		log.Fatalf("Error running `git merge-base %s %s` to find merge parent: %v\n", source, target, err)
 	}
 	base := strings.TrimSpace(string(mbco))
 
-	return CheckFromBase(base, "remotes/origin/"+pr)
+	return CheckFromBase(base, source)
 }
 
-func CheckDir(target string) bool {
-	return CheckFromBase("remotes/origin/"+target, "HEAD")
-}
-
-func CheckFromBase(base string, target string) bool {
-	lc := exec.Command("git", "log", "--format=full", base+".."+target)
+func CheckFromBase(base string, source string) bool {
+	lc := exec.Command("git", "log", "--format=full", base+".."+source)
 	lco, err := lc.CombinedOutput()
 	if err != nil {
-		log.Fatalf("Error running `git log --format=full %s..%s`: %v\n", base, target, err)
+		log.Fatalf("Error running `git log --format=full %s..%s`: %v\n", base, source, err)
 	}
 
 	var failed bool
