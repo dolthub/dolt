@@ -10,7 +10,7 @@ if [ "$bad_files" != "" ]; then
     echo "ERROR: The following files do not match goimports output:"
     echo "$bad_files"
     echo
-    echo "Please format the go code in the repository with 'goimports -l -local github.com/liquidata-inc/dolt .'"
+    echo "Please format the go code in the repository with './utils/repofmt/format_repo.sh'"
     exit 1
 fi
 
@@ -23,5 +23,7 @@ done)
 if [ "$bad_files" != "" ]; then
     echo "ERROR: The following files have more than three import groups:"
     echo "$bad_files"
+    echo
+    echo "Please format the go code in the repository with './utils/repofmt/format_repo.sh'"
     exit 1
 fi
