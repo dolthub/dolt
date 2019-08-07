@@ -131,28 +131,30 @@ func PrintDoltLicense(out io.Writer) {
 }
 
 func PrintGoLicense(out io.Writer, root string) {
+	filepath := FindLicenseFile(root, []string{"LICENSE", "../LICENSE"})
 	fmt.Fprintf(out, "\n================================================================================\n")
 	fmt.Fprintf(out, "= Go standard library licensed under: =\n\n")
-	PrintLicense(out, root+"/LICENSE")
+	PrintLicense(out, filepath)
 	fmt.Fprintf(out, "================================================================================\n")
 }
 
+var StandardCandidates = []string{
+	"LICENSE",
+	"LICENSE.txt",
+	"LICENSE.md",
+	"COPYING",
+	"LICENSE-MIT",
+}
+
 func PrintPkgLicense(out io.Writer, pkg string, dir string) {
-	filepath := FindLicenseFile(dir)
+	filepath := FindLicenseFile(dir, StandardCandidates)
 	fmt.Fprintf(out, "\n================================================================================\n")
 	fmt.Fprintf(out, "= %v licensed under: =\n\n", pkg)
 	PrintLicense(out, filepath)
 	fmt.Fprintf(out, "================================================================================\n")
 }
 
-func FindLicenseFile(dir string) string {
-	candidates := []string{
-		"LICENSE",
-		"LICENSE.txt",
-		"LICENSE.md",
-		"COPYING",
-		"LICENSE-MIT",
-	}
+func FindLicenseFile(dir string, candidates []string) string {
 	for _, c := range candidates {
 		if _, err := os.Stat(dir + "/" + c); err == nil {
 			return dir + "/" + c
