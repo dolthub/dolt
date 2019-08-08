@@ -55,23 +55,65 @@ var AllowedCommitters = map[string]*struct{}{
 // - This would be a place to enforce DCO or CLA requirements.
 
 func main() {
-	if len(os.Args) != 3 {
-		fmt.Printf("Usage: checkcommitters SOURCE_BRANCH TARGET_BRANCH\n")
-		fmt.Printf("  SOURCE_BRANCH is the remotes/origin branch to be merged by the PR, for example PR-4.\n")
-		fmt.Printf("  CHANGE_TARGET is the target remotes/origin branch of the PR, for example master.\n")
-		fmt.Printf("This should be run from the git checkout workspace for the PR.\n")
+	if len(os.Args) < 2 {
+		PrintUsageAndExit()
+	}
+	if os.Args[1] == "-pr" {
+		if len(os.Args) != 4 {
+			PrintUsageAndExit()
+		}
+		HandleCheckAndExit(Check("remotes/origin/"+os.Args[2], "remotes/origin/"+os.Args[3]))
+	} else if os.Args[1] == "-dir" {
+		if len(os.Args) > 3 {
+			PrintUsageAndExit()
+		}
+		target := "master"
+		if len(os.Args) == 3 {
+			target = os.Args[2]
+		}
+		HandleCheckAndExit(Check("HEAD", "remotes/origin/"+target))
+	} else {
+		PrintUsageAndExit()
+	}
+}
+
+func HandleCheckAndExit(failed bool) {
+	if failed {
+		fmt.Printf("\nThis PR has non-whitelisted committers or authors.\n")
+		fmt.Printf("Please use ./utils/checkcommitters/fix_committer.sh to make\n")
+		fmt.Printf("all commits from a whitelisted committer and author.\n")
 		os.Exit(1)
 	}
-	mbc := exec.Command("git", "merge-base", "remotes/origin/"+os.Args[2], "remotes/origin/"+os.Args[1])
+}
+
+func PrintUsageAndExit() {
+	fmt.Printf("Usage: checkcommitters [-pr SOURCE_BRANCH TARGET_BRANCH | -dir TARGET_BRANCH\n")
+	fmt.Printf("  SOURCE_BRANCH is the remotes/origin branch to be merged by the PR, for example PR-4.\n")
+	fmt.Printf("  CHANGE_TARGET is the target remotes/origin branch of the PR, for example master.\n")
+	fmt.Printf("This should be run from the git checkout workspace for the PR.\n")
+	fmt.Printf("Example: checkcommitters -pr PR-4 master.\n")
+	fmt.Printf("  Will check that all commits from merge-base of PR-4 and remotes/origin/master HEAD conform.\n")
+	fmt.Printf("Example: checkcommitters -dir master\n")
+	fmt.Printf("  Will check that all commits from remotes/origin/master..HEAD conform.\n")
+	os.Exit(1)
+}
+
+func Check(source, target string) bool {
+	mbc := exec.Command("git", "merge-base", source, target)
 	mbco, err := mbc.CombinedOutput()
 	if err != nil {
-		log.Fatalf("Error running `git merge-base remotes/origin/%s remotes/origin/%s` to find merge parent: %v\n", os.Args[2], os.Args[1], err)
+		log.Fatalf("Error running `git merge-base %s %s` to find merge parent: %v\n", source, target, err)
 	}
 	base := strings.TrimSpace(string(mbco))
-	lc := exec.Command("git", "log", "--format=full", base+"..remotes/origin/"+os.Args[1])
+
+	return CheckFromBase(base, source)
+}
+
+func CheckFromBase(base string, source string) bool {
+	lc := exec.Command("git", "log", "--format=full", base+".."+source)
 	lco, err := lc.CombinedOutput()
 	if err != nil {
-		log.Fatalf("Error running `git log --format=full %s..remotes/origin/%s`: %v\n", base, os.Args[1], err)
+		log.Fatalf("Error running `git log --format=full %s..%s`: %v\n", base, source, err)
 	}
 
 	var failed bool
@@ -98,10 +140,5 @@ func main() {
 		}
 		lco = lco[n+1:]
 	}
-	if failed {
-		fmt.Printf("\n\nThis PR has non-whitelisted committers or authors.\n")
-		fmt.Printf("Please use git rebase or git filter-branch to ensure every commit\n")
-		fmt.Printf("is from a whitelisted committer and author.\n")
-		os.Exit(1)
-	}
+	return failed
 }

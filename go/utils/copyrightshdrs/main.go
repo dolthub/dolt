@@ -431,6 +431,8 @@ func CheckProto() bool {
 				fmt.Printf("ERROR: Wrong copyright header: %v\n", path)
 				failed = true
 			}
+		} else if strings.HasPrefix(path, "../proto/third_party") {
+			return filepath.SkipDir
 		}
 		return nil
 	})
