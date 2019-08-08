@@ -10,8 +10,8 @@ if [[ $# -gt 0 ]]; then
 fi
 
 if [[ $# -ne 4 && $# -ne 2 ]]; then
-    echo "Usage: fix_commiter.sh [-f] TARGET_BRANCH WRONG_EMAIL [RIGHT_NAME RIGHT_EMAIL]" 1>&2
-    echo "  Example: fix_commiter.sh master nobody@github.com \"Aaron Son\" \"aaron@liquidata.co\"" 1>&2
+    echo "Usage: fix_committer.sh [-f] TARGET_BRANCH WRONG_EMAIL [RIGHT_NAME RIGHT_EMAIL]" 1>&2
+    echo "  Example: fix_committer.sh master nobody@github.com \"Aaron Son\" \"aaron@liquidata.co\"" 1>&2
     echo "  If RIGHT_NAME and RIGHT_EMAIL are ommitted, they are taken to be the current user from git config" 1>&2
     exit 1
 fi

@@ -80,7 +80,7 @@ func main() {
 func HandleCheckAndExit(failed bool) {
 	if failed {
 		fmt.Printf("\nThis PR has non-whitelisted committers or authors.\n")
-		fmt.Printf("Please use ./utils/checkcommitters/fix_commiter.sh to make\n")
+		fmt.Printf("Please use ./utils/checkcommitters/fix_committer.sh to make\n")
 		fmt.Printf("all commits from a whitelisted committer and author.\n")
 		os.Exit(1)
 	}
