@@ -43,6 +43,7 @@ const (
 	contOnErrParam   = "continue"
 	primaryKeyParam  = "pk"
 	fileTypeParam    = "file-type"
+	delimParam       = "delim"
 )
 
 var schemaFileHelp = "Schema definition files are json files in the format:" + `
@@ -97,23 +98,25 @@ be used when creating a new table, or updating an existing table.
 	`
 In both create and update scenarios the file's extension is used to infer the type of the file.  If a file does not 
 have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of 
-the file in one of the supported formats (csv, psv, nbf, json, xlsx)`
+the file in one of the supported formats (csv, psv, nbf, json, xlsx).  For files separated by a delimiter other than a 
+',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimeter`
 
 var importSynopsis = []string{
 	"-c [-f] [--pk <field>] [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 	"-u [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 }
 
-func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, *mvdata.DataLocation, *mvdata.DataLocation) {
+func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, *mvdata.DataLocation, *mvdata.DataLocation, interface{}) {
 	if apr.NArg() != 2 {
 		usage()
-		return mvdata.InvalidOp, nil, nil
+		return mvdata.InvalidOp, nil, nil, nil
 	}
 
 	var mvOp mvdata.MoveOperation
+	var srcOpts interface{}
 	if !apr.Contains(createParam) && !apr.Contains(updateParam) {
 		cli.PrintErrln("Must include '-c' for initial table import or -u to update existing table.")
-		return mvdata.InvalidOp, nil, nil
+		return mvdata.InvalidOp, nil, nil, nil
 	} else if apr.Contains(createParam) {
 		mvOp = mvdata.OverwriteOp
 	} else {
@@ -121,7 +124,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		if apr.Contains(outSchemaParam) {
 			cli.PrintErrln("fatal:", outSchemaParam+"is not supported for update operations")
 			usage()
-			return mvdata.InvalidOp, nil, nil
+			return mvdata.InvalidOp, nil, nil, nil
 		}
 	}
 
@@ -130,23 +133,34 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		cli.PrintErrln(
 			color.RedString("'%s' is not a valid table name\n", tableName),
 			"table names must match the regular expression:", doltdb.TableNameRegexStr)
-		return mvdata.InvalidOp, nil, nil
+		return mvdata.InvalidOp, nil, nil, nil
 	}
 
 	path := apr.Arg(1)
-	fType, _ := apr.GetValue(fileTypeParam)
+	delim, hasDelim := apr.GetValue(delimParam)
+	fType, hasFileType := apr.GetValue(fileTypeParam)
 	fileLoc := mvdata.NewDataLocation(path, fType)
+
+	if fileLoc.Format == mvdata.InvalidDataFormat && !hasFileType && hasDelim {
+		fileLoc.Format = mvdata.CsvFile
+		srcOpts = mvdata.CsvOptions{Delim: delim}
+	}
 
 	if fileLoc.Format == mvdata.InvalidDataFormat {
 		cli.PrintErrln(
 			color.RedString("Could not infer type file '%s'\n", path),
 			"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
-		return mvdata.InvalidOp, nil, nil
+		return mvdata.InvalidOp, nil, nil, nil
+	}
+
+	if fileLoc.Format != mvdata.CsvFile && hasDelim {
+		cli.PrintErrln(color.RedString("delim is not a valid parameter for this type of file"))
+		return mvdata.InvalidOp, nil, nil, nil
 	}
 
 	tableLoc := &mvdata.DataLocation{Path: tableName, Format: mvdata.DoltDB}
 
-	return mvOp, tableLoc, fileLoc
+	return mvOp, tableLoc, fileLoc, srcOpts
 }
 
 func Import(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -170,7 +184,7 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	moveOp, tableLoc, fileLoc := validateImportArgs(apr, usage)
+	moveOp, tableLoc, fileLoc, srcOpts := validateImportArgs(apr, usage)
 
 	if fileLoc == nil || tableLoc == nil {
 		return false, nil
@@ -188,6 +202,7 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 		PrimaryKey:  primaryKey,
 		Src:         fileLoc,
 		Dest:        tableLoc,
+		SrcOptions:  srcOpts,
 	}
 }
 
@@ -203,6 +218,7 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
 	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
+	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimeter for a csv style file with a non-comma delimiter.")
 	return ap
 }
 

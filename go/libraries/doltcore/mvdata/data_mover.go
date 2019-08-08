@@ -40,6 +40,10 @@ const (
 	InvalidOp   MoveOperation = "invalid"
 )
 
+type CsvOptions struct {
+	Delim string
+}
+
 type MoveOptions struct {
 	Operation   MoveOperation
 	ContOnErr   bool
@@ -49,6 +53,7 @@ type MoveOptions struct {
 	PrimaryKey  string
 	Src         *DataLocation
 	Dest        *DataLocation
+	SrcOptions  interface{}
 }
 
 type DataMover struct {
@@ -84,7 +89,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	var err error
 	transforms := pipeline.NewTransformCollection()
 
-	rd, srcIsSorted, err := mvOpts.Src.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+	rd, srcIsSorted, err := mvOpts.Src.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path, mvOpts.SrcOptions)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -206,7 +211,7 @@ func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootVal
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
 
-		rd, _, err := mvOpts.Dest.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path)
+		rd, _, err := mvOpts.Dest.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path, mvOpts.SrcOptions)
 
 		if err != nil {
 			return nil, err
