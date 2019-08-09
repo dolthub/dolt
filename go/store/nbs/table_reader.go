@@ -428,9 +428,12 @@ func (tr tableReader) getManyAtOffsets(
 		}
 
 		wg.Add(1)
+		goReadStart := readStart
+		goReadEnd := readEnd
+		goBatch := batch
 		go func(batch offsetRecSlice) {
 			defer wg.Done()
-			err := tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, stats)
+			err := tr.readAtOffsets(ctx, goReadStart, goReadEnd, reqs, goBatch, foundChunks, stats)
 			ae.SetIfError(err)
 		}(batch)
 		batch = nil
