@@ -1,6 +1,6 @@
 
 CREATE TABLE ip2nation (
-  ip int(11) unsigned NOT NULL default '0',
+  ip int(11) NOT NULL default 0,
   country char(2) NOT NULL default '',
   PRIMARY KEY (ip)
 );
@@ -11,8 +11,8 @@ CREATE TABLE ip2nationCountries (
   iso_code_3 varchar(3) default '',
   iso_country varchar(255) NOT NULL default '',
   country varchar(255) NOT NULL default '',
-  lat float NOT NULL default '0',
-  lon float NOT NULL default '0',  
+  lat float NOT NULL default 0.0,
+  lon float NOT NULL default 0.0,  
   PRIMARY KEY  (code)
 );
 
