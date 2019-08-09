@@ -47,6 +47,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -117,9 +118,12 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	// Run in either batch mode for piped input, or shell mode for interactive
-	fi, _ := os.Stdin.Stat()
-	if (fi.Mode() & os.ModeCharDevice) == 0 {
+	fi, err := os.Stdin.Stat()
+	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
+	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
 		root = runBatchMode(dEnv, root)
+	} else if err != nil {
+		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
 		var err error
 		root, err = runShell(dEnv, root)

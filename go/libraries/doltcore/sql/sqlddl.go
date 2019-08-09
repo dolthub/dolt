@@ -451,6 +451,8 @@ func getColumn(colDef *sqlparser.ColumnDefinition, indexes []*sqlparser.IndexDef
 		return schema.InvalidCol, nil, err
 	}
 
+	// TODO: type conversion. This doesn't work at all for uint columns (parser always thinks integer literals are int,
+	//  not uint)
 	if getter.NomsKind != colKind {
 		return errColumn("Type mismatch for default value of column %v: '%v'", column.Name, nodeToString(colDef.Type.Default))
 	}
