@@ -203,6 +203,8 @@ github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a h1
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a/go.mod h1:bXirMMsoAKR1OI9GTQJPGSyuwJlOseI9AFNAdpwRY2k=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
+github.com/liquidata-inc/mmap-go v1.0.2 h1:8DF6lNYcqCTAdZ1BZlp4ZdHd+jfxz5/te8UvPmezlIw=
+github.com/liquidata-inc/mmap-go v1.0.2/go.mod h1:W3m91qexYIu40kcj8TLXNUSTCKprH8UQ3GgH5/Xyfc0=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796/go.mod h1:Au9ry8xH1Bp0PbsWvLzQPPDo7H9YGDOWoms2W7yqNs0=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
