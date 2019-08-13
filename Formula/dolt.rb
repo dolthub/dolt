@@ -1,8 +1,10 @@
 class Dolt < Formula
   desc "Dolt - It's git for data"
-  homepage "https://github.com/liquidata-inc/dolt"
-  url "https://github.com/liquidata-inc/dolt"
-  sha256 "2c13dfcf594f5c52780ccc97e932bcfd3128b07ff43018e1622a066b4ff36a3a"
+  homepage 'https://github.com/liquidata-inc/dolt'
+  url 'https://github.com/liquidata-inc/dolt'
+  sha256 '2c13dfcf594f5c52780ccc97e932bcfd3128b07ff43018e1622a066b4ff36a3a'
+
+  depends_on :go
 
   bottle :unneeded
 
