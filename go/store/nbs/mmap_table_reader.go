@@ -32,7 +32,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/edsrzf/mmap-go"
+	"github.com/liquidata-inc/mmap-go"
 )
 
 type mmapTableReader struct {

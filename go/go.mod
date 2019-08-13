@@ -14,16 +14,15 @@ require (
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/codahale/blake2 v0.0.0-20150924215134-8d10d0420cbf
 	github.com/dustin/go-humanize v1.0.0
-	github.com/edsrzf/mmap-go v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
-	github.com/gizak/termui/v3 v3.1.0
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gocraft/dbr v0.0.0-20190708200302-a54124dfc613
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.3.0
 	github.com/google/uuid v1.1.1
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmoiron/sqlx v1.2.0 // indirect
 	github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7
 	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
@@ -32,11 +31,11 @@ require (
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/lib/pq v1.1.1 // indirect
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
+	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/mattn/go-isatty v0.0.8
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
-	github.com/nsf/termbox-go v0.0.0-20190121233118-02980233997d
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.3.0
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
@@ -57,15 +56,6 @@ require (
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible
 )
 
-replace github.com/edsrzf/mmap-go => github.com/liquidata-inc/mmap-go v1.0.2
-
 replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a
 
-//replace github.com/src-d/go-mysql-server => ../../../../liquidata-inc/go-mysql-server
-
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796
-
-// For local development, clone vitess into $GOPATH/src like so: git clone git@github.com:liquidata-inc/vitess.git vitess.io/vitess
-// Then use this local override:
-//replace vitess.io/vitess => ../../../../../vitess.io/vitess
-
