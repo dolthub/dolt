@@ -34,8 +34,8 @@ func TestExecuteShow(t *testing.T) {
 
 	peopleSchemaRows := Rs(
 		NewResultSetRow(types.String("id"), types.String("int"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("first"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("last"), types.String("varchar"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("first"), types.String("varchar(1024)"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("last"), types.String("varchar(1024)"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("is_married"), types.String("bool"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("age"), types.String("int"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("rating"), types.String("float"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),

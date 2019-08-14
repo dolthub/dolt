@@ -26,8 +26,8 @@ import (
 
 const expectedSQL = "CREATE TABLE `table_name` (\n" +
 	"  `id` int not null comment 'tag:0',\n" +
-	"  `first` varchar not null comment 'tag:1',\n" +
-	"  `last` varchar not null comment 'tag:2',\n" +
+	"  `first` varchar(1024) not null comment 'tag:1',\n" +
+	"  `last` varchar(1024) not null comment 'tag:2',\n" +
 	"  `is_married` bool comment 'tag:3',\n" +
 	"  `age` int comment 'tag:4',\n" +
 	"  `rating` float comment 'tag:6',\n" +
@@ -56,7 +56,7 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"`first` varchar comment 'tag:0'",
+			"`first` varchar(1024) comment 'tag:0'",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),
