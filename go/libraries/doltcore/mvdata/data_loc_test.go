@@ -85,40 +85,25 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 
 func TestBasics(t *testing.T) {
 	tests := []struct {
-		dl                   *DataLocation
-		expectedFmt          DataFormat
-		expectedPath         string
+		dl                   DataLocation
+		expectedStr string
 		expectedIsFileType   bool
-		expectedReqPK        bool
-		expectedMustWrSorted bool
 	}{
-		{NewDataLocation("table-name", ""), DoltDB, "table-name", false, true, false},
-		{NewDataLocation("file.csv", ""), CsvFile, "file.csv", true, false, false},
-		{NewDataLocation("file.psv", ""), PsvFile, "file.psv", true, false, false},
-		{NewDataLocation("file.json", ""), JsonFile, "file.json", true, false, false},
-		//{NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true, true, true},
+		{NewDataLocation("", ".csv"), StdIO.ReadableStr(), false},
+		{NewDataLocation("table-name", ""), DoltDB.ReadableStr() + ":table-name", false},
+		{NewDataLocation("file.csv", ""), CsvFile.ReadableStr() + ":file.csv", true},
+		{NewDataLocation("file.psv", ""), PsvFile.ReadableStr() + ":file.psv", true},
+		{NewDataLocation("file.json", ""), JsonFile.ReadableStr() + ":file.json", true},
+		//{NewDataLocation("file.nbf", ""), NbfFile, "file.nbf", true},
 	}
 
 	for _, test := range tests {
-		if test.expectedFmt != test.dl.Format {
-			t.Error(test.dl, "Unexpected format")
-		}
+		t.Run(test.dl.String(), func(t *testing.T) {
+			assert.Equal(t, test.expectedStr, test.dl.String())
 
-		if test.expectedPath != test.dl.Path {
-			t.Error("Unexpected path")
-		}
-
-		if test.expectedIsFileType != test.dl.IsFileType() {
-			t.Error("Unexpected IsFileType result")
-		}
-
-		if test.expectedReqPK != test.dl.RequiresPK() {
-			t.Error("Unexpected IsFileType result")
-		}
-
-		if test.expectedMustWrSorted != test.dl.MustWriteSorted() {
-			t.Error("Unexpected IsFileType result")
-		}
+			_, isFileType := test.dl.(FileDataLocation)
+			assert.Equal(t, test.expectedIsFileType, isFileType)
+		})
 	}
 }
 
@@ -152,7 +137,7 @@ func init() {
 }
 
 func TestExists(t *testing.T) {
-	testLocations := []*DataLocation{
+	testLocations := []DataLocation{
 		NewDataLocation("table-name", ""),
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
@@ -163,36 +148,38 @@ func TestExists(t *testing.T) {
 	ddb, root, fs := createRootAndFS()
 
 	for _, loc := range testLocations {
-		if exists, err := loc.Exists(context.Background(), root, fs); err != nil {
-			t.Error(err)
-		} else if exists {
-			t.Error("Shouldn't exist before creation")
-		}
+		t.Run(loc.String(), func(t *testing.T) {
+			if exists, err := loc.Exists(context.Background(), root, fs); err != nil {
+				t.Error(err)
+			} else if exists {
+				t.Error("Shouldn't exist before creation")
+			}
 
-		if loc.Format == DoltDB {
-			schVal, _ := encoding.MarshalAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
-			m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
-			assert.NoError(t, err)
-			tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m)
-			assert.NoError(t, err)
-			root, err = root.PutTable(context.Background(), ddb, loc.Path, tbl)
-			assert.NoError(t, err)
-		} else {
-			err := fs.WriteFile(loc.Path, []byte("test"))
-			assert.NoError(t, err)
-		}
+			if tableVal, isTable := loc.(TableDataLocation); isTable {
+				schVal, _ := encoding.MarshalAsNomsValue(context.Background(), ddb.ValueReadWriter(), fakeSchema)
+				m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
+				assert.NoError(t, err)
+				tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m)
+				assert.NoError(t, err)
+				root, err = root.PutTable(context.Background(), ddb, tableVal.Name, tbl)
+				assert.NoError(t, err)
+			} else if fileVal, isFile := loc.(FileDataLocation); isFile {
+				err := fs.WriteFile(fileVal.Path, []byte("test"))
+				assert.NoError(t, err)
+			}
 
-		if exists, err := loc.Exists(context.Background(), root, fs); err != nil {
-			t.Error(err)
-		} else if !exists {
-			t.Error("Should already exist after creation")
-		}
+			if exists, err := loc.Exists(context.Background(), root, fs); err != nil {
+				t.Error(err)
+			} else if !exists {
+				t.Error("Should already exist after creation")
+			}
+		})
 	}
 }
 
 func TestCreateRdWr(t *testing.T) {
 	tests := []struct {
-		dl          *DataLocation
+		dl          DataLocation
 		expectedRdT reflect.Type
 		expectedWrT reflect.Type
 	}{
@@ -216,7 +203,7 @@ func TestCreateRdWr(t *testing.T) {
 	for _, test := range tests {
 		loc := test.dl
 
-		wr, err := loc.CreateOverwritingDataWriter(context.Background(), mvOpts, root, fs, true, fakeSchema, nil)
+		wr, err := loc.NewCreatingWriter(context.Background(), mvOpts, root, fs, true, fakeSchema, nil)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer.", err)
@@ -236,6 +223,7 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		if nomsWr, ok := wr.(noms.NomsMapWriteCloser); ok {
+			tableLoc := test.dl.(TableDataLocation)
 			vrw := ddb.ValueReadWriter()
 			schVal, err := encoding.MarshalAsNomsValue(context.Background(), vrw, nomsWr.GetSchema())
 
@@ -245,12 +233,13 @@ func TestCreateRdWr(t *testing.T) {
 
 			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
 			assert.NoError(t, err)
-			root, err = root.PutTable(context.Background(), ddb, test.dl.Path, tbl)
+
+			root, err = root.PutTable(context.Background(), ddb, tableLoc.Name, tbl)
 			assert.NoError(t, err)
 		}
 
 		// TODO (oo): fix this for json path test
-		rd, _, err := loc.CreateReader(context.Background(), root, fs, "schema.json", "", nil)
+		rd, _, err := loc.NewReader(context.Background(), root, fs, "schema.json", nil)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer", err)

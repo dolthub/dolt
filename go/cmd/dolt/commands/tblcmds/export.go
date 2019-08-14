@@ -34,10 +34,10 @@ var exportSynopsis = []string{
 
 // validateExportArgs validates the input from the arg parser, and returns the tuple:
 // (table name to export, data location of table to export, data location to export to)
-func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (string, *mvdata.DataLocation, *mvdata.DataLocation) {
-	if apr.NArg() != 2 {
+func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (string, mvdata.TableDataLocation, mvdata.DataLocation) {
+	if apr.NArg() == 0 || apr.NArg() > 2{
 		usage()
-		return "", nil, nil
+		return "", mvdata.TableDataLocation{}, nil
 	}
 
 	tableName := apr.Arg(0)
@@ -45,23 +45,39 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		cli.PrintErrln(
 			color.RedString("'%s' is not a valid table name\n", tableName),
 			"table names must match the regular expression:", doltdb.TableNameRegexStr)
-		return "", nil, nil
+		return "", mvdata.TableDataLocation{}, nil
 	}
 
-	path := apr.Arg(1)
+	path := ""
+	if apr.NArg() > 1 {
+		path = apr.Arg(1)
+	}
+
 	fType, _ := apr.GetValue(fileTypeParam)
-	fileLoc := mvdata.NewDataLocation(path, fType)
+	destLoc := mvdata.NewDataLocation(path, fType)
 
-	if fileLoc.Format == mvdata.InvalidDataFormat {
-		cli.PrintErrln(
-			color.RedString("Could not infer type file '%s'\n", path),
-			"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
-		return "", nil, nil
+	switch val := destLoc.(type) {
+	case mvdata.FileDataLocation:
+		if val.Format == mvdata.InvalidDataFormat {
+			cli.PrintErrln(
+				color.RedString("Could not infer type file '%s'\n", path),
+				"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
+			return "", mvdata.TableDataLocation{}, nil
+		}
+
+	case mvdata.StdIODataLocation:
+		if val.Format == mvdata.InvalidDataFormat {
+			val = mvdata.StdIODataLocation{Format:mvdata.CsvFile}
+			destLoc = val
+		} else if val.Format != mvdata.CsvFile && val.Format != mvdata.PsvFile{
+			cli.PrintErrln(color.RedString("Cannot export this format to stdout"))
+			return "", mvdata.TableDataLocation{}, nil
+		}
 	}
 
-	tableLoc := &mvdata.DataLocation{Path: tableName, Format: mvdata.DoltDB}
+	tableLoc := mvdata.TableDataLocation{Name: tableName}
 
-	return tableName, tableLoc, fileLoc
+	return tableName, tableLoc, destLoc
 }
 
 func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOptions) {
@@ -79,7 +95,7 @@ func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 	apr := cli.ParseArgs(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
 
-	if fileLoc == nil || tableLoc == nil {
+	if fileLoc == nil || len(tableLoc.Name) == 0 {
 		return false, nil
 	}
 
@@ -109,7 +125,7 @@ func Export(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	result := executeMove(dEnv, force, mvOpts)
 
 	if result == 0 {
-		cli.Println(color.CyanString("Successfully exported data."))
+		cli.PrintErrln(color.CyanString("Successfully exported data."))
 	}
 
 	return result

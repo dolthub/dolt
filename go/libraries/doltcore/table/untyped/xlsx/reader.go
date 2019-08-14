@@ -35,27 +35,21 @@ type XLSXReader struct {
 	info   *XLSXFileInfo
 	sch    schema.Schema
 	ind    int
+	rows   []row.Row
 }
 
-func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo, tblName string) (*XLSXReader, error) {
+func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return NewXLSXReader(nbf, r, info, fs, path, tblName)
-}
-
-func NewXLSXReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *XLSXFileInfo, fs filesys.ReadableFS, path string, tblName string) (*XLSXReader, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
-	colStrs, err := getColHeaders(path, tblName)
 
-	if err != nil {
-		return nil, err
-	}
+	colStrs, err := getColHeaders(path, info.SheetName)
 
-	data, err := getXlsxRows(path, tblName)
+	data, err := getXlsxRows(path, info.SheetName)
 	if err != nil {
 		return nil, err
 	}
@@ -68,9 +62,7 @@ func NewXLSXReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *XLSXFileInfo
 		return nil, err
 	}
 
-	info.SetRows(decodedRows)
-
-	return &XLSXReader{r, br, info, sch, 0}, nil
+	return &XLSXReader{r, br, info, sch, 0, decodedRows}, nil
 }
 
 func getColHeaders(path string, sheetName string) ([]string, error) {
@@ -100,13 +92,11 @@ func (xlsxr *XLSXReader) Close(ctx context.Context) error {
 }
 
 func (xlsxr *XLSXReader) ReadRow(ctx context.Context) (row.Row, error) {
-	rows := xlsxr.info.Rows
-
-	if xlsxr.ind == len(rows) {
+	if xlsxr.ind == len(xlsxr.rows) {
 		return nil, io.EOF
 	}
 
-	outRow := rows[xlsxr.ind]
+	outRow := xlsxr.rows[xlsxr.ind]
 	xlsxr.ind++
 
 	return outRow, nil
