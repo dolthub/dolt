@@ -279,7 +279,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` varchar comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c1\` varchar(1024) comment 'tag:1'" ]] || false
     [[ "$output" =~ "primary key (\`pk\`)" ]] || false
 }
 
