@@ -19,7 +19,7 @@ import (
 )
 
 var DoltToSQLType = map[types.NomsKind]string{
-	types.StringKind: VARCHAR,
+	types.StringKind: VARCHAR + "(1024)", // we don't actually enforce string lengths, but mysql requires them
 	types.BoolKind:   BOOL,
 	types.FloatKind:  FLOAT_TYPE,
 	types.IntKind:    INT,
