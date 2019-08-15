@@ -17,6 +17,8 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -27,6 +29,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
+var InStream io.ReadCloser = os.Stdin
+var OutStream io.WriteCloser = os.Stdout
+
+func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
+	InStream = inStream
+	OutStream = outStream
+}
+
+// DataFormat is an enumeration of the valid data formats
 type DataFormat string
 
 const (
@@ -50,9 +61,6 @@ const (
 
 	// SqlFile is the format of a data location that is a .sql file
 	SqlFile           DataFormat = ".sql"
-
-	// StdIO is the format of a data location that is stdin or stdout
-	StdIO             DataFormat = "stdio"
 )
 
 // ReadableStr returns a human readable string for a DataFormat
@@ -60,8 +68,6 @@ func (df DataFormat) ReadableStr() string {
 	switch df {
 	case DoltDB:
 		return "dolt table"
-	case StdIO:
-		return "std i/o"
 	case CsvFile:
 		return "csv file"
 	case PsvFile:
@@ -105,7 +111,7 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 	dataFmt := DFFromString(fileFmtStr)
 
 	if len(path) == 0 {
-		return StdIODataLocation{dataFmt}
+		return StreamDataLocation{Format:dataFmt, Reader:InStream, Writer:OutStream}
 	} else if fileFmtStr == "" {
 		if doltdb.IsValidTableName(path) {
 			return TableDataLocation{path}

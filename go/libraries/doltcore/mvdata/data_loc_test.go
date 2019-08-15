@@ -89,7 +89,7 @@ func TestBasics(t *testing.T) {
 		expectedStr        string
 		expectedIsFileType bool
 	}{
-		{NewDataLocation("", ".csv"), StdIO.ReadableStr(), false},
+		{NewDataLocation("", ".csv"), "stream", false},
 		{NewDataLocation("table-name", ""), DoltDB.ReadableStr() + ":table-name", false},
 		{NewDataLocation("file.csv", ""), CsvFile.ReadableStr() + ":file.csv", true},
 		{NewDataLocation("file.psv", ""), PsvFile.ReadableStr() + ":file.psv", true},

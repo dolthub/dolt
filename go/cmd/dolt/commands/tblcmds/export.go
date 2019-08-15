@@ -16,6 +16,8 @@ package tblcmds
 
 import (
 	"github.com/fatih/color"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"os"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -65,9 +67,9 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			return "", mvdata.TableDataLocation{}, nil
 		}
 
-	case mvdata.StdIODataLocation:
+	case mvdata.StreamDataLocation:
 		if val.Format == mvdata.InvalidDataFormat {
-			val = mvdata.StdIODataLocation{Format: mvdata.CsvFile}
+			val = mvdata.StreamDataLocation{Format: mvdata.CsvFile, Reader: os.Stdin, Writer: iohelp.NopWrCloser(cli.CliOut)}
 			destLoc = val
 		} else if val.Format != mvdata.CsvFile && val.Format != mvdata.PsvFile {
 			cli.PrintErrln(color.RedString("Cannot export this format to stdout"))

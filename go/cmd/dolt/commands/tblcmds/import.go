@@ -17,6 +17,8 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"os"
 
 	"github.com/fatih/color"
 
@@ -169,9 +171,9 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 		}
 
-	case mvdata.StdIODataLocation:
+	case mvdata.StreamDataLocation:
 		if val.Format == mvdata.InvalidDataFormat {
-			val = mvdata.StdIODataLocation{Format: mvdata.CsvFile}
+			val = mvdata.StreamDataLocation{Format: mvdata.CsvFile, Reader: os.Stdin, Writer: iohelp.NopWrCloser(cli.CliOut)}
 			srcLoc = val
 		}
 
@@ -267,7 +269,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	_, isStdOut := mvOpts.Dest.(mvdata.StdIODataLocation)
+	_, isStdOut := mvOpts.Dest.(mvdata.StreamDataLocation)
 	if !isStdOut && mvOpts.Operation == mvdata.OverwriteOp && !force {
 		if exists, err := mvOpts.Dest.Exists(context.TODO(), root, dEnv.FS); err != nil {
 			cli.Println(color.RedString(err.Error()))

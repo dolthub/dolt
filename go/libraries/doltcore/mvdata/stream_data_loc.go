@@ -17,36 +17,35 @@ package mvdata
 import (
 	"context"
 	"errors"
-	"os"
-
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-// StdIODataLocation is a process stream that that can be imported from or exported to.
-type StdIODataLocation struct {
+// StreamDataLocation is a process stream that that can be imported from or exported to.
+type StreamDataLocation struct {
 	Format DataFormat
+	Writer io.WriteCloser
+	Reader io.ReadCloser
 }
 
 // String returns a string representation of the data location.
-func (dl StdIODataLocation) String() string {
-	return StdIO.ReadableStr()
+func (dl StreamDataLocation) String() string {
+	return "stream"
 }
 
 // Exists returns true if the DataLocation already exists
-func (dl StdIODataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
+func (dl StreamDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	return true, nil
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl StdIODataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	switch dl.Format {
 	case CsvFile:
 		delim := ","
@@ -59,12 +58,12 @@ func (dl StdIODataLocation) NewReader(ctx context.Context, root *doltdb.RootValu
 			}
 		}
 
-		rd, err := csv.NewCSVReader(root.VRW().Format(), os.Stdin, csv.NewCSVInfo().SetDelim(delim))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), dl.Reader, csv.NewCSVInfo().SetDelim(delim))
 
 		return rd, false, err
 
 	case PsvFile:
-		rd, err := csv.NewCSVReader(root.VRW().Format(), os.Stdin, csv.NewCSVInfo().SetDelim("|"))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), dl.Reader, csv.NewCSVInfo().SetDelim("|"))
 		return rd, false, err
 	}
 
@@ -73,13 +72,13 @@ func (dl StdIODataLocation) NewReader(ctx context.Context, root *doltdb.RootValu
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 // an existing table.
-func (dl StdIODataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
-		return csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, csv.NewCSVInfo())
+		return csv.NewCSVWriter(dl.Writer, outSch, csv.NewCSVInfo())
 
 	case PsvFile:
-		return csv.NewCSVWriter(iohelp.NopWrCloser(cli.CliOut), outSch, csv.NewCSVInfo().SetDelim("|"))
+		return csv.NewCSVWriter(dl.Writer, outSch, csv.NewCSVInfo().SetDelim("|"))
 	}
 
 	return nil, errors.New(string(dl.Format) + "is an unsupported format to write to stdout")
@@ -87,6 +86,6 @@ func (dl StdIODataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveO
 
 // NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 // their primary key.
-func (dl StdIODataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+func (dl StreamDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating is not supported for stdout")
 }
