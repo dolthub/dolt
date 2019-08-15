@@ -37,7 +37,7 @@ const (
 	XlsxFile          DataFormat = ".xlsx"
 	JsonFile          DataFormat = ".json"
 	SqlFile           DataFormat = ".sql"
-	StdIO			  DataFormat = "stdio"
+	StdIO             DataFormat = "stdio"
 )
 
 func (df DataFormat) ReadableStr() string {
@@ -104,15 +104,9 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 	return FileDataLocation{path, dataFmt}
 }
 
-
 func mapByTag(src, dest DataLocation) bool {
 	_, srcIsTable := src.(TableDataLocation)
 	_, destIsTable := dest.(TableDataLocation)
 
 	return srcIsTable && destIsTable
 }
-
-
-
-
-

@@ -35,7 +35,7 @@ var exportSynopsis = []string{
 // validateExportArgs validates the input from the arg parser, and returns the tuple:
 // (table name to export, data location of table to export, data location to export to)
 func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (string, mvdata.TableDataLocation, mvdata.DataLocation) {
-	if apr.NArg() == 0 || apr.NArg() > 2{
+	if apr.NArg() == 0 || apr.NArg() > 2 {
 		usage()
 		return "", mvdata.TableDataLocation{}, nil
 	}
@@ -67,9 +67,9 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 	case mvdata.StdIODataLocation:
 		if val.Format == mvdata.InvalidDataFormat {
-			val = mvdata.StdIODataLocation{Format:mvdata.CsvFile}
+			val = mvdata.StdIODataLocation{Format: mvdata.CsvFile}
 			destLoc = val
-		} else if val.Format != mvdata.CsvFile && val.Format != mvdata.PsvFile{
+		} else if val.Format != mvdata.CsvFile && val.Format != mvdata.PsvFile {
 			cli.PrintErrln(color.RedString("Cannot export this format to stdout"))
 			return "", mvdata.TableDataLocation{}, nil
 		}

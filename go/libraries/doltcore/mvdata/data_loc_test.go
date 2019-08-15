@@ -85,9 +85,9 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 
 func TestBasics(t *testing.T) {
 	tests := []struct {
-		dl                   DataLocation
-		expectedStr string
-		expectedIsFileType   bool
+		dl                 DataLocation
+		expectedStr        string
+		expectedIsFileType bool
 	}{
 		{NewDataLocation("", ".csv"), StdIO.ReadableStr(), false},
 		{NewDataLocation("table-name", ""), DoltDB.ReadableStr() + ":table-name", false},

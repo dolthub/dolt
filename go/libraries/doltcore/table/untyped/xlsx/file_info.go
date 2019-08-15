@@ -23,4 +23,3 @@ func NewXLSXInfo(sheetName string) *XLSXFileInfo {
 		SheetName: sheetName,
 	}
 }
-
