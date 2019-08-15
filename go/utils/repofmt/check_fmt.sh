@@ -5,6 +5,8 @@ set -eo pipefail
 script_dir=$(dirname "$0")
 cd $script_dir/../..
 
+go install golang.org/x/tools/cmd/goimports
+
 bad_files=$(goimports -l -local github.com/liquidata-inc/dolt .)
 if [ "$bad_files" != "" ]; then
     echo "ERROR: The following files do not match goimports output:"

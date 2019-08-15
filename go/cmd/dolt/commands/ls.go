@@ -85,7 +85,19 @@ func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.Ver
 				return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 			}
 
-			cli.Printf("\t%-32s %s\n", tbl, h.String())
+			tblVal, _, err := root.GetTable(context.TODO(), tbl)
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get table").AddCause(err).Build()
+			}
+
+			rows, err := tblVal.GetRowData(context.TODO())
+
+			if err != nil {
+				return errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
+			}
+
+			cli.Printf("\t%-32s %s    %d rows\n", tbl, h.String(), rows.Len())
 		} else {
 			cli.Println("\t", tbl)
 		}

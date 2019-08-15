@@ -46,9 +46,10 @@ require (
 	github.com/src-d/go-mysql-server v0.4.1-0.20190624170509-8702d43af506
 	github.com/stretchr/testify v1.3.0
 	github.com/tealeg/xlsx v1.0.4-0.20190601071628-e2d23f3c43dc
-	golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
-	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
-	golang.org/x/sys v0.0.0-20190624142023-c5567b49c5d0
+	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
+	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
+	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a
+	golang.org/x/tools v0.0.0-20190815144358-9065c182e3b6 // indirect
 	google.golang.org/api v0.7.0
 	google.golang.org/grpc v1.22.0
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect

@@ -13,9 +13,6 @@ pipeline {
                         PATH = "${pwd()}/.ci_bin:${env.HOME}/go/bin:${env.PATH}"
                     }
                     steps {
-                        dir (".ci_bin") {
-                            sh "go get golang.org/x/tools/cmd/goimports"
-                        }
                         dir ("go") {
                             sh "git submodule update --init --recursive"
 

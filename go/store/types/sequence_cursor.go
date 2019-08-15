@@ -21,9 +21,12 @@
 
 package types
 
-import "context"
-import "github.com/liquidata-inc/dolt/go/store/d"
-import "fmt"
+import (
+	"context"
+	"fmt"
+
+	"github.com/liquidata-inc/dolt/go/store/d"
+)
 
 // sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
