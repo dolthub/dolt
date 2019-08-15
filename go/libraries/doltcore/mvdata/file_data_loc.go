@@ -32,6 +32,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
+// DFFFromString returns a data object from a string.
 func DFFromString(dfStr string) DataFormat {
 	switch strings.ToLower(dfStr) {
 	case "csv", ".csv":
@@ -49,20 +50,27 @@ func DFFromString(dfStr string) DataFormat {
 	}
 }
 
+// FileDataLocation is a file that that can be imported from or exported to.
 type FileDataLocation struct {
+	// Path is the path of the file on the filesystem
 	Path   string
+
+	// Format is the DataFormat of the file
 	Format DataFormat
 }
 
+// String returns a string representation of the data location.
 func (dl FileDataLocation) String() string {
 	return dl.Format.ReadableStr() + ":" + dl.Path
 }
 
+// Exists returns true if the DataLocation already exists
 func (dl FileDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	exists, _ := fs.Exists(dl.Path)
 	return exists, nil
 }
 
+// NewReader creates a TableReadCloser for the DataLocation
 func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	exists, isDir := fs.Exists(dl.Path)
 
@@ -106,6 +114,8 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 	return nil, false, errors.New("unsupported format")
 }
 
+// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
+// an existing table.
 func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
@@ -123,6 +133,8 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOp
 	panic("Invalid Data Format." + string(dl.Format))
 }
 
+// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
+// their primary key.
 func (dl FileDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating of files is not supported")
 }

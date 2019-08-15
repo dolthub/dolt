@@ -26,20 +26,26 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// ErrNoPK is an error returned if a schema is missing a required primary key
 var ErrNoPK = errors.New("schema does not contain a primary key")
 
+// TableDataLocation is a dolt table that that can be imported from or exported to.
 type TableDataLocation struct {
+	// Name the name of a table
 	Name string
 }
 
+// String returns a string representation of the data location.
 func (dl TableDataLocation) String() string {
 	return DoltDB.ReadableStr() + ":" + dl.Name
 }
 
+// Exists returns true if the DataLocation already exists
 func (dl TableDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	return root.HasTable(ctx, dl.Name)
 }
 
+// NewReader creates a TableReadCloser for the DataLocation
 func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 
@@ -72,6 +78,8 @@ func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValu
 	return rd, true, nil
 }
 
+// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
+// an existing table.
 func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	if outSch.GetPKCols().Size() == 0 {
 		return nil, ErrNoPK
@@ -90,6 +98,8 @@ func (dl TableDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveO
 	}
 }
 
+// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
+// their primary key.
 func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 

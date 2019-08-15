@@ -30,16 +30,32 @@ import (
 type DataFormat string
 
 const (
+	// InvalidDataFormat is the format of a data lotacion that isn't valid
 	InvalidDataFormat DataFormat = "invalid"
+
+	// DoltDB is the format of a data location for a dolt table
 	DoltDB            DataFormat = "doltdb"
+
+	// CsvFile is the format of a data location that is a .csv file
 	CsvFile           DataFormat = ".csv"
+
+	// PsvFile is the format of a data location that is a .psv file
 	PsvFile           DataFormat = ".psv"
+
+	// XlsxFile is the format of a data location that is a .xlsx file
 	XlsxFile          DataFormat = ".xlsx"
+
+	// JsonFile is the format of a data location that is a json file
 	JsonFile          DataFormat = ".json"
+
+	// SqlFile is the format of a data location that is a .sql file
 	SqlFile           DataFormat = ".sql"
+
+	// StdIO is the format of a data location that is stdin or stdout
 	StdIO             DataFormat = "stdio"
 )
 
+// ReadableStr returns a human readable string for a DataFormat
 func (df DataFormat) ReadableStr() string {
 	switch df {
 	case DoltDB:
@@ -61,6 +77,7 @@ func (df DataFormat) ReadableStr() string {
 	}
 }
 
+// DataLocation is an interface that can be used to read or write from the source or the destination of a move operation.
 type DataLocation interface {
 	fmt.Stringer
 
@@ -70,13 +87,20 @@ type DataLocation interface {
 	// NewReader creates a TableReadCloser for the DataLocation
 	NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error)
 
-	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite an existing table.
+	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
+	// an existing table.
 	NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error)
 
-	// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on their primary key.
+	// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
+	// their primary key.
 	NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error)
 }
 
+// NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table
+// then a TableDataLocation will be returned.  If the path is empty a StdioDataLocationo is returned.  Otherwise a
+// FileDataLocation is returned.  For FileDataLocations and StdioDataLocations, if a file format is provided explicitly
+// then it is used as the format, otherwise, when it can be, it is inferred from the path for files.  Inference is based
+// on the file's extension.
 func NewDataLocation(path, fileFmtStr string) DataLocation {
 	dataFmt := DFFromString(fileFmtStr)
 

@@ -30,10 +30,12 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
+// StdIODataLocation is a process stream that that can be imported from or exported to.
 type StdIODataLocation struct {
 	Format DataFormat
 }
 
+// String returns a string representation of the data location.
 func (dl StdIODataLocation) String() string {
 	return StdIO.ReadableStr()
 }
@@ -69,7 +71,8 @@ func (dl StdIODataLocation) NewReader(ctx context.Context, root *doltdb.RootValu
 	return nil, false, errors.New(string(dl.Format) + "is an unsupported format to read from stdin")
 }
 
-// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite an existing table.
+// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
+// an existing table.
 func (dl StdIODataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
@@ -82,7 +85,8 @@ func (dl StdIODataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveO
 	return nil, errors.New(string(dl.Format) + "is an unsupported format to write to stdout")
 }
 
-// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on their primary key.
+// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
+// their primary key.
 func (dl StdIODataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating is not supported for stdout")
 }
