@@ -13,9 +13,6 @@ pipeline {
                         PATH = "${pwd()}/.ci_bin:${env.HOME}/go/bin:${env.PATH}"
                     }
                     steps {
-                        dir (".ci_bin") {
-                            sh "go get golang.org/x/tools/cmd/goimports"
-                        }
                         dir ("go") {
                             // Keep this in sync with //go/utils/prepr/prepr.sh.
                             sh "go get -mod=readonly ./..."
