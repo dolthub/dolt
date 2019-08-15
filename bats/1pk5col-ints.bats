@@ -93,6 +93,7 @@ teardown() {
 }
 
 @test "dolt table import from stdin export to stdout" {
+    skiponwindows "Need to install python before this test will work."
     echo 'pk,c1,c2,c3,c4,c5
 0,1,2,3,4,5
 9,8,7,6,5,4
