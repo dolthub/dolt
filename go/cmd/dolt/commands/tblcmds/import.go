@@ -173,7 +173,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 		if val.Format == mvdata.XlsxFile {
 			// table name must match sheet name currently
-			srcOpts = mvdata.XlsxOptions{SheetName:tableName}
+			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		}
 
 	case mvdata.StreamDataLocation:
@@ -193,7 +193,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		}
 	}
 
-	tableLoc := mvdata.TableDataLocation{Name:tableName}
+	tableLoc := mvdata.TableDataLocation{Name: tableName}
 
 	return mvOp, tableLoc, srcLoc, srcOpts
 }
