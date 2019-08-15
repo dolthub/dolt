@@ -44,6 +44,10 @@ type CsvOptions struct {
 	Delim string
 }
 
+type XlsxOptions struct {
+	SheetName string
+}
+
 type MoveOptions struct {
 	Operation   MoveOperation
 	ContOnErr   bool

@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -101,9 +100,8 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 		return rd, false, err
 
 	case XlsxFile:
-		sheetName := filepath.Base(dl.Path)
-		sheetName = filepath.Ext(sheetName)
-		rd, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, xlsx.NewXLSXInfo(sheetName))
+		xlsxOpts := opts.(XlsxOptions)
+		rd, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, &xlsx.XLSXFileInfo{xlsxOpts.SheetName})
 		return rd, false, err
 
 	case JsonFile:

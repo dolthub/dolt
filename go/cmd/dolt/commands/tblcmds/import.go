@@ -171,6 +171,11 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 		}
 
+		if val.Format == mvdata.XlsxFile {
+			// table name must match sheet name currently
+			srcOpts = mvdata.XlsxOptions{tableName}
+		}
+
 	case mvdata.StreamDataLocation:
 		if val.Format == mvdata.InvalidDataFormat {
 			val = mvdata.StreamDataLocation{Format: mvdata.CsvFile, Reader: os.Stdin, Writer: iohelp.NopWrCloser(cli.CliOut)}
