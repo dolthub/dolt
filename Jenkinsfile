@@ -14,6 +14,8 @@ pipeline {
                     }
                     steps {
                         dir ("go") {
+                            sh "git submodule update --init --recursive"
+
                             // Keep this in sync with //go/utils/prepr/prepr.sh.
                             sh "go get -mod=readonly ./..."
                             sh "./utils/repofmt/check_fmt.sh"
@@ -39,6 +41,8 @@ pipeline {
                             sh "npm i bats"
                         }
                         dir ("go") {
+                            sh "git submodule update --init --recursive"
+
                             sh "go get -mod=readonly ./..."
                             sh "go build -mod=readonly -o ../.ci_bin/dolt ./cmd/dolt/."
                             sh "go build -mod=readonly -o ../.ci_bin/git-dolt ./cmd/git-dolt/."
@@ -62,6 +66,8 @@ pipeline {
                     }
                     steps {
                         dir ("go/") {
+                            bat "git submodule update --init --recursive"
+
                             bat "go test ./..."
                             bat "go build -mod=readonly -o ..\\.ci_bin\\dolt.exe ./cmd/dolt/."
                             bat "copy /Y ..\\.ci_bin\\dolt.exe ..\\.ci_bin\\dolt"

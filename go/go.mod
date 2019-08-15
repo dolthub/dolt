@@ -59,4 +59,6 @@ require (
 
 replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a
 
+replace github.com/golang/protobuf => ../proto/third_party/golang-protobuf
+
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796

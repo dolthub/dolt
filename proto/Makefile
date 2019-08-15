@@ -3,8 +3,9 @@ THIRD_PARTY_ROOT := ./third_party
 GOOGLEAPIS := $(THIRD_PARTY_ROOT)/googleapis
 PROTOBUF := $(THIRD_PARTY_ROOT)/protobuf/src
 
+PROTOC_GEN_GO := third_party/golang-protobuf/._protoc-gen-go
 PROTOC := $(THIRD_PARTY_ROOT)/protobuf/bazel-bin/protoc
-PROTOC_FLAGS = -I . -I $(GOOGLEAPIS) -I $(PROTOBUF)
+PROTOC_FLAGS = --plugin=protoc-gen-go=$(PROTOC_GEN_GO) -I . -I $(GOOGLEAPIS) -I $(PROTOBUF)
 
 pbgo_out := ../go/gen/proto
 
@@ -17,6 +18,11 @@ PBGO_pkgs := REMOTESAPI
 
 all:
 
+$(PROTOC_GEN_GO):
+	@echo "ERROR: Could not find $(PROTOC_GEN_GO)"
+	@echo "ERROR: Run "'`'"go build -o ._protoc-gen-go ./protoc-gen-go"'`'" in third_party/golang-protobuf to build protoc-gen-go."
+	@exit 1
+
 $(PROTOC):
 	@echo "ERROR: Could not find $(PROTOC)"
 	@echo "ERROR: Run "'`'"bazel build //:protoc"'`'" in $(THIRD_PARTY_ROOT)/protobuf to build protoc."
@@ -28,7 +34,7 @@ clean:
 	@rm -f $(ALL_OUTPUTS)
 
 define PROTOC_template # 1=proto, 2=outputs, 3=flags
-$(2) : $(1)
+$(2) : $(1) $(PROTOC) $(PROTOC_GEN_GO)
 	@$$(PROTOC) $$(PROTOC_FLAGS) $(3) $(1)
 ALL_OUTPUTS += $(2)
 all: $(2)
