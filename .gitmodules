@@ -4,3 +4,6 @@
 [submodule "proto/third_party/googleapis"]
 	path = proto/third_party/googleapis
 	url = git@github.com:googleapis/googleapis.git
+[submodule "proto/third_party/golang-protobuf"]
+	path = proto/third_party/golang-protobuf
+	url = https://github.com/golang/protobuf.git
