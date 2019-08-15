@@ -16,10 +16,11 @@ package cli
 
 import (
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"os"
 	"path/filepath"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"

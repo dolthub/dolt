@@ -45,22 +45,22 @@ const (
 	InvalidDataFormat DataFormat = "invalid"
 
 	// DoltDB is the format of a data location for a dolt table
-	DoltDB            DataFormat = "doltdb"
+	DoltDB DataFormat = "doltdb"
 
 	// CsvFile is the format of a data location that is a .csv file
-	CsvFile           DataFormat = ".csv"
+	CsvFile DataFormat = ".csv"
 
 	// PsvFile is the format of a data location that is a .psv file
-	PsvFile           DataFormat = ".psv"
+	PsvFile DataFormat = ".psv"
 
 	// XlsxFile is the format of a data location that is a .xlsx file
-	XlsxFile          DataFormat = ".xlsx"
+	XlsxFile DataFormat = ".xlsx"
 
 	// JsonFile is the format of a data location that is a json file
-	JsonFile          DataFormat = ".json"
+	JsonFile DataFormat = ".json"
 
 	// SqlFile is the format of a data location that is a .sql file
-	SqlFile           DataFormat = ".sql"
+	SqlFile DataFormat = ".sql"
 )
 
 // ReadableStr returns a human readable string for a DataFormat
@@ -111,7 +111,7 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 	dataFmt := DFFromString(fileFmtStr)
 
 	if len(path) == 0 {
-		return StreamDataLocation{Format:dataFmt, Reader:InStream, Writer:OutStream}
+		return StreamDataLocation{Format: dataFmt, Reader: InStream, Writer: OutStream}
 	} else if fileFmtStr == "" {
 		if doltdb.IsValidTableName(path) {
 			return TableDataLocation{path}

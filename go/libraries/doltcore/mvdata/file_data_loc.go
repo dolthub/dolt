@@ -52,7 +52,7 @@ func DFFromString(dfStr string) DataFormat {
 // FileDataLocation is a file that that can be imported from or exported to.
 type FileDataLocation struct {
 	// Path is the path of the file on the filesystem
-	Path   string
+	Path string
 
 	// Format is the DataFormat of the file
 	Format DataFormat

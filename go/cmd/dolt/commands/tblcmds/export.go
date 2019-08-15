@@ -15,15 +15,16 @@
 package tblcmds
 
 import (
-	"github.com/fatih/color"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"os"
+
+	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 var exportShortDesc = `Export the contents of a table to a file.`
