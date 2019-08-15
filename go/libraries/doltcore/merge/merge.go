@@ -41,7 +41,7 @@ type Merger struct {
 }
 
 func NewMerger(ctx context.Context, commit, mergeCommit *doltdb.Commit, vrw types.ValueReadWriter) (*Merger, error) {
-	ancestor, err := doltdb.GetCommitAnscestor(ctx, commit, mergeCommit)
+	ancestor, err := doltdb.GetCommitAncestor(ctx, commit, mergeCommit)
 
 	if err != nil {
 		return nil, err

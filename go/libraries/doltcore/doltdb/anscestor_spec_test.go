@@ -50,7 +50,7 @@ func TestParseInstructions(t *testing.T) {
 	}
 }
 
-func TestSplitAnscestorSpec(t *testing.T) {
+func TestSplitAncestorSpec(t *testing.T) {
 	tests := []struct {
 		inputStr         string
 		expectedCSpecStr string

@@ -242,11 +242,11 @@ func walkAncestorSpec(ctx context.Context, db datas.Database, commitSt types.Str
 			}
 
 			if commitStPtr == nil {
-				return types.EmptyStruct(db.Format()), ErrInvalidAnscestorSpec
+				return types.EmptyStruct(db.Format()), ErrInvalidAncestorSpec
 			}
 			commitSt = *commitStPtr
 		} else {
-			return types.EmptyStruct(db.Format()), ErrInvalidAnscestorSpec
+			return types.EmptyStruct(db.Format()), ErrInvalidAncestorSpec
 		}
 	}
 

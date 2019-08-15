@@ -19,7 +19,7 @@ import "errors"
 var ErrInvBranchName = errors.New("not a valid user branch name")
 var ErrInvTableName = errors.New("not a valid table name")
 var ErrInvHash = errors.New("not a valid hash")
-var ErrInvalidAnscestorSpec = errors.New("invalid anscestor spec")
+var ErrInvalidAncestorSpec = errors.New("invalid ancestor spec")
 var ErrInvalidBranchOrHash = errors.New("string is not a valid branch or hash")
 
 var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is not a commit")
@@ -39,7 +39,7 @@ var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a alr
 
 func IsInvalidFormatErr(err error) bool {
 	switch err {
-	case ErrInvBranchName, ErrInvTableName, ErrInvHash, ErrInvalidAnscestorSpec, ErrInvalidBranchOrHash:
+	case ErrInvBranchName, ErrInvTableName, ErrInvHash, ErrInvalidAncestorSpec, ErrInvalidBranchOrHash:
 		return true
 	default:
 		return false
