@@ -329,7 +329,6 @@ func (p *Pipeline) processBadRows() {
 					return
 				}
 
-
 			case <-p.stopChan:
 				return
 			}
