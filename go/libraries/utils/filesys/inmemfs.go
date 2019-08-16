@@ -376,6 +376,7 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 	return nil
 }
 
+// MoveFile will move a file from the srcPath in the filesystem to the destPath
 func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 	srcPath = fs.getAbsPath(srcPath)
 	destPath = fs.getAbsPath(destPath)

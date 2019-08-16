@@ -60,7 +60,7 @@ type WritableFS interface {
 	// true in order to delete the dir and all of it's contents
 	Delete(path string, force bool) error
 
-	// MoveFile will move a file from one path to another
+	// MoveFile will move a file from the srcPath in the filesystem to the destPath
 	MoveFile(srcPath, destPath string) error
 }
 
