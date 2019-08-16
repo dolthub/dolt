@@ -103,8 +103,8 @@ type DataLocation interface {
 }
 
 // NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table
-// then a TableDataLocation will be returned.  If the path is empty a StdioDataLocationo is returned.  Otherwise a
-// FileDataLocation is returned.  For FileDataLocations and StdioDataLocations, if a file format is provided explicitly
+// then a TableDataLocation will be returned.  If the path is empty a StreamDataLocation is returned.  Otherwise a
+// FileDataLocation is returned.  For FileDataLocations and StreamDataLocations, if a file format is provided explicitly
 // then it is used as the format, otherwise, when it can be, it is inferred from the path for files.  Inference is based
 // on the file's extension.
 func NewDataLocation(path, fileFmtStr string) DataLocation {

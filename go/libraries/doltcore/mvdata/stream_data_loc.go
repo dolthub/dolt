@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"io/ioutil"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -25,6 +26,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 // StreamDataLocation is a process stream that that can be imported from or exported to.
@@ -58,12 +60,12 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 			}
 		}
 
-		rd, err := csv.NewCSVReader(root.VRW().Format(), dl.Reader, csv.NewCSVInfo().SetDelim(delim))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
 
 		return rd, false, err
 
 	case PsvFile:
-		rd, err := csv.NewCSVReader(root.VRW().Format(), dl.Reader, csv.NewCSVInfo().SetDelim("|"))
+		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
 		return rd, false, err
 	}
 
@@ -75,10 +77,10 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	switch dl.Format {
 	case CsvFile:
-		return csv.NewCSVWriter(dl.Writer, outSch, csv.NewCSVInfo())
+		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo())
 
 	case PsvFile:
-		return csv.NewCSVWriter(dl.Writer, outSch, csv.NewCSVInfo().SetDelim("|"))
+		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo().SetDelim("|"))
 	}
 
 	return nil, errors.New(string(dl.Format) + "is an unsupported format to write to stdout")
