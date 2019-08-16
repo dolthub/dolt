@@ -18,6 +18,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 )
 
+var NoTransformRowFailure = TransformRowFailure{}
+
 // TransformRowFailure is an error implementation that stores the row that failed to transform, the transform that
 // failed and some details of the error
 type TransformRowFailure struct {

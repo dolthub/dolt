@@ -317,15 +317,15 @@ func (p *Pipeline) processBadRows() {
 	if p.badRowCB != nil {
 		for {
 			select {
-			case bRow, ok := <-p.badRowChan:
-				if ok {
-					quit := p.badRowCB(bRow)
+			case bRow := <-p.badRowChan:
+				if bRow == &NoTransformRowFailure {
+					return
+				}
 
-					if quit {
-						p.Abort()
-						return
-					}
-				} else {
+				quit := p.badRowCB(bRow)
+
+				if quit {
+					p.Abort()
 					return
 				}
 

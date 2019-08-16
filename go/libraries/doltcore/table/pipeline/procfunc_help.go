@@ -87,7 +87,9 @@ type SinkFunc func(row.Row, ReadableMap) error
 // processing, stop conditions, and error handling.
 func ProcFuncForSinkFunc(sinkFunc SinkFunc) OutFunc {
 	return func(p *Pipeline, ch <-chan RowWithProps, badRowChan chan<- *TransformRowFailure) {
-		defer close(badRowChan)
+		defer func() {
+			badRowChan <- &NoTransformRowFailure
+		}()
 
 		for {
 			if p.IsStopping() {
