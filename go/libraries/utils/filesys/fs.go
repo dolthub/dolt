@@ -59,6 +59,9 @@ type WritableFS interface {
 	// Delete will delete an empty directory, or a file.  If trying delete a directory that is not empty you can set force to
 	// true in order to delete the dir and all of it's contents
 	Delete(path string, force bool) error
+
+	// MoveFile will move a file from one path to another
+	MoveFile(srcPath, destPath string) error
 }
 
 // FSIterCB specifies the signature of the function that will be called for every item found while iterating.
