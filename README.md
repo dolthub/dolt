@@ -8,7 +8,7 @@ concepts of Git.
 
 DoltHub is GitHub for Dolt, a place on the internet to share Dolt repositories. https://www.dolthub.com
 
-# Why Dolt?
+# Why name a tool Dolt?
 
 Why Dolt? To pay homage to Git! [Linus Torvalds famously said he names his products after himself](https://en.wikipedia.org/wiki/Git#Naming), Linux and Git. Git is British slang for idiot. We needed a word that meant idiot that started with 'D' for data that was short enough to type on the command line. Hence, Dolt.
 
