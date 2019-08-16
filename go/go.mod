@@ -18,7 +18,7 @@ require (
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gocraft/dbr v0.0.0-20190708200302-a54124dfc613
-	github.com/golang/protobuf v1.3.2
+	github.com/golang/protobuf v1.3.3-0.20190805180045-4c88cc3f1a34
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.3.0
 	github.com/google/uuid v1.1.1
@@ -58,7 +58,5 @@ require (
 )
 
 replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a
-
-replace github.com/golang/protobuf => ../proto/third_party/golang-protobuf
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796
