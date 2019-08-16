@@ -44,6 +44,10 @@ type CsvOptions struct {
 	Delim string
 }
 
+type XlsxOptions struct {
+	SheetName string
+}
+
 type MoveOptions struct {
 	Operation   MoveOperation
 	ContOnErr   bool
@@ -51,8 +55,8 @@ type MoveOptions struct {
 	TableName   string
 	MappingFile string
 	PrimaryKey  string
-	Src         *DataLocation
-	Dest        *DataLocation
+	Src         DataLocation
+	Dest        DataLocation
 	SrcOptions  interface{}
 }
 
@@ -89,7 +93,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	var err error
 	transforms := pipeline.NewTransformCollection()
 
-	rd, srcIsSorted, err := mvOpts.Src.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path, mvOpts.SrcOptions)
+	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -131,19 +135,13 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 
 	var wr table.TableWriteCloser
 	if mvOpts.Operation == OverwriteOp {
-		wr, err = mvOpts.Dest.CreateOverwritingDataWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
 	} else {
-		wr, err = mvOpts.Dest.CreateUpdatingDataWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
 	}
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateWriterErr, err}
-	}
-
-	wr, err = maybeSort(wr, outSch, srcIsSorted, mvOpts)
-
-	if err != nil {
-		return nil, &DataMoverCreationError{CreateSorterErr, err}
 	}
 
 	imp := &DataMover{rd, transforms, wr, mvOpts.ContOnErr}
@@ -197,21 +195,11 @@ func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.F
 	return nil
 }
 
-func maybeSort(wr table.TableWriteCloser, outSch schema.Schema, srcIsSorted bool, mvOpts *MoveOptions) (table.TableWriteCloser, error) {
-	if !srcIsSorted && mvOpts.Dest.MustWriteSorted() {
-		//TODO: implement this
-		panic("Implement")
-		//wr = table.NewSortingTableWriter(wr, outSch.GetPKIndex(), mvOpts.ContOnErr)
-	}
-
-	return wr, nil
-}
-
 func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
 	if mvOpts.Operation == UpdateOp {
 		// Get schema from target
 
-		rd, _, err := mvOpts.Dest.CreateReader(ctx, root, fs, mvOpts.SchFile, mvOpts.Dest.Path, mvOpts.SrcOptions)
+		rd, _, err := mvOpts.Dest.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
 
 		if err != nil {
 			return nil, err
@@ -232,6 +220,7 @@ func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootVal
 		if err != nil {
 			return nil, err
 		}
+
 		return sch, nil
 	}
 

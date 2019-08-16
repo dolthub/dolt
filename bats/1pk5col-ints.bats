@@ -92,6 +92,32 @@ teardown() {
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
 }
 
+@test "dolt table import from stdin export to stdout" {
+    skiponwindows "Need to install python before this test will work."
+    echo 'pk,c1,c2,c3,c4,c5
+0,1,2,3,4,5
+9,8,7,6,5,4
+'|dolt table import -u test
+    dolt table export --file-type=csv test|python -c '
+import sys
+rows = []
+for line in sys.stdin:
+    rows.append(line.strip().split(","))
+
+if len(rows) != 3:
+    sys.exit(1)
+
+if rows[0] != "pk,c1,c2,c3,c4,c5".split(","):
+    sys.exit(1)
+
+if rows[1] != "0,1,2,3,4,5".split(","):
+    sys.exit(1)
+
+if rows[2] != "9,8,7,6,5,4".split(","):
+    sys.exit(1)
+'
+}
+
 @test "dolt sql all manner of inserts" {
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
@@ -566,7 +592,7 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
     run dolt table export test export.csv
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "Data already exists in" ]] || false
+    [[ "$output" =~ "Data already exists" ]] || false
     run dolt table export -f test export.csv
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully exported data." ]

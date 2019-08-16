@@ -19,6 +19,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+
 	"github.com/fatih/color"
 	"github.com/google/uuid"
 )
@@ -37,6 +40,7 @@ func InitIO() (restoreIO func()) {
 	if err == nil {
 		os.Stdout = f
 		os.Stderr = f
+		mvdata.SetIOStreams(os.Stdin, iohelp.NopWrCloser(CliOut))
 	}
 
 	restoreIO = func() {
@@ -46,6 +50,7 @@ func InitIO() (restoreIO func()) {
 
 		os.Stdout = stdOut
 		os.Stderr = stdErr
+		mvdata.SetIOStreams(os.Stdin, os.Stdout)
 	}
 
 	ExecuteWithStdioRestored = func(userFunc func()) {
@@ -53,12 +58,14 @@ func InitIO() (restoreIO func()) {
 		color.NoColor = true
 		os.Stdout = stdOut
 		os.Stderr = stdErr
+		mvdata.SetIOStreams(os.Stdin, os.Stdout)
 
 		userFunc()
 
 		os.Stdout = f
 		os.Stderr = f
 		color.NoColor = initialNoColor
+		mvdata.SetIOStreams(os.Stdin, iohelp.NopWrCloser(CliOut))
 	}
 
 	return restoreIO

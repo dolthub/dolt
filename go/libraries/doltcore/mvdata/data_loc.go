@@ -16,36 +16,54 @@ package mvdata
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/json"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/sqlexport"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/xlsx"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+var InStream io.ReadCloser = os.Stdin
+var OutStream io.WriteCloser = os.Stdout
+
+func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
+	InStream = inStream
+	OutStream = outStream
+}
+
+// DataFormat is an enumeration of the valid data formats
 type DataFormat string
 
 const (
+	// InvalidDataFormat is the format of a data lotacion that isn't valid
 	InvalidDataFormat DataFormat = "invalid"
-	DoltDB            DataFormat = "doltdb"
-	CsvFile           DataFormat = ".csv"
-	PsvFile           DataFormat = ".psv"
-	XlsxFile          DataFormat = ".xlsx"
-	JsonFile          DataFormat = ".json"
-	SqlFile           DataFormat = ".sql"
+
+	// DoltDB is the format of a data location for a dolt table
+	DoltDB DataFormat = "doltdb"
+
+	// CsvFile is the format of a data location that is a .csv file
+	CsvFile DataFormat = ".csv"
+
+	// PsvFile is the format of a data location that is a .psv file
+	PsvFile DataFormat = ".psv"
+
+	// XlsxFile is the format of a data location that is a .xlsx file
+	XlsxFile DataFormat = ".xlsx"
+
+	// JsonFile is the format of a data location that is a json file
+	JsonFile DataFormat = ".json"
+
+	// SqlFile is the format of a data location that is a .sql file
+	SqlFile DataFormat = ".sql"
 )
 
+// ReadableStr returns a human readable string for a DataFormat
 func (df DataFormat) ReadableStr() string {
 	switch df {
 	case DoltDB:
@@ -65,38 +83,38 @@ func (df DataFormat) ReadableStr() string {
 	}
 }
 
-func DFFromString(dfStr string) DataFormat {
-	switch strings.ToLower(dfStr) {
-	case "csv", ".csv":
-		return CsvFile
-	case "psv", ".psv":
-		return PsvFile
-	case "xlsx", ".xlsx":
-		return XlsxFile
-	case "json", ".json":
-		return JsonFile
-	case "sql", ".sql":
-		return SqlFile
-	default:
-		return InvalidDataFormat
-	}
+// DataLocation is an interface that can be used to read or write from the source or the destination of a move operation.
+type DataLocation interface {
+	fmt.Stringer
+
+	// Exists returns true if the DataLocation already exists
+	Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error)
+
+	// NewReader creates a TableReadCloser for the DataLocation
+	NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error)
+
+	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
+	// an existing table.
+	NewCreatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error)
+
+	// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
+	// their primary key.
+	NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error)
 }
 
-type DataLocation struct {
-	Path   string
-	Format DataFormat
-}
+// NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table
+// then a TableDataLocation will be returned.  If the path is empty a StreamDataLocation is returned.  Otherwise a
+// FileDataLocation is returned.  For FileDataLocations and StreamDataLocations, if a file format is provided explicitly
+// then it is used as the format, otherwise, when it can be, it is inferred from the path for files.  Inference is based
+// on the file's extension.
+func NewDataLocation(path, fileFmtStr string) DataLocation {
+	dataFmt := DFFromString(fileFmtStr)
 
-func (dl *DataLocation) String() string {
-	return dl.Format.ReadableStr() + ":" + dl.Path
-}
-
-func NewDataLocation(path, fileFmtStr string) *DataLocation {
-	dataFmt := InvalidDataFormat
-
-	if fileFmtStr == "" {
+	if len(path) == 0 {
+		return StreamDataLocation{Format: dataFmt, Reader: InStream, Writer: OutStream}
+	} else if fileFmtStr == "" {
 		if doltdb.IsValidTableName(path) {
-			dataFmt = DoltDB
+			return TableDataLocation{path}
 		} else {
 			switch strings.ToLower(filepath.Ext(path)) {
 			case string(CsvFile):
@@ -111,187 +129,14 @@ func NewDataLocation(path, fileFmtStr string) *DataLocation {
 				dataFmt = SqlFile
 			}
 		}
-	} else {
-		dataFmt = DFFromString(fileFmtStr)
 	}
 
-	return &DataLocation{path, dataFmt}
+	return FileDataLocation{path, dataFmt}
 }
 
-func (dl *DataLocation) IsFileType() bool {
-	switch dl.Format {
-	case DoltDB:
-		return false
-	case InvalidDataFormat:
-		panic("Invalid format")
-	}
+func mapByTag(src, dest DataLocation) bool {
+	_, srcIsTable := src.(TableDataLocation)
+	_, destIsTable := dest.(TableDataLocation)
 
-	return true
-}
-
-func (dl *DataLocation) CreateReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, tblName string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
-	if dl.Format == DoltDB {
-		tbl, ok, err := root.GetTable(ctx, dl.Path)
-
-		if err != nil {
-			return nil, false, err
-		}
-
-		if !ok {
-			return nil, false, doltdb.ErrTableNotFound
-		}
-
-		sch, err := tbl.GetSchema(ctx)
-
-		if err != nil {
-			return nil, false, err
-		}
-
-		rowData, err := tbl.GetRowData(ctx)
-
-		if err != nil {
-			return nil, false, err
-		}
-
-		rd, err := noms.NewNomsMapReader(ctx, rowData, sch)
-
-		if err != nil {
-			return nil, false, err
-		}
-
-		return rd, true, nil
-	} else {
-		exists, isDir := fs.Exists(dl.Path)
-
-		if !exists {
-			return nil, false, os.ErrNotExist
-		} else if isDir {
-			return nil, false, filesys.ErrIsDir
-		}
-
-		switch dl.Format {
-		case CsvFile:
-			delim := ","
-
-			if opts != nil {
-				csvOpts, _ := opts.(CsvOptions)
-
-				if len(csvOpts.Delim) != 0 {
-					delim = csvOpts.Delim
-				}
-			}
-
-			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim))
-
-			return rd, false, err
-
-		case PsvFile:
-			rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"))
-			return rd, false, err
-
-		case XlsxFile:
-			rd, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, xlsx.NewXLSXInfo(), tblName)
-			return rd, false, err
-
-		case JsonFile:
-			rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), schPath)
-			return rd, false, err
-		}
-	}
-
-	panic("Unsupported table format should have failed before reaching here. ")
-}
-
-func (dl *DataLocation) Exists(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
-	if dl.IsFileType() {
-		exists, _ := fs.Exists(dl.Path)
-		return exists, nil
-	}
-
-	if dl.Format == DoltDB {
-		return root.HasTable(ctx, dl.Path)
-	}
-
-	panic("Invalid Data Format.")
-}
-
-var ErrNoPK = errors.New("schema does not contain a primary key")
-
-func (dl *DataLocation) CreateOverwritingDataWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
-	if dl.RequiresPK() && outSch.GetPKCols().Size() == 0 {
-		return nil, ErrNoPK
-	}
-
-	switch dl.Format {
-	case DoltDB:
-		if sortedInput {
-			return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
-		} else {
-			m, err := types.NewMap(ctx, root.VRW())
-
-			if err != nil {
-				return nil, err
-			}
-
-			return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
-		}
-
-	case CsvFile:
-		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo())
-	case PsvFile:
-		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo().SetDelim("|"))
-	case XlsxFile:
-		return xlsx.OpenXLSXWriter(dl.Path, fs, outSch, xlsx.NewXLSXInfo())
-	case JsonFile:
-		return json.OpenJSONWriter(dl.Path, fs, outSch, json.NewJSONInfo())
-	case SqlFile:
-		return sqlexport.OpenSQLExportWriter(dl.Path, mvOpts.TableName, fs, outSch)
-	}
-
-	panic("Invalid Data Format." + string(dl.Format))
-}
-
-// CreateUpdatingDataWriter will create a TableWriteCloser for a DataLocation that will update and append rows based
-// on their primary key.
-func (dl *DataLocation) CreateUpdatingDataWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
-	switch dl.Format {
-	case DoltDB:
-		tableName := dl.Path
-		tbl, ok, err := root.GetTable(ctx, tableName)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if !ok {
-			return nil, errors.New("Could not find table " + tableName)
-		}
-
-		m, err := tbl.GetRowData(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
-
-	case CsvFile, PsvFile, JsonFile, XlsxFile, SqlFile:
-		panic("Update not supported for this file type.")
-	}
-
-	panic("Invalid Data Format.")
-}
-
-// MustWriteSorted returns whether this DataLocation must be written to in primary key order
-func (dl *DataLocation) MustWriteSorted() bool {
-	return false
-}
-
-// RequiresPK returns whether this DataLocation requires a primary key
-func (dl *DataLocation) RequiresPK() bool {
-	return dl.Format == DoltDB
-}
-
-func mapByTag(src, dest *DataLocation) bool {
-	return src.Format == DoltDB && dest.Format == DoltDB
+	return srcIsTable && destIsTable
 }

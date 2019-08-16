@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/fatih/color"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -106,17 +108,17 @@ var importSynopsis = []string{
 	"-u [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 }
 
-func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, *mvdata.DataLocation, *mvdata.DataLocation, interface{}) {
-	if apr.NArg() != 2 {
+func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
+	if apr.NArg() == 0 || apr.NArg() > 2 {
 		usage()
-		return mvdata.InvalidOp, nil, nil, nil
+		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 	}
 
 	var mvOp mvdata.MoveOperation
 	var srcOpts interface{}
 	if !apr.Contains(createParam) && !apr.Contains(updateParam) {
 		cli.PrintErrln("Must include '-c' for initial table import or -u to update existing table.")
-		return mvdata.InvalidOp, nil, nil, nil
+		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 	} else if apr.Contains(createParam) {
 		mvOp = mvdata.OverwriteOp
 	} else {
@@ -124,7 +126,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		if apr.Contains(outSchemaParam) {
 			cli.PrintErrln("fatal:", outSchemaParam+"is not supported for update operations")
 			usage()
-			return mvdata.InvalidOp, nil, nil, nil
+			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 		}
 	}
 
@@ -133,34 +135,67 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		cli.PrintErrln(
 			color.RedString("'%s' is not a valid table name\n", tableName),
 			"table names must match the regular expression:", doltdb.TableNameRegexStr)
-		return mvdata.InvalidOp, nil, nil, nil
+		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 	}
 
-	path := apr.Arg(1)
+	path := ""
+	if apr.NArg() > 1 {
+		path = apr.Arg(1)
+	}
+
 	delim, hasDelim := apr.GetValue(delimParam)
 	fType, hasFileType := apr.GetValue(fileTypeParam)
-	fileLoc := mvdata.NewDataLocation(path, fType)
 
-	if fileLoc.Format == mvdata.InvalidDataFormat && !hasFileType && hasDelim {
-		fileLoc.Format = mvdata.CsvFile
-		srcOpts = mvdata.CsvOptions{Delim: delim}
+	if hasFileType {
+		if mvdata.DFFromString(fType) == mvdata.InvalidDataFormat {
+			cli.PrintErrln(color.RedString("'%s' is not a valid file type.", fType))
+			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
+		}
 	}
 
-	if fileLoc.Format == mvdata.InvalidDataFormat {
-		cli.PrintErrln(
-			color.RedString("Could not infer type file '%s'\n", path),
-			"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
-		return mvdata.InvalidOp, nil, nil, nil
+	srcLoc := mvdata.NewDataLocation(path, fType)
+
+	switch val := srcLoc.(type) {
+	case mvdata.FileDataLocation:
+		if hasDelim {
+			if val.Format == mvdata.InvalidDataFormat {
+				val = mvdata.FileDataLocation{Path: val.Path, Format: mvdata.CsvFile}
+				srcLoc = val
+			}
+
+			srcOpts = mvdata.CsvOptions{Delim: delim}
+		} else if val.Format == mvdata.InvalidDataFormat {
+			cli.PrintErrln(
+				color.RedString("Could not infer type file '%s'\n", path),
+				"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
+			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
+		}
+
+		if val.Format == mvdata.XlsxFile {
+			// table name must match sheet name currently
+			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
+		}
+
+	case mvdata.StreamDataLocation:
+		if val.Format == mvdata.InvalidDataFormat {
+			val = mvdata.StreamDataLocation{Format: mvdata.CsvFile, Reader: os.Stdin, Writer: iohelp.NopWrCloser(cli.CliOut)}
+			srcLoc = val
+		}
+
+		if hasDelim {
+			srcOpts = mvdata.CsvOptions{Delim: delim}
+		}
+
+	case mvdata.TableDataLocation:
+		if hasDelim {
+			cli.PrintErrln(color.RedString("delim is not a valid parameter for this type of file"))
+			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
+		}
 	}
 
-	if fileLoc.Format != mvdata.CsvFile && hasDelim {
-		cli.PrintErrln(color.RedString("delim is not a valid parameter for this type of file"))
-		return mvdata.InvalidOp, nil, nil, nil
-	}
+	tableLoc := mvdata.TableDataLocation{Name: tableName}
 
-	tableLoc := &mvdata.DataLocation{Path: tableName, Format: mvdata.DoltDB}
-
-	return mvOp, tableLoc, fileLoc, srcOpts
+	return mvOp, tableLoc, srcLoc, srcOpts
 }
 
 func Import(commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -186,7 +221,7 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 	apr := cli.ParseArgs(ap, args, help)
 	moveOp, tableLoc, fileLoc, srcOpts := validateImportArgs(apr, usage)
 
-	if fileLoc == nil || tableLoc == nil {
+	if fileLoc == nil || len(tableLoc.Name) == 0 {
 		return false, nil
 	}
 
@@ -239,24 +274,27 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	if mvOpts.Operation == mvdata.OverwriteOp && !force {
+	_, isStdOut := mvOpts.Dest.(mvdata.StreamDataLocation)
+	if !isStdOut && mvOpts.Operation == mvdata.OverwriteOp && !force {
 		if exists, err := mvOpts.Dest.Exists(context.TODO(), root, dEnv.FS); err != nil {
 			cli.Println(color.RedString(err.Error()))
 			return 1
 		} else if exists {
-			cli.PrintErrln(color.RedString("Data already exists in %s.  Use -f to overwrite.", mvOpts.Dest.Path))
+			cli.PrintErrln(color.RedString("Data already exists.  Use -f to overwrite."))
 			return 1
 		}
 	}
 
-	if mvOpts.Src.Format == mvdata.SqlFile {
-		cli.Println(color.RedString("For SQL import, please pipe SQL input files to `dolt sql`"))
-		return 1
-	}
+	if srcFileLoc, isFileType := mvOpts.Src.(mvdata.FileDataLocation); isFileType {
+		if srcFileLoc.Format == mvdata.SqlFile {
+			cli.Println(color.RedString("For SQL import, please pipe SQL input files to `dolt sql`"))
+			return 1
+		}
 
-	if mvOpts.Src.Format == mvdata.JsonFile && mvOpts.SchFile == "" {
-		cli.Println(color.RedString("Please specify schema file for .json tables."))
-		return 1
+		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.SchFile == "" {
+			cli.Println(color.RedString("Please specify schema file for .json tables."))
+			return 1
+		}
 	}
 
 	mover, nDMErr := mvdata.NewDataMover(context.TODO(), root, dEnv.FS, mvOpts, importStatsCB)
@@ -294,7 +332,8 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 	}
 
 	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
-		err = dEnv.PutTableToWorking(context.Background(), *nomsWr.GetMap(), nomsWr.GetSchema(), mvOpts.Dest.Path)
+		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
+		err = dEnv.PutTableToWorking(context.Background(), *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to update the working value."))
@@ -308,7 +347,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCreationError) errhand.VerboseError {
 	switch err.ErrType {
 	case mvdata.CreateReaderErr:
-		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.Src.Path)
+		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.Src.String())
 		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.Src.String(), mvOpts.Dest.String())
 		return bdr.AddCause(err.Cause).Build()
 
@@ -340,13 +379,13 @@ func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCrea
 
 	case mvdata.CreateWriterErr:
 		if err.Cause == mvdata.ErrNoPK {
-			builder := errhand.BuildDError("Attempting to write to a %s with a schema that does not contain a primary key.", mvOpts.Dest.Format.ReadableStr())
+			builder := errhand.BuildDError("Attempting to write to %s with a schema that does not contain a primary key.", mvOpts.Dest.String())
 			builder.AddDetails("A primary key is required and can be specified by:\n" +
 				"\tusing -pk option to designate a field as the primary key by name.\n" +
 				"\tusing -schema to provide a schema descriptor file.")
 			return builder.Build()
 		} else {
-			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.Dest.Path)
+			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.Dest.String())
 			bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.Src.String(), mvOpts.Dest.String())
 			return bdr.AddCause(err.Cause).Build()
 		}

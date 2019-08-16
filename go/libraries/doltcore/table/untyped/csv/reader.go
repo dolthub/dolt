@@ -157,7 +157,7 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 	if len(colVals) != numCols {
 		return nil, table.NewBadRow(nil,
 			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", numCols, len(colVals)),
-			fmt.Sprintf("line: %s", line),
+			fmt.Sprintf("line: '%s'", line),
 		)
 	}
 

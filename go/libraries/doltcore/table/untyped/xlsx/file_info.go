@@ -14,17 +14,12 @@
 
 package xlsx
 
-import "github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-
 type XLSXFileInfo struct {
-	Rows []row.Row
+	SheetName string
 }
 
-func NewXLSXInfo() *XLSXFileInfo {
-	return &XLSXFileInfo{nil}
-}
-
-func (info *XLSXFileInfo) SetRows(rows []row.Row) *XLSXFileInfo {
-	info.Rows = rows
-	return info
+func NewXLSXInfo(sheetName string) *XLSXFileInfo {
+	return &XLSXFileInfo{
+		SheetName: sheetName,
+	}
 }
