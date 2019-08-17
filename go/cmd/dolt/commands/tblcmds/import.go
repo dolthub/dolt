@@ -105,7 +105,7 @@ the file in one of the supported formats (csv, psv, nbf, json, xlsx).  For files
 
 var importSynopsis = []string{
 	"-c [-f] [--pk <field>] [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
-	"-u [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
+	"-u [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 }
 
 func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
@@ -124,7 +124,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	} else {
 		mvOp = mvdata.UpdateOp
 		if apr.Contains(outSchemaParam) {
-			cli.PrintErrln("fatal:", outSchemaParam+"is not supported for update operations")
+			cli.PrintErrln("fatal:", outSchemaParam+" is not supported for update operations")
 			usage()
 			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 		}
@@ -174,6 +174,8 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		if val.Format == mvdata.XlsxFile {
 			// table name must match sheet name currently
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
+		} else if val.Format == mvdata.JsonFile {
+			srcOpts = mvdata.JSONOptions{TableName: tableName}
 		}
 
 	case mvdata.StreamDataLocation:
@@ -291,7 +293,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 			return 1
 		}
 
-		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.SchFile == "" {
+		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.Operation != mvdata.UpdateOp && mvOpts.SchFile == "" {
 			cli.Println(color.RedString("Please specify schema file for .json tables."))
 			return 1
 		}

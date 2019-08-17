@@ -48,6 +48,10 @@ type XlsxOptions struct {
 	SheetName string
 }
 
+type JSONOptions struct {
+	TableName string
+}
+
 type MoveOptions struct {
 	Operation   MoveOperation
 	ContOnErr   bool

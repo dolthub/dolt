@@ -39,7 +39,7 @@ You may also consider using <b>dolt sql -q 'CREATE TABLE ...'</b>:
 `
 
 var tblCreateSynopsis = []string{
-	"[-f] -schema <schema_file> <table>...",
+	"[-f] -s <schema_file> <table>...",
 }
 
 func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
