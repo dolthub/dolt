@@ -15,11 +15,12 @@
 package filesys
 
 import (
-	"bytes"
 	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
@@ -27,6 +28,7 @@ import (
 
 const (
 	testFilename  = "testfile.txt"
+	movedFilename = "movedfile.txt"
 	testString    = "this is a test"
 	testStringLen = int64(len(testString))
 )
@@ -39,70 +41,68 @@ var filesysetmsToTest = map[string]Filesys{
 func TestFilesystems(t *testing.T) {
 	dir := test.TestDir("filesys_test")
 	fp := filepath.Join(dir, testFilename)
+	movedFilePath := filepath.Join(dir, movedFilename)
 
 	for fsName, fs := range filesysetmsToTest {
-		if exists, _ := fs.Exists(dir); exists {
-			t.Error("fs:", fsName, "Directory existed before it was created:", dir)
-			continue
-		}
+		t.Run(fsName, func(t *testing.T) {
+			// Test file doesn't exist before creation
+			exists, _ := fs.Exists(dir)
+			require.False(t, exists)
 
-		err := fs.MkDirs(dir)
+			// Test creating a directory
+			err := fs.MkDirs(dir)
+			require.NoError(t, err)
 
-		if err != nil {
-			t.Error("fs:", fsName, "failed to make dir", dir, err)
-			continue
-		}
+			// Test directory exists, and is in fact a directory
+			exists, isDir := fs.Exists(dir)
+			require.True(t, exists)
+			require.True(t, isDir)
 
-		if exists, isDir := fs.Exists(dir); !exists || !isDir {
-			t.Error("fs:", fsName, "Directory not found after creating:", dir)
-			continue
-		}
+			// Test failure to open a directory for read
+			_, err = fs.OpenForRead(dir)
+			require.Error(t, err)
 
-		_, err = fs.OpenForRead(dir)
+			// Test failure to open a directory for write
+			_, err = fs.OpenForWrite(dir)
+			require.Error(t, err)
 
-		if err == nil {
-			t.Error("fs:", fsName, "shouldn't be able to open a directory for reading")
-			continue
-		}
+			// Test file doesn't exist before creation
+			exists, _ = fs.Exists(fp)
+			require.False(t, exists)
 
-		_, err = fs.OpenForWrite(dir)
+			// Test can't open a file that doesn't exist for read
+			_, err = fs.OpenForRead(fp)
+			require.Error(t, err)
 
-		if err == nil {
-			t.Error("fs:", fsName, "shouldn't be able to open a directory for writing")
-			continue
-		}
+			data := test.RandomData(256 * 1024)
 
-		if exists, _ := fs.Exists(fp); exists {
-			t.Error("fs:", fsName, "file existed before creating:", fp)
-			continue
-		}
+			// Test writing file with random data
+			err = fs.WriteFile(fp, data)
+			require.NoError(t, err)
 
-		_, err = fs.OpenForRead(fp)
+			// Test that the data can be read back and hasn't changed
+			dataRead, err := fs.ReadFile(fp)
+			require.NoError(t, err)
+			require.Equal(t, dataRead, data)
 
-		if err == nil {
-			t.Error("fs:", fsName, "Shouldn't be able to read a file that isn't there")
-			continue
-		}
+			// Test moving the file
+			err = fs.MoveFile(fp, movedFilePath)
+			require.NoError(t, err)
 
-		data := test.RandomData(256 * 1024)
-		err = fs.WriteFile(fp, data)
+			// Test that there is no longer a file at the initial path
+			exists, _ = fs.Exists(fp)
+			require.False(t, exists)
 
-		if err != nil {
-			t.Error("fs:", fsName, "failed to write file", fp, err)
-			continue
-		}
+			// Test that a file exists at the new location
+			exists, isDir = fs.Exists(movedFilePath)
+			require.True(t, exists)
+			require.False(t, isDir)
 
-		dataRead, err := fs.ReadFile(fp)
-
-		if err != nil {
-			t.Error("fs:", fsName, "failed to read the data that was written", fp, err)
-			continue
-		}
-
-		if !bytes.Equal(dataRead, data) {
-			t.Error("fs:", fsName, "data read does not match what was written", fp)
-			continue
-		}
+			// Test that the data can be read back and hasn't changed since being moved
+			dataRead, err = fs.ReadFile(movedFilePath)
+			require.NoError(t, err)
+			require.Equal(t, dataRead, data)
+		})
 	}
 }
 

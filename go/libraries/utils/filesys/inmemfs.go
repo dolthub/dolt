@@ -344,7 +344,7 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 
 	isEmpty := true
 	toDelete := map[string]bool{path: true}
-	fs.Iter(path, true, func(path string, size int64, isDir bool) (stop bool) {
+	err := fs.Iter(path, true, func(path string, size int64, isDir bool) (stop bool) {
 		isEmpty = false
 		if !force {
 			return true
@@ -354,6 +354,10 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 
 		return false
 	})
+
+	if err != nil {
+		return err
+	}
 
 	if !force && !isEmpty {
 		return errors.New(path + " is a directory which is not empty. Delete the contents first, or set force to true")
@@ -370,6 +374,45 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 	}
 
 	return nil
+}
+
+// MoveFile will move a file from the srcPath in the filesystem to the destPath
+func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
+	srcPath = fs.getAbsPath(srcPath)
+	destPath = fs.getAbsPath(destPath)
+
+	if exists, destIsDir := fs.Exists(destPath); exists && destIsDir {
+		return ErrIsDir
+	}
+
+	if obj, ok := fs.objs[srcPath]; ok {
+		if obj.isDir() {
+			return ErrIsDir
+		}
+
+		destDir := filepath.Dir(destPath)
+		destParentDir, err := fs.mkDirs(destDir)
+
+		if err != nil {
+			return err
+		}
+
+		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir}
+
+		fs.objs[destPath] = destObj
+		delete(fs.objs, srcPath)
+
+		parentDir := obj.parent()
+		if parentDir != nil {
+			delete(parentDir.objs, srcPath)
+		}
+
+		destParentDir.objs[destPath] = destObj
+
+		return nil
+	}
+
+	return os.ErrNotExist
 }
 
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
