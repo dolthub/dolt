@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -105,7 +106,25 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 		return rd, false, err
 
 	case JsonFile:
-		rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), schPath)
+		var sch schema.Schema = nil
+		if schPath == "" {
+			if opts == nil {
+				return nil, false, errors.New("Unable to determine table name on JSON import")
+			}
+			jsonOpts, _ := opts.(JSONOptions)
+			table, exists, err := root.GetTable(context.TODO(), jsonOpts.TableName)
+			if !exists {
+				return nil, false, errors.New(fmt.Sprintf("The following table could not be found:\n%v", jsonOpts.TableName))
+			}
+			if err != nil {
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
+			}
+			sch, err = table.GetSchema(context.TODO())
+			if err != nil {
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+			}
+		}
+		rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), sch, schPath)
 		return rd, false, err
 	}
 
