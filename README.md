@@ -53,15 +53,7 @@ available at https://github.com/liquidata-inc/dolt/releases. The `./bin`
 directory of your platforms tarball should be placed on your path so you can
 run `dolt`.
 
-Installing from source requires Go 1.13+. Using go install:
-
-```sh
-$ go install github.com/liquidata-inc/dolt/go/cmd/dolt
-$ go install github.com/liquidata-inc/dolt/go/cmd/git-dolt
-$ go install github.com/liquidata-inc/dolt/go/cmd/git-dolt-smudge
-```
-
-Or from a checkout of the repository:
+Installing from source requires Go 1.12+. From a checkout of this repository:
 
 ```sh
 $ cd go
