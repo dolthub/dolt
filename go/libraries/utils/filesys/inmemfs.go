@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
@@ -66,8 +67,9 @@ func (md *memDir) parent() *memDir {
 
 // InMemFS is an in memory filesystem implementation that is primarily intended for testing
 type InMemFS struct {
-	cwd  string
-	objs map[string]memObj
+	rwLock *sync.RWMutex
+	cwd    string
+	objs   map[string]memObj
 }
 
 // EmptyInMemFS creates an empty InMemFS instance
@@ -86,7 +88,7 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 		panic("cwd for InMemFilesys must be absolute path.")
 	}
 
-	fs := &InMemFS{cwd, map[string]memObj{osutil.FileSystemRoot: newEmptyDir(osutil.FileSystemRoot, nil)}}
+	fs := &InMemFS{&sync.RWMutex{}, cwd, map[string]memObj{osutil.FileSystemRoot: newEmptyDir(osutil.FileSystemRoot, nil)}}
 
 	if dirs != nil {
 		for _, dir := range dirs {
@@ -127,6 +129,13 @@ func (fs *InMemFS) getAbsPath(path string) string {
 
 // Exists will tell you if a file or directory with a given path already exists, and if it does is it a directory
 func (fs *InMemFS) Exists(path string) (exists bool, isDir bool) {
+	fs.rwLock.RLock()
+	defer fs.rwLock.RUnlock()
+
+	return fs.exists(path)
+}
+
+func (fs *InMemFS) exists(path string) (exists bool, isDir bool) {
 	path = fs.getAbsPath(path)
 
 	if obj, ok := fs.objs[path]; ok {
@@ -136,13 +145,46 @@ func (fs *InMemFS) Exists(path string) (exists bool, isDir bool) {
 	return false, false
 }
 
-// Iter iterates over the files and subdirectories within a given directory (Optionally recursively).  There
-// are no guarantees about the ordering of results.  Two calls to iterate the same directory may yield
-// differently ordered results.
-func (fs *InMemFS) Iter(path string, recursive bool, cb FSIterCB) error {
-	_, err := fs.iter(fs.getAbsPath(path), recursive, cb)
+type iterEntry struct {
+	path  string
+	size  int64
+	isDir bool
+}
 
-	return err
+func (fs *InMemFS) getIterEntries(path string, recursive bool) ([]iterEntry, error) {
+	var entries []iterEntry
+	_, err := fs.iter(fs.getAbsPath(path), recursive, func(path string, size int64, isDir bool) (stop bool) {
+		entries = append(entries, iterEntry{path, size, isDir})
+		return false
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return entries, nil
+}
+
+// Iter iterates over the files and subdirectories within a given directory (Optionally recursively).  There
+// are no guarantees about the ordering of results. It is also possible that concurrent delete operations could render
+// a file path invalid when the callback is made.
+func (fs *InMemFS) Iter(path string, recursive bool, cb FSIterCB) error {
+	entries, err := func() ([]iterEntry, error) {
+		fs.rwLock.RLock()
+		defer fs.rwLock.RUnlock()
+
+		return fs.getIterEntries(path, recursive)
+	}()
+
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		cb(entry.path, entry.size, entry.isDir)
+	}
+
+	return nil
 }
 
 func (fs *InMemFS) iter(path string, recursive bool, cb FSIterCB) (bool, error) {
@@ -183,9 +225,12 @@ func (fs *InMemFS) iter(path string, recursive bool, cb FSIterCB) (bool, error) 
 
 // OpenForRead opens a file for reading
 func (fs *InMemFS) OpenForRead(fp string) (io.ReadCloser, error) {
+	fs.rwLock.RLock()
+	defer fs.rwLock.RUnlock()
+
 	fp = fs.getAbsPath(fp)
 
-	if exists, isDir := fs.Exists(fp); !exists {
+	if exists, isDir := fs.exists(fp); !exists {
 		return nil, os.ErrNotExist
 	} else if isDir {
 		return nil, ErrIsDir
@@ -214,6 +259,7 @@ type inMemFSWriteCloser struct {
 	parentDir *memDir
 	fs        *InMemFS
 	buf       *bytes.Buffer
+	rwLock    *sync.RWMutex
 }
 
 func (fsw *inMemFSWriteCloser) Write(p []byte) (int, error) {
@@ -221,6 +267,9 @@ func (fsw *inMemFSWriteCloser) Write(p []byte) (int, error) {
 }
 
 func (fsw *inMemFSWriteCloser) Close() error {
+	fsw.rwLock.Lock()
+	defer fsw.rwLock.Unlock()
+
 	data := fsw.buf.Bytes()
 	newFile := &memFile{fsw.path, data, fsw.parentDir}
 	fsw.parentDir.objs[fsw.path] = newFile
@@ -232,9 +281,12 @@ func (fsw *inMemFSWriteCloser) Close() error {
 // OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 // it will be overwritten.
 func (fs *InMemFS) OpenForWrite(fp string) (io.WriteCloser, error) {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	fp = fs.getAbsPath(fp)
 
-	if exists, isDir := fs.Exists(fp); exists && isDir {
+	if exists, isDir := fs.exists(fp); exists && isDir {
 		return nil, ErrIsDir
 	}
 
@@ -245,7 +297,7 @@ func (fs *InMemFS) OpenForWrite(fp string) (io.WriteCloser, error) {
 		return nil, err
 	}
 
-	return &inMemFSWriteCloser{fp, parentDir, fs, bytes.NewBuffer(make([]byte, 0, 512))}, nil
+	return &inMemFSWriteCloser{fp, parentDir, fs, bytes.NewBuffer(make([]byte, 0, 512)), fs.rwLock}, nil
 }
 
 // WriteFile writes the entire data buffer to a given file.  The file will be created if it does not exist,
@@ -268,7 +320,9 @@ func (fs *InMemFS) WriteFile(fp string, data []byte) error {
 
 // MkDirs creates a folder and all the parent folders that are necessary to create it.
 func (fs *InMemFS) MkDirs(path string) error {
-	path = fs.getAbsPath(path)
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	_, err := fs.mkDirs(path)
 	return err
 }
@@ -311,6 +365,13 @@ func (fs *InMemFS) mkDirs(path string) (*memDir, error) {
 
 // DeleteFile will delete a file at the given path
 func (fs *InMemFS) DeleteFile(path string) error {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
+	return fs.deleteFile(path)
+}
+
+func (fs *InMemFS) deleteFile(path string) error {
 	path = fs.getAbsPath(path)
 
 	if obj, ok := fs.objs[path]; ok {
@@ -334,30 +395,29 @@ func (fs *InMemFS) DeleteFile(path string) error {
 // Delete will delete an empty directory, or a file.  If trying delete a directory that is not empty you can set force to
 // true in order to delete the dir and all of it's contents
 func (fs *InMemFS) Delete(path string, force bool) error {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	path = fs.getAbsPath(path)
 
-	if exists, isDir := fs.Exists(path); !exists {
+	if exists, isDir := fs.exists(path); !exists {
 		return os.ErrNotExist
 	} else if !isDir {
-		return fs.DeleteFile(path)
+		return fs.deleteFile(path)
 	}
 
-	isEmpty := true
 	toDelete := map[string]bool{path: true}
-	err := fs.Iter(path, true, func(path string, size int64, isDir bool) (stop bool) {
-		isEmpty = false
-		if !force {
-			return true
-		}
-
-		toDelete[path] = isDir
-
-		return false
-	})
+	entries, err := fs.getIterEntries(path, true)
 
 	if err != nil {
 		return err
 	}
+
+	for _, entry := range entries {
+		toDelete[entry.path] = entry.isDir
+	}
+
+	isEmpty := len(toDelete) == 1
 
 	if !force && !isEmpty {
 		return errors.New(path + " is a directory which is not empty. Delete the contents first, or set force to true")
@@ -378,10 +438,13 @@ func (fs *InMemFS) Delete(path string, force bool) error {
 
 // MoveFile will move a file from the srcPath in the filesystem to the destPath
 func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
+	fs.rwLock.Lock()
+	defer fs.rwLock.Unlock()
+
 	srcPath = fs.getAbsPath(srcPath)
 	destPath = fs.getAbsPath(destPath)
 
-	if exists, destIsDir := fs.Exists(destPath); exists && destIsDir {
+	if exists, destIsDir := fs.exists(destPath); exists && destIsDir {
 		return ErrIsDir
 	}
 
