@@ -293,7 +293,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 			return 1
 		}
 
-		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.Operation != mvdata.UpdateOp && mvOpts.SchFile == "" {
+		if srcFileLoc.Format == mvdata.JsonFile && mvOpts.Operation == mvdata.OverwriteOp && mvOpts.SchFile == "" {
 			cli.Println(color.RedString("Please specify schema file for .json tables."))
 			return 1
 		}
