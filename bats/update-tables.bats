@@ -31,14 +31,6 @@ teardown() {
     [[ "$output" =~ "schema is not supported for update operations" ]] || false
 }
 
-@test "update table using csv with newlines" {
-    skip "We currently fail on CSV imports with newlines"
-    run dolt table create -s `batshelper 1pk5col-strings.schema` test
-    [ "$status" -eq 0 ]
-    run dolt table import -u test `batshelper 1pk5col-strings-newlines.csv`
-    [ "$status" -eq 0 ]
-}
-
 @test "update table using json" {
     run dolt table create -s `batshelper employees-sch.json` employees
     [ "$status" -eq 0 ]
