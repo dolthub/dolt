@@ -78,8 +78,6 @@ var remoteSynopsis = []string{
 const (
 	addRemoteId    = "add"
 	removeRemoteId = "remove"
-
-	DolthubHostName = "dolthub.com"
 )
 
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
@@ -191,7 +189,7 @@ func getAbsRemoteUrl(fs filesys.Filesys, cfg config.ReadableConfig, urlArg strin
 			return "", "", err
 		}
 
-		hostName = DolthubHostName
+		hostName = env.DefaultRemotesApiHost
 	}
 
 	hostName = strings.TrimSpace(hostName)
