@@ -165,9 +165,9 @@ func (c *Commit) GetRootValue() (*RootValue, error) {
 	return nil, errHasNoRootValue
 }
 
-var ErrNoCommonAnscestor = errors.New("no common anscestor")
+var ErrNoCommonAncestor = errors.New("no common ancestor")
 
-func GetCommitAnscestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
+func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	ref1, err := types.NewRef(cm1.commitSt, cm1.vrw.Format())
 
 	if err != nil {
@@ -209,14 +209,14 @@ func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw types.V
 	}
 
 	if !ok {
-		return types.Ref{}, ErrNoCommonAnscestor
+		return types.Ref{}, ErrNoCommonAncestor
 	}
 
 	return ancestorRef, nil
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {
-	ancestor, err := GetCommitAnscestor(ctx, c, new)
+	ancestor, err := GetCommitAncestor(ctx, c, new)
 
 	if err != nil {
 		return false, err
@@ -235,7 +235,7 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 }
 
 func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error) {
-	ancestor, err := GetCommitAnscestor(ctx, c, new)
+	ancestor, err := GetCommitAncestor(ctx, c, new)
 
 	if err != nil {
 		return false, err
