@@ -29,6 +29,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
 )
 
+// InMemNowFunc is a func() time.Time that can be used to supply the current time.  The default value gets the current
+// time from the system clock, but it can be set to something else in order to support reproducible tests.
+var InMemNowFunc = time.Now
+
 type memObj interface {
 	isDir() bool
 	parent() *memDir
@@ -62,7 +66,7 @@ type memDir struct {
 }
 
 func newEmptyDir(path string, parent *memDir) *memDir {
-	return &memDir{path, make(map[string]memObj), parent, time.Now()}
+	return &memDir{path, make(map[string]memObj), parent, InMemNowFunc()}
 }
 
 func (md *memDir) isDir() bool {
@@ -120,7 +124,7 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 				panic("Initializing InMemFS with invalid data.")
 			}
 
-			now := time.Now()
+			now := InMemNowFunc()
 			newFile := &memFile{path, val, targetDir, now}
 
 			targetDir.time = now
@@ -284,7 +288,7 @@ func (fsw *inMemFSWriteCloser) Close() error {
 	fsw.rwLock.Lock()
 	defer fsw.rwLock.Unlock()
 
-	now := time.Now()
+	now := InMemNowFunc()
 	data := fsw.buf.Bytes()
 	newFile := &memFile{fsw.path, data, fsw.parentDir, now}
 	fsw.parentDir.time = now
@@ -476,8 +480,8 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 			return err
 		}
 
-		now := time.Now()
-		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir, time.Now()}
+		now := InMemNowFunc()
+		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir, now}
 
 		fs.objs[destPath] = destObj
 		delete(fs.objs, srcPath)
