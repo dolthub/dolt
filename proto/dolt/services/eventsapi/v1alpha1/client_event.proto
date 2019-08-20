@@ -64,7 +64,6 @@ message ClientEventMetric {
     MetricID metric_id = 100;
 }
 
-
 message ClientEvent {
     string id = 1;
     google.protobuf.Timestamp start_time = 2;
