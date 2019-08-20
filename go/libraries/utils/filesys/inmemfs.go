@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/osutil"
@@ -31,12 +32,14 @@ import (
 type memObj interface {
 	isDir() bool
 	parent() *memDir
+	modTime() time.Time
 }
 
 type memFile struct {
 	absPath   string
 	data      []byte
 	parentDir *memDir
+	time      time.Time
 }
 
 func (mf *memFile) isDir() bool {
@@ -47,14 +50,19 @@ func (mf *memFile) parent() *memDir {
 	return mf.parentDir
 }
 
+func (mf *memFile) modTime() time.Time {
+	return mf.time
+}
+
 type memDir struct {
 	absPath   string
 	objs      map[string]memObj
 	parentDir *memDir
+	time      time.Time
 }
 
 func newEmptyDir(path string, parent *memDir) *memDir {
-	return &memDir{path, make(map[string]memObj), parent}
+	return &memDir{path, make(map[string]memObj), parent, time.Now()}
 }
 
 func (md *memDir) isDir() bool {
@@ -63,6 +71,10 @@ func (md *memDir) isDir() bool {
 
 func (md *memDir) parent() *memDir {
 	return md.parentDir
+}
+
+func (md *memDir) modTime() time.Time {
+	return md.time
 }
 
 // InMemFS is an in memory filesystem implementation that is primarily intended for testing
@@ -108,8 +120,10 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 				panic("Initializing InMemFS with invalid data.")
 			}
 
-			newFile := &memFile{path, val, targetDir}
+			now := time.Now()
+			newFile := &memFile{path, val, targetDir, now}
 
+			targetDir.time = now
 			targetDir.objs[path] = newFile
 			fs.objs[path] = newFile
 		}
@@ -270,8 +284,10 @@ func (fsw *inMemFSWriteCloser) Close() error {
 	fsw.rwLock.Lock()
 	defer fsw.rwLock.Unlock()
 
+	now := time.Now()
 	data := fsw.buf.Bytes()
-	newFile := &memFile{fsw.path, data, fsw.parentDir}
+	newFile := &memFile{fsw.path, data, fsw.parentDir, now}
+	fsw.parentDir.time = now
 	fsw.parentDir.objs[fsw.path] = newFile
 	fsw.fs.objs[fsw.path] = newFile
 
@@ -460,17 +476,20 @@ func (fs *InMemFS) MoveFile(srcPath, destPath string) error {
 			return err
 		}
 
-		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir}
+		now := time.Now()
+		destObj := &memFile{destPath, obj.(*memFile).data, destParentDir, time.Now()}
 
 		fs.objs[destPath] = destObj
 		delete(fs.objs, srcPath)
 
 		parentDir := obj.parent()
 		if parentDir != nil {
+			parentDir.time = now
 			delete(parentDir.objs, srcPath)
 		}
 
 		destParentDir.objs[destPath] = destObj
+		destParentDir.time = now
 
 		return nil
 	}
@@ -486,6 +505,20 @@ func (fs *InMemFS) Abs(path string) (string, error) {
 	}
 
 	return filepath.Join(fs.cwd, path), nil
+}
+
+// LastModified gets the last modified timestamp for a file or directory at a given path
+func (fs *InMemFS) LastModified(path string) (t time.Time, exists bool) {
+	fs.rwLock.RLock()
+	defer fs.rwLock.RUnlock()
+
+	path = fs.getAbsPath(path)
+
+	if obj, ok := fs.objs[path]; ok {
+		return obj.modTime(), true
+	}
+
+	return time.Time{}, false
 }
 
 func (fs *InMemFS) pathToNative(path string) string {
