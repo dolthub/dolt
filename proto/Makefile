@@ -9,12 +9,18 @@ PROTOC_FLAGS = --plugin=protoc-gen-go=$(PROTOC_GEN_GO) -I . -I $(GOOGLEAPIS) -I 
 
 pbgo_out := ../go/gen/proto
 
+EVENTSAPI_protos := \
+  dolt/services/eventsapi/v1alpha1/client_event.proto
+EVENTSAPI_pbgo_pkg_path := dolt/services/eventsapi_v1alpha1
+
 REMOTESAPI_protos := \
   dolt/services/remotesapi/v1alpha1/chunkstore.proto \
   dolt/services/remotesapi/v1alpha1/credentials.proto
 REMOTESAPI_pbgo_pkg_path := dolt/services/remotesapi_v1alpha1
 
-PBGO_pkgs := REMOTESAPI
+PBGO_pkgs := \
+  REMOTESAPI \
+  EVENTSAPI
 
 all:
 
