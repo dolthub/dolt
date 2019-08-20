@@ -45,14 +45,14 @@ func TestGetAbsRemoteUrl(t *testing.T) {
 		{
 			"",
 			config.NewMapConfig(map[string]string{}),
-			"https://dolthub.com",
+			"https://doltremoteapi.beta.dolthub.com",
 			"https",
 			false,
 		},
 		{
 			"ts/emp",
 			config.NewMapConfig(map[string]string{}),
-			"https://dolthub.com/ts/emp",
+			"https://doltremoteapi.beta.dolthub.com/ts/emp",
 			"https",
 			false,
 		},
