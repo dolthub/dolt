@@ -16,6 +16,8 @@ package cli
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"strings"
 
 	"github.com/fatih/color"
@@ -39,6 +41,8 @@ type Command struct {
 	ReqRepo bool
 	// Hide says whether to hide this command from help listings (for features that aren't ready to be released publicly).
 	HideFromHelp bool
+	// A client event associated with this command
+	EventType eventsapi.ClientEventType
 }
 
 // MapCommands takes a list of commands and maps them based on the commands name
@@ -80,7 +84,19 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 				}
 			}
 
-			return command.Func(ctx, commandStr+" "+subCommandStr, args[1:], dEnv)
+			var evt *events.Event
+			if command.EventType != eventsapi.ClientEventType_UNSPECIFIED_Type {
+				evt = events.NewEvent(command.EventType)
+				ctx = events.NewContextForEvent(ctx, evt)
+			}
+
+			ret := command.Func(ctx, commandStr+" "+subCommandStr, args[1:], dEnv)
+
+			if evt != nil {
+				events.GlobalCollector.CloseEventAndAdd(evt)
+			}
+
+			return ret
 		}
 
 		if !isHelp(subCommandStr) {

@@ -17,6 +17,8 @@ package main
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"os"
 	"strings"
 
@@ -55,7 +57,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "push", Desc: "Push to a dolt remote.", Func: commands.Push, ReqRepo: true},
 	{Name: "pull", Desc: "Fetch from a dolt remote data repository and merge.", Func: commands.Pull, ReqRepo: true},
 	{Name: "fetch", Desc: "Update the database from a remote data repository.", Func: commands.Fetch, ReqRepo: true},
-	{Name: "clone", Desc: "Clone from a remote data repository.", Func: commands.Clone, ReqRepo: false},
+	{Name: "clone", Desc: "Clone from a remote data repository.", Func: commands.Clone, ReqRepo: false, EventType: eventsapi.ClientEventType_CLONE},
 	{Name: "creds", Desc: "Commands for managing credentials.", Func: credcmds.Commands, ReqRepo: false},
 	{Name: "login", Desc: "Login to a dolt remote host.", Func: commands.Login, ReqRepo: false},
 	{Name: "version", Desc: "Displays the current Dolt cli version.", Func: commands.Version(Version), ReqRepo: false},
@@ -119,6 +121,10 @@ func runMain() int {
 
 	restoreIO := cli.InitIO()
 	defer restoreIO()
+	defer func() {
+		ces := events.GlobalCollector.Close()
+		_ = events.WriterEmitter{Wr: os.Stderr}.LogEvents(ces)
+	}()
 
 	warnIfMaxFilesTooLow()
 

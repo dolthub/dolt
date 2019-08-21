@@ -26,28 +26,28 @@ service ClientEventsService {
 }
 
 enum Platform {
-    PLATFORM_UNSPECIFIED = 0;
-    PLATFORM_LINUX = 1;
-    PLATFORM_WINDOWS = 2;
-    PLATFORM_DARWIN = 3;
+    UNSPECIFIED_PLATFORM = 0;
+    LINUX = 1;
+    WINDOWS = 2;
+    DARWIN = 3;
 }
 
 enum ClientEventType {
-    CLIENT_EVENT_TYPE_UNSPECIFIED = 0;
-    CLIENT_EVENT_TYPE_CLONE = 1;
-    CLIENT_EVENT_TYPE_PUSH = 2;
-    CLIENT_EVENT_TYPE_PULL = 3;
+    UNSPECIFIED_Type = 0;
+    CLONE = 1;
+    PUSH = 2;
+    PULL = 3;
 }
 
 enum MetricID {
-    METRIC_ID_UNSPECIFIED = 0;
-    METRIC_ID_BYTES_DOWNLOADED = 1;
-    METRIC_ID_DOWNLOAD_MS_ELAPSED = 2;
+    UNSPECIFIED_METRIC = 0;
+    BYTES_DOWNLOADED = 1;
+    DOWNLOAD_MS_ELAPSED = 2;
 }
 
 enum AttributeID {
-    ATTRIBUTE_ID_UNSPECIFIED = 0;
-    ATTRIBUTE_ID_REMOTEURL = 1;
+    UNSPECIFIED_ATTRIBUTE = 0;
+    REMOTEURL = 1;
 }
 
 message ClientEventAttribute {
