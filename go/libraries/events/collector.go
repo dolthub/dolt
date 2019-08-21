@@ -1,12 +1,23 @@
 package events
 
 import (
+	"github.com/denisbrodbeck/machineid"
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 )
+
+func getMachineID() string {
+	id, err := machineid.ProtectedID("dolt")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return id
+}
 
 // GlobalCollector is an instance of a collector where all events should be sent via the CloseEventAndAdd function
 var GlobalCollector = NewCollector()
@@ -18,6 +29,8 @@ type Collector struct {
 	val   *atomic.Value
 	wg    *sync.WaitGroup
 	evtCh chan *eventsapi.ClientEvent
+
+	machineID string
 }
 
 // NewCollector creates a new instance of a collector
@@ -25,7 +38,7 @@ func NewCollector() *Collector {
 	wg := &sync.WaitGroup{}
 	evtCh := make(chan *eventsapi.ClientEvent, collChanBufferSize)
 
-	c := &Collector{&atomic.Value{}, wg, evtCh}
+	c := &Collector{&atomic.Value{}, wg, evtCh, getMachineID()}
 
 	wg.Add(1)
 	go func() {
@@ -44,7 +57,8 @@ func NewCollector() *Collector {
 
 // CloseEventAndAdd closes the supplied event and adds it to the collection of events.  This method is thread safe.
 func (c *Collector) CloseEventAndAdd(evt *Event) {
-	ce := evt.close()
+	ce := evt.close(c.machineID)
+
 	c.evtCh <- ce
 }
 

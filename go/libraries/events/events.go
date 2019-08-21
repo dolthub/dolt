@@ -50,7 +50,7 @@ func (evt *Event) AddAttribute(attID eventsapi.AttributeID, attVal string) {
 	evt.attributes[attID] = attVal
 }
 
-func (evt *Event) close() *eventsapi.ClientEvent {
+func (evt *Event) close(machineID string) *eventsapi.ClientEvent {
 	if evt.ce == nil {
 		panic("multiple close calls for the same event.")
 	}
@@ -63,6 +63,8 @@ func (evt *Event) close() *eventsapi.ClientEvent {
 	}
 
 	ce := evt.ce
+	ce.Id = machineID
+
 	evt.ce = nil
 
 	return ce

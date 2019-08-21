@@ -123,7 +123,7 @@ func runMain() int {
 	defer restoreIO()
 	defer func() {
 		ces := events.GlobalCollector.Close()
-		_ = events.WriterEmitter{Wr: os.Stderr}.LogEvents(ces)
+		_ = events.WriterEmitter{Wr: cli.CliOut}.LogEvents(ces)
 	}()
 
 	warnIfMaxFilesTooLow()

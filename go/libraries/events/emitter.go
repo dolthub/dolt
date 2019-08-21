@@ -1,7 +1,10 @@
 package events
 
 import (
+	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"io"
+	"strings"
 
 	"github.com/golang/protobuf/proto"
 
@@ -31,14 +34,20 @@ type WriterEmitter struct {
 // LogEvents takes a batch of events and processes them.  In this case the text encoding of the events is written to
 // the writer
 func (we WriterEmitter) LogEvents(evts []*eventsapi.ClientEvent) error {
-	for _, evt := range evts {
-		err := proto.MarshalText(we.Wr, evt)
+	for i, evt := range evts {
+		header := fmt.Sprintf("event%03d: <\n", i)
+
+		err := iohelp.WriteAll(we.Wr, []byte(header))
 
 		if err != nil {
 			return err
 		}
 
-		_, err = we.Wr.Write([]byte("\n"))
+		str := proto.MarshalTextString(evt)
+		tokens := strings.Split(strings.TrimSpace(str), "\n")
+		str = "\t" + strings.Join(tokens, "\n\t") + "\n>\n"
+
+		err = iohelp.WriteAll(we.Wr, []byte(str))
 
 		if err != nil {
 			return err
