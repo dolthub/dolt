@@ -39,7 +39,7 @@ var tblCpSynopsis = []string{
 	"[-f] [<commit>] <oldtable> <newtable>",
 }
 
-func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Cp(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["commit"] = "The state at which point the table whill be copied."
 	ap.ArgListHelp["oldtable"] = "The table being copied."
@@ -77,21 +77,21 @@ func Cp(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		}
 
 		if verr == nil {
-			tbl, ok, err := root.GetTable(context.TODO(), old)
+			tbl, ok, err := root.GetTable(ctx, old)
 
 			if err != nil {
 				verr = errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 			}
 
 			if ok && verr == nil {
-				has, err := working.HasTable(context.TODO(), new)
+				has, err := working.HasTable(ctx, new)
 
 				if err != nil {
 					verr = errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
 				} else if !force && has {
 					verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
 				} else {
-					working, err = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
+					working, err = working.PutTable(ctx, dEnv.DoltDB, new, tbl)
 
 					if err != nil {
 						verr = errhand.BuildDError("error; failed to write tables back to database").Build()

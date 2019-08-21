@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -27,9 +28,10 @@ var globalCfg = set.NewStrSet([]string{globalParamName})
 var localCfg = set.NewStrSet([]string{localParamName})
 
 func TestConfig(t *testing.T) {
+	ctx := context.TODO()
 	dEnv := createTestEnv()
-	ret := Config("dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
-	ret += Config("dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv)
+	ret := Config(ctx, "dolt config", []string{"-global", "--add", "name", "bheni"}, dEnv)
+	ret += Config(ctx, "dolt config", []string{"-global", "--add", "title", "dufus"}, dEnv)
 
 	expectedGlobal := map[string]string{
 		"name":  "bheni",
@@ -42,7 +44,7 @@ func TestConfig(t *testing.T) {
 		t.Error("config -add did not yield expected global results")
 	}
 
-	ret = Config("dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
+	ret = Config(ctx, "dolt config", []string{"-local", "--add", "title", "senior dufus"}, dEnv)
 
 	expectedLocal := map[string]string{
 		"title": "senior dufus",
@@ -56,7 +58,7 @@ func TestConfig(t *testing.T) {
 		t.Error("Unexpected value of \"title\" retrieved from the config hierarchy")
 	}
 
-	ret = Config("dolt config", []string{"-global", "--unset", "name"}, dEnv)
+	ret = Config(ctx, "dolt config", []string{"-global", "--unset", "name"}, dEnv)
 
 	expectedGlobal = map[string]string{
 		"title": "dufus",
@@ -114,17 +116,18 @@ func TestConfig(t *testing.T) {
 }
 
 func TestInvalidConfigArgs(t *testing.T) {
+	ctx := context.TODO()
 	dEnv := createTestEnv()
 
 	// local and global flags passed together is invalid
-	ret := Config("dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv)
+	ret := Config(ctx, "dolt config", []string{"--global", "--local", "--add", "name", "bheni"}, dEnv)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command has both local and global")
 	}
 
 	// both -add and -get are used
-	ret = Config("dolt config", []string{"-global", "--get", "--add", "title"}, dEnv)
+	ret = Config(ctx, "dolt config", []string{"-global", "--get", "--add", "title"}, dEnv)
 
 	if ret == 0 {
 		t.Error("Invalid commands should fail. Command is missing local/global")

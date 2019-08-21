@@ -32,7 +32,7 @@ var lsSynopsis = []string{
 	"[<commit>]",
 }
 
-func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Ls(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
@@ -50,11 +50,11 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		label = "working set"
 		root, verr = GetWorkingWithVErr(dEnv)
 	} else {
-		label, root, verr = getRootForCommitSpecStr(apr.Arg(0), dEnv)
+		label, root, verr = getRootForCommitSpecStr(ctx, apr.Arg(0), dEnv)
 	}
 
 	if verr == nil {
-		verr = printTables(root, label, apr.Contains(verboseFlag))
+		verr = printTables(ctx, root, label, apr.Contains(verboseFlag))
 		return 0
 	}
 
@@ -62,8 +62,8 @@ func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 1
 }
 
-func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
-	tblNames, err := root.GetTableNames(context.TODO())
+func printTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
+	tblNames, err := root.GetTableNames(ctx)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
@@ -79,19 +79,19 @@ func printTables(root *doltdb.RootValue, label string, verbose bool) errhand.Ver
 	cli.Printf("Tables in %s:\n", label)
 	for _, tbl := range tblNames {
 		if verbose {
-			h, _, err := root.GetTableHash(context.TODO(), tbl)
+			h, _, err := root.GetTableHash(ctx, tbl)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to get table hash").AddCause(err).Build()
 			}
 
-			tblVal, _, err := root.GetTable(context.TODO(), tbl)
+			tblVal, _, err := root.GetTable(ctx, tbl)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 			}
 
-			rows, err := tblVal.GetRowData(context.TODO())
+			rows, err := tblVal.GetRowData(ctx)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to get row data").AddCause(err).Build()

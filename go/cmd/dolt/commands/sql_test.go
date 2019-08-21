@@ -71,7 +71,7 @@ func TestSqlSelect(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -95,7 +95,7 @@ func TestSqlShow(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -114,7 +114,7 @@ func TestBadInput(t *testing.T) {
 			dEnv := createEnvWithSeedData(t)
 
 			commandStr := "dolt sql"
-			result := Sql(commandStr, test.args, dEnv)
+			result := Sql(context.TODO(), commandStr, test.args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -147,7 +147,7 @@ func TestCreateTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			working, err = dEnv.WorkingRoot(context.Background())
@@ -185,7 +185,7 @@ func TestShowTables(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -214,7 +214,7 @@ func TestAlterTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -239,7 +239,7 @@ func TestDropTable(t *testing.T) {
 
 			args := []string{"-q", test.query}
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 		})
 	}
@@ -320,7 +320,7 @@ func TestInsert(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -396,7 +396,7 @@ func TestUpdate(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {
@@ -466,7 +466,7 @@ func TestDelete(t *testing.T) {
 			args := []string{"-q", test.query}
 
 			commandStr := "dolt sql"
-			result := Sql(commandStr, args, dEnv)
+			result := Sql(context.TODO(), commandStr, args, dEnv)
 			assert.Equal(t, test.expectedRes, result)
 
 			if result == 0 {

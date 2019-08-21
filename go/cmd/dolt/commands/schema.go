@@ -69,7 +69,7 @@ var tblSchemaSynopsis = []string{
 
 var bold = color.New(color.Bold)
 
-func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Schema(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
@@ -88,21 +88,21 @@ func Schema(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	var verr errhand.VerboseError
 	if apr.Contains(renameFieldFlag) {
-		verr = renameColumn(apr, root, dEnv)
+		verr = renameColumn(ctx, apr, root, dEnv)
 	} else if apr.Contains(addFieldFlag) {
-		verr = addField(apr, root, dEnv)
+		verr = addField(ctx, apr, root, dEnv)
 	} else if apr.Contains(exportFlag) {
-		verr = exportSchemas(apr, root, dEnv)
+		verr = exportSchemas(ctx, apr, root, dEnv)
 	} else if apr.Contains(dropFieldFlag) {
-		verr = removeColumn(apr, root, dEnv)
+		verr = removeColumn(ctx, apr, root, dEnv)
 	} else {
-		verr = printSchemas(apr, dEnv)
+		verr = printSchemas(ctx, apr, dEnv)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
+func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	cmStr := "working"
 	args := apr.Args()
 
@@ -139,7 +139,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 		// show usage and error out if there aren't any
 		if len(tables) == 0 {
 			var err error
-			tables, err = root.GetTableNames(context.TODO())
+			tables, err = root.GetTableNames(ctx)
 
 			if err != nil {
 				return errhand.BuildDError("unable to get table names.").AddCause(err).Build()
@@ -152,7 +152,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 
 		var notFound []string
 		for _, tblName := range tables {
-			tbl, ok, err := root.GetTable(context.TODO(), tblName)
+			tbl, ok, err := root.GetTable(ctx, tblName)
 
 			if err != nil {
 				return errhand.BuildDError("unable to get table '%s'", tblName).AddCause(err).Build()
@@ -161,7 +161,7 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 			if !ok {
 				notFound = append(notFound, tblName)
 			} else {
-				verr = printTblSchema(cmStr, tblName, tbl, root)
+				verr = printTblSchema(ctx, cmStr, tblName, tbl, root)
 				cli.Println()
 			}
 		}
@@ -174,9 +174,9 @@ func printSchemas(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ver
 	return verr
 }
 
-func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) errhand.VerboseError {
+func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *doltdb.Table, root *doltdb.RootValue) errhand.VerboseError {
 	cli.Println(bold.Sprint(tblName), "@", cmStr)
-	sch, err := tbl.GetSchema(context.TODO())
+	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		return errhand.BuildDError("unable to get schema").AddCause(err).Build()
@@ -186,7 +186,7 @@ func printTblSchema(cmStr string, tblName string, tbl *doltdb.Table, root *doltd
 	return nil
 }
 
-func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+func exportSchemas(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("Must specify table and file to which table will be exported.").SetPrintUsage().Build()
 	}
@@ -194,19 +194,19 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 	tblName := apr.Arg(0)
 	fileName := apr.Arg(1)
 	root, _ = GetWorkingWithVErr(dEnv)
-	if has, err := root.HasTable(context.TODO(), tblName); err != nil {
+	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("unable to read from database").AddCause(err).Build()
 	} else if !has {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _, err := root.GetTable(context.TODO(), tblName)
+	tbl, _, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
 		return errhand.BuildDError("unable to get table").AddCause(err).Build()
 	}
 
-	err = exportTblSchema(tbl, fileName, dEnv)
+	err = exportTblSchema(ctx, tbl, fileName, dEnv)
 	if err != nil {
 		return errhand.BuildDError("file path not valid.").Build()
 	}
@@ -214,8 +214,8 @@ func exportSchemas(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv 
 	return nil
 }
 
-func exportTblSchema(tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
-	sch, err := tbl.GetSchema(context.TODO())
+func exportTblSchema(ctx context.Context, tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errhand.VerboseError {
+	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
@@ -230,25 +230,25 @@ func exportTblSchema(tbl *doltdb.Table, filename string, dEnv *env.DoltEnv) errh
 	return errhand.BuildIf(err, "Unable to write "+filename).AddCause(err).Build()
 }
 
-func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+func addField(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 3 {
 		return errhand.BuildDError("Must specify table name, column name, column type, and if column required.").SetPrintUsage().Build()
 	}
 
 	tblName := apr.Arg(0)
-	if has, err := root.HasTable(context.TODO(), tblName); err != nil {
+	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("error: could not read tables from database").AddCause(err).Build()
 	} else if !has {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _, err := root.GetTable(context.TODO(), tblName)
+	tbl, _, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
 	}
 
-	tblSch, err := tbl.GetSchema(context.TODO())
+	tblSch, err := tbl.GetSchema(ctx)
 	newFieldName := apr.Arg(1)
 
 	var tag uint64
@@ -278,12 +278,12 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 		nullable = alterschema.NotNull
 	}
 
-	newTable, err := alterschema.AddColumnToTable(context.TODO(), dEnv.DoltDB, tbl, tag, newFieldName, newFieldKind, nullable, defaultVal)
+	newTable, err := alterschema.AddColumnToTable(ctx, dEnv.DoltDB, tbl, tag, newFieldName, newFieldKind, nullable, defaultVal)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	root, err = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTable)
+	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, newTable)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write table back to database").Build()
@@ -292,19 +292,19 @@ func addField(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.
 	return UpdateWorkingWithVErr(dEnv, root)
 }
 
-func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+func renameColumn(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 3 {
 		return errhand.BuildDError("Table name, current column name, and new column name are needed to rename column.").SetPrintUsage().Build()
 	}
 
 	tblName := apr.Arg(0)
-	if has, err := root.HasTable(context.TODO(), tblName); err != nil {
+	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("error: failed to read tables from database").AddCause(err).Build()
 	} else if !has {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _, err := root.GetTable(context.TODO(), tblName)
+	tbl, _, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
@@ -313,12 +313,12 @@ func renameColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 	oldColName := apr.Arg(1)
 	newColName := apr.Arg(2)
 
-	newTbl, err := alterschema.RenameColumn(context.Background(), dEnv.DoltDB, tbl, oldColName, newColName)
+	newTbl, err := alterschema.RenameColumn(ctx, dEnv.DoltDB, tbl, oldColName, newColName)
 	if err != nil {
 		return errToVerboseErr(oldColName, newColName, err)
 	}
 
-	root, err = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTbl)
+	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, newTbl)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write table back to database").Build()
@@ -340,19 +340,19 @@ func errToVerboseErr(oldName, newName string, err error) errhand.VerboseError {
 	}
 }
 
-func removeColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
+func removeColumn(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *env.DoltEnv) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("Table name and column to be removed must be specified.").SetPrintUsage().Build()
 	}
 
 	tblName := apr.Arg(0)
-	if has, err := root.HasTable(context.TODO(), tblName); err != nil {
+	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("error: failed to read tables from database.").Build()
 	} else if !has {
 		return errhand.BuildDError(tblName + " not found").Build()
 	}
 
-	tbl, _, err := root.GetTable(context.TODO(), tblName)
+	tbl, _, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
@@ -360,13 +360,13 @@ func removeColumn(apr *argparser.ArgParseResults, root *doltdb.RootValue, dEnv *
 
 	colName := apr.Arg(1)
 
-	newTbl, err := alterschema.DropColumn(context.Background(), dEnv.DoltDB, tbl, colName)
+	newTbl, err := alterschema.DropColumn(ctx, dEnv.DoltDB, tbl, colName)
 
 	if err != nil {
 		return errToVerboseErr(colName, "", err)
 	}
 
-	root, err = root.PutTable(context.Background(), dEnv.DoltDB, tblName, newTbl)
+	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, newTbl)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()

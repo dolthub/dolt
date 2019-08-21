@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -43,11 +44,11 @@ var sqlServerSynopsis = []string{
 	"[-H <host>] [-P <port>] [-u <user>] [-p <password>] [-t <timeout>] [-l <loglevel>] [-r]",
 }
 
-func SqlServer(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return sqlServerImpl(commandStr, args, dEnv, nil)
+func SqlServer(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	return sqlServerImpl(ctx, commandStr, args, dEnv, nil)
 }
 
-func sqlServerImpl(commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+func sqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	serverConfig := DefaultServerConfig()
 
 	ap := argparser.NewArgParser()
@@ -89,7 +90,7 @@ func sqlServerImpl(commandStr string, args []string, dEnv *env.DoltEnv, serverCo
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		serverConfig.LogLevel = LogLevel(logLevel)
 	}
-	if startError, closeError := serve(serverConfig, root, serverController); startError != nil || closeError != nil {
+	if startError, closeError := serve(ctx, serverConfig, root, serverController); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}

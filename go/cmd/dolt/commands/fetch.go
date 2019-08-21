@@ -39,7 +39,7 @@ var fetchSynopsis = []string{
 	"[<remote>] [<refspec> ...]",
 }
 
-func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Fetch(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
@@ -48,7 +48,7 @@ func Fetch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	r, refSpecs, verr := getRefSpecs(apr.Args(), dEnv, remotes)
 
 	if verr == nil {
-		verr = fetchRefSpecs(dEnv, r, refSpecs)
+		verr = fetchRefSpecs(ctx, dEnv, r, refSpecs)
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
@@ -127,11 +127,9 @@ func mapRefspecsToRemotes(refSpecs []ref.RemoteRefSpec, dEnv *env.DoltEnv) (map[
 	return rsToRem, nil
 }
 
-func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
-	ctx := context.TODO()
-
+func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSpec) errhand.VerboseError {
 	for _, rs := range refSpecs {
-		srcDB, err := rem.GetRemoteDB(context.TODO(), dEnv.DoltDB.ValueReadWriter().Format())
+		srcDB, err := rem.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
@@ -147,7 +145,7 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSp
 			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
-				verr := fetchRemoteBranch(rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
+				verr := fetchRemoteBranch(ctx, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
 
 				if verr != nil {
 					return verr
@@ -159,9 +157,9 @@ func fetchRefSpecs(dEnv *env.DoltEnv, rem env.Remote, refSpecs []ref.RemoteRefSp
 	return nil
 }
 
-func fetchRemoteBranch(rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
+func fetchRemoteBranch(ctx context.Context, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
-	cm, err := srcDB.Resolve(context.TODO(), cs)
+	cm, err := srcDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
@@ -170,7 +168,7 @@ func fetchRemoteBranch(rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, des
 		stopChan := make(chan struct{})
 		go progFunc(progChan, stopChan)
 
-		err = actions.Fetch(context.TODO(), destRef, srcDB, destDB, cm, progChan)
+		err = actions.Fetch(ctx, destRef, srcDB, destDB, cm, progChan)
 
 		close(progChan)
 		<-stopChan

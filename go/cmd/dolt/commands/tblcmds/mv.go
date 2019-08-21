@@ -38,7 +38,7 @@ var tblMvSynopsis = []string{
 	"[-f] <oldtable> <newtable>",
 }
 
-func Mv(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Mv(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["oldtable"] = "The table being moved."
 	ap.ArgListHelp["newtable"] = "The new name of the table"
@@ -58,7 +58,7 @@ func Mv(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		old := apr.Arg(0)
 		new := apr.Arg(1)
 		if verr == nil {
-			tbl, ok, err := working.GetTable(context.TODO(), old)
+			tbl, ok, err := working.GetTable(ctx, old)
 
 			if err != nil {
 				verr = errhand.BuildDError("").Build()
@@ -66,19 +66,19 @@ func Mv(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			}
 
 			if ok {
-				has, err := working.HasTable(context.TODO(), new)
+				has, err := working.HasTable(ctx, new)
 
 				if err != nil {
 					verr = errhand.BuildDError("error: failed to read tables from working set").AddCause(err).Build()
 				} else if !force && has {
 					verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
 				} else {
-					working, err = working.PutTable(context.Background(), dEnv.DoltDB, new, tbl)
+					working, err = working.PutTable(ctx, dEnv.DoltDB, new, tbl)
 
 					if err != nil {
 						verr = errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()
 					} else {
-						working, err := working.RemoveTables(context.TODO(), old)
+						working, err := working.RemoveTables(ctx, old)
 
 						if err != nil {
 							verr = errhand.BuildDError("Unable to remove '%s'", old).Build()

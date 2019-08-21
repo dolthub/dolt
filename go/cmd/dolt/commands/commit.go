@@ -43,7 +43,7 @@ var commitSynopsis = []string{
 	"[-m <msg>]",
 }
 
-func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	const (
 		allowEmptyFlag   = "allow-empty"
 		commitMessageArg = "message"
@@ -57,10 +57,10 @@ func Commit(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
-		msg = getCommitMessageFromEditor(dEnv)
+		msg = getCommitMessageFromEditor(ctx, dEnv)
 	}
 
-	err := actions.CommitStaged(context.Background(), dEnv, msg, apr.Contains(allowEmptyFlag))
+	err := actions.CommitStaged(ctx, dEnv, msg, apr.Contains(allowEmptyFlag))
 	return handleCommitErr(err, usage)
 }
 
@@ -102,9 +102,9 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func getCommitMessageFromEditor(dEnv *env.DoltEnv) string {
+func getCommitMessageFromEditor(ctx context.Context, dEnv *env.DoltEnv) string {
 	var finalMsg string
-	initialMsg := buildInitalCommitMsg(dEnv)
+	initialMsg := buildInitalCommitMsg(ctx, dEnv)
 	backupEd := "vim"
 	if ed, edSet := os.LookupEnv("EDITOR"); edSet {
 		backupEd = ed
@@ -118,15 +118,15 @@ func getCommitMessageFromEditor(dEnv *env.DoltEnv) string {
 	return finalMsg
 }
 
-func buildInitalCommitMsg(dEnv *env.DoltEnv) string {
+func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	initialNoColor := color.NoColor
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.Head.Ref
-	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(context.Background(), dEnv)
+	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
 	buf := bytes.NewBuffer([]byte{})
 
-	workingInConflict, _, _, err := actions.GetTablesInConflict(context.Background(), dEnv)
+	workingInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 
 	if err != nil {
 		workingInConflict = []string{}

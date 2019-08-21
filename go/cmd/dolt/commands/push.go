@@ -56,7 +56,7 @@ var pushSynopsis = []string{
 	"[-u | --set-upstream] [<remote>] [<refspec>]",
 }
 
-func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Push(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less dolt pull and other commands.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
@@ -140,14 +140,13 @@ func Push(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	}
 
 	if verr == nil {
-		hasRef, err := dEnv.DoltDB.HasRef(context.TODO(), currentBranch)
+		hasRef, err := dEnv.DoltDB.HasRef(ctx, currentBranch)
 
 		if err != nil {
 			verr = errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
 		} else if !hasRef {
 			verr = errhand.BuildDError("fatal: unknown branch " + currentBranch.GetPath()).Build()
 		} else {
-			ctx := context.Background()
 			src := refSpec.SrcRef(currentBranch)
 			dest := refSpec.DestRef(src)
 

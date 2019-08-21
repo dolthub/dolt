@@ -69,7 +69,7 @@ const (
 	allFlag         = "all"
 )
 
-func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Branch(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["start-point"] = "A commit that a new branch should point at."
 	ap.SupportsFlag(listFlag, "", "List branches")
@@ -85,29 +85,29 @@ func Branch(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	switch {
 	case apr.Contains(moveFlag):
-		return moveBranch(dEnv, apr, usage)
+		return moveBranch(ctx, dEnv, apr, usage)
 	case apr.Contains(copyFlag):
-		return copyBranch(dEnv, apr, usage)
+		return copyBranch(ctx, dEnv, apr, usage)
 	case apr.Contains(deleteFlag):
-		return deleteBranches(dEnv, apr, usage)
+		return deleteBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(deleteForceFlag):
-		return deleteForceBranches(dEnv, apr, usage)
+		return deleteForceBranches(ctx, dEnv, apr, usage)
 	case apr.Contains(listFlag):
-		return printBranches(dEnv, apr, usage)
+		return printBranches(ctx, dEnv, apr, usage)
 	case apr.NArg() > 0:
-		return createBranch(dEnv, apr, usage)
+		return createBranch(ctx, dEnv, apr, usage)
 	default:
-		return printBranches(dEnv, apr, usage)
+		return printBranches(ctx, dEnv, apr, usage)
 	}
 }
 
-func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
+func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.UsagePrinter) int {
 	branchSet := set.NewStrSet(apr.Args())
 
 	verbose := apr.Contains(verboseFlag)
 	printAll := apr.Contains(allParam)
 
-	branches, err := dEnv.DoltDB.GetRefs(context.TODO())
+	branches, err := dEnv.DoltDB.GetRefs(ctx)
 
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.BuildDError("error: failed to read refs from db").AddCause(err).Build(), nil)
@@ -141,7 +141,7 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 		}
 
 		if verbose {
-			cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
+			cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 			if err == nil {
 				h, err := cm.HashOf()
@@ -163,7 +163,7 @@ func printBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, _ cli.Usag
 	return 0
 }
 
-func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
+func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() != 2 {
 		usage()
 		return 1
@@ -172,7 +172,7 @@ func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.MoveBranch(context.TODO(), dEnv, src, apr.Arg(1), force)
+	err := actions.MoveBranch(ctx, dEnv, src, apr.Arg(1), force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -193,7 +193,7 @@ func moveBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
+func copyBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() != 2 {
 		usage()
 		return 1
@@ -202,7 +202,7 @@ func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.CopyBranch(context.TODO(), dEnv, src, dest, force)
+	err := actions.CopyBranch(ctx, dEnv, src, dest, force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -221,15 +221,15 @@ func copyBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.Usa
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func deleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	return handleDeleteBranches(dEnv, apr, usage, apr.Contains(forceFlag))
+func deleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
+	return handleDeleteBranches(ctx, dEnv, apr, usage, apr.Contains(forceFlag))
 }
 
-func deleteForceBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
-	return handleDeleteBranches(dEnv, apr, usage, true)
+func deleteForceBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
+	return handleDeleteBranches(ctx, dEnv, apr, usage, true)
 }
 
-func handleDeleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
+func handleDeleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter, force bool) int {
 	if apr.NArg() != 1 {
 		usage()
 		return 1
@@ -237,7 +237,7 @@ func handleDeleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usa
 
 	brName := apr.Arg(0)
 
-	err := actions.DeleteBranch(context.TODO(), dEnv, brName, force)
+	err := actions.DeleteBranch(ctx, dEnv, brName, force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -254,7 +254,7 @@ func handleDeleteBranches(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usa
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func createBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
+func createBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.UsagePrinter) int {
 	if apr.NArg() == 0 || apr.NArg() > 2 {
 		usage()
 		return 1
@@ -267,12 +267,12 @@ func createBranch(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, usage cli.U
 		startPt = apr.Arg(1)
 	}
 
-	verr := createBranchWithStartPt(dEnv, newBranch, startPt, apr.Contains(forceFlag))
+	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, apr.Contains(forceFlag))
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func createBranchWithStartPt(dEnv *env.DoltEnv, newBranch, startPt string, force bool) errhand.VerboseError {
-	err := actions.CreateBranch(context.TODO(), dEnv, newBranch, startPt, force)
+func createBranchWithStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string, force bool) errhand.VerboseError {
+	err := actions.CreateBranch(ctx, dEnv, newBranch, startPt, force)
 
 	if err != nil {
 		if err == actions.ErrAlreadyExists {

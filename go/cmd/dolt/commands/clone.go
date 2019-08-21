@@ -55,7 +55,7 @@ var cloneSynopsis = []string{
 	"[-remote <remote>] [-branch <branch>]  [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <remote-url> <new-dir>",
 }
 
-func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Clone(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
 	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
@@ -83,13 +83,13 @@ func Clone(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		if verr == nil {
 			var r env.Remote
 			var srcDB *doltdb.DoltDB
-			r, srcDB, verr = createRemote(remoteName, remoteUrl, params)
+			r, srcDB, verr = createRemote(ctx, remoteName, remoteUrl, params)
 
 			if verr == nil {
-				dEnv, verr = envForClone(srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS)
+				dEnv, verr = envForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS)
 
 				if verr == nil {
-					verr = cloneRemote(context.Background(), srcDB, remoteName, branch, dEnv)
+					verr = cloneRemote(ctx, srcDB, remoteName, branch, dEnv)
 
 					// Make best effort to delete the directory we created.
 					if verr != nil {
@@ -131,7 +131,7 @@ func parseArgs(apr *argparser.ArgParseResults) (string, string, errhand.VerboseE
 	return dir, urlStr, nil
 }
 
-func envForClone(nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
+func envForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.Filesys) (*env.DoltEnv, errhand.VerboseError) {
 	exists, _ := fs.Exists(filepath.Join(dir, dbfactory.DoltDir))
 
 	if exists {
@@ -150,8 +150,8 @@ func envForClone(nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.
 		return nil, errhand.BuildDError("error: unable to access directory " + dir).Build()
 	}
 
-	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB)
-	err = dEnv.InitRepoWithNoData(context.TODO(), nbf)
+	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, fs, doltdb.LocalDirDoltDB)
+	err = dEnv.InitRepoWithNoData(ctx, nbf)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to initialize repo without data").AddCause(err).Build()
@@ -167,12 +167,12 @@ func envForClone(nbf *types.NomsBinFormat, r env.Remote, dir string, fs filesys.
 	return dEnv, nil
 }
 
-func createRemote(remoteName, remoteUrl string, params map[string]string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
+func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[string]string) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
 	cli.Printf("cloning %s\n", remoteUrl)
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
 
-	ddb, err := r.GetRemoteDB(context.TODO(), types.Format_Default)
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
 
 	if err != nil {
 		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)

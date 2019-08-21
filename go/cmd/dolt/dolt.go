@@ -129,5 +129,5 @@ func runMain() int {
 		return 1
 	}
 
-	return doltCommand("dolt", args, dEnv)
+	return doltCommand(context.Background(), "dolt", args, dEnv)
 }

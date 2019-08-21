@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"context"
 	"strings"
 
 	"github.com/fatih/color"
@@ -50,7 +51,7 @@ var cfgSynopsis = []string{
 }
 
 // Config is used by the config command to allow users to view / edit their global and repository local configurations.
-func Config(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Config(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")

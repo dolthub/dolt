@@ -38,18 +38,18 @@ before running <b>dolt commit</b>.`
 
 var statusSynopsis = []string{""}
 
-func Status(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Status(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 
-	stagedDiffs, notStagedDiffs, err := actions.GetTableDiffs(context.Background(), dEnv)
+	stagedDiffs, notStagedDiffs, err := actions.GetTableDiffs(ctx, dEnv)
 
 	if err != nil {
 		panic(err) // fix
 	}
 
-	workingInConflict, _, _, err := actions.GetTablesInConflict(context.Background(), dEnv)
+	workingInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 
 	if err != nil {
 		panic(err) // fix

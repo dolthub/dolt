@@ -15,6 +15,7 @@
 package tblcmds
 
 import (
+	"context"
 	"os"
 
 	"github.com/fatih/color"
@@ -118,14 +119,14 @@ func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 	}
 }
 
-func Export(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Export(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	force, mvOpts := parseExportArgs(commandStr, args)
 
 	if mvOpts == nil {
 		return 1
 	}
 
-	result := executeMove(dEnv, force, mvOpts)
+	result := executeMove(ctx, dEnv, force, mvOpts)
 
 	if result == 0 {
 		cli.PrintErrln(color.CyanString("Successfully exported data."))

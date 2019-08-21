@@ -40,7 +40,7 @@ var catSynopsis = []string{
 	"[<commit>] <table>...",
 }
 
-func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Cat(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "List of tables to be printed. '.' can be used to print conflicts for all tables."
 	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
@@ -77,7 +77,7 @@ func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				return 1
 			}
 
-			verr = printConflicts(root, args)
+			verr = printConflicts(ctx, root, args)
 		}
 	}
 
@@ -89,10 +89,10 @@ func Cat(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
+func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
 	if len(tblNames) == 1 && tblNames[0] == "." {
 		var err error
-		tblNames, err = actions.AllTables(context.TODO(), root)
+		tblNames, err = actions.AllTables(ctx, root)
 
 		if err != nil {
 			return errhand.BuildDError("unable to read tables").AddCause(err).Build()
@@ -101,19 +101,19 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 
 	for _, tblName := range tblNames {
 		verr := func() errhand.VerboseError {
-			if has, err := root.HasTable(context.TODO(), tblName); err != nil {
+			if has, err := root.HasTable(ctx, tblName); err != nil {
 				return errhand.BuildDError("error: unable to read database").AddCause(err).Build()
 			} else if !has {
 				return errhand.BuildDError("error: unknown table '%s'", tblName).Build()
 			}
 
-			tbl, _, err := root.GetTable(context.TODO(), tblName)
+			tbl, _, err := root.GetTable(ctx, tblName)
 
 			if err != nil {
 
 			}
 
-			cnfRd, err := merge.NewConflictReader(context.TODO(), tbl)
+			cnfRd, err := merge.NewConflictReader(ctx, tbl)
 
 			if err == doltdb.ErrNoConflicts {
 				return nil
@@ -134,7 +134,7 @@ func printConflicts(root *doltdb.RootValue, tblNames []string) errhand.VerboseEr
 			)
 
 			// TODO: Pipeline should be contextified.
-			srcProcFunc := pipeline.ProcFuncForSourceFunc(func() (row.Row, pipeline.ImmutableProperties, error) { return cnfRd.NextConflict(context.TODO()) })
+			srcProcFunc := pipeline.ProcFuncForSourceFunc(func() (row.Row, pipeline.ImmutableProperties, error) { return cnfRd.NextConflict(ctx) })
 			sinkProcFunc := pipeline.ProcFuncForSinkFunc(cnfWr.ProcRowWithProps)
 			p := pipeline.NewAsyncPipeline(srcProcFunc, sinkProcFunc, transforms, func(failure *pipeline.TransformRowFailure) (quit bool) {
 				panic("")
