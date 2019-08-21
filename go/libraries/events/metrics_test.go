@@ -39,7 +39,7 @@ func TestTimer(t *testing.T) {
 	EventNowFunc = func() time.Time { return time.Date(2018, 8, 6, 10, 0, 0, 0, time.UTC) }
 	timer := NewTimer(eventsapi.MetricID_UNSPECIFIED_METRIC)
 	EventNowFunc = func() time.Time { return time.Date(2018, 8, 6, 10, 1, 0, 0, time.UTC) }
-	timer.ReStart()
+	timer.Restart()
 	EventNowFunc = func() time.Time { return time.Date(2018, 8, 6, 10, 1, 5, 123, time.UTC) }
 	timer.Stop()
 	EventNowFunc = time.Now

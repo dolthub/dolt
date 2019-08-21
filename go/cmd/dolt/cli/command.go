@@ -16,13 +16,13 @@ package cli
 
 import (
 	"context"
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"strings"
 
 	"github.com/fatih/color"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 )
 
 // CommandFunc specifies the signature of the functions that will be called based on the command line being executed.
