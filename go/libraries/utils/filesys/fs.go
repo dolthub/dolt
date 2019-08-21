@@ -16,6 +16,7 @@ package filesys
 
 import (
 	"io"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -37,11 +38,13 @@ type ReadableFS interface {
 
 	// converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 	Abs(path string) (string, error)
+
+	// LastModified gets the last modified timestamp for a file or directory at a given path
+	LastModified(path string) (t time.Time, exists bool)
 }
 
 // WritableFS is an interface providing write access to objs in a filesystem
 type WritableFS interface {
-
 	// OpenForWrite opens a file for writing.  The file will be created if it does not exist, and if it does exist
 	// it will be overwritten.
 	OpenForWrite(fp string) (io.WriteCloser, error)

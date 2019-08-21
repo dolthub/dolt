@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // LocalFS is the machines local filesystem
@@ -165,4 +166,15 @@ func (fs *localFS) MoveFile(srcPath, destPath string) error {
 // converts a path to an absolute path.  If it's already an absolute path the input path will be returned unaltered
 func (fs *localFS) Abs(path string) (string, error) {
 	return filepath.Abs(path)
+}
+
+// LastModified gets the last modified timestamp for a file or directory at a given path
+func (fs *localFS) LastModified(path string) (t time.Time, exists bool) {
+	stat, err := os.Stat(path)
+
+	if err != nil {
+		return time.Time{}, false
+	}
+
+	return stat.ModTime(), true
 }
