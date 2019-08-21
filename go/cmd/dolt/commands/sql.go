@@ -93,7 +93,7 @@ const (
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
-func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
@@ -108,7 +108,7 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
-		if newRoot, err := processQuery(query, dEnv, root); err != nil {
+		if newRoot, err := processQuery(ctx, query, dEnv, root); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		} else if newRoot != nil {
 			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, newRoot), usage)
@@ -121,12 +121,12 @@ func Sql(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	fi, err := os.Stdin.Stat()
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
-		root = runBatchMode(dEnv, root)
+		root = runBatchMode(ctx, dEnv, root)
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
 		var err error
-		root, err = runShell(dEnv, root)
+		root, err = runShell(ctx, dEnv, root)
 
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
@@ -160,7 +160,7 @@ func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err err
 }
 
 // runBatchMode processes queries until EOF and returns the resulting root value
-func runBatchMode(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
+func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(scanStatements)
 
@@ -168,7 +168,7 @@ func runBatchMode(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 
 	for scanner.Scan() {
 		query := scanner.Text()
-		if newRoot, err := processBatchQuery(query, dEnv, root, batcher); newRoot != nil {
+		if newRoot, err := processBatchQuery(ctx, query, dEnv, root, batcher); newRoot != nil {
 			root = newRoot
 		} else if err != nil {
 			_, _ = fmt.Fprintf(cli.CliErr, "Error processing query '%s': %s\n", query, err.Error())
@@ -179,7 +179,7 @@ func runBatchMode(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 		cli.Println(err.Error())
 	}
 
-	if newRoot, _ := batcher.Commit(context.Background()); newRoot != nil {
+	if newRoot, _ := batcher.Commit(ctx); newRoot != nil {
 		root = newRoot
 	}
 
@@ -187,7 +187,7 @@ func runBatchMode(dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
 }
 
 // runShell starts a SQL shell. Returns when the user exits the shell with the root value resulting from any queries.
-func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+func runShell(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	// start the doltsql shell
@@ -212,7 +212,7 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, err
 	shell := ishell.NewUninterpreted(&shellConf)
 	shell.SetMultiPrompt("      -> ")
 	// TODO: update completer on create / drop / alter statements
-	completer, err := newCompleter(dEnv)
+	completer, err := newCompleter(ctx, dEnv)
 
 	if err != nil {
 		return nil, err
@@ -238,7 +238,7 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, err
 			return
 		}
 
-		if newRoot, err := processQuery(query, dEnv, root); err != nil {
+		if newRoot, err := processQuery(ctx, query, dEnv, root); err != nil {
 			shell.Println(color.RedString(err.Error()))
 		} else if newRoot != nil {
 			root = newRoot
@@ -262,15 +262,15 @@ func runShell(dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, err
 }
 
 // Returns a new auto completer with table names, column names, and SQL keywords.
-func newCompleter(dEnv *env.DoltEnv) (*sqlCompleter, error) {
+func newCompleter(ctx context.Context, dEnv *env.DoltEnv) (*sqlCompleter, error) {
 	var completionWords []string
 
-	root, err := dEnv.WorkingRoot(context.TODO())
+	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return &sqlCompleter{}, nil
 	}
 
-	tableNames, err := root.GetTableNames(context.TODO())
+	tableNames, err := root.GetTableNames(ctx)
 
 	if err != nil {
 		return nil, err
@@ -279,13 +279,13 @@ func newCompleter(dEnv *env.DoltEnv) (*sqlCompleter, error) {
 	completionWords = append(completionWords, tableNames...)
 	var columnNames []string
 	for _, tableName := range tableNames {
-		tbl, _, err := root.GetTable(context.TODO(), tableName)
+		tbl, _, err := root.GetTable(ctx, tableName)
 
 		if err != nil {
 			return nil, err
 		}
 
-		sch, err := tbl.GetSchema(context.TODO())
+		sch, err := tbl.GetSchema(ctx)
 
 		if err != nil {
 			return nil, err
@@ -372,7 +372,7 @@ func prepend(s string, ss []string) []string {
 }
 
 // Processes a single query and returns the new root value of the DB, or an error encountered.
-func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+func processQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SQL: %v.", err.Error())
@@ -380,32 +380,32 @@ func processQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue) (*dol
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Show:
-		return nil, sqlShow(root, s)
+		return nil, sqlShow(ctx, root, s)
 	case *sqlparser.Select, *sqlparser.OtherRead:
 		sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
-			err = prettyPrintResults(root.VRW().Format(), sqlSch, rowIter)
+			err = prettyPrintResults(ctx, root.VRW().Format(), sqlSch, rowIter)
 		}
 		return nil, err
 	case *sqlparser.Insert:
-		return sqlInsert(dEnv, root, s)
+		return sqlInsert(ctx, dEnv, root, s)
 	case *sqlparser.Update:
-		return sqlUpdate(dEnv, root, s, query)
+		return sqlUpdate(ctx, dEnv, root, s, query)
 	case *sqlparser.Delete:
-		return sqlDelete(dEnv, root, s, query)
+		return sqlDelete(ctx, dEnv, root, s, query)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
 			return nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
 		}
-		return sqlDDL(dEnv, root, s, query)
+		return sqlDDL(ctx, dEnv, root, s, query)
 	default:
 		return nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 	}
 }
 
 // Processes a single query in batch mode and returns the result. The RootValue may or may not be changed.
-func processBatchQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue, batcher *dsql.SqlBatcher) (*doltdb.RootValue, error) {
+func processBatchQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *doltdb.RootValue, batcher *dsql.SqlBatcher) (*doltdb.RootValue, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, fmt.Errorf("Error parsing SQL: %v.", err.Error())
@@ -413,15 +413,15 @@ func processBatchQuery(query string, dEnv *env.DoltEnv, root *doltdb.RootValue, 
 
 	switch s := sqlStatement.(type) {
 	case *sqlparser.Insert:
-		return sqlInsertBatch(dEnv, root, s, batcher)
+		return sqlInsertBatch(ctx, dEnv, root, s, batcher)
 	default:
 		// For any other kind of statement, we need to commit whatever batch edit we've accumulated so far before executing
 		// the query
-		newRoot, err := batcher.Commit(context.Background())
+		newRoot, err := batcher.Commit(ctx)
 		if err != nil {
 			return nil, err
 		}
-		newRoot, err = processQuery(query, dEnv, newRoot)
+		newRoot, err = processQuery(ctx, query, dEnv, newRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -456,17 +456,17 @@ func sqlNewEngine(query string, root *doltdb.RootValue) (sql.Schema, sql.RowIter
 }
 
 // Executes a SQL show statement and prints the result to the CLI.
-func sqlShow(root *doltdb.RootValue, show *sqlparser.Show) error {
-	p, sch, err := dsql.BuildShowPipeline(context.TODO(), root, show)
+func sqlShow(ctx context.Context, root *doltdb.RootValue, show *sqlparser.Show) error {
+	p, sch, err := dsql.BuildShowPipeline(ctx, root, show)
 	if err != nil {
 		return err
 	}
 
-	return runPrintingPipeline(root.VRW().Format(), p, sch)
+	return runPrintingPipeline(ctx, root.VRW().Format(), p, sch)
 }
 
 // Pretty prints the output of the new SQL engine
-func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
+func prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	var chanErr error
 	doltSch := dsqle.SqlSchemaToDoltSchema(sqlSch)
 	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
@@ -513,13 +513,13 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 		return err
 	}
 
-	p.RunAfter(func() { wr.Close(context.TODO()) })
+	p.RunAfter(func() { wr.Close(ctx) })
 
-	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
+	cliSink := pipeline.ProcFuncForWriter(ctx, wr)
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, untypedSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, untypedSch)))
 		return true
 	})
 
@@ -552,7 +552,7 @@ func prettyPrintResults(nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql
 
 // Adds some print-handling stages to the pipeline given and runs it, returning any error.
 // Adds null-printing and fixed-width transformers. The schema given is assumed to be untyped (string-typed).
-func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untypedSch schema.Schema) error {
+func runPrintingPipeline(ctx context.Context, nbf *types.NomsBinFormat, p *pipeline.Pipeline, untypedSch schema.Schema) error {
 	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
@@ -568,13 +568,13 @@ func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untyped
 		return err
 	}
 
-	p.RunAfter(func() { wr.Close(context.TODO()) })
+	p.RunAfter(func() { wr.Close(ctx) })
 
-	cliSink := pipeline.ProcFuncForWriter(context.TODO(), wr)
+	cliSink := pipeline.ProcFuncForWriter(ctx, wr)
 	p.SetOutput(cliSink)
 
 	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(context.Background(), tff.Row, untypedSch)))
+		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, untypedSch)))
 		return true
 	})
 
@@ -602,8 +602,8 @@ func runPrintingPipeline(nbf *types.NomsBinFormat, p *pipeline.Pipeline, untyped
 }
 
 // Executes a SQL insert statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlInsert(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteInsert(context.Background(), dEnv.DoltDB, root, stmt)
+func sqlInsert(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert) (*doltdb.RootValue, error) {
+	result, err := dsql.ExecuteInsert(ctx, dEnv.DoltDB, root, stmt)
 	if err != nil {
 		return nil, fmt.Errorf("Error inserting rows: %v", err.Error())
 	}
@@ -630,8 +630,8 @@ var displayStrLen int
 
 // Executes a SQL insert statement in batch mode and returns the new root value (which is usually unchanged) or an
 // error. No output is written to the console in batch mode.
-func sqlInsertBatch(dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, batcher *dsql.SqlBatcher) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteBatchInsert(context.Background(), root, stmt, batcher)
+func sqlInsertBatch(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert, batcher *dsql.SqlBatcher) (*doltdb.RootValue, error) {
+	result, err := dsql.ExecuteBatchInsert(ctx, root, stmt, batcher)
 	if err != nil {
 		return nil, fmt.Errorf("Error inserting rows: %v", err.Error())
 	}
@@ -655,8 +655,8 @@ func mergeResultIntoStats(result *dsql.InsertResult, stats *stats) {
 }
 
 // Executes a SQL update statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteUpdate(context.Background(), dEnv.DoltDB, root, update, query)
+func sqlUpdate(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) (*doltdb.RootValue, error) {
+	result, err := dsql.ExecuteUpdate(ctx, dEnv.DoltDB, root, update, query)
 	if err != nil {
 		return nil, fmt.Errorf("Error during update: %v", err.Error())
 	}
@@ -670,8 +670,8 @@ func sqlUpdate(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Upda
 }
 
 // Executes a SQL delete statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteDelete(context.Background(), dEnv.DoltDB, root, update, query)
+func sqlDelete(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) (*doltdb.RootValue, error) {
+	result, err := dsql.ExecuteDelete(ctx, dEnv.DoltDB, root, update, query)
 	if err != nil {
 		return nil, fmt.Errorf("Error during update: %v", err.Error())
 	}
@@ -682,22 +682,22 @@ func sqlDelete(dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Dele
 }
 
 // Executes a SQL DDL statement (create, update, etc.). Returns the new root value to be written as appropriate.
-func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
+func sqlDDL(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	switch ddl.Action {
 	case sqlparser.CreateStr:
-		newRoot, _, err := dsql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
+		newRoot, _, err := dsql.ExecuteCreate(ctx, dEnv.DoltDB, root, ddl, query)
 		if err != nil {
 			return nil, fmt.Errorf("Error creating table: %v", err)
 		}
 		return newRoot, nil
 	case sqlparser.AlterStr, sqlparser.RenameStr:
-		newRoot, err := dsql.ExecuteAlter(context.Background(), dEnv.DoltDB, root, ddl, query)
+		newRoot, err := dsql.ExecuteAlter(ctx, dEnv.DoltDB, root, ddl, query)
 		if err != nil {
 			return nil, fmt.Errorf("Error altering table: %v", err)
 		}
 		return newRoot, nil
 	case sqlparser.DropStr:
-		newRoot, err := dsql.ExecuteDrop(context.Background(), dEnv.DoltDB, root, ddl, query)
+		newRoot, err := dsql.ExecuteDrop(ctx, dEnv.DoltDB, root, ddl, query)
 		if err != nil {
 			return nil, fmt.Errorf("Error dropping table: %v", err)
 		}

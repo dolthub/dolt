@@ -36,7 +36,7 @@ var addSynopsis = []string{
 	`[<table>...]`,
 }
 
-func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Add(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."
 	ap.SupportsFlag(allParam, "a", "Stages any and all changes (adds, deletes, and modifications).")
@@ -49,9 +49,9 @@ func Add(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if apr.NArg() == 0 && !allFlag {
 		cli.Println("Nothing specified, nothing added.\n Maybe you wanted to say 'dolt add .'?")
 	} else if allFlag || apr.NArg() == 1 && apr.Arg(0) == "." {
-		err = actions.StageAllTables(context.Background(), dEnv, false)
+		err = actions.StageAllTables(ctx, dEnv, false)
 	} else {
-		err = actions.StageTables(context.Background(), dEnv, apr.Args(), false)
+		err = actions.StageTables(ctx, dEnv, apr.Args(), false)
 	}
 
 	if err != nil {

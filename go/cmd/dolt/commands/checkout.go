@@ -44,7 +44,7 @@ var coSynopsis = []string{
 	`-b <new-branch> [<start-point>]`,
 }
 
-func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	const coBranchArg = "b"
 	ap := argparser.NewArgParser()
 	ap.SupportsString(coBranchArg, "", "branch", "Create a new branch named <new_branch> and start it at <start_point>.")
@@ -64,17 +64,17 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 				startPt = apr.Arg(0)
 			}
 
-			verr = checkoutNewBranch(dEnv, newBranch, startPt)
+			verr = checkoutNewBranch(ctx, dEnv, newBranch, startPt)
 		} else {
 			name := apr.Arg(0)
-			isBranch, rootsWithTable, err := actions.BranchOrTable(context.Background(), dEnv, name)
+			isBranch, rootsWithTable, err := actions.BranchOrTable(ctx, dEnv, name)
 
 			if err != nil {
 				verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 			} else if !rootsWithTable.IsEmpty() || apr.NArg() > 1 {
-				verr = checkoutTable(dEnv, apr.Args())
+				verr = checkoutTable(ctx, dEnv, apr.Args())
 			} else if isBranch {
-				verr = checkoutBranch(dEnv, name)
+				verr = checkoutBranch(ctx, dEnv, name)
 			} else {
 				verr = errhand.BuildDError("error: could not find %s", name).Build()
 			}
@@ -89,18 +89,18 @@ func Checkout(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func checkoutNewBranch(dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
-	verr := createBranchWithStartPt(dEnv, newBranch, startPt, false)
+func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
+	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, false)
 
 	if verr != nil {
 		return verr
 	}
 
-	return checkoutBranch(dEnv, newBranch)
+	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
-func checkoutTable(dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
-	err := actions.CheckoutTables(context.Background(), dEnv, tables)
+func checkoutTable(ctx context.Context, dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
+	err := actions.CheckoutTables(ctx, dEnv, tables)
 
 	if err != nil {
 		if actions.IsRootValUnreachable(err) {
@@ -123,8 +123,8 @@ func checkoutTable(dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
 	return nil
 }
 
-func checkoutBranch(dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	err := actions.CheckoutBranch(context.Background(), dEnv, name)
+func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
+	err := actions.CheckoutBranch(ctx, dEnv, name)
 
 	if err != nil {
 		if err == doltdb.ErrBranchNotFound {

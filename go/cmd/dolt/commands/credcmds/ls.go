@@ -15,6 +15,7 @@
 package credcmds
 
 import (
+	"context"
 	"strings"
 
 	"github.com/fatih/color"
@@ -31,7 +32,7 @@ var lsShortDesc = ""
 var lsLongDesc = ""
 var lsSynopsis = []string{}
 
-func Ls(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Ls(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
 	cli.ParseArgs(ap, args, help)

@@ -77,11 +77,11 @@ func printDesc(cm *doltdb.CommitMeta) {
 	cli.Println(formattedDesc)
 }
 
-func Log(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return logWithLoggerFunc(commandStr, args, dEnv, logToStdOutFunc)
+func Log(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	return logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
 }
 
-func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
+func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
@@ -104,7 +104,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 		return 1
 	}
 
-	commit, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
+	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot get HEAD commit for current branch."))
@@ -112,7 +112,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 	}
 
 	n := apr.GetIntOrDefault(numLinesParam, -1)
-	commits, err := actions.TimeSortedCommits(context.TODO(), dEnv.DoltDB, commit, n)
+	commits, err := actions.TimeSortedCommits(ctx, dEnv.DoltDB, commit, n)
 
 	if err != nil {
 		cli.PrintErrln("Error retrieving commit.")
@@ -127,7 +127,7 @@ func logWithLoggerFunc(commandStr string, args []string, dEnv *env.DoltEnv, logg
 			return 1
 		}
 
-		pHashes, err := comm.ParentHashes(context.TODO())
+		pHashes, err := comm.ParentHashes(ctx)
 
 		if err != nil {
 			cli.PrintErrln("error: failed to get parent hashes")

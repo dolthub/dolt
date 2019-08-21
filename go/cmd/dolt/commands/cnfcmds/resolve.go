@@ -61,7 +61,7 @@ func init() {
 	}
 }
 
-func Resolve(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Resolve(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."
 	ap.ArgListHelp["key"] = "key(s) of rows within a table whose conflicts have been resolved"
@@ -72,15 +72,15 @@ func Resolve(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	var verr errhand.VerboseError
 	if apr.ContainsAny(autoResolverParams...) {
-		verr = autoResolve(apr, dEnv)
+		verr = autoResolve(ctx, apr, dEnv)
 	} else {
-		verr = manualResolve(apr, dEnv)
+		verr = manualResolve(ctx, apr, dEnv)
 	}
 
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func autoResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
+func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	funcFlags := apr.FlagsEqualTo(autoResolverParams, true)
 
 	if funcFlags.Size() > 1 {
@@ -95,9 +95,9 @@ func autoResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Verb
 	var err error
 	tbls := apr.Args()
 	if len(tbls) == 1 && tbls[0] == "." {
-		err = actions.AutoResolveAll(context.Background(), dEnv, autoResolveFunc)
+		err = actions.AutoResolveAll(ctx, dEnv, autoResolveFunc)
 	} else {
-		err = actions.AutoResolveTables(context.Background(), dEnv, autoResolveFunc, tbls)
+		err = actions.AutoResolveTables(ctx, dEnv, autoResolveFunc, tbls)
 	}
 
 	if err != nil {
@@ -112,7 +112,7 @@ func autoResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Verb
 	return nil
 }
 
-func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
+func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
 	args := apr.Args()
 
 	if len(args) < 2 {
@@ -126,19 +126,19 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 	}
 
 	tblName := args[0]
-	if has, err := root.HasTable(context.TODO(), tblName); err != nil {
+	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("error: could not read tables").AddCause(err).Build()
 	} else if !has {
 		return errhand.BuildDError("error: table '%s' not found", tblName).Build()
 	}
 
-	tbl, _, err := root.GetTable(context.TODO(), tblName)
+	tbl, _, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
 	}
 
-	sch, err := tbl.GetSchema(context.TODO())
+	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
@@ -150,7 +150,7 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 		return errhand.BuildDError("error: parsing command line").AddCause(err).Build()
 	}
 
-	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(context.TODO(), keysToResolve)
+	invalid, notFound, updatedTbl, err := tbl.ResolveConflicts(ctx, keysToResolve)
 
 	if err != nil {
 		verr = errhand.BuildDError("fatal: Failed to resolve conflicts").AddCause(err).Build()
@@ -176,7 +176,7 @@ func manualResolve(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.Ve
 		}
 
 		if hash == updatedHash {
-			root, err := root.PutTable(context.TODO(), dEnv.DoltDB, tblName, updatedTbl)
+			root, err := root.PutTable(ctx, dEnv.DoltDB, tblName, updatedTbl)
 
 			if err != nil {
 				return errhand.BuildDError("").AddCause(err).Build()

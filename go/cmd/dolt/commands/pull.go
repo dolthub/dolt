@@ -34,7 +34,7 @@ var pullSynopsis = []string{
 	"<remote>",
 }
 
-func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Pull(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
@@ -60,7 +60,7 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 				for _, refSpec := range refSpecs {
 					if remoteTrackRef := refSpec.DestRef(branch); remoteTrackRef != nil {
-						verr = pullRemoteBranch(dEnv, remote, branch, remoteTrackRef)
+						verr = pullRemoteBranch(ctx, dEnv, remote, branch, remoteTrackRef)
 
 						if verr != nil {
 							break
@@ -74,18 +74,18 @@ func Pull(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func pullRemoteBranch(dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
-	srcDB, err := r.GetRemoteDB(context.TODO(), dEnv.DoltDB.ValueReadWriter().Format())
+func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcRef, destRef ref.DoltRef) errhand.VerboseError {
+	srcDB, err := r.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
 	}
 
-	verr := fetchRemoteBranch(r, srcDB, dEnv.DoltDB, srcRef, destRef)
+	verr := fetchRemoteBranch(ctx, r, srcDB, dEnv.DoltDB, srcRef, destRef)
 
 	if verr != nil {
 		return verr
 	}
 
-	return mergeBranch(dEnv, destRef)
+	return mergeBranch(ctx, dEnv, destRef)
 }

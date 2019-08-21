@@ -61,7 +61,7 @@ func parseRmRowArgs(commandStr string, args []string) *rmRowArgs {
 	return &rmRowArgs{tableName, pks}
 }
 
-func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func RmRow(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	rmArgs := parseRmRowArgs(commandStr, args)
 
 	if rmArgs == nil {
@@ -70,10 +70,10 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	var root *doltdb.RootValue
 	var tbl *doltdb.Table
-	root, tbl, verr := getRootAndTable(dEnv, rmArgs.TableName)
+	root, tbl, verr := getRootAndTable(ctx, dEnv, rmArgs.TableName)
 
 	if verr == nil {
-		sch, err := tbl.GetSchema(context.TODO())
+		sch, err := tbl.GetSchema(ctx)
 
 		if err != nil {
 			verr = errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
@@ -83,7 +83,7 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 			if err != nil {
 				verr = errhand.BuildDError("error parsing keys to delete").AddCause(err).Build()
 			} else {
-				verr = updateTableWithRowsRemoved(root, tbl, rmArgs.TableName, pkVals, dEnv)
+				verr = updateTableWithRowsRemoved(ctx, root, tbl, rmArgs.TableName, pkVals, dEnv)
 			}
 		}
 	}
@@ -96,14 +96,14 @@ func RmRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *doltdb.Table, errhand.VerboseError) {
-	root, err := dEnv.WorkingRoot(context.Background())
+func getRootAndTable(ctx context.Context, dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *doltdb.Table, errhand.VerboseError) {
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Unable to get working value for the dolt data repository.").Build()
 	}
 
-	tbl, ok, err := root.GetTable(context.TODO(), tblName)
+	tbl, ok, err := root.GetTable(ctx, tblName)
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("error: failde to get tables").AddCause(err).Build()
@@ -116,8 +116,8 @@ func getRootAndTable(dEnv *env.DoltEnv, tblName string) (*doltdb.RootValue, *dol
 	return root, tbl, nil
 }
 
-func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblName string, pkVals []types.Value, dEnv *env.DoltEnv) errhand.VerboseError {
-	m, err := tbl.GetRowData(context.TODO())
+func updateTableWithRowsRemoved(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.Table, tblName string, pkVals []types.Value, dEnv *env.DoltEnv) errhand.VerboseError {
+	m, err := tbl.GetRowData(ctx)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get row data").Build()
@@ -125,14 +125,14 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 
 	updates := 0
 	for _, pk := range pkVals {
-		_, ok, err := m.MaybeGet(context.TODO(), pk)
+		_, ok, err := m.MaybeGet(ctx, pk)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to read from database").Build()
 		}
 
 		if !ok {
-			str, err := types.EncodedValue(context.TODO(), pk)
+			str, err := types.EncodedValue(ctx, pk)
 
 			if err != nil {
 				panic(err)
@@ -144,7 +144,7 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 
 		me := m.Edit()
 		me.Remove(pk)
-		m, err = me.Map(context.TODO())
+		m, err = me.Map(ctx)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to remove row from table").Build()
@@ -153,13 +153,13 @@ func updateTableWithRowsRemoved(root *doltdb.RootValue, tbl *doltdb.Table, tblNa
 		updates++
 	}
 
-	tbl, err = tbl.UpdateRows(context.Background(), m)
+	tbl, err = tbl.UpdateRows(ctx, m)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to update the table").AddCause(err).Build()
 	}
 
-	root, err = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
+	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to update the table").AddCause(err).Build()

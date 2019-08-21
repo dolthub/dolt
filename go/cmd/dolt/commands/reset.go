@@ -52,16 +52,14 @@ var resetSynopsis = []string{
 	"[--hard | --soft]",
 }
 
-func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ctx := context.TODO()
-
+func Reset(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since <commit> are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	workingRoot, stagedRoot, headRoot, verr := getAllRoots(dEnv)
+	workingRoot, stagedRoot, headRoot, verr := getAllRoots(ctx, dEnv)
 
 	if verr == nil {
 		if apr.ContainsAll(HardResetParam, SoftResetParam) {
@@ -69,7 +67,7 @@ func Reset(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		} else if apr.Contains(HardResetParam) {
 			verr = resetHard(ctx, dEnv, apr, workingRoot, headRoot)
 		} else {
-			verr = resetSoft(dEnv, apr, stagedRoot, headRoot)
+			verr = resetSoft(ctx, dEnv, apr, stagedRoot, headRoot)
 		}
 	}
 
@@ -132,12 +130,12 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	return nil
 }
 
-func resetSoft(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
+func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
 	tbls := apr.Args()
 
 	if len(tbls) == 0 || (len(tbls) == 1 && tbls[0] == ".") {
 		var err error
-		tbls, err = actions.AllTables(context.TODO(), stagedRoot, headRoot)
+		tbls, err = actions.AllTables(ctx, stagedRoot, headRoot)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
@@ -150,25 +148,25 @@ func resetSoft(dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, he
 		return verr
 	}
 
-	stagedRoot, verr = resetStaged(dEnv, tbls, stagedRoot, headRoot)
+	stagedRoot, verr = resetStaged(ctx, dEnv, tbls, stagedRoot, headRoot)
 
 	if verr != nil {
 		return verr
 	}
 
-	printNotStaged(dEnv, stagedRoot)
+	printNotStaged(ctx, dEnv, stagedRoot)
 	return nil
 }
 
-func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
+func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	// Printing here is best effort.  Fail silently
-	working, err := dEnv.WorkingRoot(context.Background())
+	working, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return
 	}
 
-	notStaged, err := actions.NewTableDiffs(context.TODO(), working, staged)
+	notStaged, err := actions.NewTableDiffs(ctx, working, staged)
 
 	if err != nil {
 		return
@@ -190,8 +188,8 @@ func printNotStaged(dEnv *env.DoltEnv, staged *doltdb.RootValue) {
 	}
 }
 
-func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
-	updatedRoot, err := staged.UpdateTablesFromOther(context.TODO(), tbls, head)
+func resetStaged(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValue) (*doltdb.RootValue, errhand.VerboseError) {
+	updatedRoot, err := staged.UpdateTablesFromOther(ctx, tbls, head)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: failed to update tables").AddCause(err).Build()
@@ -200,20 +198,20 @@ func resetStaged(dEnv *env.DoltEnv, tbls []string, staged, head *doltdb.RootValu
 	return updatedRoot, UpdateStagedWithVErr(dEnv, updatedRoot)
 }
 
-func getAllRoots(dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
-	workingRoot, err := dEnv.WorkingRoot(context.Background())
+func getAllRoots(ctx context.Context, dEnv *env.DoltEnv) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, errhand.VerboseError) {
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
 	}
 
-	stagedRoot, err := dEnv.StagedRoot(context.Background())
+	stagedRoot, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return nil, nil, nil, errhand.BuildDError("Unable to get staged.").AddCause(err).Build()
 	}
 
-	headRoot, err := dEnv.HeadRoot(context.TODO())
+	headRoot, err := dEnv.HeadRoot(ctx)
 
 	if err != nil {
 		return nil, nil, nil, errhand.BuildDError("Unable to get at HEAD.").AddCause(err).Build()

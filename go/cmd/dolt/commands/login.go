@@ -40,7 +40,7 @@ var loginSynopsis = []string{
 	"[<creds>]",
 }
 
-func Login(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Login(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["creds"] = "A specific credential to use for login."
 	help, usage := cli.HelpAndUsagePrinters(commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
@@ -48,9 +48,9 @@ func Login(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	var verr errhand.VerboseError
 	if apr.NArg() == 0 {
-		verr = loginWithNewCreds(dEnv)
+		verr = loginWithNewCreds(ctx, dEnv)
 	} else if apr.NArg() == 1 {
-		verr = loginWithExistingCreds(dEnv, apr.Arg(0))
+		verr = loginWithExistingCreds(ctx, dEnv, apr.Arg(0))
 	} else {
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -58,7 +58,7 @@ func Login(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func loginWithNewCreds(dEnv *env.DoltEnv) errhand.VerboseError {
+func loginWithNewCreds(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
 	path, dc, err := actions.NewCredsFile(dEnv)
 
 	if err != nil {
@@ -67,10 +67,10 @@ func loginWithNewCreds(dEnv *env.DoltEnv) errhand.VerboseError {
 
 	cli.Println(path)
 
-	return loginWithCreds(dEnv, dc)
+	return loginWithCreds(ctx, dEnv, dc)
 }
 
-func loginWithExistingCreds(dEnv *env.DoltEnv, idOrPubKey string) errhand.VerboseError {
+func loginWithExistingCreds(ctx context.Context, dEnv *env.DoltEnv, idOrPubKey string) errhand.VerboseError {
 	credsDir, err := dEnv.CredsDir()
 
 	if err != nil {
@@ -89,10 +89,10 @@ func loginWithExistingCreds(dEnv *env.DoltEnv, idOrPubKey string) errhand.Verbos
 		return errhand.BuildDError("error: failed to load creds from file").AddCause(err).Build()
 	}
 
-	return loginWithCreds(dEnv, dc)
+	return loginWithCreds(ctx, dEnv, dc)
 }
 
-func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError {
+func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError {
 	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
 	url := fmt.Sprintf("%s#%s", *loginUrl, dc.PubKeyBase32Str())
 
@@ -115,7 +115,7 @@ func loginWithCreds(dEnv *env.DoltEnv, dc creds.DoltCreds) errhand.VerboseError 
 	var whoAmI *remotesapi.WhoAmIResponse
 	for whoAmI == nil {
 		prevMsgLen = cli.DeleteAndPrint(prevMsgLen, "requesting update")
-		whoAmI, err = grpcClient.WhoAmI(context.Background(), &remotesapi.WhoAmIRequest{})
+		whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 
 		if err != nil {
 			for i := 0; i < loginRetryInterval; i++ {

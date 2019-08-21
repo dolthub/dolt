@@ -15,6 +15,8 @@
 package credcmds
 
 import (
+	"context"
+
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -28,7 +30,7 @@ var rmShortDesc = ""
 var rmLongDesc = ""
 var rmSynopsis = []string{}
 
-func Rm(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Rm(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)

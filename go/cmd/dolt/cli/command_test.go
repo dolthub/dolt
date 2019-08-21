@@ -15,6 +15,7 @@
 package cli
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
@@ -36,7 +37,7 @@ func (tf *trackedCommandFunc) wasCalled() bool {
 	return tf.called
 }
 
-func (tf *trackedCommandFunc) commandFunc(cmdStr string, args []string, dEnv *env.DoltEnv) int {
+func (tf *trackedCommandFunc) commandFunc(ctx context.Context, cmdStr string, args []string, dEnv *env.DoltEnv) int {
 	tf.called = true
 	tf.cmdStr = cmdStr
 	tf.args = args
@@ -102,5 +103,5 @@ func runCommand(root *Command, commandLine string) int {
 		panic("Invalid test commandh line")
 	}
 
-	return root.Func(appName, tokens[1:], nil)
+	return root.Func(context.Background(), appName, tokens[1:], nil)
 }

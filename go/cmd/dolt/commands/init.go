@@ -41,7 +41,7 @@ var initSynopsis = []string{
 }
 
 // Init is used by the init command
-func Init(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Init(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", "The name used in commits to this repo. If not provided will be taken from \""+env.UserNameKey+"\" in the global config.")
 	ap.SupportsString(emailParamName, "", "email", "The email address used. If not provided will be taken from \""+env.UserEmailKey+"\" in the global config.")

@@ -42,7 +42,7 @@ var tblCreateSynopsis = []string{
 	"[-f] -s <schema_file> <table>...",
 }
 
-func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Create(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	//ap.ArgListHelp["field_descriptor"] = fieldDescriptorHelp
 	ap.ArgListHelp["table"] = "name of the table being created."
@@ -56,7 +56,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	schVal, verr := readSchema(apr, dEnv)
+	schVal, verr := readSchema(ctx, apr, dEnv)
 
 	if verr == nil {
 		var root *doltdb.RootValue
@@ -64,13 +64,13 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 		if verr == nil {
 			force := apr.Contains(forceParam)
-			m, err := types.NewMap(context.TODO(), root.VRW())
+			m, err := types.NewMap(ctx, root.VRW())
 
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("").AddCause(err).Build(), nil)
 			}
 
-			tbl, err := doltdb.NewTable(context.Background(), root.VRW(), schVal, m)
+			tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, m)
 
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("").AddCause(err).Build(), nil)
@@ -78,7 +78,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 			for i := 0; i < apr.NArg() && verr == nil; i++ {
 				tblName := apr.Arg(i)
-				has, err := root.HasTable(context.TODO(), tblName)
+				has, err := root.HasTable(ctx, tblName)
 
 				if err != nil {
 
@@ -87,7 +87,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 					bdr.AddDetails("Use -f to overwrite the table with the specified schema and empty row data.")
 					verr = bdr.AddDetails("aborting").Build()
 				} else {
-					root, err = root.PutTable(context.Background(), dEnv.DoltDB, tblName, tbl)
+					root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
 
 					if err != nil {
 						verr = errhand.BuildDError("error: failed to write table back to database.").AddCause(err).Build()
@@ -104,7 +104,7 @@ func Create(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
-func readSchema(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (types.Value, errhand.VerboseError) {
+func readSchema(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (types.Value, errhand.VerboseError) {
 	if !apr.Contains(outSchemaParam) {
 		return nil, errhand.BuildDError("fatal: missing required parameter 'schema'").SetPrintUsage().Build()
 	}
@@ -136,7 +136,7 @@ func readSchema(apr *argparser.ArgParseResults, dEnv *env.DoltEnv) (types.Value,
 		return nil, errhand.BuildDError("Invalid schema does not have a primary key.").Build()
 	}
 
-	schVal, err := encoding.MarshalAsNomsValue(context.TODO(), dEnv.DoltDB.ValueReadWriter(), sch)
+	schVal, err := encoding.MarshalAsNomsValue(ctx, dEnv.DoltDB.ValueReadWriter(), sch)
 
 	if err != nil {
 		//I dont really understand the cases where this would happen.

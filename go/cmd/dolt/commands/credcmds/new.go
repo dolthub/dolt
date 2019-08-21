@@ -15,6 +15,8 @@
 package credcmds
 
 import (
+	"context"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -26,7 +28,7 @@ var newShortDesc = ""
 var newLongDesc = ""
 var newSynopsis = []string{}
 
-func New(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func New(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, newShortDesc, newLongDesc, newSynopsis, ap)
 	cli.ParseArgs(ap, args, help)

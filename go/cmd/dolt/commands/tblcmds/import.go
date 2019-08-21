@@ -200,14 +200,14 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	return mvOp, tableLoc, srcLoc, srcOpts
 }
 
-func Import(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Import(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	force, mvOpts := parseCreateArgs(commandStr, args)
 
 	if mvOpts == nil {
 		return 1
 	}
 
-	res := executeMove(dEnv, force, mvOpts)
+	res := executeMove(ctx, dEnv, force, mvOpts)
 
 	if res == 0 {
 		cli.Println(color.CyanString("\nImport completed successfully."))
@@ -268,8 +268,8 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {
-	root, err := dEnv.WorkingRoot(context.Background())
+func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int {
+	root, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Unable to get the working root value for this data repository."))
@@ -278,7 +278,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 
 	_, isStdOut := mvOpts.Dest.(mvdata.StreamDataLocation)
 	if !isStdOut && mvOpts.Operation == mvdata.OverwriteOp && !force {
-		if exists, err := mvOpts.Dest.Exists(context.TODO(), root, dEnv.FS); err != nil {
+		if exists, err := mvOpts.Dest.Exists(ctx, root, dEnv.FS); err != nil {
 			cli.Println(color.RedString(err.Error()))
 			return 1
 		} else if exists {
@@ -299,7 +299,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		}
 	}
 
-	mover, nDMErr := mvdata.NewDataMover(context.TODO(), root, dEnv.FS, mvOpts, importStatsCB)
+	mover, nDMErr := mvdata.NewDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
 		verr := newDataMoverErrToVerr(mvOpts, nDMErr)
@@ -307,7 +307,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 		return 1
 	}
 
-	err = mover.Move(context.TODO())
+	err = mover.Move(ctx)
 
 	if err != nil {
 		cli.Println()
@@ -317,7 +317,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 
 			r := pipeline.GetTransFailureRow(err)
 			if r != nil {
-				bdr.AddDetails("Bad Row:" + row.Fmt(context.TODO(), r, mover.Rd.GetSchema()))
+				bdr.AddDetails("Bad Row:" + row.Fmt(ctx, r, mover.Rd.GetSchema()))
 			}
 
 			details := pipeline.GetTransFailureDetails(err)
@@ -335,7 +335,7 @@ func executeMove(dEnv *env.DoltEnv, force bool, mvOpts *mvdata.MoveOptions) int 
 
 	if nomsWr, ok := mover.Wr.(noms.NomsMapWriteCloser); ok {
 		tableDest := mvOpts.Dest.(mvdata.TableDataLocation)
-		err = dEnv.PutTableToWorking(context.Background(), *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name)
+		err = dEnv.PutTableToWorking(ctx, *nomsWr.GetMap(), nomsWr.GetSchema(), tableDest.Name)
 
 		if err != nil {
 			cli.PrintErrln(color.RedString("Failed to update the working value."))

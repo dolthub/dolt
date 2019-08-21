@@ -102,14 +102,14 @@ func parseKVPs(args []string) ([]string, map[string]string, errhand.VerboseError
 	return fieldNames, kvps, nil
 }
 
-func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func PutRow(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	prArgs := parsePutRowArgs(commandStr, args)
 
 	if prArgs == nil {
 		return 1
 	}
 
-	root, err := dEnv.WorkingRoot(context.Background())
+	root, err := dEnv.WorkingRoot(ctx)
 	fmt := root.VRW().Format()
 
 	if err != nil {
@@ -117,7 +117,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	tbl, ok, err := root.GetTable(context.TODO(), prArgs.TableName)
+	tbl, ok, err := root.GetTable(ctx, prArgs.TableName)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("error: failed to read tables: " + err.Error()))
@@ -129,7 +129,7 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		return 1
 	}
 
-	sch, err := tbl.GetSchema(context.TODO())
+	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("error: failed to read schema: " + err.Error()))
@@ -139,23 +139,23 @@ func PutRow(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	row, verr := createRow(fmt, sch, prArgs)
 
 	if verr == nil {
-		m, err := tbl.GetRowData(context.TODO())
+		m, err := tbl.GetRowData(ctx)
 
 		if err != nil {
 			verr = errhand.BuildDError("error: failed to get row data.").AddCause(err).Build()
 		} else {
 			me := m.Edit()
-			updated, err := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map(context.TODO())
+			updated, err := me.Set(row.NomsMapKey(sch), row.NomsMapValue(sch)).Map(ctx)
 
 			if err != nil {
 				verr = errhand.BuildDError("error: failed to modify table").AddCause(err).Build()
 			} else {
-				tbl, err = tbl.UpdateRows(context.Background(), updated)
+				tbl, err = tbl.UpdateRows(ctx, updated)
 
 				if err != nil {
 					verr = errhand.BuildDError("error: failed to update rows").AddCause(err).Build()
 				} else {
-					root, err = root.PutTable(context.Background(), dEnv.DoltDB, prArgs.TableName, tbl)
+					root, err = root.PutTable(ctx, dEnv.DoltDB, prArgs.TableName, tbl)
 
 					if err != nil {
 						verr = errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()

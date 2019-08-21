@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"context"
 	"net"
 	"strconv"
 	"time"
@@ -32,7 +33,7 @@ import (
 )
 
 // serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func serve(serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController) (startError error, closeError error) {
+func serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()

@@ -69,7 +69,7 @@ var diffSynopsis = []string{
 	"[options] <commit> <commit> [--data|--schema] [<tables>...]",
 }
 
-func Diff(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
@@ -83,10 +83,10 @@ func Diff(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		diffParts = SchemaOnlyDiff
 	}
 
-	r1, r2, tables, verr := getRoots(apr.Args(), dEnv)
+	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
 
 	if verr == nil {
-		verr = diffRoots(r1, r2, tables, diffParts, dEnv)
+		verr = diffRoots(ctx, r1, r2, tables, diffParts, dEnv)
 	}
 
 	if verr != nil {
@@ -98,13 +98,13 @@ func Diff(commandStr string, args []string, dEnv *env.DoltEnv) int {
 }
 
 // this doesnt work correctly.  Need to be able to distinguish commits from tables
-func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, tables []string, verr errhand.VerboseError) {
+func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, tables []string, verr errhand.VerboseError) {
 	roots := make([]*doltdb.RootValue, 2)
 
 	i := 0
 	for _, arg := range args {
 		if cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.Head.Ref.String()); err == nil {
-			if cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs); err == nil {
+			if cm, err := dEnv.DoltDB.Resolve(ctx, cs); err == nil {
 				roots[i], err = cm.GetRootValue()
 
 				if err != nil {
@@ -134,13 +134,13 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 
 	for ; i < len(args); i++ {
 		tbl := args[i]
-		has0, err := roots[0].HasTable(context.TODO(), tbl)
+		has0, err := roots[0].HasTable(ctx, tbl)
 
 		if err != nil {
 			return nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
 		}
 
-		has1, err := roots[1].HasTable(context.TODO(), tbl)
+		has1, err := roots[1].HasTable(ctx, tbl)
 
 		if err != nil {
 			return nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
@@ -157,7 +157,7 @@ func getRoots(args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, table
 	return roots[0], roots[1], tables, nil
 }
 
-func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.RootValue, errhand.VerboseError) {
+func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEnv) (string, *doltdb.RootValue, errhand.VerboseError) {
 	cs, err := doltdb.NewCommitSpec(csStr, dEnv.RepoState.Head.Ref.String())
 
 	if err != nil {
@@ -165,7 +165,7 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 		return "", nil, bdr.AddCause(err).Build()
 	}
 
-	cm, err := dEnv.DoltDB.Resolve(context.TODO(), cs)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()
@@ -186,10 +186,10 @@ func getRootForCommitSpecStr(csStr string, dEnv *env.DoltEnv) (string, *doltdb.R
 	return h.String(), r, nil
 }
 
-func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv) errhand.VerboseError {
+func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
-		tblNames, err = actions.AllTables(context.TODO(), r1, r2)
+		tblNames, err = actions.AllTables(ctx, r1, r2)
 	}
 
 	if err != nil {
@@ -197,13 +197,13 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 	}
 
 	for _, tblName := range tblNames {
-		tbl1, ok1, err := r1.GetTable(context.TODO(), tblName)
+		tbl1, ok1, err := r1.GetTable(ctx, tblName)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
 		}
 
-		tbl2, ok2, err := r2.GetTable(context.TODO(), tblName)
+		tbl2, ok2, err := r2.GetTable(ctx, tblName)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to get table '%s'", tblName).AddCause(err).Build()
@@ -241,20 +241,20 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 		var sch2 schema.Schema
 		var sch1Hash hash.Hash
 		var sch2Hash hash.Hash
-		rowData1, err := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+		rowData1, err := types.NewMap(ctx, dEnv.DoltDB.ValueReadWriter())
 
 		if err != nil {
 			return errhand.BuildDError("").AddCause(err).Build()
 		}
 
-		rowData2, err := types.NewMap(context.TODO(), dEnv.DoltDB.ValueReadWriter())
+		rowData2, err := types.NewMap(ctx, dEnv.DoltDB.ValueReadWriter())
 
 		if err != nil {
 			return errhand.BuildDError("").AddCause(err).Build()
 		}
 
 		if ok1 {
-			sch1, err = tbl1.GetSchema(context.TODO())
+			sch1, err = tbl1.GetSchema(ctx)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
@@ -267,7 +267,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 			}
 
 			sch1Hash = schRef.TargetHash()
-			rowData1, err = tbl1.GetRowData(context.TODO())
+			rowData1, err = tbl1.GetRowData(ctx)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
@@ -275,7 +275,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 		}
 
 		if ok2 {
-			sch2, err = tbl2.GetSchema(context.TODO())
+			sch2, err = tbl2.GetSchema(ctx)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
@@ -288,7 +288,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 			}
 
 			sch2Hash = schRef.TargetHash()
-			rowData2, err = tbl2.GetRowData(context.TODO())
+			rowData2, err = tbl2.GetRowData(ctx)
 
 			if err != nil {
 				return errhand.BuildDError("error: failed to get row data").AddCause(err).Build()
@@ -302,7 +302,7 @@ func diffRoots(r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv 
 		}
 
 		if diffParts&DataOnlyDiff != 0 {
-			verr = diffRows(rowData1, rowData2, sch1, sch2)
+			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2)
 		}
 
 		if verr != nil {
@@ -394,7 +394,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	return schema.SchemaFromCols(dumbColColl), nil
 }
 
-func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.VerboseError {
+func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.VerboseError {
 	dumbNewSch, err := dumbDownSchema(newSch)
 
 	if err != nil {
@@ -436,7 +436,7 @@ func diffRows(newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.
 	}
 
 	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(context.TODO(), newRows, oldRows)
+	ad.Start(ctx, newRows, oldRows)
 	defer ad.Close()
 
 	src := diff.NewRowDiffSource(ad, oldToUnionConv, newToUnionConv, untypedUnionSch)

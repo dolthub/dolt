@@ -32,7 +32,7 @@ var tblRmSynopsis = []string{
 	"<table>...",
 }
 
-func Rm(commandStr string, args []string, dEnv *env.DoltEnv) int {
+func Rm(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "The table to remove"
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
@@ -49,7 +49,7 @@ func Rm(commandStr string, args []string, dEnv *env.DoltEnv) int {
 		verr := commands.ValidateTablesWithVErr(apr.Args(), working)
 
 		if verr == nil {
-			verr = removeTables(dEnv, apr.Args(), working)
+			verr = removeTables(ctx, dEnv, apr.Args(), working)
 		}
 	}
 
@@ -61,8 +61,8 @@ func Rm(commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return 0
 }
 
-func removeTables(dEnv *env.DoltEnv, tables []string, working *doltdb.RootValue) errhand.VerboseError {
-	working, err := working.RemoveTables(context.TODO(), tables...)
+func removeTables(ctx context.Context, dEnv *env.DoltEnv, tables []string, working *doltdb.RootValue) errhand.VerboseError {
+	working, err := working.RemoveTables(ctx, tables...)
 
 	if err != nil {
 		return errhand.BuildDError("Unable to remove table(s)").AddCause(err).Build()

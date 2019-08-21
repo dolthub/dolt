@@ -15,6 +15,7 @@
 package commands
 
 import (
+	"context"
 	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -61,7 +62,7 @@ func TestInit(t *testing.T) {
 		gCfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 		gCfg.SetStrings(test.GlobalConfig)
 
-		result := Init("dolt init", test.Args, dEnv)
+		result := Init(context.TODO(), "dolt init", test.Args, dEnv)
 
 		if (result == 0) != test.ExpectSuccess {
 			t.Error(test.Name, "- Expected success:", test.ExpectSuccess, "result:", result == 0)
@@ -81,13 +82,13 @@ func TestInit(t *testing.T) {
 
 func TestInitTwice(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	result := Init("dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	result := Init(context.TODO(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
 
 	if result != 0 {
 		t.Error("First init should succeed")
 	}
 
-	result = Init("dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	result = Init(context.TODO(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
 
 	if result == 0 {
 		t.Error("Second init should fail")

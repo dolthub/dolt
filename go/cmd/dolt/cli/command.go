@@ -15,6 +15,7 @@
 package cli
 
 import (
+	"context"
 	"strings"
 
 	"github.com/fatih/color"
@@ -23,7 +24,7 @@ import (
 )
 
 // CommandFunc specifies the signature of the functions that will be called based on the command line being executed.
-type CommandFunc func(string, []string, *env.DoltEnv) int
+type CommandFunc func(context.Context, string, []string, *env.DoltEnv) int
 
 // Command represents either a command to be run, or a command that is a parent of a subcommand.
 type Command struct {
@@ -55,7 +56,7 @@ func MapCommands(commands []*Command) map[string]*Command {
 func GenSubCommandHandler(commands []*Command) CommandFunc {
 	commandMap := MapCommands(commands)
 
-	return func(commandStr string, args []string, dEnv *env.DoltEnv) int {
+	return func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 		if len(args) < 1 {
 			printUsage(commandStr, commands)
 			return 1
@@ -79,7 +80,7 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 				}
 			}
 
-			return command.Func(commandStr+" "+subCommandStr, args[1:], dEnv)
+			return command.Func(ctx, commandStr+" "+subCommandStr, args[1:], dEnv)
 		}
 
 		if !isHelp(subCommandStr) {
