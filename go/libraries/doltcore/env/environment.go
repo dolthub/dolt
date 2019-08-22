@@ -39,6 +39,8 @@ import (
 
 const (
 	DefaultLoginUrl       = "https://beta.dolthub.com/settings/credentials"
+	DefaultMetricsHost    = "eventsapi.beta.dolthub.com"
+	DefaultMetricsPort    = "443"
 	DefaultRemotesApiHost = "doltremoteapi.beta.dolthub.com"
 	DefaultRemotesApiPort = "443"
 )

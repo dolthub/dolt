@@ -10,6 +10,7 @@ import (
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 )
 
+// getMachineID returns a unique machine identifier hash specific to dolt
 func getMachineID() string {
 	id, err := machineid.ProtectedID("dolt")
 	if err != nil {
@@ -29,8 +30,6 @@ type Collector struct {
 	val   *atomic.Value
 	wg    *sync.WaitGroup
 	evtCh chan *eventsapi.ClientEvent
-
-	machineID string
 }
 
 // NewCollector creates a new instance of a collector
@@ -38,7 +37,7 @@ func NewCollector() *Collector {
 	wg := &sync.WaitGroup{}
 	evtCh := make(chan *eventsapi.ClientEvent, collChanBufferSize)
 
-	c := &Collector{&atomic.Value{}, wg, evtCh, getMachineID()}
+	c := &Collector{&atomic.Value{}, wg, evtCh}
 
 	wg.Add(1)
 	go func() {
@@ -57,9 +56,7 @@ func NewCollector() *Collector {
 
 // CloseEventAndAdd closes the supplied event and adds it to the collection of events.  This method is thread safe.
 func (c *Collector) CloseEventAndAdd(evt *Event) {
-	ce := evt.close(c.machineID)
-
-	c.evtCh <- ce
+	c.evtCh <- evt.close()
 }
 
 // Close waits for any remaining events to finish collection and then returns a slice of ClientEvents to be passed to an

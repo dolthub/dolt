@@ -42,6 +42,11 @@ const (
 	RemotesApiHostPortKey = "remotes.default_port"
 
 	AddCredsUrlKey = "creds.add_url"
+
+	MetricsDisabled = "metrics.disabled"
+	MetricsHost = "metrics.host"
+	MetricsPort = "metrics.port"
+	MetricsInsecure = "metrics.insecure"
 )
 
 var LocalConfigWhitelist = set.NewStrSet([]string{UserNameKey, UserEmailKey})

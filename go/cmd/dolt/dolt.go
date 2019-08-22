@@ -17,7 +17,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
@@ -121,14 +123,17 @@ func runMain() int {
 
 	restoreIO := cli.InitIO()
 	defer restoreIO()
-	defer func() {
-		ces := events.GlobalCollector.Close()
-		_ = events.WriterEmitter{Wr: cli.CliOut}.LogEvents(ces)
-	}()
 
 	warnIfMaxFilesTooLow()
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
+
+	emitter := createMetricsEmitter(dEnv)
+	defer func() {
+		ces := events.GlobalCollector.Close()
+		//events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
+		_ = emitter.LogEvents(Version, ces)
+	}()
 
 	if dEnv.CfgLoadErr != nil {
 		cli.PrintErrln(color.RedString("Failed to load the global config.", dEnv.CfgLoadErr))
@@ -136,4 +141,30 @@ func runMain() int {
 	}
 
 	return doltCommand(context.Background(), "dolt", args, dEnv)
+}
+
+func createMetricsEmitter(dEnv *env.DoltEnv) events.Emitter {
+	var emitter events.Emitter = events.NullEmitter{}
+	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+
+	if disabled, err := strconv.ParseBool(*metricsDisabled); err == nil && !disabled {
+		host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
+		portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
+		insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
+
+		port, err := strconv.ParseUint(*portStr, 10, 16)
+
+		if err != nil {
+			log.Fatalf("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, *portStr)
+		}
+
+		insecure, err := strconv.ParseBool(*insecureStr)
+
+		hostAndPort := fmt.Sprintf("%s:%d", *host, port)
+		conn, err := dEnv.GrpcConnWithCreds(hostAndPort, insecure, nil)
+
+		return events.NewGrpcEmitter(conn)
+	}
+
+	return emitter
 }
