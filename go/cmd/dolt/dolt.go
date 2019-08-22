@@ -131,7 +131,7 @@ func runMain() int {
 	emitter := createMetricsEmitter(dEnv)
 	defer func() {
 		ces := events.GlobalCollector.Close()
-		events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
+		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
 		_ = emitter.LogEvents(Version, ces)
 	}()
 
