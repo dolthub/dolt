@@ -4,7 +4,6 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/denisbrodbeck/machineid"
 
@@ -67,10 +66,7 @@ func (c *Collector) Close() []*eventsapi.ClientEvent {
 
 	c.wg.Wait()
 
-	var interf interface{}
-	for interf = c.val.Load(); interf == nil; interf = c.val.Load() {
-		time.Sleep(10 * time.Millisecond)
-	}
+	interf := c.val.Load()
 
 	return interf.([]*eventsapi.ClientEvent)
 }

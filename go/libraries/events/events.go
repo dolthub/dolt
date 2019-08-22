@@ -13,9 +13,9 @@ import (
 // EventNowFunc function is used to get the current time and can be overridden for testing.
 var EventNowFunc = time.Now
 
-func nowTimestamp() *timestamp.Timestamp{
+func nowTimestamp() *timestamp.Timestamp {
 	now := EventNowFunc()
-	nanos := int32(now.UnixNano() % 1000000000)
+	nanos := int32(now.UnixNano() % int64(time.Second))
 
 	return &timestamp.Timestamp{Seconds: now.Unix(), Nanos: nanos}
 }
@@ -49,8 +49,8 @@ func (evt *Event) AddMetric(em EventMetric) {
 	evt.ce.Metrics = append(evt.ce.Metrics, em.AsClientEventMetric())
 }
 
-// AddAttribute adds an attribute to the event.  This method is thread safe
-func (evt *Event) AddAttribute(attID eventsapi.AttributeID, attVal string) {
+// SetAttribute adds an attribute to the event.  This method is thread safe
+func (evt *Event) SetAttribute(attID eventsapi.AttributeID, attVal string) {
 	evt.m.Lock()
 	defer evt.m.Unlock()
 

@@ -6,7 +6,7 @@ import (
 )
 
 // ContextEventKey key used for storing and retrieving an event from the context.
-const ContextEventKey = "event"
+const ContextEventKey = "client_metric_event"
 
 // NewContextForEvent creates a new context with the event provided
 func NewContextForEvent(ctx context.Context, evt *Event) context.Context {

@@ -155,13 +155,18 @@ func createMetricsEmitter(dEnv *env.DoltEnv) events.Emitter {
 		port, err := strconv.ParseUint(*portStr, 10, 16)
 
 		if err != nil {
-			log.Fatalf("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, *portStr)
+			log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, *portStr))
+			return emitter
 		}
 
 		insecure, err := strconv.ParseBool(*insecureStr)
 
+		if err != nil {
+			log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, *insecureStr))
+		}
+
 		hostAndPort := fmt.Sprintf("%s:%d", *host, port)
-		conn, err := dEnv.GrpcConnWithCreds(hostAndPort, insecure, nil)
+		conn, _ := dEnv.GrpcConnWithCreds(hostAndPort, insecure, nil)
 
 		return events.NewGrpcEmitter(conn)
 	}

@@ -14,7 +14,7 @@ func TestEvents(t *testing.T) {
 	collector := NewCollector()
 	testEvent := NewEvent(eventsapi.ClientEventType_CLONE)
 
-	testEvent.AddAttribute(eventsapi.AttributeID_REMOTEURL, remoteUrl)
+	testEvent.SetAttribute(eventsapi.AttributeID_REMOTEURL, remoteUrl)
 
 	counter := NewCounter(eventsapi.MetricID_UNSPECIFIED_METRIC)
 	counter.Inc()

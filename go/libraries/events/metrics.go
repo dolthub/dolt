@@ -81,7 +81,7 @@ func (t *Timer) AsClientEventMetric() *eventsapi.ClientEventMetric {
 
 	delta := t.stop.Sub(t.start)
 	seconds := int64(delta.Seconds())
-	nanos := int32(delta.Nanoseconds() % 1000000000)
+	nanos := int32(delta.Nanoseconds() % int64(time.Second))
 	d := duration.Duration{Seconds: seconds, Nanos: nanos}
 
 	return &eventsapi.ClientEventMetric{
