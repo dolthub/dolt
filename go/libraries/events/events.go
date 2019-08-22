@@ -13,6 +13,13 @@ import (
 // EventNowFunc function is used to get the current time and can be overridden for testing.
 var EventNowFunc = time.Now
 
+func nowTimestamp() *timestamp.Timestamp{
+	now := EventNowFunc()
+	nanos := int32(now.UnixNano() % 1000000000)
+
+	return &timestamp.Timestamp{Seconds: now.Unix(), Nanos: nanos}
+}
+
 // Event is an event to be added to a collector and logged
 type Event struct {
 	ce         *eventsapi.ClientEvent
@@ -26,7 +33,7 @@ func NewEvent(ceType eventsapi.ClientEventType) *Event {
 	return &Event{
 		ce: &eventsapi.ClientEvent{
 			Id:        uuid.New().String(),
-			StartTime: &timestamp.Timestamp{Seconds: int64(EventNowFunc().Second())},
+			StartTime: nowTimestamp(),
 			Type:      ceType,
 		},
 		m:          &sync.Mutex{},
@@ -57,6 +64,8 @@ func (evt *Event) close() *eventsapi.ClientEvent {
 
 	evt.m.Lock()
 	defer evt.m.Unlock()
+
+	evt.ce.EndTime = nowTimestamp()
 
 	for k, v := range evt.attributes {
 		evt.ce.Attributes = append(evt.ce.Attributes, &eventsapi.ClientEventAttribute{Id: k, Value: v})

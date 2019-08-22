@@ -35,6 +35,8 @@ func TestEvents(t *testing.T) {
 	assert.Equal(t, 1, len(clientEvents))
 	assert.Equal(t, 1, len(clientEvents[0].Attributes))
 	assert.Equal(t, 2, len(clientEvents[0].Metrics))
+	assert.NotNil(t, clientEvents[0].StartTime)
+	assert.NotNil(t, clientEvents[0].EndTime)
 
 	assert.Equal(t, eventsapi.AttributeID_REMOTEURL, clientEvents[0].Attributes[0].Id)
 	assert.Equal(t, remoteUrl, clientEvents[0].Attributes[0].Value)
