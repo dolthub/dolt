@@ -1,11 +1,12 @@
 package events
 
 import (
-	"github.com/denisbrodbeck/machineid"
 	"log"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/denisbrodbeck/machineid"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 )

@@ -44,8 +44,8 @@ const (
 	AddCredsUrlKey = "creds.add_url"
 
 	MetricsDisabled = "metrics.disabled"
-	MetricsHost = "metrics.host"
-	MetricsPort = "metrics.port"
+	MetricsHost     = "metrics.host"
+	MetricsPort     = "metrics.port"
 	MetricsInsecure = "metrics.insecure"
 )
 

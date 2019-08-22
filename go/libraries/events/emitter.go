@@ -3,16 +3,16 @@ package events
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
-	"google.golang.org/grpc"
 	"io"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 // Emitter is an interface used for processing a batch of events
@@ -86,9 +86,9 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 
 	req := eventsapi.LogEventsRequest{
 		MachineId: getMachineID(),
-		Version: version,
-		Platform: plat,
-		Events: evts,
+		Version:   version,
+		Platform:  plat,
+		Events:    evts,
 	}
 
 	_, err := em.client.LogEvents(ctx, &req)
