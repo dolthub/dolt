@@ -34,9 +34,42 @@ enum Platform {
 
 enum ClientEventType {
     UNSPECIFIED_Type = 0;
-    CLONE = 1;
-    PUSH = 2;
-    PULL = 3;
+    INIT = 1;
+    STATUS = 2;
+    ADD = 3;
+    RESET = 4;
+    COMMIT = 5;
+    SQL = 6;
+    SQL_SERVER = 7;
+    LOG = 8;
+    DIFF = 9;
+    MERGE = 10;
+    BRANCH = 11;
+    CHECKOUT = 12;
+    REMOTE = 13;
+    PUSH = 14;
+    PULL = 15;
+    FETCH = 16;
+    CLONE = 17;
+    LOGIN = 18;
+    VERSION = 19;
+    CONFIG = 20;
+    LS = 21;
+    SCHEMA = 22;
+    TABLE_IMPORT = 23;
+    TABLE_EXPORT = 24;
+    TABLE_CREATE = 25;
+    TABLE_RM = 26;
+    TABLE_MV = 27;
+    TABLE_CP = 28;
+    TABLE_SELECT = 29;
+    TABLE_PUT_ROW = 30;
+    TABLE_RM_ROW = 31;
+    CREDS_NEW = 32;
+    CREDS_RM = 33;
+    CREDS_LS = 34;
+    CONF_CAT = 35;
+    CONF_RESOLVE = 36;
 }
 
 enum MetricID {

@@ -43,29 +43,29 @@ const (
 )
 
 var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
-	{Name: "init", Desc: "Create an empty Dolt data repository.", Func: commands.Init, ReqRepo: false},
-	{Name: "status", Desc: "Show the working tree status.", Func: commands.Status, ReqRepo: true},
-	{Name: "add", Desc: "Add table changes to the list of staged table changes.", Func: commands.Add, ReqRepo: true},
-	{Name: "reset", Desc: "Remove table changes from the list of staged table changes.", Func: commands.Reset, ReqRepo: true},
-	{Name: "commit", Desc: "Record changes to the repository.", Func: commands.Commit, ReqRepo: true},
-	{Name: "sql", Desc: "Run a SQL query against tables in repository.", Func: commands.Sql, ReqRepo: true},
-	{Name: "sql-server", Desc: "Starts a MySQL-compatible server.", Func: sqlserver.SqlServer, ReqRepo: true},
-	{Name: "log", Desc: "Show commit logs.", Func: commands.Log, ReqRepo: true},
-	{Name: "diff", Desc: "Diff a table.", Func: commands.Diff, ReqRepo: true},
-	{Name: "merge", Desc: "Merge a branch.", Func: commands.Merge, ReqRepo: true},
-	{Name: "branch", Desc: "Create, list, edit, delete branches.", Func: commands.Branch, ReqRepo: true},
-	{Name: "checkout", Desc: "Checkout a branch or overwrite a table from HEAD.", Func: commands.Checkout, ReqRepo: true},
-	{Name: "remote", Desc: "Manage set of tracked repositories.", Func: commands.Remote, ReqRepo: true},
-	{Name: "push", Desc: "Push to a dolt remote.", Func: commands.Push, ReqRepo: true},
-	{Name: "pull", Desc: "Fetch from a dolt remote data repository and merge.", Func: commands.Pull, ReqRepo: true},
-	{Name: "fetch", Desc: "Update the database from a remote data repository.", Func: commands.Fetch, ReqRepo: true},
+	{Name: "init", Desc: "Create an empty Dolt data repository.", Func: commands.Init, ReqRepo: false, EventType: eventsapi.ClientEventType_INIT},
+	{Name: "status", Desc: "Show the working tree status.", Func: commands.Status, ReqRepo: true, EventType: eventsapi.ClientEventType_STATUS},
+	{Name: "add", Desc: "Add table changes to the list of staged table changes.", Func: commands.Add, ReqRepo: true, EventType: eventsapi.ClientEventType_ADD},
+	{Name: "reset", Desc: "Remove table changes from the list of staged table changes.", Func: commands.Reset, ReqRepo: true, EventType: eventsapi.ClientEventType_RESET},
+	{Name: "commit", Desc: "Record changes to the repository.", Func: commands.Commit, ReqRepo: true, EventType: eventsapi.ClientEventType_COMMIT},
+	{Name: "sql", Desc: "Run a SQL query against tables in repository.", Func: commands.Sql, ReqRepo: true, EventType: eventsapi.ClientEventType_SQL},
+	{Name: "sql-server", Desc: "Starts a MySQL-compatible server.", Func: sqlserver.SqlServer, ReqRepo: true, EventType: eventsapi.ClientEventType_SQL_SERVER},
+	{Name: "log", Desc: "Show commit logs.", Func: commands.Log, ReqRepo: true, EventType: eventsapi.ClientEventType_LOG},
+	{Name: "diff", Desc: "Diff a table.", Func: commands.Diff, ReqRepo: true, EventType: eventsapi.ClientEventType_DIFF},
+	{Name: "merge", Desc: "Merge a branch.", Func: commands.Merge, ReqRepo: true, EventType: eventsapi.ClientEventType_MERGE},
+	{Name: "branch", Desc: "Create, list, edit, delete branches.", Func: commands.Branch, ReqRepo: true, EventType: eventsapi.ClientEventType_BRANCH},
+	{Name: "checkout", Desc: "Checkout a branch or overwrite a table from HEAD.", Func: commands.Checkout, ReqRepo: true, EventType: eventsapi.ClientEventType_CHECKOUT},
+	{Name: "remote", Desc: "Manage set of tracked repositories.", Func: commands.Remote, ReqRepo: true, EventType: eventsapi.ClientEventType_REMOTE},
+	{Name: "push", Desc: "Push to a dolt remote.", Func: commands.Push, ReqRepo: true, EventType: eventsapi.ClientEventType_PUSH},
+	{Name: "pull", Desc: "Fetch from a dolt remote data repository and merge.", Func: commands.Pull, ReqRepo: true, EventType: eventsapi.ClientEventType_PULL},
+	{Name: "fetch", Desc: "Update the database from a remote data repository.", Func: commands.Fetch, ReqRepo: true, EventType: eventsapi.ClientEventType_FETCH},
 	{Name: "clone", Desc: "Clone from a remote data repository.", Func: commands.Clone, ReqRepo: false, EventType: eventsapi.ClientEventType_CLONE},
 	{Name: "creds", Desc: "Commands for managing credentials.", Func: credcmds.Commands, ReqRepo: false},
-	{Name: "login", Desc: "Login to a dolt remote host.", Func: commands.Login, ReqRepo: false},
-	{Name: "version", Desc: "Displays the current Dolt cli version.", Func: commands.Version(Version), ReqRepo: false},
-	{Name: "config", Desc: "Dolt configuration.", Func: commands.Config, ReqRepo: false},
-	{Name: "ls", Desc: "List tables in the working set.", Func: commands.Ls, ReqRepo: true},
-	{Name: "schema", Desc: "Display the schema for table(s)", Func: commands.Schema, ReqRepo: true},
+	{Name: "login", Desc: "Login to a dolt remote host.", Func: commands.Login, ReqRepo: false, EventType: eventsapi.ClientEventType_LOGIN},
+	{Name: "version", Desc: "Displays the current Dolt cli version.", Func: commands.Version(Version), ReqRepo: false, EventType: eventsapi.ClientEventType_VERSION},
+	{Name: "config", Desc: "Dolt configuration.", Func: commands.Config, ReqRepo: false, EventType: eventsapi.ClientEventType_CONFIG},
+	{Name: "ls", Desc: "List tables in the working set.", Func: commands.Ls, ReqRepo: true, EventType: eventsapi.ClientEventType_LS},
+	{Name: "schema", Desc: "Display the schema for table(s)", Func: commands.Schema, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts.", Func: cnfcmds.Commands, ReqRepo: false},
 })
@@ -131,7 +131,7 @@ func runMain() int {
 	emitter := createMetricsEmitter(dEnv)
 	defer func() {
 		ces := events.GlobalCollector.Close()
-		//events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
+		events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
 		_ = emitter.LogEvents(Version, ces)
 	}()
 

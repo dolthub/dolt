@@ -16,10 +16,11 @@ package credcmds
 
 import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 )
 
 var Commands = cli.GenSubCommandHandler([]*cli.Command{
-	{Name: "new", Desc: "", Func: New, ReqRepo: false},
-	{Name: "rm", Desc: "", Func: Rm, ReqRepo: false},
-	{Name: "ls", Desc: "", Func: Ls, ReqRepo: false},
+	{Name: "new", Desc: "", Func: New, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_NEW},
+	{Name: "rm", Desc: "", Func: Rm, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_RM},
+	{Name: "ls", Desc: "", Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_LS},
 })
