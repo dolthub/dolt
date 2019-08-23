@@ -22,12 +22,14 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -90,6 +92,11 @@ func Clone(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 
 				if verr == nil {
 					verr = cloneRemote(ctx, srcDB, remoteName, branch, dEnv)
+
+					if verr == nil {
+						evt := events.GetEventFromContext(ctx)
+						evt.SetAttribute(eventsapi.AttributeID_CLONE_REMOTE_URL, remoteUrl)
+					}
 
 					// Make best effort to delete the directory we created.
 					if verr != nil {
@@ -209,6 +216,9 @@ func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx contex
 	var masterHash hash.Hash
 	var h hash.Hash
 
+	// get event from context
+	evt := events.GetEventFromContext(ctx)
+
 	for i := 0; i < len(branches); i++ {
 		dref = branches[i]
 		branch := dref.GetPath()
@@ -231,10 +241,11 @@ func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx contex
 
 		progChan := make(chan datas.PullProgress)
 		doneChan := make(chan struct{})
-		go progFunc(progChan, doneChan)
+		go progFunc(progChan, doneChan, evt)
 
 		remoteBranch := ref.NewRemoteRef(remoteName, branch)
 		err = actions.Fetch(ctx, remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
+
 		close(progChan)
 		<-doneChan
 

@@ -23,11 +23,13 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/store/datas"
@@ -233,12 +235,14 @@ func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.Dolt
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.GetPath())
 	cm, err := localDB.Resolve(ctx, cs)
 
+	evt := events.GetEventFromContext(ctx)
+
 	if err != nil {
 		return errhand.BuildDError("error: unable to find %v", srcRef.GetPath()).Build()
 	} else {
 		progChan := make(chan datas.PullProgress, 16)
 		stopChan := make(chan struct{})
-		go progFunc(progChan, stopChan)
+		go progFunc(progChan, stopChan, evt)
 
 		err = actions.Push(ctx, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan)
 
@@ -264,18 +268,37 @@ func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.Dolt
 	return nil
 }
 
-func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}) {
+func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}, evt *events.Event) {
 	var latest datas.PullProgress
 	last := time.Now().UnixNano() - 1
 	lenPrinted := 0
 	done := false
+
+	timerMetricID := eventsapi.MetricID_DOWNLOAD_MS_ELAPSED
+	counterMetricID := eventsapi.MetricID_BYTES_DOWNLOADED
+
+	if evt.GetClientEventType() == eventsapi.ClientEventType_PUSH {
+		timerMetricID = eventsapi.MetricID_UPLOAD_MS_ELAPSED
+		counterMetricID = eventsapi.MetricID_BYTES_UPLOADED
+	}
+
+	counter := events.NewCounter(counterMetricID)
+	timer := events.NewTimer(timerMetricID)
+
 	for !done {
 		select {
 		case progress, ok := <-progChan:
 			if !ok {
 				done = true
+
+				timer.Stop()
+
+				evt.AddMetric(timer)
+				evt.AddMetric(counter)
 			}
+
 			latest = progress
+			counter.Add(int32(latest.ActualBytes))
 
 		case <-time.After(250 * time.Millisecond):
 			break

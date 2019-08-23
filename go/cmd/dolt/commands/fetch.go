@@ -23,6 +23,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 )
@@ -161,12 +162,14 @@ func fetchRemoteBranch(ctx context.Context, rem env.Remote, srcDB, destDB *doltd
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
 	cm, err := srcDB.Resolve(ctx, cs)
 
+	evt := events.GetEventFromContext(ctx)
+
 	if err != nil {
 		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
 		progChan := make(chan datas.PullProgress)
 		stopChan := make(chan struct{})
-		go progFunc(progChan, stopChan)
+		go progFunc(progChan, stopChan, evt)
 
 		err = actions.Fetch(ctx, destRef, srcDB, destDB, cm, progChan)
 
