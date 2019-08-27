@@ -33,7 +33,7 @@ const (
 	metaVersion = "1.0"
 )
 
-// CommitMeta contains all the metadata that is associated with a commit within an data repo.
+// CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
 	Name        string
 	Email       string
