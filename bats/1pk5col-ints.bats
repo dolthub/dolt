@@ -59,13 +59,11 @@ teardown() {
     [[ "$output" =~ "new table:" ]] || false
     run dolt commit -m "test commit"
     [ "$status" -eq 0 ]
-    local commitOutput="$output"
+    [[ "$output" =~ "test commit" ]] || false
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
 
-    skip "successful commits should produce output but don't; see issue #1744"
-    [[ "$commitOutput" =~ "test commit" ]] || false
 }
 
 @test "dolt log with -n specified" {
