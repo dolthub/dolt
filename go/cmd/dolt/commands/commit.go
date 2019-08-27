@@ -61,6 +61,11 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	}
 
 	err := actions.CommitStaged(ctx, dEnv, msg, apr.Contains(allowEmptyFlag))
+	if err == nil {
+		// if the commit was successful, print it out using the log command
+		return Log(ctx, "log", []string{"-n=1"}, dEnv)
+	}
+
 	return handleCommitErr(err, usage)
 }
 
