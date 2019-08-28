@@ -5,9 +5,12 @@ set -eo pipefail
 force=
 if [[ $# -gt 0 ]]; then
     if [ "$1" = "-f" ]; then
-        force=`shift`
+        force=$1
+        shift
     fi
 fi
+
+echo "$@"
 
 if [[ $# -ne 4 && $# -ne 2 ]]; then
     echo "Usage: fix_committer.sh [-f] TARGET_BRANCH WRONG_EMAIL [RIGHT_NAME RIGHT_EMAIL]" 1>&2
@@ -31,7 +34,7 @@ fi
 
 mergebase=`git merge-base HEAD "remotes/origin/$target"`
 
-exec git "$force" filter-branch --env-filter '
+exec git filter-branch "$force" --env-filter '
 OLD_EMAIL="'"$wrongemail"'"
 CORRECT_NAME="'"$rightname"'"
 CORRECT_EMAIL="'"$rightemail"'"
