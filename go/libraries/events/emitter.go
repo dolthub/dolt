@@ -72,7 +72,8 @@ func NewGrpcEmitter(conn *grpc.ClientConn) *GrpcEmitter {
 }
 
 func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
-	ctx, _ := context.WithDeadline(context.Background(), time.Now().Add(time.Second+500*time.Millisecond))
+	ctx, cnclFn := context.WithDeadline(context.Background(), time.Now().Add(time.Second+500*time.Millisecond))
+	defer cnclFn()
 
 	var plat eventsapi.Platform
 	switch strings.ToLower(runtime.GOOS) {
