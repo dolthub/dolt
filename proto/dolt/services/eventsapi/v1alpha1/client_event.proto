@@ -26,14 +26,14 @@ service ClientEventsService {
 }
 
 enum Platform {
-    UNSPECIFIED_PLATFORM = 0;
+    PLATFORM_UNSPECIFIED = 0;
     LINUX = 1;
     WINDOWS = 2;
     DARWIN = 3;
 }
 
 enum ClientEventType {
-    UNSPECIFIED_Type = 0;
+    TYPE_UNSPECIFIED = 0;
     INIT = 1;
     STATUS = 2;
     ADD = 3;
@@ -73,13 +73,13 @@ enum ClientEventType {
 }
 
 enum MetricID {
-    UNSPECIFIED_METRIC = 0;
+    METRIC_UNSPECIFIED = 0;
     BYTES_DOWNLOADED = 1;
     DOWNLOAD_MS_ELAPSED = 2;
 }
 
 enum AttributeID {
-    UNSPECIFIED_ATTRIBUTE = 0;
+    ATTRIBUTE_UNSPECIFIED = 0;
     REMOTEURL = 1;
 }
 

@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/ptypes"
 	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/uuid"
 
@@ -15,9 +16,13 @@ var EventNowFunc = time.Now
 
 func nowTimestamp() *timestamp.Timestamp {
 	now := EventNowFunc()
-	nanos := int32(now.UnixNano() % int64(time.Second))
+	ts, err := ptypes.TimestampProto(now)
 
-	return &timestamp.Timestamp{Seconds: now.Unix(), Nanos: nanos}
+	if err != nil {
+		panic(err)
+	}
+
+	return ts
 }
 
 // Event is an event to be added to a collector and logged

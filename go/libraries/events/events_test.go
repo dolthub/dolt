@@ -16,11 +16,11 @@ func TestEvents(t *testing.T) {
 
 	testEvent.SetAttribute(eventsapi.AttributeID_REMOTEURL, remoteUrl)
 
-	counter := NewCounter(eventsapi.MetricID_UNSPECIFIED_METRIC)
+	counter := NewCounter(eventsapi.MetricID_METRIC_UNSPECIFIED)
 	counter.Inc()
 	testEvent.AddMetric(counter)
 
-	timer := NewTimer(eventsapi.MetricID_UNSPECIFIED_METRIC)
+	timer := NewTimer(eventsapi.MetricID_METRIC_UNSPECIFIED)
 	timer.Stop()
 	testEvent.AddMetric(timer)
 

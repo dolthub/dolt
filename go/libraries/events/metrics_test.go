@@ -11,7 +11,7 @@ import (
 )
 
 func TestCounterAtomicity(t *testing.T) {
-	c := NewCounter(eventsapi.MetricID_UNSPECIFIED_METRIC)
+	c := NewCounter(eventsapi.MetricID_METRIC_UNSPECIFIED)
 	wg := &sync.WaitGroup{}
 
 	for i := 0; i < 10; i++ {
@@ -37,7 +37,7 @@ func TestCounterAtomicity(t *testing.T) {
 
 func TestTimer(t *testing.T) {
 	EventNowFunc = func() time.Time { return time.Date(2018, 8, 6, 10, 0, 0, 0, time.UTC) }
-	timer := NewTimer(eventsapi.MetricID_UNSPECIFIED_METRIC)
+	timer := NewTimer(eventsapi.MetricID_METRIC_UNSPECIFIED)
 	EventNowFunc = func() time.Time { return time.Date(2018, 8, 6, 10, 1, 0, 0, time.UTC) }
 	timer.Restart()
 	EventNowFunc = func() time.Time { return time.Date(2018, 8, 6, 10, 1, 5, 123, time.UTC) }
@@ -51,7 +51,7 @@ func TestTimer(t *testing.T) {
 
 func TestPanicOnAddUnstoppedTimer(t *testing.T) {
 	assert.Panics(t, func() {
-		timer := NewTimer(eventsapi.MetricID_UNSPECIFIED_METRIC)
+		timer := NewTimer(eventsapi.MetricID_METRIC_UNSPECIFIED)
 		timer.AsClientEventMetric()
 	})
 }

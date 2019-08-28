@@ -85,7 +85,7 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 			}
 
 			var evt *events.Event
-			if command.EventType != eventsapi.ClientEventType_UNSPECIFIED_Type {
+			if command.EventType != eventsapi.ClientEventType_TYPE_UNSPECIFIED {
 				evt = events.NewEvent(command.EventType)
 				ctx = events.NewContextForEvent(ctx, evt)
 			}

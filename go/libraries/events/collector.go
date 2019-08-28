@@ -1,7 +1,6 @@
 package events
 
 import (
-	"log"
 	"sync"
 	"sync/atomic"
 
@@ -10,14 +9,20 @@ import (
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 )
 
+var machineID = "invalid"
+var machineIDOnce = &sync.Once{}
+
 // getMachineID returns a unique machine identifier hash specific to dolt
 func getMachineID() string {
-	id, err := machineid.ProtectedID("dolt")
-	if err != nil {
-		log.Fatal(err)
-	}
+	machineIDOnce.Do(func() {
+		id, err := machineid.ProtectedID("dolt")
 
-	return id
+		if err == nil {
+			machineID = id
+		}
+	})
+
+	return machineID
 }
 
 // GlobalCollector is an instance of a collector where all events should be sent via the CloseEventAndAdd function

@@ -4,7 +4,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/golang/protobuf/ptypes"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 )
@@ -80,12 +80,10 @@ func (t *Timer) AsClientEventMetric() *eventsapi.ClientEventMetric {
 	}
 
 	delta := t.stop.Sub(t.start)
-	seconds := int64(delta.Seconds())
-	nanos := int32(delta.Nanoseconds() % int64(time.Second))
-	d := duration.Duration{Seconds: seconds, Nanos: nanos}
+	d := ptypes.DurationProto(delta)
 
 	return &eventsapi.ClientEventMetric{
 		MetricId:    t.metricID,
-		MetricOneof: &eventsapi.ClientEventMetric_Duration{Duration: &d},
+		MetricOneof: &eventsapi.ClientEventMetric_Duration{Duration: d},
 	}
 }
