@@ -227,8 +227,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 
 @test "initializing a dolt repository" {
     cd $BATS_TMPDIR
-    mkdir dolt-repo
-    cd dolt-repo
+    mkdir dolt-repo-$$
+    cd dolt-repo-$$
     run dolt init
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully initialized dolt data repository." ]
@@ -236,5 +236,5 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ -d .dolt/noms ]
     [ -f .dolt/config.json ]
     [ -f .dolt/repo_state.json ]
-    rm -rf $BATS_TMPDIR/dolt-repo
+    rm -rf $BATS_TMPDIR/dolt-repo-$$
 }
