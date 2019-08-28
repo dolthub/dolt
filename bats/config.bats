@@ -4,15 +4,15 @@ setup() {
     load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-    mkdir $BATS_TMPDIR/config-$$
-    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
+    mkdir $BATS_TMPDIR/config-test$$
+    nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-test$$ /p
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
 }
 
 teardown() {
-    rm -rf "$BATS_TMPDIR/config-$$"
+    rm -rf "$BATS_TMPDIR/config-test$$"
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 

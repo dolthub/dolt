@@ -63,7 +63,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "creds", Desc: "Commands for managing credentials.", Func: credcmds.Commands, ReqRepo: false},
 	{Name: "login", Desc: "Login to a dolt remote host.", Func: commands.Login, ReqRepo: false, EventType: eventsapi.ClientEventType_LOGIN},
 	{Name: "version", Desc: "Displays the current Dolt cli version.", Func: commands.Version(Version), ReqRepo: false, EventType: eventsapi.ClientEventType_VERSION},
-	{Name: "config", Desc: "Dolt configuration.", Func: commands.Config, ReqRepo: false, EventType: eventsapi.ClientEventType_CONFIG},
+	{Name: "config", Desc: "Dolt configuration.", Func: commands.Config, ReqRepo: false},
 	{Name: "ls", Desc: "List tables in the working set.", Func: commands.Ls, ReqRepo: true, EventType: eventsapi.ClientEventType_LS},
 	{Name: "schema", Desc: "Display the schema for table(s)", Func: commands.Schema, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
