@@ -27,27 +27,60 @@ service ClientEventsService {
 
 enum Platform {
     PLATFORM_UNSPECIFIED = 0;
-    PLATFORM_LINUX = 1;
-    PLATFORM_WINDOWS = 2;
-    PLATFORM_DARWIN = 3;
+    LINUX = 1;
+    WINDOWS = 2;
+    DARWIN = 3;
 }
 
 enum ClientEventType {
-    CLIENT_EVENT_TYPE_UNSPECIFIED = 0;
-    CLIENT_EVENT_TYPE_CLONE = 1;
-    CLIENT_EVENT_TYPE_PUSH = 2;
-    CLIENT_EVENT_TYPE_PULL = 3;
+    TYPE_UNSPECIFIED = 0;
+    INIT = 1;
+    STATUS = 2;
+    ADD = 3;
+    RESET = 4;
+    COMMIT = 5;
+    SQL = 6;
+    SQL_SERVER = 7;
+    LOG = 8;
+    DIFF = 9;
+    MERGE = 10;
+    BRANCH = 11;
+    CHECKOUT = 12;
+    REMOTE = 13;
+    PUSH = 14;
+    PULL = 15;
+    FETCH = 16;
+    CLONE = 17;
+    LOGIN = 18;
+    VERSION = 19;
+    CONFIG = 20;
+    LS = 21;
+    SCHEMA = 22;
+    TABLE_IMPORT = 23;
+    TABLE_EXPORT = 24;
+    TABLE_CREATE = 25;
+    TABLE_RM = 26;
+    TABLE_MV = 27;
+    TABLE_CP = 28;
+    TABLE_SELECT = 29;
+    TABLE_PUT_ROW = 30;
+    TABLE_RM_ROW = 31;
+    CREDS_NEW = 32;
+    CREDS_RM = 33;
+    CREDS_LS = 34;
+    CONF_CAT = 35;
+    CONF_RESOLVE = 36;
 }
 
 enum MetricID {
-    METRIC_ID_UNSPECIFIED = 0;
-    METRIC_ID_BYTES_DOWNLOADED = 1;
-    METRIC_ID_DOWNLOAD_MS_ELAPSED = 2;
+    METRIC_UNSPECIFIED = 0;
+    BYTES_DOWNLOADED = 1;
+    DOWNLOAD_MS_ELAPSED = 2;
 }
 
 enum AttributeID {
-    ATTRIBUTE_ID_UNSPECIFIED = 0;
-    ATTRIBUTE_ID_REMOTEURL = 1;
+    ATTRIBUTE_UNSPECIFIED = 0;
+    REMOTEURL = 1;
 }
 
 message ClientEventAttribute {
