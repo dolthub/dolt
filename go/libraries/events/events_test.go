@@ -28,7 +28,7 @@ func TestEvents(t *testing.T) {
 	collector := NewCollector()
 	testEvent := NewEvent(eventsapi.ClientEventType_CLONE)
 
-	testEvent.SetAttribute(eventsapi.AttributeID_REMOTEURL, remoteUrl)
+	testEvent.SetAttribute(eventsapi.AttributeID_LOCAL_REMOTE_URLS, remoteUrl)
 
 	counter := NewCounter(eventsapi.MetricID_METRIC_UNSPECIFIED)
 	counter.Inc()
@@ -52,7 +52,7 @@ func TestEvents(t *testing.T) {
 	assert.NotNil(t, clientEvents[0].StartTime)
 	assert.NotNil(t, clientEvents[0].EndTime)
 
-	assert.Equal(t, eventsapi.AttributeID_REMOTEURL, clientEvents[0].Attributes[0].Id)
+	assert.Equal(t, eventsapi.AttributeID_LOCAL_REMOTE_URLS, clientEvents[0].Attributes[0].Id)
 	assert.Equal(t, remoteUrl, clientEvents[0].Attributes[0].Value)
 	_, isCounter := clientEvents[0].Metrics[0].MetricOneof.(*eventsapi.ClientEventMetric_Count)
 	assert.True(t, isCounter)

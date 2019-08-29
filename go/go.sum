@@ -195,6 +195,7 @@ github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
 github.com/lib/pq v1.0.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/lib/pq v1.1.1 h1:sJZmqHoEaY7f+NPP8pgLB/WxulyR3fewgCM2qaSlBb4=
 github.com/lib/pq v1.1.1/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
+github.com/liquidata-inc/dolt v0.9.8 h1:uup9UA59oSvYsqYd9A3zF0CFXUnF1qI8odE+Cxtn+pg=
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a h1:Z8uOEqaBW1a0vpu+S9MlWwiyIDrjtn9sZ/CCcs32e9s=
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190710171053-b2883167103a/go.mod h1:bXirMMsoAKR1OI9GTQJPGSyuwJlOseI9AFNAdpwRY2k=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=

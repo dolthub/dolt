@@ -17,9 +17,8 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
-	"strconv"
+	"os/exec"
 	"strings"
 
 	"github.com/fatih/color"
@@ -68,6 +67,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "schema", Desc: "Display the schema for table(s)", Func: commands.Schema, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
 	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts.", Func: cnfcmds.Commands, ReqRepo: false},
+	{Name: commands.SendMetricsCommand, Desc: "Send events logs to server.", Func: commands.SendMetrics, ReqRepo: false, HideFromHelp: true},
 })
 
 const profFlag = "--prof"
@@ -128,11 +128,16 @@ func runMain() int {
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 
-	emitter := createMetricsEmitter(dEnv)
+	emitter := events.NewFileEmitter()
+
 	defer func() {
 		ces := events.GlobalCollector.Close()
 		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
 		_ = emitter.LogEvents(Version, ces)
+
+		if err := processEventsDir(args, dEnv); err != nil {
+			// log.Print(err)
+		}
 	}()
 
 	if dEnv.CfgLoadErr != nil {
@@ -143,33 +148,22 @@ func runMain() int {
 	return doltCommand(context.Background(), "dolt", args, dEnv)
 }
 
-func createMetricsEmitter(dEnv *env.DoltEnv) events.Emitter {
-	var emitter events.Emitter = events.NullEmitter{}
-	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+// processEventsDir runs the dolt send-metrics command in a new process
+func processEventsDir(args []string, dEnv *env.DoltEnv) error {
+	if len(args) > 0 {
+		if args[0] != commands.SendMetricsCommand {
+			cmd := exec.Command("dolt", commands.SendMetricsCommand)
 
-	if disabled, err := strconv.ParseBool(*metricsDisabled); err == nil && !disabled {
-		host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
-		portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
-		insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
+			if err := cmd.Start(); err != nil {
+				// log.Print(err)
+				return err
+			}
 
-		port, err := strconv.ParseUint(*portStr, 10, 16)
-
-		if err != nil {
-			log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, *portStr))
-			return emitter
+			return nil
 		}
 
-		insecure, err := strconv.ParseBool(*insecureStr)
-
-		if err != nil {
-			log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, *insecureStr))
-		}
-
-		hostAndPort := fmt.Sprintf("%s:%d", *host, port)
-		conn, _ := dEnv.GrpcConnWithCreds(hostAndPort, insecure, nil)
-
-		return events.NewGrpcEmitter(conn)
+		return nil
 	}
 
-	return emitter
+	return nil
 }

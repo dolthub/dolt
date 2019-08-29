@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,9 @@ import (
 	"google.golang.org/grpc"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
@@ -109,4 +113,49 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 	_, err := em.client.LogEvents(ctx, &req)
 
 	return err
+}
+
+// SendLogEventsRequest sends a request using the grpc client
+func (em *GrpcEmitter) SendLogEventsRequest(ctx context.Context, req *eventsapi.LogEventsRequest) error {
+	_, err := em.client.LogEvents(ctx, req)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// FileEmitter saves event requests to files
+type FileEmitter struct {
+	fbp *FileBackedProc
+}
+
+// NewFileEmitter creates a new file emitter
+func NewFileEmitter() *FileEmitter {
+	fs := filesys.LocalFS
+
+	root, err := env.GetCurrentUserHomeDir()
+	if err != nil {
+		panic(err)
+	}
+
+	dolt := dbfactory.DoltDir
+
+	return &FileEmitter{fbp: NewFileBackedProc(fs, root, dolt, MD5FileNamer, CheckFilenameMD5)}
+}
+
+// LogEvents implements the Emitter interface and writes events requests to files
+func (fe *FileEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) error {
+	if err := fe.fbp.WriteEvents(version, evts); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AreMetricsDisabled returns true if the dolt config has the metrics.disabled property
+// set to true, otherwise returns false
+func AreMetricsDisabled(dEnv *env.DoltEnv) (bool, error) {
+	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+
+	return strconv.ParseBool(*metricsDisabled)
 }
