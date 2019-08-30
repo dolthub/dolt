@@ -38,6 +38,46 @@ const singleQueryTest = "" //"Natural join with join clause"
 // Set to false to run tests known to be broken
 const skipBroken = true
 
+func TestTES(t *testing.T) {
+	test := SelectTest{
+		Name:        "unknown column in order by",
+		Query:       "select * from people where rating > 8.0 order by dne",
+		ExpectedErr: `Unknown column: 'dne'`,
+	}
+	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
+		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
+	if len(singleQueryTest) > 0 && test.Name != singleQueryTest {
+		t.Skip("Skipping tests until " + singleQueryTest)
+	}
+
+	if len(singleQueryTest) == 0 && test.SkipOnSqlEngine && skipBroken {
+		t.Skip("Skipping test broken on SQL engine")
+	}
+
+	dEnv := dtestutils.CreateTestEnv()
+	CreateTestDatabase(dEnv, t)
+
+	if test.AdditionalSetup != nil {
+		test.AdditionalSetup(t, dEnv)
+	}
+
+	root, _ := dEnv.WorkingRoot(context.Background())
+	actualRows, sch, err := executeSelect(context.Background(), test.ExpectedSchema, root, test.Query)
+	if len(test.ExpectedErr) > 0 {
+		require.Error(t, err)
+		// Too much work to synchronize error messages between the two implementations, so for now we'll just assert that an error occurred.
+		// require.Contains(t, err.Error(), test.ExpectedErr)
+		return
+	} else {
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, test.ExpectedRows, actualRows)
+	assert.Equal(t, test.ExpectedSchema, sch)
+}
+
 func TestExecuteSelect(t *testing.T) {
 	for _, test := range BasicSelectTests {
 		t.Run(test.Name, func(t *testing.T) {
