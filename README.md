@@ -163,9 +163,15 @@ Then you'll need to add and commit the merged data:
 Dolt supports remotes in a similar manner to Git. Liquidata, the company behind Dolt, also created DoltHub, a hosting service for Dolt databases. In the following we use DoltHub as an example for setting up a remote.
 
 If you haven't done so already, setting up your default servers will make it easier to add and clone remotes
+```
+$ dolt login
+[...]
+```
+Which should open a browser window where you can create a credential for HTTPS. Upon successful creation the following will appear in the shell:
+```
+Key successfully associated with user: youusername email you@youremail.com
 
-    dolt config --global --add creds.add_url https://www.dolthub.com/settings/credentials remotes.default_host doltremoteapi.dolthub.com remotes.default_port 443
-
+```
 Next you'll want to make sure you've created the remote at https://www.dolthub.com .  Once created you can add the remote.  As an example, if the repository is created under an organization named "org", with the name "repo" you could add the remote like so:
 
     dolt remote add origin org/repo
