@@ -114,6 +114,14 @@ func (c *Commit) NumParents() (int, error) {
 	return int(parents.Len()), nil
 }
 
+func (c *Commit) Height() (uint64, error) {
+	ref, err := types.NewRef(c.commitSt, c.vrw.Format())
+	if err != nil {
+		return 0, err
+	}
+	return ref.Height(), nil
+}
+
 func (c *Commit) getParent(ctx context.Context, idx int) (*types.Struct, error) {
 	parentSet, err := c.getParents()
 
