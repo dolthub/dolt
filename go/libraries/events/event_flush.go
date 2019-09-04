@@ -31,8 +31,9 @@ import (
 
 // EventGrpcFlush parses dolt event logs sends the events to the events server
 type EventGrpcFlush struct {
-	em  *GrpcEmitter
-	fbp *FileBackedProc
+	em       *GrpcEmitter
+	fbp      *FileBackedProc
+	LockPath string
 }
 
 // ErrEventsDataDir occurs when events are trying to be  flushed, but the events data directory
@@ -66,14 +67,13 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
 
 // NewEventGrpcFlush creates a new EventGrpcFlush
 func NewEventGrpcFlush(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *EventGrpcFlush {
-
 	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
 
 	if exists := fbp.EventsDirExists(); !exists {
 		panic(ErrEventsDataDir)
 	}
 
-	return &EventGrpcFlush{em: getGRPCEmitter(dEnv), fbp: fbp}
+	return &EventGrpcFlush{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
 }
 
 // flush is the FSIterCB function that sends the events requests from the .devts files to the grpc server
