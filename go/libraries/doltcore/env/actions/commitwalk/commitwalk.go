@@ -1,3 +1,17 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package commitwalk
 
 import (
@@ -19,7 +33,6 @@ type q struct {
 	numVisiblePending int
 	loaded            map[hash.Hash]*c
 
-	ctx context.Context
 	ddb *doltdb.DoltDB
 }
 
@@ -36,8 +49,8 @@ func (q *q) PopPending() *c {
 	return c
 }
 
-func (q *q) AddPendingIfUnseen(id hash.Hash) error {
-	c, err := q.Get(id)
+func (q *q) AddPendingIfUnseen(ctx context.Context, id hash.Hash) error {
+	c, err := q.Get(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -59,8 +72,8 @@ func (q *q) AddPendingIfUnseen(id hash.Hash) error {
 	return nil
 }
 
-func (q *q) SetInvisible(id hash.Hash) error {
-	c, err := q.Get(id)
+func (q *q) SetInvisible(ctx context.Context, id hash.Hash) error {
+	c, err := q.Get(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -73,23 +86,23 @@ func (q *q) SetInvisible(id hash.Hash) error {
 	return nil
 }
 
-func (q *q) load(h hash.Hash) (*doltdb.Commit, error) {
+func (q *q) load(ctx context.Context, h hash.Hash) (*doltdb.Commit, error) {
 	cs, err := doltdb.NewCommitSpec(h.String(), "")
 	if err != nil {
 		return nil, err
 	}
-	c, err := q.ddb.Resolve(q.ctx, cs)
+	c, err := q.ddb.Resolve(ctx, cs)
 	if err != nil {
 		return nil, err
 	}
 	return c, nil
 }
 
-func (q *q) Get(id hash.Hash) (*c, error) {
+func (q *q) Get(ctx context.Context, id hash.Hash) (*c, error) {
 	if l, ok := q.loaded[id]; ok {
 		return l, nil
 	} else {
-		l, err := q.load(id)
+		l, err := q.load(ctx, id)
 		if err != nil {
 			return nil, err
 		}
@@ -103,8 +116,8 @@ func (q *q) Get(id hash.Hash) (*c, error) {
 	}
 }
 
-func newQueue(ctx context.Context, ddb *doltdb.DoltDB) *q {
-	return &q{ctx: ctx, ddb: ddb, loaded: make(map[hash.Hash]*c)}
+func newQueue(ddb *doltdb.DoltDB) *q {
+	return &q{ddb: ddb, loaded: make(map[hash.Hash]*c)}
 }
 
 // Return the commits reachable from commit at hash `includedHead`
@@ -119,14 +132,14 @@ func newQueue(ctx context.Context, ddb *doltdb.DoltDB) *q {
 // Roughly mimics `git log master..feature`.
 func GetDotDotRevisions(ctx context.Context, ddb *doltdb.DoltDB, includedHead hash.Hash, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
 	commitList := make([]*doltdb.Commit, 0, num)
-	q := newQueue(ctx, ddb)
-	if err := q.SetInvisible(excludedHead); err != nil {
+	q := newQueue(ddb)
+	if err := q.SetInvisible(ctx, excludedHead); err != nil {
 		return nil, err
 	}
-	if err := q.AddPendingIfUnseen(excludedHead); err != nil {
+	if err := q.AddPendingIfUnseen(ctx, excludedHead); err != nil {
 		return nil, err
 	}
-	if err := q.AddPendingIfUnseen(includedHead); err != nil {
+	if err := q.AddPendingIfUnseen(ctx, includedHead); err != nil {
 		return nil, err
 	}
 	for q.NumVisiblePending() > 0 {
@@ -137,11 +150,11 @@ func GetDotDotRevisions(ctx context.Context, ddb *doltdb.DoltDB, includedHead ha
 		}
 		for _, parentID := range parents {
 			if nextC.invisible {
-				if err := q.SetInvisible(parentID); err != nil {
+				if err := q.SetInvisible(ctx, parentID); err != nil {
 					return nil, err
 				}
 			}
-			if err := q.AddPendingIfUnseen(parentID); err != nil {
+			if err := q.AddPendingIfUnseen(ctx, parentID); err != nil {
 				return nil, err
 			}
 		}
