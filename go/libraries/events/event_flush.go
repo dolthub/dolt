@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
+	"github.com/juju/fslock"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -117,17 +119,60 @@ func (egf *EventGrpcFlush) flush(ctx context.Context, path string) error {
 func (egf *EventGrpcFlush) FlushEvents(ctx context.Context) error {
 	fs := egf.fbp.GetFileSys()
 
-	err := fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
-		if err := egf.flush(ctx, path); err != nil {
-			// log.Print(err)
-			return false
-		}
-		return false
-	})
+	switch fs.(type) {
+	case *filesys.InMemFS:
+		// create a mutex
+		mtx := &sync.Mutex{}
 
-	if err != nil {
-		return err
+		// lock the mutex
+		mtx.Lock()
+
+		// unlock the mutex
+		defer mtx.Unlock()
+
+		err := fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
+			if err := egf.flush(ctx, path); err != nil {
+				// log.Print(err)
+				return false
+			}
+			return false
+		})
+
+		if err != nil {
+			return err
+		}
+
+		return nil
+
+	default:
+		// init a lock
+		lck := fslock.New(egf.LockPath)
+
+		// lock the lock
+		err := lck.LockWithTimeout(30 * time.Millisecond)
+		if err != nil {
+			// return no err, file locked and being worked on?
+			// log.Print(err)
+			return err
+		}
+
+		defer lck.Unlock()
+
+		err = fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
+			if err := egf.flush(ctx, path); err != nil {
+				// log.Print(err)
+				return false
+			}
+			return false
+		})
+
+		if err != nil {
+			// log.Print(err)
+			return err
+		}
+
+		return nil
 	}
 
-	return nil
+	panic("I dont know this fs......")
 }

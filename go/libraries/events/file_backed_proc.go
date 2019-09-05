@@ -182,10 +182,6 @@ func (fbp *FileBackedProc) WriteEvents(version string, evts []*eventsapi.ClientE
 		plat = eventsapi.Platform_WINDOWS
 	}
 
-	// if err := fbp.ed.MakeEventsDir(); err != nil {
-	// 	return err
-	// }
-
 	if dirExists := fbp.EventsDirExists(); dirExists {
 		eventsPath := fbp.ed.getPath()
 		tempFilename := filepath.Join(eventsPath, localPath)
