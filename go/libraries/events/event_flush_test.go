@@ -54,6 +54,8 @@ func TestEF(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+
 			fs := filesys.NewInMemFS([]string{eventsDataDir}, nil, eventsDataDir)
 
 			client := NewTestClient()
@@ -76,7 +78,7 @@ func TestEF(t *testing.T) {
 			err := fbp.WriteEvents(version, ces)
 			assert.Equal(t, err, nil)
 
-			err = flush.FlushEvents()
+			err = flush.FlushEvents(ctx)
 
 			assert.Equal(t, err, nil)
 			assert.Equal(t, len(client.CES), len(ces))

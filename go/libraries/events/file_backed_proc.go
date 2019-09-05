@@ -17,6 +17,7 @@ package events
 import (
 	"crypto/md5"
 	"encoding/base64"
+	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -80,6 +81,8 @@ func CheckFilenameMD5(data []byte, path string) (bool, error) {
 	return true, nil
 }
 
+var errEventsDirNotExists = errors.New("no events data directory exists")
+
 // eventsDataDir is the directory used to store the events requests files
 type eventsDataDir struct {
 	fs   filesys.Filesys
@@ -118,6 +121,10 @@ type FileBackedProc struct {
 // NewFileBackedProc creates a new FileBackedProc
 func NewFileBackedProc(fs filesys.Filesys, userHomeDir string, doltDir string, nf fileNamingFunc, cf fileCheckingFunc) *FileBackedProc {
 	eventsDataDir := newEventsDataDir(fs, userHomeDir, doltDir)
+
+	if err := eventsDataDir.MakeEventsDir(); err != nil {
+		panic(err)
+	}
 
 	return &FileBackedProc{ed: eventsDataDir, namingFunc: nf, CheckingFunc: cf}
 }
@@ -175,42 +182,46 @@ func (fbp *FileBackedProc) WriteEvents(version string, evts []*eventsapi.ClientE
 		plat = eventsapi.Platform_WINDOWS
 	}
 
-	if err := fbp.ed.MakeEventsDir(); err != nil {
-		return err
+	// if err := fbp.ed.MakeEventsDir(); err != nil {
+	// 	return err
+	// }
+
+	if dirExists := fbp.EventsDirExists(); dirExists {
+		eventsPath := fbp.ed.getPath()
+		tempFilename := filepath.Join(eventsPath, localPath)
+
+		f, err := fbp.ed.fs.OpenForWrite(tempFilename)
+
+		if err != nil {
+			return err
+		}
+
+		req := &eventsapi.LogEventsRequest{
+			MachineId: getMachineID(),
+			Version:   version,
+			Platform:  plat,
+			Events:    evts,
+		}
+
+		data, err := proto.Marshal(req)
+		if err != nil {
+			return err
+		}
+
+		if err := iohelp.WriteAll(f, data); err != nil {
+			return err
+		}
+
+		if err := f.Close(); err != nil {
+			return err
+		}
+
+		if err = fbp.renameFile(eventsPath, localPath); err != nil {
+			return err
+		}
+
+		return nil
 	}
 
-	eventsPath := fbp.ed.getPath()
-	tempFilename := filepath.Join(eventsPath, localPath)
-
-	f, err := fbp.ed.fs.OpenForWrite(tempFilename)
-
-	if err != nil {
-		return err
-	}
-
-	req := &eventsapi.LogEventsRequest{
-		MachineId: getMachineID(),
-		Version:   version,
-		Platform:  plat,
-		Events:    evts,
-	}
-
-	data, err := proto.Marshal(req)
-	if err != nil {
-		return err
-	}
-
-	if err := iohelp.WriteAll(f, data); err != nil {
-		return err
-	}
-
-	if err := f.Close(); err != nil {
-		return err
-	}
-
-	if err = fbp.renameFile(eventsPath, localPath); err != nil {
-		return err
-	}
-
-	return nil
+	return errEventsDirNotExists
 }

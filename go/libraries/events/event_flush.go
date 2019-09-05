@@ -40,6 +40,8 @@ type EventGrpcFlush struct {
 // does not yet exist
 var ErrEventsDataDir = errors.New("unable to flush, events data directory does not exist")
 
+var errInvalidFile = errors.New("unable to flush, invalid file")
+
 // getGRPCEmitter gets the connection to the events grpc service
 func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
 	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
@@ -76,51 +78,54 @@ func NewEventGrpcFlush(fs filesys.Filesys, userHomeDir string, doltDir string, d
 	return &EventGrpcFlush{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
 }
 
-// flush is the FSIterCB function that sends the events requests from the .devts files to the grpc server
-func (egf *EventGrpcFlush) flush(path string, size int64, isDir bool) (stop bool) {
+// flush sends the events requests from the files to the grpc server
+func (egf *EventGrpcFlush) flush(ctx context.Context, path string) error {
 	fs := egf.fbp.GetFileSys()
 
 	data, err := fs.ReadFile(path)
 	if err != nil {
-		log.Print(err)
-		return false
+		return err
 	}
 
 	isFileValid, err := egf.fbp.CheckingFunc(data, path)
 
 	if isFileValid && err == nil {
-		ctx, cnclFn := context.WithDeadline(context.Background(), time.Now().Add(time.Minute))
+		ctx, cnclFn := context.WithDeadline(ctx, time.Now().Add(time.Minute))
 		defer cnclFn()
 
 		req := &eventsapi.LogEventsRequest{}
 
 		if err := proto.Unmarshal(data, req); err != nil {
-			log.Print(err)
-			return false
+			return err
 		}
 
 		if err := egf.em.SendLogEventsRequest(ctx, req); err != nil {
-			log.Print(err)
-			return false
+			return err
 		}
 
 		if err := fs.DeleteFile(path); err != nil {
-			log.Print(err)
-			return false
+			return err
 		}
 
-		return false
+		return nil
 	}
 
-	log.Print(err)
-	return false
+	return errInvalidFile
 }
 
 // FlushEvents sends event logs to the events server
-func (egf *EventGrpcFlush) FlushEvents() error {
+func (egf *EventGrpcFlush) FlushEvents(ctx context.Context) error {
 	fs := egf.fbp.GetFileSys()
 
-	if err := fs.Iter(egf.fbp.GetEventsDirPath(), false, egf.flush); err != nil {
+	err := fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
+		if err := egf.flush(ctx, path); err != nil {
+			// log.Print(err)
+			return false
+		}
+		return false
+	})
+
+	if err != nil {
 		return err
 	}
 

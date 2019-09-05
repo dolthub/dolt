@@ -2,12 +2,12 @@ package commands
 
 import (
 	"context"
+	"log"
+	"time"
 
-	// "github.com/juju/fslock"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 // SendMetricsCommand is the command used for sending metrics
@@ -15,26 +15,36 @@ const SendMetricsCommand = "send-metrics"
 
 // var errMetricsDisabled = errors.New("metrics are currently disabled")
 
-// func fLock(lockFilePath string) (*fslock.Lock, error) {
-// 	lck := fslock.New(lockFilePath)
-// 	err := lck.Lock()
+func flockAndFlush(ctx context.Context, dEnv *env.DoltEnv, egf *events.EventGrpcFlush) error {
+	lck, err := dEnv.FS.LockWithTimeout(egf.LockPath, 100*time.Millisecond)
+	if err != nil {
+		return err
+	}
 
-// 	if err != nil {
-// 		return nil, err
-// 	}
+	defer func() {
+		err := lck.Unlock()
+		if err != nil {
+			log.Print(err)
+		}
+	}()
 
-// 	return lck, nil
-// }
+	err = egf.FlushEvents(ctx)
+	if err != nil {
+		// unlock should run?
+		return err
+	}
+
+	return nil
+}
 
 // SendMetrics is the commandFunc used that flushes the events to the grpc service
 func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	disabled, err := events.AreMetricsDisabled(dEnv)
 	if !disabled && err == nil {
-		fs := filesys.LocalFS
+		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		defer cancel()
 
-		// context.WithDeadline()
-
-		root, err := env.GetCurrentUserHomeDir()
+		root, err := dEnv.GetUserHomeDir()
 		if err != nil {
 			// log.Print(err)
 			return 1
@@ -42,35 +52,11 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 
 		dolt := dbfactory.DoltDir
 
-		egf := events.NewEventGrpcFlush(fs, root, dolt, dEnv)
+		egf := events.NewEventGrpcFlush(dEnv.FS, root, dolt, dEnv)
 
-		// init lock
-		lck := fslock.New(egf.LockPath)
-
-		// try the lock
-		if err := lck.TryLock(); err != nil {
-			// log.Print("Trylock block")
-			log.Print(err)
-			return 1
-		}
-
-		// if no err, lock the lock
-		if err := lck.Lock(); err != nil {
-			// log.Print("Lock block")
-			log.Print(err)
-			return 1
-		}
-	
-		// process dir
-		if err := egf.FlushEvents(); err != nil {
-			log.Print(err)
-			return 1
-		}
-
-		// unlock dir
-		if err := lck.Unlock(); err != nil {
-			log.Print(err)
-			return 1
+		err = flockAndFlush(ctx, dEnv, egf)
+		if err != nil {
+			return 2
 		}
 
 		return 0
