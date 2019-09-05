@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
@@ -14,28 +13,6 @@ import (
 const SendMetricsCommand = "send-metrics"
 
 // var errMetricsDisabled = errors.New("metrics are currently disabled")
-
-// func flockAndFlush(ctx context.Context, dEnv *env.DoltEnv, egf *events.EventGrpcFlush) error {
-// 	err := efg.Lock()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	defer func() {
-// 		err := efg.Unlock()
-// 		if err != nil {
-// 			log.Print(err)
-// 		}
-// 	}()
-
-	// err = egf.FlushEvents(ctx)
-	// if err != nil {
-	// 	// unlock should run?
-	// 	return err
-	// }
-
-// 	return nil
-// }
 
 // SendMetrics is the commandFunc used that flushes the events to the grpc service
 func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -56,7 +33,6 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 
 		err = egf.FlushEvents(ctx)
 		if err != nil {
-			// unlock should run?
 			return 2
 		}
 
