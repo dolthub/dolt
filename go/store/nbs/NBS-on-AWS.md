@@ -67,7 +67,7 @@ This is where the ARN for your bucket and table come in.
 ### On the command line
 
 ```shell
-noms ds aws://dynamo-table:s3-bucket/store-name
+noms ds aws://[dynamo-table:s3-bucket]/store-name
 ```
 
 ### NewAWSStore

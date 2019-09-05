@@ -121,7 +121,7 @@ func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 }
 
 func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]string) (chunks.ChunkStore, error) {
-	parts := strings.SplitN(urlObj.Host, ":", 2) // [table]:[bucket]
+	parts := strings.SplitN(urlObj.Hostname(), ":", 2) // [table]:[bucket]
 	if len(parts) != 2 {
 		return nil, errors.New("aws url has an invalid format")
 	}
