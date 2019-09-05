@@ -20,13 +20,16 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 )
 
 // LocalFS is the machines local filesystem
-var LocalFS = &localFS{}
+var LocalFS = &localFS{&sync.Mutex{}}
 
-type localFS struct{}
+type localFS struct {
+	mtx *sync.Mutex
+}
 
 // Exists will tell you if a file or directory with a given path already exists, and if it does is it a directory
 func (fs *localFS) Exists(path string) (exists bool, isDir bool) {
@@ -177,4 +180,8 @@ func (fs *localFS) LastModified(path string) (t time.Time, exists bool) {
 	}
 
 	return stat.ModTime(), true
+}
+
+func (fs *localFS) GetMutex() *sync.Mutex {
+	return fs.mtx
 }

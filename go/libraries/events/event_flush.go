@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -38,11 +37,14 @@ type EventGrpcFlush struct {
 	LockPath string
 }
 
-// ErrEventsDataDir occurs when events are trying to be  flushed, but the events data directory
-// does not yet exist
-var ErrEventsDataDir = errors.New("unable to flush, events data directory does not exist")
+var (
+	// ErrEventsDataDir occurs when events are trying to be  flushed, but the events data directory
+	// does not yet exist
+	ErrEventsDataDir = errors.New("unable to flush, events data directory does not exist")
 
-var errInvalidFile = errors.New("unable to flush, invalid file")
+	errInvalidFile = errors.New("unable to flush, invalid file")
+	errUnknownFS   = errors.New("unknown filesystem")
+)
 
 // getGRPCEmitter gets the connection to the events grpc service
 func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
@@ -121,13 +123,10 @@ func (egf *EventGrpcFlush) FlushEvents(ctx context.Context) error {
 
 	switch fs.(type) {
 	case *filesys.InMemFS:
-		// create a mutex
-		mtx := &sync.Mutex{}
+		mtx := fs.GetMutex()
 
-		// lock the mutex
 		mtx.Lock()
 
-		// unlock the mutex
 		defer mtx.Unlock()
 
 		err := fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
@@ -144,15 +143,16 @@ func (egf *EventGrpcFlush) FlushEvents(ctx context.Context) error {
 
 		return nil
 
-	default:
-		// init a lock
+	default: // local fs
 		lck := fslock.New(egf.LockPath)
 
-		// lock the lock
-		err := lck.LockWithTimeout(30 * time.Millisecond)
+		err := lck.TryLock()
+
 		if err != nil {
-			// return no err, file locked and being worked on?
-			// log.Print(err)
+			if err == fslock.ErrLocked {
+				// path being processed
+				return nil
+			}
 			return err
 		}
 
@@ -174,5 +174,6 @@ func (egf *EventGrpcFlush) FlushEvents(ctx context.Context) error {
 		return nil
 	}
 
-	panic("I dont know this fs......")
+	panic(errUnknownFS)
+	return nil
 }

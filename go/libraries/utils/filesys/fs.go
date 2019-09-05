@@ -16,6 +16,7 @@ package filesys
 
 import (
 	"io"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -70,6 +71,10 @@ type WritableFS interface {
 // FSIterCB specifies the signature of the function that will be called for every item found while iterating.
 type FSIterCB func(path string, size int64, isDir bool) (stop bool)
 
+type LockableFS interface {
+	GetMutex() *sync.Mutex
+}
+
 // WalkableFS is an interface for walking the files and subdirectories of a directory
 type WalkableFS interface {
 
@@ -91,4 +96,5 @@ type Filesys interface {
 	ReadableFS
 	WritableFS
 	WalkableFS
+	LockableFS
 }

@@ -86,6 +86,7 @@ type InMemFS struct {
 	rwLock *sync.RWMutex
 	cwd    string
 	objs   map[string]memObj
+	mtx    *sync.Mutex
 }
 
 // EmptyInMemFS creates an empty InMemFS instance
@@ -104,7 +105,7 @@ func NewInMemFS(dirs []string, files map[string][]byte, cwd string) *InMemFS {
 		panic("cwd for InMemFilesys must be absolute path.")
 	}
 
-	fs := &InMemFS{&sync.RWMutex{}, cwd, map[string]memObj{osutil.FileSystemRoot: newEmptyDir(osutil.FileSystemRoot, nil)}}
+	fs := &InMemFS{&sync.RWMutex{}, cwd, map[string]memObj{osutil.FileSystemRoot: newEmptyDir(osutil.FileSystemRoot, nil)}, &sync.Mutex{}}
 
 	if dirs != nil {
 		for _, dir := range dirs {
@@ -540,4 +541,8 @@ func (fs *InMemFS) pathToNative(path string) string {
 		}
 	}
 	return osutil.PathToNative(path)
+}
+
+func (fs *InMemFS) GetMutex() *sync.Mutex {
+	return fs.mtx
 }
