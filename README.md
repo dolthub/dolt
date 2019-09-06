@@ -202,7 +202,6 @@ $ dolt login
 Which should open a browser window where you can create a credential for HTTPS. Upon successful creation the following will appear in the shell:
 ```
 Key successfully associated with user: youusername email you@youremail.com
-
 ```
 Next you'll want to make sure you've created the remote at https://www.dolthub.com .  Once created you can add the remote.  As an example, if the repository is created under an organization named "org", with the name "repo" you could add the remote like so:
 
