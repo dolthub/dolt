@@ -39,7 +39,7 @@ const (
 	memSpec    = "mem"
 	nbsAbsSpec = "nbs:/tmp/noms"
 	awsAlias   = "awsdb"
-	awsSpec    = "aws://dynamo_table:bucket/db"
+	awsSpec    = "aws://[dynamo_table:bucket]/db"
 )
 
 var (
