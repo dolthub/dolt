@@ -17,6 +17,16 @@ const SendMetricsCommand = "send-metrics"
 // SendMetrics is the commandFunc used that flushes the events to the grpc service
 func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	disabled, err := events.AreMetricsDisabled(dEnv)
+
+	if err != nil {
+		// log.Print(err)
+		return 1
+	}
+
+	if disabled {
+		return 0
+	}
+
 	if !disabled && err == nil {
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
@@ -32,18 +42,17 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 		gef := events.NewGrpcEventFlusher(dEnv.FS, root, dolt, dEnv)
 
 		err = gef.FlushEvents(ctx)
+
 		if err != nil {
-			return 2
+			if err == events.ErrFileLocked {
+				return 2
+			}
+
+			return 1
 		}
 
 		return 0
 	}
 
-	if err != nil {
-		// log.Print(err)
-		return 1
-	}
-
-	// log.Print(errMetricsDisabled)
 	return 0
 }

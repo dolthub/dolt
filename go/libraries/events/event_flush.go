@@ -24,6 +24,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
+	"github.com/juju/fslock"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -34,7 +35,7 @@ var (
 	// does not yet exist
 	ErrEventsDataDir = errors.New("unable to flush, events data directory does not exist")
 
-	errFileLocked  = errors.New("file is currently locked")
+	ErrFileLocked  = errors.New("file is currently locked")
 	errInvalidFile = errors.New("unable to flush, invalid file")
 )
 
@@ -132,8 +133,11 @@ func (egf *GrpcEventFlusher) FlushEvents(ctx context.Context) error {
 		return nil
 	}()
 
-	if !isUnlocked {
-		return errFileLocked
+	if !isUnlocked && err != nil {
+		if err == fslock.ErrLocked {
+			return ErrFileLocked
+		}
+		return err
 	}
 
 	if isUnlocked && err == nil {

@@ -75,9 +75,6 @@ func NewLocalFileLock(fs Filesys, filename string) *LocalFileLock {
 func (locLock *LocalFileLock) TryLock() (bool, error) {
 	err := locLock.lck.TryLock()
 	if err != nil {
-		if err == fslock.ErrLocked {
-			return false, nil
-		}
 		return false, err
 	}
 	return true, nil
