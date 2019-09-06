@@ -84,14 +84,6 @@ func TestEFInMem(t *testing.T) {
 
 			fs := filesys.NewInMemFS([]string{tempEvtsDir}, nil, tempEvtsDir)
 
-			// client := NewTestClient()
-			// sn := NewSequentialNamer()
-
-			// fbp := NewFileBackedProc(fs, homeDir, doltDir, sn.Name, sn.Check)
-
-			// em := &GrpcEmitter{client}
-			// flush := &GrpcEventFlusher{em: em, fbp: fbp, LockPath: fbp.GetEventsDirPath()}
-
 			flushTester := createFlushTester(fs, homeDir, doltDir)
 
 			ces := make([]*eventsapi.ClientEvent, 0)
