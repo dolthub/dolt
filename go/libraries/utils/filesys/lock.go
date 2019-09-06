@@ -1,10 +1,16 @@
 package filesys
 
 import (
+	"sync/atomic"
+
 	"github.com/juju/fslock"
+	"github.com/pkg/errors"
 )
 
-const defaultValue int32 = 0
+const originalStateValue int32 = 0
+const newStateValue int32 = 1
+
+var errLockUnlock = errors.New("unable to unlock the lock")
 
 type FilesysLock interface {
 	TryLock() (bool, error)
@@ -23,20 +29,37 @@ func CreateFilesysLock(fs Filesys, filename string) FilesysLock {
 }
 
 type InMemFileLock struct {
-	value int32
+	state int32
 }
 
 func NewInMemFileLock(fs Filesys) *InMemFileLock {
-	return &InMemFileLock{defaultValue}
+	return &InMemFileLock{originalStateValue}
 }
 
 func (memLock *InMemFileLock) TryLock() (bool, error) {
-	// do atomic swap
-	return true, nil
+	if atomic.CompareAndSwapInt32(&memLock.state, originalStateValue, newStateValue) {
+		return true, nil
+	}
+	return false, nil
 }
 
 func (memLock *InMemFileLock) Unlock() error {
-	// do atomic swap
+	// if memLock.state == originalStateValue {
+	if memLock.state == 0 {
+		return nil
+	}
+
+	// old := newStateValue
+	new := atomic.AddInt32(&memLock.state, -newStateValue)
+
+	// if atomic.CompareAndSwapInt32(&memLock.state, old, new) {
+	// 	return nil
+	// }
+
+	if new != 0 {
+		return errLockUnlock
+	}
+
 	return nil
 }
 
