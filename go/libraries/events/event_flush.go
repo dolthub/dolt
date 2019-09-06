@@ -24,27 +24,26 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
-	"github.com/juju/fslock"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
-
-// EventGrpcFlush parses dolt event logs sends the events to the events server
-type EventGrpcFlush struct {
-	em       *GrpcEmitter
-	fbp      *FileBackedProc
-	LockPath string
-}
 
 var (
 	// ErrEventsDataDir occurs when events are trying to be  flushed, but the events data directory
 	// does not yet exist
 	ErrEventsDataDir = errors.New("unable to flush, events data directory does not exist")
 
+	errFileLocked  = errors.New("file is currently locked")
 	errInvalidFile = errors.New("unable to flush, invalid file")
-	errUnknownFS   = errors.New("unknown filesystem")
 )
+
+// GrpcEventFlusher parses dolt event logs sends the events to the events server
+type GrpcEventFlusher struct {
+	em       *GrpcEmitter
+	fbp      *FileBackedProc
+	LockPath string
+}
 
 // getGRPCEmitter gets the connection to the events grpc service
 func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
@@ -71,19 +70,19 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
 	return NewGrpcEmitter(conn)
 }
 
-// NewEventGrpcFlush creates a new EventGrpcFlush
-func NewEventGrpcFlush(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *EventGrpcFlush {
+// NewGrpcEventFlusher creates a new GrpcEventFlusher
+func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *GrpcEventFlusher {
 	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
 
 	if exists := fbp.EventsDirExists(); !exists {
 		panic(ErrEventsDataDir)
 	}
 
-	return &EventGrpcFlush{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
+	return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
 }
 
 // flush sends the events requests from the files to the grpc server
-func (egf *EventGrpcFlush) flush(ctx context.Context, path string) error {
+func (egf *GrpcEventFlusher) flush(ctx context.Context, path string) error {
 	fs := egf.fbp.GetFileSys()
 
 	data, err := fs.ReadFile(path)
@@ -118,17 +117,26 @@ func (egf *EventGrpcFlush) flush(ctx context.Context, path string) error {
 }
 
 // FlushEvents sends event logs to the events server
-func (egf *EventGrpcFlush) FlushEvents(ctx context.Context) error {
+func (egf *GrpcEventFlusher) FlushEvents(ctx context.Context) error {
 	fs := egf.fbp.GetFileSys()
 
-	switch fs.(type) {
-	case *filesys.InMemFS:
-		mtx := fs.GetMutex()
+	fsLock := filesys.CreateFilesysLock(fs, egf.LockPath)
 
-		mtx.Lock()
+	isUnlocked, err := fsLock.TryLock()
 
-		defer mtx.Unlock()
+	defer func() error {
+		err := fsLock.Unlock()
+		if err != nil {
+			return err
+		}
+		return nil
+	}()
 
+	if !isUnlocked {
+		return errFileLocked
+	}
+
+	if isUnlocked && err == nil {
 		err := fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
 			if err := egf.flush(ctx, path); err != nil {
 				// log.Print(err)
@@ -142,38 +150,11 @@ func (egf *EventGrpcFlush) FlushEvents(ctx context.Context) error {
 		}
 
 		return nil
-
-	default: // local fs
-		lck := fslock.New(egf.LockPath)
-
-		err := lck.TryLock()
-
-		if err != nil {
-			if err == fslock.ErrLocked {
-				// path being processed
-				return nil
-			}
-			return err
-		}
-
-		defer lck.Unlock()
-
-		err = fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
-			if err := egf.flush(ctx, path); err != nil {
-				// log.Print(err)
-				return false
-			}
-			return false
-		})
-
-		if err != nil {
-			// log.Print(err)
-			return err
-		}
-
-		return nil
 	}
 
-	panic(errUnknownFS)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

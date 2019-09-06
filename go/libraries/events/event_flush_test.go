@@ -78,7 +78,7 @@ func TestEF(t *testing.T) {
 			fbp := NewFileBackedProc(fs, smHomeDir, doltDir, sn.Name, sn.Check)
 
 			em := &GrpcEmitter{client}
-			flush := &EventGrpcFlush{em: em, fbp: fbp, LockPath: fbp.GetEventsDirPath()}
+			flush := &GrpcEventFlusher{em: em, fbp: fbp, LockPath: fbp.GetEventsDirPath()}
 
 			ces := make([]*eventsapi.ClientEvent, 0)
 

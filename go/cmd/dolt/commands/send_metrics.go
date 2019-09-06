@@ -18,7 +18,7 @@ const SendMetricsCommand = "send-metrics"
 func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	disabled, err := events.AreMetricsDisabled(dEnv)
 	if !disabled && err == nil {
-		ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
 		root, err := dEnv.GetUserHomeDir()
@@ -29,9 +29,9 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 
 		dolt := dbfactory.DoltDir
 
-		egf := events.NewEventGrpcFlush(dEnv.FS, root, dolt, dEnv)
+		gef := events.NewGrpcEventFlusher(dEnv.FS, root, dolt, dEnv)
 
-		err = egf.FlushEvents(ctx)
+		err = gef.FlushEvents(ctx)
 		if err != nil {
 			return 2
 		}
