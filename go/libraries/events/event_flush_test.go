@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/dbfactory"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	testLib "github.com/liquidata-inc/dolt/go/libraries/utils/test"
 	"github.com/stretchr/testify/assert"
@@ -129,16 +129,13 @@ func TestEFLocal(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			fs := filesys.LocalFS
 
-			dDir := testLib.TestDir(dPath)
-			evtDir := filepath.Join(dDir, evtPath)
+			path := filepath.Join(dPath, evtPath)
 
-			fs.MkDirs(evtDir)
-			exists, _ := fs.Exists(evtDir)
-			assert.Equal(t, exists, true)
+			dDir := testLib.TestDir(path)
 
 			ctx := context.Background()
 
-			flushTester := createFlushTester(fs, "", dPath)
+			flushTester := createFlushTester(fs, "", dDir)
 
 			ces := make([]*eventsapi.ClientEvent, 0)
 
