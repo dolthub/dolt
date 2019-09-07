@@ -98,7 +98,7 @@ func TestEFInMem(t *testing.T) {
 			err := flushTester.Fbp.WriteEvents(testVersion, ces)
 			assert.Equal(t, err, nil)
 
-			err = flushTester.Flusher.FlushEvents(ctx)
+			err = flushTester.Flusher.Flush(ctx)
 
 			assert.Equal(t, err, nil)
 			assert.Equal(t, len(flushTester.Client.CES), len(ces))
@@ -147,7 +147,7 @@ func TestEFLocal(t *testing.T) {
 			err := flushTester.Fbp.WriteEvents(testVersion, ces)
 			assert.Equal(t, err, nil)
 
-			err = flushTester.Flusher.FlushEvents(ctx)
+			err = flushTester.Flusher.Flush(ctx)
 
 			assert.Equal(t, err, nil)
 			assert.Equal(t, len(flushTester.Client.CES), len(ces))

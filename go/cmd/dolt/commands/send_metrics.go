@@ -28,6 +28,11 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	}
 
 	if !disabled && err == nil {
+		// parse args
+		// if it's the output flag
+		// use the a WriterFlusher
+		// then call the rest of the shit
+
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
@@ -41,7 +46,7 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 
 		gef := events.NewGrpcEventFlusher(dEnv.FS, root, dolt, dEnv)
 
-		err = gef.FlushEvents(ctx)
+		err = gef.Flush(ctx)
 
 		if err != nil {
 			if err == events.ErrFileLocked {
