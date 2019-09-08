@@ -35,23 +35,20 @@ var (
 	// does not yet exist
 	ErrEventsDataDir = errors.New("unable to flush, events data directory does not exist")
 
-	ErrFileLocked  = errors.New("file is currently locked")
+	// ErrFileLocked occurs if the current file or dir is locked for processing
+	ErrFileLocked = errors.New("file is currently locked")
+
+	// errInvalidFile occurs if the filename fails the CheckingFunc
 	errInvalidFile = errors.New("unable to flush, invalid file")
 )
 
+// flushCB is the signature of the callback used to process event files
+type flushCB func(ctx context.Context, path string) error
+
+// Flusher flushes events to a destination
 type Flusher interface {
 	Flush(ctx context.Context) error
 }
-
-// GrpcEventFlusher parses dolt event logs sends the events to the events server
-type GrpcEventFlusher struct {
-	em       *GrpcEmitter
-	fbp      *FileBackedProc
-	LockPath string
-}
-
-// flushCB is the signature of the callback used on each file of the given path
-type flushCB func(ctx context.Context, path string) error
 
 // getGRPCEmitter gets the connection to the events grpc service
 func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
@@ -78,7 +75,7 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
 	return NewGrpcEmitter(conn)
 }
 
-// lockAndFlush locks the given lock path and passes the flushCB to the filesys' Iter method
+// lockAndFlush locks the given lockPath and passes the flushCB to the filesys' Iter method
 func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockPath string, fcb flushCB) error {
 	fsLock := filesys.CreateFilesysLock(fs, lockPath)
 
@@ -122,6 +119,13 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 	return nil
 }
 
+// GrpcEventFlusher parses dolt event logs sends the events to the events server
+type GrpcEventFlusher struct {
+	em       *GrpcEmitter
+	fbp      *FileBackedProc
+	LockPath string
+}
+
 // NewGrpcEventFlusher creates a new GrpcEventFlusher
 func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *GrpcEventFlusher {
 	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
@@ -134,6 +138,7 @@ func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string,
 }
 
 // flush has the function signature of the flushCb type
+// and sends events data to the events server
 func (egf *GrpcEventFlusher) flush(ctx context.Context, path string) error {
 	fs := egf.fbp.GetFileSys()
 
@@ -168,7 +173,7 @@ func (egf *GrpcEventFlusher) flush(ctx context.Context, path string) error {
 	return errInvalidFile
 }
 
-// Flush sends event logs to the events server
+// Flush satisfies the Flusher interface and calls this Flusher's flush method on each events file
 func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
 	fs := egf.fbp.GetFileSys()
 
@@ -182,11 +187,13 @@ func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
 	return nil
 }
 
+// IOFlusher parses event files and writes them to stdout
 type IOFlusher struct {
 	fbp      *FileBackedProc
 	LockPath string
 }
 
+// NewIOFlusher creates a new IOFlusher
 func NewIOFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *IOFlusher {
 	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
 
@@ -196,6 +203,8 @@ func NewIOFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *
 	return &IOFlusher{fbp: fbp, LockPath: fbp.GetEventsDirPath()}
 }
 
+// flush has the function signature of the flushCb type
+// and writes data to stdout
 func (iof *IOFlusher) flush(ctx context.Context, path string) error {
 	fs := iof.fbp.GetFileSys()
 
@@ -210,10 +219,8 @@ func (iof *IOFlusher) flush(ctx context.Context, path string) error {
 		return err
 	}
 
-	// is this the correct output format?
 	fmt.Fprintf(color.Output, "%+v\n", req)
 
-	// do  we  want to delete the file in  this format?
 	if err := fs.DeleteFile(path); err != nil {
 		return err
 	}
@@ -221,6 +228,7 @@ func (iof *IOFlusher) flush(ctx context.Context, path string) error {
 	return nil
 }
 
+// Flush satisfies the Flusher interface and calls this Flusher's flush method on each events file
 func (iof *IOFlusher) Flush(ctx context.Context) error {
 	fs := iof.fbp.GetFileSys()
 

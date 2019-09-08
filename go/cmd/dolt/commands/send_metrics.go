@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	// "github.com/fatih/color"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
@@ -41,7 +40,6 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 		dolt := dbfactory.DoltDir
 
 		if len(args) > 0 {
-			// parse args correctly...
 			if args[0] == outputFlag {
 				iof := events.NewIOFlusher(dEnv.FS, root, dolt, dEnv)
 
@@ -56,7 +54,6 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 
 				return 0
 			}
-			return 1 // unknown args
 		}
 
 		gef := events.NewGrpcEventFlusher(dEnv.FS, root, dolt, dEnv)
@@ -74,5 +71,5 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 		return 0
 	}
 
-	return 0
+	return 1
 }
