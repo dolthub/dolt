@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	// "github.com/fatih/color"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
