@@ -50,6 +50,9 @@ type GrpcEventFlusher struct {
 	LockPath string
 }
 
+// flushCB is the signature of the callback used on each file of the given path
+type flushCB func(ctx context.Context, path string) error
+
 // getGRPCEmitter gets the connection to the events grpc service
 func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
 	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
@@ -75,66 +78,9 @@ func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
 	return NewGrpcEmitter(conn)
 }
 
-// NewGrpcEventFlusher creates a new GrpcEventFlusher
-func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *GrpcEventFlusher {
-	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
-
-	if exists := fbp.EventsDirExists(); !exists {
-		panic(ErrEventsDataDir)
-	}
-
-	return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
-}
-
-// checkAndFlush is the function that checks that the file are correct
-// then it calls the call back on the
-type flushFunc func(ctx context.Context, req eventsapi.LogEventsRequest) error
-
-func checkAndFlush(ctx context.Context, path string, flusher Flusher, flush flushFunc) error {
-	fs := flusher.fbp.GetFileSys()
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	isFileValid, err := flusher.fbp.CheckingFunc(data, path)
-
-	if isFileValid && err == nil {
-		ctx, cnclFn := context.WithDeadline(ctx, time.Now().Add(time.Minute))
-		defer cnclFn()
-
-		req := &eventsapi.LogEventsRequest{}
-
-		if err := proto.Unmarshal(data, req); err != nil {
-			return err
-		}
-
-		// flush takes context and a proto request
-		err := flush(ctx, req)
-		if err != nil {
-			return err
-		}
-		// this would be in the flush method on the different flusher
-		// if err := flusher.em.SendLogEventsRequest(ctx, req); err != nil {
-		// 	return err
-		// }
-
-		if err := fs.DeleteFile(path); err != nil {
-			return err
-		}
-
-		return nil
-	}
-
-	return errInvalidFile
-}
-
-// Flush sends event logs to the events server
-func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
-	fs := egf.fbp.GetFileSys()
-
-	fsLock := filesys.CreateFilesysLock(fs, egf.LockPath)
+// lockAndFlush locks the given lock path and passes the flushCB to the filesys' Iter method
+func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockPath string, fcb flushCB) error {
+	fsLock := filesys.CreateFilesysLock(fs, lockPath)
 
 	isUnlocked, err := fsLock.TryLock()
 
@@ -154,8 +100,8 @@ func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
 	}
 
 	if isUnlocked && err == nil {
-		err := fs.Iter(egf.fbp.GetEventsDirPath(), false, func(path string, size int64, isDir bool) (stop bool) {
-			if err := checkAndFlush(ctx, path, egf.flush); err != nil {
+		err := fs.Iter(dirPath, false, func(path string, size int64, isDir bool) (stop bool) {
+			if err := fcb(ctx, path); err != nil {
 				// log.Print(err)
 				return false
 			}
@@ -169,6 +115,66 @@ func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
 		return nil
 	}
 
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// NewGrpcEventFlusher creates a new GrpcEventFlusher
+func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *GrpcEventFlusher {
+	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
+
+	if exists := fbp.EventsDirExists(); !exists {
+		panic(ErrEventsDataDir)
+	}
+
+	return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
+}
+
+// flush has the function signature of the flushCb type
+func (egf *GrpcEventFlusher) flush(ctx context.Context, path string) error {
+	fs := egf.fbp.GetFileSys()
+
+	data, err := fs.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	isFileValid, err := egf.fbp.CheckingFunc(data, path)
+
+	if isFileValid && err == nil {
+		ctx, cnclFn := context.WithDeadline(ctx, time.Now().Add(time.Minute))
+		defer cnclFn()
+
+		req := &eventsapi.LogEventsRequest{}
+
+		if err := proto.Unmarshal(data, req); err != nil {
+			return err
+		}
+
+		if err := egf.em.SendLogEventsRequest(ctx, req); err != nil {
+			return err
+		}
+
+		if err := fs.DeleteFile(path); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return errInvalidFile
+}
+
+// Flush sends event logs to the events server
+func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
+	fs := egf.fbp.GetFileSys()
+
+	evtsDir := egf.fbp.GetEventsDirPath()
+
+	err := lockAndFlush(ctx, fs, evtsDir, egf.LockPath, egf.flush)
 	if err != nil {
 		return err
 	}
@@ -190,10 +196,40 @@ func NewIOFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *
 	return &IOFlusher{fbp: fbp, LockPath: fbp.GetEventsDirPath()}
 }
 
-// func (iof *IOFlusher) flush(ctx context.Context, path string) error {
-// 	// do stuff
-// }
+func (iof *IOFlusher) flush(ctx context.Context, path string) error {
+	fs := iof.fbp.GetFileSys()
 
-// func (iof *IOFlusher) Flush(ctx context.Context) error {
-// 	// do stuff
-// }
+	data, err := fs.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	req := &eventsapi.LogEventsRequest{}
+
+	if err := proto.Unmarshal(data, req); err != nil {
+		return err
+	}
+
+	// is this the correct output format?
+	fmt.Fprintf(color.Output, "%+v\n", req)
+
+	// do  we  want to delete the file in  this format?
+	if err := fs.DeleteFile(path); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (iof *IOFlusher) Flush(ctx context.Context) error {
+	fs := iof.fbp.GetFileSys()
+
+	evtsDir := iof.fbp.GetEventsDirPath()
+
+	err := lockAndFlush(ctx, fs, evtsDir, iof.LockPath, iof.flush)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

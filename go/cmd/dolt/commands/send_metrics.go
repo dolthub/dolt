@@ -10,14 +10,14 @@ import (
 )
 
 // SendMetricsCommand is the command used for sending metrics
-const SendMetricsCommand = "send-metrics"
-
-// var errMetricsDisabled = errors.New("metrics are currently disabled")
+const (
+	SendMetricsCommand = "send-metrics"
+	outputFlag         = "--output"
+)
 
 // SendMetrics is the commandFunc used that flushes the events to the grpc service
 func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	disabled, err := events.AreMetricsDisabled(dEnv)
-
 	if err != nil {
 		// log.Print(err)
 		return 1
@@ -28,11 +28,6 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	}
 
 	if !disabled && err == nil {
-		// parse args
-		// if it's the output flag
-		// use the a WriterFlusher
-		// then call the rest of the shit
-
 		ctx, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()
 
@@ -43,6 +38,25 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 		}
 
 		dolt := dbfactory.DoltDir
+
+		if len(args) > 0 {
+			// parse args correctly...
+			if args[0] == outputFlag {
+				iof := events.NewIOFlusher(dEnv.FS, root, dolt, dEnv)
+
+				err := iof.Flush(ctx)
+				if err != nil {
+					if err == events.ErrFileLocked {
+						return 2
+					}
+
+					return 1
+				}
+
+				return 0
+			}
+			return 1 // unknown args
+		}
 
 		gef := events.NewGrpcEventFlusher(dEnv.FS, root, dolt, dEnv)
 
