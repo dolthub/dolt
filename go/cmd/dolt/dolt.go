@@ -31,7 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"

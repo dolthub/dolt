@@ -1,3 +1,5 @@
+comma := ,
+
 THIRD_PARTY_ROOT := ./third_party
 
 GOOGLEAPIS := $(THIRD_PARTY_ROOT)/googleapis
@@ -11,12 +13,12 @@ pbgo_out := ../go/gen/proto
 
 EVENTSAPI_protos := \
   dolt/services/eventsapi/v1alpha1/client_event.proto
-EVENTSAPI_pbgo_pkg_path := dolt/services/eventsapi_v1alpha1
+EVENTSAPI_pbgo_pkg_path := dolt/services/eventsapi/v1alpha1
 
 REMOTESAPI_protos := \
   dolt/services/remotesapi/v1alpha1/chunkstore.proto \
   dolt/services/remotesapi/v1alpha1/credentials.proto
-REMOTESAPI_pbgo_pkg_path := dolt/services/remotesapi_v1alpha1
+REMOTESAPI_pbgo_pkg_path := dolt/services/remotesapi/v1alpha1
 
 PBGO_pkgs := \
   REMOTESAPI \
@@ -54,7 +56,7 @@ define PBGO_template # 1=proto, 2=output pkg path, 3=output base
 $(call PROTOC_template,\
   $(1),\
   $(addprefix $(3)/$(2)/,$(notdir $(call PBGO_output,$(1)))),\
-	--go_out=plugins=grpc:$(3))
+	--go_out=plugins=grpc$(comma)paths=source_relative:$(3))
 endef
 
 $(foreach p,$(PBGO_pkgs),\
