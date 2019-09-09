@@ -20,11 +20,20 @@ option go_package = "dolt/services/remotesapi_v1alpha1;remotesapi";
 
 service ChunkStoreService {
   rpc GetRepoMetadata(GetRepoMetadataRequest) returns (GetRepoMetadataResponse);
+
   rpc HasChunks(HasChunksRequest) returns (HasChunksResponse);
+
+  // Get the download locations for a list of chunk hashes.
   rpc GetDownloadLocations(GetDownloadLocsRequest) returns (GetDownloadLocsResponse);
+
+  // Get upload locations for a list of table file hashes.
+  // NOTE: We upload full table files but download individual chunks.
   rpc GetUploadLocations(GetUploadLocsRequest) returns (GetUploadLocsResponse);
+
   rpc Rebase(RebaseRequest) returns (RebaseResponse);
+
   rpc Root(RootRequest) returns (RootResponse);
+
   rpc Commit(CommitRequest) returns (CommitResponse);
 }
 
@@ -65,20 +74,20 @@ message DownloadLoc {
   }
 }
 
-message HttpPostChunk {
+message HttpPostTableFile {
   string url = 1;
 }
 
 message UploadLoc {
-  bytes hash = 1;
+  bytes table_file_hash = 1;
   oneof location {
-    HttpPostChunk http_post = 2;
+    HttpPostTableFile http_post = 2;
   }
 }
 
 message GetDownloadLocsRequest {
   RepoId repo_id = 1;
-  repeated bytes hashes = 2;
+  repeated bytes chunk_hashes = 2;
 }
 
 message GetDownloadLocsResponse {
@@ -87,7 +96,7 @@ message GetDownloadLocsResponse {
 
 message GetUploadLocsRequest {
   RepoId repo_id = 1;
-  repeated bytes hashes = 2;
+  repeated bytes table_file_hashes = 2;
 }
 
 message GetUploadLocsResponse {
