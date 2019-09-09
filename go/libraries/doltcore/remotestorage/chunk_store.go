@@ -120,6 +120,10 @@ func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore 
 	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher}
 }
 
+func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher}
+}
+
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
 	return &remotesapi.RepoId{
 		Org:      dcs.org,
