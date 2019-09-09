@@ -20,7 +20,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 )
 
 // EventMetric is an interface for getting the eventsapi.ClientEventMetric encoding of a metric

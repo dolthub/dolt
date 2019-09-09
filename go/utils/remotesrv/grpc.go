@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
