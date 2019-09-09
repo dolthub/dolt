@@ -1,4 +1,6 @@
 ## Dolt
+This is a test change!
+
 Dolt is a relational database, i.e. it has tables, and you can execute SQL queries against those tables. It also has version control primitives that operate at the level of table cell. Thus Dolt is a database that supports fine grained value-wise version control, where all changes to data and schema are stored in commit log.
 
 It is inspired by RDBMS and Git, and attempts to blend concepts about both in a manner that allows users to better manage, distribute, and collaborate on, data.
