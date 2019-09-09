@@ -221,10 +221,6 @@ func (iof *IOFlusher) flush(ctx context.Context, path string) error {
 
 	fmt.Fprintf(color.Output, "%+v\n", req)
 
-	if err := fs.DeleteFile(path); err != nil {
-		return err
-	}
-
 	return nil
 }
 
