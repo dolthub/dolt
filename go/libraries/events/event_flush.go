@@ -117,9 +117,8 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 
 // GrpcEventFlusher parses dolt event logs sends the events to the events server
 type GrpcEventFlusher struct {
-	em       *GrpcEmitter
-	fbp      *FileBackedProc
-	LockPath string
+	em  *GrpcEmitter
+	fbp *FileBackedProc
 }
 
 // NewGrpcEventFlusher creates a new GrpcEventFlusher
@@ -130,7 +129,8 @@ func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string,
 		panic(ErrEventsDataDir)
 	}
 
-	return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
+	// return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
+	return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp}
 }
 
 // flush has the function signature of the flushCb type
@@ -172,7 +172,7 @@ func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
 
 	evtsDir := egf.fbp.GetEventsDirPath()
 
-	err := lockAndFlush(ctx, fs, evtsDir, egf.LockPath, egf.flush)
+	err := lockAndFlush(ctx, fs, evtsDir, egf.fbp.LockPath, egf.flush)
 	if err != nil {
 		return err
 	}
@@ -182,8 +182,7 @@ func (egf *GrpcEventFlusher) Flush(ctx context.Context) error {
 
 // IOFlusher parses event files and writes them to stdout
 type IOFlusher struct {
-	fbp      *FileBackedProc
-	LockPath string
+	fbp *FileBackedProc
 }
 
 // NewIOFlusher creates a new IOFlusher
@@ -193,7 +192,8 @@ func NewIOFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *
 	if exists := fbp.EventsDirExists(); !exists {
 		panic(ErrEventsDataDir)
 	}
-	return &IOFlusher{fbp: fbp, LockPath: fbp.GetEventsDirPath()}
+
+	return &IOFlusher{fbp: fbp}
 }
 
 // flush has the function signature of the flushCb type
@@ -227,7 +227,7 @@ func (iof *IOFlusher) Flush(ctx context.Context) error {
 
 	evtsDir := iof.fbp.GetEventsDirPath()
 
-	err := lockAndFlush(ctx, fs, evtsDir, iof.LockPath, iof.flush)
+	err := lockAndFlush(ctx, fs, evtsDir, iof.fbp.LockPath, iof.flush)
 	if err != nil {
 		return err
 	}

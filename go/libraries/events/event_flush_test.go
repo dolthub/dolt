@@ -51,7 +51,7 @@ func createFlushTester(fs filesys.Filesys, hdir string, ddir string) *flushTeste
 
 	fbp := NewFileBackedProc(fs, hdir, ddir, sn.Name, sn.Check)
 
-	gef := &GrpcEventFlusher{em: &GrpcEmitter{client}, fbp: fbp, LockPath: fbp.GetEventsDirPath()}
+	gef := &GrpcEventFlusher{em: &GrpcEmitter{client}, fbp: fbp}
 
 	return &flushTester{Client: client, Fbp: fbp, Flusher: gef}
 }

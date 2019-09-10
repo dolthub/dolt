@@ -30,9 +30,10 @@ import (
 )
 
 const (
-	eventsDir  = "eventsData"
-	localPath  = "temp"
-	evtDataExt = ".devts"
+	eventsDir    = "eventsData"
+	localPath    = "temp"
+	evtDataExt   = ".devts"
+	doltLockFile = "dolt.lock"
 )
 
 // fileNamingFunc is the signature used for functions used to create
@@ -116,6 +117,7 @@ type FileBackedProc struct {
 	ed           *eventsDataDir
 	namingFunc   fileNamingFunc
 	CheckingFunc fileCheckingFunc
+	LockPath     string
 }
 
 // NewFileBackedProc creates a new FileBackedProc
@@ -126,7 +128,13 @@ func NewFileBackedProc(fs filesys.Filesys, userHomeDir string, doltDir string, n
 		panic(err)
 	}
 
-	return &FileBackedProc{ed: eventsDataDir, namingFunc: nf, CheckingFunc: cf}
+	lp := filepath.Join(eventsDataDir.getPath(), doltLockFile)
+
+	if err := fs.WriteFile(lp, []byte("lockfile for dolt \n")); err != nil {
+		panic(err)
+	}
+
+	return &FileBackedProc{ed: eventsDataDir, namingFunc: nf, CheckingFunc: cf, LockPath: lp}
 }
 
 // renameFile renames the request events file using the namingFunc
