@@ -87,7 +87,7 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 		return nil
 	}()
 
-	if !isUnlocked && err != nil {
+	if err != nil {
 		if err == fslock.ErrLocked {
 			return ErrFileLocked
 		}
@@ -109,10 +109,6 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 		}
 
 		return nil
-	}
-
-	if err != nil {
-		return err
 	}
 
 	return nil
