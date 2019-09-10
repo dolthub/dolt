@@ -4,44 +4,58 @@ setup() {
     load $BATS_TEST_DIRNAME/helper/common.bash
     export PATH=$PATH:~/go/bin
     export NOMS_VERSION_NEXT=1
-    dolt config --global --unset metrics.disabled
     cd $BATS_TMPDIR
     mkdir "dolt-repo-$$"
     cd "dolt-repo-$$"
     dolt init
+    dolt config --global --unset metrics.disabled
 }
 
 teardown() {
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    rm -rf "$BATS_TMPDIR/config-$$/.dolt/eventsData/"
 }
-
-# How these tests work --
-# The initial dolt command will generate an events file
-# and will kick off a separate process that attempts to send the
-# events in this file to the grpc events server.
-# This attempt will fail, since there is no server running, which will allow
-# the events file to persist.
-# Next, we will run the "send-metrics" command with the "--output" flag
-# which will parse the events file and send it's info to stdout.
-# Because we've implemented a locking system, our "send-metrics" call should
-# fail with a status code of 2 if try to do work on the events directory while
-# a separate process is already working on it
 
 # Create events data then flush data to stdout non-concurrently
-@test "create events data then flush data to stdout non-concurrently" {
-    run dolt ls
-    [ "$status" -eq 0 ]
-    run sleep 1
-    run dolt send-metrics --output
-    [ "$status" -eq 0 ]
+@test "create events data then flush data to stdout concurrently" {
+    cp -a $BATS_TEST_DIRNAME/helper/testEvents/ $BATS_TMPDIR/config-$$/.dolt/eventsData/
+    dolt send-metrics -output >file1.txt &
+    pid1=$!
+    dolt send-metrics -output >file2.txt &
+    pid2=$!
+    wait $pid1
+    exit_code1=$?
+    wait $pid2
+    echo exit code 1
+    echo $exit_code1
+    exit_code2=$?
+    echo exit code 2
+    echo $exit_code2
+    echo file 1 contents
+    cat file1.txt
+    echo file 2 contents
+    cat file2.txt
+    if $exit_code1 = 0; then
+      if $exit_code2 = 0; then
+        # test file1 and file2 for some text like "0 events processed" and make sure the process writes that out
+        echo inside block 1
+        exit 1
+      elif exit_code2 != 2; then
+        # fail test
+        echo inside block 2
+        exit 1
+      fi
+    elif $exit_code2 != 0; then
+      # fail test
+        echo inside block 1
+        exit 1
+    else
+      if exit_code1 != 2; then
+        # fail
+        echo inside block 3
+        exit 1
+      fi
+    fi
+    exit 1
 }
 
-# Create events data then flush data to stdout concurrently
-@test "create events data then flush data to stdout concurrently" {
-    run dolt ls
-    [ "$status" -eq 0 ]
-    run dolt send-metrics --output
-    [ "$status" -eq 2 ]
-    run dolt send-metrics --output
-    [ "$status" -eq 2 ]
-}

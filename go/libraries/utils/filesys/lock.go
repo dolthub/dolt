@@ -7,8 +7,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-const originalStateValue int32 = 0
-const newStateValue int32 = 1
+const unlockedStateValue int32 = 0
+const lockedStateValue int32 = 1
 
 // errLockUnlock occurs if there is an error unlocking the lock
 var errLockUnlock = errors.New("unable to unlock the lock")
@@ -38,12 +38,12 @@ type InMemFileLock struct {
 
 // NewInMemFileLock creates a new InMemFileLock
 func NewInMemFileLock(fs Filesys) *InMemFileLock {
-	return &InMemFileLock{originalStateValue}
+	return &InMemFileLock{unlockedStateValue}
 }
 
 // TryLock attempts to lock the lock or fails if it is already locked
 func (memLock *InMemFileLock) TryLock() (bool, error) {
-	if atomic.CompareAndSwapInt32(&memLock.state, originalStateValue, newStateValue) {
+	if atomic.CompareAndSwapInt32(&memLock.state, unlockedStateValue, lockedStateValue) {
 		return true, nil
 	}
 	return false, nil
@@ -55,7 +55,7 @@ func (memLock *InMemFileLock) Unlock() error {
 		return nil
 	}
 
-	new := atomic.AddInt32(&memLock.state, -newStateValue)
+	new := atomic.AddInt32(&memLock.state, -lockedStateValue)
 
 	if new != 0 {
 		return errLockUnlock
@@ -72,6 +72,7 @@ type LocalFileLock struct {
 // NewLocalFileLock creates a new LocalFileLock
 func NewLocalFileLock(fs Filesys, filename string) *LocalFileLock {
 	lck := fslock.New(filename)
+
 	return &LocalFileLock{lck: lck}
 }
 

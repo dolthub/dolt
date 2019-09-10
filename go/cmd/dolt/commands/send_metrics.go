@@ -26,6 +26,7 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	help, _ := cli.HelpAndUsagePrinters(commandStr, sendMetricsShortDec, "", []string{}, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	// needed for direct send metrics command
 	disabled, err := events.AreMetricsDisabled(dEnv)
 	if err != nil {
 		// log.Print(err)
@@ -33,6 +34,7 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	}
 
 	if disabled {
+		cli.Println("Metrics are disabled -- return 0 \n")
 		return 0
 	}
 
@@ -60,7 +62,7 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 
 		if err != nil {
 			if err == events.ErrFileLocked {
-				return 3
+				return 2
 			}
 
 			return 1

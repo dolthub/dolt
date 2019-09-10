@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"log"
 	"strconv"
-	"time"
 
 	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
@@ -80,7 +79,6 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 	fsLock := filesys.CreateFilesysLock(fs, lockPath)
 
 	isUnlocked, err := fsLock.TryLock()
-
 	defer func() error {
 		err := fsLock.Unlock()
 		if err != nil {
@@ -102,6 +100,7 @@ func lockAndFlush(ctx context.Context, fs filesys.Filesys, dirPath string, lockP
 				// log.Print(err)
 				return false
 			}
+
 			return false
 		})
 
@@ -150,9 +149,6 @@ func (egf *GrpcEventFlusher) flush(ctx context.Context, path string) error {
 	isFileValid, err := egf.fbp.CheckingFunc(data, path)
 
 	if isFileValid && err == nil {
-		ctx, cnclFn := context.WithDeadline(ctx, time.Now().Add(time.Minute))
-		defer cnclFn()
-
 		req := &eventsapi.LogEventsRequest{}
 
 		if err := proto.Unmarshal(data, req); err != nil {
@@ -220,6 +216,10 @@ func (iof *IOFlusher) flush(ctx context.Context, path string) error {
 	}
 
 	fmt.Fprintf(color.Output, "%+v\n", req)
+
+	// if err := fs.DeleteFile(path); err != nil {
+	// 	return err
+	// }
 
 	return nil
 }
