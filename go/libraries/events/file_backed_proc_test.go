@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
+
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/stretchr/testify/assert"
 )
 
 type SequentialNamer struct {

@@ -24,6 +24,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/fslock"
+
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"

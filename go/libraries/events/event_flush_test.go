@@ -5,12 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
+
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi_v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	testLib "github.com/liquidata-inc/dolt/go/libraries/utils/test"
-	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc"
 )
 
 var (
