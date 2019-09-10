@@ -37,10 +37,6 @@ func NewTestClient() *TestClient {
 	return &TestClient{}
 }
 
-func testSMHomeDirFunc() (string, error) {
-	return homeDir, nil
-}
-
 type flushTester struct {
 	Client  *TestClient
 	Fbp     *FileBackedProc
@@ -59,7 +55,7 @@ func createFlushTester(fs filesys.Filesys, hdir string, ddir string) *flushTeste
 	return &flushTester{Client: client, Fbp: fbp, Flusher: gef}
 }
 
-func TestEFInMem(t *testing.T) {
+func TestEventFlushing(t *testing.T) {
 	tests := []struct {
 		name      string
 		numEvents int
@@ -78,79 +74,46 @@ func TestEFInMem(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
+	filesystems := []string{"inMemFS", "local"}
 
-			fs := filesys.NewInMemFS([]string{tempEvtsDir}, nil, tempEvtsDir)
+	for _, fsName := range filesystems {
+		for _, test := range tests {
 
-			flushTester := createFlushTester(fs, homeDir, doltDir)
+			t.Run(test.name, func(t *testing.T) {
+				ctx := context.Background()
 
-			ces := make([]*eventsapi.ClientEvent, 0)
+				var ft *flushTester
 
-			for i := 0; i < test.numEvents; i++ {
-				ce := &eventsapi.ClientEvent{}
-				ces = append(ces, ce)
-			}
+				if fsName == "inMemFS" {
+					fs := filesys.NewInMemFS([]string{tempEvtsDir}, nil, tempEvtsDir)
 
-			assert.Equal(t, len(ces), test.numEvents)
+					ft = createFlushTester(fs, homeDir, doltDir)
+				} else {
+					fs := filesys.LocalFS
 
-			err := flushTester.Fbp.WriteEvents(testVersion, ces)
-			assert.Equal(t, err, nil)
+					path := filepath.Join(dPath, evtPath)
+					dDir := testLib.TestDir(path)
 
-			err = flushTester.Flusher.Flush(ctx)
+					ft = createFlushTester(fs, "", dDir)
+				}
 
-			assert.Equal(t, err, nil)
-			assert.Equal(t, len(flushTester.Client.CES), len(ces))
-		})
-	}
-}
+				ces := make([]*eventsapi.ClientEvent, 0)
 
-func TestEFLocal(t *testing.T) {
-	tests := []struct {
-		name      string
-		numEvents int
-	}{
-		{
-			name:      "Flush 0 events",
-			numEvents: 0,
-		},
-		{
-			name:      "Flush 100 events",
-			numEvents: 100,
-		},
-		{
-			name:      "Flush 1000 events",
-			numEvents: 1000,
-		},
-	}
+				for i := 0; i < test.numEvents; i++ {
+					ce := &eventsapi.ClientEvent{}
+					ces = append(ces, ce)
+				}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			fs := filesys.LocalFS
+				assert.Equal(t, len(ces), test.numEvents)
 
-			path := filepath.Join(dPath, evtPath)
+				err := ft.Fbp.WriteEvents(testVersion, ces)
+				assert.Equal(t, err, nil)
 
-			dDir := testLib.TestDir(path)
+				err = ft.Flusher.Flush(ctx)
 
-			ctx := context.Background()
-
-			flushTester := createFlushTester(fs, "", dDir)
-
-			ces := make([]*eventsapi.ClientEvent, 0)
-
-			for i := 0; i < test.numEvents; i++ {
-				ce := &eventsapi.ClientEvent{}
-				ces = append(ces, ce)
-			}
-
-			err := flushTester.Fbp.WriteEvents(testVersion, ces)
-			assert.Equal(t, err, nil)
-
-			err = flushTester.Flusher.Flush(ctx)
-
-			assert.Equal(t, err, nil)
-			assert.Equal(t, len(flushTester.Client.CES), len(ces))
-		})
+				assert.Equal(t, err, nil)
+				assert.Equal(t, len(ft.Client.CES), len(ces))
+			})
+		}
 	}
 }

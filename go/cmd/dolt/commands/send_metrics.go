@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -26,7 +27,6 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	help, _ := cli.HelpAndUsagePrinters(commandStr, sendMetricsShortDec, "", []string{}, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	// needed for direct send metrics command
 	disabled, err := events.AreMetricsDisabled(dEnv)
 	if err != nil {
 		// log.Print(err)
@@ -34,7 +34,7 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	}
 
 	if disabled {
-		cli.Println("Metrics are disabled -- return 0 \n")
+		cli.Println(color.CyanString("Sending metrics is currently disabled\n"))
 		return 0
 	}
 

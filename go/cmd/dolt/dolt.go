@@ -141,14 +141,13 @@ func runMain() int {
 		}
 
 		if disabled {
-			cli.Println("Exiting without sending metrics")
 			return
 		}
 
 		// write events
 		_ = emitter.LogEvents(Version, ces)
 
-		// send events
+		// flush events
 		if err := processEventsDir(args, dEnv); err != nil {
 			// log.Print(err)
 		}
@@ -177,7 +176,6 @@ func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 			return nil
 		}
 
-		cli.Println("Starting to send metrics...")
 		cmd := exec.Command("dolt", commands.SendMetricsCommand)
 
 		if err := cmd.Start(); err != nil {
