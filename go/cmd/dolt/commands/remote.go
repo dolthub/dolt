@@ -49,7 +49,7 @@ var remoteLongDesc = "With no arguments, shows a list of existing remotes. Sever
 	"url then https is assumed.  If the <url> paramenter is in the format <organization>/<repository> then dolt will use " +
 	"the remotes.default_host from your configuration file (Which will be dolthub.com unless changed).\n" +
 	"\n" +
-	"AWS cloud remote urls should be of the form aws://dynamo-table:s3-bucket/database.  You may configure your aws " +
+	"AWS cloud remote urls should be of the form aws://[dynamo-table:s3-bucket]/database.  You may configure your aws " +
 	"cloud remote using the optional parameters aws-region, aws-creds-type, aws-creds-file.\n" +
 	"\n" +
 	"aws-creds-type specifies the means by which credentials should be retrieved in order to access the specified " +

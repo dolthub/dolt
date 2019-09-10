@@ -310,7 +310,7 @@ func parseAWSSpec(ctx context.Context, awsURL string, options SpecOptions) chunk
 	fmt.Println(awsURL, options)
 
 	u, _ := url.Parse(awsURL)
-	parts := strings.SplitN(u.Host, ":", 2) // [table] [, bucket]?
+	parts := strings.SplitN(u.Hostname(), ":", 2) // [table] [, bucket]?
 	d.PanicIfFalse(len(parts) == 2)
 
 	awsConfig := aws.NewConfig().WithRegion(options.AwsRegionOrDefault())

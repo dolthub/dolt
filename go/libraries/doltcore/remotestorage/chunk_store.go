@@ -29,7 +29,7 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/golang/snappy"
 
-	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -118,6 +118,10 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 
 func (dcs *DoltChunkStore) WithHTTPFetcher(fetcher HTTPFetcher) *DoltChunkStore {
 	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, dcs.cache, dcs.metadata, dcs.nbf, fetcher}
+}
+
+func (dcs *DoltChunkStore) WithNoopChunkCache() *DoltChunkStore {
+	return &DoltChunkStore{dcs.org, dcs.repoName, dcs.host, dcs.csClient, noopChunkCache, dcs.metadata, dcs.nbf, dcs.httpFetcher}
 }
 
 func (dcs *DoltChunkStore) getRepoId() *remotesapi.RepoId {
@@ -224,7 +228,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
 		batch := hashesBytes[st:end]
 		f := func() error {
-			req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), Hashes: batch}
+			req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch}
 			resp, err := dcs.csClient.GetDownloadLocations(ctx, &req)
 
 			if err != nil {
@@ -524,7 +528,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		hashBytes = append(hashBytes, tmp[:])
 	}
 
-	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), Hashes: hashBytes}
+	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileHashes: hashBytes}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 
 	if err != nil {
@@ -533,11 +537,11 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 
 	for _, loc := range resp.Locs {
 		var err error
-		h := hash.New(loc.Hash)
+		h := hash.New(loc.TableFileHash)
 		data := hashToData[h]
 		switch typedLoc := loc.Location.(type) {
 		case *remotesapi.UploadLoc_HttpPost:
-			err = dcs.httpPostUpload(ctx, loc.Hash, typedLoc.HttpPost, data)
+			err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, data)
 		default:
 			break
 		}
@@ -550,7 +554,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	return hashToCount, nil
 }
 
-func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostChunk, data []byte) error {
+func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, data []byte) error {
 	//resp, err := http(post.Url, "application/octet-stream", bytes.NewBuffer(data))
 	req, err := http.NewRequest(http.MethodPut, post.Url, bytes.NewBuffer(data))
 	if err != nil {

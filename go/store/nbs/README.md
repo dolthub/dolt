@@ -45,5 +45,5 @@ NBS is more-or-less "beta". There's still [work we want to do](https://github.co
 The AWS backend is available via the `aws:` scheme:
 
 ```shell
-./csv-import foo.csv aws://table:bucket::data
+./csv-import foo.csv aws://[table:bucket]::data
 ```

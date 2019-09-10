@@ -230,10 +230,10 @@ func TestHref(t *testing.T) {
 
 	sp, _ := ForDatabase("aws://table/foo/bar/baz")
 	assert.Equal("aws://table/foo/bar/baz", sp.Href())
-	sp, _ = ForDataset("aws://table:bucket/foo/bar/baz::myds")
-	assert.Equal("aws://table:bucket/foo/bar/baz", sp.Href())
-	sp, _ = ForPath("aws://table:bucket/foo/bar/baz::myds.my.path")
-	assert.Equal("aws://table:bucket/foo/bar/baz", sp.Href())
+	sp, _ = ForDataset("aws://[table:bucket]/foo/bar/baz::myds")
+	assert.Equal("aws://[table:bucket]/foo/bar/baz", sp.Href())
+	sp, _ = ForPath("aws://[table:bucket]/foo/bar/baz::myds.my.path")
+	assert.Equal("aws://[table:bucket]/foo/bar/baz", sp.Href())
 
 	sp, err := ForPath("mem::myds.my.path")
 	assert.NoError(err)
@@ -251,7 +251,7 @@ func TestForDatabase(t *testing.T) {
 		"random:",
 		"random:random",
 		"/file/ba:d",
-		"aws://t:b",
+		"aws://[t:b]",
 		"aws://t",
 		"aws://t:",
 	}
@@ -271,7 +271,7 @@ func TestForDatabase(t *testing.T) {
 		{"mem", "mem", "", ""},
 		{tmpDir, "nbs", tmpDir, "nbs:" + tmpDir},
 		{"nbs:" + tmpDir, "nbs", tmpDir, ""},
-		{"aws://table:bucket/db", "aws", "//table:bucket/db", ""},
+		{"aws://[table:bucket]/db", "aws", "//[table:bucket]/db", ""},
 		{"aws://table/db", "aws", "//table/db", ""},
 	}
 
@@ -304,7 +304,7 @@ func TestForDataset(t *testing.T) {
 		"mem:/a/bogus/path:dsname",
 		"nbs:",
 		"nbs:hello",
-		"aws://t:b/db",
+		"aws://[t:b]/db",
 		"mem::foo.value",
 	}
 
@@ -334,7 +334,7 @@ func TestForDataset(t *testing.T) {
 	}{
 		{"nbs:" + tmpDir + "::ds/one", "nbs", tmpDir, "ds/one", ""},
 		{tmpDir + "::ds/one", "nbs", tmpDir, "ds/one", "nbs:" + tmpDir + "::ds/one"},
-		{"aws://table:bucket/db::ds", "aws", "//table:bucket/db", "ds", ""},
+		{"aws://[table:bucket]/db::ds", "aws", "//[table:bucket]/db", "ds", ""},
 		{"aws://table/db::ds", "aws", "//table/db", "ds", ""},
 	}
 
@@ -380,7 +380,7 @@ func TestForPath(t *testing.T) {
 		{tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv", "nbs:" + tmpDir + "::#0123456789abcdefghijklmnopqrstuv"},
 		{"nbs:" + tmpDir + "::#0123456789abcdefghijklmnopqrstuv", "nbs", tmpDir, "#0123456789abcdefghijklmnopqrstuv", ""},
 		{"mem::#0123456789abcdefghijklmnopqrstuv", "mem", "", "#0123456789abcdefghijklmnopqrstuv", ""},
-		{"aws://table:bucket/db::foo.foo", "aws", "//table:bucket/db", "foo.foo", ""},
+		{"aws://[table:bucket]/db::foo.foo", "aws", "//[table:bucket]/db", "foo.foo", ""},
 		{"aws://table/db::foo.foo", "aws", "//table/db", "foo.foo", ""},
 	}
 

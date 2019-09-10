@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi_v1alpha1"
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
@@ -93,7 +93,7 @@ func (rs *RemoteChunkStore) GetDownloadLocations(ctx context.Context, req *remot
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
-	hashes, _ := remotestorage.ParseByteSlices(req.Hashes)
+	hashes, _ := remotestorage.ParseByteSlices(req.ChunkHashes)
 	locations, err := cs.GetChunkLocations(hashes)
 
 	if err != nil {
@@ -140,29 +140,21 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
-	hashes, _ := remotestorage.ParseByteSlices(req.Hashes)
-	absent, err := cs.HasMany(ctx, hashes)
-
-	if err != nil {
-		return nil, status.Error(codes.Internal, "HasMany failure:"+err.Error())
-	}
+	hashes, _ := remotestorage.ParseByteSlices(req.TableFileHashes)
 
 	var locs []*remotesapi.UploadLoc
 	for h := range hashes {
-		// if it's absent send the upload location
-		if _, ok := absent[h]; ok {
-			tmp := h
-			url, err := rs.getUploadUrl(logger, org, repoName, h.String())
+		tmp := h
+		url, err := rs.getUploadUrl(logger, org, repoName, h.String())
 
-			if err != nil {
-				return nil, status.Error(codes.Internal, "Failed to get upload Url.")
-			}
-
-			loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostChunk{Url: url}}
-			locs = append(locs, &remotesapi.UploadLoc{Hash: tmp[:], Location: loc})
-
-			logger(fmt.Sprintf("sending upload location for chunk %s: %s", h.String(), url))
+		if err != nil {
+			return nil, status.Error(codes.Internal, "Failed to get upload Url.")
 		}
+
+		loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostTableFile{Url: url}}
+		locs = append(locs, &remotesapi.UploadLoc{TableFileHash: tmp[:], Location: loc})
+
+		logger(fmt.Sprintf("sending upload location for chunk %s: %s", h.String(), url))
 	}
 
 	return &remotesapi.GetUploadLocsResponse{Locs: locs}, nil

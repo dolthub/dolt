@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package dolt.services.eventsapi.v1alpha1;
 
-option go_package = "dolt/services/eventsapi_v1alpha1;eventsapi";
+option go_package = "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1;eventsapi";
 
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
