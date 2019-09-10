@@ -130,8 +130,12 @@ func NewFileBackedProc(fs filesys.Filesys, userHomeDir string, doltDir string, n
 
 	lp := filepath.Join(eventsDataDir.getPath(), doltLockFile)
 
-	if err := fs.WriteFile(lp, []byte("lockfile for dolt \n")); err != nil {
-		panic(err)
+	exists, _ := fs.Exists(lp)
+
+	if !exists {
+		if err := fs.WriteFile(lp, []byte("lockfile for dolt \n")); err != nil {
+			panic(err)
+		}
 	}
 
 	return &FileBackedProc{ed: eventsDataDir, namingFunc: nf, CheckingFunc: cf, LockPath: lp}
