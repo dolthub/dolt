@@ -6,14 +6,13 @@ package eventsapi
 import (
 	context "context"
 	fmt "fmt"
-	math "math"
-
 	proto "github.com/golang/protobuf/proto"
 	duration "github.com/golang/protobuf/ptypes/duration"
 	timestamp "github.com/golang/protobuf/ptypes/timestamp"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	math "math"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -193,25 +192,19 @@ type MetricID int32
 const (
 	MetricID_METRIC_UNSPECIFIED  MetricID = 0
 	MetricID_BYTES_DOWNLOADED    MetricID = 1
-	MetricID_BYTES_UPLOADED      MetricID = 2
-	MetricID_DOWNLOAD_MS_ELAPSED MetricID = 3
-	MetricID_UPLOAD_MS_ELAPSED   MetricID = 4
+	MetricID_DOWNLOAD_MS_ELAPSED MetricID = 2
 )
 
 var MetricID_name = map[int32]string{
 	0: "METRIC_UNSPECIFIED",
 	1: "BYTES_DOWNLOADED",
-	2: "BYTES_UPLOADED",
-	3: "DOWNLOAD_MS_ELAPSED",
-	4: "UPLOAD_MS_ELAPSED",
+	2: "DOWNLOAD_MS_ELAPSED",
 }
 
 var MetricID_value = map[string]int32{
 	"METRIC_UNSPECIFIED":  0,
 	"BYTES_DOWNLOADED":    1,
-	"BYTES_UPLOADED":      2,
-	"DOWNLOAD_MS_ELAPSED": 3,
-	"UPLOAD_MS_ELAPSED":   4,
+	"DOWNLOAD_MS_ELAPSED": 2,
 }
 
 func (x MetricID) String() string {
@@ -226,26 +219,17 @@ type AttributeID int32
 
 const (
 	AttributeID_ATTRIBUTE_UNSPECIFIED AttributeID = 0
-	AttributeID_LOCAL_REMOTE_URLS     AttributeID = 1
-	AttributeID_BRANCH_NAME           AttributeID = 2
-	AttributeID_CLONE_REMOTE_URL      AttributeID = 3
-	AttributeID_REMOTEAPI_ERROR       AttributeID = 4
+	AttributeID_REMOTEURL             AttributeID = 1
 )
 
 var AttributeID_name = map[int32]string{
 	0: "ATTRIBUTE_UNSPECIFIED",
-	1: "LOCAL_REMOTE_URLS",
-	2: "BRANCH_NAME",
-	3: "CLONE_REMOTE_URL",
-	4: "REMOTEAPI_ERROR",
+	1: "REMOTEURL",
 }
 
 var AttributeID_value = map[string]int32{
 	"ATTRIBUTE_UNSPECIFIED": 0,
-	"LOCAL_REMOTE_URLS":     1,
-	"BRANCH_NAME":           2,
-	"CLONE_REMOTE_URL":      3,
-	"REMOTEAPI_ERROR":       4,
+	"REMOTEURL":             1,
 }
 
 func (x AttributeID) String() string {
