@@ -2,25 +2,47 @@ package commands
 
 import (
 	"context"
+	"time"
 
+	"github.com/fatih/color"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
 // SendMetricsCommand is the command used for sending metrics
-const SendMetricsCommand = "send-metrics"
-
-// var errMetricsDisabled = errors.New("metrics are currently disabled")
+const (
+	SendMetricsCommand  = "send-metrics"
+	outputFlag          = "output"
+	sendMetricsShortDec = "Send metrics to the events server or print them to stdout"
+)
 
 // SendMetrics is the commandFunc used that flushes the events to the grpc service
 func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	disabled, err := events.AreMetricsDisabled(dEnv)
-	if !disabled && err == nil {
-		fs := filesys.LocalFS
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
 
-		root, err := env.GetCurrentUserHomeDir()
+	help, _ := cli.HelpAndUsagePrinters(commandStr, sendMetricsShortDec, "", []string{}, ap)
+	apr := cli.ParseArgs(ap, args, help)
+
+	disabled, err := events.AreMetricsDisabled(dEnv)
+	if err != nil {
+		// log.Print(err)
+		return 1
+	}
+
+	if disabled {
+		cli.Println(color.CyanString("Sending metrics is currently disabled\n"))
+		return 0
+	}
+
+	if !disabled {
+		ctx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+
+		root, err := dEnv.GetUserHomeDir()
 		if err != nil {
 			// log.Print(err)
 			return 1
@@ -28,21 +50,26 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 
 		dolt := dbfactory.DoltDir
 
-		eventGrpcFlush := events.NewEventGrpcFlush(fs, root, dolt, dEnv)
+		var flusher events.Flusher
 
-		if err := eventGrpcFlush.FlushEvents(); err != nil {
-			// log.Print(err)
+		if apr.Contains(outputFlag) {
+			flusher = events.NewIOFlusher(dEnv.FS, root, dolt, dEnv)
+		} else {
+			flusher = events.NewGrpcEventFlusher(dEnv.FS, root, dolt, dEnv)
+		}
+
+		err = flusher.Flush(ctx)
+
+		if err != nil {
+			if err == events.ErrFileLocked {
+				return 2
+			}
+
 			return 1
 		}
 
 		return 0
 	}
 
-	if err != nil {
-		// log.Print(err)
-		return 1
-	}
-
-	// log.Print(errMetricsDisabled)
-	return 0
+	return 1
 }

@@ -133,8 +133,21 @@ func runMain() int {
 	defer func() {
 		ces := events.GlobalCollector.Close()
 		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
+
+		disabled, err := events.AreMetricsDisabled(dEnv)
+		if err != nil {
+			// log.Print(err)
+			return
+		}
+
+		if disabled {
+			return
+		}
+
+		// write events
 		_ = emitter.LogEvents(Version, ces)
 
+		// flush events
 		if err := processEventsDir(args, dEnv); err != nil {
 			// log.Print(err)
 		}
@@ -151,15 +164,23 @@ func runMain() int {
 // processEventsDir runs the dolt send-metrics command in a new process
 func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 	if len(args) > 0 {
-		if args[0] != commands.SendMetricsCommand {
-			cmd := exec.Command("dolt", commands.SendMetricsCommand)
+		ignoreCommands := map[string]struct{}{
+			commands.SendMetricsCommand: struct{}{},
+			"init":                      struct{}{},
+			"config":                    struct{}{},
+		}
 
-			if err := cmd.Start(); err != nil {
-				// log.Print(err)
-				return err
-			}
+		_, ok := ignoreCommands[args[0]]
 
+		if ok {
 			return nil
+		}
+
+		cmd := exec.Command("dolt", commands.SendMetricsCommand)
+
+		if err := cmd.Start(); err != nil {
+			// log.Print(err)
+			return err
 		}
 
 		return nil

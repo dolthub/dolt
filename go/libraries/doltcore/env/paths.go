@@ -76,3 +76,11 @@ func getLocalConfigPath() string {
 func getRepoStateFile() string {
 	return filepath.Join(dbfactory.DoltDir, repoStateFile)
 }
+
+func getHomeDir(hdp HomeDirProvider) (string, error) {
+	homeDir, err := hdp()
+	if err != nil {
+		return "", err
+	}
+	return homeDir, nil
+}
