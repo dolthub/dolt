@@ -382,13 +382,17 @@ func processQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *do
 	case *sqlparser.Show:
 		return nil, sqlShow(ctx, root, s)
 	case *sqlparser.Select, *sqlparser.OtherRead:
-		sqlSch, rowIter, err := sqlNewEngine(query, root)
+		_, sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
 			err = prettyPrintResults(ctx, root.VRW().Format(), sqlSch, rowIter)
 		}
 		return nil, err
 	case *sqlparser.Insert:
-		return sqlInsert(ctx, dEnv, root, s)
+		newRoot, sqlSch, rowIter, err := sqlNewEngine(query, root)
+		if err == nil {
+			err = prettyPrintResults(ctx, newRoot.VRW().Format(), sqlSch, rowIter)
+		}
+		return newRoot, err
 	case *sqlparser.Update:
 		return sqlUpdate(ctx, dEnv, root, s, query)
 	case *sqlparser.Delete:
@@ -437,7 +441,7 @@ func processBatchQuery(ctx context.Context, query string, dEnv *env.DoltEnv, roo
 }
 
 // Executes a SQL statement of either SHOW or SELECT and returns values for printing if applicable.
-func sqlNewEngine(query string, root *doltdb.RootValue) (sql.Schema, sql.RowIter, error) {
+func sqlNewEngine(query string, root *doltdb.RootValue) (*doltdb.RootValue, sql.Schema, sql.RowIter, error) {
 	db := dsqle.NewDatabase("dolt", root)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
@@ -448,11 +452,12 @@ func sqlNewEngine(query string, root *doltdb.RootValue) (sql.Schema, sql.RowIter
 		engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
 		err := engine.Init()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
-	return engine.Query(ctx, query)
+	sqlSch, rowIter, err := engine.Query(ctx, query)
+	return db.Root(), sqlSch, rowIter, err
 }
 
 // Executes a SQL show statement and prints the result to the CLI.

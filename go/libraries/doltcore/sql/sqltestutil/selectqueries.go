@@ -669,9 +669,10 @@ var BasicSelectTests = []SelectTest{
 		ExpectedErr: `Unknown column: 'dne'`,
 	},
 	{
-		Name:        "unknown column in order by",
-		Query:       "select * from people where rating > 8.0 order by dne",
-		ExpectedErr: `Unknown column: 'dne'`,
+		Name:            "unknown column in order by",
+		Query:           "select * from people where rating > 8.0 order by dne",
+		ExpectedErr:     `Unknown column: 'dne'`,
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name:        "unsupported comparison",

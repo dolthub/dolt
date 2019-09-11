@@ -70,14 +70,14 @@ teardown() {
 @test "interact with a multiple primary key table with sql" {
     run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows inserted: 1" ]
+    [[ "$output" =~ "| 1       |" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "c5" ]] || false
     [[ "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,1,7,7,7,7,7),(1,0,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows inserted: 2" ]
+    [[ "$output" =~ "| 2       |" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "c5" ]] || false
@@ -90,11 +90,11 @@ teardown() {
     [[ ! "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,1,7,7,7,7,7)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: Duplicate primary key: 'pk1: 0, pk2: 1'" ] || false
+    [ "$output" = "duplicate primary key given" ] || false
     run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: One or more primary key columns missing from insert statement" ] || false
+    [ "$output" = "column <pk2> received nil but is non-nullable" ] || false
     run dolt sql -q "insert into test (c1,c2,c3,c4,c5) values (6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: One or more primary key columns missing from insert statement" ] || false
+    [ "$output" = "column <pk1> received nil but is non-nullable" ] || false
 }

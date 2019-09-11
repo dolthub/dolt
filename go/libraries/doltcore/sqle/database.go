@@ -71,8 +71,13 @@ func (db *Database) Tables() map[string]sql.Table {
 		if err != nil {
 			panic(err)
 		}
-		tables[name] = &DoltTable{name: name, table: table, sch: sch}
+		tables[name] = &DoltTable{name: name, table: table, sch: sch, db: db}
 	}
 
 	return tables
+}
+
+// Root returns the root value for the database.
+func (db *Database) Root() *doltdb.RootValue {
+	return db.root
 }

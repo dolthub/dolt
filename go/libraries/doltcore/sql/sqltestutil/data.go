@@ -115,7 +115,7 @@ func createAppearancesTestSchema() schema.Schema {
 	return schema.SchemaFromCols(colColl)
 }
 
-func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float32) row.Row {
+func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float64) row.Row {
 	vals := row.TaggedValues{
 		IdTag:        types.Int(id),
 		FirstTag:     types.String(first),
@@ -134,7 +134,7 @@ func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating fl
 	return r
 }
 
-func newEpsRow(id int, name string, airdate int, rating float32) row.Row {
+func newEpsRow(id int, name string, airdate int, rating float64) row.Row {
 	vals := row.TaggedValues{
 		EpisodeIdTag: types.Int(id),
 		EpNameTag:    types.String(name),
@@ -168,7 +168,7 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 }
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
-func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float32, uid uuid.UUID, numEpisodes uint64) row.Row {
+func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float64, uid uuid.UUID, numEpisodes uint64) row.Row {
 	vals := row.TaggedValues{
 		IdTag:          types.Int(id),
 		FirstTag:       types.String(first),
@@ -336,4 +336,11 @@ func CreateTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema, AllPeopleRows...)
 	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema, AllEpsRows...)
 	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema, AllAppsRows...)
+}
+
+// Creates a test database without any data in it
+func CreateEmptyTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
+	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
+	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
+	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
 }

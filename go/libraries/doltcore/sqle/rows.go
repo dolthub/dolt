@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -98,12 +99,20 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 // Returns a Dolt row representation for SQL row given
 func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Schema) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
+	allCols := doltSchema.GetAllCols()
 	for i, val := range r {
+		tag := allCols.Tags[i]
+		schCol := allCols.TagToCol[tag]
 		if val != nil {
-			taggedVals[uint64(i)] = SqlValToNomsVal(val)
+			var err error
+			taggedVals[tag], err = SqlValToNomsVal(val, schCol.Kind)
+			if err != nil {
+				return nil, err
+			}
+		} else if !schCol.IsNullable() {
+			return nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
 		}
 	}
-
 	return row.New(nbf, doltSchema, taggedVals)
 }
 
