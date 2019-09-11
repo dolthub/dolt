@@ -26,68 +26,53 @@ import (
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
-const singleSelectQueryTest = "" //"Natural join with join clause"
+const singleInsertQueryTest = "" //"Natural join with join clause"
 
 // Set to false to run tests known to be broken
-const skipBrokenSelect = true
+const skipBrokenInsert = true
 
-func TestExecuteSelect(t *testing.T) {
-	for _, test := range BasicSelectTests {
+func TestExecuteInsert(t *testing.T) {
+	for _, test := range BasicInsertTests {
 		t.Run(test.Name, func(t *testing.T) {
-			testSelectQuery(t, test)
-		})
-	}
-}
-
-func TestJoins(t *testing.T) {
-	for _, tt := range JoinTests {
-		t.Run(tt.Name, func(t *testing.T) {
-			testSelectQuery(t, tt)
-		})
-	}
-}
-
-// Tests of case sensitivity handling
-func TestCaseSensitivity(t *testing.T) {
-	for _, tt := range CaseSensitivityTests {
-		t.Run(tt.Name, func(t *testing.T) {
-			testSelectQuery(t, tt)
+			testInsertQuery(t, test)
 		})
 	}
 }
 
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
-func testSelectQuery(t *testing.T, test SelectTest) {
+func testInsertQuery(t *testing.T, test InsertTest) {
 	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
 		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
 	}
 
-	if len(singleSelectQueryTest) > 0 && test.Name != singleSelectQueryTest {
-		t.Skip("Skipping tests until " + singleSelectQueryTest)
+	if len(singleInsertQueryTest) > 0 && test.Name != singleInsertQueryTest {
+		t.Skip("Skipping tests until " + singleInsertQueryTest)
 	}
 
-	if len(singleSelectQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenSelect {
+	if len(singleInsertQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenInsert {
 		t.Skip("Skipping test broken on SQL engine")
 	}
 
 	dEnv := dtestutils.CreateTestEnv()
-	CreateTestDatabase(dEnv, t)
+	CreateEmptyTestDatabase(dEnv, t)
 
 	if test.AdditionalSetup != nil {
 		test.AdditionalSetup(t, dEnv)
 	}
 
+	var err error
 	root, _ := dEnv.WorkingRoot(context.Background())
-	actualRows, sch, err := executeSelect(context.Background(), test.ExpectedSchema, root, test.Query)
+	root, err = executeInsert(context.Background(), root, test.InsertQuery)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
-		// Too much work to synchronize error messages between the two implementations, so for now we'll just assert that an error occurred.
-		// require.Contains(t, err.Error(), test.ExpectedErr)
 		return
 	} else {
 		require.NoError(t, err)
 	}
+
+	actualRows, sch, err := executeSelect(context.Background(), test.ExpectedSchema, root, test.SelectQuery)
+	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)
 	assert.Equal(t, test.ExpectedSchema, sch)

@@ -273,19 +273,34 @@ func TestInsert(t *testing.T) {
 		},
 		{
 			name: "insert one row",
-			query: `insert into people (id, name, age, is_married) values 
+			query: `insert into people (id, name, age, is_married) values
 				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10, false)`,
 			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000005")},
 		},
 		{
+			name: "includes functions",
+			query: `insert into people (id, name, age, is_married, title) values
+				('00000000-0000-0000-0000-000000000005', UPPER('FirsNam LasNam'), 33, false, TO_BASE64('Super-Resident'))`,
+			expectedIds: []uuid.UUID{
+				uuid.MustParse("00000000-0000-0000-0000-000000000005"),
+			},
+		},
+		{
+			name:  "no column names",
+			query: `insert into people values ('00000000-0000-0000-0000-000000000005', 'FirsNam LasNam', 33, false, 'Super-Resident')`,
+			expectedIds: []uuid.UUID{
+				uuid.MustParse("00000000-0000-0000-0000-000000000005"),
+			},
+		},
+		{
 			name: "insert one row all columns",
-			query: `insert into people (id, name, age, is_married, title) values 
+			query: `insert into people (id, name, age, is_married, title) values
 				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10, false, 'Goon')`,
 			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000005")},
 		},
 		{
 			name: "insert two rows all columns",
-			query: `insert into people (id, name, age, is_married, title) values 
+			query: `insert into people (id, name, age, is_married, title) values
 				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10, false, 'Goon'),
 				('00000000-0000-0000-0000-000000000006', 'Kobe Buffalomeat', 30, false, 'Linebacker')`,
 			expectedIds: []uuid.UUID{
@@ -294,23 +309,43 @@ func TestInsert(t *testing.T) {
 			},
 		},
 		{
+			name: "mixed order",
+			query: `insert into people (name, id, age, is_married, title) values
+				('FirsNam LasNam', '00000000-0000-0000-0000-000000000005', 33, false, 'Super-Resident')`,
+			expectedIds: []uuid.UUID{
+				uuid.MustParse("00000000-0000-0000-0000-000000000005"),
+			},
+		},
+		{
+			name: "too many values",
+			query: `insert into people (name, id, age, is_married) values
+				('FirsNam LasNam', '00000000-0000-0000-0000-000000000005', 33, false, 'Super-Resident')`,
+			expectedRes: 1,
+		},
+		{
+			name: "not enough values",
+			query: `insert into people (name, id, age, is_married, title) values
+				('FirsNam LasNam', '00000000-0000-0000-0000-000000000005', 33, false)`,
+			expectedRes: 1,
+		},
+		{
 			name: "missing required column",
-			query: `insert into people (id, name, age) values 
+			query: `insert into people (id, name, age) values
 				('00000000-0000-0000-0000-000000000005', 'Frank Frankerson', 10)`,
 			expectedRes: 1,
 		},
 		{
 			name: "existing primary key",
-			query: `insert into people (id, name, age, is_married, title) values 
+			query: `insert into people (id, name, age, is_married, title) values
 				('00000000-0000-0000-0000-000000000000', 'Frank Frankerson', 10, false, 'Goon')`,
 			expectedRes: 1,
 		},
-		{
-			name: "insert ignore",
-			query: `insert ignore into people (id, name, age, is_married, title) values 
-				('00000000-0000-0000-0000-000000000000', 'Frank Frankerson', 10, false, 'Goon')`,
-			expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000000")},
-		},
+		//{
+		//	name: "insert ignore",
+		//	query: `insert ignore into people (id, name, age, is_married, title) values
+		//		('00000000-0000-0000-0000-000000000000', 'Frank Frankerson', 10, false, 'Goon')`,
+		//	expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000000")},
+		//},
 	}
 
 	for _, test := range tests {
@@ -386,6 +421,14 @@ func TestUpdate(t *testing.T) {
 			query:       `update people set name = null where id ='00000000-0000-0000-0000-000000000000'`,
 			expectedRes: 1,
 		},
+		//{
+		//	name:  "on duplicate update",
+		//	query: `insert into people (id, name, age, is_married) values
+		//		('00000000-0000-0000-0000-000000000000', 'Bill Billerson', 99, true)
+		//		ON DUPLICATE KEY UPDATE age=99`,
+		//	expectedIds: []uuid.UUID{uuid.MustParse("00000000-0000-0000-0000-000000000000")},
+		//	expectedAges: []uint{99},
+		//},
 	}
 
 	for _, test := range tests {

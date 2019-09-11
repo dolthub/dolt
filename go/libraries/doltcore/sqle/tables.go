@@ -22,8 +22,10 @@ import (
 
 	"github.com/src-d/go-mysql-server/sql"
 
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
@@ -31,6 +33,7 @@ type DoltTable struct {
 	name  string
 	table *doltdb.Table
 	sch   schema.Schema
+	db    *Database
 }
 
 // Implements sql.IndexableTable
@@ -94,6 +97,47 @@ func (t *DoltTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 // Returns the table rows for the partition given (all rows of the table).
 func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	return newRowIterator(t, ctx)
+}
+
+// Insert adds the given row to the table and updates the database root.
+func (t *DoltTable) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	dRow, err := SqlRowToDoltRow(t.table.Format(), sqlRow, t.sch)
+	if err != nil {
+		return err
+	}
+
+	key, err := dRow.NomsMapKey(t.sch).Value(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
+	}
+	_, rowExists, err := t.table.GetRow(ctx, key.(types.Tuple), t.sch)
+	if err != nil {
+		return errhand.BuildDError("failed to read table").AddCause(err).Build()
+	}
+	if rowExists {
+		return errors.New("duplicate primary key given")
+	}
+
+	typesMap, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
+	}
+	mapEditor := typesMap.Edit()
+	updated, err := mapEditor.Set(dRow.NomsMapKey(t.sch), dRow.NomsMapValue(t.sch)).Map(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
+	}
+	newTable, err := t.table.UpdateRows(ctx, updated)
+	if err != nil {
+		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
+	}
+	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
+	if err != nil {
+		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
+	}
+	t.table = newTable
+	t.db.root = newRoot
+	return nil
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.

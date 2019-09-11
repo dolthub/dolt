@@ -251,12 +251,17 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
 func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, table *Table) (*RootValue, error) {
+	return PutTable(ctx, root, ddb.ValueReadWriter(), tName, table)
+}
+
+// PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
+func PutTable(ctx context.Context, root *RootValue, vrw types.ValueReadWriter, tName string, table *Table) (*RootValue, error) {
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
 	rootValSt := root.valueSt
-	tableRef, err := writeValAndGetRef(ctx, ddb.ValueReadWriter(), table.tableStruct)
+	tableRef, err := writeValAndGetRef(ctx, vrw, table.tableStruct)
 
 	if err != nil {
 		return nil, err

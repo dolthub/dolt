@@ -15,7 +15,9 @@
 package sqle
 
 import (
+	"errors"
 	"fmt"
+	"math"
 
 	"github.com/google/uuid"
 	"github.com/src-d/go-mysql-server/sql"
@@ -80,45 +82,142 @@ func nomsValToSqlVal(val types.Value) interface{} {
 	}
 }
 
-func SqlValToNomsVal(val interface{}) types.Value {
+func SqlValToNomsVal(val interface{}, kind types.NomsKind) (types.Value, error) {
 	if val == nil {
-		return nil
+		return nil, nil
 	}
 
-	switch e := val.(type) {
-	case bool:
-		return types.Bool(e)
-	case int:
-		return types.Int(e)
-	case int8:
-		return types.Int(e)
-	case int16:
-		return types.Int(e)
-	case int32:
-		return types.Int(e)
-	case int64:
-		return types.Int(e)
-	case uint:
-		return types.Uint(e)
-	case uint8:
-		return types.Uint(e)
-	case uint16:
-		return types.Uint(e)
-	case uint32:
-		return types.Uint(e)
-	case uint64:
-		return types.Uint(e)
-	case float32:
-		return types.Float(e)
-	case float64:
-		return types.Float(e)
-	case string:
-		if u, err := uuid.Parse(e); err == nil {
-			return types.UUID(u)
+	switch kind {
+	case types.BoolKind:
+		switch e := val.(type) {
+		case bool:
+			return types.Bool(e), nil
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			return types.Bool(e != 0), nil
+		case float32, float64:
+			return types.Bool(int(math.Round(e.(float64))) != 0), nil
+		case string:
+			return types.Bool(false), nil
+		default:
+			return nil, errors.New(fmt.Sprintf("Cannot convert SQL type <%T> val <%v> to bool", val, val))
 		}
-		return types.String(e)
+	case types.IntKind:
+		switch e := val.(type) {
+		case int:
+			return types.Int(e), nil
+		case int8:
+			return types.Int(e), nil
+		case int16:
+			return types.Int(e), nil
+		case int32:
+			return types.Int(e), nil
+		case int64:
+			return types.Int(e), nil
+		case uint:
+			if e > math.MaxInt64 {
+				return nil, errors.New(fmt.Sprintf("Cannot convert SQL val <%v> to int", e))
+			}
+			return types.Int(e), nil
+		case uint8:
+			return types.Int(e), nil
+		case uint16:
+			return types.Int(e), nil
+		case uint32:
+			return types.Int(e), nil
+		case uint64:
+			if e > math.MaxInt64 {
+				return nil, errors.New(fmt.Sprintf("Cannot convert SQL val <%v> to int", e))
+			}
+			return types.Int(e), nil
+		default:
+			return nil, errors.New(fmt.Sprintf("Cannot convert SQL type <%T> val <%v> to int", val, val))
+		}
+	case types.UintKind:
+		switch e := val.(type) {
+		case int:
+			if e < 0 {
+				return nil, errors.New(fmt.Sprintf("Cannot convert negative SQL val <%v> to uint", e))
+			}
+			return types.Uint(e), nil
+		case int8:
+			if e < 0 {
+				return nil, errors.New(fmt.Sprintf("Cannot convert negative SQL val <%v> to uint", e))
+			}
+			return types.Uint(e), nil
+		case int16:
+			if e < 0 {
+				return nil, errors.New(fmt.Sprintf("Cannot convert negative SQL val <%v> to uint", e))
+			}
+			return types.Uint(e), nil
+		case int32:
+			if e < 0 {
+				return nil, errors.New(fmt.Sprintf("Cannot convert negative SQL val <%v> to uint", e))
+			}
+			return types.Uint(e), nil
+		case int64:
+			if e < 0 {
+				return nil, errors.New(fmt.Sprintf("Cannot convert negative SQL val <%v> to uint", e))
+			}
+			return types.Uint(e), nil
+		case uint:
+			return types.Uint(e), nil
+		case uint8:
+			return types.Uint(e), nil
+		case uint16:
+			return types.Uint(e), nil
+		case uint32:
+			return types.Uint(e), nil
+		case uint64:
+			return types.Uint(e), nil
+		default:
+			return nil, errors.New(fmt.Sprintf("Cannot convert SQL type <%T> val <%v> to uint", val, val))
+		}
+	case types.FloatKind:
+		switch e := val.(type) {
+		case int:
+			return types.Float(e), nil
+		case int8:
+			return types.Float(e), nil
+		case int16:
+			return types.Float(e), nil
+		case int32:
+			return types.Float(e), nil
+		case int64:
+			return types.Float(e), nil
+		case uint:
+			return types.Float(e), nil
+		case uint8:
+			return types.Float(e), nil
+		case uint16:
+			return types.Float(e), nil
+		case uint32:
+			return types.Float(e), nil
+		case uint64:
+			return types.Float(e), nil
+		case float32:
+			return types.Float(e), nil
+		case float64:
+			return types.Float(e), nil
+		default:
+			return nil, errors.New(fmt.Sprintf("Cannot convert SQL type <%T> val <%v> to float", val, val))
+		}
+	case types.StringKind:
+		e, ok := val.(string)
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("Cannot convert SQL type <%T> val <%v> to string", val, val))
+		}
+		return types.String(e), nil
+	case types.UUIDKind:
+		e, ok := val.(string)
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("Cannot convert SQL type <%T> val <%v> to uuid", val, val))
+		}
+		if u, err := uuid.Parse(e); err == nil {
+			return types.UUID(u), nil
+		}
+		return nil, errors.New(fmt.Sprintf("Cannot convert SQL val <%v> to uuid", e))
 	default:
-		panic(fmt.Sprintf("Unexpected type <%T> val <%v>", val, val))
+		return nil, errors.New("invalid Kind to convert SQL type to")
 	}
 }
 

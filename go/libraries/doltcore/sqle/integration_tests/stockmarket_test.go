@@ -65,7 +65,7 @@ CREATE TABLE join_result (
   High float  COMMENT 'tag:5',
   Low float  COMMENT 'tag:6',
   Close float  COMMENT 'tag:7',
-  Volumne float  COMMENT 'tag:8',
+  Volume float  COMMENT 'tag:8',
   OpenInt varchar(80)  COMMENT 'tag:9',
   Name varchar(1024) COMMENT 'tag:10',
   Sector varchar(1024) COMMENT 'tag:11',
