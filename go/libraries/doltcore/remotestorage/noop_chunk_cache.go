@@ -41,7 +41,7 @@ func (*noopChunkCacheImpl) Has(hashes hash.HashSet) (absent hash.HashSet) {
 }
 
 func (*noopChunkCacheImpl) PutChunk(ch *chunks.Chunk) bool {
-	return false
+	return true
 }
 
 func (*noopChunkCacheImpl) GetAndClearChunksToFlush() map[hash.Hash]chunks.Chunk {
