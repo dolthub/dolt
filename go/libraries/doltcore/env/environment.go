@@ -573,3 +573,9 @@ func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
 
 	return NoRemote, ErrCantDetermineDefault
 }
+
+// GetUserHomeDir returns the user's home dir
+// based on current filesys
+func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
+	return getHomeDir(dEnv.hdp)
+}
