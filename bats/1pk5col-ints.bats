@@ -117,7 +117,6 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "dolt sql all manner of inserts" {
-    skip "Temporary skip due to bug that needs to be tackled in go-mysql-server"
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| 1       |" ]] || false
@@ -139,17 +138,16 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$output" = "column <pk> received nil but is non-nullable" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Error inserting rows: Unknown column: 'c6'" ]
+    [ "$output" = "invalid column name c6" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
     [ "$output" = "duplicate primary key given" ] || false
 }
 
 @test "dolt sql insert same column twice" {
-    skip "Temporary skip due to bug that needs to be tackled in go-mysql-server"
     run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Repeated column" ]] || false
+    [ "$output" = "duplicate column name c1" ]
 }
 
 @test "dolt sql insert no columns specified" {
