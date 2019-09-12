@@ -106,10 +106,14 @@ var BasicInsertTests = []InsertTest{
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first", types.StringKind, "last", types.StringKind),
 	},
 	{
-		Name:            "insert partial columns duplicate column",
-		InsertQuery:     "insert into people (id, first, last, first) values (2, 'Bart', 'Simpson', 'Bart')",
-		ExpectedErr:     "duplicate column",
-		SkipOnSqlEngine: true,
+		Name:        "insert partial columns duplicate column",
+		InsertQuery: "insert into people (id, first, last, first) values (2, 'Bart', 'Simpson', 'Bart')",
+		ExpectedErr: "duplicate column",
+	},
+	{
+		Name:        "insert partial columns invalid column",
+		InsertQuery: "insert into people (id, first, last, middle) values (2, 'Bart', 'Simpson', 'Nani')",
+		ExpectedErr: "duplicate column",
 	},
 	{
 		Name:        "insert missing non-nullable column",
