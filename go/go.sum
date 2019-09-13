@@ -198,6 +198,8 @@ github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190821121850-0e0249cf7bc0 h1
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190821121850-0e0249cf7bc0/go.mod h1:DdWE0ku/mNfuLsRJIrHeHpDtB7am+6oopxEsQKmVkx8=
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190911213247-6dfc00bbb116 h1:1sjwK2ofL06EFX8f0wbA/RW2Y2C3su42YBg/O4Rn9bg=
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190911213247-6dfc00bbb116/go.mod h1:DdWE0ku/mNfuLsRJIrHeHpDtB7am+6oopxEsQKmVkx8=
+github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190912171848-afe92c9129ca h1:m+IjqmcLBpmNI/58CcE+GOjsD5gxwfK1etDdcVAUx/k=
+github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190912171848-afe92c9129ca/go.mod h1:DdWE0ku/mNfuLsRJIrHeHpDtB7am+6oopxEsQKmVkx8=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClMUiIr+hF2LGt8KRuUa2Vd2GI1sNgHgSXoU=
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/mmap-go v1.0.3 h1:2LndAeAtup9rpvUmu4wZSYCsjCQ0Zpc+NqE+6+PnT7g=
