@@ -387,7 +387,7 @@ func processQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *do
 			err = prettyPrintResults(ctx, root.VRW().Format(), sqlSch, rowIter)
 		}
 		return nil, err
-	case *sqlparser.Insert:
+	case *sqlparser.Insert, *sqlparser.Delete:
 		newRoot, sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
 			err = prettyPrintResults(ctx, newRoot.VRW().Format(), sqlSch, rowIter)
@@ -395,8 +395,6 @@ func processQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *do
 		return newRoot, err
 	case *sqlparser.Update:
 		return sqlUpdate(ctx, dEnv, root, s, query)
-	case *sqlparser.Delete:
-		return sqlDelete(ctx, dEnv, root, s, query)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {

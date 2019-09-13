@@ -140,6 +140,35 @@ func (t *DoltTable) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	return nil
 }
 
+// Delete removes the given row to the table and updates the database root.
+func (t *DoltTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+	dRow, err := SqlRowToDoltRow(t.table.Format(), sqlRow, t.sch)
+	if err != nil {
+		return err
+	}
+
+	typesMap, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
+	}
+	mapEditor := typesMap.Edit()
+	updated, err := mapEditor.Remove(dRow.NomsMapKey(t.sch)).Map(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
+	}
+	newTable, err := t.table.UpdateRows(ctx, updated)
+	if err != nil {
+		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
+	}
+	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
+	if err != nil {
+		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
+	}
+	t.table = newTable
+	t.db.root = newRoot
+	return nil
+}
+
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
 type doltTablePartitionIter struct {
 	sql.PartitionIter

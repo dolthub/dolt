@@ -43,7 +43,7 @@ type InsertTest struct {
 	SkipOnSqlEngine bool
 }
 
-// BasicSelectTests cover basic select statement features and error handling
+// BasicInsertTests cover basic insert statement features and error handling
 var BasicInsertTests = []InsertTest{
 	{
 		Name:           "insert no columns",

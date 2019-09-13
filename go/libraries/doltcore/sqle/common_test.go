@@ -66,11 +66,10 @@ func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 }
 
 // Runs the query given and returns the error (if any).
-func executeInsert(ctx context.Context, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
+func executeModify(ctx context.Context, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
 	db := NewDatabase("dolt", root)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
 	engine.Init()
 	sqlCtx := sql.NewContext(ctx)
 	_, _, err := engine.Query(sqlCtx, query)
