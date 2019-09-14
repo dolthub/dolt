@@ -295,24 +295,24 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where pk=2"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows deleted: 1" ]
+    [[ "$output" =~ "| 1       |" ]] || false
     run dolt sql -q "delete from test"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows deleted: 2" ]
+    [[ "$output" =~ "| 2       |" ]] || false
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where pk>0"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows deleted: 2" ]
+    [[ "$output" =~ "| 2       |" ]] || false
     run dolt sql -q "delete from test where c1=1"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows deleted: 1" ]
+    [[ "$output" =~ "| 1       |" ]] || false
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where c10=1"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown column: 'c10'" ]] || false
+    [ "$output" = "column \"c10\" could not be found in any table in scope" ]
     run dolt sql -q "delete from test where c1='foo'"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error during update" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0       |" ]] || false
 }
 
 @test "delete a row with dolt table rm-row" {
