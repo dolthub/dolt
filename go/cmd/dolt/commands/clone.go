@@ -193,26 +193,55 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return errhand.BuildDError("error: clone failed").AddCause(err).Build()
 	}
 
-	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
+	if branch == "" {
+		branches, err := dEnv.DoltDB.GetBranches(ctx)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to list branches").AddCause(err).Build()
+		}
+
+		for _, brnch := range branches {
+			branch = brnch.GetPath()
+
+			if branch == "master" {
+				break
+			}
+		}
+	}
+
+	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
 	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
-		return errhand.BuildDError("error: could not get master").AddCause(err).Build()
+		return errhand.BuildDError("error: could not get " + branch).AddCause(err).Build()
+	}
+
+	remoteRef := ref.NewRemoteRef(remoteName, branch)
+	err = dEnv.DoltDB.FastForward(ctx, remoteRef, cm)
+
+	if err != nil {
+		return errhand.BuildDError("error: could not create remote ref at " +remoteRef.String()).AddCause(err).Build()
 	}
 
 	rootVal, err := cm.GetRootValue()
 
 	if err != nil {
-		return errhand.BuildDError("error: could not get the root value of master").AddCause(err).Build()
+		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
 	h, err := rootVal.HashOf()
 
 	if err != nil {
-		return errhand.BuildDError("error: could not get the root value of master.").AddCause(err).Build()
+		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef("master")}
+	_, err = dEnv.DoltDB.WriteRootValue(ctx, rootVal)
+
+	if err != nil {
+		return errhand.BuildDError("error: could not write root value").AddCause(err).Build()
+	}
+
+	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef(branch)}
 	dEnv.RepoState.Staged = h.String()
 	dEnv.RepoState.Working = h.String()
 	err = dEnv.RepoState.Save()
