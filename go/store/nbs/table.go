@@ -27,6 +27,7 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"hash/crc32"
 	"io"
 	"sync"
@@ -257,3 +258,20 @@ type chunkSource interface {
 }
 
 type chunkSources []chunkSource
+
+type TableFile interface {
+	FileId() string
+	NumChunks() int
+	Open() (io.ReadCloser, error)
+}
+
+type WriteCloserWithContext interface {
+	io.Writer
+	Close(ctx context.Context) error
+}
+
+type TableFileStore interface {
+	Sources(ctx context.Context) (hash.Hash, []TableFile, error)
+	NewSink(ctx context.Context, fileId string, numChunks int) (WriteCloserWithContext, error)
+	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
+}

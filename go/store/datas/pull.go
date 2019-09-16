@@ -25,15 +25,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
-	"math/rand"
-
 	"github.com/golang/snappy"
-
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
+	"io"
+	"math"
+	"math/rand"
 )
 
 type PullProgress struct {
@@ -54,6 +54,53 @@ func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreA
 		doneCount, knownCount, approxBytesWritten = doneCount+moreDone, knownCount+moreKnown, approxBytesWritten+moreApproxBytesWritten
 		progressCh <- PullProgress{doneCount, knownCount, approxBytesWritten}
 	}
+}
+
+func Clone(ctx context.Context, srcDB, sinkDB Database) error {
+	srcCS := srcDB.chunkStore().(interface{})
+	sinkCS := sinkDB.chunkStore().(interface{})
+
+	srcTS, srcOK := srcCS.(nbs.TableFileStore)
+
+	if !srcOK {
+
+	}
+
+	sinkTS, sinkOK := sinkCS.(nbs.TableFileStore)
+
+	if !sinkOK {
+
+	}
+
+	root, tblFiles, err := srcTS.Sources(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	for _, tblFile := range tblFiles {
+		rd, err := tblFile.Open()
+
+		if err != nil {
+			return err
+		}
+
+		wr, err := sinkTS.NewSink(ctx, tblFile.FileId(), tblFile.NumChunks())
+
+		_, err = io.Copy(wr, rd)
+
+		if err != nil {
+			return err
+		}
+
+		err = wr.Close(ctx)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
 }
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB.

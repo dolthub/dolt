@@ -85,7 +85,9 @@ func (fm fileManifest) Name() string {
 func (fm fileManifest) ParseIfExists(ctx context.Context, stats *Stats, readHook func() error) (exists bool, contents manifestContents, err error) {
 	t1 := time.Now()
 	defer func() {
-		stats.ReadManifestLatency.SampleTimeSince(t1)
+		if stats != nil {
+			stats.ReadManifestLatency.SampleTimeSince(t1)
+		}
 	}()
 
 	var locked bool

@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -771,4 +772,57 @@ func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *
 	}
 
 	return []func() error{dcs.getRangeDownloadFunc(ctx, getRange.Url, getRange.Ranges, chunkChan)}
+}
+
+func (dcs *DoltChunkStore) NewSink(ctx context.Context, fileId string, numChunks int) (nbs.WriteCloserWithContext, error) {
+	panic("Not implemented")
+}
+
+type DoltRemoteTableFile struct {
+	dcs *DoltChunkStore
+	info *remotesapi.TableInfo
+}
+
+func (drtf DoltRemoteTableFile) FileId() string {
+	return drtf.info.FileId
+}
+
+func (drtf DoltRemoteTableFile) NumChunks() int {
+	return int(drtf.info.NumChunks)
+}
+
+func (drtf DoltRemoteTableFile) Open() (io.ReadCloser, error) {
+	req, err := http.NewRequest(http.MethodGet, drtf.info.Url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := drtf.dcs.httpFetcher.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
+}
+
+func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	req := &remotesapi.EnumerateTablesRequest{RepoId: dcs.getRepoId()}
+	resp, err := dcs.csClient.EnumerateTables(ctx, req)
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	var tblFiles []nbs.TableFile
+	for _, nfo := range resp.TableInfo {
+		tblFiles = append(tblFiles, DoltRemoteTableFile{dcs, nfo})
+	}
+
+	return hash.New(resp.RootHash), tblFiles, nil
+}
+
+func (dcs *DoltChunkStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
+	panic("Not Implemented")
 }

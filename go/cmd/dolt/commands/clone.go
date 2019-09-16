@@ -31,8 +31,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -189,110 +187,39 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 }
 
 func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) errhand.VerboseError {
-	var branches []ref.DoltRef
-	if len(branch) > 0 {
-		branches = []ref.DoltRef{ref.NewBranchRef(branch)}
-	} else {
-		var err error
-		branches, err = srcDB.GetBranches(ctx)
+	err := actions.Clone(ctx, srcDB, dEnv.DoltDB)
 
-		if err != nil {
-			return errhand.BuildDError("error: failed to read branches").AddCause(err).Build()
-		}
+	if err != nil {
+		return errhand.BuildDError("error: clone failed").AddCause(err).Build()
 	}
 
-	return cloneAllBranchRefs(branches, srcDB, ctx, remoteName, dEnv)
-}
+	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
 
-func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx context.Context, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
-	var dref ref.DoltRef
-	var masterHash hash.Hash
-	var h hash.Hash
-
-	for i := 0; i < len(branches); i++ {
-		dref = branches[i]
-		branch := dref.GetPath()
-		hasRef, err := srcDB.HasRef(ctx, dref)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-		}
-
-		if !hasRef {
-			return errhand.BuildDError("fatal: unknown branch " + branch).Build()
-		}
-
-		cs, _ := doltdb.NewCommitSpec("HEAD", dref.GetPath())
-		cm, err := srcDB.Resolve(ctx, cs)
-
-		if err != nil {
-			return errhand.BuildDError("error: unable to find %v", branch).AddCause(err).Build()
-		}
-
-		progChan := make(chan datas.PullProgress)
-		doneChan := make(chan struct{})
-		go progFunc(progChan, doneChan)
-
-		remoteBranch := ref.NewRemoteRef(remoteName, branch)
-		err = actions.Fetch(ctx, remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
-		close(progChan)
-		<-doneChan
-
-		if err != nil {
-			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
-		}
-
-		err = dEnv.DoltDB.NewBranchAtCommit(ctx, dref, cm)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to create branch " + branch).AddCause(err).Build()
-		}
-
-		localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
-		localCommit, _ := dEnv.DoltDB.Resolve(ctx, localCommitSpec)
-
-		root, err := localCommit.GetRootValue()
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to get root").AddCause(err).Build()
-		}
-
-		h, err = dEnv.DoltDB.WriteRootValue(ctx, root)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to write to database.").AddCause(err).Build()
-		}
-
-		if branch == "master" {
-			masterHash = h
-		}
+	if err != nil {
+		return errhand.BuildDError("error: could not get master").AddCause(err).Build()
 	}
 
-	if !masterHash.IsEmpty() {
-		h = masterHash
-		dref = ref.NewBranchRef("master")
+	rootVal, err := cm.GetRootValue()
+
+	if err != nil {
+		return errhand.BuildDError("error: could not get the root value of master").AddCause(err).Build()
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
+	h, err := rootVal.HashOf()
+
+	if err != nil {
+		return errhand.BuildDError("error: could not get the root value of master.").AddCause(err).Build()
+	}
+
+	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef("master")}
 	dEnv.RepoState.Staged = h.String()
 	dEnv.RepoState.Working = h.String()
-	err := dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save()
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
 	}
 
 	return nil
-}
-
-type RpcErrVerbWrap struct {
-	*remotestorage.RpcError
-}
-
-func (vw RpcErrVerbWrap) ShouldPrintUsage() bool {
-	return false
-}
-
-func (vw RpcErrVerbWrap) Verbose() string {
-	return vw.FullDetails()
 }

@@ -24,7 +24,9 @@ package nbs
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"sync"
@@ -822,4 +824,123 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 	cnt, _ := nbs.tables.count()
 	physLen, _ := nbs.tables.physicalLen()
 	return fmt.Sprintf("Root: %s; Chunk Count %d; Physical Bytes %s", nbs.upstream.root, cnt, humanize.Bytes(physLen))
+}
+
+type NomsBlockStoreTableFileInfo struct {
+	info TableSpecInfo
+}
+
+func (tfi NomsBlockStoreTableFileInfo) FileId() string {
+	return tfi.info.GetName()
+}
+
+func (tfi NomsBlockStoreTableFileInfo) NumChunks() int {
+	return int(tfi.info.GetChunkCount())
+}
+
+func (tfi NomsBlockStoreTableFileInfo) Open() (io.ReadCloser, error) {
+	return nil, errors.New("open only implemented for for fsTablePersister")
+}
+
+type NomsBlockStoreTableFile struct {
+	NomsBlockStoreTableFileInfo
+	dir string
+}
+
+func (tf NomsBlockStoreTableFile) FileId() string {
+	return tf.info.GetName()
+}
+
+func (tf NomsBlockStoreTableFile) NumChunks() int {
+	return int(tf.info.GetChunkCount())
+}
+
+func (tf NomsBlockStoreTableFile) Open() (io.ReadCloser, error) {
+	path := filepath.Join(tf.dir, tf.FileId())
+	f, err := os.Open(path)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return f, nil
+}
+
+func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, nil, nil)
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	if !exists {
+		return hash.Hash{}, nil, nil
+	}
+
+	fsPersister, ok := nbs.p.(*fsTablePersister)
+	numSpecs := contents.NumTableSpecs()
+
+	var tableFiles []TableFile
+	for i := 0; i < numSpecs; i++ {
+		info := contents.GetTableSpecInfo(i)
+
+		if ok {
+			tf := NomsBlockStoreTableFile{
+				NomsBlockStoreTableFileInfo : NomsBlockStoreTableFileInfo{info : info},
+				dir : fsPersister.dir,
+			}
+			tableFiles = append(tableFiles, tf)
+		} else {
+			tableFiles = append(tableFiles, NomsBlockStoreTableFileInfo{info:info})
+		}
+	}
+
+	return contents.GetRoot(), tableFiles, nil
+}
+
+type NomsBlockStoreTableSink struct {
+	fileId string
+	numChunks int
+	wr io.WriteCloser
+	nbs *NomsBlockStore
+}
+
+func (ts NomsBlockStoreTableSink) Write(p []byte) (n int, err error) {
+	return ts.wr.Write(p)
+}
+
+func (ts NomsBlockStoreTableSink) Close(ctx context.Context) error {
+	fileIdHash, ok := hash.MaybeParse(ts.fileId)
+
+	if !ok {
+		return errors.New("invalid base32 encoded hash: " + ts.fileId)
+	}
+
+	_, err := ts.nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash:uint32(ts.numChunks)})
+
+	return err
+}
+
+func (nbs *NomsBlockStore) NewSink(ctx context.Context, fileId string, numChunks int) (WriteCloserWithContext, error) {
+	fsPersister, ok := nbs.p.(*fsTablePersister)
+
+	if !ok {
+		return nil, errors.New("Not implemented")
+	}
+
+	path := filepath.Join(fsPersister.dir, fileId)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return NomsBlockStoreTableSink{fileId, numChunks,  f, nbs}, nil
+}
+
+func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
+	return nbs.updateManifest(ctx, root, previous)
 }
