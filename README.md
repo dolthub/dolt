@@ -223,6 +223,11 @@ Once that is succeeded others can clone the repository (assuming you've given th
 
     dolt clone org/repo
 
+## Interesting Datasets to Clone
+
+Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images
+Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements
+Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays
 
 ## Other remotes
 
