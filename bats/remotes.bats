@@ -93,7 +93,7 @@ teardown() {
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    [ "$output" = "cloning http://localhost:50051/test-org/test-repo" ]
+    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -130,7 +130,7 @@ teardown() {
     cd "dolt-repo-clones"
     run dolt clone -b test-branch http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    [ "$output" = "cloning http://localhost:50051/test-org/test-repo" ]
+    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
     cd test-repo
     run dolt branch
     [ "$status" -eq 0 ]
@@ -150,7 +150,7 @@ teardown() {
     cd "dolt-repo-clones"
     run dolt clone --remote test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
-    [ "$output" = "cloning http://localhost:50051/test-org/test-repo" ]
+    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]

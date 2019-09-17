@@ -796,12 +796,12 @@ func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableF
 	return hash.New(resp.RootHash), tblFiles, nil
 }
 
-// SetRootChunk sets the root chunk changes the root chunk hash from the previous value to the new root.
+// SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (dcs *DoltChunkStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	panic("Not Implemented")
 }
 
-// DoltRemoteTableFile is an implementation of a TableFile that live in a DoltChunkStore
+// DoltRemoteTableFile is an implementation of a TableFile that lives in a DoltChunkStore
 type DoltRemoteTableFile struct {
 	dcs  *DoltChunkStore
 	info *remotesapi.TableFileInfo

@@ -933,7 +933,7 @@ func (nbs *NomsBlockStore) NewSink(ctx context.Context, fileId string, numChunks
 	return NomsBlockStoreTableSink{fileId, numChunks, f, nbs}, nil
 }
 
-// SetRootChunk sets the root chunk changes the root chunk hash from the previous value to the new root.
+// SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	return nbs.updateManifest(ctx, root, previous)
 }

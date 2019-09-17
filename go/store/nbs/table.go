@@ -286,6 +286,6 @@ type TableFileStore interface {
 	// NewSink returns a writer for a new table file.  When the writer is closed the table file is persisted
 	NewSink(ctx context.Context, fileId string, numChunks int) (WriteCloserWithContext, error)
 
-	// SetRootChunk sets the root chunk changes the root chunk hash from the previous value to the new root.
+	// SetRootChunk changes the root chunk hash from the previous value to the new root.
 	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
 }
