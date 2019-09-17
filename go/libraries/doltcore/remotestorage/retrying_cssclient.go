@@ -125,7 +125,7 @@ func (c RetryingChunkStoreServiceClient) Commit(ctx context.Context, in *remotes
 }
 
 func (c RetryingChunkStoreServiceClient) EnumerateTables(ctx context.Context, in *remotesapi.EnumerateTablesRequest, opts ...grpc.CallOption) (*remotesapi.EnumerateTablesResponse, error) {
-	var resp * remotesapi.EnumerateTablesResponse
+	var resp *remotesapi.EnumerateTablesResponse
 	op := func() error {
 		var err error
 		resp, err = c.client.EnumerateTables(ctx, in, opts...)

@@ -135,7 +135,6 @@ func offsetAndLenFromRange(rngStr string) (int64, int64, error) {
 	return int64(start), int64(end-start) + 1, nil
 }
 
-
 func readFile(logger func(string), org, repo, fileId string, writer io.Writer) int {
 	path := filepath.Join(org, repo, fileId)
 
@@ -161,7 +160,7 @@ func readFile(logger func(string), org, repo, fileId string, writer io.Writer) i
 	}
 
 	if n != info.Size() {
-		logger(fmt.Sprint("failed to write entire file to response. Copied %d of %d err: %v", n, info.Size(), err))
+		logger(fmt.Sprintf("failed to write entire file to response. Copied %d of %d err: %v", n, info.Size(), err))
 		return -1
 	}
 

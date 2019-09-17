@@ -234,6 +234,10 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	nbs.upstream = updatedContents
 	nbs.tables, err = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 
+	if err != nil {
+		return manifestContents{}, err
+	}
+
 	return updatedContents, nil
 }
 
@@ -826,37 +830,46 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 	return fmt.Sprintf("Root: %s; Chunk Count %d; Physical Bytes %s", nbs.upstream.root, cnt, humanize.Bytes(physLen))
 }
 
+// NomsBlockStoreTibleFileInfo is an implementation of a TableFile that cannot be read.  It only stores the information
+// such as the file ID and the number of chunks.  Calling read will always return an error.
 type NomsBlockStoreTableFileInfo struct {
 	info TableSpecInfo
 }
 
-func (tfi NomsBlockStoreTableFileInfo) FileId() string {
+// FileID gets the id of the file
+func (tfi NomsBlockStoreTableFileInfo) FileID() string {
 	return tfi.info.GetName()
 }
 
+// NumChunks returns the number of chunks in a table file
 func (tfi NomsBlockStoreTableFileInfo) NumChunks() int {
 	return int(tfi.info.GetChunkCount())
 }
 
+// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
 func (tfi NomsBlockStoreTableFileInfo) Open() (io.ReadCloser, error) {
 	return nil, errors.New("open only implemented for for fsTablePersister")
 }
 
+// NomsBlockStoreTableFile is an implementation of TableFile that is in a NomsBlockStore on the machine.
 type NomsBlockStoreTableFile struct {
 	NomsBlockStoreTableFileInfo
 	dir string
 }
 
-func (tf NomsBlockStoreTableFile) FileId() string {
+// FileID gets the id of the file
+func (tf NomsBlockStoreTableFile) FileID() string {
 	return tf.info.GetName()
 }
 
+// NumChunks returns the number of chunks in a table file
 func (tf NomsBlockStoreTableFile) NumChunks() int {
 	return int(tf.info.GetChunkCount())
 }
 
+// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
 func (tf NomsBlockStoreTableFile) Open() (io.ReadCloser, error) {
-	path := filepath.Join(tf.dir, tf.FileId())
+	path := filepath.Join(tf.dir, tf.FileID())
 	f, err := os.Open(path)
 
 	if err != nil {
@@ -866,6 +879,7 @@ func (tf NomsBlockStoreTableFile) Open() (io.ReadCloser, error) {
 	return f, nil
 }
 
+// Sources retrieves the current root hash, and a list of all the table files
 func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile, error) {
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
@@ -889,41 +903,19 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 
 		if ok {
 			tf := NomsBlockStoreTableFile{
-				NomsBlockStoreTableFileInfo : NomsBlockStoreTableFileInfo{info : info},
-				dir : fsPersister.dir,
+				NomsBlockStoreTableFileInfo: NomsBlockStoreTableFileInfo{info: info},
+				dir:                         fsPersister.dir,
 			}
 			tableFiles = append(tableFiles, tf)
 		} else {
-			tableFiles = append(tableFiles, NomsBlockStoreTableFileInfo{info:info})
+			tableFiles = append(tableFiles, NomsBlockStoreTableFileInfo{info: info})
 		}
 	}
 
 	return contents.GetRoot(), tableFiles, nil
 }
 
-type NomsBlockStoreTableSink struct {
-	fileId string
-	numChunks int
-	wr io.WriteCloser
-	nbs *NomsBlockStore
-}
-
-func (ts NomsBlockStoreTableSink) Write(p []byte) (n int, err error) {
-	return ts.wr.Write(p)
-}
-
-func (ts NomsBlockStoreTableSink) Close(ctx context.Context) error {
-	fileIdHash, ok := hash.MaybeParse(ts.fileId)
-
-	if !ok {
-		return errors.New("invalid base32 encoded hash: " + ts.fileId)
-	}
-
-	_, err := ts.nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash:uint32(ts.numChunks)})
-
-	return err
-}
-
+// NewSink returns a writer for a new table file.  When the writer is closed the table file is persisted
 func (nbs *NomsBlockStore) NewSink(ctx context.Context, fileId string, numChunks int) (WriteCloserWithContext, error) {
 	fsPersister, ok := nbs.p.(*fsTablePersister)
 
@@ -938,9 +930,48 @@ func (nbs *NomsBlockStore) NewSink(ctx context.Context, fileId string, numChunks
 		return nil, err
 	}
 
-	return NomsBlockStoreTableSink{fileId, numChunks,  f, nbs}, nil
+	return NomsBlockStoreTableSink{fileId, numChunks, f, nbs}, nil
 }
 
+// SetRootChunk sets the root chunk changes the root chunk hash from the previous value to the new root.
 func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	return nbs.updateManifest(ctx, root, previous)
+}
+
+// NomsBlockStoreTableSink is an implementation of a WriteCloserWithContext which expects a table file to be
+// written to it, and when closed will persist the table file, and update the manifest of the associated nbs
+type NomsBlockStoreTableSink struct {
+	fileId    string
+	numChunks int
+	wr        io.WriteCloser
+	nbs       *NomsBlockStore
+}
+
+// Write writes the bytes of a table file
+func (ts NomsBlockStoreTableSink) Write(p []byte) (n int, err error) {
+	return ts.wr.Write(p)
+}
+
+// Close closes the writer, and persists it in the manifest of the associated nbs
+func (ts NomsBlockStoreTableSink) Close(ctx context.Context) error {
+	if ts.wr == nil {
+		return errors.New("already closed")
+	}
+
+	err := ts.wr.Close()
+	ts.wr = nil
+
+	if err != nil {
+		return err
+	}
+
+	fileIdHash, ok := hash.MaybeParse(ts.fileId)
+
+	if !ok {
+		return errors.New("invalid base32 encoded hash: " + ts.fileId)
+	}
+
+	_, err = ts.nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(ts.numChunks)})
+
+	return err
 }

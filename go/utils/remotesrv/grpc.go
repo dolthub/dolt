@@ -281,22 +281,22 @@ func (rs *RemoteChunkStore) EnumerateTables(ctx context.Context, req *remotesapi
 
 	var tableInfo []*remotesapi.TableInfo
 	for _, tbl := range tables {
-		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, tbl.FileId())
+		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, tbl.FileID())
 
 		if err != nil {
-			return nil, status.Error(codes.Internal, "failed to get download url for " + tbl.FileId())
+			return nil, status.Error(codes.Internal, "failed to get download url for "+tbl.FileID())
 		}
 
 		tableInfo = append(tableInfo, &remotesapi.TableInfo{
-			FileId:               tbl.FileId(),
-			NumChunks:            uint32(tbl.NumChunks()),
-			Url:                  url,
+			FileId:    tbl.FileID(),
+			NumChunks: uint32(tbl.NumChunks()),
+			Url:       url,
 		})
 	}
 
 	resp := &remotesapi.EnumerateTablesResponse{
-		RootHash: root[:],
-		TableInfo:tableInfo,
+		RootHash:  root[:],
+		TableInfo: tableInfo,
 	}
 
 	return resp, nil

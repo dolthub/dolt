@@ -774,39 +774,12 @@ func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *
 	return []func() error{dcs.getRangeDownloadFunc(ctx, getRange.Url, getRange.Ranges, chunkChan)}
 }
 
+// NewSink still needs to be implemented in order to write to a DoltChunkStore using the TableFileStore interface
 func (dcs *DoltChunkStore) NewSink(ctx context.Context, fileId string, numChunks int) (nbs.WriteCloserWithContext, error) {
 	panic("Not implemented")
 }
 
-type DoltRemoteTableFile struct {
-	dcs *DoltChunkStore
-	info *remotesapi.TableInfo
-}
-
-func (drtf DoltRemoteTableFile) FileId() string {
-	return drtf.info.FileId
-}
-
-func (drtf DoltRemoteTableFile) NumChunks() int {
-	return int(drtf.info.NumChunks)
-}
-
-func (drtf DoltRemoteTableFile) Open() (io.ReadCloser, error) {
-	req, err := http.NewRequest(http.MethodGet, drtf.info.Url, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := drtf.dcs.httpFetcher.Do(req)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Body, nil
-}
-
+// Sources retrieves the current root hash, and a list of all the table files
 func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
 	req := &remotesapi.EnumerateTablesRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.EnumerateTables(ctx, req)
@@ -823,6 +796,40 @@ func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableF
 	return hash.New(resp.RootHash), tblFiles, nil
 }
 
+// SetRootChunk sets the root chunk changes the root chunk hash from the previous value to the new root.
 func (dcs *DoltChunkStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
 	panic("Not Implemented")
+}
+
+// DoltRemoteTableFile is an implementation of a TableFile that live in a DoltChunkStore
+type DoltRemoteTableFile struct {
+	dcs  *DoltChunkStore
+	info *remotesapi.TableInfo
+}
+
+// FileID gets the id of the file
+func (drtf DoltRemoteTableFile) FileID() string {
+	return drtf.info.FileId
+}
+
+// NumChunks returns the number of chunks in a table file
+func (drtf DoltRemoteTableFile) NumChunks() int {
+	return int(drtf.info.NumChunks)
+}
+
+// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
+func (drtf DoltRemoteTableFile) Open() (io.ReadCloser, error) {
+	req, err := http.NewRequest(http.MethodGet, drtf.info.Url, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := drtf.dcs.httpFetcher.Do(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Body, nil
 }

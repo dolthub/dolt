@@ -27,14 +27,13 @@ import (
 	"crypto/sha512"
 	"encoding/base32"
 	"encoding/binary"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"hash/crc32"
 	"io"
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-
 	"github.com/liquidata-inc/dolt/go/store/chunks"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 /*
@@ -259,19 +258,34 @@ type chunkSource interface {
 
 type chunkSources []chunkSource
 
+// TableFile is an interface for working with an existing table file
 type TableFile interface {
-	FileId() string
+	// FileID gets the id of the file
+	FileID() string
+
+	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
+
+	// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
 	Open() (io.ReadCloser, error)
 }
 
+// WriteCloserWithContext is an interface which extends io.Writer and has a Close method that takes a context
 type WriteCloserWithContext interface {
 	io.Writer
+
+	// Close closes the writer
 	Close(ctx context.Context) error
 }
 
+// TableFileStore is an interface for interacting with table files directly
 type TableFileStore interface {
+	// Sources retrieves the current root hash, and a list of all the table files
 	Sources(ctx context.Context) (hash.Hash, []TableFile, error)
+
+	// NewSink returns a writer for a new table file.  When the writer is closed the table file is persisted
 	NewSink(ctx context.Context, fileId string, numChunks int) (WriteCloserWithContext, error)
+
+	// SetRootChunk sets the root chunk changes the root chunk hash from the previous value to the new root.
 	SetRootChunk(ctx context.Context, root, previous hash.Hash) error
 }

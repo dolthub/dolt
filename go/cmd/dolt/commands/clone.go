@@ -220,7 +220,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	err = dEnv.DoltDB.FastForward(ctx, remoteRef, cm)
 
 	if err != nil {
-		return errhand.BuildDError("error: could not create remote ref at " +remoteRef.String()).AddCause(err).Build()
+		return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
 	}
 
 	rootVal, err := cm.GetRootValue()

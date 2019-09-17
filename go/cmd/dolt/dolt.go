@@ -86,7 +86,7 @@ func runMain() int {
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags {
-			switch args[0]{
+			switch args[0] {
 			case profFlag:
 				switch args[1] {
 				case cpuProf:

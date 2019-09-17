@@ -25,15 +25,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math"
+	"math/rand"
+
 	"github.com/golang/snappy"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"io"
-	"math"
-	"math/rand"
 )
 
 type PullProgress struct {
@@ -63,21 +65,26 @@ func Clone(ctx context.Context, srcDB, sinkDB Database) error {
 	srcTS, srcOK := srcCS.(nbs.TableFileStore)
 
 	if !srcOK {
-
+		return errors.New("src db is not a Table File Store")
 	}
 
 	sinkTS, sinkOK := sinkCS.(nbs.TableFileStore)
 
 	if !sinkOK {
-
+		return errors.New("sink db is not a Table File Store")
 	}
 
+	return clone(ctx, srcTS, sinkTS)
+}
+
+func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore) error {
 	root, tblFiles, err := srcTS.Sources(ctx)
 
 	if err != nil {
 		return err
 	}
 
+	// should parallelize at some point
 	for _, tblFile := range tblFiles {
 		rd, err := tblFile.Open()
 
@@ -85,7 +92,7 @@ func Clone(ctx context.Context, srcDB, sinkDB Database) error {
 			return err
 		}
 
-		wr, err := sinkTS.NewSink(ctx, tblFile.FileId(), tblFile.NumChunks())
+		wr, err := sinkTS.NewSink(ctx, tblFile.FileID(), tblFile.NumChunks())
 
 		_, err = io.Copy(wr, rd)
 
