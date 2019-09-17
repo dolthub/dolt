@@ -58,7 +58,7 @@ func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreA
 	}
 }
 
-func Clone(ctx context.Context, srcDB, sinkDB Database) error {
+func Clone(ctx context.Context, srcDB, sinkDB Database, eventCh chan<- TableFileEvent) error {
 	srcCS := srcDB.chunkStore().(interface{})
 	sinkCS := sinkDB.chunkStore().(interface{})
 
@@ -74,14 +74,36 @@ func Clone(ctx context.Context, srcDB, sinkDB Database) error {
 		return errors.New("sink db is not a Table File Store")
 	}
 
-	return clone(ctx, srcTS, sinkTS)
+	return clone(ctx, srcTS, sinkTS, eventCh)
 }
 
-func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore) error {
+type CloneTableFileEvent int
+
+const (
+	Listed = iota
+	DownloadStart
+	DownloadSuccess
+	DownloadFailed
+)
+
+type TableFileEvent struct {
+	EventType  CloneTableFileEvent
+	TableFiles []nbs.TableFile
+}
+
+func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
+	if eventCh != nil {
+		defer close(eventCh)
+	}
+
 	root, tblFiles, err := srcTS.Sources(ctx)
 
 	if err != nil {
 		return err
+	}
+
+	if eventCh != nil {
+		eventCh <- TableFileEvent{Listed, tblFiles}
 	}
 
 	// should parallelize at some point
@@ -94,16 +116,36 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore) error {
 
 		wr, err := sinkTS.NewSink(ctx, tblFile.FileID(), tblFile.NumChunks())
 
+		if err != nil {
+			return err
+		}
+
+		if eventCh != nil {
+			eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
+		}
+
 		_, err = io.Copy(wr, rd)
 
 		if err != nil {
+			if eventCh != nil {
+				eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+			}
+
 			return err
 		}
 
 		err = wr.Close(ctx)
 
 		if err != nil {
+			if eventCh != nil {
+				eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+			}
+
 			return err
+		}
+
+		if eventCh != nil {
+			eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
 		}
 	}
 

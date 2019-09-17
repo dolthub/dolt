@@ -470,7 +470,7 @@ func TestClone(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	err := clone(ctx, src, dest)
+	err := clone(ctx, src, dest, nil)
 	require.NoError(t, err)
 
 	err = dest.SetRootChunk(ctx, src.root, hash.Hash{})

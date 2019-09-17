@@ -16,9 +16,14 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
+	"github.com/liquidata-inc/dolt/go/store/datas"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -186,8 +191,54 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	return r, ddb, nil
 }
 
+func cloneProg(eventCh <-chan datas.TableFileEvent) {
+	var (
+		chunks            int64
+		chunksDownloading int64
+		chunksDownloaded  int64
+		cliPos            int
+	)
+
+	cliPos = cli.DeleteAndPrint(cliPos, "Retrieving remote information.")
+	for tblFEvt := range eventCh {
+		switch tblFEvt.EventType {
+		case datas.Listed:
+			for _, tf := range tblFEvt.TableFiles {
+				chunks += int64(tf.NumChunks())
+			}
+		case datas.DownloadStart:
+			for _, tf := range tblFEvt.TableFiles {
+				chunksDownloading += int64(tf.NumChunks())
+			}
+		case datas.DownloadSuccess:
+			for _, tf := range tblFEvt.TableFiles {
+				chunksDownloading -= int64(tf.NumChunks())
+				chunksDownloaded += int64(tf.NumChunks())
+			}
+		case datas.DownloadFailed:
+			// Ignore for now and output errors on the main thread
+		}
+
+		str := fmt.Sprintf("%s of %s chunks complete. %s chunks being downloaded currently.", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+		cliPos = cli.DeleteAndPrint(cliPos, str)
+	}
+
+	cli.Println()
+}
+
 func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.Clone(ctx, srcDB, dEnv.DoltDB)
+	wg := &sync.WaitGroup{}
+	eventCh := make(chan datas.TableFileEvent, 128)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		cloneProg(eventCh)
+	}()
+
+	err := actions.Clone(ctx, srcDB, dEnv.DoltDB, eventCh)
+
+	wg.Wait()
 
 	if err != nil {
 		return errhand.BuildDError("error: clone failed").AddCause(err).Build()

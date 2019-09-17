@@ -93,6 +93,6 @@ func Fetch(ctx context.Context, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltD
 	return destDB.FastForward(ctx, destRef, commit)
 }
 
-func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB) error {
-	return srcDB.Clone(ctx, destDB)
+func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- datas.TableFileEvent) error {
+	return srcDB.Clone(ctx, destDB, eventCh)
 }

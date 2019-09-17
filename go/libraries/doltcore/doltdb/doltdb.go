@@ -644,6 +644,6 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, pr
 	return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, rf, progChan)
 }
 
-func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB) error {
-	return datas.Clone(ctx, ddb.db, destDB.db)
+func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {
+	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
 }
