@@ -124,11 +124,11 @@ func (c RetryingChunkStoreServiceClient) Commit(ctx context.Context, in *remotes
 	return resp, err
 }
 
-func (c RetryingChunkStoreServiceClient) EnumerateTables(ctx context.Context, in *remotesapi.EnumerateTablesRequest, opts ...grpc.CallOption) (*remotesapi.EnumerateTablesResponse, error) {
-	var resp *remotesapi.EnumerateTablesResponse
+func (c RetryingChunkStoreServiceClient) ListTableFiles(ctx context.Context, in *remotesapi.ListTableFilesRequest, opts ...grpc.CallOption) (*remotesapi.ListTableFilesResponse, error) {
+	var resp *remotesapi.ListTableFilesResponse
 	op := func() error {
 		var err error
-		resp, err = c.client.EnumerateTables(ctx, in, opts...)
+		resp, err = c.client.ListTableFiles(ctx, in, opts...)
 		return processGrpcErr(err)
 	}
 

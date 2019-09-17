@@ -781,15 +781,15 @@ func (dcs *DoltChunkStore) NewSink(ctx context.Context, fileId string, numChunks
 
 // Sources retrieves the current root hash, and a list of all the table files
 func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
-	req := &remotesapi.EnumerateTablesRequest{RepoId: dcs.getRepoId()}
-	resp, err := dcs.csClient.EnumerateTables(ctx, req)
+	req := &remotesapi.ListTableFilesRequest{RepoId: dcs.getRepoId()}
+	resp, err := dcs.csClient.ListTableFiles(ctx, req)
 
 	if err != nil {
 		return hash.Hash{}, nil, err
 	}
 
 	var tblFiles []nbs.TableFile
-	for _, nfo := range resp.TableInfo {
+	for _, nfo := range resp.TableFileInfo {
 		tblFiles = append(tblFiles, DoltRemoteTableFile{dcs, nfo})
 	}
 
@@ -804,7 +804,7 @@ func (dcs *DoltChunkStore) SetRootChunk(ctx context.Context, root, previous hash
 // DoltRemoteTableFile is an implementation of a TableFile that live in a DoltChunkStore
 type DoltRemoteTableFile struct {
 	dcs  *DoltChunkStore
-	info *remotesapi.TableInfo
+	info *remotesapi.TableFileInfo
 }
 
 // FileID gets the id of the file
