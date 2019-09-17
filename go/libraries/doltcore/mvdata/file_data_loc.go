@@ -155,3 +155,22 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOp
 func (dl FileDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating of files is not supported")
 }
+
+// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table using
+// the same schema
+func (dl FileDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+	switch dl.Format {
+	case CsvFile:
+		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo())
+	case PsvFile:
+		return csv.OpenCSVWriter(dl.Path, fs, outSch, csv.NewCSVInfo().SetDelim("|"))
+	case XlsxFile:
+		panic("writing to xlsx files is not supported yet")
+	case JsonFile:
+		return json.OpenJSONWriter(dl.Path, fs, outSch, json.NewJSONInfo())
+	case SqlFile:
+		return sqlexport.OpenSQLExportWriter(dl.Path, mvOpts.TableName, fs, outSch)
+	}
+
+	panic("Invalid Data Format." + string(dl.Format))
+}

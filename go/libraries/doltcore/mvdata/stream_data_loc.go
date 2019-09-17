@@ -91,3 +91,17 @@ func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *Move
 func (dl StreamDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating is not supported for stdout")
 }
+
+// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table using
+// the same schema
+func (dl StreamDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+	switch dl.Format {
+	case CsvFile:
+		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo())
+
+	case PsvFile:
+		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo().SetDelim("|"))
+	}
+
+	return nil, errors.New(string(dl.Format) + "is an unsupported format to write to stdout")
+}

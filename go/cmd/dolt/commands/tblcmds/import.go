@@ -37,6 +37,7 @@ import (
 const (
 	createParam      = "create-table"
 	updateParam      = "update-table"
+	replaceParam     = "replace-table"
 	tableParam       = "table"
 	fileParam        = "file"
 	outSchemaParam   = "schema"
@@ -97,6 +98,14 @@ A mapping file can be used to map fields between the file being imported and the
 be used when creating a new table, or updating an existing table.
 
 ` + mappingFileHelp +
+
+	`If <b>--replace-table | -r</b> is given the operation will replace <table> with the contents of the file. The table's
+	existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is
+	specified.
+
+	If the schema for the existing table does not match the schema for the new file, the import will be aborted by default. To
+	overwrite both the table and the schema, use <b>-c -f</b>.` +
+
 	`
 In both create and update scenarios the file's extension is used to infer the type of the file.  If a file does not 
 have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of 
@@ -106,6 +115,7 @@ the file in one of the supported formats (csv, psv, nbf, json, xlsx).  For files
 var importSynopsis = []string{
 	"-c [-f] [--pk <field>] [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>",
 	"-u [--map <file>] [--continue] [--file-type <type>] <table> <file>",
+	"-r [--map <file>] [--file-type <type>] <table> <file>",
 }
 
 func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
@@ -116,15 +126,19 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 	var mvOp mvdata.MoveOperation
 	var srcOpts interface{}
-	if !apr.Contains(createParam) && !apr.Contains(updateParam) {
-		cli.PrintErrln("Must include '-c' for initial table import or -u to update existing table.")
+	if !apr.Contains(createParam) && !apr.Contains(updateParam) && !apr.Contains(replaceParam) {
+		cli.PrintErrln("Must include '-c' for initial table import or -u to update existing table or -r to replace existing table.")
 		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 	} else if apr.Contains(createParam) {
 		mvOp = mvdata.OverwriteOp
 	} else {
-		mvOp = mvdata.UpdateOp
+		if apr.Contains(replaceParam) {
+			mvOp = mvdata.ReplaceOp
+		} else {
+			mvOp = mvdata.UpdateOp
+		}
 		if apr.Contains(outSchemaParam) {
-			cli.PrintErrln("fatal:", outSchemaParam+" is not supported for update operations")
+			cli.PrintErrln("fatal:", outSchemaParam+" is not supported for update or replace operations")
 			usage()
 			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 		}
@@ -250,6 +264,7 @@ func createArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
 	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
@@ -298,6 +313,11 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 			return 1
 		}
 	}
+
+	// not sure if this is where this should happen but it needs to happen at some point
+	// if mvOpts.Operation == mvdata.ReplaceOp && [schema check fails] {
+	// cli.PrintErrln(color.RedString("Schema does not match. Please upload file with same schema as table"))
+	// }
 
 	mover, nDMErr := mvdata.NewDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
 

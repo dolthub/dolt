@@ -36,6 +36,7 @@ type MoveOperation string
 
 const (
 	OverwriteOp MoveOperation = "overwrite"
+	ReplaceOp   MoveOperation = "replace"
 	UpdateOp    MoveOperation = "update"
 	InvalidOp   MoveOperation = "invalid"
 )
@@ -140,6 +141,8 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	var wr table.TableWriteCloser
 	if mvOpts.Operation == OverwriteOp {
 		wr, err = mvOpts.Dest.NewCreatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
+	} else if mvOpts.Operation == ReplaceOp {
+		wr, err = mvOpts.Dest.NewReplacingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
 	} else {
 		wr, err = mvOpts.Dest.NewUpdatingWriter(ctx, mvOpts, root, fs, srcIsSorted, outSch, statsCB)
 	}
@@ -200,7 +203,7 @@ func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.F
 }
 
 func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootValue, fs filesys.ReadableFS, mvOpts *MoveOptions) (schema.Schema, error) {
-	if mvOpts.Operation == UpdateOp {
+	if mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
 		// Get schema from target
 
 		rd, _, err := mvOpts.Dest.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
