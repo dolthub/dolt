@@ -38,9 +38,9 @@ import (
 )
 
 type CompressedChunk struct {
-	H hash.Hash
+	H                   hash.Hash
 	FullCompressedChunk []byte
-	CompressedData []byte
+	CompressedData      []byte
 }
 
 func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
@@ -53,11 +53,11 @@ func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 		return CompressedChunk{}, errors.New("checksum error")
 	}
 
-	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData:compressedData}, nil
+	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData: compressedData}, nil
 }
 
 func (cmp CompressedChunk) Decompress() (chunks.Chunk, error) {
-	data, err :=  snappy.Decode(nil, cmp.CompressedData)
+	data, err := snappy.Decode(nil, cmp.CompressedData)
 
 	if err != nil {
 		return chunks.Chunk{}, err
@@ -701,7 +701,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	sendChunk := func(i uint32) error {
 		localOffset := tr.offsets[i] - tr.offsets[0]
 
-		cmp, err := NewCompressedChunk(hash.Hash(hashes[i]), buff[localOffset : localOffset+uint64(tr.lengths[i])])
+		cmp, err := NewCompressedChunk(hash.Hash(hashes[i]), buff[localOffset:localOffset+uint64(tr.lengths[i])])
 
 		if err != nil {
 			return err

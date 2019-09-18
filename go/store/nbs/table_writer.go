@@ -88,24 +88,6 @@ func newTableWriter(buff []byte, snapper snappyEncoder) *tableWriter {
 	}
 }
 
-func (tw *tableWriter) encodingTransform(src, dest []byte) (uint64, error) {
-	compressed := tw.snapper.Encode(dest, src)
-
-	if v, _ := binary.Uvarint(dest); v == 0 {
-		if len(dest) >= len(compressed) {
-			n := copy(dest, compressed)
-
-			if n != len(compressed) {
-				return 0, ErrBufferFull
-			}
-		} else {
-			return 0, ErrBufferFull
-		}
-	}
-
-	return uint64(len(compressed)), nil
-}
-
 func (tw *tableWriter) addChunk(h addr, data []byte) bool {
 	if len(data) == 0 {
 		panic("NBS blocks cannont be zero length")

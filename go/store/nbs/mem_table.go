@@ -41,6 +41,10 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 
 	mt := newMemTable(size)
 
+	return writeChunksToMT(mt, chunks)
+}
+
+func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error) {
 	for _, chunk := range chunks {
 		if !mt.addChunk(addr(chunk.Hash()), chunk.Data()) {
 			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")

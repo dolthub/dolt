@@ -15,34 +15,35 @@
 package nbs
 
 import (
-	"bufio"
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
-	"github.com/golang/snappy"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"hash"
-	"io/ioutil"
+	"io"
 	"os"
-	"path/filepath"
 	"sort"
+
+	"github.com/golang/snappy"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 var ErrBufferFull = errors.New("buffer full")
+var ErrNotFinished = errors.New("Not finished")
+var ErrAlreadyFinished = errors.New("Already Finished")
 
 type TableSink interface {
 	Write(src []byte) (int, error)
-	Flush(path string) error
+	Flush(wr io.Writer) error
 }
 
 type FixedBufferTableSink struct {
-	buff          []byte
-	pos           uint64
+	buff []byte
+	pos  uint64
 }
 
 func NewFixedBufferTableSink(buff []byte) *FixedBufferTableSink {
-	return &FixedBufferTableSink{buff:buff}
+	return &FixedBufferTableSink{buff: buff}
 }
 
 func (sink *FixedBufferTableSink) Write(src []byte) (int, error) {
@@ -64,13 +65,13 @@ func (sink *FixedBufferTableSink) Write(src []byte) (int, error) {
 	return srcLen, nil
 }
 
-func (sink *FixedBufferTableSink) Flush(path string) error {
-	return ioutil.WriteFile(path, sink.buff[:sink.pos], os.ModePerm)
+func (sink *FixedBufferTableSink) Flush(wr io.Writer) error {
+	return iohelp.WriteAll(wr, sink.buff[:sink.pos])
 }
 
 type BlockBufferTableSink struct {
 	blockSize int
-	pos 	  uint64
+	pos       uint64
 	blocks    [][]byte
 }
 
@@ -103,90 +104,22 @@ func (sink *BlockBufferTableSink) Write(src []byte) (int, error) {
 	return srcLen, nil
 }
 
-func (sink *BlockBufferTableSink) Flush(path string) (err error) {
-	var f *os.File
-	f, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		closeErr := f.Close()
-
-		if err == nil {
-			err = closeErr
-		}
-	}()
-
-	err = iohelp.WriteAll(f, sink.blocks...)
-
-	return err
+func (sink *BlockBufferTableSink) Flush(wr io.Writer) (err error) {
+	return iohelp.WriteAll(wr, sink.blocks...)
 }
 
-type TempFileStreamingSync struct {
-	f *os.File
-	bufWr *bufio.Writer
-	path string
-}
+const defaultTableSinkBlockSize = 2 * 1024 * 1024
 
-func NewTempFileStreamingSync() *TempFileStreamingSync {
-	tempPath := filepath.Join(os.TempDir(), uuid.New().String())
-	f, err := os.OpenFile(tempPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModeTemporary)
-
-	if err != nil {
-		panic(err)
-	}
-
-	bufWr := bufio.NewWriter(f)
-
-	return &TempFileStreamingSync{f, bufWr, tempPath }
-}
-
-func (sink *TempFileStreamingSync) Write(src []byte) (int, error) {
-	err := iohelp.WriteAll(sink.bufWr, src)
-
-	if err != nil {
-		return 0, err
-	}
-
-	return len(src), nil
-}
-
-func (sink *TempFileStreamingSync) Flush(path string) error {
-	err := sink.bufWr.Flush()
-
-	if err != nil {
-		_ = sink.f.Close()
-		return err
-	}
-
-	err = sink.f.Close()
-
-	if err != nil {
-		return err
-	}
-
-	err = os.Rename(sink.path, path)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-const defaultTableSinkBlockSize = 2*1024*1024
-
-type CmpChunkTableWriter struct{
-	sink 			      TableSink
+type CmpChunkTableWriter struct {
+	sink                  TableSink
 	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
+	blockAddr             *addr
 }
 
 func NewCmpChunkTableWriter() *CmpChunkTableWriter {
-	return &CmpChunkTableWriter{NewBlockBufferTableSink(defaultTableSinkBlockSize), 0, 0, nil}
+	return &CmpChunkTableWriter{NewBlockBufferTableSink(defaultTableSinkBlockSize), 0, 0, nil, nil}
 }
 
 func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
@@ -222,7 +155,11 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 	return nil
 }
 
-func (tw *CmpChunkTableWriter) Finish(outputDir string) (string, error) {
+func (tw *CmpChunkTableWriter) Finish() (string, error) {
+	if tw.blockAddr != nil {
+		return "", ErrAlreadyFinished
+	}
+
 	blockHash, err := tw.writeIndex()
 
 	if err != nil {
@@ -241,16 +178,42 @@ func (tw *CmpChunkTableWriter) Finish(outputDir string) (string, error) {
 	var blockAddr addr
 	copy(blockAddr[:], h)
 
-	hashStr := blockAddr.String()
-	path := filepath.Join(outputDir, hashStr)
+	tw.blockAddr = &blockAddr
+	return tw.blockAddr.String(), nil
+}
 
-	err = tw.sink.Flush(path)
-
-	if err != nil {
-		return "", err
+func (tw *CmpChunkTableWriter) FlushToFile(path string) error {
+	if tw.blockAddr == nil {
+		return ErrNotFinished
 	}
 
-	return hashStr, nil
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
+
+	if err != nil {
+		return err
+	}
+
+	err = tw.sink.Flush(f)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (tw *CmpChunkTableWriter) Flush(wr io.Writer) error {
+	if tw.blockAddr == nil {
+		return ErrNotFinished
+	}
+
+	err := tw.sink.Flush(wr)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (tw *CmpChunkTableWriter) writeIndex() (hash.Hash, error) {
@@ -328,4 +291,3 @@ func (tw *CmpChunkTableWriter) writeFooter() error {
 
 	return nil
 }
-

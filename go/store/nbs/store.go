@@ -420,7 +420,7 @@ func (nbs *NomsBlockStore) getManyWithFunc(
 	ctx context.Context,
 	hashes hash.HashSet,
 	getManyFunc func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool,
-	) error {
+) error {
 	t1 := time.Now()
 	reqs := toGetRecords(hashes)
 
