@@ -35,6 +35,8 @@ service ChunkStoreService {
   rpc Root(RootRequest) returns (RootResponse);
 
   rpc Commit(CommitRequest) returns (CommitResponse);
+
+  rpc ListTableFiles(ListTableFilesRequest) returns (ListTableFilesResponse);
 }
 
 message RepoId {
@@ -152,4 +154,19 @@ message GetRepoMetadataResponse {
 message ClientRepoFormat {
   string nbf_version = 1;
   string nbs_version = 2;
+}
+
+message ListTableFilesRequest  {
+  RepoId repo_id = 1;
+}
+
+message TableFileInfo {
+  string file_id = 1;
+  uint32 num_chunks = 2;
+  string url = 3;
+}
+
+message ListTableFilesResponse {
+  bytes root_hash = 1;
+  repeated TableFileInfo table_file_info = 2;
 }

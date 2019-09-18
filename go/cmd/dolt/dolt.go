@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -70,6 +69,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: commands.SendMetricsCommand, Desc: "Send events logs to server.", Func: commands.SendMetrics, ReqRepo: false, HideFromHelp: true},
 })
 
+const chdirFlag = "--chdir"
 const profFlag = "--prof"
 const cpuProf = "cpu"
 const memProf = "mem"
@@ -83,42 +83,45 @@ func main() {
 func runMain() int {
 	args := os.Args[1:]
 
-	if len(args) > 0 && args[0] == profFlag {
-		if len(os.Args) <= 2 {
-			panic("Expected a profile arg after " + profFlag)
-		}
-		prof := args[1]
-		switch prof {
-		case cpuProf:
-			fmt.Println("cpu profiling enabled.")
-			defer profile.Start(profile.CPUProfile).Stop()
-		case memProf:
-			fmt.Println("mem profiling enabled.")
-			defer profile.Start(profile.MemProfile).Stop()
-		case blockingProf:
-			fmt.Println("block profiling enabled")
-			defer profile.Start(profile.BlockProfile).Stop()
-		case traceProf:
-			fmt.Println("trace profiling enabled")
-			defer profile.Start(profile.TraceProfile).Stop()
-		default:
-			panic("Unexpected prof flag: " + prof)
-		}
-		args = args[2:]
-	}
+	if len(args) > 0 {
+		var doneDebugFlags bool
+		for !doneDebugFlags {
+			switch args[0] {
+			case profFlag:
+				switch args[1] {
+				case cpuProf:
+					fmt.Println("cpu profiling enabled.")
+					defer profile.Start(profile.CPUProfile).Stop()
+				case memProf:
+					fmt.Println("mem profiling enabled.")
+					defer profile.Start(profile.MemProfile).Stop()
+				case blockingProf:
+					fmt.Println("block profiling enabled")
+					defer profile.Start(profile.BlockProfile).Stop()
+				case traceProf:
+					fmt.Println("trace profiling enabled")
+					defer profile.Start(profile.TraceProfile).Stop()
+				default:
+					panic("Unexpected prof flag: " + args[1])
+				}
+				args = args[2:]
 
-	// Currently goland doesn't support running with a different working directory when using go modules.
-	// This is a hack that allows a different working directory to be set after the application starts using
-	// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
-	if len(args) > 0 && strings.HasPrefix(strings.ToLower(args[0]), "chdir=") {
-		dir := args[0][6:]
-		err := os.Chdir(dir)
+			// Currently goland doesn't support running with a different working directory when using go modules.
+			// This is a hack that allows a different working directory to be set after the application starts using
+			// chdir=<DIR>.  The syntax is not flexible and must match exactly this.
+			case chdirFlag:
+				err := os.Chdir(args[1])
 
-		if err != nil {
-			panic(err)
+				if err != nil {
+					panic(err)
+				}
+
+				args = args[2:]
+
+			default:
+				doneDebugFlags = true
+			}
 		}
-
-		args = args[1:]
 	}
 
 	restoreIO := cli.InitIO()

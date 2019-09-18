@@ -261,6 +261,47 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	}, nil
 }
 
+func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.ListTableFilesRequest) (*remotesapi.ListTableFilesResponse, error) {
+	logger := getReqLogger("GRPC", "ListTableFiles")
+	defer func() { logger("finished") }()
+
+	cs := rs.getStore(req.RepoId, "ListTableFiles")
+
+	if cs == nil {
+		return nil, status.Error(codes.Internal, "Could not get chunkstore")
+	}
+
+	logger(fmt.Sprintf("found repo %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+
+	root, tables, err := cs.Sources(ctx)
+
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get sources")
+	}
+
+	var tableFileInfo []*remotesapi.TableFileInfo
+	for _, tbl := range tables {
+		url, err := rs.getDownloadUrl(logger, req.RepoId.Org, req.RepoId.RepoName, tbl.FileID())
+
+		if err != nil {
+			return nil, status.Error(codes.Internal, "failed to get download url for "+tbl.FileID())
+		}
+
+		tableFileInfo = append(tableFileInfo, &remotesapi.TableFileInfo{
+			FileId:    tbl.FileID(),
+			NumChunks: uint32(tbl.NumChunks()),
+			Url:       url,
+		})
+	}
+
+	resp := &remotesapi.ListTableFilesResponse{
+		RootHash:      root[:],
+		TableFileInfo: tableFileInfo,
+	}
+
+	return resp, nil
+}
+
 func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) *nbs.NomsBlockStore {
 	org := repoId.Org
 	repoName := repoId.RepoName

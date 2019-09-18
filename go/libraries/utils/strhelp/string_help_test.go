@@ -14,7 +14,11 @@
 
 package strhelp
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestNthTokenTest(t *testing.T) {
 	tests := []struct {
@@ -109,5 +113,23 @@ func TestNthTokenTest(t *testing.T) {
 		if token != test.expectedStr || ok != test.expectedOk {
 			t.Error(test.in, test.n, "th token should be", test.expectedStr, "but it is", token)
 		}
+	}
+}
+
+func TestCommaIfy(t *testing.T) {
+	tests := map[int64]string{
+		1:        "1",
+		10:       "10",
+		100:      "100",
+		1000:     "1,000",
+		10000:    "10,000",
+		100000:   "100,000",
+		1000000:  "1,000,000",
+		10000000: "10,000,000",
+	}
+
+	for i, expected := range tests {
+		str := CommaIfy(i)
+		assert.Equal(t, expected, str)
 	}
 }

@@ -22,13 +22,21 @@
 package datas
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"io/ioutil"
+	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -360,4 +368,113 @@ func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
 		d.PanicIfError(err)
 	}
 	return l
+}
+
+type TestTableFile struct {
+	fileID    string
+	numChunks int
+	data      []byte
+}
+
+func (ttf *TestTableFile) FileID() string {
+	return ttf.fileID
+}
+
+func (ttf *TestTableFile) NumChunks() int {
+	return ttf.numChunks
+}
+
+func (ttf *TestTableFile) Open() (io.ReadCloser, error) {
+	return ioutil.NopCloser(bytes.NewReader(ttf.data)), nil
+}
+
+type TestTableFileWriter struct {
+	fileID    string
+	numChunks int
+	writer    *bytes.Buffer
+	ttfs      *TestTableFileStore
+}
+
+func (ttfWr *TestTableFileWriter) Write(data []byte) (int, error) {
+	return ttfWr.writer.Write(data)
+}
+
+func (ttfWr *TestTableFileWriter) Close(ctx context.Context) error {
+	data := ttfWr.writer.Bytes()
+	ttfWr.writer = nil
+
+	ttfWr.ttfs.tableFiles[ttfWr.fileID] = &TestTableFile{ttfWr.fileID, ttfWr.numChunks, data}
+	return nil
+}
+
+type TestTableFileStore struct {
+	root       hash.Hash
+	tableFiles map[string]nbs.TableFile
+}
+
+func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	var tblFiles []nbs.TableFile
+	for _, tblFile := range ttfs.tableFiles {
+		tblFiles = append(tblFiles, tblFile)
+	}
+
+	return ttfs.root, tblFiles, nil
+}
+
+func (ttfs *TestTableFileStore) NewSink(ctx context.Context, fileID string, numChunks int) (nbs.WriteCloserWithContext, error) {
+	tblFile := &TestTableFileWriter{fileID, numChunks, bytes.NewBuffer(nil), ttfs}
+	return tblFile, nil
+}
+
+func (ttfs *TestTableFileStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
+	ttfs.root = root
+	return nil
+}
+
+func TestClone(t *testing.T) {
+	hashBytes := [hash.ByteLen]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10, 0x11, 0x12, 0x13}
+	src := &TestTableFileStore{
+		root: hash.Of(hashBytes[:]),
+		tableFiles: map[string]nbs.TableFile{
+			"file1": &TestTableFile{
+				fileID:    "file1",
+				numChunks: 1,
+				data:      []byte("Call me Ishmael. Some years ago—never mind how long precisely—having little or no money in my purse, "),
+			},
+			"file2": &TestTableFile{
+				fileID:    "file2",
+				numChunks: 2,
+				data:      []byte("and nothing particular to interest me on shore, I thought I would sail about a little and see the watery "),
+			},
+			"file3": &TestTableFile{
+				fileID:    "file3",
+				numChunks: 3,
+				data:      []byte("part of the world. It is a way I have of driving off the spleen and regulating the "),
+			},
+			"file4": &TestTableFile{
+				fileID:    "file4",
+				numChunks: 4,
+				data:      []byte("circulation. Whenever I find myself growing grim about the mouth; whenever it is a damp, drizzly "),
+			},
+			"file5": &TestTableFile{
+				fileID:    "file5",
+				numChunks: 5,
+				data:      []byte("November in my soul; whenever I find myself involuntarily pausing before coffin warehouses, and bringing "),
+			},
+		},
+	}
+
+	dest := &TestTableFileStore{
+		root:       hash.Hash{},
+		tableFiles: map[string]nbs.TableFile{},
+	}
+
+	ctx := context.Background()
+	err := clone(ctx, src, dest, nil)
+	require.NoError(t, err)
+
+	err = dest.SetRootChunk(ctx, src.root, hash.Hash{})
+	require.NoError(t, err)
+
+	assert.True(t, reflect.DeepEqual(src, dest))
 }

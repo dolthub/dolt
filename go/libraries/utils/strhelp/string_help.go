@@ -14,6 +14,8 @@
 
 package strhelp
 
+import "strconv"
+
 // NthToken returns the Nth token in s, delimited by delim. There is always at least one token: the zeroth token is the
 // input string if delim doesn't occur in s. The second return value will be false if there is no Nth token.
 func NthToken(s string, delim rune, n int) (string, bool) {
@@ -40,4 +42,24 @@ func NthToken(s string, delim rune, n int) (string, bool) {
 	}
 
 	return "", false
+}
+
+func CommaIfy(n int64) string {
+	str := strconv.FormatInt(n, 10)
+
+	if len(str) < 4 {
+		return str
+	}
+
+	result := ""
+
+	for i := len(str); i >= 0; i -= 3 {
+		if i-4 >= 0 {
+			result = "," + str[i-3:i] + result
+		} else {
+			result = str[0:i] + result
+		}
+	}
+
+	return result
 }

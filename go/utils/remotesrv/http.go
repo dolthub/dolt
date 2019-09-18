@@ -49,7 +49,12 @@ func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case http.MethodGet:
 		rangeStr := req.Header.Get("Range")
-		statusCode = readChunk(logger, org, repo, hashStr, rangeStr, respWr)
+
+		if rangeStr == "" {
+			statusCode = readFile(logger, org, repo, hashStr, respWr)
+		} else {
+			statusCode = readChunk(logger, org, repo, hashStr, rangeStr, respWr)
+		}
 
 	case http.MethodPost, http.MethodPut:
 		statusCode = writeChunk(logger, org, repo, hashStr, req)
@@ -128,6 +133,38 @@ func offsetAndLenFromRange(rngStr string) (int64, int64, error) {
 	}
 
 	return int64(start), int64(end-start) + 1, nil
+}
+
+func readFile(logger func(string), org, repo, fileId string, writer io.Writer) int {
+	path := filepath.Join(org, repo, fileId)
+
+	info, err := os.Stat(path)
+
+	if err != nil {
+		logger("file not found. path: " + path)
+		return http.StatusNotFound
+	}
+
+	f, err := os.Open(path)
+
+	if err != nil {
+		logger("failed to open file. file: " + path + " err: " + err.Error())
+		return http.StatusInternalServerError
+	}
+
+	n, err := io.Copy(writer, f)
+
+	if err != nil {
+		logger("failed to write data to response. err : " + err.Error())
+		return -1
+	}
+
+	if n != info.Size() {
+		logger(fmt.Sprintf("failed to write entire file to response. Copied %d of %d err: %v", n, info.Size(), err))
+		return -1
+	}
+
+	return -1
 }
 
 func readChunk(logger func(string), org, repo, fileId, rngStr string, writer io.Writer) int {

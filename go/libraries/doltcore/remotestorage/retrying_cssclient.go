@@ -123,3 +123,16 @@ func (c RetryingChunkStoreServiceClient) Commit(ctx context.Context, in *remotes
 
 	return resp, err
 }
+
+func (c RetryingChunkStoreServiceClient) ListTableFiles(ctx context.Context, in *remotesapi.ListTableFilesRequest, opts ...grpc.CallOption) (*remotesapi.ListTableFilesResponse, error) {
+	var resp *remotesapi.ListTableFilesResponse
+	op := func() error {
+		var err error
+		resp, err = c.client.ListTableFiles(ctx, in, opts...)
+		return processGrpcErr(err)
+	}
+
+	err := backoff.Retry(op, backoff.WithMaxRetries(csRetryParams, csClientRetries))
+
+	return resp, err
+}

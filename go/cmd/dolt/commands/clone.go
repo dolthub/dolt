@@ -16,9 +16,14 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"sync"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
+	"github.com/liquidata-inc/dolt/go/store/datas"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -31,8 +36,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -188,111 +191,115 @@ func createRemote(ctx context.Context, remoteName, remoteUrl string, params map[
 	return r, ddb, nil
 }
 
-func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) errhand.VerboseError {
-	var branches []ref.DoltRef
-	if len(branch) > 0 {
-		branches = []ref.DoltRef{ref.NewBranchRef(branch)}
-	} else {
-		var err error
-		branches, err = srcDB.GetBranches(ctx)
+func cloneProg(eventCh <-chan datas.TableFileEvent) {
+	var (
+		chunks            int64
+		chunksDownloading int64
+		chunksDownloaded  int64
+		cliPos            int
+	)
 
-		if err != nil {
-			return errhand.BuildDError("error: failed to read branches").AddCause(err).Build()
+	cliPos = cli.DeleteAndPrint(cliPos, "Retrieving remote information.")
+	for tblFEvt := range eventCh {
+		switch tblFEvt.EventType {
+		case datas.Listed:
+			for _, tf := range tblFEvt.TableFiles {
+				chunks += int64(tf.NumChunks())
+			}
+		case datas.DownloadStart:
+			for _, tf := range tblFEvt.TableFiles {
+				chunksDownloading += int64(tf.NumChunks())
+			}
+		case datas.DownloadSuccess:
+			for _, tf := range tblFEvt.TableFiles {
+				chunksDownloading -= int64(tf.NumChunks())
+				chunksDownloaded += int64(tf.NumChunks())
+			}
+		case datas.DownloadFailed:
+			// Ignore for now and output errors on the main thread
 		}
+
+		str := fmt.Sprintf("%s of %s chunks complete. %s chunks being downloaded currently.", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+		cliPos = cli.DeleteAndPrint(cliPos, str)
 	}
 
-	return cloneAllBranchRefs(branches, srcDB, ctx, remoteName, dEnv)
+	cli.Println()
 }
 
-func cloneAllBranchRefs(branches []ref.DoltRef, srcDB *doltdb.DoltDB, ctx context.Context, remoteName string, dEnv *env.DoltEnv) errhand.VerboseError {
-	var dref ref.DoltRef
-	var masterHash hash.Hash
-	var h hash.Hash
+func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) errhand.VerboseError {
+	wg := &sync.WaitGroup{}
+	eventCh := make(chan datas.TableFileEvent, 128)
 
-	for i := 0; i < len(branches); i++ {
-		dref = branches[i]
-		branch := dref.GetPath()
-		hasRef, err := srcDB.HasRef(ctx, dref)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		cloneProg(eventCh)
+	}()
 
-		if err != nil {
-			return errhand.BuildDError("error: failed to read from db").AddCause(err).Build()
-		}
+	err := actions.Clone(ctx, srcDB, dEnv.DoltDB, eventCh)
 
-		if !hasRef {
-			return errhand.BuildDError("fatal: unknown branch " + branch).Build()
-		}
+	wg.Wait()
 
-		cs, _ := doltdb.NewCommitSpec("HEAD", dref.GetPath())
-		cm, err := srcDB.Resolve(ctx, cs)
+	if err != nil {
+		return errhand.BuildDError("error: clone failed").AddCause(err).Build()
+	}
 
-		if err != nil {
-			return errhand.BuildDError("error: unable to find %v", branch).AddCause(err).Build()
-		}
-
-		progChan := make(chan datas.PullProgress)
-		doneChan := make(chan struct{})
-		go progFunc(progChan, doneChan)
-
-		remoteBranch := ref.NewRemoteRef(remoteName, branch)
-		err = actions.Fetch(ctx, remoteBranch, srcDB, dEnv.DoltDB, cm, progChan)
-		close(progChan)
-		<-doneChan
+	if branch == "" {
+		branches, err := dEnv.DoltDB.GetBranches(ctx)
 
 		if err != nil {
-			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
+			return errhand.BuildDError("error: failed to list branches").AddCause(err).Build()
 		}
 
-		err = dEnv.DoltDB.NewBranchAtCommit(ctx, dref, cm)
+		for _, brnch := range branches {
+			branch = brnch.GetPath()
 
-		if err != nil {
-			return errhand.BuildDError("error: failed to create branch " + branch).AddCause(err).Build()
-		}
-
-		localCommitSpec, _ := doltdb.NewCommitSpec("HEAD", branch)
-		localCommit, _ := dEnv.DoltDB.Resolve(ctx, localCommitSpec)
-
-		root, err := localCommit.GetRootValue()
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to get root").AddCause(err).Build()
-		}
-
-		h, err = dEnv.DoltDB.WriteRootValue(ctx, root)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to write to database.").AddCause(err).Build()
-		}
-
-		if branch == "master" {
-			masterHash = h
+			if branch == "master" {
+				break
+			}
 		}
 	}
 
-	if !masterHash.IsEmpty() {
-		h = masterHash
-		dref = ref.NewBranchRef("master")
+	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+
+	if err != nil {
+		return errhand.BuildDError("error: could not get " + branch).AddCause(err).Build()
 	}
 
-	dEnv.RepoState.Head = ref.MarshalableRef{Ref: dref}
+	remoteRef := ref.NewRemoteRef(remoteName, branch)
+	err = dEnv.DoltDB.FastForward(ctx, remoteRef, cm)
+
+	if err != nil {
+		return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
+	}
+
+	rootVal, err := cm.GetRootValue()
+
+	if err != nil {
+		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
+	}
+
+	h, err := rootVal.HashOf()
+
+	if err != nil {
+		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
+	}
+
+	_, err = dEnv.DoltDB.WriteRootValue(ctx, rootVal)
+
+	if err != nil {
+		return errhand.BuildDError("error: could not write root value").AddCause(err).Build()
+	}
+
+	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef(branch)}
 	dEnv.RepoState.Staged = h.String()
 	dEnv.RepoState.Working = h.String()
-	err := dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save()
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
 	}
 
 	return nil
-}
-
-type RpcErrVerbWrap struct {
-	*remotestorage.RpcError
-}
-
-func (vw RpcErrVerbWrap) ShouldPrintUsage() bool {
-	return false
-}
-
-func (vw RpcErrVerbWrap) Verbose() string {
-	return vw.FullDetails()
 }

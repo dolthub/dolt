@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 
@@ -33,6 +34,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -54,6 +56,100 @@ func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreA
 		doneCount, knownCount, approxBytesWritten = doneCount+moreDone, knownCount+moreKnown, approxBytesWritten+moreApproxBytesWritten
 		progressCh <- PullProgress{doneCount, knownCount, approxBytesWritten}
 	}
+}
+
+func Clone(ctx context.Context, srcDB, sinkDB Database, eventCh chan<- TableFileEvent) error {
+	srcCS := srcDB.chunkStore().(interface{})
+	sinkCS := sinkDB.chunkStore().(interface{})
+
+	srcTS, srcOK := srcCS.(nbs.TableFileStore)
+
+	if !srcOK {
+		return errors.New("src db is not a Table File Store")
+	}
+
+	sinkTS, sinkOK := sinkCS.(nbs.TableFileStore)
+
+	if !sinkOK {
+		return errors.New("sink db is not a Table File Store")
+	}
+
+	return clone(ctx, srcTS, sinkTS, eventCh)
+}
+
+type CloneTableFileEvent int
+
+const (
+	Listed = iota
+	DownloadStart
+	DownloadSuccess
+	DownloadFailed
+)
+
+type TableFileEvent struct {
+	EventType  CloneTableFileEvent
+	TableFiles []nbs.TableFile
+}
+
+func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
+	if eventCh != nil {
+		defer close(eventCh)
+	}
+
+	root, tblFiles, err := srcTS.Sources(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	if eventCh != nil {
+		eventCh <- TableFileEvent{Listed, tblFiles}
+	}
+
+	// should parallelize at some point
+	for _, tblFile := range tblFiles {
+		rd, err := tblFile.Open()
+
+		if err != nil {
+			return err
+		}
+
+		wr, err := sinkTS.NewSink(ctx, tblFile.FileID(), tblFile.NumChunks())
+
+		if err != nil {
+			return err
+		}
+
+		if eventCh != nil {
+			eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
+		}
+
+		_, err = io.Copy(wr, rd)
+
+		if err != nil {
+			if eventCh != nil {
+				eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+			}
+
+			return err
+		}
+
+		err = wr.Close(ctx)
+
+		if err != nil {
+			if eventCh != nil {
+				eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+			}
+
+			return err
+		}
+
+		if eventCh != nil {
+			eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
+		}
+	}
+
+	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
 }
 
 // Pull objects that descend from sourceRef from srcDB to sinkDB.
