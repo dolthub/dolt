@@ -884,7 +884,8 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, nil, nil)
+	stats := &Stats{}
+	exists, contents, err := nbs.mm.m.ParseIfExists(ctx, stats, nil)
 
 	if err != nil {
 		return hash.Hash{}, nil, err
