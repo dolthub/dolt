@@ -149,6 +149,10 @@ func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks c
 	return remaining
 }
 
+func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+	panic("not implemented")
+}
+
 func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) error {
 	for _, hrec := range mt.order {
 		chunks <- extractRecord{a: *hrec.a, data: mt.chunks[*hrec.a], err: nil}

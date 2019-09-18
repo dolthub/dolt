@@ -269,6 +269,18 @@ func (crg chunkReaderGroup) getMany(ctx context.Context, reqs []getRecord, found
 	return true
 }
 
+func (crg chunkReaderGroup) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+	for _, haver := range crg {
+		remaining := haver.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
+
+		if !remaining {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (crg chunkReaderGroup) count() (count uint32, err error) {
 	for _, haver := range crg {
 		count += mustUint32(haver.count())
