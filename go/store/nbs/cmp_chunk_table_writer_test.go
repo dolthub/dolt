@@ -38,7 +38,7 @@ func TestFixedBufferTableSink(t *testing.T) {
 }
 
 type TableSinkSuite struct {
-	sink TableSink
+	sink ByteSink
 	t    *testing.T
 }
 

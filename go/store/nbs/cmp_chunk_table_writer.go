@@ -28,25 +28,35 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
-var ErrBufferFull = errors.New("buffer full")
-var ErrNotFinished = errors.New("Not finished")
-var ErrAlreadyFinished = errors.New("Already Finished")
+// A ByteSink is an interface for writing bytes which can later be flushed to a writer
+type ByteSink interface {
+	io.Writer
 
-type TableSink interface {
-	Write(src []byte) (int, error)
+	// Flush writes all the data that was written to the ByteSink to the supplied writer
 	Flush(wr io.Writer) error
 }
 
-type FixedBufferTableSink struct {
+// ErrBuffFull used by the FixedBufferSink when the data written is larger than the buffer allocated.
+var ErrBufferFull = errors.New("buffer full")
+
+// FixedBufferByteSink is a ByteSink implementation with a buffer whose size will not change.  Writing more
+// data than the fixed buffer can hold will result in an error
+type FixedBufferByteSink struct {
 	buff []byte
 	pos  uint64
 }
 
-func NewFixedBufferTableSink(buff []byte) *FixedBufferTableSink {
-	return &FixedBufferTableSink{buff: buff}
+// NewFixedBufferTableSink creates a FixedBufferTableSink which will use the supplied buffer
+func NewFixedBufferTableSink(buff []byte) *FixedBufferByteSink {
+	if len(buff) == 0 {
+		panic("must provide a buffer")
+	}
+
+	return &FixedBufferByteSink{buff: buff}
 }
 
-func (sink *FixedBufferTableSink) Write(src []byte) (int, error) {
+// Write writes a byte array to the sink.
+func (sink *FixedBufferByteSink) Write(src []byte) (int, error) {
 	dest := sink.buff[sink.pos:]
 	destLen := len(dest)
 	srcLen := len(src)
@@ -65,22 +75,27 @@ func (sink *FixedBufferTableSink) Write(src []byte) (int, error) {
 	return srcLen, nil
 }
 
-func (sink *FixedBufferTableSink) Flush(wr io.Writer) error {
+// Flush writes all the data that was written to the ByteSink to the supplied writer
+func (sink *FixedBufferByteSink) Flush(wr io.Writer) error {
 	return iohelp.WriteAll(wr, sink.buff[:sink.pos])
 }
 
-type BlockBufferTableSink struct {
+// BlockBufferByteSink allocates blocks of data which of a given block size to store the bytes written to the sink. New
+// blocks are allocated as needed in order to handle all the data of the Write calls.
+type BlockBufferByteSink struct {
 	blockSize int
 	pos       uint64
 	blocks    [][]byte
 }
 
-func NewBlockBufferTableSink(blockSize int) *BlockBufferTableSink {
+// NewBlockBufferTableSink creates a BlockBufferByteSink with the provided block size.
+func NewBlockBufferTableSink(blockSize int) *BlockBufferByteSink {
 	block := make([]byte, 0, blockSize)
-	return &BlockBufferTableSink{blockSize, 0, [][]byte{block}}
+	return &BlockBufferByteSink{blockSize, 0, [][]byte{block}}
 }
 
-func (sink *BlockBufferTableSink) Write(src []byte) (int, error) {
+// Write writes a byte array to the sink.
+func (sink *BlockBufferByteSink) Write(src []byte) (int, error) {
 	srcLen := len(src)
 	currBlockIdx := len(sink.blocks) - 1
 	currBlock := sink.blocks[currBlockIdx]
@@ -104,24 +119,34 @@ func (sink *BlockBufferTableSink) Write(src []byte) (int, error) {
 	return srcLen, nil
 }
 
-func (sink *BlockBufferTableSink) Flush(wr io.Writer) (err error) {
+// Flush writes all the data that was written to the ByteSink to the supplied writer
+func (sink *BlockBufferByteSink) Flush(wr io.Writer) (err error) {
 	return iohelp.WriteAll(wr, sink.blocks...)
 }
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
 
+// ErrNotFinished is an error returned by a CmpChunkTableWriter when a call to Flush* is called before Finish is called
+var ErrNotFinished = errors.New("Not finished")
+
+// ErrAlreadyFinished is an error returned if Finish is called more than once on a CmpChunkTableWriter
+var ErrAlreadyFinished = errors.New("Already Finished")
+
+// CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
-	sink                  TableSink
+	sink                  ByteSink
 	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
 	blockAddr             *addr
 }
 
+// NewCmpChunkTableWriter creates a new CmpChunkTableWriter instance with a default ByteSink
 func NewCmpChunkTableWriter() *CmpChunkTableWriter {
 	return &CmpChunkTableWriter{NewBlockBufferTableSink(defaultTableSinkBlockSize), 0, 0, nil, nil}
 }
 
+// AddCmpChunk adds a compressed chunk
 func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 	if len(c.CompressedData) == 0 {
 		panic("NBS blocks cannot be zero length")
@@ -155,6 +180,7 @@ func (tw *CmpChunkTableWriter) AddCmpChunk(c CompressedChunk) error {
 	return nil
 }
 
+// Finish will write the index and footer of the table file and return the id of the file.
 func (tw *CmpChunkTableWriter) Finish() (string, error) {
 	if tw.blockAddr != nil {
 		return "", ErrAlreadyFinished
@@ -182,6 +208,7 @@ func (tw *CmpChunkTableWriter) Finish() (string, error) {
 	return tw.blockAddr.String(), nil
 }
 
+// FlushToFile can be called after Finish in order to write the data out to the path provided.
 func (tw *CmpChunkTableWriter) FlushToFile(path string) error {
 	if tw.blockAddr == nil {
 		return ErrNotFinished
@@ -202,6 +229,7 @@ func (tw *CmpChunkTableWriter) FlushToFile(path string) error {
 	return nil
 }
 
+// Flush can be called after Finish in order to write the data out to the writer provided.
 func (tw *CmpChunkTableWriter) Flush(wr io.Writer) error {
 	if tw.blockAddr == nil {
 		return ErrNotFinished
