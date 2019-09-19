@@ -23,6 +23,15 @@ teardown() {
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
 
+@test "replace table using csv with wrong schema" {
+    run dolt table create -s `batshelper 1pk5col-ints.schema` test
+    [ "$status" -eq 0 ]
+    run dolt table import -r test `batshelper 2pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error replacing table" ]] || false
+    [[ "$output" =~ "cause: Schema from file does not match existing table schema" ]] || false
+}
+
 @test "replace table using schema with csv" {
     run dolt table create -s `batshelper 1pk5col-ints.schema` test
     [ "$status" -eq 0 ]
@@ -78,6 +87,24 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt table import -r employees `batshelper employees-tbl-schema-wrong.json`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error replacing table" ]] || false
+    [[ "$output" =~ "cause: Schema from file does not match existing table schema" ]] || false
+}
+
+@test "replace table using xlsx file" {
+    run dolt table create -s `batshelper employees-sch-2.json` employees
+    [ "$status" -eq 0 ]
+    run dolt table import -r employees `batshelper employees.xlsx`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}
+
+@test "replace table using xlsx file with wrong schema" {
+    run dolt table create -s `batshelper employees-sch.json` employees
+    [ "$status" -eq 0 ]
+    run dolt table import -r employees `batshelper employees.xlsx`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error replacing table" ]] || false
     [[ "$output" =~ "cause: Schema from file does not match existing table schema" ]] || false
