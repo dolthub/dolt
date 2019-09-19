@@ -37,6 +37,35 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+type CompressedChunk struct {
+	H                   hash.Hash
+	FullCompressedChunk []byte
+	CompressedData      []byte
+}
+
+func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
+	dataLen := uint64(len(buff)) - checksumSize
+
+	chksum := binary.BigEndian.Uint32(buff[dataLen:])
+	compressedData := buff[:dataLen]
+
+	if chksum != crc(compressedData) {
+		return CompressedChunk{}, errors.New("checksum error")
+	}
+
+	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData: compressedData}, nil
+}
+
+func (cmp CompressedChunk) Decompress() (chunks.Chunk, error) {
+	data, err := snappy.Decode(nil, cmp.CompressedData)
+
+	if err != nil {
+		return chunks.Chunk{}, err
+	}
+
+	return chunks.NewChunk(data), nil
+}
+
 var ErrInvalidTableFile = errors.New("invalid or corrupt table file")
 
 type tableIndex struct {
@@ -298,17 +327,23 @@ func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, er
 		return nil, errors.New("failed to read all data")
 	}
 
-	data, err := tr.parseChunk(buff)
+	cmp, err := NewCompressedChunk(hash.Hash(h), buff)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if data == nil {
+	if len(cmp.CompressedData) == 0 {
 		return nil, errors.New("failed to get data")
 	}
 
-	return data, nil
+	chnk, err := cmp.Decompress()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return chnk.Data(), nil
 }
 
 type offsetRec struct {
@@ -323,6 +358,20 @@ func (hs offsetRecSlice) Len() int           { return len(hs) }
 func (hs offsetRecSlice) Less(i, j int) bool { return hs[i].offset < hs[j].offset }
 func (hs offsetRecSlice) Swap(i, j int)      { hs[i], hs[j] = hs[j], hs[i] }
 
+func (tr tableReader) readCompressedAtOffsets(
+	ctx context.Context,
+	readStart, readEnd uint64,
+	reqs []getRecord,
+	offsets offsetRecSlice,
+	foundCmpChunks chan CompressedChunk,
+	stats *Stats,
+) error {
+	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
+		foundCmpChunks <- cmp
+		return nil
+	})
+}
+
 func (tr tableReader) readAtOffsets(
 	ctx context.Context,
 	readStart, readEnd uint64,
@@ -330,6 +379,26 @@ func (tr tableReader) readAtOffsets(
 	offsets offsetRecSlice,
 	foundChunks chan *chunks.Chunk,
 	stats *Stats,
+) error {
+	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
+		chk, err := cmp.Decompress()
+
+		if err != nil {
+			return err
+		}
+
+		foundChunks <- &chk
+		return nil
+	})
+}
+
+func (tr tableReader) readAtOffsetsWithCB(
+	ctx context.Context,
+	readStart, readEnd uint64,
+	reqs []getRecord,
+	offsets offsetRecSlice,
+	stats *Stats,
+	cb func(cmp CompressedChunk) error,
 ) error {
 	readLength := readEnd - readStart
 	buff := make([]byte, readLength)
@@ -356,14 +425,17 @@ func (tr tableReader) readAtOffsets(
 			return errors.New("length goes past the end")
 		}
 
-		data, err := tr.parseChunk(buff[localStart:localEnd])
+		cmp, err := NewCompressedChunk(hash.Hash(*rec.a), buff[localStart:localEnd])
 
 		if err != nil {
 			return err
 		}
 
-		c := chunks.NewChunkWithHash(hash.Hash(*rec.a), data)
-		foundChunks <- &c
+		err = cb(cmp)
+
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -385,6 +457,33 @@ func (tr tableReader) getMany(
 	tr.getManyAtOffsets(ctx, reqs, offsetRecords, foundChunks, wg, ae, stats)
 	return remaining
 }
+func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
+	// of table locations which must be read in order to satisfy the getMany operation.
+	offsetRecords, remaining := tr.findOffsets(reqs)
+	tr.getManyCompressedAtOffsets(ctx, reqs, offsetRecords, foundCmpChunks, wg, ae, stats)
+	return remaining
+}
+
+func (tr tableReader) getManyCompressedAtOffsets(
+	ctx context.Context,
+	reqs []getRecord,
+	offsetRecords offsetRecSlice,
+	foundCmpChunks chan CompressedChunk,
+	wg *sync.WaitGroup,
+	ae *atomicerr.AtomicError,
+	stats *Stats,
+) {
+	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
+		ctx context.Context,
+		readStart, readEnd uint64,
+		reqs []getRecord,
+		offsets offsetRecSlice,
+		stats *Stats) error {
+
+		return tr.readCompressedAtOffsets(ctx, readStart, readEnd, reqs, offsets, foundCmpChunks, stats)
+	})
+}
 
 func (tr tableReader) getManyAtOffsets(
 	ctx context.Context,
@@ -395,7 +494,31 @@ func (tr tableReader) getManyAtOffsets(
 	ae *atomicerr.AtomicError,
 	stats *Stats,
 ) {
+	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
+		ctx context.Context,
+		readStart, readEnd uint64,
+		reqs []getRecord,
+		offsets offsetRecSlice,
+		stats *Stats) error {
 
+		return tr.readAtOffsets(ctx, readStart, readEnd, reqs, offsets, foundChunks, stats)
+	})
+}
+
+func (tr tableReader) getManyAtOffsetsWithReadFunc(
+	ctx context.Context,
+	reqs []getRecord,
+	offsetRecords offsetRecSlice,
+	wg *sync.WaitGroup,
+	ae *atomicerr.AtomicError,
+	stats *Stats,
+	readAtOffsets func(
+		ctx context.Context,
+		readStart, readEnd uint64,
+		reqs []getRecord,
+		offsets offsetRecSlice,
+		stats *Stats) error,
+) {
 	// Now |offsetRecords| contains all locations within the table which must be search (note
 	// that there may be duplicates of a particular location). Sort by offset and scan forward,
 	// grouping sequences of reads into large physical reads.
@@ -433,7 +556,7 @@ func (tr tableReader) getManyAtOffsets(
 		goBatch := batch
 		go func(batch offsetRecSlice) {
 			defer wg.Done()
-			err := tr.readAtOffsets(ctx, goReadStart, goReadEnd, reqs, goBatch, foundChunks, stats)
+			err := readAtOffsets(ctx, goReadStart, goReadEnd, reqs, goBatch, stats)
 			ae.SetIfError(err)
 		}(batch)
 		batch = nil
@@ -444,7 +567,7 @@ func (tr tableReader) getManyAtOffsets(
 			wg.Add(1)
 			go func(batch offsetRecSlice) {
 				defer wg.Done()
-				err := tr.readAtOffsets(ctx, readStart, readEnd, reqs, batch, foundChunks, stats)
+				err := readAtOffsets(ctx, readStart, readEnd, reqs, batch, stats)
 				ae.SetIfError(err)
 			}(batch)
 			batch = nil
@@ -515,25 +638,6 @@ func canReadAhead(fRec offsetRec, fLength uint32, readStart, readEnd, blockSize 
 	return fRec.offset + uint64(fLength), true
 }
 
-// Fetches the byte stream of data logically encoded within the table starting at |pos|.
-func (tr tableReader) parseChunk(buff []byte) ([]byte, error) {
-	dataLen := uint64(len(buff)) - checksumSize
-
-	chksum := binary.BigEndian.Uint32(buff[dataLen:])
-
-	if chksum != crc(buff[:dataLen]) {
-		return nil, errors.New("checksum error")
-	}
-
-	data, err := snappy.Decode(nil, buff[:dataLen])
-
-	if err != nil {
-		return nil, errors.New("decode error - likely corrupt data")
-	}
-
-	return data, nil
-}
-
 func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
 	var offsetRecords offsetRecSlice
 	// Pass #1: Build the set of table locations which must be read in order to find all the elements of |reqs| which are present in this table.
@@ -596,13 +700,20 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 
 	sendChunk := func(i uint32) error {
 		localOffset := tr.offsets[i] - tr.offsets[0]
-		data, err := tr.parseChunk(buff[localOffset : localOffset+uint64(tr.lengths[i])])
+
+		cmp, err := NewCompressedChunk(hash.Hash(hashes[i]), buff[localOffset:localOffset+uint64(tr.lengths[i])])
 
 		if err != nil {
 			return err
 		}
 
-		chunks <- extractRecord{a: hashes[i], data: data}
+		chnk, err := cmp.Decompress()
+
+		if err != nil {
+			return err
+		}
+
+		chunks <- extractRecord{a: hashes[i], data: chnk.Data()}
 		return nil
 	}
 

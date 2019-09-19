@@ -41,6 +41,10 @@ func WriteChunks(chunks []chunks.Chunk) (string, []byte, error) {
 
 	mt := newMemTable(size)
 
+	return writeChunksToMT(mt, chunks)
+}
+
+func writeChunksToMT(mt *memTable, chunks []chunks.Chunk) (string, []byte, error) {
 	for _, chunk := range chunks {
 		if !mt.addChunk(addr(chunk.Hash()), chunk.Data()) {
 			return "", nil, errors.New("didn't create this memory table with enough space to add all the chunks")
@@ -147,6 +151,10 @@ func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks c
 	}
 
 	return remaining
+}
+
+func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+	panic("not implemented")
 }
 
 func (mt *memTable) extract(ctx context.Context, chunks chan<- extractRecord) error {

@@ -167,6 +167,42 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 	return f(ts.novel) && f(ts.upstream)
 }
 
+func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+	f := func(css chunkSources) bool {
+		for _, haver := range css {
+			if ae.IsSet() {
+				return false
+			}
+
+			if rp, ok := haver.(chunkReadPlanner); ok {
+				offsets, remaining := rp.findOffsets(reqs)
+
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					rp.getManyCompressedAtOffsets(ctx, reqs, offsets, foundCmpChunks, wg, ae, stats)
+				}()
+
+				if !remaining {
+					return false
+				}
+
+				continue
+			}
+
+			remaining := haver.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
+
+			if !remaining {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return f(ts.novel) && f(ts.upstream)
+}
+
 func (ts tableSet) calcReads(reqs []getRecord, blockSize uint64) (reads int, split, remaining bool, err error) {
 	f := func(css chunkSources) (int, bool, bool, error) {
 		reads, split := 0, false

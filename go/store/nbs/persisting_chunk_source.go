@@ -134,6 +134,17 @@ func (ccs *persistingChunkSource) getMany(ctx context.Context, reqs []getRecord,
 	return cr.getMany(ctx, reqs, foundChunks, wg, ae, stats)
 }
 
+func (ccs *persistingChunkSource) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+	cr := ccs.getReader()
+
+	if cr == nil {
+		ae.SetIfErrAndCheck(ErrNoReader)
+		return false
+	}
+
+	return cr.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, stats)
+}
+
 func (ccs *persistingChunkSource) wait() error {
 	ccs.wg.Wait()
 	return ccs.ae.Get()
@@ -252,6 +263,10 @@ func (ecs emptyChunkSource) get(ctx context.Context, h addr, stats *Stats) ([]by
 }
 
 func (ecs emptyChunkSource) getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+	return true
+}
+
+func (ecs emptyChunkSource) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	return true
 }
 

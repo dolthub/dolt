@@ -405,6 +405,22 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 }
 
 func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
+	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+		return cr.getMany(ctx, reqs, foundChunks, wg, ae, nbs.stats)
+	})
+}
+
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan CompressedChunk) error {
+	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+		return cr.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, nbs.stats)
+	})
+}
+
+func (nbs *NomsBlockStore) getManyWithFunc(
+	ctx context.Context,
+	hashes hash.HashSet,
+	getManyFunc func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool,
+) error {
 	t1 := time.Now()
 	reqs := toGetRecords(hashes)
 
@@ -424,7 +440,7 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		tables = nbs.tables
 		remaining = true
 		if nbs.mt != nil {
-			remaining = nbs.mt.getMany(ctx, reqs, foundChunks, nil, ae, nbs.stats)
+			remaining = getManyFunc(ctx, nbs.mt, reqs, nil, ae, nbs.stats)
 		}
 
 		return
@@ -435,7 +451,7 @@ func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	}
 
 	if remaining {
-		tables.getMany(ctx, reqs, foundChunks, wg, ae, nbs.stats)
+		getManyFunc(ctx, tables, reqs, wg, ae, nbs.stats)
 		wg.Wait()
 	}
 
