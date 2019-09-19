@@ -127,9 +127,6 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *Move
 		return nil, ErrNoPK
 	}
 
-	// if srcIsSorted {
-	// 	return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
-	// } else {
 	m, err := types.NewMap(ctx, root.VRW())
 
 	if err != nil {
@@ -137,5 +134,4 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *Move
 	}
 
 	return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
-	// }
 }

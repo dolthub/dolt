@@ -132,7 +132,7 @@ func readTestRows(t *testing.T, inputStr string, info *CSVFileInfo) ([]row.Row, 
 	const path = "/file.csv"
 
 	fs := filesys.NewInMemFS(nil, map[string][]byte{path: []byte(inputStr)}, root)
-	csvR, err := OpenCSVReader(types.Format_7_18, path, fs, info)
+	csvR, _, err := OpenCSVReader(types.Format_7_18, path, fs, info, nil)
 	defer csvR.Close(context.Background())
 
 	if err != nil {

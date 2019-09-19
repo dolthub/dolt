@@ -42,7 +42,8 @@ const (
 )
 
 type CsvOptions struct {
-	Delim string
+	Delim     string
+	TableName string
 }
 
 type XlsxOptions struct {

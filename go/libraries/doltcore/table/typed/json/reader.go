@@ -79,7 +79,6 @@ func NewJSONReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *JSONFileInfo
 
 	fileMatchesSchema := true
 	decodedRows, err := jsonRows.decodeJSONRows(nbf, sch)
-	// decodeJSONRows returns err if row doesn't match schema
 	if err != nil {
 		fileMatchesSchema = false
 	}

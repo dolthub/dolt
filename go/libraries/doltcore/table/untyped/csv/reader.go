@@ -47,29 +47,37 @@ type CSVReader struct {
 
 // OpenCSVReader opens a reader at a given path within a given filesys.  The CSVFileInfo should describe the csv file
 // being opened.
-func OpenCSVReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *CSVFileInfo) (*CSVReader, error) {
+func OpenCSVReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *CSVFileInfo, outSch schema.Schema) (*CSVReader, bool, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return NewCSVReader(nbf, r, info)
+	return NewCSVReader(nbf, r, info, outSch)
 }
 
 // NewCSVReader creates a CSVReader from a given ReadCloser.  The CSVFileInfo should describe the csv file being read.
-func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
+func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo, outSch schema.Schema) (*CSVReader, bool, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	colStrs, err := getColHeaders(br, info)
 
 	if err != nil {
 		r.Close()
-		return nil, err
+		return nil, false, err
 	}
 
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	return &CSVReader{r, br, info, sch, false, nbf}, nil
+	fileMatchesSchema := true
+	if outSch != nil {
+		fileMatchesSchema, err = SchemasMatch(sch, outSch)
+		if err != nil {
+			return nil, false, nil
+		}
+	}
+
+	return &CSVReader{r, br, info, sch, false, nbf}, fileMatchesSchema, nil
 }
 
 func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
@@ -170,4 +178,38 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 	}
 
 	return row.New(csvr.nbf, sch, taggedVals)
+}
+
+func SchemasMatch(sch1, sch2 schema.Schema) (bool, error) {
+	inSch := sch1.GetAllCols()
+	outSch := sch2.GetAllCols()
+
+	if inSch.Size() != outSch.Size() {
+		return false, nil
+	}
+
+	match := true
+	err := outSch.Iter(func(tag uint64, outCol schema.Column) (stop bool, err error) {
+		inCol, ok := inSch.GetByTag(tag)
+
+		if !ok || !ColumnsMatch(inCol, outCol) {
+			match = false
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	return match, nil
+}
+
+func ColumnsMatch(inCol, outCol schema.Column) bool {
+	if inCol.Name != outCol.Name || inCol.Tag != outCol.Tag {
+		return false
+	}
+	return true
 }

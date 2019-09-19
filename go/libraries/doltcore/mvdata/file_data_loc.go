@@ -83,20 +83,27 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 	switch dl.Format {
 	case CsvFile:
 		delim := ","
-
-		if opts != nil {
-			csvOpts, _ := opts.(CsvOptions)
-
-			if len(csvOpts.Delim) != 0 {
-				delim = csvOpts.Delim
-			}
+		csvOpts, _ := opts.(CsvOptions)
+		if len(csvOpts.Delim) != 0 {
+			delim = csvOpts.Delim
 		}
 
-		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim))
+		var outSch schema.Schema = nil
+		sch, tableExists, err := GetOutSchema(csvOpts.TableName, root)
+		if tableExists {
+			outSch = sch
+		}
+		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim), outSch)
 		return rd, false, fileMatchesSchema, err
 
 	case PsvFile:
-		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"))
+		var outSch schema.Schema = nil
+		csvOpts, _ := opts.(CsvOptions)
+		sch, tableExists, err := GetOutSchema(csvOpts.TableName, root)
+		if tableExists {
+			outSch = sch
+		}
+		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"), outSch)
 		return rd, false, fileMatchesSchema, err
 
 	case XlsxFile:

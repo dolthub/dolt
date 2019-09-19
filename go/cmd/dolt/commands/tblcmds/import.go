@@ -190,6 +190,8 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			srcOpts = mvdata.XlsxOptions{SheetName: tableName}
 		} else if val.Format == mvdata.JsonFile {
 			srcOpts = mvdata.JSONOptions{TableName: tableName}
+		} else if val.Format == mvdata.CsvFile || val.Format == mvdata.PsvFile {
+			srcOpts = mvdata.CsvOptions{TableName: tableName}
 		}
 
 	case mvdata.StreamDataLocation:
