@@ -37,50 +37,55 @@ type JSONReader struct {
 	ind    int
 }
 
-func OpenJSONReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *JSONFileInfo, sch schema.Schema, schPath string) (*JSONReader, error) {
+func OpenJSONReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *JSONFileInfo, sch schema.Schema, schPath string) (*JSONReader, bool, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	return NewJSONReader(nbf, r, info, fs, sch, schPath, path)
 }
 
-func NewJSONReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, sch schema.Schema, schPath string, tblPath string) (*JSONReader, error) {
+func NewJSONReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *JSONFileInfo, fs filesys.ReadableFS, sch schema.Schema, schPath string, tblPath string) (*JSONReader, bool, error) {
 	br := bufio.NewReaderSize(r, ReadBufSize)
 
 	if sch == nil {
 		if schPath == "" {
-			return nil, errors.New("schema must be provided")
+			return nil, false, errors.New("schema must be provided")
 		}
 
 		schData, err := fs.ReadFile(schPath)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 
 		jsonSchStr := string(schData)
 		sch, err = encoding.UnmarshalJson(jsonSchStr)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 	}
 
 	tblData, err := fs.ReadFile(tblPath)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	jsonRows, err := UnmarshalFromJSON(tblData)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
+	fileMatchesSchema := true
 	decodedRows, err := jsonRows.decodeJSONRows(nbf, sch)
+	// decodeJSONRows returns err if row doesn't match schema
+	if err != nil {
+		fileMatchesSchema = false
+	}
 	info.SetRows(decodedRows)
 
-	return &JSONReader{r, br, info, sch, 0}, nil
+	return &JSONReader{r, br, info, sch, 0}, fileMatchesSchema, nil
 }
 
 // Close should release resources being held

@@ -314,11 +314,6 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 		}
 	}
 
-	// not sure if this is where this should happen but it needs to happen at some point
-	// if mvOpts.Operation == mvdata.ReplaceOp && [schema check fails] {
-	// cli.PrintErrln(color.RedString("Schema does not match. Please upload file with same schema as table"))
-	// }
-
 	mover, nDMErr := mvdata.NewDataMover(ctx, root, dEnv.FS, mvOpts, importStatsCB)
 
 	if nDMErr != nil {
@@ -389,6 +384,11 @@ func newDataMoverErrToVerr(mvOpts *mvdata.MoveOptions, err *mvdata.DataMoverCrea
 		bdr := errhand.BuildDError("Error determining the mapping from input fields to output fields.")
 		bdr.AddDetails("When attempting to move data from %s to %s, determine the mapping from input fields t, output fields.", mvOpts.Src.String(), mvOpts.Dest.String())
 		bdr.AddDetails(`Mapping File: "%s"`, mvOpts.MappingFile)
+		return bdr.AddCause(err.Cause).Build()
+
+	case mvdata.ReplacingErr:
+		bdr := errhand.BuildDError("Error replacing table")
+		bdr.AddDetails("When adding to replace data with %s, could not validate schema.", mvOpts.Src.String())
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.CreateMapperErr:

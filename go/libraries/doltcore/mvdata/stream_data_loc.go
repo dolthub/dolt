@@ -47,7 +47,7 @@ func (dl StreamDataLocation) Exists(ctx context.Context, root *doltdb.RootValue,
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, fileMatchesSchema bool, err error) {
 	switch dl.Format {
 	case CsvFile:
 		delim := ","
@@ -62,14 +62,14 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 
 		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
 
-		return rd, false, err
+		return rd, false, false, err
 
 	case PsvFile:
 		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
-		return rd, false, err
+		return rd, false, false, err
 	}
 
-	return nil, false, errors.New(string(dl.Format) + "is an unsupported format to read from stdin")
+	return nil, false, false, errors.New(string(dl.Format) + "is an unsupported format to read from stdin")
 }
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
@@ -95,13 +95,5 @@ func (dl StreamDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *Move
 // NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table using
 // the same schema
 func (dl StreamDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
-	switch dl.Format {
-	case CsvFile:
-		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo())
-
-	case PsvFile:
-		return csv.NewCSVWriter(iohelp.NopWrCloser(dl.Writer), outSch, csv.NewCSVInfo().SetDelim("|"))
-	}
-
-	return nil, errors.New(string(dl.Format) + "is an unsupported format to write to stdout")
+	panic("Replacing is not supported for stdout")
 }

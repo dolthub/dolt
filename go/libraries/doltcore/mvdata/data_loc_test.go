@@ -239,7 +239,7 @@ func TestCreateRdWr(t *testing.T) {
 		}
 
 		// TODO (oo): fix this for json path test
-		rd, _, err := loc.NewReader(context.Background(), root, fs, "schema.json", nil)
+		rd, _, _, err := loc.NewReader(context.Background(), root, fs, "schema.json", nil)
 
 		if err != nil {
 			t.Fatal("Unexpected error creating writer", err)

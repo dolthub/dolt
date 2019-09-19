@@ -79,6 +79,7 @@ const (
 	NomsKindSchemaErr DataMoverCreationErrType = "Invalid schema error"
 	SchemaErr         DataMoverCreationErrType = "Schema error"
 	MappingErr        DataMoverCreationErrType = "Mapping error"
+	ReplacingErr      DataMoverCreationErrType = "Replacing error"
 	CreateMapperErr   DataMoverCreationErrType = "Mapper creation error"
 	CreateWriterErr   DataMoverCreationErrType = "Create writer error"
 	CreateSorterErr   DataMoverCreationErrType = "Create sorter error"
@@ -98,7 +99,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	var err error
 	transforms := pipeline.NewTransformCollection()
 
-	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
+	rd, srcIsSorted, fileMatchesSchema, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -117,6 +118,13 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 			return nil, &DataMoverCreationError{NomsKindSchemaErr, err}
 		}
 		return nil, &DataMoverCreationError{SchemaErr, err}
+	}
+
+	if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" {
+		if !fileMatchesSchema {
+			err := errors.New("Schema from file does not match existing table schema.")
+			return nil, &DataMoverCreationError{ReplacingErr, err}
+		}
 	}
 
 	var mapping *rowconv.FieldMapping
@@ -206,7 +214,7 @@ func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootVal
 	if mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
 		// Get schema from target
 
-		rd, _, err := mvOpts.Dest.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
+		rd, _, _, err := mvOpts.Dest.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
 
 		if err != nil {
 			return nil, err

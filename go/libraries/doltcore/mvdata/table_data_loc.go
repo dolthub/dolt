@@ -46,36 +46,36 @@ func (dl TableDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, 
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, fileMatchesSchema bool, err error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	if !ok {
-		return nil, false, doltdb.ErrTableNotFound
+		return nil, false, false, doltdb.ErrTableNotFound
 	}
 
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	rowData, err := tbl.GetRowData(ctx)
 
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	rd, err := noms.NewNomsMapReader(ctx, rowData, sch)
 
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
-	return rd, true, nil
+	return rd, true, false, nil
 }
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
@@ -127,15 +127,15 @@ func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *Move
 		return nil, ErrNoPK
 	}
 
-	if srcIsSorted {
-		return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
-	} else {
-		m, err := types.NewMap(ctx, root.VRW())
+	// if srcIsSorted {
+	// 	return noms.NewNomsMapCreator(ctx, root.VRW(), outSch), nil
+	// } else {
+	m, err := types.NewMap(ctx, root.VRW())
 
-		if err != nil {
-			return nil, err
-		}
-
-		return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
+	if err != nil {
+		return nil, err
 	}
+
+	return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
+	// }
 }
