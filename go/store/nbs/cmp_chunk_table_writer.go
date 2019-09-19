@@ -65,13 +65,9 @@ func (sink *FixedBufferByteSink) Write(src []byte) (int, error) {
 		return 0, ErrBufferFull
 	}
 
-	n := copy(dest, src)
+	copy(dest, src)
 
-	if n != srcLen {
-		return 0, ErrBufferFull
-	}
-
-	sink.pos += uint64(n)
+	sink.pos += uint64(srcLen)
 	return srcLen, nil
 }
 
@@ -80,7 +76,7 @@ func (sink *FixedBufferByteSink) Flush(wr io.Writer) error {
 	return iohelp.WriteAll(wr, sink.buff[:sink.pos])
 }
 
-// BlockBufferByteSink allocates blocks of data which of a given block size to store the bytes written to the sink. New
+// BlockBufferByteSink allocates blocks of data with a given block size to store the bytes written to the sink. New
 // blocks are allocated as needed in order to handle all the data of the Write calls.
 type BlockBufferByteSink struct {
 	blockSize int
@@ -127,10 +123,10 @@ func (sink *BlockBufferByteSink) Flush(wr io.Writer) (err error) {
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
 
 // ErrNotFinished is an error returned by a CmpChunkTableWriter when a call to Flush* is called before Finish is called
-var ErrNotFinished = errors.New("Not finished")
+var ErrNotFinished = errors.New("not finished")
 
 // ErrAlreadyFinished is an error returned if Finish is called more than once on a CmpChunkTableWriter
-var ErrAlreadyFinished = errors.New("Already Finished")
+var ErrAlreadyFinished = errors.New("already Finished")
 
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
@@ -223,10 +219,11 @@ func (tw *CmpChunkTableWriter) FlushToFile(path string) error {
 	err = tw.sink.Flush(f)
 
 	if err != nil {
+		_ = f.Close()
 		return err
 	}
 
-	return nil
+	return f.Close()
 }
 
 // Flush can be called after Finish in order to write the data out to the writer provided.
@@ -304,7 +301,7 @@ func (tw *CmpChunkTableWriter) writeFooter() error {
 	}
 
 	// total uncompressed chunk data
-	err = binary.Write(tw.sink, binary.BigEndian, uint64(tw.totalUncompressedData))
+	err = binary.Write(tw.sink, binary.BigEndian, tw.totalUncompressedData)
 
 	if err != nil {
 		return err

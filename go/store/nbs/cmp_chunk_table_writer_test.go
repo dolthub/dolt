@@ -63,7 +63,7 @@ func (suite *TableSinkSuite) TestWrite() {
 }
 
 func TestCmpChunkTableWriter(t *testing.T) {
-	// Put some chunks in a table file and get the buffer back which cotains the table file data
+	// Put some chunks in a table file and get the buffer back which contains the table file data
 	ctx := context.Background()
 
 	expectedId, buff, err := WriteChunks(testMDChunks)
