@@ -38,11 +38,11 @@ type XLSXReader struct {
 	rows   []row.Row
 }
 
-func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo) (*XLSXReader, error) {
+func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS, info *XLSXFileInfo, outSch schema.Schema) (*XLSXReader, bool, error) {
 	r, err := fs.OpenForRead(path)
 
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	br := bufio.NewReaderSize(r, ReadBufSize)
@@ -51,18 +51,29 @@ func OpenXLSXReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS
 
 	data, err := getXlsxRows(path, info.SheetName)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	_, sch := untyped.NewUntypedSchema(colStrs...)
-
-	decodedRows, err := decodeXLSXRows(nbf, data, sch)
-	if err != nil {
-		r.Close()
-		return nil, err
+	fileMatchesSchema := true
+	var decodedRows []row.Row
+	var inSch schema.Schema
+	if outSch != nil {
+		inSch = outSch
+		decodedRows, err = decodeXLSXRows(nbf, data, outSch)
+		if err != nil {
+			fileMatchesSchema = false
+		}
+	} else {
+		_, sch := untyped.NewUntypedSchema(colStrs...)
+		inSch = sch
+		decodedRows, err = decodeXLSXRows(nbf, data, sch)
+		if err != nil {
+			r.Close()
+			return nil, false, err
+		}
 	}
 
-	return &XLSXReader{r, br, info, sch, 0, decodedRows}, nil
+	return &XLSXReader{r, br, info, inSch, 0, decodedRows}, fileMatchesSchema, nil
 }
 
 func getColHeaders(path string, sheetName string) ([]string, error) {

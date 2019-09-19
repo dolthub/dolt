@@ -92,18 +92,22 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 			}
 		}
 
-		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim))
-
-		return rd, false, true, err
+		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim))
+		return rd, false, fileMatchesSchema, err
 
 	case PsvFile:
-		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"))
-		return rd, false, true, err
+		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"))
+		return rd, false, fileMatchesSchema, err
 
 	case XlsxFile:
+		var outSch schema.Schema = nil
 		xlsxOpts := opts.(XlsxOptions)
-		rd, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, &xlsx.XLSXFileInfo{SheetName: xlsxOpts.SheetName})
-		return rd, false, true, err
+		sch, tableExists, err := GetOutSchema(xlsxOpts.SheetName, root)
+		if tableExists {
+			outSch = sch
+		}
+		rd, fileMatchesSchema, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, &xlsx.XLSXFileInfo{SheetName: xlsxOpts.SheetName}, outSch)
+		return rd, false, fileMatchesSchema, err
 
 	case JsonFile:
 		var sch schema.Schema = nil
@@ -112,16 +116,9 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 				return nil, false, false, errors.New("Unable to determine table name on JSON import")
 			}
 			jsonOpts, _ := opts.(JSONOptions)
-			table, exists, err := root.GetTable(context.TODO(), jsonOpts.TableName)
-			if !exists {
-				return nil, false, false, errors.New(fmt.Sprintf("The following table could not be found:\n%v", jsonOpts.TableName))
-			}
+			sch, _, err = GetOutSchema(jsonOpts.TableName, root)
 			if err != nil {
-				return nil, false, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
-			}
-			sch, err = table.GetSchema(context.TODO())
-			if err != nil {
-				return nil, false, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+				return nil, false, false, err
 			}
 		}
 		rd, fileMatchesSchema, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), sch, schPath)
@@ -160,4 +157,19 @@ func (dl FileDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOp
 // the same schema
 func (dl FileDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Replacing files is not supported")
+}
+
+func GetOutSchema(tableName string, root *doltdb.RootValue) (schema.Schema, bool, error) {
+	table, exists, err := root.GetTable(context.TODO(), tableName)
+	if !exists {
+		return nil, exists, errors.New(fmt.Sprintf("The following table could not be found:\n%v", tableName))
+	}
+	if err != nil {
+		return nil, exists, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
+	}
+	sch, err := table.GetSchema(context.TODO())
+	if err != nil {
+		return nil, exists, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
+	}
+	return sch, exists, nil
 }
