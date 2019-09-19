@@ -28,7 +28,7 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt table import -u -s `batshelper 1pk5col-ints.schema` test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "schema is not supported for update operations" ]] || false
+    [[ "$output" =~ "fatal: schema is not supported for update or replace operations" ]] || false
 }
 
 @test "update table using csv with newlines" {
@@ -61,7 +61,16 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt table import -u -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "schema is not supported for update operations" ]] || false
+    [[ "$output" =~ "fatal: schema is not supported for update or replace operations" ]] || false
+}
+
+@test "update table with existing imported data with different schema" {
+  run dolt table import -c -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Import completed successfully." ]] || false
+  run dolt table import -u employees `batshelper employees-tbl-schema-wrong.json`
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
 }
 
 @test "update table with json when table does not exist" {
