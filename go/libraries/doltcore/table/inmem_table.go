@@ -144,6 +144,10 @@ func (rd *InMemTableReader) GetSchema() schema.Schema {
 	return rd.tt.sch
 }
 
+func (rd *InMemTableReader) VerifySchema(outSch schema.Schema) (bool, error) {
+	return schema.VerifyInSchema(rd.tt.sch, outSch)
+}
+
 // InMemTableWriter is an implementation of a TableWriter for an InMemTable
 type InMemTableWriter struct {
 	tt *InMemTable

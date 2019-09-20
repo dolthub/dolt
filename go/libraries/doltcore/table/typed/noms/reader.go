@@ -65,3 +65,7 @@ func (nmr *NomsMapReader) Close(ctx context.Context) error {
 	nmr.itr = nil
 	return nil
 }
+
+func (nmr *NomsMapReader) VerifySchema(outSch schema.Schema) (bool, error) {
+	return schema.VerifyInSchema(nmr.sch, outSch)
+}

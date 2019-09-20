@@ -46,36 +46,36 @@ func (dl TableDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, 
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, fileMatchesSchema bool, err error) {
+func (dl TableDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	tbl, ok, err := root.GetTable(ctx, dl.Name)
 
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 
 	if !ok {
-		return nil, false, false, doltdb.ErrTableNotFound
+		return nil, false, doltdb.ErrTableNotFound
 	}
 
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 
 	rowData, err := tbl.GetRowData(ctx)
 
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 
 	rd, err := noms.NewNomsMapReader(ctx, rowData, sch)
 
 	if err != nil {
-		return nil, false, false, err
+		return nil, false, err
 	}
 
-	return rd, true, false, nil
+	return rd, true, nil
 }
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite

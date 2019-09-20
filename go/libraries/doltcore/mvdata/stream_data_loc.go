@@ -47,7 +47,7 @@ func (dl StreamDataLocation) Exists(ctx context.Context, root *doltdb.RootValue,
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, fileMatchesSchema bool, err error) {
+func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	switch dl.Format {
 	case CsvFile:
 		delim := ","
@@ -60,16 +60,16 @@ func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootVal
 			}
 		}
 
-		rd, _, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim), nil)
+		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim(delim))
 
-		return rd, false, false, err
+		return rd, false, err
 
 	case PsvFile:
-		rd, _, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"), nil)
-		return rd, false, false, err
+		rd, err := csv.NewCSVReader(root.VRW().Format(), ioutil.NopCloser(dl.Reader), csv.NewCSVInfo().SetDelim("|"))
+		return rd, false, err
 	}
 
-	return nil, false, false, errors.New(string(dl.Format) + "is an unsupported format to read from stdin")
+	return nil, false, errors.New(string(dl.Format) + "is an unsupported format to read from stdin")
 }
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite

@@ -42,8 +42,7 @@ const (
 )
 
 type CsvOptions struct {
-	Delim     string
-	TableName string
+	Delim string
 }
 
 type XlsxOptions struct {
@@ -100,7 +99,7 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	var err error
 	transforms := pipeline.NewTransformCollection()
 
-	rd, srcIsSorted, fileMatchesSchema, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
+	rd, srcIsSorted, err := mvOpts.Src.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
 
 	if err != nil {
 		return nil, &DataMoverCreationError{CreateReaderErr, err}
@@ -121,9 +120,15 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 		return nil, &DataMoverCreationError{SchemaErr, err}
 	}
 
-	if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" && !fileMatchesSchema {
-		err := errors.New("Schema from file does not match schema from existing table.")
-		return nil, &DataMoverCreationError{ReplacingErr, err}
+	if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" {
+		fileMatchesSchema, err := rd.VerifySchema(outSch)
+		if err != nil {
+			return nil, &DataMoverCreationError{ReplacingErr, err}
+		}
+		if !fileMatchesSchema {
+			err := errors.New("Schema from file does not match schema from existing table.")
+			return nil, &DataMoverCreationError{ReplacingErr, err}
+		}
 	}
 
 	var mapping *rowconv.FieldMapping
@@ -213,7 +218,7 @@ func getOutSchema(ctx context.Context, inSch schema.Schema, root *doltdb.RootVal
 	if mvOpts.Operation == UpdateOp || mvOpts.Operation == ReplaceOp {
 		// Get schema from target
 
-		rd, _, _, err := mvOpts.Dest.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
+		rd, _, err := mvOpts.Dest.NewReader(ctx, root, fs, mvOpts.SchFile, mvOpts.SrcOptions)
 
 		if err != nil {
 			return nil, err

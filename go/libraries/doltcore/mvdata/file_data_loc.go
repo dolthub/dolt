@@ -71,68 +71,64 @@ func (dl FileDataLocation) Exists(ctx context.Context, root *doltdb.RootValue, f
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, fileMatchesSchema bool, err error) {
+func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, schPath string, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
 	exists, isDir := fs.Exists(dl.Path)
 
 	if !exists {
-		return nil, false, false, os.ErrNotExist
+		return nil, false, os.ErrNotExist
 	} else if isDir {
-		return nil, false, false, filesys.ErrIsDir
+		return nil, false, filesys.ErrIsDir
 	}
 
 	switch dl.Format {
 	case CsvFile:
 		delim := ","
-		csvOpts, _ := opts.(CsvOptions)
-		if len(csvOpts.Delim) != 0 {
-			delim = csvOpts.Delim
+
+		if opts != nil {
+			csvOpts, _ := opts.(CsvOptions)
+
+			if len(csvOpts.Delim) != 0 {
+				delim = csvOpts.Delim
+			}
 		}
 
-		var outSch schema.Schema = nil
-		sch, tableExists, err := GetOutSchema(csvOpts.TableName, root)
-		if tableExists {
-			outSch = sch
-		}
-		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim), outSch)
-		return rd, false, fileMatchesSchema, err
+		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim(delim))
+
+		return rd, false, err
 
 	case PsvFile:
-		var outSch schema.Schema = nil
-		csvOpts, _ := opts.(CsvOptions)
-		sch, tableExists, err := GetOutSchema(csvOpts.TableName, root)
-		if tableExists {
-			outSch = sch
-		}
-		rd, fileMatchesSchema, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"), outSch)
-		return rd, false, fileMatchesSchema, err
+		rd, err := csv.OpenCSVReader(root.VRW().Format(), dl.Path, fs, csv.NewCSVInfo().SetDelim("|"))
+		return rd, false, err
 
 	case XlsxFile:
-		var outSch schema.Schema = nil
 		xlsxOpts := opts.(XlsxOptions)
-		sch, tableExists, err := GetOutSchema(xlsxOpts.SheetName, root)
-		if tableExists {
-			outSch = sch
-		}
-		rd, fileMatchesSchema, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, &xlsx.XLSXFileInfo{SheetName: xlsxOpts.SheetName}, outSch)
-		return rd, false, fileMatchesSchema, err
+		rd, err := xlsx.OpenXLSXReader(root.VRW().Format(), dl.Path, fs, &xlsx.XLSXFileInfo{SheetName: xlsxOpts.SheetName})
+		return rd, false, err
 
 	case JsonFile:
 		var sch schema.Schema = nil
 		if schPath == "" {
 			if opts == nil {
-				return nil, false, false, errors.New("Unable to determine table name on JSON import")
+				return nil, false, errors.New("Unable to determine table name on JSON import")
 			}
 			jsonOpts, _ := opts.(JSONOptions)
-			sch, _, err = GetOutSchema(jsonOpts.TableName, root)
+			table, exists, err := root.GetTable(context.TODO(), jsonOpts.TableName)
+			if !exists {
+				return nil, false, errors.New(fmt.Sprintf("The following table could not be found:\n%v", jsonOpts.TableName))
+			}
 			if err != nil {
-				return nil, false, false, err
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
+			}
+			sch, err = table.GetSchema(context.TODO())
+			if err != nil {
+				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
 			}
 		}
-		rd, fileMatchesSchema, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), sch, schPath)
-		return rd, false, fileMatchesSchema, err
+		rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), sch, schPath)
+		return rd, false, err
 	}
 
-	return nil, false, false, errors.New("unsupported format")
+	return nil, false, errors.New("unsupported format")
 }
 
 // NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
@@ -164,19 +160,4 @@ func (dl FileDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOp
 // preserving schema
 func (dl FileDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Replacing files is not supported")
-}
-
-func GetOutSchema(tableName string, root *doltdb.RootValue) (schema.Schema, bool, error) {
-	table, exists, err := root.GetTable(context.TODO(), tableName)
-	if !exists {
-		return nil, exists, errors.New(fmt.Sprintf("The following table could not be found:\n%v", tableName))
-	}
-	if err != nil {
-		return nil, exists, errors.New(fmt.Sprintf("An error occurred attempting to read the table:\n%v", err.Error()))
-	}
-	sch, err := table.GetSchema(context.TODO())
-	if err != nil {
-		return nil, exists, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
-	}
-	return sch, exists, nil
 }
