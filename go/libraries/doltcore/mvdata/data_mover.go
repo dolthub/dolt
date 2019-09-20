@@ -121,11 +121,9 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 		return nil, &DataMoverCreationError{SchemaErr, err}
 	}
 
-	if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" {
-		if !fileMatchesSchema {
-			err := errors.New("Schema from file does not match existing table schema.")
-			return nil, &DataMoverCreationError{ReplacingErr, err}
-		}
+	if mvOpts.Operation == ReplaceOp && mvOpts.MappingFile == "" && !fileMatchesSchema {
+		err := errors.New("Schema from file does not match schema from existing table.")
+		return nil, &DataMoverCreationError{ReplacingErr, err}
 	}
 
 	var mapping *rowconv.FieldMapping

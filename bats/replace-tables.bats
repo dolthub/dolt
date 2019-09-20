@@ -137,7 +137,7 @@ teardown() {
     [[ "$output" =~ "cause: Schema from file does not match schema from existing table." ]] || false
 }
 
-@test "replace table with 2 primary keys with a csv with 1 primary key" {
+@test "replace table with 2 primary keys with a csv with one primary key" {
     run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -145,4 +145,14 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error replacing table" ]] || false
     [[ "$output" =~ "cause: Schema from file does not match schema from existing table." ]] || false
+}
+
+@test "replace table with 2 primary keys with a csv with 2 primary keys" {
+    run dolt table import -c --pk=pk1,pk2 test `batshelper 2pk5col-ints.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt table import -r test `batshelper 2pk5col-ints.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 4, Additions: 4, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
 }

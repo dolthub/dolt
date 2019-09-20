@@ -120,11 +120,17 @@ func (dl TableDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveO
 	return noms.NewNomsMapUpdater(ctx, root.VRW(), m, outSch, statsCB), nil
 }
 
-// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table using
-// the same schema
+// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
+// preserving schema
 func (dl TableDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
-	if outSch.GetPKCols().Size() == 0 {
-		return nil, ErrNoPK
+	_, ok, err := root.GetTable(ctx, dl.Name)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, errors.New("Could not find table " + dl.Name)
 	}
 
 	m, err := types.NewMap(ctx, root.VRW())
