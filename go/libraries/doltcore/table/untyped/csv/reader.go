@@ -132,6 +132,11 @@ func (csvr *CSVReader) GetSchema() schema.Schema {
 	return csvr.sch
 }
 
+// VerifySchema checks that the in schema matches the original schema
+func (csvr *CSVReader) VerifySchema(outSch schema.Schema) (bool, error) {
+	return schema.VerifyInSchema(csvr.sch, outSch)
+}
+
 // Close should release resources being held
 func (csvr *CSVReader) Close(ctx context.Context) error {
 	if csvr.closer != nil {

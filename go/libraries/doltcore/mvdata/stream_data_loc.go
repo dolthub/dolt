@@ -91,3 +91,9 @@ func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *Move
 func (dl StreamDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating is not supported for stdout")
 }
+
+// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
+// preserving schema
+func (dl StreamDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+	panic("Replacing is not supported for stdout")
+}

@@ -100,6 +100,9 @@ type DataLocation interface {
 	// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
 	// their primary key.
 	NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error)
+
+	// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table if it has the same schema.
+	NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error)
 }
 
 // NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table

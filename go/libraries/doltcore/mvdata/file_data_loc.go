@@ -155,3 +155,9 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOp
 func (dl FileDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
 	panic("Updating of files is not supported")
 }
+
+// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
+// preserving schema
+func (dl FileDataLocation) NewReplacingWriter(ctx context.Context, mvOpts *MoveOptions, root *doltdb.RootValue, fs filesys.WritableFS, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB) (table.TableWriteCloser, error) {
+	panic("Replacing files is not supported")
+}

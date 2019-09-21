@@ -20,7 +20,7 @@ import (
 )
 
 var Commands = cli.GenSubCommandHandler([]*cli.Command{
-	{Name: "import", Desc: "Creates, overwrites, or updates a table from the data in a file.", Func: Import, ReqRepo: true, EventType: eventsapi.ClientEventType_TABLE_IMPORT},
+	{Name: "import", Desc: "Creates, overwrites, replaces, or updates a table from the data in a file.", Func: Import, ReqRepo: true, EventType: eventsapi.ClientEventType_TABLE_IMPORT},
 	{Name: "export", Desc: "Export a table to a file.", Func: Export, ReqRepo: true, EventType: eventsapi.ClientEventType_TABLE_EXPORT},
 	{Name: "create", Desc: "Creates or overwrite an existing table with an empty table.", Func: Create, ReqRepo: true, EventType: eventsapi.ClientEventType_TABLE_CREATE},
 	{Name: "rm", Desc: "Deletes a table", Func: Rm, ReqRepo: true, EventType: eventsapi.ClientEventType_TABLE_RM},

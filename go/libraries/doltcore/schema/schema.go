@@ -84,6 +84,35 @@ func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
 	return areEqual, nil
 }
 
+// VerifyInSchema tests that the incoming schema matches the schema from the original table.
+// The test for column equality is more flexible than SchemasAreEqual.
+func VerifyInSchema(inSch, outSch Schema) (bool, error) {
+	inSchCols := inSch.GetAllCols()
+	outSchCols := outSch.GetAllCols()
+
+	if inSchCols.Size() != outSchCols.Size() {
+		return false, nil
+	}
+
+	match := true
+	err := outSchCols.Iter(func(tag uint64, outCol Column) (stop bool, err error) {
+		inCol, ok := inSchCols.GetByTag(tag)
+
+		if !ok || inCol.Name != outCol.Name || inCol.Tag != outCol.Tag {
+			match = false
+			return true, nil
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	return match, nil
+}
+
 var randGen = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func AutoGenerateTag(sch Schema) uint64 {
