@@ -100,10 +100,12 @@ func (jsonr *JSONReader) Close(ctx context.Context) error {
 
 }
 
+// GetSchema gets the schema of the rows that this reader will return
 func (jsonr *JSONReader) GetSchema() schema.Schema {
 	return jsonr.sch
 }
 
+// VerifySchema checks that the incoming schema matches the schema from the existing table
 func (jsonr *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
 	return jsonr.info.AbleToDecode, nil
 }

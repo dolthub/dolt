@@ -66,6 +66,7 @@ func (nmr *NomsMapReader) Close(ctx context.Context) error {
 	return nil
 }
 
+// VerifySchema checks that the incoming schema matches the schema from the existing table
 func (nmr *NomsMapReader) VerifySchema(outSch schema.Schema) (bool, error) {
 	return schema.VerifyInSchema(nmr.sch, outSch)
 }

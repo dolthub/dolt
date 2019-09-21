@@ -75,10 +75,12 @@ func getColHeaders(path string, sheetName string) ([]string, error) {
 	return colHeaders, nil
 }
 
+// GetSchema gets the schema of the rows that this reader will return
 func (xlsxr *XLSXReader) GetSchema() schema.Schema {
 	return xlsxr.sch
 }
 
+// VerifySchema checks that the incoming schema matches the schema from the existing table
 func (xlsxr *XLSXReader) VerifySchema(outSch schema.Schema) (bool, error) {
 	return schema.VerifyInSchema(xlsxr.sch, outSch)
 }

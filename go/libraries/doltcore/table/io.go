@@ -32,7 +32,7 @@ type TableReader interface {
 	// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 	ReadRow(ctx context.Context) (row.Row, error)
 
-	// VerifySchema checks that the incoming schema matches the schema from the original table
+	// VerifySchema checks that the incoming schema matches the schema from the existing table
 	VerifySchema(outSch schema.Schema) (bool, error)
 }
 
