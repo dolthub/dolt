@@ -40,6 +40,7 @@ import (
 
 type PullProgress struct {
 	DoneCount, KnownCount, ApproxWrittenBytes uint64
+	ActualBytes                               int
 }
 
 const (
@@ -47,14 +48,16 @@ const (
 	defaultBatchSize       = 1 << 12 // 4096 chunks
 )
 
-func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreApproxBytesWritten uint64) {
+func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreApproxBytesWritten uint64, moreActualBytes int) {
 	var doneCount, knownCount, approxBytesWritten uint64
-	return func(moreDone, moreKnown, moreApproxBytesWritten uint64) {
+	var actualBytes int
+
+	return func(moreDone, moreKnown, moreApproxBytesWritten uint64, moreActualBytes int) {
 		if progressCh == nil {
 			return
 		}
-		doneCount, knownCount, approxBytesWritten = doneCount+moreDone, knownCount+moreKnown, approxBytesWritten+moreApproxBytesWritten
-		progressCh <- PullProgress{doneCount, knownCount, approxBytesWritten}
+		doneCount, knownCount, approxBytesWritten, actualBytes = doneCount+moreDone, knownCount+moreKnown, approxBytesWritten+moreApproxBytesWritten, actualBytes+moreActualBytes
+		progressCh <- PullProgress{doneCount, knownCount, approxBytesWritten, actualBytes}
 	}
 }
 
@@ -189,7 +192,7 @@ func pull(ctx context.Context, srcDB, sinkDB Database, sourceRef types.Ref, prog
 	// TODO: This batches based on limiting the _number_ of chunks processed at the same time. We really want to batch based on the _amount_ of chunk data being processed simultaneously. We also want to consider the chunks in a particular order, however, and the current GetMany() interface doesn't provide any ordering guarantees. Once BUG 3750 is fixed, we should be able to revisit this and do a better job.
 	absent := hash.HashSlice{sourceRef.TargetHash()}
 	for absentCount := len(absent); absentCount != 0; absentCount = len(absent) {
-		updateProgress(0, uint64(absentCount), 0)
+		updateProgress(0, uint64(absentCount), 0, 0)
 
 		// For gathering up the hashes in the next level of the tree
 		nextLevel := hash.HashSet{}
@@ -259,7 +262,7 @@ func PullWithoutBatching(ctx context.Context, srcDB, sinkDB Database, sourceRef 
 }
 
 // concurrently pull all chunks from this batch that the sink is missing out of the source
-func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64)) (map[hash.Hash]*chunks.Chunk, error) {
+func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sampleSize uint64, sampleCount uint64, updateProgress func(moreDone uint64, moreKnown uint64, moreApproxBytesWritten uint64, actualBytes int)) (map[hash.Hash]*chunks.Chunk, error) {
 	neededChunks := map[hash.Hash]*chunks.Chunk{}
 	found := make(chan *chunks.Chunk)
 
@@ -282,7 +285,7 @@ func getChunks(ctx context.Context, srcDB Database, batch hash.HashSlice, sample
 			sampleSize += uint64(len(snappy.Encode(nil, c.Data())))
 			sampleCount++
 		}
-		updateProgress(1, 0, sampleSize/uint64(math.Max(1, float64(sampleCount))))
+		updateProgress(1, 0, sampleSize/uint64(math.Max(1, float64(sampleCount))), c.Size())
 	}
 
 	if ae.IsSet() {

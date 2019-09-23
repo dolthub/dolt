@@ -20,19 +20,24 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
-	testHomeDir = "/user/bheni"
-	workingDir  = "/user/bheni/datasets/addresses"
+	testHomeDir      = "/user/bheni"
+	workingDir       = "/user/bheni/datasets/addresses"
+	testMasterBranch = "master"
+	testOriginRemote = "https://dolthub.com/org/repo"
 )
 
 func testHomeDirFunc() (string, error) {
@@ -47,9 +52,13 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 		doltDir := filepath.Join(workingDir, dbfactory.DoltDir)
 		initialDirs = append(initialDirs, doltDir)
 
+		remote := NewRemote("origin", testOriginRemote, map[string]string{})
+		//remotes := make(map[string]Remote, 0)
+		//remotes["origin"] = remote
 		hashStr := hash.Hash{}.String()
-		masterRef := ref.NewBranchRef("master")
+		masterRef := ref.NewBranchRef(testMasterBranch)
 		repoState := &RepoState{ref.MarshalableRef{Ref: masterRef}, hashStr, hashStr, nil, nil, nil, nil}
+		repoState.AddRemote(remote)
 		repoStateData, err := json.Marshal(repoState)
 
 		if err != nil {
@@ -183,4 +192,30 @@ func TestBestEffortDelete(t *testing.T) {
 	if !isCWDEmpty(dEnv) {
 		t.Error("Dir should be empty after delete.")
 	}
+}
+
+func TestDoltEnv_SetStandardEventAttributes(t *testing.T) {
+	dEnv := createTestEnv(true, false)
+
+	collector := events.NewCollector()
+	testEvent := events.NewEvent(eventsapi.ClientEventType_CLONE)
+
+	dEnv.SetStandardEventAttributes(testEvent)
+
+	collector.CloseEventAndAdd(testEvent)
+
+	assert.Panics(t, func() {
+		collector.CloseEventAndAdd(testEvent)
+	})
+
+	clientEvents := collector.Close()
+
+	assert.Equal(t, 1, len(clientEvents))
+	assert.Equal(t, 2, len(clientEvents[0].Attributes))
+
+	assert.Equal(t, eventsapi.AttributeID_LOCAL_REMOTE_URLS, clientEvents[0].Attributes[0].Id)
+	assert.Equal(t, testOriginRemote, clientEvents[0].Attributes[0].Value)
+
+	assert.Equal(t, eventsapi.AttributeID_BRANCH_NAME, clientEvents[0].Attributes[1].Id)
+	assert.Equal(t, testMasterBranch, clientEvents[0].Attributes[1].Value)
 }

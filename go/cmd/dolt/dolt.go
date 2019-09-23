@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -131,13 +132,21 @@ func runMain() int {
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 
-	emitter := events.NewFileEmitter()
+	root, err := env.GetCurrentUserHomeDir()
+
+	if err != nil {
+		return 1
+	}
+
+	emitter := events.NewFileEmitter(root)
 
 	defer func() {
 		ces := events.GlobalCollector.Close()
 		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
 
-		disabled, err := events.AreMetricsDisabled(dEnv)
+		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+
+		disabled, err := strconv.ParseBool(*metricsDisabled)
 		if err != nil {
 			// log.Print(err)
 			return

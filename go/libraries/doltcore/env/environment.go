@@ -26,12 +26,14 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -578,4 +580,32 @@ func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
 // based on current filesys
 func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 	return getHomeDir(dEnv.hdp)
+}
+
+// SetStandardEventAttributes sets local remote urls, and current branch as attributes
+// on an Event
+func (dEnv *DoltEnv) SetStandardEventAttributes(evt *events.Event) {
+	if evt != nil {
+		if len(evt.GetAttribute(eventsapi.AttributeID_LOCAL_REMOTE_URLS)) < 1 {
+			remotes, _ := dEnv.GetRemotes()
+
+			if len(remotes) > 0 {
+				urls := make([]string, len(remotes))
+
+				for _, remote := range remotes {
+					urls = append(urls, remote.Url)
+				}
+
+				joined := strings.Join(urls[:], " ")
+
+				evt.SetAttribute(eventsapi.AttributeID_LOCAL_REMOTE_URLS, strings.Trim(joined, " "))
+			}
+		}
+
+		if len(evt.GetAttribute(eventsapi.AttributeID_BRANCH_NAME)) < 1 {
+			if dEnv.RepoState != nil {
+				evt.SetAttribute(eventsapi.AttributeID_BRANCH_NAME, dEnv.RepoState.Head.Ref.GetPath())
+			}
+		}
+	}
 }

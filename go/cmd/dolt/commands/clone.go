@@ -22,20 +22,21 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
-	"github.com/liquidata-inc/dolt/go/store/datas"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/strhelp"
+	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -93,6 +94,11 @@ func Clone(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 
 				if verr == nil {
 					verr = cloneRemote(ctx, srcDB, remoteName, branch, dEnv)
+
+					if verr == nil {
+						evt := events.GetEventFromContext(ctx)
+						evt.SetAttribute(eventsapi.AttributeID_ACTIVE_REMOTE_URL, remoteUrl)
+					}
 
 					// Make best effort to delete the directory we created.
 					if verr != nil {

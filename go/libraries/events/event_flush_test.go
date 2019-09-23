@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	testLib "github.com/liquidata-inc/dolt/go/libraries/utils/test"
 )
@@ -31,10 +30,10 @@ import (
 var (
 	testVersion = "1.0.0"
 	homeDir     = "/home/"
-	dPath       = dbfactory.DoltDir
+	dPath       = doltDir
 	evtPath     = eventsDir
-	doltDir     = filepath.Join(homeDir, dPath)
-	tempEvtsDir = filepath.Join(doltDir, evtPath)
+	doltTestDir = filepath.Join(homeDir, dPath)
+	tempEvtsDir = filepath.Join(doltTestDir, evtPath)
 )
 
 type TestClient struct {
@@ -102,7 +101,7 @@ func TestEventFlushing(t *testing.T) {
 				if fsName == "inMemFS" {
 					fs := filesys.NewInMemFS([]string{tempEvtsDir}, nil, tempEvtsDir)
 
-					ft = createFlushTester(fs, homeDir, doltDir)
+					ft = createFlushTester(fs, homeDir, doltTestDir)
 				} else {
 					fs := filesys.LocalFS
 

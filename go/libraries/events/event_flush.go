@@ -18,15 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"strconv"
 
 	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
 	"github.com/juju/fslock"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
@@ -48,31 +45,6 @@ type flushCB func(ctx context.Context, path string) error
 // Flusher flushes events to a destination
 type Flusher interface {
 	Flush(ctx context.Context) error
-}
-
-// getGRPCEmitter gets the connection to the events grpc service
-func getGRPCEmitter(dEnv *env.DoltEnv) *GrpcEmitter {
-	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
-	portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
-	insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
-
-	port, err := strconv.ParseUint(*portStr, 10, 16)
-
-	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, *portStr))
-		return nil
-	}
-
-	insecure, err := strconv.ParseBool(*insecureStr)
-
-	if err != nil {
-		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, *insecureStr))
-	}
-
-	hostAndPort := fmt.Sprintf("%s:%d", *host, port)
-	conn, _ := dEnv.GrpcConnWithCreds(hostAndPort, insecure, nil)
-
-	return NewGrpcEmitter(conn)
 }
 
 // lockAndFlush locks the given lockPath and passes the flushCB to the filesys' Iter method
@@ -122,15 +94,14 @@ type GrpcEventFlusher struct {
 }
 
 // NewGrpcEventFlusher creates a new GrpcEventFlusher
-func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *GrpcEventFlusher {
+func NewGrpcEventFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, grpcEmitter *GrpcEmitter) *GrpcEventFlusher {
 	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
 
 	if exists := fbp.EventsDirExists(); !exists {
 		panic(ErrEventsDataDir)
 	}
 
-	// return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp, LockPath: fbp.GetEventsDirPath()}
-	return &GrpcEventFlusher{em: getGRPCEmitter(dEnv), fbp: fbp}
+	return &GrpcEventFlusher{em: grpcEmitter, fbp: fbp}
 }
 
 // flush has the function signature of the flushCb type
@@ -186,7 +157,7 @@ type IOFlusher struct {
 }
 
 // NewIOFlusher creates a new IOFlusher
-func NewIOFlusher(fs filesys.Filesys, userHomeDir string, doltDir string, dEnv *env.DoltEnv) *IOFlusher {
+func NewIOFlusher(fs filesys.Filesys, userHomeDir string, doltDir string) *IOFlusher {
 	fbp := NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)
 
 	if exists := fbp.EventsDirExists(); !exists {
@@ -212,6 +183,7 @@ func (iof *IOFlusher) flush(ctx context.Context, path string) error {
 		return err
 	}
 
+	// needed for bats test
 	fmt.Fprintf(color.Output, "%+v\n", req)
 
 	if err := fs.DeleteFile(path); err != nil {
