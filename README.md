@@ -250,8 +250,7 @@ dolt also supports directory, aws, and gcs based remotes:
 If you have any issues with Dolt, find any bugs, or simply have a question, feel free to file an issue!
 
 # Credits and License
-The implementation of Dolt makes use of code and ideas from
-[noms](https://github.com/attic-labs/noms).
+Dolt relies heavily on open source code and ideas from the [Noms](https://github.com/attic-labs/noms) project. We are very thankful to the Noms team for making this code freely available, without which we would not have been able to build Dolt so rapidly.
 
 Dolt is licensed under the Apache License, Version 2.0. See
 [LICENSE](https://github.com/liquidata-inc/dolt/blob/master/LICENSE) for
