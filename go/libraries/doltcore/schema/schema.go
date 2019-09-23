@@ -84,8 +84,8 @@ func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
 	return areEqual, nil
 }
 
-// VerifyInSchema tests that the incoming schema matches the schema from the original table.
-// The test for column equality is more flexible than SchemasAreEqual.
+// VerifyInSchema tests that the incoming schema matches the schema from the original table
+// based on the presence of the column name in the original schema.
 func VerifyInSchema(inSch, outSch Schema) (bool, error) {
 	inSchCols := inSch.GetAllCols()
 	outSchCols := outSch.GetAllCols()
@@ -95,10 +95,10 @@ func VerifyInSchema(inSch, outSch Schema) (bool, error) {
 	}
 
 	match := true
-	err := outSchCols.Iter(func(tag uint64, outCol Column) (stop bool, err error) {
-		inCol, ok := inSchCols.GetByTag(tag)
+	err := inSchCols.Iter(func(tag uint64, inCol Column) (stop bool, err error) {
+		_, isValid := outSchCols.GetByNameCaseInsensitive(inCol.Name)
 
-		if !ok || inCol.Name != outCol.Name || inCol.Tag != outCol.Tag {
+		if !isValid {
 			match = false
 			return true, nil
 		}
