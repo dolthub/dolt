@@ -153,7 +153,7 @@ func (mt *memTable) getMany(ctx context.Context, reqs []getRecord, foundChunks c
 	return remaining
 }
 
-func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (mt *memTable) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	panic("not implemented")
 }
 

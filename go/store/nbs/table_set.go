@@ -167,7 +167,7 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 	return f(ts.novel) && f(ts.upstream)
 }
 
-func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if ae.IsSet() {

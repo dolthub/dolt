@@ -22,45 +22,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
-func TestBlockBufferTableSink(t *testing.T) {
-	suite.Run(t, &TableSinkSuite{sink: NewBlockBufferTableSink(128)})
-}
 
-func TestFixedBufferTableSink(t *testing.T) {
-	suite.Run(t, &TableSinkSuite{sink: NewFixedBufferTableSink(make([]byte, 32*1024))})
-}
-
-type TableSinkSuite struct {
-	sink ByteSink
-	t    *testing.T
-}
-
-func (suite *TableSinkSuite) SetT(t *testing.T) {
-	suite.t = t
-}
-
-func (suite *TableSinkSuite) T() *testing.T {
-	return suite.t
-}
-
-func (suite *TableSinkSuite) TestWrite() {
-	data := make([]byte, 64)
-	for i := 0; i < 64; i++ {
-		data[i] = byte(i)
-	}
-
-	for i := 0; i < 32; i++ {
-		_, err := suite.sink.Write(data)
-		assert.NoError(suite.t, err)
-	}
-}
 
 func TestCmpChunkTableWriter(t *testing.T) {
 	// Put some chunks in a table file and get the buffer back which contains the table file data
@@ -82,7 +50,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
 	reqs := toGetRecords(hashes)
-	found := make(chan CompressedChunk, 128)
+	found := make(chan chunks.Chunkable, 128)
 
 	go func() {
 		defer close(found)
@@ -93,7 +61,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	// for all the chunks we find, write them using the compressed writer
 	tw := NewCmpChunkTableWriter()
 	for cmpChnk := range found {
-		err = tw.AddCmpChunk(cmpChnk)
+		err = tw.AddCmpChunk(cmpChnk.(CompressedChunk))
 		require.NoError(t, err)
 	}
 

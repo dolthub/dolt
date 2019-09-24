@@ -20,107 +20,15 @@ import (
 	"errors"
 	"hash"
 	"io"
-	"os"
 	"sort"
 
 	"github.com/golang/snappy"
-
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
-// A ByteSink is an interface for writing bytes which can later be flushed to a writer
-type ByteSink interface {
-	io.Writer
 
-	// Flush writes all the data that was written to the ByteSink to the supplied writer
-	Flush(wr io.Writer) error
-}
-
-// ErrBuffFull used by the FixedBufferSink when the data written is larger than the buffer allocated.
-var ErrBufferFull = errors.New("buffer full")
-
-// FixedBufferByteSink is a ByteSink implementation with a buffer whose size will not change.  Writing more
-// data than the fixed buffer can hold will result in an error
-type FixedBufferByteSink struct {
-	buff []byte
-	pos  uint64
-}
-
-// NewFixedBufferTableSink creates a FixedBufferTableSink which will use the supplied buffer
-func NewFixedBufferTableSink(buff []byte) *FixedBufferByteSink {
-	if len(buff) == 0 {
-		panic("must provide a buffer")
-	}
-
-	return &FixedBufferByteSink{buff: buff}
-}
-
-// Write writes a byte array to the sink.
-func (sink *FixedBufferByteSink) Write(src []byte) (int, error) {
-	dest := sink.buff[sink.pos:]
-	destLen := len(dest)
-	srcLen := len(src)
-
-	if destLen < srcLen {
-		return 0, ErrBufferFull
-	}
-
-	copy(dest, src)
-
-	sink.pos += uint64(srcLen)
-	return srcLen, nil
-}
-
-// Flush writes all the data that was written to the ByteSink to the supplied writer
-func (sink *FixedBufferByteSink) Flush(wr io.Writer) error {
-	return iohelp.WriteAll(wr, sink.buff[:sink.pos])
-}
-
-// BlockBufferByteSink allocates blocks of data with a given block size to store the bytes written to the sink. New
-// blocks are allocated as needed in order to handle all the data of the Write calls.
-type BlockBufferByteSink struct {
-	blockSize int
-	pos       uint64
-	blocks    [][]byte
-}
-
-// NewBlockBufferTableSink creates a BlockBufferByteSink with the provided block size.
-func NewBlockBufferTableSink(blockSize int) *BlockBufferByteSink {
-	block := make([]byte, 0, blockSize)
-	return &BlockBufferByteSink{blockSize, 0, [][]byte{block}}
-}
-
-// Write writes a byte array to the sink.
-func (sink *BlockBufferByteSink) Write(src []byte) (int, error) {
-	srcLen := len(src)
-	currBlockIdx := len(sink.blocks) - 1
-	currBlock := sink.blocks[currBlockIdx]
-	remaining := cap(currBlock) - len(currBlock)
-
-	if remaining >= srcLen {
-		currBlock = append(currBlock, src...)
-		sink.blocks[currBlockIdx] = currBlock
-	} else {
-		if remaining > 0 {
-			currBlock = append(currBlock, src[:remaining]...)
-			sink.blocks[currBlockIdx] = currBlock
-		}
-
-		newBlock := make([]byte, 0, sink.blockSize)
-		newBlock = append(newBlock, src[remaining:]...)
-		sink.blocks = append(sink.blocks, newBlock)
-	}
-
-	sink.pos += uint64(srcLen)
-	return srcLen, nil
-}
-
-// Flush writes all the data that was written to the ByteSink to the supplied writer
-func (sink *BlockBufferByteSink) Flush(wr io.Writer) (err error) {
-	return iohelp.WriteAll(wr, sink.blocks...)
-}
 
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
+const defaultChBufferSize = 32*1024
 
 // ErrNotFinished is an error returned by a CmpChunkTableWriter when a call to Flush* is called before Finish is called
 var ErrNotFinished = errors.New("not finished")
@@ -138,8 +46,19 @@ type CmpChunkTableWriter struct {
 }
 
 // NewCmpChunkTableWriter creates a new CmpChunkTableWriter instance with a default ByteSink
-func NewCmpChunkTableWriter() *CmpChunkTableWriter {
-	return &CmpChunkTableWriter{NewBlockBufferTableSink(defaultTableSinkBlockSize), 0, 0, nil, nil}
+func NewCmpChunkTableWriter() (*CmpChunkTableWriter, error) {
+	s, err := NewBufferedFileByteSink(defaultTableSinkBlockSize, defaultChBufferSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &CmpChunkTableWriter{s, 0, 0, nil, nil}, nil
+}
+
+// Size returns the number of compressed chunks that have been added
+func (tw *CmpChunkTableWriter) Size() int {
+	return len(tw.prefixes)
 }
 
 // AddCmpChunk adds a compressed chunk
@@ -210,20 +129,7 @@ func (tw *CmpChunkTableWriter) FlushToFile(path string) error {
 		return ErrNotFinished
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
-
-	if err != nil {
-		return err
-	}
-
-	err = tw.sink.Flush(f)
-
-	if err != nil {
-		_ = f.Close()
-		return err
-	}
-
-	return f.Close()
+	return tw.sink.FlushToFile(path)
 }
 
 // Flush can be called after Finish in order to write the data out to the writer provided.

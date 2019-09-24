@@ -28,6 +28,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+type Chunkable interface {
+	ToChunk() (Chunk, error)
+	Hash() hash.Hash
+}
+
 // ChunkStore is the core storage abstraction in noms. We can put data
 // anyplace we have a ChunkStore implementation for.
 type ChunkStore interface {
@@ -39,6 +44,8 @@ type ChunkStore interface {
 	// |foundChunks| will have been fully sent all chunks which have been
 	// found. Any non-present chunks will silently be ignored.
 	GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error
+
+	GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan Chunkable) error
 
 	// Returns true iff the value at the address |h| is contained in the
 	// store

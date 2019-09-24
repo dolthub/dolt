@@ -23,7 +23,6 @@ package chunks
 
 import (
 	"context"
-
 	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -66,6 +65,11 @@ func (s *TestStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error {
 	s.Reads += len(hashes)
 	return s.ChunkStore.GetMany(ctx, hashes, foundChunks)
+}
+
+func (s *TestStoreView) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan Chunkable) error {
+	s.Reads += len(hashes)
+	return s.ChunkStore.GetManyCompressed(ctx, hashes, foundCmpChunks)
 }
 
 func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {

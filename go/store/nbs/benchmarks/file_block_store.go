@@ -50,6 +50,10 @@ func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	panic("not impl")
 }
 
+func (fb fileBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan chunks.Chunkable) error {
+	panic("not impl")
+}
+
 func (fb fileBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	panic("not impl")
 }
