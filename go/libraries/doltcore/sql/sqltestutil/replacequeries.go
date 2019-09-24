@@ -53,8 +53,8 @@ var BasicReplaceTests = []ReplaceTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:           "replace set",
-		ReplaceQuery:   "replace into people set id = 2, first = 'Bart', last = 'Simpson'," +
+		Name: "replace set",
+		ReplaceQuery: "replace into people set id = 2, first = 'Bart', last = 'Simpson'," +
 			"is_married = false, age = 10, rating = 9, uuid = '00000000-0000-0000-0000-000000000002', num_episodes = 222",
 		SelectQuery:    "select * from people where id = 2",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Bart),
@@ -213,7 +213,7 @@ var BasicReplaceTests = []ReplaceTest{
 					(0, "Homer", "Simpson", true, 45, 100),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5),
 					(7, "Maggie", null, false, 1, 5.1)`,
-		ExpectedErr:  "Constraint failed for column 'last': Not null",
+		ExpectedErr: "Constraint failed for column 'last': Not null",
 	},
 	{
 		Name: "type mismatch int -> string",
