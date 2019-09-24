@@ -135,7 +135,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "9" ]] || false
     run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
     [ "$status" -eq 1 ]
-    [ "$output" = "column <pk> received nil but is non-nullable" ]
+    [ "$output" = "column name 'pk' is non-nullable but attempted to set default value of null" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
     [ "$status" -eq 1 ]
     [ "$output" = "invalid column name c6" ]
