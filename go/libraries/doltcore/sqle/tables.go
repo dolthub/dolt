@@ -147,12 +147,25 @@ func (t *DoltTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
+	nomsMapKey := dRow.NomsMapKey(t.sch)
+	nmkValue, err := nomsMapKey.Value(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
+	}
+	_, rowExists, err := t.table.GetRow(ctx, nmkValue.(types.Tuple), t.sch)
+	if err != nil {
+		return errhand.BuildDError("failed to read table").AddCause(err).Build()
+	}
+	if !rowExists {
+		return sql.ErrDeleteRowNotFound
+	}
+
 	typesMap, err := t.table.GetRowData(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
 	}
 	mapEditor := typesMap.Edit()
-	updated, err := mapEditor.Remove(dRow.NomsMapKey(t.sch)).Map(ctx)
+	updated, err := mapEditor.Remove(nomsMapKey).Map(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
 	}
