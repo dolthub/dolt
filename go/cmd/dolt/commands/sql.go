@@ -387,7 +387,17 @@ func processQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *do
 			err = prettyPrintResults(ctx, root.VRW().Format(), sqlSch, rowIter)
 		}
 		return nil, err
-	case *sqlparser.Insert, *sqlparser.Delete:
+	case *sqlparser.Insert:
+		newRoot, sqlSch, rowIter, err := sqlNewEngine(query, root)
+		if err == nil {
+			err = prettyPrintResults(ctx, newRoot.VRW().Format(), sqlSch, rowIter)
+		}
+		return newRoot, err
+	case *sqlparser.Delete:
+		newRoot, ok := sqlCheckThenDeleteAllRows(ctx, root, s)
+		if ok {
+			return newRoot, nil
+		}
 		newRoot, sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
 			err = prettyPrintResults(ctx, newRoot.VRW().Format(), sqlSch, rowIter)
@@ -682,6 +692,57 @@ func sqlDelete(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, u
 	cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
 
 	return result.Root, nil
+}
+
+type intRowIter struct {
+	Number uint64
+	Called bool
+}
+
+func (ri *intRowIter) Next() (sql.Row, error) {
+	if !ri.Called {
+		ri.Called = true
+		return sql.Row{ri.Number}, nil
+	}
+	return nil, io.EOF
+}
+func (ri *intRowIter) Close() error {
+	ri.Called = true
+	return nil
+}
+
+// Checks if the query is a naked delete and then deletes all rows if so
+func sqlCheckThenDeleteAllRows(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Delete) (*doltdb.RootValue, bool) {
+	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
+		if ate, ok := s.TableExprs[0].(*sqlparser.AliasedTableExpr); ok {
+			if ste, ok := ate.Expr.(sqlparser.TableName); ok {
+				tName := ste.Name.String()
+				table, ok, err := root.GetTable(ctx, tName)
+				if err == nil && ok {
+					rowData, err := table.GetRowData(ctx)
+					if err != nil {
+						return nil, false
+					}
+					printRowIter := &intRowIter{rowData.Len(), false}
+					emptyMap, err := types.NewMap(ctx, root.VRW())
+					if err != nil {
+						return nil, false
+					}
+					newTable, err := table.UpdateRows(ctx, emptyMap)
+					if err != nil {
+						return nil, false
+					}
+					newRoot, err := doltdb.PutTable(ctx, root, root.VRW(), tName, newTable)
+					if err != nil {
+						return nil, false
+					}
+					_ = prettyPrintResults(ctx, root.VRW().Format(), sql.Schema{{Name: "updated", Type: sql.Uint64}}, printRowIter)
+					return newRoot, true
+				}
+			}
+		}
+	}
+	return nil, false
 }
 
 // Executes a SQL DDL statement (create, update, etc.). Returns the new root value to be written as appropriate.
