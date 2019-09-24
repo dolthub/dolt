@@ -70,6 +70,10 @@ func (cmp CompressedChunk) Hash() hash.Hash {
 	return cmp.H
 }
 
+func (cmp CompressedChunk) IsEmpty() bool {
+	return len(cmp.CompressedData) == 0
+}
+
 var ErrInvalidTableFile = errors.New("invalid or corrupt table file")
 
 type tableIndex struct {

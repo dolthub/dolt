@@ -9,7 +9,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -117,11 +116,6 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 
 	for i := len(tblFiles) - 1; i >= 0; i-- {
 		tmpTblFile := tblFiles[i]
-		chSink, err := p.sinkDB.chunkStore().(*nbs.NomsBlockStore).NewSink(ctx, tmpTblFile.id, tmpTblFile.numChunks)
-
-		if ae.SetIfError(err) {
-			return
-		}
 
 		f, err := os.Open(tmpTblFile.path)
 
@@ -129,13 +123,7 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 			return
 		}
 
-		_, err = io.Copy(chSink, f)
-
-		if ae.SetIfError(err) {
-			return
-		}
-
-		err = chSink.Close(ctx)
+		err = p.sinkDB.chunkStore().(*nbs.NomsBlockStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, f)
 
 		if ae.SetIfError(err) {
 			return

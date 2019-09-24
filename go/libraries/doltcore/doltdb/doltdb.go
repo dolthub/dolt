@@ -622,26 +622,46 @@ func (ddb *DoltDB) DeleteBranch(ctx context.Context, dref ref.DoltRef) error {
 
 // PushChunks initiates a push into a database from the source database given, at the commit given. Pull progress is
 // communicated over the provided channel.
-func (ddb *DoltDB) PushChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
+func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
 	rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
 
 	if err != nil {
 		return err
 	}
 
-	return datas.Pull(ctx, srcDB.db, ddb.db, rf, progChan)
+	/*if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+		puller, err := datas.NewPuller(ctx, tempDir, 256*1024, srcDB.db, ddb.db, rf.TargetHash())
+
+		if err != nil {
+			return err
+		}
+
+		return puller.Pull(ctx)
+	} else {*/
+		return datas.Pull(ctx, srcDB.db, ddb.db, rf, progChan)
+	//}
 }
 
 // PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
 // communicated over the provided channel.
-func (ddb *DoltDB) PullChunks(ctx context.Context, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
+func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, cm *Commit, progChan chan datas.PullProgress) error {
 	rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
 
 	if err != nil {
 		return err
 	}
 
-	return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, rf, progChan)
+	/*if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+		puller, err := datas.NewPuller(ctx, tempDir, 256*1024, srcDB.db, ddb.db, rf.TargetHash())
+
+		if err != nil {
+			return err
+		}
+
+		return puller.Pull(ctx)
+	} else {*/
+		return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, rf, progChan)
+	//}
 }
 
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {

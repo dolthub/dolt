@@ -43,6 +43,7 @@ const (
 	DefaultMetricsPort    = "443"
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
+	tempTablesDir = "temptf"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
@@ -578,4 +579,8 @@ func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
 // based on current filesys
 func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 	return getHomeDir(dEnv.hdp)
+}
+
+func (dEnv *DoltEnv) TempTableFilesDir() string {
+	return filepath.Join(dEnv.GetDoltDir(), tempTablesDir)
 }

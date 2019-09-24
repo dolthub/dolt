@@ -421,9 +421,15 @@ func (ttfs *TestTableFileStore) Sources(ctx context.Context) (hash.Hash, []nbs.T
 	return ttfs.root, tblFiles, nil
 }
 
-func (ttfs *TestTableFileStore) NewSink(ctx context.Context, fileID string, numChunks int) (nbs.WriteCloserWithContext, error) {
-	tblFile := &TestTableFileWriter{fileID, numChunks, bytes.NewBuffer(nil), ttfs}
-	return tblFile, nil
+func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error {
+	tblFile := &TestTableFileWriter{fileId, numChunks, bytes.NewBuffer(nil), ttfs}
+	_, err := io.Copy(tblFile, rd)
+
+	if err != nil {
+		return err
+	}
+
+	return tblFile.Close(ctx)
 }
 
 func (ttfs *TestTableFileStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {

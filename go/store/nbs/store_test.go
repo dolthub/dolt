@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -50,13 +51,7 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		data, addr, err := buildTable(chunkData)
 		fileID := addr.String()
 		fileToData[fileID] = data
-		sink, err := st.NewSink(ctx, fileID, i+1)
-		require.NoError(t, err)
-		n, err := sink.Write(data)
-		require.NoError(t, err)
-		assert.Equal(t, n, len(data))
-
-		err = sink.Close(ctx)
+		err = st.WriteTableFile(ctx, fileID, i+1, bytes.NewReader(data))
 		require.NoError(t, err)
 	}
 

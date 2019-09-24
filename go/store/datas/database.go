@@ -24,6 +24,7 @@ package datas
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"io"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
@@ -138,4 +139,11 @@ type Database interface {
 
 func NewDatabase(cs chunks.ChunkStore) Database {
 	return newDatabase(cs)
+}
+
+func CanUsePuller(db Database) bool {
+	cs := db.chunkStore()
+	_, ok := cs.(nbs.TableFileStore)
+
+	return ok
 }

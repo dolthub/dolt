@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"math"
 	"math/rand"
 
@@ -114,27 +113,11 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 			return err
 		}
 
-		wr, err := sinkTS.NewSink(ctx, tblFile.FileID(), tblFile.NumChunks())
-
-		if err != nil {
-			return err
-		}
-
 		if eventCh != nil {
 			eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
 		}
 
-		_, err = io.Copy(wr, rd)
-
-		if err != nil {
-			if eventCh != nil {
-				eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
-			}
-
-			return err
-		}
-
-		err = wr.Close(ctx)
+		err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd)
 
 		if err != nil {
 			if eventCh != nil {

@@ -31,6 +31,7 @@ import (
 type Chunkable interface {
 	ToChunk() (Chunk, error)
 	Hash() hash.Hash
+	IsEmpty() bool
 }
 
 // ChunkStore is the core storage abstraction in noms. We can put data

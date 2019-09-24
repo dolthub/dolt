@@ -175,7 +175,7 @@ func Push(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 				} else if src == ref.EmptyBranchRef {
 					verr = deleteRemoteBranch(ctx, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				} else {
-					verr = pushToRemoteBranch(ctx, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
+					verr = pushToRemoteBranch(ctx, dEnv, src, dest, remoteRef, dEnv.DoltDB, destDB, remote)
 				}
 			}
 
@@ -229,7 +229,7 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 	return nil
 }
 
-func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
+func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.GetPath())
 	cm, err := localDB.Resolve(ctx, cs)
 
@@ -240,7 +240,7 @@ func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.Dolt
 		stopChan := make(chan struct{})
 		go progFunc(progChan, stopChan)
 
-		err = actions.Push(ctx, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan)
+		err = actions.Push(ctx, dEnv, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan)
 
 		close(progChan)
 		<-stopChan
