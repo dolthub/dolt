@@ -499,6 +499,15 @@ func TestDelete(t *testing.T) {
 				uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 			},
 		},
+		{
+			name:  "delete everything",
+			query: `delete from people`,
+			deletedIds: []uuid.UUID{
+				uuid.MustParse("00000000-0000-0000-0000-000000000000"),
+				uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+				uuid.MustParse("00000000-0000-0000-0000-000000000002"),
+			},
+		},
 	}
 
 	for _, test := range tests {
