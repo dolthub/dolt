@@ -53,7 +53,7 @@ var BasicReplaceTests = []ReplaceTest{
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
-		Name:           "replace no columns",
+		Name:           "replace set",
 		ReplaceQuery:   "replace into people set id = 2, first = 'Bart', last = 'Simpson'," +
 			"is_married = false, age = 10, rating = 9, uuid = '00000000-0000-0000-0000-000000000002', num_episodes = 222",
 		SelectQuery:    "select * from people where id = 2",
@@ -206,7 +206,6 @@ var BasicReplaceTests = []ReplaceTest{
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first", types.StringKind, "last", types.StringKind,
 			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
-		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "replace partial columns multiple rows null pk",
@@ -214,23 +213,7 @@ var BasicReplaceTests = []ReplaceTest{
 					(0, "Homer", "Simpson", true, 45, 100),
 					(8, "Milhouse", "Van Houten", false, 8, 3.5),
 					(7, "Maggie", null, false, 1, 5.1)`,
-		ExpectedErr:     "Constraint failed for column 'last': Not null",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "replace ignore partial columns multiple rows null pk",
-		ReplaceQuery: `replace ignore into people (id, first, last, is_married, age, rating) values
-					(0, "Homer", "Simpson", true, 45, 100),
-					(8, "Milhouse", "Van Houten", false, 8, 100),
-					(7, "Maggie", null, false, 1, 100)`,
-		SelectQuery: "select id, first, last, is_married, age, rating from people where rating = 100 order by id",
-		ExpectedRows: CompressRows(PeopleTestSchema,
-			NewPeopleRow(0, "Homer", "Simpson", true, 45, 100),
-			NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 100),
-		),
-		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first", types.StringKind, "last", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
-		SkipOnSqlEngine: true,
+		ExpectedErr:  "Constraint failed for column 'last': Not null",
 	},
 	{
 		Name: "type mismatch int -> string",

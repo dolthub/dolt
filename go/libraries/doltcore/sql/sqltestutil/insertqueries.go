@@ -219,44 +219,6 @@ var BasicInsertTests = []InsertTest{
 		ExpectedErr: "duplicate primary key",
 	},
 	{
-		Name: "replace partial columns multiple rows replace existing pk",
-		InsertQuery: `replace into people (id, first, last, is_married, age, rating) values
-					(0, "Homer", "Simpson", true, 45, 100),
-					(8, "Milhouse", "Van Houten", false, 8, 100)`,
-		SelectQuery: "select id, first, last, is_married, age, rating from people where rating = 100 order by id",
-		ExpectedRows: CompressRows(PeopleTestSchema,
-			NewPeopleRow(0, "Homer", "Simpson", true, 45, 100),
-			NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 100),
-		),
-		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first", types.StringKind, "last", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "replace partial columns multiple rows null pk",
-		InsertQuery: `replace into people (id, first, last, is_married, age, rating) values
-					(0, "Homer", "Simpson", true, 45, 100),
-					(8, "Milhouse", "Van Houten", false, 8, 3.5),
-					(7, "Maggie", null, false, 1, 5.1)`,
-		ExpectedErr:     "Constraint failed for column 'last': Not null",
-		SkipOnSqlEngine: true,
-	},
-	{
-		Name: "replace ignore partial columns multiple rows null pk",
-		InsertQuery: `replace ignore into people (id, first, last, is_married, age, rating) values
-					(0, "Homer", "Simpson", true, 45, 100),
-					(8, "Milhouse", "Van Houten", false, 8, 100),
-					(7, "Maggie", null, false, 1, 100)`,
-		SelectQuery: "select id, first, last, is_married, age, rating from people where rating = 100 order by id",
-		ExpectedRows: CompressRows(PeopleTestSchema,
-			NewPeopleRow(0, "Homer", "Simpson", true, 45, 100),
-			NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 100),
-		),
-		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first", types.StringKind, "last", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
-		SkipOnSqlEngine: true,
-	},
-	{
 		Name: "type mismatch int -> string",
 		InsertQuery: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", 100, false, 1, 5.1)`,
