@@ -93,8 +93,8 @@ teardown() {
     [ "$output" = "duplicate primary key given" ] || false
     run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "column <pk2> received nil but is non-nullable" ] || false
+    [ "$output" = "column name 'pk2' is non-nullable but attempted to set default value of null" ] || false
     run dolt sql -q "insert into test (c1,c2,c3,c4,c5) values (6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "column <pk1> received nil but is non-nullable" ] || false
+    [ "$output" = "column name 'pk1' is non-nullable but attempted to set default value of null" ] || false
 }
