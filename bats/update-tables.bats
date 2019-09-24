@@ -78,3 +78,23 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The following table could not be found:" ]] || false
 }
+
+@test "replace table with a json with columns in different order" {
+    run dolt table create -s `batshelper employees-sch.json` employees
+    [ "$status" -eq 0 ]
+    run dolt table import -u employees `batshelper employees-tbl-schema-unordered.json`
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}
+
+@test "replace table with a csv with columns in different order" {
+    run dolt table create -s `batshelper employees-sch.json` employees
+    [ "$status" -eq 0 ]
+    run dolt table import -u employees `batshelper employees-tbl-schema-unordered.csv`
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}

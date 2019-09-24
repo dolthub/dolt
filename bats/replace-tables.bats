@@ -156,3 +156,22 @@ teardown() {
     [[ "$output" =~ "Rows Processed: 4, Additions: 4, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
+
+@test "replace table with a json with columns in different order" {
+    run dolt table create -s `batshelper employees-sch.json` employees
+    [ "$status" -eq 0 ]
+    run dolt table import -r employees `batshelper employees-tbl-schema-unordered.json`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}
+
+@test "replace table with a csv with columns in different order" {
+    run dolt table create -s `batshelper employees-sch.json` employees
+    [ "$status" -eq 0 ]
+    run dolt table import -r employees `batshelper employees-tbl-schema-unordered.csv`
+    echo "$output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}
