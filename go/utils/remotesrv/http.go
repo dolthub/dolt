@@ -152,6 +152,16 @@ func readFile(logger func(string), org, repo, fileId string, writer io.Writer) i
 		return http.StatusInternalServerError
 	}
 
+	defer func() {
+		err := f.Close()
+
+		if err != nil {
+			logger(fmt.Sprintf("Close failed. file: %s, err: %v", path, err))
+		} else {
+			logger("Close Successful")
+		}
+	}()
+
 	n, err := io.Copy(writer, f)
 
 	if err != nil {
