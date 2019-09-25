@@ -45,7 +45,9 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 
 	if isInitialized {
 		doltDir := filepath.Join(workingDir, dbfactory.DoltDir)
+		doltDataDir := filepath.Join(workingDir, dbfactory.DoltDataDir)
 		initialDirs = append(initialDirs, doltDir)
+		initialDirs = append(initialDirs, doltDataDir)
 
 		hashStr := hash.Hash{}.String()
 		masterRef := ref.NewBranchRef("master")

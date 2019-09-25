@@ -25,10 +25,8 @@ import (
 	"github.com/golang/snappy"
 )
 
-
-
 const defaultTableSinkBlockSize = 2 * 1024 * 1024
-const defaultChBufferSize = 32*1024
+const defaultChBufferSize = 32 * 1024
 
 // ErrNotFinished is an error returned by a CmpChunkTableWriter when a call to Flush* is called before Finish is called
 var ErrNotFinished = errors.New("not finished")

@@ -24,8 +24,9 @@ package datas
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"io"
+
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/types"

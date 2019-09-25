@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -43,7 +44,7 @@ const (
 	DefaultMetricsPort    = "443"
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
-	tempTablesDir = "temptf"
+	tempTablesDir         = "temptf"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
@@ -85,6 +86,11 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 		hdp,
 	}
 
+	if dbLoadErr == nil && dEnv.HasDoltDir() && !dEnv.HasDoltTempTableDir() {
+		err := os.Mkdir(dEnv.TempTableFilesDir(), os.ModePerm)
+		dEnv.DBLoadError = err
+	}
+
 	dbfactory.InitializeFactories(dEnv)
 
 	return dEnv
@@ -97,6 +103,12 @@ func (dEnv *DoltEnv) HasDoltDir() bool {
 
 func (dEnv *DoltEnv) HasDoltDataDir() bool {
 	return dEnv.hasDoltDataDir("./")
+}
+
+func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
+	ex, _ := dEnv.FS.Exists(dEnv.TempTableFilesDir())
+
+	return ex
 }
 
 // GetDoltDir returns the path to the .dolt directory

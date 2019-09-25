@@ -473,7 +473,7 @@ func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, f
 	return remaining
 }
 
-func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, foundCmpChunks chan chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats, ) {
+func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, foundCmpChunks chan chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
 	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,

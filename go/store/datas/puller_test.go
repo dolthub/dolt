@@ -1,17 +1,33 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package datas
 
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/liquidata-inc/dolt/go/store/util/clienttest"
 )
 
 func mustTuple(tpl types.Tuple, err error) types.Tuple {
@@ -22,7 +38,7 @@ func mustTuple(tpl types.Tuple, err error) types.Tuple {
 	return tpl
 }
 
-func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, alternatingKeyVals ...types.Value) (types.Map, error){
+func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, alternatingKeyVals ...types.Value) (types.Map, error) {
 	val, ok, err := m.MaybeGet(ctx, types.String(tableName))
 
 	if err != nil {
@@ -37,9 +53,9 @@ func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map,
 			return types.EmptyMap, err
 		}
 
-		me  := mv.(types.Map).Edit()
+		me := mv.(types.Map).Edit()
 
-		for i := 0; i < len(alternatingKeyVals); i+=2 {
+		for i := 0; i < len(alternatingKeyVals); i += 2 {
 			me.Set(alternatingKeyVals[i], alternatingKeyVals[i+1])
 		}
 
@@ -67,7 +83,7 @@ func addTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map,
 	return me.Map(ctx)
 }
 
-func deleteTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, keys ...types.Value) (types.Map, error){
+func deleteTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.Map, tableName string, keys ...types.Value) (types.Map, error) {
 	if len(keys) == 0 {
 		return m, nil
 	}
@@ -88,7 +104,7 @@ func deleteTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.M
 		return types.EmptyMap, err
 	}
 
-	me  := mv.(types.Map).Edit()
+	me := mv.(types.Map).Edit()
 	for _, k := range keys {
 		me.Remove(k)
 	}
@@ -110,7 +126,7 @@ func deleteTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.M
 	return me.Map(ctx)
 }
 
-func tempDirDB(ctx context.Context) (Database, error){
+func tempDirDB(ctx context.Context) (Database, error) {
 	dir := filepath.Join(os.TempDir(), uuid.New().String())
 	err := os.MkdirAll(dir, os.ModePerm)
 
@@ -128,12 +144,12 @@ func tempDirDB(ctx context.Context) (Database, error){
 }
 
 func TestPuller(t *testing.T) {
-	deltas := []struct{
-		name string
-		sets map[string][]types.Value
-		deletes map[string][]types.Value
+	deltas := []struct {
+		name       string
+		sets       map[string][]types.Value
+		deletes    map[string][]types.Value
 		tblDeletes []string
-	} {
+	}{
 		{
 			"empty",
 			map[string][]types.Value{},
@@ -410,7 +426,7 @@ func errIfNotEqual(ctx context.Context, ex, act types.Map) error {
 
 		if actK == nil && exK == nil {
 			break
-		} else if exK == nil || actK == nil{
+		} else if exK == nil || actK == nil {
 			return errNotEqual
 		}
 

@@ -71,6 +71,9 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		data, err := ioutil.ReadAll(rd)
 		require.NoError(t, err)
 
+		err = rd.Close()
+		require.NoError(t, err)
+
 		assert.Equal(t, expected, data)
 	}
 }

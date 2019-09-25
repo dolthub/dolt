@@ -1,17 +1,32 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package datas
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"os"
-	"path/filepath"
-	"sync"
 )
 
 const (
@@ -24,7 +39,7 @@ type FilledWriters struct {
 
 type CmpChnkAndRefs struct {
 	cmpChnk nbs.CompressedChunk
-	refs map[hash.Hash]bool
+	refs    map[hash.Hash]bool
 }
 
 type Puller struct {
@@ -33,9 +48,10 @@ type Puller struct {
 	srcDB         Database
 	sinkDB        Database
 	rootChunkHash hash.Hash
+	downloaded    hash.HashSet
 
-	wr	    	*nbs.CmpChunkTableWriter
-	tempDir 	string
+	wr          *nbs.CmpChunkTableWriter
+	tempDir     string
 	chunksPerTF int
 }
 
@@ -71,14 +87,15 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, err
 	}
 
-	return &Puller {
-		fmt: srcDB.Format(),
-		srcDB: srcDB,
-		sinkDB: sinkDB,
+	return &Puller{
+		fmt:           srcDB.Format(),
+		srcDB:         srcDB,
+		sinkDB:        sinkDB,
 		rootChunkHash: rootChunkHash,
-		tempDir: tempDir,
-		wr: wr,
-		chunksPerTF: chunksPerTF,
+		downloaded:    hash.HashSet{},
+		tempDir:       tempDir,
+		wr:            wr,
+		chunksPerTF:   chunksPerTF,
 	}, nil
 }
 
@@ -123,7 +140,7 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 			return
 		}
 
-		err = p.sinkDB.chunkStore().(*nbs.NomsBlockStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, f)
+		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, f)
 
 		if ae.SetIfError(err) {
 			return
@@ -148,10 +165,14 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	for len(absent) > 0 {
 		var err error
-		leaves, absent, err = p.getCmp(ctx, leaves, absent, completedTables)
+		absent, err = p.sinkDB.chunkStore().HasMany(ctx, absent)
 
-		if err != nil {
-			return err
+		if len(absent) > 0 {
+			leaves, absent, err = p.getCmp(ctx, leaves, absent, completedTables)
+
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -182,51 +203,48 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 		numChunkWorkers = maxChunkWorkers
 	}
 
-	wg := &sync.WaitGroup{}
-	once := &sync.Once{}
-	for i := 0; i < numChunkWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer func(){
-				wg.Done()
-				wg.Wait()
-				once.Do(func() {
-					close(processed)
-				})
-			}()
-
-			for chable := range found {
-				if ae.IsSet() {
-					break
-				}
-
-				cmpChnk, ok := chable.(nbs.CompressedChunk)
-
-				if !ok {
-					ae.SetIfError(errors.New("requires an nbs.CompressedChunk"))
-					break
-				}
-
-				if leaves.Has(cmpChnk.H) {
-					processed <- CmpChnkAndRefs{cmpChnk:cmpChnk}
-				} else {
-					chnk, err := chable.ToChunk()
-
-					if ae.SetIfError(err) {
-						return
-					}
-
-					refs := make(map[hash.Hash]bool)
-					err = types.WalkRefs(chnk, p.fmt, func(r types.Ref) error {
-						refs[r.TargetHash()] = r.Height() == 1
-						return nil
-					})
-
-					processed <- CmpChnkAndRefs{cmpChnk:cmpChnk, refs:refs}
-				}
-			}
+	go func() {
+		defer func() {
+			close(processed)
 		}()
-	}
+
+		for chable := range found {
+			if ae.IsSet() {
+				break
+			}
+
+			cmpChnk, ok := chable.(nbs.CompressedChunk)
+
+			if !ok {
+				ae.SetIfError(errors.New("requires an nbs.CompressedChunk"))
+				break
+			}
+
+			if p.downloaded.Has(cmpChnk.H) {
+				continue
+			} else {
+				p.downloaded.Insert(cmpChnk.H)
+			}
+
+			if leaves.Has(cmpChnk.H) {
+				processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}
+			} else {
+				chnk, err := chable.ToChunk()
+
+				if ae.SetIfError(err) {
+					return
+				}
+
+				refs := make(map[hash.Hash]bool)
+				err = types.WalkRefs(chnk, p.fmt, func(r types.Ref) error {
+					refs[r.TargetHash()] = r.Height() == 1
+					return nil
+				})
+
+				processed <- CmpChnkAndRefs{cmpChnk: cmpChnk, refs: refs}
+			}
+		}
+	}()
 
 	var err error
 	nextLeaves := make(hash.HashSet, batchSize)

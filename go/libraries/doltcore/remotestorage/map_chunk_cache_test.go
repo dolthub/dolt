@@ -15,13 +15,13 @@
 package remotestorage
 
 import (
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"

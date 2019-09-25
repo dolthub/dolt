@@ -629,17 +629,22 @@ func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 		return err
 	}
 
-	/*if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
 		puller, err := datas.NewPuller(ctx, tempDir, 256*1024, srcDB.db, ddb.db, rf.TargetHash())
 
 		if err != nil {
 			return err
 		}
 
+		if puller == nil {
+			// already up to date
+			return nil
+		}
+
 		return puller.Pull(ctx)
-	} else {*/
+	} else {
 		return datas.Pull(ctx, srcDB.db, ddb.db, rf, progChan)
-	//}
+	}
 }
 
 // PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
@@ -651,17 +656,22 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 		return err
 	}
 
-	/*if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
 		puller, err := datas.NewPuller(ctx, tempDir, 256*1024, srcDB.db, ddb.db, rf.TargetHash())
 
 		if err != nil {
 			return err
 		}
 
+		if puller == nil {
+			// already up to date
+			return nil
+		}
+
 		return puller.Pull(ctx)
-	} else {*/
+	} else {
 		return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, rf, progChan)
-	//}
+	}
 }
 
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {

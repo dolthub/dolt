@@ -65,12 +65,13 @@ func (rs *RemoteChunkStore) HasChunks(ctx context.Context, req *remotesapi.HasCh
 
 	indices := make([]int32, len(absent))
 
-	logger(fmt.Sprintf("missing chunks: %v", indices))
 	n := 0
 	for h := range absent {
 		indices[n] = int32(hashToIndex[h])
 		n++
 	}
+
+	//logger(fmt.Sprintf("missing chunks: %v", indices))
 
 	resp := &remotesapi.HasChunksResponse{
 		Absent: indices,
@@ -300,6 +301,34 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	}
 
 	return resp, nil
+}
+
+func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.AddTableFilesRequest) (*remotesapi.AddTableFilesResponse, error) {
+	logger := getReqLogger("GRPC", "Commit")
+	defer func() { logger("finished") }()
+
+	cs := rs.getStore(req.RepoId, "Commit")
+
+	if cs == nil {
+		return nil, status.Error(codes.Internal, "Could not get chunkstore")
+	}
+
+	logger(fmt.Sprintf("found %s/%s", req.RepoId.Org, req.RepoId.RepoName))
+
+	// should validate
+	updates := make(map[hash.Hash]uint32)
+	for _, cti := range req.ChunkTableInfo {
+		updates[hash.New(cti.Hash)] = cti.ChunkCount
+	}
+
+	_, err := cs.UpdateManifest(ctx, updates)
+
+	if err != nil {
+		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
+		return nil, status.Error(codes.Internal, "manifest update error")
+	}
+
+	return &remotesapi.AddTableFilesResponse{Success: true}, nil
 }
 
 func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) *nbs.NomsBlockStore {

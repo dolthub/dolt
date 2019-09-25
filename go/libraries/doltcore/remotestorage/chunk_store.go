@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"io"
 	"net/http"
 	"net/url"
@@ -32,6 +31,7 @@ import (
 
 	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
@@ -615,6 +615,13 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 	op := func() error {
 		var err error
 		resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
+
+		if err == nil {
+			defer func() {
+				_ = resp.Body.Close()
+			}()
+		}
+
 		return processHttpResp(resp, err)
 	}
 
@@ -768,6 +775,13 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 
 		var resp *http.Response
 		resp, err = fetcher.Do(req.WithContext(ctx))
+
+		if err == nil {
+			defer func() {
+				_ = resp.Body.Close()
+			}()
+		}
+
 		respErr := processHttpResp(resp, err)
 
 		if respErr != nil {
@@ -847,6 +861,29 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 	default:
 		return errors.New("unsupported upload location")
+	}
+
+	chnkTblInfo := []*remotesapi.ChunkTableInfo{
+		{Hash: fileIdBytes[:], ChunkCount: uint32(numChunks)},
+	}
+
+	atReq := &remotesapi.AddTableFilesRequest{
+		RepoId:         dcs.getRepoId(),
+		ChunkTableInfo: chnkTblInfo,
+		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+			NbfVersion: dcs.nbf.VersionString(),
+			NbsVersion: nbs.StorageVersion,
+		},
+	}
+
+	atResp, err := dcs.csClient.AddTableFiles(ctx, atReq)
+
+	if err != nil {
+		return NewRpcError(err, "UpdateManifest", dcs.host, atReq)
+	}
+
+	if !atResp.Success {
+		return errors.New("update table files failed")
 	}
 
 	return nil
