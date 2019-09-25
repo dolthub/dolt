@@ -694,23 +694,6 @@ func sqlDelete(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, u
 	return result.Root, nil
 }
 
-type intRowIter struct {
-	Number uint64
-	Called bool
-}
-
-func (ri *intRowIter) Next() (sql.Row, error) {
-	if !ri.Called {
-		ri.Called = true
-		return sql.Row{ri.Number}, nil
-	}
-	return nil, io.EOF
-}
-func (ri *intRowIter) Close() error {
-	ri.Called = true
-	return nil
-}
-
 // Checks if the query is a naked delete and then deletes all rows if so
 func sqlCheckThenDeleteAllRows(ctx context.Context, root *doltdb.RootValue, s *sqlparser.Delete) (*doltdb.RootValue, bool) {
 	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
@@ -723,7 +706,7 @@ func sqlCheckThenDeleteAllRows(ctx context.Context, root *doltdb.RootValue, s *s
 					if err != nil {
 						return nil, false
 					}
-					printRowIter := &intRowIter{rowData.Len(), false}
+					printRowIter := sql.RowsToRowIter(sql.NewRow(rowData.Len()))
 					emptyMap, err := types.NewMap(ctx, root.VRW())
 					if err != nil {
 						return nil, false
