@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -86,9 +87,27 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 		hdp,
 	}
 
-	if dbLoadErr == nil && dEnv.HasDoltDir() && !dEnv.HasDoltTempTableDir() {
-		err := os.Mkdir(dEnv.TempTableFilesDir(), os.ModePerm)
-		dEnv.DBLoadError = err
+	if dbLoadErr == nil && dEnv.HasDoltDir() {
+		if !dEnv.HasDoltTempTableDir() {
+			err := os.Mkdir(dEnv.TempTableFilesDir(), os.ModePerm)
+			dEnv.DBLoadError = err
+		} else {
+			// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
+			// The process will not wait for this to finish so this may not always complete.
+			go func() {
+				_ = fs.Iter(dEnv.TempTableFilesDir(), true, func(path string, size int64, isDir bool) (stop bool) {
+					if !isDir {
+						lm, exists := fs.LastModified(path)
+
+						if exists && time.Now().Sub(lm) > (time.Hour*24) {
+							_ = fs.DeleteFile(path)
+						}
+					}
+
+					return false
+				})
+			}()
+		}
 	}
 
 	dbfactory.InitializeFactories(dEnv)
