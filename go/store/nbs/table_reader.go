@@ -524,10 +524,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		readStart uint64
 		readEnd   uint64
 	}
-	batchCh := make(chan readBatch, 128)
-	buildBatches := func() {
-		defer close(batchCh)
-
+	buildBatches := func(batchCh chan<- readBatch) {
 		// |offsetRecords| contains all locations within the table
 		// which must be search in sorted order and without
 		// duplicates. Now scan forward, grouping sequences of reads
@@ -564,8 +561,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 			batchCh <- readBatch{batch, readStart, readEnd}
 		}
 	}
-	readBatches := func() {
-		defer wg.Done()
+	readBatches := func(batchCh <-chan readBatch) {
 		for rb := range batchCh {
 			if !ae.IsSet() {
 				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, reqs, rb.batch, stats)
@@ -574,13 +570,19 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		}
 	}
 
-	go buildBatches()
-
 	ioParallelism := 4
 
+	batchCh := make(chan readBatch, 128)
+	go func() {
+		defer close(batchCh)
+		buildBatches(batchCh)
+	}()
 	wg.Add(ioParallelism)
 	for i := 0; i < ioParallelism; i++ {
-		go readBatches()
+		go func() {
+			defer wg.Done()
+			readBatches(batchCh)
+		}()
 	}
 }
 
