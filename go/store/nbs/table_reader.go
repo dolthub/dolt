@@ -37,12 +37,20 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+// CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.  CompressedChunk
+// implements chunks.Chunkable
 type CompressedChunk struct {
-	H                   hash.Hash
+	// H is the hash of the chunk
+	H hash.Hash
+
+	// FullCompressedChunk is the entirety of the compressed chunk data including the crc
 	FullCompressedChunk []byte
-	CompressedData      []byte
+
+	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
+	CompressedData []byte
 }
 
+// NewCompressedChunk creates a CompressedChunk
 func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	dataLen := uint64(len(buff)) - checksumSize
 
@@ -56,6 +64,7 @@ func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData: compressedData}, nil
 }
 
+// ToChunk snappy decodes the compressed data and returns a chunks.Chunk
 func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 	data, err := snappy.Decode(nil, cmp.CompressedData)
 
@@ -66,14 +75,17 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 	return chunks.NewChunk(data), nil
 }
 
+// Hash returns the hash of the data
 func (cmp CompressedChunk) Hash() hash.Hash {
 	return cmp.H
 }
 
+// IsEmpty returns true if the chunk contains no data.
 func (cmp CompressedChunk) IsEmpty() bool {
 	return len(cmp.CompressedData) == 0
 }
 
+// ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
 var ErrInvalidTableFile = errors.New("invalid or corrupt table file")
 
 type tableIndex struct {

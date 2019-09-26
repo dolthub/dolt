@@ -28,9 +28,16 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+// Chunkable is an interface for working with data that can be converted into a chunk.  Two implementations include chunks.Chunk
+// itself, and nbs.CompressedChunk which allows you to get the chunk from the compressed data.
 type Chunkable interface {
+	// ToChunk gets a chunks.Chunk from the Chunkable
 	ToChunk() (Chunk, error)
+
+	// Hash returns the hash of the Chunk.
 	Hash() hash.Hash
+
+	// IsEmpty returns true if the chunk contains no data.
 	IsEmpty() bool
 }
 
@@ -46,6 +53,8 @@ type ChunkStore interface {
 	// found. Any non-present chunks will silently be ignored.
 	GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error
 
+	// GetManyCompressed gets the Chunkable obects with |hashes| from the store. On return, |foundChunks| will have been
+	// fully sent all chunks which have been found. Any non-present chunks will silently be ignored.
 	GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan Chunkable) error
 
 	// Returns true iff the value at the address |h| is contained in the

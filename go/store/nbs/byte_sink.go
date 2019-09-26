@@ -98,6 +98,7 @@ func (sink *FixedBufferByteSink) Flush(wr io.Writer) error {
 	return iohelp.WriteAll(wr, sink.buff[:sink.pos])
 }
 
+// FlushToFile writes all teh data that was written to the file to a file at the provided location.
 func (sink *FixedBufferByteSink) FlushToFile(path string) (err error) {
 	return flushSinkToFile(sink, path)
 }
@@ -146,10 +147,13 @@ func (sink *BlockBufferByteSink) Flush(wr io.Writer) (err error) {
 	return iohelp.WriteAll(wr, sink.blocks...)
 }
 
+// FlushToFile writes all teh data that was written to the file to a file at the provided location.
 func (sink *BlockBufferByteSink) FlushToFile(path string) (err error) {
 	return flushSinkToFile(sink, path)
 }
 
+// BufferedFileByteSink is a ByteSink implementation that buffers some amount of data before it passes it
+// to a background writing thread to be flushed to a file.
 type BufferedFileByteSink struct {
 	blockSize    int
 	pos          uint64
@@ -163,6 +167,7 @@ type BufferedFileByteSink struct {
 	path string
 }
 
+// NewBufferedFileByteSink creates a BufferedFileByteSink
 func NewBufferedFileByteSink(blockSize, chBufferSize int) (*BufferedFileByteSink, error) {
 	path := filepath.Join(os.TempDir(), uuid.New().String()+".tf")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
@@ -266,6 +271,7 @@ func (sink *BufferedFileByteSink) Flush(wr io.Writer) (err error) {
 	return err
 }
 
+// FlushToFile writes all teh data that was written to the file to a file at the provided location.
 func (sink *BufferedFileByteSink) FlushToFile(path string) (err error) {
 	toWrite := len(sink.currentBlock)
 	if toWrite > 0 {

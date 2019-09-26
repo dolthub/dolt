@@ -142,6 +142,8 @@ func NewDatabase(cs chunks.ChunkStore) Database {
 	return newDatabase(cs)
 }
 
+// CanUsePuller returns true if a datas.Puller can be used to pull data from one Database into another.  Not all
+// Databases support this yet.
 func CanUsePuller(db Database) bool {
 	cs := db.chunkStore()
 	_, ok := cs.(nbs.TableFileStore)

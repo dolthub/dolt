@@ -33,15 +33,19 @@ const (
 	maxChunkWorkers = 2
 )
 
+// FilledWriters store CmpChunkTableWriter that have been filled and are ready to be flushed.  In the future will likely
+// add the md5 of the data to this structure to be used to verify table upload calls.
 type FilledWriters struct {
 	wr *nbs.CmpChunkTableWriter
 }
 
+// CmpChnkAndRefs holds a CompressedChunk and all of it's references
 type CmpChnkAndRefs struct {
 	cmpChnk nbs.CompressedChunk
 	refs    map[hash.Hash]bool
 }
 
+// Puller is used to sync data between to Databases
 type Puller struct {
 	fmt *types.NomsBinFormat
 
@@ -55,6 +59,8 @@ type Puller struct {
 	chunksPerTF int
 }
 
+// NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
+// that there is nothing to pull and the sinkDB is already up to date.
 func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sinkDB Database, rootChunkHash hash.Hash) (*Puller, error) {
 	// Sanity Check
 	exists, err := srcDB.chunkStore().Has(ctx, rootChunkHash)
@@ -148,6 +154,7 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 	}
 }
 
+// Pull executes the sync operation
 func (p *Puller) Pull(ctx context.Context) error {
 	leaves := make(hash.HashSet)
 	absent := make(hash.HashSet)

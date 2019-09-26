@@ -303,6 +303,7 @@ func (rs *RemoteChunkStore) ListTableFiles(ctx context.Context, req *remotesapi.
 	return resp, nil
 }
 
+// AddTableFiles updates the remote manifest with new table files without modifying the root hash.
 func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.AddTableFilesRequest) (*remotesapi.AddTableFilesResponse, error) {
 	logger := getReqLogger("GRPC", "Commit")
 	defer func() { logger("finished") }()
