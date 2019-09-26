@@ -148,6 +148,10 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 
 		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, f)
 
+		go func() {
+			_ = os.Remove(tmpTblFile.path)
+		}()
+
 		if ae.SetIfError(err) {
 			return
 		}
