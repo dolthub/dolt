@@ -519,59 +519,70 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		offsets offsetRecSlice,
 		stats *Stats) error,
 ) {
-	// Now |offsetRecords| contains all locations within the table which must be search (note
-	// that there may be duplicates of a particular location). Sort by offset and scan forward,
-	// grouping sequences of reads into large physical reads.
-
-	var batch offsetRecSlice
-	var readStart, readEnd uint64
-
-	for i := 0; i < len(offsetRecords); {
-		if ae.IsSet() {
-			return
-		}
-
-		rec := offsetRecords[i]
-		length := tr.lengths[rec.ordinal]
-
-		if batch == nil {
-			batch = make(offsetRecSlice, 1)
-			batch[0] = offsetRecords[i]
-			readStart = rec.offset
-			readEnd = readStart + uint64(length)
-			i++
-			continue
-		}
-
-		if newReadEnd, canRead := canReadAhead(rec, tr.lengths[rec.ordinal], readStart, readEnd, tr.blockSize); canRead {
-			batch = append(batch, rec)
-			readEnd = newReadEnd
-			i++
-			continue
-		}
-
-		wg.Add(1)
-		goReadStart := readStart
-		goReadEnd := readEnd
-		goBatch := batch
-		go func(batch offsetRecSlice) {
-			defer wg.Done()
-			err := readAtOffsets(ctx, goReadStart, goReadEnd, reqs, goBatch, stats)
-			ae.SetIfError(err)
-		}(batch)
-		batch = nil
+	type readBatch struct {
+		batch     offsetRecSlice
+		readStart uint64
+		readEnd   uint64
 	}
+	buildBatches := func(batchCh chan<- readBatch) {
+		// |offsetRecords| contains all locations within the table
+		// which must be search in sorted order and without
+		// duplicates. Now scan forward, grouping sequences of reads
+		// into larger physical reads.
 
-	if !ae.IsSet() {
-		if batch != nil {
-			wg.Add(1)
-			go func(batch offsetRecSlice) {
-				defer wg.Done()
-				err := readAtOffsets(ctx, readStart, readEnd, reqs, batch, stats)
-				ae.SetIfError(err)
-			}(batch)
+		var batch offsetRecSlice
+		var readStart, readEnd uint64
+
+		for i, rec := range offsetRecords {
+			if ae.IsSet() {
+				break
+			}
+			length := tr.lengths[rec.ordinal]
+
+			if batch == nil {
+				batch = make(offsetRecSlice, 1)
+				batch[0] = offsetRecords[i]
+				readStart = rec.offset
+				readEnd = readStart + uint64(length)
+				continue
+			}
+
+			if newReadEnd, canRead := canReadAhead(rec, tr.lengths[rec.ordinal], readStart, readEnd, tr.blockSize); canRead {
+				batch = append(batch, rec)
+				readEnd = newReadEnd
+				continue
+			}
+
+			batchCh <- readBatch{batch, readStart, readEnd}
 			batch = nil
 		}
+
+		if !ae.IsSet() && batch != nil {
+			batchCh <- readBatch{batch, readStart, readEnd}
+		}
+	}
+	readBatches := func(batchCh <-chan readBatch) {
+		for rb := range batchCh {
+			if !ae.IsSet() {
+				err := readAtOffsets(ctx, rb.readStart, rb.readEnd, reqs, rb.batch, stats)
+				ae.SetIfError(err)
+			}
+		}
+	}
+
+	ioParallelism := 4
+
+	batchCh := make(chan readBatch, 128)
+	go func() {
+		defer close(batchCh)
+		buildBatches(batchCh)
+	}()
+	wg.Add(ioParallelism)
+	for i := 0; i < ioParallelism; i++ {
+		go func() {
+			defer wg.Done()
+			readBatches(batchCh)
+		}()
 	}
 }
 
