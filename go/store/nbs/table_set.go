@@ -141,11 +141,7 @@ func (ts tableSet) getMany(ctx context.Context, reqs []getRecord, foundChunks ch
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
 
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					rp.getManyAtOffsets(ctx, reqs, offsets, foundChunks, wg, ae, stats)
-				}()
+				rp.getManyAtOffsets(ctx, reqs, offsets, foundChunks, wg, ae, stats)
 
 				if !remaining {
 					return false
@@ -177,11 +173,7 @@ func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foun
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
 
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					rp.getManyCompressedAtOffsets(ctx, reqs, offsets, foundCmpChunks, wg, ae, stats)
-				}()
+				rp.getManyCompressedAtOffsets(ctx, reqs, offsets, foundCmpChunks, wg, ae, stats)
 
 				if !remaining {
 					return false
