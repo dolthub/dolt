@@ -49,10 +49,6 @@ func (c Chunk) IsEmpty() bool {
 	return len(c.data) == 0
 }
 
-func (c Chunk) Size() int {
-	return len(c.data)
-}
-
 // NewChunk creates a new Chunk backed by data. This means that the returned Chunk has ownership of this slice of memory.
 func NewChunk(data []byte) Chunk {
 	r := hash.Of(data)

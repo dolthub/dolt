@@ -30,7 +30,7 @@ import (
 var (
 	testVersion = "1.0.0"
 	homeDir     = "/home/"
-	dPath       = doltDir
+	dPath       = ".dolt"
 	evtPath     = eventsDir
 	doltTestDir = filepath.Join(homeDir, dPath)
 	tempEvtsDir = filepath.Join(doltTestDir, evtPath)

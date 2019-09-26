@@ -171,7 +171,7 @@ func fetchRemoteBranch(ctx context.Context, rem env.Remote, srcDB, destDB *doltd
 	} else {
 		progChan := make(chan datas.PullProgress)
 		stopChan := make(chan struct{})
-		go progFunc(progChan, stopChan, evt)
+		go progFunc(progChan, stopChan)
 
 		err = actions.Fetch(ctx, destRef, srcDB, destDB, cm, progChan)
 

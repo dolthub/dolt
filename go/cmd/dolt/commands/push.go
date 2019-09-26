@@ -243,7 +243,7 @@ func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.Dolt
 	} else {
 		progChan := make(chan datas.PullProgress, 16)
 		stopChan := make(chan struct{})
-		go progFunc(progChan, stopChan, evt)
+		go progFunc(progChan, stopChan)
 
 		err = actions.Push(ctx, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan)
 
@@ -269,40 +269,18 @@ func pushToRemoteBranch(ctx context.Context, srcRef, destRef, remoteRef ref.Dolt
 	return nil
 }
 
-func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}, evt *events.Event) {
+func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}) {
 	var latest datas.PullProgress
 	last := time.Now().UnixNano() - 1
 	lenPrinted := 0
 	done := false
-
-	var timerMetricID, counterMetricID eventsapi.MetricID
-
-	switch evt.GetClientEventType() {
-	case eventsapi.ClientEventType_PUSH:
-		timerMetricID = eventsapi.MetricID_UPLOAD_MS_ELAPSED
-		counterMetricID = eventsapi.MetricID_BYTES_UPLOADED
-	default:
-		timerMetricID = eventsapi.MetricID_DOWNLOAD_MS_ELAPSED
-		counterMetricID = eventsapi.MetricID_BYTES_DOWNLOADED
-	}
-
-	counter := events.NewCounter(counterMetricID)
-	timer := events.NewTimer(timerMetricID)
-
 	for !done {
 		select {
 		case progress, ok := <-progChan:
 			if !ok {
 				done = true
-
-				timer.Stop()
-
-				evt.AddMetric(timer)
-				evt.AddMetric(counter)
 			}
-
 			latest = progress
-			counter.Add(int32(latest.ActualBytes))
 
 		case <-time.After(250 * time.Millisecond):
 			break

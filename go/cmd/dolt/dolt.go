@@ -31,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
@@ -138,7 +139,7 @@ func runMain() int {
 		return 1
 	}
 
-	emitter := events.NewFileEmitter(root)
+	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
 
 	defer func() {
 		ces := events.GlobalCollector.Close()

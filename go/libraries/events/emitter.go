@@ -30,10 +30,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
-const (
-	doltDir = ".dolt"
-)
-
 // Emitter is an interface used for processing a batch of events
 type Emitter interface {
 	// LogEvents takes a batch of events and processes them
@@ -132,7 +128,7 @@ type FileEmitter struct {
 }
 
 // NewFileEmitter creates a new file emitter
-func NewFileEmitter(userHomeDir string) *FileEmitter {
+func NewFileEmitter(userHomeDir string, doltDir string) *FileEmitter {
 	fs := filesys.LocalFS
 
 	return &FileEmitter{fbp: NewFileBackedProc(fs, userHomeDir, doltDir, MD5FileNamer, CheckFilenameMD5)}

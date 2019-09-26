@@ -104,6 +104,9 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 	}
 
 	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_REPO_METADATA)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
 	metadata, err := csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
 		RepoId: &remotesapi.RepoId{
@@ -116,13 +119,10 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 		},
 	})
 	if err != nil {
-		evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-		events.GlobalCollector.CloseEventAndAdd(evt)
-
+		counter.Inc()
 		return nil, err
 	}
 
-	events.GlobalCollector.CloseEventAndAdd(evt)
 	return &DoltChunkStore{org, repoName, host, csClient, newMapChunkCache(), metadata, nbf, globalHttpFetcher}, nil
 }
 
@@ -239,14 +239,15 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 		batch := hashesBytes[st:end]
 		f := func() error {
 			evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_DOWNLOAD_LOCATIONS)
+			defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+			counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
 			req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch}
 			resp, err := dcs.csClient.GetDownloadLocations(ctx, &req)
 
 			if err != nil {
-				evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-				events.GlobalCollector.CloseEventAndAdd(evt)
-
+				counter.Inc()
 				return NewRpcError(err, "GetDownloadLocations", dcs.host, req)
 			}
 
@@ -254,7 +255,6 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 				dlLocChan <- loc
 			}
 
-			events.GlobalCollector.CloseEventAndAdd(evt)
 			return nil
 		}
 
@@ -363,6 +363,9 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 		currByteSl := byteSl[st:end]
 
 		evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_HAS_CHUNKS)
+		defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+		counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
 		// send a request to the remote api to determine which chunks the remote api already has
 		req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
@@ -371,9 +374,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 		if err != nil {
 			err = NewRpcError(err, "HasMany", dcs.host, req)
 
-			evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-			events.GlobalCollector.CloseEventAndAdd(evt)
-
+			counter.Inc()
 			return true
 		}
 
@@ -401,7 +402,6 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 			}
 		}
 
-		events.GlobalCollector.CloseEventAndAdd(evt)
 		return false
 	})
 
@@ -438,18 +438,18 @@ func (dcs *DoltChunkStore) Version() string {
 // current root.
 func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_REBASE)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
 	req := &remotesapi.RebaseRequest{RepoId: dcs.getRepoId()}
 	_, err := dcs.csClient.Rebase(ctx, req)
 
 	if err != nil {
-		evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-		events.GlobalCollector.CloseEventAndAdd(evt)
-
+		counter.Inc()
 		return NewRpcError(err, "Rebase", dcs.host, req)
 	}
 
-	events.GlobalCollector.CloseEventAndAdd(evt)
 	return nil
 }
 
@@ -457,18 +457,18 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 // was opened or the most recent call to Rebase.
 func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
 	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_ROOT)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
 	req := &remotesapi.RootRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.Root(ctx, req)
 
 	if err != nil {
-		evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-		events.GlobalCollector.CloseEventAndAdd(evt)
-
+		counter.Inc()
 		return hash.Hash{}, NewRpcError(err, "Root", dcs.host, req)
 	}
 
-	events.GlobalCollector.CloseEventAndAdd(evt)
 	return hash.New(resp.RootHash), nil
 }
 
@@ -477,13 +477,14 @@ func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
 // If last doesn't match the root in persistent storage, returns false.
 func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
 	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_COMMIT)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
 	hashToChunkCount, err := dcs.uploadChunks(ctx)
 
 	if err != nil {
-		evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-		events.GlobalCollector.CloseEventAndAdd(evt)
-
+		counter.Inc()
 		return false, err
 	}
 
@@ -505,14 +506,11 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 	resp, err := dcs.csClient.Commit(ctx, req)
 
 	if err != nil {
-		evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-		events.GlobalCollector.CloseEventAndAdd(evt)
-
+		counter.Inc()
 		return false, NewRpcError(err, "Commit", dcs.host, req)
 
 	}
 
-	events.GlobalCollector.CloseEventAndAdd(evt)
 	return resp.Success, nil
 }
 
@@ -573,14 +571,15 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	}
 
 	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_UPLOAD_LOCATIONS)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
 	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileHashes: hashBytes}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 
 	if err != nil {
-		evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-		events.GlobalCollector.CloseEventAndAdd(evt)
-
+		counter.Inc()
 		return map[hash.Hash]int{}, err
 	}
 
@@ -596,14 +595,11 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		}
 
 		if err != nil {
-			evt.SetAttribute(eventsapi.AttributeID_REMOTEAPI_ERROR, err.Error())
-			events.GlobalCollector.CloseEventAndAdd(evt)
-
+			counter.Inc()
 			return map[hash.Hash]int{}, err
 		}
 	}
 
-	events.GlobalCollector.CloseEventAndAdd(evt)
 	return hashToCount, nil
 }
 
@@ -833,10 +829,16 @@ func (dcs *DoltChunkStore) NewSink(ctx context.Context, fileId string, numChunks
 
 // Sources retrieves the current root hash, and a list of all the table files
 func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_LIST_TABLE_FILES)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 	req := &remotesapi.ListTableFilesRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.ListTableFiles(ctx, req)
 
 	if err != nil {
+		counter.Inc()
 		return hash.Hash{}, nil, err
 	}
 

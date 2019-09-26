@@ -93,7 +93,6 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 			ret := command.Func(ctx, commandStr+" "+subCommandStr, args[1:], dEnv)
 
 			if evt != nil {
-				dEnv.SetStandardEventAttributes(evt)
 				events.GlobalCollector.CloseEventAndAdd(evt)
 			}
 
