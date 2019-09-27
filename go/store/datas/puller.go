@@ -29,6 +29,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+type FileReaderWithSize struct {
+	*os.File
+	size int64
+}
+
+func (rd FileReaderWithSize) Size() int64 {
+	return rd.size
+}
+
 // ErrDBUpToDate is the error code returned from NewPuller in the event that there is no work to do.
 var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's already up to date")
 
@@ -213,7 +222,8 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 		details.CurrentFileSize = fi.Size()
 		p.eventCh <- NewTFPullerEvent(StartUploadTableFile, details)
 
-		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, f)
+		fWithSize := FileReaderWithSize{f, fi.Size()}
+		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithSize)
 
 		go func() {
 			_ = os.Remove(tmpTblFile.path)
