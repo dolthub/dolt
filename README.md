@@ -38,6 +38,9 @@ Valid commands for dolt are
 ```
 
 ## Installation
+These installation instructions assume that you have Go installed, and that `go` is in your path.
+
+### From Latest Release
 Obtain the appropriate archive for your operating system under [releases](https://github.com/liquidata-inc/dolt/releases):
 
 System|Archive
@@ -54,7 +57,27 @@ For Unix systems extract the archive to a directory on in your path, for example
 $ tar -xf /your/download/location/dolt-darwin-amd64.tar.gz -C /usr/local/bin
 $ ln -s /usr/local/lib/dolt /usr/local/lib/dolt/bin/dolt
 ```
-Verify that your installation has succeeded as follows:
+
+### From Source
+Alternatively clone this repository and then, assuming you cloned the repository into your home directory:
+```
+$ cd ~/dolt/go
+$ go install ./cmd/dolt
+[...]
+$ go install ./cmd/git-dolt
+[...]
+$ go install ./cmd/git-dolt-smudge
+[...]
+```
+This will install the requisite binaries at `$GOROOT/bin`, which defaults to `$HOME/go`, thus you should see something like (unless you set `$GOROOT` to something else):
+```
+$ ls -ltr $HOME/go/bin/
+dolt             git-dolt         git-dolt-smudge
+```
+Ensure that `$GOROOT/bin` is on your path, and then proceed.
+
+### Verify
+Whichever method you used, verify that your installation has succeeded as follows:
 ```
 $ dolt
 Valid commands for dolt are
