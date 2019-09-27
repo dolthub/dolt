@@ -69,7 +69,7 @@ $ go install ./cmd/git-dolt
 $ go install ./cmd/git-dolt-smudge
 [...]
 ```
-This will install the the requisite binaries at `$GOROOT/bin`, which defaults to `$HOME/go`, thus you should see something like (unless you set `$GOROOT` to something else):
+This will install the requisite binaries at `$GOROOT/bin`, which defaults to `$HOME/go`, thus you should see something like (unless you set `$GOROOT` to something else):
 ```
 $ ls -ltr $HOME/go/bin/
 dolt             git-dolt         git-dolt-smudge
