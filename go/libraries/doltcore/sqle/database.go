@@ -81,3 +81,25 @@ func (db *Database) Tables() map[string]sql.Table {
 func (db *Database) Root() *doltdb.RootValue {
 	return db.root
 }
+
+// DropTable drops the table with the name given
+func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
+	tableExists, err := db.root.HasTable(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
+	if !tableExists {
+		return sql.ErrTableNotFound.New(tableName)
+	}
+
+	newRoot, err := db.root.RemoveTables(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
+	// TODO: races
+	db.root = newRoot
+
+	return nil
+}
