@@ -29,21 +29,21 @@ var noopChunkCache = &noopChunkCacheImpl{}
 type noopChunkCacheImpl struct {
 }
 
-func (*noopChunkCacheImpl) Put(chnks []chunks.Chunk) {
+func (*noopChunkCacheImpl) Put(chnks []chunks.Chunkable) {
 }
 
-func (*noopChunkCacheImpl) Get(hashes hash.HashSet) map[hash.Hash]chunks.Chunk {
-	return make(map[hash.Hash]chunks.Chunk)
+func (*noopChunkCacheImpl) Get(hashes hash.HashSet) map[hash.Hash]chunks.Chunkable {
+	return make(map[hash.Hash]chunks.Chunkable)
 }
 
 func (*noopChunkCacheImpl) Has(hashes hash.HashSet) (absent hash.HashSet) {
 	return hashes
 }
 
-func (*noopChunkCacheImpl) PutChunk(ch *chunks.Chunk) bool {
+func (*noopChunkCacheImpl) PutChunk(ch chunks.Chunkable) bool {
 	return true
 }
 
-func (*noopChunkCacheImpl) GetAndClearChunksToFlush() map[hash.Hash]chunks.Chunk {
+func (*noopChunkCacheImpl) GetAndClearChunksToFlush() map[hash.Hash]chunks.Chunkable {
 	panic("noopChunkCache does not support GetAndClearChunksToFlush().")
 }

@@ -24,7 +24,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/store/datas"
 )
 
 var fetchShortDesc = "Download objects and refs from another repository"
@@ -145,7 +144,7 @@ func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSp
 			remoteTrackRef := rs.DestRef(branchRef)
 
 			if remoteTrackRef != nil {
-				verr := fetchRemoteBranch(ctx, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
+				verr := fetchRemoteBranch(ctx, dEnv, rem, srcDB, dEnv.DoltDB, branchRef, remoteTrackRef)
 
 				if verr != nil {
 					return verr
@@ -157,21 +156,16 @@ func fetchRefSpecs(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, refSp
 	return nil
 }
 
-func fetchRemoteBranch(ctx context.Context, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
+func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef) errhand.VerboseError {
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.String())
 	cm, err := srcDB.Resolve(ctx, cs)
 
 	if err != nil {
 		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
-		progChan := make(chan datas.PullProgress)
-		stopChan := make(chan struct{})
-		go progFunc(progChan, stopChan)
-
-		err = actions.Fetch(ctx, destRef, srcDB, destDB, cm, progChan)
-
-		close(progChan)
-		<-stopChan
+		wg, progChan, pullerEventCh := runProgFuncs()
+		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, cm, progChan, pullerEventCh)
+		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {
 			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()

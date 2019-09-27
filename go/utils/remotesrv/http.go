@@ -152,6 +152,16 @@ func readFile(logger func(string), org, repo, fileId string, writer io.Writer) i
 		return http.StatusInternalServerError
 	}
 
+	defer func() {
+		err := f.Close()
+
+		if err != nil {
+			logger(fmt.Sprintf("Close failed. file: %s, err: %v", path, err))
+		} else {
+			logger("Close Successful")
+		}
+	}()
+
 	n, err := io.Copy(writer, f)
 
 	if err != nil {
@@ -215,24 +225,34 @@ func readLocalRange(logger func(string), org, repo, fileId string, offset, lengt
 	f, err := os.Open(path)
 
 	if err != nil {
-		logger(fmt.Sprintf("Failed to open %s", path))
+		logger(fmt.Sprintf("Failed to open %s: %v", path, err))
 		return nil, http.StatusInternalServerError
 	}
+
+	defer func() {
+		err := f.Close()
+
+		if err != nil {
+			logger(fmt.Sprintf("Close failed. file: %s, err: %v", path, err))
+		} else {
+			logger("Close Successful")
+		}
+	}()
 
 	logger(fmt.Sprintf("Successfully opened file"))
 	pos, err := f.Seek(int64(offset), 0)
 
 	if err != nil {
-		logger(fmt.Sprintf("Failed to seek to %d", offset))
+		logger(fmt.Sprintf("Failed to seek to %d: %v", offset, err))
 		return nil, http.StatusInternalServerError
 	}
 
 	logger(fmt.Sprintf("Seek succeeded.  Current position is %d", pos))
-	diff := int64(offset) - pos
+	diff := offset - pos
 	data, err := iohelp.ReadNBytes(f, int(diff+int64(length)))
 
 	if err != nil {
-		logger(fmt.Sprintf("Failed to read %d bytes", diff+int64(length)))
+		logger(fmt.Sprintf("Failed to read %d bytes: %v", diff+length, err))
 		return nil, http.StatusInternalServerError
 	}
 

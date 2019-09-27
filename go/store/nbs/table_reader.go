@@ -37,12 +37,20 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+// CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.  CompressedChunk
+// implements chunks.Chunkable
 type CompressedChunk struct {
-	H                   hash.Hash
+	// H is the hash of the chunk
+	H hash.Hash
+
+	// FullCompressedChunk is the entirety of the compressed chunk data including the crc
 	FullCompressedChunk []byte
-	CompressedData      []byte
+
+	// CompressedData is just the snappy encoded byte buffer that stores the chunk data
+	CompressedData []byte
 }
 
+// NewCompressedChunk creates a CompressedChunk
 func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	dataLen := uint64(len(buff)) - checksumSize
 
@@ -56,7 +64,8 @@ func NewCompressedChunk(h hash.Hash, buff []byte) (CompressedChunk, error) {
 	return CompressedChunk{H: h, FullCompressedChunk: buff, CompressedData: compressedData}, nil
 }
 
-func (cmp CompressedChunk) Decompress() (chunks.Chunk, error) {
+// ToChunk snappy decodes the compressed data and returns a chunks.Chunk
+func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 	data, err := snappy.Decode(nil, cmp.CompressedData)
 
 	if err != nil {
@@ -66,6 +75,17 @@ func (cmp CompressedChunk) Decompress() (chunks.Chunk, error) {
 	return chunks.NewChunk(data), nil
 }
 
+// Hash returns the hash of the data
+func (cmp CompressedChunk) Hash() hash.Hash {
+	return cmp.H
+}
+
+// IsEmpty returns true if the chunk contains no data.
+func (cmp CompressedChunk) IsEmpty() bool {
+	return len(cmp.CompressedData) == 0
+}
+
+// ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
 var ErrInvalidTableFile = errors.New("invalid or corrupt table file")
 
 type tableIndex struct {
@@ -337,7 +357,7 @@ func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, er
 		return nil, errors.New("failed to get data")
 	}
 
-	chnk, err := cmp.Decompress()
+	chnk, err := cmp.ToChunk()
 
 	if err != nil {
 		return nil, err
@@ -363,7 +383,7 @@ func (tr tableReader) readCompressedAtOffsets(
 	readStart, readEnd uint64,
 	reqs []getRecord,
 	offsets offsetRecSlice,
-	foundCmpChunks chan CompressedChunk,
+	foundCmpChunks chan chunks.Chunkable,
 	stats *Stats,
 ) error {
 	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
@@ -381,7 +401,7 @@ func (tr tableReader) readAtOffsets(
 	stats *Stats,
 ) error {
 	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
-		chk, err := cmp.Decompress()
+		chk, err := cmp.ToChunk()
 
 		if err != nil {
 			return err
@@ -457,7 +477,7 @@ func (tr tableReader) getMany(
 	tr.getManyAtOffsets(ctx, reqs, offsetRecords, foundChunks, wg, ae, stats)
 	return remaining
 }
-func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
@@ -465,15 +485,7 @@ func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, f
 	return remaining
 }
 
-func (tr tableReader) getManyCompressedAtOffsets(
-	ctx context.Context,
-	reqs []getRecord,
-	offsetRecords offsetRecSlice,
-	foundCmpChunks chan CompressedChunk,
-	wg *sync.WaitGroup,
-	ae *atomicerr.AtomicError,
-	stats *Stats,
-) {
+func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, foundCmpChunks chan chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
 	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,
@@ -718,7 +730,7 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 			return err
 		}
 
-		chnk, err := cmp.Decompress()
+		chnk, err := cmp.ToChunk()
 
 		if err != nil {
 			return err

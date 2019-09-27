@@ -18,9 +18,9 @@ import (
 	"context"
 	"errors"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 )
 
@@ -31,7 +31,7 @@ var ErrCantFF = errors.New("can't fast forward merge")
 // the given commit via a fast forward merge.  If this is the case, an attempt will be made to update the branch in the
 // destination db to the given commit via fast forward move.  If that succeeds the tracking branch is updated in the
 // source db.
-func Push(ctx context.Context, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
+func Push(ctx context.Context, dEnv *env.DoltEnv, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
 	canFF, err := srcDB.CanFastForward(ctx, remoteRef, commit)
 
 	if err != nil {
@@ -40,7 +40,7 @@ func Push(ctx context.Context, destRef ref.BranchRef, remoteRef ref.RemoteRef, s
 		return ErrCantFF
 	}
 
-	err = destDB.PushChunks(ctx, srcDB, commit, progChan)
+	err = destDB.PushChunks(ctx, dEnv.TempTableFilesDir(), srcDB, commit, progChan, pullerEventCh)
 
 	if err != nil {
 		return err
@@ -83,8 +83,8 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 	return nil
 }
 
-func Fetch(ctx context.Context, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress) error {
-	err := destDB.PullChunks(ctx, srcDB, commit, progChan)
+func Fetch(ctx context.Context, dEnv *env.DoltEnv, destRef ref.DoltRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
+	err := destDB.PullChunks(ctx, dEnv.TempTableFilesDir(), srcDB, commit, progChan, pullerEventCh)
 
 	if err != nil {
 		return err

@@ -18,8 +18,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
@@ -43,6 +45,7 @@ const (
 	DefaultMetricsPort    = "443"
 	DefaultRemotesApiHost = "doltremoteapi.dolthub.com"
 	DefaultRemotesApiPort = "443"
+	tempTablesDir         = "temptf"
 )
 
 var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
@@ -84,6 +87,29 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 		hdp,
 	}
 
+	if dbLoadErr == nil && dEnv.HasDoltDir() {
+		if !dEnv.HasDoltTempTableDir() {
+			err := os.Mkdir(dEnv.TempTableFilesDir(), os.ModePerm)
+			dEnv.DBLoadError = err
+		} else {
+			// fire and forget cleanup routine.  Will delete as many old temp files as it can during the main commands execution.
+			// The process will not wait for this to finish so this may not always complete.
+			go func() {
+				_ = fs.Iter(dEnv.TempTableFilesDir(), true, func(path string, size int64, isDir bool) (stop bool) {
+					if !isDir {
+						lm, exists := fs.LastModified(path)
+
+						if exists && time.Now().Sub(lm) > (time.Hour*24) {
+							_ = fs.DeleteFile(path)
+						}
+					}
+
+					return false
+				})
+			}()
+		}
+	}
+
 	dbfactory.InitializeFactories(dEnv)
 
 	return dEnv
@@ -96,6 +122,12 @@ func (dEnv *DoltEnv) HasDoltDir() bool {
 
 func (dEnv *DoltEnv) HasDoltDataDir() bool {
 	return dEnv.hasDoltDataDir("./")
+}
+
+func (dEnv *DoltEnv) HasDoltTempTableDir() bool {
+	ex, _ := dEnv.FS.Exists(dEnv.TempTableFilesDir())
+
+	return ex
 }
 
 // GetDoltDir returns the path to the .dolt directory
@@ -578,4 +610,8 @@ func (dEnv *DoltEnv) GetDefaultRemote() (Remote, errhand.VerboseError) {
 // based on current filesys
 func (dEnv *DoltEnv) GetUserHomeDir() (string, error) {
 	return getHomeDir(dEnv.hdp)
+}
+
+func (dEnv *DoltEnv) TempTableFilesDir() string {
+	return filepath.Join(dEnv.GetDoltDir(), tempTablesDir)
 }

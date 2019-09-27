@@ -68,6 +68,11 @@ func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundC
 	return s.ChunkStore.GetMany(ctx, hashes, foundChunks)
 }
 
+func (s *TestStoreView) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan Chunkable) error {
+	s.Reads += len(hashes)
+	return s.ChunkStore.GetManyCompressed(ctx, hashes, foundCmpChunks)
+}
+
 func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	s.Hases++
 	return s.ChunkStore.Has(ctx, h)
