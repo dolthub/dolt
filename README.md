@@ -59,7 +59,7 @@ $ ln -s /usr/local/lib/dolt /usr/local/lib/dolt/bin/dolt
 ```
 
 ### From Source
-Alternatively clone this repository and then, assume you cloned the repository into your home directory:
+Alternatively clone this repository and then, assuming you cloned the repository into your home directory:
 ```
 $ cd ~/dolt/go
 $ go install ./cmd/dolt
