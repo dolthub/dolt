@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/dustin/go-humanize"
@@ -236,14 +237,9 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef,
 	if err != nil {
 		return errhand.BuildDError("error: unable to find %v", srcRef.GetPath()).Build()
 	} else {
-		progChan := make(chan datas.PullProgress, 16)
-		stopChan := make(chan struct{})
-		go progFunc(progChan, stopChan)
-
-		err = actions.Push(ctx, dEnv, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan)
-
-		close(progChan)
-		<-stopChan
+		wg, progChan, pullerEventCh := runProgFuncs()
+		err = actions.Push(ctx, dEnv, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
+		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {
 			if err == doltdb.ErrUpToDate {
@@ -264,7 +260,58 @@ func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef,
 	return nil
 }
 
-func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}) {
+func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
+	var pos int
+	for evt := range pullerEventCh {
+		switch evt.EventType {
+		case datas.NewLevelTWEvent:
+			if evt.TWEventDetails.TreeLevel == -1 {
+				continue
+			}
+
+			pos = cli.DeleteAndPrint(0, fmt.Sprintf("Tree Level: %d has %d new chunks. Determining how many are needed.", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel))
+		case datas.DestDBHasTWEvent:
+			if evt.TWEventDetails.TreeLevel == -1 {
+				continue
+			}
+
+			cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d has %d new chunks of which %d already exist in the database. Buffering %d chunks.\n", evt.TWEventDetails.TreeLevel, evt.TWEventDetails.ChunksInLevel, evt.TWEventDetails.ChunksAlreadyHad, evt.TWEventDetails.ChunksInLevel-evt.TWEventDetails.ChunksAlreadyHad))
+			pos = 0
+
+		case datas.LevelUpdateTWEvent:
+			if evt.TWEventDetails.TreeLevel == -1 {
+				continue
+			}
+
+			toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
+
+			var percentBuffered float64
+			if toBuffer > 0 {
+				percentBuffered = 100 * float64(evt.TWEventDetails.ChunksBuffered) / float64(toBuffer)
+			}
+
+			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, percentBuffered))
+
+		case datas.LevelDoneTWEvent:
+			if evt.TWEventDetails.TreeLevel == -1 {
+				continue
+			}
+
+			_ = cli.DeleteAndPrint(pos, fmt.Sprintf("Tree Level: %d. %.2f%% of new chunks buffered.", evt.TWEventDetails.TreeLevel, 100.0))
+
+			pos = 0
+			cli.Println("")
+
+		case datas.StartUploadTableFile:
+			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Uploading table file %d of %d. %s bytes", evt.TFEventDetails.TableFilesUploaded+1, evt.TFEventDetails.TableFileCount, humanize.Bytes(uint64(evt.TFEventDetails.CurrentFileSize))))
+
+		case datas.EndUpdateTableFile:
+			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Successfully uploaded %d of %d table files.", evt.TFEventDetails.TableFilesUploaded, evt.TFEventDetails.TableFileCount))
+		}
+	}
+}
+
+func progFunc(progChan chan datas.PullProgress) {
 	var latest datas.PullProgress
 	last := time.Now().UnixNano() - 1
 	lenPrinted := 0
@@ -296,7 +343,32 @@ func progFunc(progChan chan datas.PullProgress, stopChan chan struct{}) {
 	if lenPrinted > 0 {
 		cli.Println()
 	}
-	stopChan <- struct{}{}
+}
+
+func runProgFuncs() (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
+	pullerEventCh := make(chan datas.PullerEvent, 128)
+	progChan := make(chan datas.PullProgress, 128)
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		progFunc(progChan)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		pullerProgFunc(pullerEventCh)
+	}()
+
+	return wg, progChan, pullerEventCh
+}
+
+func stopProgFuncs(wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+	close(progChan)
+	close(pullerEventCh)
+	wg.Wait()
 }
 
 func bytesPerSec(bytes uint64, start time.Time) string {

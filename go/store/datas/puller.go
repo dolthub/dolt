@@ -29,6 +29,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// ErrDBUpToDate is the error code returned from NewPuller in the event that there is no work to do.
+var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's already up to date")
+
 const (
 	maxChunkWorkers = 2
 )
@@ -42,7 +45,7 @@ type FilledWriters struct {
 // CmpChnkAndRefs holds a CompressedChunk and all of it's references
 type CmpChnkAndRefs struct {
 	cmpChnk nbs.CompressedChunk
-	refs    map[hash.Hash]bool
+	refs    map[hash.Hash]int
 }
 
 // Puller is used to sync data between to Databases
@@ -57,11 +60,57 @@ type Puller struct {
 	wr          *nbs.CmpChunkTableWriter
 	tempDir     string
 	chunksPerTF int
+
+	eventCh chan PullerEvent
+}
+
+type PullerEventType int
+
+const (
+	NewLevelTWEvent PullerEventType = iota
+	DestDBHasTWEvent
+	LevelUpdateTWEvent
+	LevelDoneTWEvent
+	StartUploadTableFile
+	EndUpdateTableFile
+)
+
+type TreeWalkEventDetails struct {
+	TreeLevel           int
+	ChunksInLevel       int
+	ChunksAlreadyHad    int
+	ChunksBuffered      int
+	ChildrenFound       int
+	TableFilesGenerated int
+}
+
+type TableFileEventDetails struct {
+	TableFileCount     int
+	TableFilesUploaded int
+	CurrentFileSize    int64
+}
+
+type PullerEvent struct {
+	EventType      PullerEventType
+	TWEventDetails TreeWalkEventDetails
+	TFEventDetails TableFileEventDetails
+}
+
+func NewTWPullerEvent(et PullerEventType, details *TreeWalkEventDetails) PullerEvent {
+	return PullerEvent{EventType: et, TWEventDetails: *details}
+}
+
+func NewTFPullerEvent(et PullerEventType, details *TableFileEventDetails) PullerEvent {
+	return PullerEvent{EventType: et, TFEventDetails: *details}
 }
 
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
-func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sinkDB Database, rootChunkHash hash.Hash) (*Puller, error) {
+func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sinkDB Database, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
+	if eventCh == nil {
+		panic("eventCh is required")
+	}
+
 	// Sanity Check
 	exists, err := srcDB.chunkStore().Has(ctx, rootChunkHash)
 
@@ -80,7 +129,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 	}
 
 	if exists {
-		return nil, nil // already up to date
+		return nil, ErrDBUpToDate
 	}
 
 	if srcDB.chunkStore().Version() != sinkDB.chunkStore().Version() {
@@ -102,6 +151,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		tempDir:       tempDir,
 		wr:            wr,
 		chunksPerTF:   chunksPerTF,
+		eventCh:       eventCh,
 	}, nil
 }
 
@@ -137,14 +187,31 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 		tblFiles = append(tblFiles, tempTblFile{id, path, tblFile.wr.Size()})
 	}
 
+	if ae.IsSet() {
+		return
+	}
+
+	details := &TableFileEventDetails{TableFileCount: len(tblFiles)}
+
+	// Write tables in reverse order so that on a partial success, it will still be true that if a db has a chunk, it
+	// also has all of that chunks references.
 	for i := len(tblFiles) - 1; i >= 0; i-- {
 		tmpTblFile := tblFiles[i]
+
+		fi, err := os.Stat(tmpTblFile.path)
+
+		if ae.SetIfError(err) {
+			return
+		}
 
 		f, err := os.Open(tmpTblFile.path)
 
 		if ae.SetIfError(err) {
 			return
 		}
+
+		details.CurrentFileSize = fi.Size()
+		p.eventCh <- NewTFPullerEvent(StartUploadTableFile, details)
 
 		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, f)
 
@@ -155,11 +222,16 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 		if ae.SetIfError(err) {
 			return
 		}
+
+		details.TableFilesUploaded++
+		p.eventCh <- NewTFPullerEvent(EndUpdateTableFile, details)
 	}
 }
 
 // Pull executes the sync operation
 func (p *Puller) Pull(ctx context.Context) error {
+	twDetails := &TreeWalkEventDetails{TreeLevel: -1}
+
 	leaves := make(hash.HashSet)
 	absent := make(hash.HashSet)
 	absent.Insert(p.rootChunkHash)
@@ -175,11 +247,20 @@ func (p *Puller) Pull(ctx context.Context) error {
 	}()
 
 	for len(absent) > 0 {
+		limitToNewChunks(absent, p.downloaded)
+
+		chunksInLevel := len(absent)
+		twDetails.ChunksInLevel = chunksInLevel
+		p.eventCh <- NewTWPullerEvent(NewLevelTWEvent, twDetails)
+
 		var err error
 		absent, err = p.sinkDB.chunkStore().HasMany(ctx, absent)
 
+		twDetails.ChunksAlreadyHad = chunksInLevel - len(absent)
+		p.eventCh <- NewTWPullerEvent(DestDBHasTWEvent, twDetails)
+
 		if len(absent) > 0 {
-			leaves, absent, err = p.getCmp(ctx, leaves, absent, completedTables)
+			leaves, absent, err = p.getCmp(ctx, twDetails, leaves, absent, completedTables)
 
 			if err != nil {
 				return err
@@ -197,7 +278,22 @@ func (p *Puller) Pull(ctx context.Context) error {
 	return ae.Get()
 }
 
-func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, completedTables chan FilledWriters) (hash.HashSet, hash.HashSet, error) {
+func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet) {
+	smaller := absent
+	longer := downloaded
+	if len(absent) > len(downloaded) {
+		smaller = downloaded
+		longer = absent
+	}
+
+	for k := range smaller {
+		if longer.Has(k) {
+			absent.Remove(k)
+		}
+	}
+}
+
+func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, leaves, batch hash.HashSet, completedTables chan FilledWriters) (hash.HashSet, hash.HashSet, error) {
 	found := make(chan chunks.Chunkable, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
@@ -215,10 +311,7 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 	}
 
 	go func() {
-		defer func() {
-			close(processed)
-		}()
-
+		defer close(processed)
 		for chable := range found {
 			if ae.IsSet() {
 				break
@@ -231,11 +324,7 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 				break
 			}
 
-			if p.downloaded.Has(cmpChnk.H) {
-				continue
-			} else {
-				p.downloaded.Insert(cmpChnk.H)
-			}
+			p.downloaded.Insert(cmpChnk.H)
 
 			if leaves.Has(cmpChnk.H) {
 				processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}
@@ -246,9 +335,9 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 					return
 				}
 
-				refs := make(map[hash.Hash]bool)
+				refs := make(map[hash.Hash]int)
 				err = types.WalkRefs(chnk, p.fmt, func(r types.Ref) error {
-					refs[r.TargetHash()] = r.Height() == 1
+					refs[r.TargetHash()] = int(r.Height())
 					return nil
 				})
 
@@ -258,12 +347,21 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 	}()
 
 	var err error
+	var maxHeight int
 	nextLeaves := make(hash.HashSet, batchSize)
 	nextLevel := make(hash.HashSet, batchSize)
+
+	twDetails.ChunksBuffered = 0
 	for cmpAndRef := range processed {
 		if err != nil {
 			// drain to prevent deadlock
 			continue
+		}
+
+		twDetails.ChunksBuffered++
+
+		if twDetails.ChunksBuffered%1000 == 0 {
+			p.eventCh <- NewTWPullerEvent(LevelUpdateTWEvent, twDetails)
 		}
 
 		err = p.wr.AddCmpChunk(cmpAndRef.cmpChnk)
@@ -277,11 +375,16 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 			}
 		}
 
-		for h, isLeaf := range cmpAndRef.refs {
+		for h, height := range cmpAndRef.refs {
 			nextLevel.Insert(h)
+			twDetails.ChildrenFound++
 
-			if isLeaf {
+			if height == 1 {
 				nextLeaves.Insert(h)
+			}
+
+			if height > maxHeight {
+				maxHeight = height
 			}
 		}
 	}
@@ -290,5 +393,8 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 		return nil, nil, err
 	}
 
+	p.eventCh <- NewTWPullerEvent(LevelDoneTWEvent, twDetails)
+
+	twDetails.TreeLevel = maxHeight
 	return nextLeaves, nextLevel, nil
 }

@@ -552,7 +552,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		ch, err := chable.ToChunk()
 
 		if err != nil {
-			return map[hash.Hash]int{}, err
+			return nil, err
 		}
 
 		chnks = append(chnks, ch)
@@ -836,7 +836,7 @@ func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *
 	return []func() error{dcs.getRangeDownloadFunc(ctx, getRange.Url, getRange.Ranges, chunkChan)}
 }
 
-// WriteTableFile returns a writer for a new table file.  When the writer is closed the table file is persisted
+// WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error {
 	fileIdBytes := hash.Parse(fileId)
 	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileHashes: [][]byte{fileIdBytes[:]}}

@@ -98,7 +98,7 @@ func (sink *FixedBufferByteSink) Flush(wr io.Writer) error {
 	return iohelp.WriteAll(wr, sink.buff[:sink.pos])
 }
 
-// FlushToFile writes all teh data that was written to the file to a file at the provided location.
+// FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 func (sink *FixedBufferByteSink) FlushToFile(path string) (err error) {
 	return flushSinkToFile(sink, path)
 }
@@ -147,7 +147,7 @@ func (sink *BlockBufferByteSink) Flush(wr io.Writer) (err error) {
 	return iohelp.WriteAll(wr, sink.blocks...)
 }
 
-// FlushToFile writes all teh data that was written to the file to a file at the provided location.
+// FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 func (sink *BlockBufferByteSink) FlushToFile(path string) (err error) {
 	return flushSinkToFile(sink, path)
 }
@@ -271,7 +271,7 @@ func (sink *BufferedFileByteSink) Flush(wr io.Writer) (err error) {
 	return err
 }
 
-// FlushToFile writes all teh data that was written to the file to a file at the provided location.
+// FlushToFile writes all the data that was written to the ByteSink to a file at the given path
 func (sink *BufferedFileByteSink) FlushToFile(path string) (err error) {
 	toWrite := len(sink.currentBlock)
 	if toWrite > 0 {

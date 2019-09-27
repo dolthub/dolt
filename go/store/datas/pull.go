@@ -150,7 +150,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 		}()
 
 		if err != nil {
-			return nil
+			return err
 		}
 	}
 

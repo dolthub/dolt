@@ -16,6 +16,7 @@ package datas
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -296,16 +297,36 @@ func TestPuller(t *testing.T) {
 
 	for k, rootRef := range states {
 		t.Run(k, func(t *testing.T) {
+			eventCh := make(chan PullerEvent, 128)
+			go func() {
+				for evt := range eventCh {
+					var details interface{}
+					switch evt.EventType {
+					case NewLevelTWEvent, DestDBHasTWEvent, LevelUpdateTWEvent:
+						details = evt.TWEventDetails
+					default:
+						details = evt.TFEventDetails
+					}
+
+					jsonBytes, err := json.Marshal(details)
+
+					if err == nil {
+						t.Logf("event_type: %d details: %s\n", evt.EventType, string(jsonBytes))
+					}
+				}
+			}()
+
 			sinkdb, err := tempDirDB(ctx)
 			require.NoError(t, err)
 
 			tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
 			err = os.MkdirAll(tmpDir, os.ModePerm)
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, db, sinkdb, rootRef.TargetHash())
+			plr, err := NewPuller(ctx, tmpDir, 128, db, sinkdb, rootRef.TargetHash(), eventCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)
+			close(eventCh)
 			require.NoError(t, err)
 
 			sinkDS, err := sinkdb.GetDataset(ctx, "ds")

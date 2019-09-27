@@ -24,7 +24,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/store/datas"
 )
 
 var fetchShortDesc = "Download objects and refs from another repository"
@@ -164,14 +163,9 @@ func fetchRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, rem env.Remote, s
 	if err != nil {
 		return errhand.BuildDError("error: unable to find '%s' on '%s'", srcRef.GetPath(), rem.Name).Build()
 	} else {
-		progChan := make(chan datas.PullProgress)
-		stopChan := make(chan struct{})
-		go progFunc(progChan, stopChan)
-
-		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, cm, progChan)
-
-		close(progChan)
-		<-stopChan
+		wg, progChan, pullerEventCh := runProgFuncs()
+		err = actions.Fetch(ctx, dEnv, destRef, srcDB, destDB, cm, progChan, pullerEventCh)
+		stopProgFuncs(wg, progChan, pullerEventCh)
 
 		if err != nil {
 			return errhand.BuildDError("error: fetch failed").AddCause(err).Build()
