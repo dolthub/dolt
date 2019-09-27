@@ -47,8 +47,9 @@ const (
 	DataOnlyDiff      = 2
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
-	DataFlag   = "data"
-	SchemaFlag = "schema"
+	DataFlag    = "data"
+	SchemaFlag  = "schema"
+	SummaryFlag = "summary"
 )
 
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
@@ -61,7 +62,7 @@ dolt diff [--options] <commit> [<tables>...]
    This form is to view the changes you have in your working tables relative to the named <commit>. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
 
 dolt diff [--options] <commit> <commit> [<tables>...]
-   This is to view the changes between two arbitrary <commit>.
+	 This is to view the changes between two arbitrary <commit>.
 `
 
 var diffSynopsis = []string{
@@ -73,6 +74,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
+	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -85,8 +87,10 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 
 	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
 
+	summary := apr.Contains(SummaryFlag)
+
 	if verr == nil {
-		verr = diffRoots(ctx, r1, r2, tables, diffParts, dEnv)
+		verr = diffRoots(ctx, r1, r2, tables, diffParts, dEnv, summary)
 	}
 
 	if verr != nil {
@@ -186,7 +190,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 	return h.String(), r, nil
 }
 
-func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv) errhand.VerboseError {
+func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv, summary bool) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
 		tblNames, err = actions.AllTables(ctx, r1, r2)
@@ -297,11 +301,15 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 
 		var verr errhand.VerboseError
 
-		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash {
+		if summary {
+			verr = diff.Summary(ctx, rowData2, rowData1)
+		}
+
+		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash && !summary {
 			verr = diffSchemas(tblName, sch2, sch1)
 		}
 
-		if diffParts&DataOnlyDiff != 0 {
+		if diffParts&DataOnlyDiff != 0 && !summary {
 			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2)
 		}
 

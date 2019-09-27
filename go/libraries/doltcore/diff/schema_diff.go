@@ -39,7 +39,7 @@ type SchemaDifference struct {
 	New      *schema.Column
 }
 
-// DiffSchemas compares two schemas by looking at column's with the same tag.
+// DiffSchemas compares two schemas by looking at columns with the same tag.
 func DiffSchemas(sch1, sch2 schema.Schema) (map[uint64]SchemaDifference, error) {
 	colPairMap, err := pairColumns(sch1, sch2)
 
