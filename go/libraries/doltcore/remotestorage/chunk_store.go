@@ -605,10 +605,18 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	return hashToCount, nil
 }
 
+type Sizer interface {
+	Size() int64
+}
+
 func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, rd io.Reader) error {
 	req, err := http.NewRequest(http.MethodPut, post.Url, rd)
 	if err != nil {
 		return err
+	}
+
+	if sizer, ok := rd.(Sizer); ok {
+		req.ContentLength = sizer.Size()
 	}
 
 	var resp *http.Response
