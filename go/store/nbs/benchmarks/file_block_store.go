@@ -46,11 +46,11 @@ func (fb fileBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, er
 	panic("not impl")
 }
 
-func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
+func (fb fileBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *chunks.Chunk) error {
 	panic("not impl")
 }
 
-func (fb fileBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan chunks.Chunkable) error {
+func (fb fileBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan<- chunks.Chunkable) error {
 	panic("not impl")
 }
 

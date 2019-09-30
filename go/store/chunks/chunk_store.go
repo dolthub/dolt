@@ -51,11 +51,11 @@ type ChunkStore interface {
 	// GetMany gets the Chunks with |hashes| from the store. On return,
 	// |foundChunks| will have been fully sent all chunks which have been
 	// found. Any non-present chunks will silently be ignored.
-	GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error
+	GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error
 
 	// GetManyCompressed gets the Chunkable obects with |hashes| from the store. On return, |foundChunks| will have been
 	// fully sent all chunks which have been found. Any non-present chunks will silently be ignored.
-	GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan Chunkable) error
+	GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan<- Chunkable) error
 
 	// Returns true iff the value at the address |h| is contained in the
 	// store
