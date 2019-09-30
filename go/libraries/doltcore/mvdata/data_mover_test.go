@@ -16,6 +16,7 @@ package mvdata
 
 import (
 	"context"
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -150,7 +151,9 @@ func TestDataMover(t *testing.T) {
 			t.Fatal(crDMErr.String())
 		}
 
-		err = dm.Move(context.Background())
+		var badCount int64
+		badCount, err = dm.Move(context.Background())
+		assert.Equal(t, int64(0), badCount)
 
 		if err != nil {
 			t.Fatal(err)

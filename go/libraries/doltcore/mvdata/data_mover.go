@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 
@@ -169,10 +170,11 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	return imp, nil
 }
 
-func (imp *DataMover) Move(ctx context.Context) error {
+func (imp *DataMover) Move(ctx context.Context) (int64, error) {
 	defer imp.Rd.Close(ctx)
 	defer imp.Wr.Close(ctx)
 
+	var badCount int64
 	var rowErr error
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
@@ -180,6 +182,7 @@ func (imp *DataMover) Move(ctx context.Context) error {
 			return true
 		}
 
+		atomic.AddInt64(&badCount, 1)
 		return false
 	}
 
@@ -193,10 +196,14 @@ func (imp *DataMover) Move(ctx context.Context) error {
 	err := p.Wait()
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return rowErr
+	if rowErr != nil {
+		return 0, rowErr
+	}
+
+	return badCount, nil
 }
 
 func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.FieldMapping) error {
