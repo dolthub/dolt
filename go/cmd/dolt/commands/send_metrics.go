@@ -16,6 +16,9 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"strconv"
 	"time"
 
 	"github.com/fatih/color"
@@ -42,7 +45,9 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	help, _ := cli.HelpAndUsagePrinters(commandStr, sendMetricsShortDec, "", []string{}, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	disabled, err := events.AreMetricsDisabled(dEnv)
+	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+
+	disabled, err := strconv.ParseBool(*metricsDisabled)
 	if err != nil {
 		// log.Print(err)
 		return 1
@@ -68,9 +73,11 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 		var flusher events.Flusher
 
 		if apr.Contains(outputFlag) {
-			flusher = events.NewIOFlusher(dEnv.FS, root, dolt, dEnv)
+			flusher = events.NewIOFlusher(dEnv.FS, root, dolt)
 		} else {
-			flusher = events.NewGrpcEventFlusher(dEnv.FS, root, dolt, dEnv)
+			grpcEmitter := getGRPCEmitter(dEnv)
+
+			flusher = events.NewGrpcEventFlusher(dEnv.FS, root, dolt, grpcEmitter)
 		}
 
 		err = flusher.Flush(ctx)
@@ -87,4 +94,29 @@ func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *en
 	}
 
 	return 1
+}
+
+// getGRPCEmitter gets the connection to the events grpc service
+func getGRPCEmitter(dEnv *env.DoltEnv) *events.GrpcEmitter {
+	host := dEnv.Config.GetStringOrDefault(env.MetricsHost, env.DefaultMetricsHost)
+	portStr := dEnv.Config.GetStringOrDefault(env.MetricsPort, env.DefaultMetricsPort)
+	insecureStr := dEnv.Config.GetStringOrDefault(env.MetricsInsecure, "false")
+
+	port, err := strconv.ParseUint(*portStr, 10, 16)
+
+	if err != nil {
+		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid port.", env.MetricsPort, *portStr))
+		return nil
+	}
+
+	insecure, err := strconv.ParseBool(*insecureStr)
+
+	if err != nil {
+		log.Println(color.YellowString("The config value of '%s' is '%s' which is not a valid true/false value", env.MetricsInsecure, *insecureStr))
+	}
+
+	hostAndPort := fmt.Sprintf("%s:%d", *host, port)
+	conn, _ := dEnv.GrpcConnWithCreds(hostAndPort, insecure, nil)
+
+	return events.NewGrpcEmitter(conn)
 }

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/fatih/color"
 	"github.com/pkg/profile"
@@ -30,6 +31,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
@@ -131,13 +133,21 @@ func runMain() int {
 
 	dEnv := env.Load(context.TODO(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 
-	emitter := events.NewFileEmitter()
+	root, err := env.GetCurrentUserHomeDir()
+
+	if err != nil {
+		return 1
+	}
+
+	emitter := events.NewFileEmitter(root, dbfactory.DoltDir)
 
 	defer func() {
 		ces := events.GlobalCollector.Close()
 		// events.WriterEmitter{cli.CliOut}.LogEvents(Version, ces)
 
-		disabled, err := events.AreMetricsDisabled(dEnv)
+		metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")
+
+		disabled, err := strconv.ParseBool(*metricsDisabled)
 		if err != nil {
 			// log.Print(err)
 			return

@@ -29,7 +29,9 @@ import (
 
 	"github.com/cenkalti/backoff"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
@@ -101,6 +103,11 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 		csClient = RetryingChunkStoreServiceClient{csClient}
 	}
 
+	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_REPO_METADATA)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 	metadata, err := csClient.GetRepoMetadata(ctx, &remotesapi.GetRepoMetadataRequest{
 		RepoId: &remotesapi.RepoId{
 			Org:      org,
@@ -113,6 +120,7 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 	})
 
 	if err != nil {
+		counter.Inc()
 		return nil, err
 	}
 
@@ -273,10 +281,16 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	batchItr(len(hashesBytes), getLocsBatchSize, func(st, end int) (stop bool) {
 		batch := hashesBytes[st:end]
 		f := func() error {
+			evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_DOWNLOAD_LOCATIONS)
+			defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+			counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 			req := remotesapi.GetDownloadLocsRequest{RepoId: dcs.getRepoId(), ChunkHashes: batch}
 			resp, err := dcs.csClient.GetDownloadLocations(ctx, &req)
 
 			if err != nil {
+				counter.Inc()
 				return NewRpcError(err, "GetDownloadLocations", dcs.host, req)
 			}
 
@@ -391,12 +405,19 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 		currHashSl := hashSl[st:end]
 		currByteSl := byteSl[st:end]
 
+		evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_HAS_CHUNKS)
+		defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+		counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 		// send a request to the remote api to determine which chunks the remote api already has
 		req := remotesapi.HasChunksRequest{RepoId: dcs.getRepoId(), Hashes: currByteSl}
 		resp, err := dcs.csClient.HasChunks(ctx, &req)
 
 		if err != nil {
 			err = NewRpcError(err, "HasMany", dcs.host, req)
+
+			counter.Inc()
 			return true
 		}
 
@@ -459,10 +480,16 @@ func (dcs *DoltChunkStore) Version() string {
 // Rebase brings this ChunkStore into sync with the persistent storage's
 // current root.
 func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
+	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_REBASE)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 	req := &remotesapi.RebaseRequest{RepoId: dcs.getRepoId()}
 	_, err := dcs.csClient.Rebase(ctx, req)
 
 	if err != nil {
+		counter.Inc()
 		return NewRpcError(err, "Rebase", dcs.host, req)
 	}
 
@@ -472,10 +499,16 @@ func (dcs *DoltChunkStore) Rebase(ctx context.Context) error {
 // Root returns the root of the database as of the time the ChunkStore
 // was opened or the most recent call to Rebase.
 func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
+	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_ROOT)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 	req := &remotesapi.RootRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.Root(ctx, req)
 
 	if err != nil {
+		counter.Inc()
 		return hash.Hash{}, NewRpcError(err, "Root", dcs.host, req)
 	}
 
@@ -486,9 +519,15 @@ func (dcs *DoltChunkStore) Root(ctx context.Context) (hash.Hash, error) {
 // persisted root hash from last to current (or keeps it the same).
 // If last doesn't match the root in persistent storage, returns false.
 func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_COMMIT)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 	hashToChunkCount, err := dcs.uploadChunks(ctx)
 
 	if err != nil {
+		counter.Inc()
 		return false, err
 	}
 
@@ -510,6 +549,7 @@ func (dcs *DoltChunkStore) Commit(ctx context.Context, current, last hash.Hash) 
 	resp, err := dcs.csClient.Commit(ctx, req)
 
 	if err != nil {
+		counter.Inc()
 		return false, NewRpcError(err, "Commit", dcs.host, req)
 
 	}
@@ -579,10 +619,16 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		hashBytes = append(hashBytes, tmp[:])
 	}
 
+	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_UPLOAD_LOCATIONS)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileHashes: hashBytes}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 
 	if err != nil {
+		counter.Inc()
 		return map[hash.Hash]int{}, err
 	}
 
@@ -598,6 +644,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		}
 
 		if err != nil {
+			counter.Inc()
 			return map[hash.Hash]int{}, err
 		}
 	}
@@ -899,10 +946,16 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 // Sources retrieves the current root hash, and a list of all the table files
 func (dcs *DoltChunkStore) Sources(ctx context.Context) (hash.Hash, []nbs.TableFile, error) {
+	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_LIST_TABLE_FILES)
+	defer events.GlobalCollector.CloseEventAndAdd(evt)
+
+	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
+
 	req := &remotesapi.ListTableFilesRequest{RepoId: dcs.getRepoId()}
 	resp, err := dcs.csClient.ListTableFiles(ctx, req)
 
 	if err != nil {
+		counter.Inc()
 		return hash.Hash{}, nil, err
 	}
 
