@@ -230,7 +230,7 @@ func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.Ha
 }
 
 const (
-	getLocsBatchSize      = 128*1024
+	getLocsBatchSize      = 128 * 1024
 	getLocsMaxConcurrency = 4
 )
 
