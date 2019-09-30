@@ -130,7 +130,7 @@ func (ms *MemoryStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) 
 	return ms.storage.Get(ctx, h)
 }
 
-func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error {
+func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
 	for h := range hashes {
 		c, err := ms.Get(ctx, h)
 
@@ -146,7 +146,7 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	return nil
 }
 
-func (ms *MemoryStoreView) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan Chunkable) error {
+func (ms *MemoryStoreView) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan<- Chunkable) error {
 	for h := range hashes {
 		c, err := ms.Get(ctx, h)
 

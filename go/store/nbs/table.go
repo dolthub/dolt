@@ -227,8 +227,8 @@ type chunkReader interface {
 	has(h addr) (bool, error)
 	hasMany(addrs []hasRecord) (bool, error)
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
-	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
-	getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
+	getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
+	getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
 	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
@@ -240,7 +240,7 @@ type chunkReadPlanner interface {
 		ctx context.Context,
 		reqs []getRecord,
 		offsetRecords offsetRecSlice,
-		foundChunks chan *chunks.Chunk,
+		foundChunks chan<- *chunks.Chunk,
 		wg *sync.WaitGroup,
 		ae *atomicerr.AtomicError,
 		stats *Stats,
@@ -249,7 +249,7 @@ type chunkReadPlanner interface {
 		ctx context.Context,
 		reqs []getRecord,
 		offsetRecords offsetRecSlice,
-		foundCmpChunks chan chunks.Chunkable,
+		foundCmpChunks chan<- chunks.Chunkable,
 		wg *sync.WaitGroup,
 		ae *atomicerr.AtomicError,
 		stats *Stats,
