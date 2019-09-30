@@ -23,8 +23,9 @@ package chunks
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/constants"
 	"sync"
+
+	"github.com/liquidata-inc/dolt/go/store/constants"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
