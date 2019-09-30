@@ -170,7 +170,9 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	return imp, nil
 }
 
-func (imp *DataMover) Move(ctx context.Context) (int64, error) {
+// Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
+// dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
+func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
 	defer imp.Wr.Close(ctx)
 
@@ -193,7 +195,7 @@ func (imp *DataMover) Move(ctx context.Context) (int64, error) {
 		badRowCB)
 	p.Start()
 
-	err := p.Wait()
+	err = p.Wait()
 
 	if err != nil {
 		return 0, err
