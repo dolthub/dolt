@@ -37,6 +37,8 @@ service ChunkStoreService {
   rpc Commit(CommitRequest) returns (CommitResponse);
 
   rpc ListTableFiles(ListTableFilesRequest) returns (ListTableFilesResponse);
+
+  rpc AddTableFiles(AddTableFilesRequest) returns (AddTableFilesResponse);
 }
 
 message RepoId {
@@ -169,4 +171,14 @@ message TableFileInfo {
 message ListTableFilesResponse {
   bytes root_hash = 1;
   repeated TableFileInfo table_file_info = 2;
+}
+
+message AddTableFilesRequest {
+  RepoId repo_id = 1;
+  ClientRepoFormat client_repo_format = 2;
+  repeated ChunkTableInfo chunk_table_info = 3;
+}
+
+message AddTableFilesResponse {
+  bool success = 1;
 }

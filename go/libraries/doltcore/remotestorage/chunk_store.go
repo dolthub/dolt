@@ -28,12 +28,12 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/golang/snappy"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
@@ -118,6 +118,7 @@ func NewDoltChunkStore(ctx context.Context, nbf *types.NomsBinFormat, org, repoN
 			NbsVersion: nbs.StorageVersion,
 		},
 	})
+
 	if err != nil {
 		counter.Inc()
 		return nil, err
@@ -159,9 +160,51 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 	}
 }
 
+func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
+	ae := atomicerr.New()
+	wg := &sync.WaitGroup{}
+	foundCmp := make(chan chunks.Chunkable, 1024)
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		var err error
+		for chable := range foundCmp {
+			if err != nil {
+				continue // drain
+			}
+
+			var c chunks.Chunk
+			c, err = chable.ToChunk()
+
+			if ae.SetIfError(err) {
+				continue
+			}
+
+			foundChunks <- &c
+		}
+	}()
+
+	err := dcs.GetManyCompressed(ctx, hashes, foundCmp)
+	close(foundCmp)
+
+	wg.Wait()
+
+	if err != nil {
+		return err
+	}
+
+	if err := ae.Get(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan chunks.Chunkable) error {
 	hashToChunk := dcs.cache.Get(hashes)
 
 	notCached := make([]hash.Hash, 0, len(hashes))
@@ -171,7 +214,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 		if c.IsEmpty() {
 			notCached = append(notCached, h)
 		} else {
-			foundChunks <- &c
+			foundChunks <- c
 		}
 	}
 
@@ -280,7 +323,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	return resourceToUrlAndRanges, nil
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan *chunks.Chunk) error {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan chunks.Chunkable) error {
 	// get the locations where the chunks can be downloaded from
 	resourceToUrlAndRanges, err := dcs.getDLLocs(ctx, notCached)
 
@@ -291,7 +334,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	var wg sync.WaitGroup
 
 	// channel to receive chunks on
-	chunkChan := make(chan *chunks.Chunk, 128)
+	chunkChan := make(chan chunks.Chunkable, 128)
 
 	// start a go routine to receive the downloaded chunks on
 	wg.Add(1)
@@ -354,7 +397,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	hashSl, byteSl := HashSetToSlices(notCached)
 
 	absent := make(hash.HashSet)
-	var found []chunks.Chunk
+	var found []chunks.Chunkable
 	var err error
 
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
@@ -425,7 +468,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
-	dcs.cache.Put([]chunks.Chunk{c})
+	dcs.cache.Put([]chunks.Chunkable{c})
 	return nil
 }
 
@@ -545,7 +588,13 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	}
 
 	chnks := make([]chunks.Chunk, 0, len(hashToChunk))
-	for _, ch := range hashToChunk {
+	for _, chable := range hashToChunk {
+		ch, err := chable.ToChunk()
+
+		if err != nil {
+			return nil, err
+		}
+
 		chnks = append(chnks, ch)
 	}
 
@@ -589,7 +638,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		data := hashToData[h]
 		switch typedLoc := loc.Location.(type) {
 		case *remotesapi.UploadLoc_HttpPost:
-			err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, data)
+			err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, bytes.NewBuffer(data))
 		default:
 			break
 		}
@@ -603,17 +652,31 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	return hashToCount, nil
 }
 
-func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, data []byte) error {
-	//resp, err := http(post.Url, "application/octet-stream", bytes.NewBuffer(data))
-	req, err := http.NewRequest(http.MethodPut, post.Url, bytes.NewBuffer(data))
+type Sizer interface {
+	Size() int64
+}
+
+func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, rd io.Reader) error {
+	req, err := http.NewRequest(http.MethodPut, post.Url, rd)
 	if err != nil {
 		return err
+	}
+
+	if sizer, ok := rd.(Sizer); ok {
+		req.ContentLength = sizer.Size()
 	}
 
 	var resp *http.Response
 	op := func() error {
 		var err error
 		resp, err = dcs.httpFetcher.Do(req.WithContext(ctx))
+
+		if err == nil {
+			defer func() {
+				_ = resp.Body.Close()
+			}()
+		}
+
 		return processHttpResp(resp, err)
 	}
 
@@ -681,15 +744,15 @@ const (
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
-func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndRanges map[string]urlAndRanges, chunkChan chan *chunks.Chunk) error {
-	var allChunks []chunks.Chunk
+func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndRanges map[string]urlAndRanges, chunkChan chan chunks.Chunkable) error {
+	var allChunks []chunks.Chunkable
 	aggLocs := aggregateDownloads(chunkAggDistance, resourceToUrlAndRanges)
 
 	// loop over all the aggLocs that need to be downloaded and create a work function for each
 	var work []func() error
 	for _, loc := range aggLocs {
 		var err error
-		var chnks []chunks.Chunk
+		var chnks []chunks.Chunkable
 		switch typedLoc := loc.Location.(type) {
 		case *remotesapi.DownloadLoc_HttpGet:
 			panic("deprecated")
@@ -714,7 +777,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndR
 
 // getRangeDownloadFunc returns a work function that does the downloading of one or more chunks and writes those chunks
 // to the chunkChan
-func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan *chunks.Chunk) func() error {
+func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan chunks.Chunkable) func() error {
 	numRanges := len(ranges)
 	offset := ranges[0].Offset
 	length := ranges[numRanges-1].Offset - offset + uint64(ranges[numRanges-1].Length)
@@ -730,15 +793,14 @@ func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr stri
 		// are then decoded to chunks and written to the chunkChan
 		for _, r := range ranges {
 			chunkStart := r.Offset - offset
-			chunkEnd := chunkStart + uint64(r.Length) - 4
-			chunkBytes, err := snappy.Decode(nil, comprData[chunkStart:chunkEnd])
+			chunkEnd := chunkStart + uint64(r.Length)
+			cmpChnk, err := nbs.NewCompressedChunk(hash.New(r.Hash), comprData[chunkStart:chunkEnd])
 
 			if err != nil {
 				return err
 			}
 
-			chunk := chunks.NewChunk(chunkBytes)
-			chunkChan <- &chunk
+			chunkChan <- cmpChnk
 		}
 
 		return nil
@@ -768,6 +830,13 @@ func rangeDownloadWithRetries(ctx context.Context, fetcher HTTPFetcher, offset, 
 
 		var resp *http.Response
 		resp, err = fetcher.Do(req.WithContext(ctx))
+
+		if err == nil {
+			defer func() {
+				_ = resp.Body.Close()
+			}()
+		}
+
 		respErr := processHttpResp(resp, err)
 
 		if respErr != nil {
@@ -810,7 +879,7 @@ func collapseBuffers(allBufs [][]byte, length uint64) []byte {
 	return collapsed
 }
 
-func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *remotesapi.HttpGetRange, chunkChan chan *chunks.Chunk) []func() error {
+func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *remotesapi.HttpGetRange, chunkChan chan chunks.Chunkable) []func() error {
 	var work []func() error
 
 	rangeCount := len(getRange.Ranges)
@@ -822,9 +891,57 @@ func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *
 	return []func() error{dcs.getRangeDownloadFunc(ctx, getRange.Url, getRange.Ranges, chunkChan)}
 }
 
-// NewSink still needs to be implemented in order to write to a DoltChunkStore using the TableFileStore interface
-func (dcs *DoltChunkStore) NewSink(ctx context.Context, fileId string, numChunks int) (nbs.WriteCloserWithContext, error) {
-	panic("Not implemented")
+// WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
+func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error {
+	fileIdBytes := hash.Parse(fileId)
+	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileHashes: [][]byte{fileIdBytes[:]}}
+	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
+
+	if err != nil {
+		return err
+	}
+
+	if len(resp.Locs) != 1 {
+		return errors.New("unexpected upload location count")
+	}
+
+	loc := resp.Locs[0]
+	switch typedLoc := loc.Location.(type) {
+	case *remotesapi.UploadLoc_HttpPost:
+		err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, rd)
+
+		if err != nil {
+			return err
+		}
+
+	default:
+		return errors.New("unsupported upload location")
+	}
+
+	chnkTblInfo := []*remotesapi.ChunkTableInfo{
+		{Hash: fileIdBytes[:], ChunkCount: uint32(numChunks)},
+	}
+
+	atReq := &remotesapi.AddTableFilesRequest{
+		RepoId:         dcs.getRepoId(),
+		ChunkTableInfo: chnkTblInfo,
+		ClientRepoFormat: &remotesapi.ClientRepoFormat{
+			NbfVersion: dcs.nbf.VersionString(),
+			NbsVersion: nbs.StorageVersion,
+		},
+	}
+
+	atResp, err := dcs.csClient.AddTableFiles(ctx, atReq)
+
+	if err != nil {
+		return NewRpcError(err, "UpdateManifest", dcs.host, atReq)
+	}
+
+	if !atResp.Success {
+		return errors.New("update table files failed")
+	}
+
+	return nil
 }
 
 // Sources retrieves the current root hash, and a list of all the table files

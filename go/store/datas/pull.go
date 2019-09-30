@@ -108,44 +108,49 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 
 	// should parallelize at some point
 	for _, tblFile := range tblFiles {
-		rd, err := tblFile.Open()
-
-		if err != nil {
-			return err
-		}
-
-		wr, err := sinkTS.NewSink(ctx, tblFile.FileID(), tblFile.NumChunks())
-
-		if err != nil {
-			return err
-		}
-
 		if eventCh != nil {
 			eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
 		}
 
-		_, err = io.Copy(wr, rd)
+		err := func() (err error) {
+			var rd io.ReadCloser
+			rd, err = tblFile.Open()
 
-		if err != nil {
-			if eventCh != nil {
-				eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+			if err != nil {
+				if eventCh != nil {
+					eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+				}
+
+				return err
 			}
 
-			return err
-		}
+			defer func() {
+				closeErr := rd.Close()
 
-		err = wr.Close(ctx)
+				if err == nil {
+					err = closeErr
+				}
+			}()
 
-		if err != nil {
-			if eventCh != nil {
-				eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+			err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd)
+
+			if err != nil {
+				if eventCh != nil {
+					eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+				}
+
+				return err
 			}
 
-			return err
-		}
+			if eventCh != nil {
+				eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
+			}
 
-		if eventCh != nil {
-			eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
+			return nil
+		}()
+
+		if err != nil {
+			return err
 		}
 	}
 

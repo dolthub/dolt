@@ -26,6 +26,7 @@ import (
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/constants"
+
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -39,12 +40,18 @@ type MemoryStorage struct {
 	data     map[hash.Hash]Chunk
 	rootHash hash.Hash
 	mu       sync.RWMutex
+	version  string
 }
 
 // NewView vends a MemoryStoreView backed by this MemoryStorage. It's
 // initialized with the currently "persisted" root.
 func (ms *MemoryStorage) NewView() ChunkStore {
-	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash}
+	version := ms.version
+	if version == "" {
+		version = constants.NomsVersion
+	}
+
+	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
 }
 
 // Get retrieves the Chunk with the Hash h, returning EmptyChunk if it's not
@@ -109,6 +116,7 @@ type MemoryStoreView struct {
 	pending  map[hash.Hash]Chunk
 	rootHash hash.Hash
 	mu       sync.RWMutex
+	version  string
 
 	storage *MemoryStorage
 }
@@ -138,6 +146,22 @@ func (ms *MemoryStoreView) GetMany(ctx context.Context, hashes hash.HashSet, fou
 	return nil
 }
 
+func (ms *MemoryStoreView) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan Chunkable) error {
+	for h := range hashes {
+		c, err := ms.Get(ctx, h)
+
+		if err != nil {
+			return err
+		}
+
+		if !c.IsEmpty() {
+			foundChunks <- c
+		}
+	}
+
+	return nil
+}
+
 func (ms *MemoryStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	ms.mu.RLock()
 	defer ms.mu.RUnlock()
@@ -161,7 +185,7 @@ func (ms *MemoryStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 }
 
 func (ms *MemoryStoreView) Version() string {
-	return constants.NomsVersion
+	return ms.version
 }
 
 func (ms *MemoryStoreView) Put(ctx context.Context, c Chunk) error {

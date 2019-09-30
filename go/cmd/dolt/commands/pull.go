@@ -81,7 +81,7 @@ func pullRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, r env.Remote, srcR
 		return errhand.BuildDError("error: failed to get remote db").AddCause(err).Build()
 	}
 
-	verr := fetchRemoteBranch(ctx, r, srcDB, dEnv.DoltDB, srcRef, destRef)
+	verr := fetchRemoteBranch(ctx, dEnv, r, srcDB, dEnv.DoltDB, srcRef, destRef)
 
 	if verr != nil {
 		return verr
