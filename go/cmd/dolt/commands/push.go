@@ -308,10 +308,10 @@ func pullerProgFunc(pullerEventCh chan datas.PullerEvent) {
 			cli.Println("")
 
 		case datas.StartUploadTableFile:
-			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Uploading table file %d of %d. %s bytes", evt.TFEventDetails.TableFilesUploaded+1, evt.TFEventDetails.TableFileCount, humanize.Bytes(uint64(evt.TFEventDetails.CurrentFileSize))))
+			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Uploading file %d of %d. File size: %s.", evt.TFEventDetails.TableFilesUploaded+1, evt.TFEventDetails.TableFileCount, humanize.Bytes(uint64(evt.TFEventDetails.CurrentFileSize))))
 
 		case datas.EndUpdateTableFile:
-			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Successfully uploaded %d of %d table files.", evt.TFEventDetails.TableFilesUploaded, evt.TFEventDetails.TableFileCount))
+			pos = cli.DeleteAndPrint(pos, fmt.Sprintf("Successfully uploaded %d of %d file(s).", evt.TFEventDetails.TableFilesUploaded, evt.TFEventDetails.TableFileCount))
 		}
 	}
 }
