@@ -545,10 +545,12 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 		var batch offsetRecSlice
 		var readStart, readEnd uint64
 
-		for i, rec := range offsetRecords {
+		for i := 0; i < len(offsetRecords); {
 			if ae.IsSet() {
 				break
 			}
+
+			rec := offsetRecords[i]
 			length := tr.lengths[rec.ordinal]
 
 			if batch == nil {
@@ -556,12 +558,14 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 				batch[0] = offsetRecords[i]
 				readStart = rec.offset
 				readEnd = readStart + uint64(length)
+				i++
 				continue
 			}
 
 			if newReadEnd, canRead := canReadAhead(rec, tr.lengths[rec.ordinal], readStart, readEnd, tr.blockSize); canRead {
 				batch = append(batch, rec)
 				readEnd = newReadEnd
+				i++
 				continue
 			}
 

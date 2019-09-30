@@ -403,6 +403,10 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 		return nil, nil, err
 	}
 
+	if twDetails.ChunksBuffered != len(batch) {
+		return nil, nil, errors.New("failed to get all chunks.")
+	}
+
 	p.eventCh <- NewTWPullerEvent(LevelDoneTWEvent, twDetails)
 
 	twDetails.TreeLevel = maxHeight

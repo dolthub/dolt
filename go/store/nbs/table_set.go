@@ -173,7 +173,9 @@ func (ts tableSet) getManyCompressed(ctx context.Context, reqs []getRecord, foun
 			if rp, ok := haver.(chunkReadPlanner); ok {
 				offsets, remaining := rp.findOffsets(reqs)
 
-				rp.getManyCompressedAtOffsets(ctx, reqs, offsets, foundCmpChunks, wg, ae, stats)
+				if len(offsets) > 0 {
+					rp.getManyCompressedAtOffsets(ctx, reqs, offsets, foundCmpChunks, wg, ae, stats)
+				}
 
 				if !remaining {
 					return false
