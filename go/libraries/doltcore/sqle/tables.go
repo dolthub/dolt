@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
 
@@ -118,26 +119,7 @@ func (t *DoltTable) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return errors.New("duplicate primary key given")
 	}
 
-	typesMap, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
-	}
-	mapEditor := typesMap.Edit()
-	updated, err := mapEditor.Set(dRow.NomsMapKey(t.sch), dRow.NomsMapValue(t.sch)).Map(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
-	}
-	newTable, err := t.table.UpdateRows(ctx, updated)
-	if err != nil {
-		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
-	}
-	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
-	if err != nil {
-		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
-	}
-	t.table = newTable
-	t.db.root = newRoot
-	return nil
+	return t.updateTable(ctx, dRow.NomsMapKey(t.sch), dRow.NomsMapValue(t.sch), nil)
 }
 
 // Delete removes the given row to the table and updates the database root.
@@ -160,26 +142,7 @@ func (t *DoltTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		return sql.ErrDeleteRowNotFound
 	}
 
-	typesMap, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
-	}
-	mapEditor := typesMap.Edit()
-	updated, err := mapEditor.Remove(nomsMapKey).Map(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
-	}
-	newTable, err := t.table.UpdateRows(ctx, updated)
-	if err != nil {
-		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
-	}
-	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
-	if err != nil {
-		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
-	}
-	t.table = newTable
-	t.db.root = newRoot
-	return nil
+	return t.updateTable(ctx, nil, nil, nomsMapKey)
 }
 
 func (t *DoltTable) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
@@ -191,7 +154,6 @@ func (t *DoltTable) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) err
 	if err != nil {
 		return err
 	}
-	deleteFirst := false
 
 	// If the PK is changed then we have to delete the old row first
 	// This is assuming that the new PK is not taken
@@ -205,40 +167,24 @@ func (t *DoltTable) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) err
 	if err != nil {
 		return err
 	}
+
+	var keyToDelete types.LesserValuable
 	if !dOldKeyVal.Equals(dNewKeyVal) {
 		_, rowExists, err := t.table.GetRow(ctx, dNewKeyVal.(types.Tuple), t.sch)
 		if err != nil {
 			return errhand.BuildDError("failed to read table").AddCause(err).Build()
 		}
 		if rowExists {
-			return errors.New("cannot update primary key column")
+			newRowAsStrings := make([]string, len(newRow))
+			for i, val := range newRow {
+				newRowAsStrings[i] = fmt.Sprintf("%v", val)
+			}
+			return fmt.Errorf("primary key collision: (%v)", strings.Join(newRowAsStrings, ", "))
 		}
-		deleteFirst = true
+		keyToDelete = dOldKey
 	}
 
-	typesMap, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
-	}
-	mapEditor := typesMap.Edit()
-	if deleteFirst {
-		mapEditor.Remove(dOldKey)
-	}
-	updated, err := mapEditor.Set(dNewRow.NomsMapKey(t.sch), dNewRow.NomsMapValue(t.sch)).Map(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
-	}
-	newTable, err := t.table.UpdateRows(ctx, updated)
-	if err != nil {
-		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
-	}
-	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
-	if err != nil {
-		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
-	}
-	t.table = newTable
-	t.db.root = newRoot
-	return nil
+	return t.updateTable(ctx, dNewRow.NomsMapKey(t.sch), dNewRow.NomsMapValue(t.sch), keyToDelete)
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
@@ -273,4 +219,41 @@ const partitionName = "single"
 // per table, so we use a constant.
 func (p doltTablePartition) Key() []byte {
 	return []byte(partitionName)
+}
+
+// key & value are for the row to insert/update
+// keyToDelete is to delete a row before insertion (such as updating a primary key)
+func (t *DoltTable) updateTable(ctx *sql.Context, key types.LesserValuable, value types.Valuable, keyToDelete types.LesserValuable) error {
+	typesMap, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
+	}
+
+	mapEditor := typesMap.Edit()
+	if keyToDelete != nil {
+		mapEditor = mapEditor.Remove(keyToDelete)
+	}
+
+	if key != nil && value != nil {
+		mapEditor = mapEditor.Set(key, value)
+	}
+
+	updated, err := mapEditor.Map(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
+	}
+
+	newTable, err := t.table.UpdateRows(ctx, updated)
+	if err != nil {
+		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
+	}
+
+	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
+	if err != nil {
+		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
+	}
+
+	t.table = newTable
+	t.db.root = newRoot
+	return nil
 }
