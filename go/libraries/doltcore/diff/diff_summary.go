@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/datas"
 	"github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/types"
 	"github.com/liquidata-inc/dolt/go/store/util/status"
@@ -31,41 +32,41 @@ import (
 
 type diffFunc func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{})
 
-func Summary(ctx context.Context, v1, v2 types.Value) errhand.VerboseError {
-	// if is1, err := datas.IsCommit(v1); err != nil {
-	// 	return errhand.BuildDError("").AddCause(err).Build()
-	// } else if is1 {
-	// 	if is2, err := datas.IsCommit(v2); err != nil {
-	// 		return errhand.BuildDError("").AddCause(err).Build()
-	// 	} else if is2 {
-	// 		cli.Println("Comparing commit values")
+// Summary prints a summary of the diff between two values
+func Summary(ctx context.Context, v1, v2 types.Value, colLen int) errhand.VerboseError {
+	if is1, err := datas.IsCommit(v1); err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	} else if is1 {
+		if is2, err := datas.IsCommit(v2); err != nil {
+			return errhand.BuildDError("").AddCause(err).Build()
+		} else if is2 {
+			cli.Println("Comparing commit values")
 
-	// 		var err error
-	// 		v1, _, err = v1.(types.Struct).MaybeGet(datas.ValueField)
-	// 		if err != nil {
-	// 			return errhand.BuildDError("").AddCause(err).Build()
-	// 		}
+			var err error
+			v1, _, err = v1.(types.Struct).MaybeGet(datas.ValueField)
+			if err != nil {
+				return errhand.BuildDError("").AddCause(err).Build()
+			}
 
-	// 		v2, _, err = v2.(types.Struct).MaybeGet(datas.ValueField)
-	// 		if err != nil {
-	// 			return errhand.BuildDError("").AddCause(err).Build()
-	// 		}
-	// 	}
-	// }
+			v2, _, err = v2.(types.Struct).MaybeGet(datas.ValueField)
+			if err != nil {
+				return errhand.BuildDError("").AddCause(err).Build()
+			}
+		}
+	}
 
-	// will values ever not be MapKind?
 	var singular, plural string
 	if v1.Kind() == v2.Kind() {
 		switch v1.Kind() {
 		case types.StructKind:
-			singular = "field"
-			plural = "fields"
+			singular = "Field"
+			plural = "Fields"
 		case types.MapKind:
-			singular = "entry"
-			plural = "entries"
+			singular = "Entry"
+			plural = "Entries"
 		default:
-			singular = "value"
-			plural = "values"
+			singular = "Value"
+			plural = "Values"
 		}
 	}
 
@@ -80,7 +81,7 @@ func Summary(ctx context.Context, v1, v2 types.Value) errhand.VerboseError {
 				rp.Store(r)
 			}
 		}()
-		verr = diffSummary(ctx, ae, ch, v1, v2)
+		verr = diffSummary(ctx, ae, ch, v2, v1)
 	}()
 
 	if verr != nil {
@@ -96,6 +97,7 @@ func Summary(ctx context.Context, v1, v2 types.Value) errhand.VerboseError {
 		acc.Adds += p.Adds
 		acc.Removes += p.Removes
 		acc.Changes += p.Changes
+		acc.CellChanges += p.CellChanges
 		acc.NewSize += p.NewSize
 		acc.OldSize += p.OldSize
 	}
@@ -108,15 +110,18 @@ func Summary(ctx context.Context, v1, v2 types.Value) errhand.VerboseError {
 		err := fmt.Errorf("panic occured during closing: %v", r)
 		return errhand.BuildDError("").AddCause(err).Build()
 	}
-
-	formatStatus(acc, singular, plural)
+	if acc.NewSize > 0 || acc.OldSize > 0 {
+		formatStatus(acc, singular, plural, colLen)
+	} else {
+		cli.Println("No data changes. See schema changes by using -s or --schema.")
+	}
 	status.Done()
 
 	return nil
 }
 
 type diffSummaryProgress struct {
-	Adds, Removes, Changes, NewSize, OldSize uint64
+	Adds, Removes, Changes, CellChanges, NewSize, OldSize uint64
 }
 
 func diffSummary(ctx context.Context, ae *atomicerr.AtomicError, ch chan diffSummaryProgress, v1, v2 types.Value) errhand.VerboseError {
@@ -245,7 +250,10 @@ func diffSummaryValueChanged(ae *atomicerr.AtomicError, ch chan<- diffSummaryPro
 		}()
 		f(changeChan, stopChan)
 	}()
-	reportChanges(ch, changeChan)
+	verr := reportChanges(ch, changeChan)
+	if verr != nil {
+		return verr
+	}
 	if r := rp.Load(); r != nil {
 		err := fmt.Errorf("panic occured during closing: %v", r)
 		return errhand.BuildDError("").AddCause(err).Build()
@@ -254,6 +262,7 @@ func diffSummaryValueChanged(ae *atomicerr.AtomicError, ch chan<- diffSummaryPro
 }
 
 func reportChanges(ch chan<- diffSummaryProgress, changeChan chan types.ValueChanged) errhand.VerboseError {
+	var verr errhand.VerboseError
 	for change := range changeChan {
 		switch change.ChangeType {
 		case types.DiffChangeAdded:
@@ -262,14 +271,42 @@ func reportChanges(ch chan<- diffSummaryProgress, changeChan chan types.ValueCha
 			ch <- diffSummaryProgress{Removes: 1}
 		case types.DiffChangeModified:
 			ch <- diffSummaryProgress{Changes: 1}
+			cellChanges, err := getCellChanges(change.NewValue, change.OldValue, change.Key)
+			if err != nil {
+				verr = errhand.BuildDError("").AddCause(err).Build()
+			}
+			ch <- diffSummaryProgress{CellChanges: cellChanges}
 		default:
 			return errhand.BuildDError("unknown change type").Build()
 		}
 	}
+	if verr != nil {
+		return verr
+	}
 	return nil
 }
 
-func formatStatus(acc diffSummaryProgress, singular, plural string) {
+func getCellChanges(oldVal, newVal, key types.Value) (uint64, error) {
+	var cellsChanged uint64
+	var err error
+
+	oldTuple := oldVal.(types.Tuple)
+	newTuple := newVal.(types.Tuple)
+
+	if oldTuple.Len() > newTuple.Len() {
+		cellsChanged, err = oldTuple.CountDifferencesBetweenTupleFields(newTuple)
+	} else {
+		cellsChanged, err = newTuple.CountDifferencesBetweenTupleFields(oldTuple)
+	}
+
+	if err != nil {
+		return 0, err
+	}
+
+	return cellsChanged, nil
+}
+
+func formatStatus(acc diffSummaryProgress, singular, plural string, colLen int) {
 	pluralize := func(singular, plural string, n uint64) string {
 		var noun string
 		if n != 1 {
@@ -285,14 +322,17 @@ func formatStatus(acc diffSummaryProgress, singular, plural string) {
 	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
 	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
 	changes := pluralize("Row Modified", "Rows Modified", acc.Changes)
-	// cellChanges := pluralize("cell modified", "cells modified", acc.CellsModified)
+	cellChanges := pluralize("Cell Modified", "Cells Modified", acc.CellChanges)
 
 	oldValues := pluralize(singular, plural, acc.OldSize)
 	newValues := pluralize(singular, plural, acc.NewSize)
+
+	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldSize) * float64(colLen))
 
 	cli.Printf("%s (%.2f%%)\n", unmodified, (float64(100*rowsUnmodified) / float64(acc.OldSize)))
 	cli.Printf("%s (%.2f%%)\n", insertions, (float64(100*acc.Adds) / float64(acc.OldSize)))
 	cli.Printf("%s (%.2f%%)\n", deletions, (float64(100*acc.Removes) / float64(acc.OldSize)))
 	cli.Printf("%s (%.2f%%)\n", changes, (float64(100*acc.Changes) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
 	cli.Printf("(%s vs %s)\n", oldValues, newValues)
 }

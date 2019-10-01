@@ -302,7 +302,8 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 		var verr errhand.VerboseError
 
 		if summary {
-			verr = diff.Summary(ctx, rowData2, rowData1)
+			colLen := sch2.GetAllCols().Size()
+			verr = diff.Summary(ctx, rowData1, rowData2, colLen)
 		}
 
 		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash && !summary {
