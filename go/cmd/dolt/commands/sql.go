@@ -387,7 +387,7 @@ func processQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *do
 			err = prettyPrintResults(ctx, root.VRW().Format(), sqlSch, rowIter)
 		}
 		return nil, err
-	case *sqlparser.Insert:
+	case *sqlparser.Insert, *sqlparser.Update:
 		newRoot, sqlSch, rowIter, err := sqlNewEngine(query, root)
 		if err == nil {
 			err = prettyPrintResults(ctx, newRoot.VRW().Format(), sqlSch, rowIter)
@@ -403,8 +403,6 @@ func processQuery(ctx context.Context, query string, dEnv *env.DoltEnv, root *do
 			err = prettyPrintResults(ctx, newRoot.VRW().Format(), sqlSch, rowIter)
 		}
 		return newRoot, err
-	case *sqlparser.Update:
-		return sqlUpdate(ctx, dEnv, root, s, query)
 	case *sqlparser.DDL:
 		_, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
@@ -614,24 +612,6 @@ func runPrintingPipeline(ctx context.Context, nbf *types.NomsBinFormat, p *pipel
 	return nil
 }
 
-// Executes a SQL insert statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlInsert(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, stmt *sqlparser.Insert) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteInsert(ctx, dEnv.DoltDB, root, stmt)
-	if err != nil {
-		return nil, fmt.Errorf("Error inserting rows: %v", err.Error())
-	}
-
-	cli.Println(fmt.Sprintf("Rows inserted: %v", result.NumRowsInserted))
-	if result.NumRowsUpdated > 0 {
-		cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-	}
-	if result.NumErrorsIgnored > 0 {
-		cli.Println(fmt.Sprintf("Errors ignored: %v", result.NumErrorsIgnored))
-	}
-
-	return result.Root, nil
-}
-
 type stats struct {
 	numRowsInserted  int
 	numRowsUpdated   int
@@ -665,33 +645,6 @@ func mergeResultIntoStats(result *dsql.InsertResult, stats *stats) {
 	stats.numRowsInserted += result.NumRowsInserted
 	stats.numRowsUpdated += result.NumRowsUpdated
 	stats.numErrorsIgnored += result.NumErrorsIgnored
-}
-
-// Executes a SQL update statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlUpdate(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Update, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteUpdate(ctx, dEnv.DoltDB, root, update, query)
-	if err != nil {
-		return nil, fmt.Errorf("Error during update: %v", err.Error())
-	}
-
-	cli.Println(fmt.Sprintf("Rows updated: %v", result.NumRowsUpdated))
-	if result.NumRowsUnchanged > 0 {
-		cli.Println(fmt.Sprintf("Rows matched but unchanged: %v", result.NumRowsUnchanged))
-	}
-
-	return result.Root, nil
-}
-
-// Executes a SQL delete statement and prints the result to the CLI. Returns the new root value to be written as appropriate.
-func sqlDelete(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, update *sqlparser.Delete, query string) (*doltdb.RootValue, error) {
-	result, err := dsql.ExecuteDelete(ctx, dEnv.DoltDB, root, update, query)
-	if err != nil {
-		return nil, fmt.Errorf("Error during update: %v", err.Error())
-	}
-
-	cli.Println(fmt.Sprintf("Rows deleted: %v", result.NumRowsDeleted))
-
-	return result.Root, nil
 }
 
 // Checks if the query is a naked delete and then deletes all rows if so
