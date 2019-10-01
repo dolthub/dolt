@@ -21,7 +21,7 @@ teardown() {
     [ "$output" = "Successfully put row." ]
     run dolt table export test export.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully exported data." ]
+    [[ "$output" =~ "Successfully exported data." ]] ||  false
     skip "dolt doesn't quote strings with the comma delimiter in them"
     grep -E \"a,b,c,d,e\" export.csv
 }

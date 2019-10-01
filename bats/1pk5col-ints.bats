@@ -100,7 +100,10 @@ teardown() {
 import sys
 rows = []
 for line in sys.stdin:
-    rows.append(line.strip().split(","))
+    line = line.strip()
+
+    if line != "":
+        rows.append(line.strip().split(","))
 
 if len(rows) != 3:
     sys.exit(1)
@@ -585,7 +588,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     run dolt table export test export.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully exported data." ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.csv ]
     run grep 5 export.csv
     [ "$status" -eq 0 ]
@@ -595,7 +598,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "Data already exists" ]] || false
     run dolt table export -f test export.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully exported data." ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.csv ]
 }
 
@@ -603,7 +606,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     run dolt table export test export.sql
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully exported data." ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.sql ]
     diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 }
