@@ -245,7 +245,7 @@ teardown() {
     cd "dolt-repo-clones/test-repo"
     run dolt push origin master
     [ "$status" -eq 0 ]
-    [ "$output" = "Everything up-to-date" ] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
     dolt fetch
     run dolt push origin master
     skip "dolt push when behind returns a 0 exit code now. should be 1"
