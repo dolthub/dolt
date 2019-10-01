@@ -322,7 +322,8 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 		return 1
 	}
 
-	err = mover.Move(ctx)
+	var badCount int64
+	badCount, err = mover.Move(ctx)
 
 	if err != nil {
 		cli.Println()
@@ -356,6 +357,10 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 			cli.PrintErrln(color.RedString("Failed to update the working value."))
 			return 1
 		}
+	}
+
+	if badCount > 0 {
+		cli.PrintErrln(color.YellowString("Lines skipped: %d", badCount))
 	}
 
 	return 0
