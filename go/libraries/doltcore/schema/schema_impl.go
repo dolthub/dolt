@@ -56,15 +56,23 @@ func SchemaFromCols(allCols *ColCollection) Schema {
 }
 
 // ValidateForInsert returns an error if the given schema cannot be written to the dolt database.
-func ValidateForInsert(sch Schema) error {
-	if sch.GetPKCols().Size() == 0 {
+func ValidateForInsert(allCols *ColCollection) error {
+	var seenPkCol bool
+	for _, c := range allCols.cols {
+		if c.IsPartOfPK {
+			seenPkCol = true
+			break
+		}
+	}
+
+	if !seenPkCol {
 		return ErrNoPrimaryKeyColumns
 	}
 
 	colNames := make(map[string]bool)
 	colTags := make(map[uint64]bool)
 
-	err := sch.GetAllCols().Iter(func(tag uint64, col Column) (stop bool, err error) {
+	err := allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
 		if _, ok := colTags[tag]; ok {
 			return true, ErrColTagCollision
 		}

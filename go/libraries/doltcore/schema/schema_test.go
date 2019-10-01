@@ -93,8 +93,7 @@ func TestValidateForInsert(t *testing.T) {
 	t.Run("Validate good", func(t *testing.T) {
 		colColl, err := NewColCollection(allCols...)
 		require.NoError(t, err)
-		schFromCols := SchemaFromCols(colColl)
-		assert.NoError(t, ValidateForInsert(schFromCols))
+		assert.NoError(t, ValidateForInsert(colColl))
 	})
 
 	t.Run("Name collision", func(t *testing.T) {
@@ -102,8 +101,7 @@ func TestValidateForInsert(t *testing.T) {
 		colColl, err := NewColCollection(cols...)
 		require.NoError(t, err)
 
-		schFromCols := SchemaFromCols(colColl)
-		err = ValidateForInsert(schFromCols)
+		err = ValidateForInsert(colColl)
 		assert.Error(t, err)
 		assert.Equal(t, err, ErrColNameCollision)
 	})
@@ -112,8 +110,7 @@ func TestValidateForInsert(t *testing.T) {
 		colColl, err := NewColCollection(nonPkCols...)
 		require.NoError(t, err)
 
-		schFromCols := UnkeyedSchemaFromCols(colColl)
-		err = ValidateForInsert(schFromCols)
+		err = ValidateForInsert(colColl)
 		assert.Error(t, err)
 		assert.Equal(t, err, ErrNoPrimaryKeyColumns)
 	})
