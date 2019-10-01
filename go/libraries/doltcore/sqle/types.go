@@ -54,9 +54,9 @@ func SqlTypeToNomsKind(t sql.Type) types.NomsKind {
 	case sql.Text:
 		// TODO: handle UUIDs
 		return types.StringKind
-	case sql.Int64:
+	case sql.Int8, sql.Int16, sql.Int32, sql.Int64:
 		return types.IntKind
-	case sql.Uint64:
+	case sql.Uint8, sql.Uint16, sql.Uint32, sql.Uint64:
 		return types.UintKind
 	default:
 		panic(fmt.Sprintf("Unexpected type %v", t))
