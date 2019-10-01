@@ -324,7 +324,6 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 
 	var badCount int64
 	badCount, err = mover.Move(ctx)
-	cli.Println()
 
 	if displayStrLen > 0 {
 		displayStrLen = 0
