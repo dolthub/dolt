@@ -182,6 +182,65 @@ func (t *DoltTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	return nil
 }
 
+func (t *DoltTable) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	dOldRow, err := SqlRowToDoltRow(t.table.Format(), oldRow, t.sch)
+	if err != nil {
+		return err
+	}
+	dNewRow, err := SqlRowToDoltRow(t.table.Format(), newRow, t.sch)
+	if err != nil {
+		return err
+	}
+	deleteFirst := false
+
+	// If the PK is changed then we have to delete the old row first
+	// This is assuming that the new PK is not taken
+	dOldKey := dOldRow.NomsMapKey(t.sch)
+	dOldKeyVal, err := dOldKey.Value(ctx)
+	if err != nil {
+		return err
+	}
+	dNewKey := dNewRow.NomsMapKey(t.sch)
+	dNewKeyVal, err := dNewKey.Value(ctx)
+	if err != nil {
+		return err
+	}
+	if !dOldKeyVal.Equals(dNewKeyVal) {
+		_, rowExists, err := t.table.GetRow(ctx, dNewKeyVal.(types.Tuple), t.sch)
+		if err != nil {
+			return errhand.BuildDError("failed to read table").AddCause(err).Build()
+		}
+		if rowExists {
+			return errors.New("cannot update primary key column")
+		}
+		deleteFirst = true
+	}
+
+	typesMap, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
+	}
+	mapEditor := typesMap.Edit()
+	if deleteFirst {
+		mapEditor.Remove(dOldKey)
+	}
+	updated, err := mapEditor.Set(dNewRow.NomsMapKey(t.sch), dNewRow.NomsMapValue(t.sch)).Map(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to modify table").AddCause(err).Build()
+	}
+	newTable, err := t.table.UpdateRows(ctx, updated)
+	if err != nil {
+		return errhand.BuildDError("failed to update rows").AddCause(err).Build()
+	}
+	newRoot, err := doltdb.PutTable(ctx, t.db.root, t.db.root.VRW(), t.name, newTable)
+	if err != nil {
+		return errhand.BuildDError("failed to write table back to database").AddCause(err).Build()
+	}
+	t.table = newTable
+	t.db.root = newRoot
+	return nil
+}
+
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
 type doltTablePartitionIter struct {
 	sql.PartitionIter
