@@ -224,7 +224,7 @@ func Import(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	res := executeMove(ctx, dEnv, force, mvOpts)
 
 	if res == 0 {
-		cli.Println(color.CyanString("\nImport completed successfully."))
+		cli.Println(color.CyanString("Import completed successfully."))
 	}
 
 	return res
@@ -324,10 +324,9 @@ func executeMove(ctx context.Context, dEnv *env.DoltEnv, force bool, mvOpts *mvd
 
 	var badCount int64
 	badCount, err = mover.Move(ctx)
+	cli.Println()
 
 	if err != nil {
-		cli.Println()
-
 		if pipeline.IsTransformFailure(err) {
 			bdr := errhand.BuildDError("A bad row was encountered while moving data.")
 
