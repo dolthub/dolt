@@ -89,7 +89,7 @@ func (cmp CompressedChunk) Hash() hash.Hash {
 
 // IsEmpty returns true if the chunk contains no data.
 func (cmp CompressedChunk) IsEmpty() bool {
-	return len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0
+	return len(cmp.CompressedData) == 0 || (len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0)
 }
 
 var EmptyCompressedChunk CompressedChunk
