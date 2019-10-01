@@ -89,13 +89,16 @@ func (cmp CompressedChunk) Hash() hash.Hash {
 
 // IsEmpty returns true if the chunk contains no data.
 func (cmp CompressedChunk) IsEmpty() bool {
-	return len(cmp.CompressedData) == 0
+	return len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0
 }
 
 var EmptyCompressedChunk CompressedChunk
 
 func init() {
 	EmptyCompressedChunk = ChunkToCompressedChunk(chunks.EmptyChunk)
+	if !EmptyCompressedChunk.IsEmpty() {
+		panic("EmptyCompressedChunk should be empty...")
+	}
 }
 
 // ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
