@@ -468,10 +468,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
-	cc, err := nbs.NewCompressedChunk(c.Hash(), c.Data())
-	if err != nil {
-		return err
-	}
+	cc := nbs.ChunkToCompressedChunk(c)
 	dcs.cache.Put([]nbs.CompressedChunk{cc})
 	return nil
 }
