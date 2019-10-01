@@ -534,7 +534,7 @@ func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) ([]se
 		if !ok {
 			return nil, errors.New("corrupted database; nil where child collection .(Collection) should be")
 		}
-		seqs[i]  = col.asSequence()
+		seqs[i] = col.asSequence()
 	}
 
 	return seqs, err
