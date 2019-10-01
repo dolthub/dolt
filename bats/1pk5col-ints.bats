@@ -255,7 +255,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "update test set c1=6,c2=7,c3=8,c4=9,c5=10 where pk=0"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows updated: 1" ]
+    [[ "$output" =~ "| 1       |" ]] || false
     run dolt sql -q "select * from test where pk=0"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10" ]] || false
@@ -263,7 +263,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (4,11,12,13,14,15)"
     run dolt sql -q "update test set c2=11,c3=11,c4=11,c5=11 where c1=11"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows updated: 2" ]
+    [[ "$output" =~ "| 2       |" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "11" ]] || false
