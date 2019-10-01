@@ -17,27 +17,27 @@ package remotestorage
 import (
 	"sync"
 
-	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 // mapChunkCache is a ChunkCache implementation that stores everything in an in memory map.
 type mapChunkCache struct {
 	mu          *sync.Mutex
-	hashToChunk map[hash.Hash]chunks.Chunkable
-	toFlush     map[hash.Hash]chunks.Chunkable
+	hashToChunk map[hash.Hash]nbs.CompressedChunk
+	toFlush     map[hash.Hash]nbs.CompressedChunk
 }
 
 func newMapChunkCache() *mapChunkCache {
 	return &mapChunkCache{
 		&sync.Mutex{},
-		make(map[hash.Hash]chunks.Chunkable),
-		make(map[hash.Hash]chunks.Chunkable),
+		make(map[hash.Hash]nbs.CompressedChunk),
+		make(map[hash.Hash]nbs.CompressedChunk),
 	}
 }
 
 // Put puts a slice of chunks into the cache.
-func (mcc *mapChunkCache) Put(chnks []chunks.Chunkable) {
+func (mcc *mapChunkCache) Put(chnks []nbs.CompressedChunk) {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
@@ -61,8 +61,8 @@ func (mcc *mapChunkCache) Put(chnks []chunks.Chunkable) {
 
 // Get gets a map of hash to chunk for a set of hashes.  In the event that a chunk is not in the cache, chunks.Empty.
 // is put in it's place
-func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]chunks.Chunkable {
-	hashToChunk := make(map[hash.Hash]chunks.Chunkable)
+func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
+	hashToChunk := make(map[hash.Hash]nbs.CompressedChunk)
 
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
@@ -71,7 +71,7 @@ func (mcc *mapChunkCache) Get(hashes hash.HashSet) map[hash.Hash]chunks.Chunkabl
 		if c, ok := mcc.hashToChunk[h]; ok {
 			hashToChunk[h] = c
 		} else {
-			hashToChunk[h] = chunks.EmptyChunk
+			hashToChunk[h] = nbs.EmptyCompressedChunk
 		}
 	}
 
@@ -96,7 +96,7 @@ func (mcc *mapChunkCache) Has(hashes hash.HashSet) (absent hash.HashSet) {
 
 // PutChunk puts a single chunk in the cache.  true returns in the event that the chunk was cached successfully
 // and false is returned if that chunk is already is the cache.
-func (mcc *mapChunkCache) PutChunk(ch chunks.Chunkable) bool {
+func (mcc *mapChunkCache) PutChunk(ch nbs.CompressedChunk) bool {
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()
 
@@ -112,8 +112,8 @@ func (mcc *mapChunkCache) PutChunk(ch chunks.Chunkable) bool {
 
 // GetAndClearChunksToFlush gets a map of hash to chunk which includes all the chunks that were put in the cache
 // between the last time GetAndClearChunksToFlush was called and now.
-func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]chunks.Chunkable {
-	newToFlush := make(map[hash.Hash]chunks.Chunkable)
+func (mcc *mapChunkCache) GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk {
+	newToFlush := make(map[hash.Hash]nbs.CompressedChunk)
 
 	mcc.mu.Lock()
 	defer mcc.mu.Unlock()

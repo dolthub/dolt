@@ -48,7 +48,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
 	reqs := toGetRecords(hashes)
-	found := make(chan chunks.Chunkable, 128)
+	found := make(chan CompressedChunk, 128)
 
 	go func() {
 		defer close(found)
@@ -60,7 +60,7 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	tw, err := NewCmpChunkTableWriter()
 	require.NoError(t, err)
 	for cmpChnk := range found {
-		err = tw.AddCmpChunk(cmpChnk.(CompressedChunk))
+		err = tw.AddCmpChunk(cmpChnk)
 		require.NoError(t, err)
 	}
 

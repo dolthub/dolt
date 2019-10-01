@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -303,14 +302,23 @@ func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet) {
 	}
 }
 
+type nbsGetManyCompressedable interface {
+	GetManyCompressed(context.Context, hash.HashSet, chan<- nbs.CompressedChunk) error
+}
+
 func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, leaves, batch hash.HashSet, completedTables chan FilledWriters) (hash.HashSet, hash.HashSet, error) {
-	found := make(chan chunks.Chunkable, 4096)
+	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
 	ae := atomicerr.New()
 	go func() {
 		defer close(found)
-		err := p.srcDB.chunkStore().GetManyCompressed(ctx, batch, found)
+		st, ok := p.srcDB.chunkStore().(nbsGetManyCompressedable)
+		if !ok {
+			ae.SetIfError(errors.New("requires ChunkStore implementing nbsGetManyCompressedable"))
+			return
+		}
+		err := st.GetManyCompressed(ctx, batch, found)
 		ae.SetIfError(err)
 	}()
 
@@ -322,15 +330,8 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 
 	go func() {
 		defer close(processed)
-		for chable := range found {
+		for cmpChnk := range found {
 			if ae.IsSet() {
-				break
-			}
-
-			cmpChnk, ok := chable.(nbs.CompressedChunk)
-
-			if !ok {
-				ae.SetIfError(errors.New("requires an nbs.CompressedChunk"))
 				break
 			}
 
@@ -339,7 +340,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 			if leaves.Has(cmpChnk.H) {
 				processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}
 			} else {
-				chnk, err := chable.ToChunk()
+				chnk, err := cmpChnk.ToChunk()
 
 				if ae.SetIfError(err) {
 					return

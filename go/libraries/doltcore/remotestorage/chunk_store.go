@@ -163,7 +163,7 @@ func (dcs *DoltChunkStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *chunks.Chunk) error {
 	ae := atomicerr.New()
 	wg := &sync.WaitGroup{}
-	foundCmp := make(chan chunks.Chunkable, 1024)
+	foundCmp := make(chan nbs.CompressedChunk, 1024)
 
 	wg.Add(1)
 	go func() {
@@ -204,7 +204,7 @@ func (dcs *DoltChunkStore) GetMany(ctx context.Context, hashes hash.HashSet, fou
 
 // GetMany gets the Chunks with |hashes| from the store. On return, |foundChunks| will have been fully sent all chunks
 // which have been found. Any non-present chunks will silently be ignored.
-func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan<- chunks.Chunkable) error {
+func (dcs *DoltChunkStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan<- nbs.CompressedChunk) error {
 	hashToChunk := dcs.cache.Get(hashes)
 
 	notCached := make([]hash.Hash, 0, len(hashes))
@@ -323,7 +323,7 @@ func (dcs *DoltChunkStore) getDLLocs(ctx context.Context, hashes []hash.Hash) (m
 	return resourceToUrlAndRanges, nil
 }
 
-func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan<- chunks.Chunkable) error {
+func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.HashSet, notCached []hash.Hash, foundChunks chan<- nbs.CompressedChunk) error {
 	// get the locations where the chunks can be downloaded from
 	resourceToUrlAndRanges, err := dcs.getDLLocs(ctx, notCached)
 
@@ -334,7 +334,7 @@ func (dcs *DoltChunkStore) readChunksAndCache(ctx context.Context, hashes hash.H
 	var wg sync.WaitGroup
 
 	// channel to receive chunks on
-	chunkChan := make(chan chunks.Chunkable, 128)
+	chunkChan := make(chan nbs.CompressedChunk, 128)
 
 	// start a go routine to receive the downloaded chunks on
 	wg.Add(1)
@@ -397,7 +397,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 	hashSl, byteSl := HashSetToSlices(notCached)
 
 	absent := make(hash.HashSet)
-	var found []chunks.Chunkable
+	var found []nbs.CompressedChunk
 	var err error
 
 	batchItr(len(hashSl), maxHasManyBatchSize, func(st, end int) (stop bool) {
@@ -440,7 +440,7 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 				absent[currHash] = struct{}{}
 				j++
 			} else {
-				c := chunks.NewChunkWithHash(currHash, []byte{})
+				c := nbs.ChunkToCompressedChunk(chunks.NewChunkWithHash(currHash, []byte{}))
 				found = append(found, c)
 			}
 		}
@@ -468,7 +468,11 @@ func (dcs *DoltChunkStore) HasMany(ctx context.Context, hashes hash.HashSet) (ha
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (dcs *DoltChunkStore) Put(ctx context.Context, c chunks.Chunk) error {
-	dcs.cache.Put([]chunks.Chunkable{c})
+	cc, err := nbs.NewCompressedChunk(c.Hash(), c.Data())
+	if err != nil {
+		return err
+	}
+	dcs.cache.Put([]nbs.CompressedChunk{cc})
 	return nil
 }
 
@@ -744,15 +748,15 @@ const (
 
 // creates work functions for each download and executes them in parallel.  The work functions write downloaded chunks
 // to chunkChan
-func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndRanges map[string]urlAndRanges, chunkChan chan chunks.Chunkable) error {
-	var allChunks []chunks.Chunkable
+func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndRanges map[string]urlAndRanges, chunkChan chan nbs.CompressedChunk) error {
+	var allChunks []nbs.CompressedChunk
 	aggLocs := aggregateDownloads(chunkAggDistance, resourceToUrlAndRanges)
 
 	// loop over all the aggLocs that need to be downloaded and create a work function for each
 	var work []func() error
 	for _, loc := range aggLocs {
 		var err error
-		var chnks []chunks.Chunkable
+		var chnks []nbs.CompressedChunk
 		switch typedLoc := loc.Location.(type) {
 		case *remotesapi.DownloadLoc_HttpGet:
 			panic("deprecated")
@@ -777,7 +781,7 @@ func (dcs *DoltChunkStore) downloadChunks(ctx context.Context, resourceToUrlAndR
 
 // getRangeDownloadFunc returns a work function that does the downloading of one or more chunks and writes those chunks
 // to the chunkChan
-func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan chunks.Chunkable) func() error {
+func (dcs *DoltChunkStore) getRangeDownloadFunc(ctx context.Context, urlStr string, ranges []*remotesapi.RangeChunk, chunkChan chan nbs.CompressedChunk) func() error {
 	numRanges := len(ranges)
 	offset := ranges[0].Offset
 	length := ranges[numRanges-1].Offset - offset + uint64(ranges[numRanges-1].Length)
@@ -879,7 +883,7 @@ func collapseBuffers(allBufs [][]byte, length uint64) []byte {
 	return collapsed
 }
 
-func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *remotesapi.HttpGetRange, chunkChan chan chunks.Chunkable) []func() error {
+func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *remotesapi.HttpGetRange, chunkChan chan nbs.CompressedChunk) []func() error {
 	var work []func() error
 
 	rangeCount := len(getRange.Ranges)
