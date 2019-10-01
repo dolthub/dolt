@@ -148,7 +148,7 @@ func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return nil, nil, err
 	}
 
-	root, err = root.PutTable(ctx, db, tableName, tbl)
+	root, err = root.PutTable(ctx, tableName, tbl)
 
 	if err != nil {
 		return nil, nil, err
@@ -253,7 +253,7 @@ func renameColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 		return nil, err
 	}
 
-	return root.PutTable(ctx, db, tableName, updatedTable)
+	return root.PutTable(ctx, tableName, updatedTable)
 }
 
 // dropColumn drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.
@@ -272,7 +272,7 @@ func dropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, 
 		return nil, err
 	}
 
-	return root.PutTable(ctx, db, tableName, updatedTable)
+	return root.PutTable(ctx, tableName, updatedTable)
 }
 
 // addColumn adds the column given to the table named. Returns the new root value and new schema, or an error if one occurs.
@@ -310,7 +310,7 @@ func addColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, t
 		return nil, err
 	}
 
-	return root.PutTable(ctx, db, tableName, updatedTable)
+	return root.PutTable(ctx, tableName, updatedTable)
 }
 
 // getSchema returns the schema corresponding to the TableSpec given

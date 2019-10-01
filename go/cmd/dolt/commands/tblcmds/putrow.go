@@ -155,7 +155,7 @@ func PutRow(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 				if err != nil {
 					verr = errhand.BuildDError("error: failed to update rows").AddCause(err).Build()
 				} else {
-					root, err = root.PutTable(ctx, dEnv.DoltDB, prArgs.TableName, tbl)
+					root, err = root.PutTable(ctx, prArgs.TableName, tbl)
 
 					if err != nil {
 						verr = errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()

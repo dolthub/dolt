@@ -159,7 +159,7 @@ func updateTableWithRowsRemoved(ctx context.Context, root *doltdb.RootValue, tbl
 		return errhand.BuildDError("error: failed to update the table").AddCause(err).Build()
 	}
 
-	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+	root, err = root.PutTable(ctx, tblName, tbl)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to update the table").AddCause(err).Build()

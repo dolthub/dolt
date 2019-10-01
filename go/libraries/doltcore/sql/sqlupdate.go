@@ -213,7 +213,7 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 		return nil, err
 	}
 
-	result.Root, err = root.PutTable(ctx, db, tableName, table)
+	result.Root, err = root.PutTable(ctx, tableName, table)
 
 	if err != nil {
 		return nil, err

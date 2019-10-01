@@ -323,7 +323,7 @@ func (dEnv *DoltEnv) PutTableToWorking(ctx context.Context, rows types.Map, sch 
 		return err
 	}
 
-	newRoot, err := root.PutTable(ctx, dEnv.DoltDB, tableName, tbl)
+	newRoot, err := root.PutTable(ctx, tableName, tbl)
 
 	if err != nil {
 		return err

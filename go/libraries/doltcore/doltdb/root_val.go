@@ -250,8 +250,8 @@ func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
-func (root *RootValue) PutTable(ctx context.Context, ddb *DoltDB, tName string, table *Table) (*RootValue, error) {
-	return PutTable(ctx, root, ddb.ValueReadWriter(), tName, table)
+func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table) (*RootValue, error) {
+	return PutTable(ctx, root, root.VRW(), tName, table)
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced

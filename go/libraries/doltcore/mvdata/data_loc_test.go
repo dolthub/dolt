@@ -161,7 +161,7 @@ func TestExists(t *testing.T) {
 				assert.NoError(t, err)
 				tbl, err := doltdb.NewTable(context.Background(), ddb.ValueReadWriter(), schVal, m)
 				assert.NoError(t, err)
-				root, err = root.PutTable(context.Background(), ddb, tableVal.Name, tbl)
+				root, err = root.PutTable(context.Background(), tableVal.Name, tbl)
 				assert.NoError(t, err)
 			} else if fileVal, isFile := loc.(FileDataLocation); isFile {
 				err := fs.WriteFile(fileVal.Path, []byte("test"))
@@ -234,7 +234,7 @@ func TestCreateRdWr(t *testing.T) {
 			tbl, err := doltdb.NewTable(context.Background(), vrw, schVal, *nomsWr.GetMap())
 			assert.NoError(t, err)
 
-			root, err = root.PutTable(context.Background(), ddb, tableLoc.Name, tbl)
+			root, err = root.PutTable(context.Background(), tableLoc.Name, tbl)
 			assert.NoError(t, err)
 		}
 

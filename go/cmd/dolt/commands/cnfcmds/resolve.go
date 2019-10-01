@@ -176,7 +176,7 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 		}
 
 		if hash == updatedHash {
-			root, err := root.PutTable(ctx, dEnv.DoltDB, tblName, updatedTbl)
+			root, err := root.PutTable(ctx, tblName, updatedTbl)
 
 			if err != nil {
 				return errhand.BuildDError("").AddCause(err).Build()
