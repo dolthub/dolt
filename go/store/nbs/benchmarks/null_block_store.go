@@ -43,10 +43,6 @@ func (nb nullBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, found
 	panic("not impl")
 }
 
-func (nb nullBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundChunks chan<- chunks.Chunkable) error {
-	panic("not impl")
-}
-
 func (nb nullBlockStore) Has(ctx context.Context, h hash.Hash) (bool, error) {
 	panic("not impl")
 }
