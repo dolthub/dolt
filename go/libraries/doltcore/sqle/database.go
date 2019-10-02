@@ -119,7 +119,10 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return sql.ErrTableAlreadyExists.New(tableName)
 	}
 
-	doltSch := SqlSchemaToDoltSchema(schema)
+	doltSch, err := SqlSchemaToDoltSchema(schema)
+	if err != nil {
+		return err
+	}
 
 	schVal, err := encoding.MarshalAsNomsValue(ctx, db.root.VRW(), doltSch)
 	if err != nil {
@@ -136,8 +139,7 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return err
 	}
 
-	// TODO: need doltdb ref
-	newRoot, err := db.root.PutTable(ctx, nil, tableName, tbl)
+	newRoot, err := db.root.PutTable(ctx, tableName, tbl)
 	if err != nil {
 		return err
 	}

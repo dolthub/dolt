@@ -34,10 +34,12 @@ func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, err
 	return cols, err
 }
 
-func SqlSchemaToDoltSchema(sqlSchema sql.Schema) schema.Schema {
+// SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
+// creating tables, use SqlSchemaToDoltSchema.
+func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) schema.Schema {
 	var cols []schema.Column
 	for i, col := range sqlSchema {
-		cols = append(cols, SqlColToDoltCol(uint64(i), false, col))
+		cols = append(cols, SqlColToDoltCol(uint64(i), col))
 	}
 
 	colColl, err := schema.NewColCollection(cols...)
@@ -46,6 +48,27 @@ func SqlSchemaToDoltSchema(sqlSchema sql.Schema) schema.Schema {
 	}
 
 	return schema.UnkeyedSchemaFromCols(colColl)
+}
+
+// SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
+// For result set schemas, see SqlSchemaToDoltResultSchema.
+func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
+	var cols []schema.Column
+	for i, col := range sqlSchema {
+		cols = append(cols, SqlColToDoltCol(uint64(i), col))
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err)
+	}
+
+	err = schema.ValidateForInsert(colColl)
+	if err != nil {
+		return nil, err
+	}
+
+	return schema.SchemaFromCols(colColl), nil
 }
 
 // doltColToSqlCol returns the SQL column corresponding to the dolt column given.
@@ -60,7 +83,11 @@ func doltColToSqlCol(tableName string, col schema.Column) *sql.Column {
 }
 
 // doltColToSqlCol returns the dolt column corresponding to the SQL column given
-func SqlColToDoltCol(tag uint64, isPk bool, col *sql.Column) schema.Column {
-	// TODO: nullness constraint
-	return schema.NewColumn(col.Name, tag, SqlTypeToNomsKind(col.Type), isPk)
+func SqlColToDoltCol(tag uint64, col *sql.Column) schema.Column {
+	var constraints []schema.ColConstraint
+	if !col.Nullable {
+		constraints = append(constraints, schema.NotNullConstraint{})
+	}
+
+	return schema.NewColumn(col.Name, tag, SqlTypeToNomsKind(col.Type), col.PrimaryKey, constraints...)
 }
