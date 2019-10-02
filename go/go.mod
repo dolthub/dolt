@@ -57,7 +57,7 @@ require (
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible
 )
 
-replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20190930213140-66f118b01f72
+replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191001191735-98ec772d8d81
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796
 
