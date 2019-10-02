@@ -200,7 +200,7 @@ func LoadLeafNodes(ctx context.Context, cols []Collection, startIdx, endIdx uint
 		var ok bool
 		childCols[i], ok = v.(Collection)
 		if !ok {
-			return nil, 0, fmt.Errorf("corrupted database; nil where child collection .(Collection) should be; i: %v, h: %v", i, hs[i])
+			return nil, 0, fmt.Errorf("corrupted database; nil where child collection .(Collection) should be; indexed_sequence; i: %v, h: %v", i, hs[i])
 		}
 	}
 
