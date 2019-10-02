@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -40,6 +41,10 @@ func (rd FileReaderWithSize) Size() int64 {
 // ErrDBUpToDate is the error code returned from NewPuller in the event that there is no work to do.
 var ErrDBUpToDate = errors.New("the database does not need to be pulled as it's already up to date")
 
+// ErrIncompatibleSourceChunkStore is the error code returned from NewPuller in
+// the event that the source ChunkStore does not implement `NBSCompressedChunkStore`.
+var ErrIncompatibleSourceChunkStore = errors.New("the chunk store of the source database does not implement NBSCompressedChunkStore.")
+
 const (
 	maxChunkWorkers = 2
 )
@@ -56,11 +61,18 @@ type CmpChnkAndRefs struct {
 	refs    map[hash.Hash]int
 }
 
+type NBSCompressedChunkStore interface {
+	chunks.ChunkStore
+	GetManyCompressed(context.Context, hash.HashSet, chan<- nbs.CompressedChunk) error
+}
+
+
 // Puller is used to sync data between to Databases
 type Puller struct {
 	fmt *types.NomsBinFormat
 
 	srcDB         Database
+	srcChunkStore NBSCompressedChunkStore
 	sinkDB        Database
 	rootChunkHash hash.Hash
 	downloaded    hash.HashSet
@@ -144,6 +156,11 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, fmt.Errorf("cannot pull from src to sink; src version is %v and sink version is %v", srcDB.chunkStore().Version(), sinkDB.chunkStore().Version())
 	}
 
+	srcChunkStore, ok := srcDB.chunkStore().(NBSCompressedChunkStore)
+	if !ok {
+		return nil, ErrIncompatibleSourceChunkStore
+	}
+
 	wr, err := nbs.NewCmpChunkTableWriter()
 
 	if err != nil {
@@ -153,6 +170,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 	return &Puller{
 		fmt:           srcDB.Format(),
 		srcDB:         srcDB,
+		srcChunkStore: srcChunkStore,
 		sinkDB:        sinkDB,
 		rootChunkHash: rootChunkHash,
 		downloaded:    hash.HashSet{},
@@ -302,10 +320,6 @@ func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet) {
 	}
 }
 
-type nbsGetManyCompressedable interface {
-	GetManyCompressed(context.Context, hash.HashSet, chan<- nbs.CompressedChunk) error
-}
-
 func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, leaves, batch hash.HashSet, completedTables chan FilledWriters) (hash.HashSet, hash.HashSet, error) {
 	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
@@ -313,12 +327,7 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 	ae := atomicerr.New()
 	go func() {
 		defer close(found)
-		st, ok := p.srcDB.chunkStore().(nbsGetManyCompressedable)
-		if !ok {
-			ae.SetIfError(errors.New("requires ChunkStore implementing nbsGetManyCompressedable"))
-			return
-		}
-		err := st.GetManyCompressed(ctx, batch, found)
+		err := p.srcChunkStore.GetManyCompressed(ctx, batch, found)
 		ae.SetIfError(err)
 	}()
 
