@@ -66,7 +66,6 @@ type NBSCompressedChunkStore interface {
 	GetManyCompressed(context.Context, hash.HashSet, chan<- nbs.CompressedChunk) error
 }
 
-
 // Puller is used to sync data between to Databases
 type Puller struct {
 	fmt *types.NomsBinFormat
