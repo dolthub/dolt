@@ -37,8 +37,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
-// CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.  CompressedChunk
-// implements chunks.Chunkable
+// CompressedChunk represents a chunk of data in a table file which is still compressed via snappy.
 type CompressedChunk struct {
 	// H is the hash of the chunk
 	H hash.Hash
@@ -75,6 +74,14 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 	return chunks.NewChunk(data), nil
 }
 
+func ChunkToCompressedChunk(chunk chunks.Chunk) CompressedChunk {
+	compressed := snappy.Encode(nil, chunk.Data())
+	length := len(compressed)
+	compressed = append(compressed, []byte{0, 0, 0, 0}...)
+	binary.BigEndian.PutUint32(compressed[length:], crc(compressed[:length]))
+	return CompressedChunk{H: chunk.Hash(), FullCompressedChunk: compressed, CompressedData: compressed[:length]}
+}
+
 // Hash returns the hash of the data
 func (cmp CompressedChunk) Hash() hash.Hash {
 	return cmp.H
@@ -82,7 +89,13 @@ func (cmp CompressedChunk) Hash() hash.Hash {
 
 // IsEmpty returns true if the chunk contains no data.
 func (cmp CompressedChunk) IsEmpty() bool {
-	return len(cmp.CompressedData) == 0
+	return len(cmp.CompressedData) == 0 || (len(cmp.CompressedData) == 1 && cmp.CompressedData[0] == 0)
+}
+
+var EmptyCompressedChunk CompressedChunk
+
+func init() {
+	EmptyCompressedChunk = ChunkToCompressedChunk(chunks.EmptyChunk)
 }
 
 // ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
@@ -383,7 +396,7 @@ func (tr tableReader) readCompressedAtOffsets(
 	readStart, readEnd uint64,
 	reqs []getRecord,
 	offsets offsetRecSlice,
-	foundCmpChunks chan<- chunks.Chunkable,
+	foundCmpChunks chan<- CompressedChunk,
 	stats *Stats,
 ) error {
 	return tr.readAtOffsetsWithCB(ctx, readStart, readEnd, reqs, offsets, stats, func(cmp CompressedChunk) error {
@@ -477,7 +490,7 @@ func (tr tableReader) getMany(
 	tr.getManyAtOffsets(ctx, reqs, offsetRecords, foundChunks, wg, ae, stats)
 	return remaining
 }
-func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
+func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
 	offsetRecords, remaining := tr.findOffsets(reqs)
@@ -485,7 +498,7 @@ func (tr tableReader) getManyCompressed(ctx context.Context, reqs []getRecord, f
 	return remaining
 }
 
-func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, foundCmpChunks chan<- chunks.Chunkable, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
+func (tr tableReader) getManyCompressedAtOffsets(ctx context.Context, reqs []getRecord, offsetRecords offsetRecSlice, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) {
 	tr.getManyAtOffsetsWithReadFunc(ctx, reqs, offsetRecords, wg, ae, stats, func(
 		ctx context.Context,
 		readStart, readEnd uint64,

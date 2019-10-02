@@ -15,8 +15,8 @@
 package remotestorage
 
 import (
-	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"github.com/liquidata-inc/dolt/go/store/nbs"
 )
 
 // noopChunkCache is a ChunkCache implementation that stores nothing
@@ -29,21 +29,21 @@ var noopChunkCache = &noopChunkCacheImpl{}
 type noopChunkCacheImpl struct {
 }
 
-func (*noopChunkCacheImpl) Put(chnks []chunks.Chunkable) {
+func (*noopChunkCacheImpl) Put(chnks []nbs.CompressedChunk) {
 }
 
-func (*noopChunkCacheImpl) Get(hashes hash.HashSet) map[hash.Hash]chunks.Chunkable {
-	return make(map[hash.Hash]chunks.Chunkable)
+func (*noopChunkCacheImpl) Get(hashes hash.HashSet) map[hash.Hash]nbs.CompressedChunk {
+	return make(map[hash.Hash]nbs.CompressedChunk)
 }
 
 func (*noopChunkCacheImpl) Has(hashes hash.HashSet) (absent hash.HashSet) {
 	return hashes
 }
 
-func (*noopChunkCacheImpl) PutChunk(ch chunks.Chunkable) bool {
+func (*noopChunkCacheImpl) PutChunk(ch nbs.CompressedChunk) bool {
 	return true
 }
 
-func (*noopChunkCacheImpl) GetAndClearChunksToFlush() map[hash.Hash]chunks.Chunkable {
+func (*noopChunkCacheImpl) GetAndClearChunksToFlush() map[hash.Hash]nbs.CompressedChunk {
 	panic("noopChunkCache does not support GetAndClearChunksToFlush().")
 }
