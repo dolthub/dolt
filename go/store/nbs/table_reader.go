@@ -96,9 +96,6 @@ var EmptyCompressedChunk CompressedChunk
 
 func init() {
 	EmptyCompressedChunk = ChunkToCompressedChunk(chunks.EmptyChunk)
-	if !EmptyCompressedChunk.IsEmpty() {
-		panic("EmptyCompressedChunk should be empty...")
-	}
 }
 
 // ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
