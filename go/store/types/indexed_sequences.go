@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -200,7 +200,7 @@ func LoadLeafNodes(ctx context.Context, cols []Collection, startIdx, endIdx uint
 		var ok bool
 		childCols[i], ok = v.(Collection)
 		if !ok {
-			return nil, 0, errors.New("corrupted database; nil where child collection .(Collection) should be")
+			return nil, 0, fmt.Errorf("corrupted database; nil where child collection .(Collection) should be; i: %v, h: %v", i, hs[i])
 		}
 	}
 

@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -532,7 +532,7 @@ func (ms metaSequence) getChildren(ctx context.Context, start, end uint64) ([]se
 	for i, v := range readValues {
 		col, ok := v.(Collection)
 		if !ok {
-			return nil, errors.New("corrupted database; nil where child collection .(Collection) should be")
+			return nil, fmt.Errorf("corrupted database; nil where child collection .(Collection) should be; meta_sequence; i: %v, h: %v", i, hs[i])
 		}
 		seqs[i] = col.asSequence()
 	}
