@@ -456,15 +456,14 @@ func (t Tuple) CountDifferencesBetweenTupleFields(other Tuple) (uint64, error) {
 		if index%2 == 1 {
 			if index >= count {
 				changed++
-				return false, nil
 			} else {
 				for i := uint64(0); i < index; i++ {
 					err := dec.skipValue(other.format())
-
 					if err != nil {
 						return true, err
 					}
 				}
+
 				otherVal, err := dec.readValue(other.format())
 				if err != nil {
 					return true, err

@@ -115,7 +115,6 @@ teardown() {
     dolt table put-row test pk:2 c1:11 c2:0 c3:0 c4:0 c5:0
     dolt table put-row employees id:1 "first name":brian "last name":hendriks title:founder "start date":"" "end date":""
     run dolt diff --summary
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
     [[ "$output" =~ "--- a/test @" ]] || false

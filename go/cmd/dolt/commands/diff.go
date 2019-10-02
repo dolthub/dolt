@@ -16,10 +16,12 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -38,6 +40,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -62,7 +65,7 @@ dolt diff [--options] <commit> [<tables>...]
    This form is to view the changes you have in your working tables relative to the named <commit>. You can use HEAD to compare it with the latest commit, or a branch name to compare with the tip of a different branch.
 
 dolt diff [--options] <commit> <commit> [<tables>...]
-	 This is to view the changes between two arbitrary <commit>.
+   This is to view the changes between two arbitrary <commit>.
 `
 
 var diffSynopsis = []string{
@@ -303,7 +306,7 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 
 		if summary {
 			colLen := sch2.GetAllCols().Size()
-			verr = diff.Summary(ctx, rowData1, rowData2, colLen)
+			verr = diffSummary(ctx, rowData1, rowData2, colLen)
 		}
 
 		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash && !summary {
@@ -567,4 +570,70 @@ func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
 
 		bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 	}
+}
+
+func diffSummary(ctx context.Context, v1, v2 types.Map, colLen int) errhand.VerboseError {
+	ae := atomicerr.New()
+	ch := make(chan diff.DiffSummaryProgress)
+	go func() {
+		defer close(ch)
+		diff.Summary(ctx, ae, ch, v2, v1)
+	}()
+
+	acc := diff.DiffSummaryProgress{}
+	for p := range ch {
+		if ae.IsSet() {
+			break
+		}
+
+		acc.Adds += p.Adds
+		acc.Removes += p.Removes
+		acc.Changes += p.Changes
+		acc.CellChanges += p.CellChanges
+		acc.NewSize += p.NewSize
+		acc.OldSize += p.OldSize
+	}
+
+	if err := ae.Get(); err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	}
+
+	if acc.NewSize > 0 || acc.OldSize > 0 {
+		formatSummary(acc, colLen)
+	} else {
+		cli.Println("No data changes. See schema changes by using -s or --schema.")
+	}
+
+	return nil
+}
+
+func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
+	pluralize := func(singular, plural string, n uint64) string {
+		var noun string
+		if n != 1 {
+			noun = plural
+		} else {
+			noun = singular
+		}
+		return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
+	}
+
+	rowsUnmodified := uint64(acc.OldSize - acc.Changes - acc.Removes)
+	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
+	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
+	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
+	changes := pluralize("Row Modified", "Rows Modified", acc.Changes)
+	cellChanges := pluralize("Cell Modified", "Cells Modified", acc.CellChanges)
+
+	oldValues := pluralize("Entry", "Entries", acc.OldSize)
+	newValues := pluralize("Entry", "Entries", acc.NewSize)
+
+	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldSize) * float64(colLen))
+
+	cli.Printf("%s (%.2f%%)\n", unmodified, (float64(100*rowsUnmodified) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", insertions, (float64(100*acc.Adds) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", deletions, (float64(100*acc.Removes) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", changes, (float64(100*acc.Changes) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
+	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
 }
