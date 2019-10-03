@@ -19,7 +19,6 @@ import (
 	"errors"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
-	"github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -32,28 +31,18 @@ type DiffSummaryProgress struct {
 // Summary reports a summary of diff changes between two values
 func Summary(ctx context.Context, ae *atomicerr.AtomicError, ch chan DiffSummaryProgress, v1, v2 types.Map) {
 	if !v1.Equals(v2) {
-		if diff.ShouldDescend(v1, v2) {
-			diffSummaryValueChanged(ae, ch, v1.Len(), v2.Len(), func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{}) {
-				v2.Diff(ctx, v1, ae, changeChan, stopChan)
-			})
-		} else {
-			ch <- DiffSummaryProgress{Adds: 1, Removes: 1, NewSize: 1, OldSize: 1}
-		}
+		ch <- DiffSummaryProgress{OldSize: v1.Len(), NewSize: v2.Len()}
+
+		changeChan := make(chan types.ValueChanged)
+		stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
+
+		go func() {
+			defer close(changeChan)
+			v2.Diff(ctx, v1, ae, changeChan, stopChan)
+		}()
+
+		reportChanges(ae, ch, changeChan)
 	}
-}
-
-func diffSummaryValueChanged(ae *atomicerr.AtomicError, ch chan<- DiffSummaryProgress, oldSize, newSize uint64, f diffFunc) {
-	ch <- DiffSummaryProgress{OldSize: oldSize, NewSize: newSize}
-
-	changeChan := make(chan types.ValueChanged)
-	stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
-
-	go func() {
-		defer close(changeChan)
-		f(changeChan, stopChan)
-	}()
-
-	reportChanges(ae, ch, changeChan)
 }
 
 func reportChanges(ae *atomicerr.AtomicError, ch chan<- DiffSummaryProgress, changeChan chan types.ValueChanged) {
