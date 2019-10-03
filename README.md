@@ -52,10 +52,12 @@ System|Archive
 64-bit Windows|dolt-windows-amd64.tar.gz
 32-bit Windows|dolt-windows-386.tar.gz
 
-For Unix systems extract the archive to a directory on in your path, for example:
+For Unix systems extract the archive to a directory on in your path, for example (you might have to use `sudo` here):
 ```
-$ tar -xf /your/download/location/dolt-darwin-amd64.tar.gz -C /usr/local/bin
-$ ln -s /usr/local/lib/dolt /usr/local/lib/dolt/bin/dolt
+$ tar -xf /your/download/location/dolt-darwin-amd64.tar.gz -C /usr/local/lib
+$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/dolt /usr/local/bin/dolt
+$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/git-dolt /usr/local/bin/git-dolt 
+$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/git-dolt-smudge /usr/local/bin/git-dolt-smudge
 ```
 
 ### From Source
