@@ -44,6 +44,9 @@ import (
 //     are stored in a bucket
 //
 // Only implemented: Log2-based histogram
+
+const bucketCount = 64
+
 type Histogram struct {
 	sum      uint64
 	buckets  [bucketCount]uint64
@@ -55,8 +58,6 @@ type ToStringFunc func(v uint64) string
 func identToString(v uint64) string {
 	return fmt.Sprintf("%d", v)
 }
-
-const bucketCount = 64
 
 // Sample adds a uint64 data point to the histogram
 func (h *Histogram) Sample(v uint64) {
@@ -106,7 +107,7 @@ func (h *Histogram) Add(other Histogram) {
 	atomic.AddUint64(&h.sum, other.sum)
 
 	for i := 0; i < bucketCount; i++ {
-		atomic.AddUint64(&h.buckets[i], other.buckets[i])
+		atomic.AddUint64(&h.buckets[i], atomic.LoadUint64(&other.buckets[i]))
 	}
 }
 
