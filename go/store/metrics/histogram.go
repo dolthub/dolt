@@ -70,7 +70,7 @@ func (h *Histogram) Sample(v uint64) {
 		pot++
 	}
 
-	atomic.AddUint64(&h.buckets[pot-1],  1)
+	atomic.AddUint64(&h.buckets[pot-1], 1)
 }
 
 // SampleTimeSince is a convenience wrapper around Sample which takes the

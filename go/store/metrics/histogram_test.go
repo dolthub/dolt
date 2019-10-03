@@ -111,4 +111,3 @@ func TestHistogramString(t *testing.T) {
 	bh.Add(h)
 	assert.Equal("Mean: 758 MB, Sum: 3.0 GB, Samples: 4", bh.String())
 }
-
