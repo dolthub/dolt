@@ -443,3 +443,42 @@ func (t Tuple) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 
 	return TupleKind < other.Kind(), nil
 }
+
+// CountDifferencesBetweenTupleFields returns the number of fields that are different between two
+// tuples and does not panic if tuples are different lengths.
+func (t Tuple) CountDifferencesBetweenTupleFields(other Tuple) (uint64, error) {
+	changed := 0
+
+	err := t.IterFields(func(index uint64, val Value) (stop bool, err error) {
+		dec, count := other.decoderSkipToFields()
+
+		// Prevents comparing column tags
+		if index%2 == 1 {
+			if index >= count {
+				changed++
+			} else {
+				for i := uint64(0); i < index; i++ {
+					err := dec.skipValue(other.format())
+					if err != nil {
+						return true, err
+					}
+				}
+
+				otherVal, err := dec.readValue(other.format())
+				if err != nil {
+					return true, err
+				}
+				if !otherVal.Equals(val) {
+					changed++
+				}
+			}
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return 0, err
+	}
+	return uint64(changed), nil
+}

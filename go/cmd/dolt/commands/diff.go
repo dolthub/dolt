@@ -16,10 +16,12 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"sort"
 	"strconv"
 
+	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -38,6 +40,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -47,8 +50,9 @@ const (
 	DataOnlyDiff      = 2
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
-	DataFlag   = "data"
-	SchemaFlag = "schema"
+	DataFlag    = "data"
+	SchemaFlag  = "schema"
+	SummaryFlag = "summary"
 )
 
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
@@ -73,6 +77,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
+	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -85,8 +90,10 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 
 	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
 
+	summary := apr.Contains(SummaryFlag)
+
 	if verr == nil {
-		verr = diffRoots(ctx, r1, r2, tables, diffParts, dEnv)
+		verr = diffRoots(ctx, r1, r2, tables, diffParts, dEnv, summary)
 	}
 
 	if verr != nil {
@@ -186,7 +193,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 	return h.String(), r, nil
 }
 
-func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv) errhand.VerboseError {
+func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv, summary bool) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
 		tblNames, err = actions.AllTables(ctx, r1, r2)
@@ -297,11 +304,16 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 
 		var verr errhand.VerboseError
 
-		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash {
+		if summary {
+			colLen := sch2.GetAllCols().Size()
+			verr = diffSummary(ctx, rowData1, rowData2, colLen)
+		}
+
+		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash && !summary {
 			verr = diffSchemas(tblName, sch2, sch1)
 		}
 
-		if diffParts&DataOnlyDiff != 0 {
+		if diffParts&DataOnlyDiff != 0 && !summary {
 			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2)
 		}
 
@@ -558,4 +570,70 @@ func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
 
 		bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 	}
+}
+
+func diffSummary(ctx context.Context, v1, v2 types.Map, colLen int) errhand.VerboseError {
+	ae := atomicerr.New()
+	ch := make(chan diff.DiffSummaryProgress)
+	go func() {
+		defer close(ch)
+		diff.Summary(ctx, ae, ch, v2, v1)
+	}()
+
+	acc := diff.DiffSummaryProgress{}
+	for p := range ch {
+		if ae.IsSet() {
+			break
+		}
+
+		acc.Adds += p.Adds
+		acc.Removes += p.Removes
+		acc.Changes += p.Changes
+		acc.CellChanges += p.CellChanges
+		acc.NewSize += p.NewSize
+		acc.OldSize += p.OldSize
+	}
+
+	if err := ae.Get(); err != nil {
+		return errhand.BuildDError("").AddCause(err).Build()
+	}
+
+	if acc.NewSize > 0 || acc.OldSize > 0 {
+		formatSummary(acc, colLen)
+	} else {
+		cli.Println("No data changes. See schema changes by using -s or --schema.")
+	}
+
+	return nil
+}
+
+func formatSummary(acc diff.DiffSummaryProgress, colLen int) {
+	pluralize := func(singular, plural string, n uint64) string {
+		var noun string
+		if n != 1 {
+			noun = plural
+		} else {
+			noun = singular
+		}
+		return fmt.Sprintf("%s %s", humanize.Comma(int64(n)), noun)
+	}
+
+	rowsUnmodified := uint64(acc.OldSize - acc.Changes - acc.Removes)
+	unmodified := pluralize("Row Unmodified", "Rows Unmodified", rowsUnmodified)
+	insertions := pluralize("Row Added", "Rows Added", acc.Adds)
+	deletions := pluralize("Row Deleted", "Rows Deleted", acc.Removes)
+	changes := pluralize("Row Modified", "Rows Modified", acc.Changes)
+	cellChanges := pluralize("Cell Modified", "Cells Modified", acc.CellChanges)
+
+	oldValues := pluralize("Entry", "Entries", acc.OldSize)
+	newValues := pluralize("Entry", "Entries", acc.NewSize)
+
+	percentCellsChanged := float64(100*acc.CellChanges) / (float64(acc.OldSize) * float64(colLen))
+
+	cli.Printf("%s (%.2f%%)\n", unmodified, (float64(100*rowsUnmodified) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", insertions, (float64(100*acc.Adds) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", deletions, (float64(100*acc.Removes) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", changes, (float64(100*acc.Changes) / float64(acc.OldSize)))
+	cli.Printf("%s (%.2f%%)\n", cellChanges, percentCellsChanged)
+	cli.Printf("(%s vs %s)\n\n", oldValues, newValues)
 }
