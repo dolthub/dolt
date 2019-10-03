@@ -295,13 +295,13 @@ func (p *Pipeline) Abort() {
 
 // StopWithErr provides a method by the pipeline can be stopped when an error is encountered.  This would typically be
 // done in InFuncs and OutFuncs
-func (p Pipeline) StopWithErr(err error) {
+func (p *Pipeline) StopWithErr(err error) {
 	p.atomicErr.Store(err)
 	p.Abort()
 }
 
 // IsStopping returns true if the pipeline is currently stopping
-func (p Pipeline) IsStopping() bool {
+func (p *Pipeline) IsStopping() bool {
 	// exit if stop
 	select {
 	case <-p.stopChan:
