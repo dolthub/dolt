@@ -83,10 +83,6 @@ func (itr *RowIterator) NextRow() row.Row {
 	if !itr.waitForResult() {
 		return nil
 	}
-
-	itr.tr.mutex.Lock()
-	defer itr.tr.mutex.Unlock()
-
 	r := itr.tr.rows[itr.i]
 	itr.i++
 	return r
