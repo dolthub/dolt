@@ -63,7 +63,7 @@ func (s *TestStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
 	return s.ChunkStore.Get(ctx, h)
 }
 
-func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *Chunk) error {
+func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
 	s.Reads += len(hashes)
 	return s.ChunkStore.GetMany(ctx, hashes, foundChunks)
 }

@@ -39,7 +39,7 @@ func (nb nullBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, er
 	panic("not impl")
 }
 
-func (nb nullBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
+func (nb nullBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *chunks.Chunk) error {
 	panic("not impl")
 }
 

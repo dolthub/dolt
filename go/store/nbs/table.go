@@ -227,8 +227,8 @@ type chunkReader interface {
 	has(h addr) (bool, error)
 	hasMany(addrs []hasRecord) (bool, error)
 	get(ctx context.Context, h addr, stats *Stats) ([]byte, error)
-	getMany(ctx context.Context, reqs []getRecord, foundChunks chan *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
-	getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
+	getMany(ctx context.Context, reqs []getRecord, foundChunks chan<- *chunks.Chunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
+	getManyCompressed(ctx context.Context, reqs []getRecord, foundCmpChunks chan<- CompressedChunk, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool
 	extract(ctx context.Context, chunks chan<- extractRecord) error
 	count() (uint32, error)
 	uncompressedLen() (uint64, error)
@@ -240,7 +240,7 @@ type chunkReadPlanner interface {
 		ctx context.Context,
 		reqs []getRecord,
 		offsetRecords offsetRecSlice,
-		foundChunks chan *chunks.Chunk,
+		foundChunks chan<- *chunks.Chunk,
 		wg *sync.WaitGroup,
 		ae *atomicerr.AtomicError,
 		stats *Stats,
@@ -249,7 +249,7 @@ type chunkReadPlanner interface {
 		ctx context.Context,
 		reqs []getRecord,
 		offsetRecords offsetRecSlice,
-		foundCmpChunks chan CompressedChunk,
+		foundCmpChunks chan<- CompressedChunk,
 		wg *sync.WaitGroup,
 		ae *atomicerr.AtomicError,
 		stats *Stats,
@@ -280,21 +280,13 @@ type TableFile interface {
 	Open() (io.ReadCloser, error)
 }
 
-// WriteCloserWithContext is an interface which extends io.Writer and has a Close method that takes a context
-type WriteCloserWithContext interface {
-	io.Writer
-
-	// Close closes the writer
-	Close(ctx context.Context) error
-}
-
 // TableFileStore is an interface for interacting with table files directly
 type TableFileStore interface {
 	// Sources retrieves the current root hash, and a list of all the table files
 	Sources(ctx context.Context) (hash.Hash, []TableFile, error)
 
-	// NewSink returns a writer for a new table file.  When the writer is closed the table file is persisted
-	NewSink(ctx context.Context, fileId string, numChunks int) (WriteCloserWithContext, error)
+	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
+	WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error
 
 	// SetRootChunk changes the root chunk hash from the previous value to the new root.
 	SetRootChunk(ctx context.Context, root, previous hash.Hash) error

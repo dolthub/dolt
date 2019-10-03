@@ -159,9 +159,6 @@ func runCat(ctx context.Context, args []string) int {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
 		db := sp.GetDatabase(ctx)
-		value, err := types.DecodeValue(chunk, db)
-
-		d.PanicIfError(err)
 
 		fmt.Printf("        chunk[%d].raw.len:     %d\n", cidx, len(currCD.compressed))
 
@@ -179,12 +176,32 @@ func runCat(ctx context.Context, args []string) int {
 		}
 
 		if !catNoShow {
+			value, err := types.DecodeValue(chunk, db)
+
+			if err != nil {
+				fmt.Println("        error reading value (Could be a format issue).")
+				continue
+			}
+
 			fmt.Printf("        chunk[%d].value.kind:  %s\n", cidx, value.Kind())
 			fmt.Printf("        chunk[%d].value:\n\n", cidx)
 			printValue(ctx, os.Stdout, value, filepath.Dir(chunkFile)+"::#"+b32Hash)
 			fmt.Println()
 		}
 
+		refIdx := 0
+		err = types.WalkRefs(chunk, db.Format(), func(ref types.Ref) error {
+			if refIdx == 0 {
+				fmt.Printf("    chunk[%d] references chunks:\n", cidx)
+			}
+
+			fmt.Printf("        Ref Hash: %s\n", ref.TargetHash().String())
+			refIdx++
+
+			return nil
+		})
+
+		d.PanicIfError(err)
 		fmt.Println()
 	}
 
@@ -289,6 +306,7 @@ func parseChunks(bytes []byte, pos int, sizes []int) (int, []chunkData) {
 	var cd []chunkData
 	for i := len(sizes) - 1; i >= 0; i-- {
 		uncompressed, err := snappy.Decode(nil, chunkBytes[i])
+		d.PanicIfError(err)
 
 		cd = append(cd, chunkData{
 			compressed:    chunkBytes[i],

@@ -45,6 +45,10 @@ func (c Chunk) Data() []byte {
 	return c.data
 }
 
+func (c Chunk) ToChunk() (Chunk, error) {
+	return c, nil
+}
+
 func (c Chunk) IsEmpty() bool {
 	return len(c.data) == 0
 }

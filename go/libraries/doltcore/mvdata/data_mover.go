@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 
@@ -169,10 +170,13 @@ func NewDataMover(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesy
 	return imp, nil
 }
 
-func (imp *DataMover) Move(ctx context.Context) error {
+// Move is the method that executes the pipeline which will move data from the pipeline's source DataLocation to it's
+// dest DataLocation.  It returns the number of bad rows encountered during import, and an error.
+func (imp *DataMover) Move(ctx context.Context) (badRowCount int64, err error) {
 	defer imp.Rd.Close(ctx)
 	defer imp.Wr.Close(ctx)
 
+	var badCount int64
 	var rowErr error
 	badRowCB := func(trf *pipeline.TransformRowFailure) (quit bool) {
 		if !imp.ContOnErr {
@@ -180,6 +184,7 @@ func (imp *DataMover) Move(ctx context.Context) error {
 			return true
 		}
 
+		atomic.AddInt64(&badCount, 1)
 		return false
 	}
 
@@ -190,13 +195,17 @@ func (imp *DataMover) Move(ctx context.Context) error {
 		badRowCB)
 	p.Start()
 
-	err := p.Wait()
+	err = p.Wait()
 
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return rowErr
+	if rowErr != nil {
+		return 0, rowErr
+	}
+
+	return badCount, nil
 }
 
 func maybeMapFields(transforms *pipeline.TransformCollection, mapping *rowconv.FieldMapping) error {

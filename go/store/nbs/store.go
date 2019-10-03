@@ -404,13 +404,13 @@ func (nbs *NomsBlockStore) Get(ctx context.Context, h hash.Hash) (chunks.Chunk, 
 	return chunks.EmptyChunk, nil
 }
 
-func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan *chunks.Chunk) error {
+func (nbs *NomsBlockStore) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *chunks.Chunk) error {
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 		return cr.getMany(ctx, reqs, foundChunks, wg, ae, nbs.stats)
 	})
 }
 
-func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan CompressedChunk) error {
+func (nbs *NomsBlockStore) GetManyCompressed(ctx context.Context, hashes hash.HashSet, foundCmpChunks chan<- CompressedChunk) error {
 	return nbs.getManyWithFunc(ctx, hashes, func(ctx context.Context, cr chunkReader, reqs []getRecord, wg *sync.WaitGroup, ae *atomicerr.AtomicError, stats *Stats) bool {
 		return cr.getManyCompressed(ctx, reqs, foundCmpChunks, wg, ae, nbs.stats)
 	})
@@ -932,63 +932,53 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 	return contents.GetRoot(), tableFiles, nil
 }
 
-// NewSink returns a writer for a new table file.  When the writer is closed the table file is persisted
-func (nbs *NomsBlockStore) NewSink(ctx context.Context, fileId string, numChunks int) (WriteCloserWithContext, error) {
+// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error {
 	fsPersister, ok := nbs.p.(*fsTablePersister)
 
 	if !ok {
-		return nil, errors.New("Not implemented")
+		return errors.New("Not implemented")
 	}
 
 	path := filepath.Join(fsPersister.dir, fileId)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
-	if err != nil {
-		return nil, err
-	}
+	err := func() (err error) {
+		var f *os.File
+		f, err = os.OpenFile(path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, os.ModePerm)
 
-	return NomsBlockStoreTableSink{fileId, numChunks, f, nbs}, nil
-}
+		if err != nil {
+			return err
+		}
 
-// SetRootChunk changes the root chunk hash from the previous value to the new root.
-func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return nbs.updateManifest(ctx, root, previous)
-}
+		defer func() {
+			closeErr := f.Close()
 
-// NomsBlockStoreTableSink is an implementation of a WriteCloserWithContext which expects a table file to be
-// written to it, and when closed will persist the table file, and update the manifest of the associated nbs
-type NomsBlockStoreTableSink struct {
-	fileId    string
-	numChunks int
-	wr        io.WriteCloser
-	nbs       *NomsBlockStore
-}
+			if err == nil {
+				err = closeErr
+			}
+		}()
 
-// Write writes the bytes of a table file
-func (ts NomsBlockStoreTableSink) Write(p []byte) (n int, err error) {
-	return ts.wr.Write(p)
-}
+		_, err = io.Copy(f, rd)
 
-// Close closes the writer, and persists it in the manifest of the associated nbs
-func (ts NomsBlockStoreTableSink) Close(ctx context.Context) error {
-	if ts.wr == nil {
-		return errors.New("already closed")
-	}
-
-	err := ts.wr.Close()
-	ts.wr = nil
+		return err
+	}()
 
 	if err != nil {
 		return err
 	}
 
-	fileIdHash, ok := hash.MaybeParse(ts.fileId)
+	fileIdHash, ok := hash.MaybeParse(fileId)
 
 	if !ok {
-		return errors.New("invalid base32 encoded hash: " + ts.fileId)
+		return errors.New("invalid base32 encoded hash: " + fileId)
 	}
 
-	_, err = ts.nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(ts.numChunks)})
+	_, err = nbs.UpdateManifest(ctx, map[hash.Hash]uint32{fileIdHash: uint32(numChunks)})
 
 	return err
+}
+
+// SetRootChunk changes the root chunk hash from the previous value to the new root.
+func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
+	return nbs.updateManifest(ctx, root, previous)
 }

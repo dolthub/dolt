@@ -223,12 +223,6 @@ teardown() {
     [[ "$output" =~ "column \"c3\" could not be found in any table in scope" ]] || false
 }
 
-@test "sql update query on a primary key should error" {
-    run dolt sql -q "update one_pk set pk=11 where pk=0"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Cannot update primary key column 'pk'" ]] || false
-}
-
 @test "sql show tables" {
     run dolt sql -q "show tables"
     [ $status -eq 0 ]

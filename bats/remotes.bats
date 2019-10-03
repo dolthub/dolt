@@ -54,7 +54,6 @@ teardown() {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote master
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
     [ -d "$BATS_TMPDIR/remotes-$$/test-org/test-repo" ]
     run dolt pull test-remote
     [ "$status" -eq 0 ]
@@ -77,7 +76,6 @@ teardown() {
     dolt checkout -b test-branch
     run dolt push test-remote test-branch
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
     run dolt pull test-remote
     [ "$status" -eq 0 ]
     skip "Should say up to date not fast forward"
@@ -203,7 +201,6 @@ teardown() {
     # [[ "$output" =~ "up to date" ]]
     run dolt fetch
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
     run dolt merge origin/master
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Fast-forward" ]]
@@ -248,7 +245,7 @@ teardown() {
     cd "dolt-repo-clones/test-repo"
     run dolt push origin master
     [ "$status" -eq 0 ]
-    [ "$output" = "Everything up-to-date" ] || false
+    [[ "$output" =~ "Everything up-to-date" ]] || false
     dolt fetch
     run dolt push origin master
     skip "dolt push when behind returns a 0 exit code now. should be 1"

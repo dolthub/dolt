@@ -23,6 +23,7 @@ package types
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -196,7 +197,11 @@ func LoadLeafNodes(ctx context.Context, cols []Collection, startIdx, endIdx uint
 
 	childCols := make([]Collection, len(readValues))
 	for i, v := range readValues {
-		childCols[i] = v.(Collection)
+		var ok bool
+		childCols[i], ok = v.(Collection)
+		if !ok {
+			return nil, 0, fmt.Errorf("corrupted database; nil where child collection .(Collection) should be; indexed_sequence; i: %v, h: %v", i, hs[i])
+		}
 	}
 
 	return LoadLeafNodes(ctx, childCols, startIdx, endIdx)

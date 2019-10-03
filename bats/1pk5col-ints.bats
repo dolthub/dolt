@@ -100,7 +100,10 @@ teardown() {
 import sys
 rows = []
 for line in sys.stdin:
-    rows.append(line.strip().split(","))
+    line = line.strip()
+
+    if line != "":
+        rows.append(line.strip().split(","))
 
 if len(rows) != 3:
     sys.exit(1)
@@ -255,7 +258,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "update test set c1=6,c2=7,c3=8,c4=9,c5=10 where pk=0"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows updated: 1" ]
+    [[ "$output" =~ "| 1       | 1       |" ]] || false
     run dolt sql -q "select * from test where pk=0"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "10" ]] || false
@@ -263,27 +266,26 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (4,11,12,13,14,15)"
     run dolt sql -q "update test set c2=11,c3=11,c4=11,c5=11 where c1=11"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows updated: 2" ]
+    [[ "$output" =~ "| 2       | 2       |" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "11" ]] || false
     [[ ! "$output" =~ "12" ]] || false
     run dolt sql -q "update test set c2=50,c3=50,c4=50,c5=50 where c1=50"
-
-[ "$status" -eq 0 ]
-    [ "$output" = "Rows updated: 0" ]
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "| 0       | 0       |" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "50" ]] || false
     run dolt sql -q "update test set c12=11 where pk=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Unknown column: 'c12'" ]] || false
+    [ "$output" = "column \"c12\" could not be found in any table in scope" ]
     run dolt sql -q "update test set c1='foo' where pk=0"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Type mismatch" ]] || false
+    [ "$output" = "unable to cast \"foo\" of type string to int64" ]
     run dolt sql -q "update test set c1=100,c2=100,c3=100,c4=100,c5=100 where pk>0"
     [ "$status" -eq 0 ]
-    [ "$output" = "Rows updated: 3" ]
+    [[ "$output" =~ "| 3       | 3       |" ]] || false
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "100" ]] || false
@@ -585,7 +587,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     run dolt table export test export.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully exported data." ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.csv ]
     run grep 5 export.csv
     [ "$status" -eq 0 ]
@@ -595,7 +597,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "Data already exists" ]] || false
     run dolt table export -f test export.csv
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully exported data." ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.csv ]
 }
 
@@ -603,7 +605,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     run dolt table export test export.sql
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully exported data." ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f export.sql ]
     diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 }
