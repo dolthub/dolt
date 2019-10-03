@@ -72,7 +72,7 @@ func TestIncrementalLoadList(t *testing.T) {
 	assert.NoError(err)
 	actual := actualVar.(List)
 
-	expectedCount := cs.Reads
+	expectedCount := cs.Reads()
 	assert.Equal(1, expectedCount)
 	// There will be one read per chunk.
 	chunkReads := make([]int, expected.Len())
@@ -84,12 +84,12 @@ func TestIncrementalLoadList(t *testing.T) {
 		assert.True(v2.Equals(v))
 
 		expectedCount += isEncodedOutOfLine(v)
-		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
+		assert.Equal(expectedCount+chunkReads[i], cs.Reads())
 
 		// Do it again to make sure multiple derefs don't do multiple loads.
 		_, err = actual.Get(context.Background(), i)
 		assert.NoError(err)
-		assert.Equal(expectedCount+chunkReads[i], cs.Reads)
+		assert.Equal(expectedCount+chunkReads[i], cs.Reads())
 	}
 }
 
@@ -108,11 +108,11 @@ func SkipTestIncrementalLoadSet(t *testing.T) {
 	assert.NoError(err)
 	actual := actualVar.(Set)
 
-	expectedCount := cs.Reads
+	expectedCount := cs.Reads()
 	assert.Equal(1, expectedCount)
 	err = actual.Iter(context.Background(), func(v Value) (bool, error) {
 		expectedCount += isEncodedOutOfLine(v)
-		assert.Equal(expectedCount, cs.Reads)
+		assert.Equal(expectedCount, cs.Reads())
 		return false, nil
 	})
 
@@ -135,12 +135,12 @@ func SkipTestIncrementalLoadMap(t *testing.T) {
 	assert.NoError(err)
 	actual := actualVar.(Map)
 
-	expectedCount := cs.Reads
+	expectedCount := cs.Reads()
 	assert.Equal(1, expectedCount)
 	err = actual.Iter(context.Background(), func(k, v Value) (bool, error) {
 		expectedCount += isEncodedOutOfLine(k)
 		expectedCount += isEncodedOutOfLine(v)
-		assert.Equal(expectedCount, cs.Reads)
+		assert.Equal(expectedCount, cs.Reads())
 		return false, nil
 	})
 	assert.NoError(err)
@@ -163,18 +163,18 @@ func SkipTestIncrementalAddRef(t *testing.T) {
 	actualVar, err := vs.ReadValue(context.Background(), ref.TargetHash())
 	assert.NoError(err)
 
-	assert.Equal(1, cs.Reads)
+	assert.Equal(1, cs.Reads())
 	assert.True(expected.Equals(actualVar))
 
 	actual := actualVar.(List)
 	actualItem, err := actual.Get(context.Background(), 0)
 	assert.NoError(err)
-	assert.Equal(2, cs.Reads)
+	assert.Equal(2, cs.Reads())
 	assert.True(expectedItem.Equals(actualItem))
 
 	// do it again to make sure caching works.
 	actualItem, err = actual.Get(context.Background(), 0)
 	assert.NoError(err)
-	assert.Equal(2, cs.Reads)
+	assert.Equal(2, cs.Reads())
 	assert.True(expectedItem.Equals(actualItem))
 }

@@ -63,17 +63,17 @@ func TestReadWriteCache(t *testing.T) {
 	assert.NoError(err)
 	_, err = vs.Commit(context.Background(), rt, rt)
 	assert.NoError(err)
-	assert.Equal(1, ts.Writes)
+	assert.Equal(1, ts.Writes())
 
 	v, err = vs.ReadValue(context.Background(), r.TargetHash())
 	assert.NoError(err)
 	assert.True(v.Equals(Bool(true)))
-	assert.Equal(1, ts.Reads)
+	assert.Equal(1, ts.Reads())
 
 	v, err = vs.ReadValue(context.Background(), r.TargetHash())
 	assert.NoError(err)
 	assert.True(v.Equals(Bool(true)))
-	assert.Equal(1, ts.Reads)
+	assert.Equal(1, ts.Reads())
 }
 
 func TestValueReadMany(t *testing.T) {

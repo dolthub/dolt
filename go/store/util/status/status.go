@@ -81,9 +81,6 @@ func Done() {
 }
 
 func reset(time time.Time) {
-	mu.Lock()
-	defer mu.Unlock()
-
 	lastTime = time
 	lastFormat, lastArgs = "", nil
 }

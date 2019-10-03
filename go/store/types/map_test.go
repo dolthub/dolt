@@ -547,8 +547,8 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 		}
 	}
 
-	cs.Writes = 0
-	cs.Reads = 0
+	wrCnt := cs.Writes()
+	rdCnt := cs.Reads()
 
 	m, err = me.Map(context.Background())
 	assert.NoError(t, err)
@@ -561,8 +561,8 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	ref, err := NewRef(m, Format_7_18)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(3), ref.Height())
-	assert.Equal(t, 105, cs.Reads)
-	assert.Equal(t, 62, cs.Writes)
+	assert.Equal(t, 105, cs.Reads()-rdCnt)
+	assert.Equal(t, 62, cs.Writes()-wrCnt)
 }
 
 func TestMapInfiniteChunkBug(t *testing.T) {

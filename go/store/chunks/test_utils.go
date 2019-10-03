@@ -23,6 +23,7 @@ package chunks
 
 import (
 	"context"
+	"sync/atomic"
 
 	"github.com/stretchr/testify/assert"
 
@@ -53,34 +54,49 @@ func (t *TestStorage) NewView() *TestStoreView {
 
 type TestStoreView struct {
 	ChunkStore
-	Reads  int
-	Hases  int
-	Writes int
+	reads  int32
+	hases  int32
+	writes int32
 }
 
 func (s *TestStoreView) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
-	s.Reads++
+	atomic.AddInt32(&s.reads, 1)
 	return s.ChunkStore.Get(ctx, h)
 }
 
 func (s *TestStoreView) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
-	s.Reads += len(hashes)
+	atomic.AddInt32(&s.reads, int32(len(hashes)))
 	return s.ChunkStore.GetMany(ctx, hashes, foundChunks)
 }
 
 func (s *TestStoreView) Has(ctx context.Context, h hash.Hash) (bool, error) {
-	s.Hases++
+	atomic.AddInt32(&s.hases, 1)
 	return s.ChunkStore.Has(ctx, h)
 }
 
 func (s *TestStoreView) HasMany(ctx context.Context, hashes hash.HashSet) (hash.HashSet, error) {
-	s.Hases += len(hashes)
+	atomic.AddInt32(&s.hases, int32(len(hashes)))
 	return s.ChunkStore.HasMany(ctx, hashes)
 }
 
 func (s *TestStoreView) Put(ctx context.Context, c Chunk) error {
-	s.Writes++
+	atomic.AddInt32(&s.writes, 1)
 	return s.ChunkStore.Put(ctx, c)
+}
+
+func (s *TestStoreView) Reads() int {
+	reads := atomic.LoadInt32(&s.reads)
+	return int(reads)
+}
+
+func (s *TestStoreView) Hases() int {
+	hases := atomic.LoadInt32(&s.hases)
+	return int(hases)
+}
+
+func (s *TestStoreView) Writes() int {
+	writes := atomic.LoadInt32(&s.writes)
+	return int(writes)
 }
 
 type TestStoreFactory struct {

@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"bytes"
+	"sync/atomic"
 	"testing"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -36,7 +37,7 @@ import (
 type fakeDDB struct {
 	data             map[string]interface{}
 	t                *testing.T
-	numPuts, numGets int
+	numPuts, numGets int64
 }
 
 type record struct {
@@ -86,7 +87,7 @@ func (m *fakeDDB) GetItemWithContext(ctx aws.Context, input *dynamodb.GetItemInp
 			item[dataAttr] = &dynamodb.AttributeValue{B: e}
 		}
 	}
-	m.numGets++
+	atomic.AddInt64(&m.numGets, 1)
 	return &dynamodb.GetItemOutput{Item: item}, nil
 }
 
@@ -141,11 +142,15 @@ func (m *fakeDDB) PutItemWithContext(ctx aws.Context, input *dynamodb.PutItemInp
 	}
 
 	m.putRecord(key, lock, root, constants.NomsVersion, specs)
-	m.numPuts++
+	atomic.AddInt64(&m.numPuts, 1)
 
 	return &dynamodb.PutItemOutput{}, nil
 }
 
 func checkCondition(current record, expressionAttrVals map[string]*dynamodb.AttributeValue) bool {
 	return current.vers == *expressionAttrVals[":vers"].S && bytes.Equal(current.lock, expressionAttrVals[":prev"].B)
+}
+
+func (m *fakeDDB) NumGets() int64 {
+	return atomic.LoadInt64(&m.numGets)
 }

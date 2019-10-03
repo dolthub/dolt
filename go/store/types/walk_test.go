@@ -90,9 +90,9 @@ func (suite *WalkAllTestSuite) TestWalkAvoidBlobChunks() {
 	val, err := suite.vs.ReadValue(context.Background(), r.TargetHash())
 	outBlob := val.(Blob)
 	suite.NoError(err)
-	suite.Equal(suite.ts.Reads, 0)
+	suite.Equal(suite.ts.Reads(), 0)
 	suite.assertCallbackCount(outBlob, 1)
-	suite.Equal(suite.ts.Reads, 0)
+	suite.Equal(suite.ts.Reads(), 0)
 }
 
 func (suite *WalkAllTestSuite) TestWalkPrimitives() {

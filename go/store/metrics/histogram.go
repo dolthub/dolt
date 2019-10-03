@@ -23,10 +23,10 @@ package metrics
 
 import (
 	"fmt"
-	"strings"
+	"sync/atomic"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
@@ -62,7 +62,7 @@ const bucketCount = 64
 func (h *Histogram) Sample(v uint64) {
 	d.PanicIfTrue(v == 0)
 
-	h.sum += v
+	atomic.AddUint64(&h.sum, v)
 
 	pot := 0
 	for v > 0 {
@@ -70,7 +70,7 @@ func (h *Histogram) Sample(v uint64) {
 		pot++
 	}
 
-	h.buckets[pot-1]++
+	atomic.AddUint64(&h.buckets[pot-1],  1)
 }
 
 // SampleTimeSince is a convenience wrapper around Sample which takes the
@@ -97,34 +97,17 @@ func (h Histogram) bucketVal(bucket int) uint64 {
 // Sum return the sum of sampled values, note that Sum can be overflowed without
 // overflowing the histogram buckets.
 func (h Histogram) Sum() uint64 {
-	return h.sum
+	return atomic.LoadUint64(&h.sum)
 }
 
 // Add returns a new Histogram which is the result of adding this and other
 // bucket-wise.
 func (h *Histogram) Add(other Histogram) {
-	h.sum += other.sum
+	atomic.AddUint64(&h.sum, other.sum)
 
 	for i := 0; i < bucketCount; i++ {
-		h.buckets[i] += other.buckets[i]
+		atomic.AddUint64(&h.buckets[i], other.buckets[i])
 	}
-}
-
-// Delta returns a new Histogram which is the result of subtracting other from
-// this bucket-wise. The intent is to capture changes in the state of histogram
-// which is collecting samples over some time period. It will panic if any
-// bucket from other is larger than the corresponding bucket in this.
-func (h Histogram) Delta(other Histogram) Histogram {
-	nh := Histogram{}
-	nh.sum = h.sum - other.sum
-
-	for i := 0; i < bucketCount; i++ {
-		c := h.buckets[i]
-		l := other.buckets[i]
-		d.PanicIfTrue(l > c)
-		nh.buckets[i] = c - l
-	}
-	return nh
 }
 
 // Mean returns 0 if there are no samples, and h.Sum()/h.Samples otherwise.
@@ -141,7 +124,7 @@ func (h Histogram) Mean() uint64 {
 func (h Histogram) Samples() uint64 {
 	s := uint64(0)
 	for i := 0; i < bucketCount; i++ {
-		s += h.buckets[i]
+		s += atomic.LoadUint64(&h.buckets[i])
 	}
 	return s
 }
@@ -165,59 +148,4 @@ func timeToString(v uint64) string {
 // NewByteHistogram stringifies values using humanize over byte values
 func NewByteHistogram() Histogram {
 	return Histogram{ToString: humanize.Bytes}
-}
-
-const colWidth = 100
-
-// Report returns an ASCII graph of the non-zero range of normalized buckets.
-// IOW, it returns a basic graph of the histogram
-func (h Histogram) Report() string {
-	ts := h.ToString
-	if ts == nil {
-		ts = identToString
-	}
-
-	maxSamples := uint64(0)
-	foundFirstNonEmpty := false
-	firstNonEmpty := 0
-	lastNonEmpty := 0
-	for i := 0; i < bucketCount; i++ {
-		samples := h.buckets[i]
-
-		if samples > 0 {
-			lastNonEmpty = i
-			if !foundFirstNonEmpty {
-				foundFirstNonEmpty = true
-				firstNonEmpty = i
-			}
-		}
-
-		if samples > maxSamples {
-			maxSamples = samples
-		}
-	}
-
-	if maxSamples == 0 {
-		return ""
-	}
-
-	val := uint64(1)
-
-	p := func(bucket int) string {
-		samples := h.buckets[bucket]
-		val := h.bucketVal(bucket)
-		adj := samples * colWidth / maxSamples
-		return fmt.Sprintf("%s> %s: (%d)", strings.Repeat("-", int(adj)), ts(val), samples)
-	}
-
-	lines := make([]string, 0)
-	for i := 0; i < bucketCount; i++ {
-		if i >= firstNonEmpty && i <= lastNonEmpty {
-			lines = append(lines, p(i))
-		}
-
-		val = val << 1
-	}
-
-	return strings.Join(lines, "\n")
 }

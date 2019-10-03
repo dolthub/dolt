@@ -172,11 +172,11 @@ func (suite *DatabaseSuite) TestRebase() {
 	noChangeDB := suite.makeDb(cs)
 	_, err = noChangeDB.Datasets(context.Background())
 	suite.NoError(err)
-	cs.Reads = 0 // New baseline
+	n := cs.Reads()
 
 	err = noChangeDB.Rebase(context.Background())
 	suite.NoError(err)
-	suite.Zero(cs.Reads)
+	suite.Equal(n, cs.Reads())
 }
 
 func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {

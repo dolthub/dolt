@@ -405,10 +405,12 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	var old, neu types.Value
 	functions.All(
 		func() {
+			var err error
 			old, err = path.Resolve(ctx, parentCommit, db)
 			d.PanicIfError(err)
 		},
 		func() {
+			var err error
 			neu, err = path.Resolve(ctx, node.commit, db)
 			d.PanicIfError(err)
 		},
