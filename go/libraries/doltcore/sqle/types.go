@@ -114,10 +114,11 @@ func SqlValToNomsVal(val interface{}, kind types.NomsKind) (types.Value, error) 
 		case int64:
 			return types.Int(e), nil
 		case uint:
-			if e > math.MaxInt64 {
+			r := types.Int(e)
+			if r < 0 {
 				return nil, errors.New(fmt.Sprintf("Cannot convert SQL val <%v> to int", e))
 			}
-			return types.Int(e), nil
+			return r, nil
 		case uint8:
 			return types.Int(e), nil
 		case uint16:
