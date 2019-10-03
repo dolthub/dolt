@@ -17,12 +17,12 @@ package sqle
 import (
 	"context"
 	"fmt"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/store/types"
 
 	"github.com/src-d/go-mysql-server/sql"
-
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 )
 
 // Database implements sql.Database for a dolt DB.
@@ -107,6 +107,7 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 	return nil
 }
 
+// CreateTable creates a table with the name and schema given.
 func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
 
 	if !doltdb.IsValidTableName(tableName) {
