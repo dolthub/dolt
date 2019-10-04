@@ -139,35 +139,35 @@ func TestDynamoManifestCaching(t *testing.T) {
 	stats := &Stats{}
 
 	// ParseIfExists should hit persistent storage no matter what
-	reads := ddb.numGets
+	reads := ddb.NumGets()
 	exists, _, err := mm.ParseIfExists(context.Background(), stats, nil)
 	assert.NoError(err)
 	assert.False(exists)
-	assert.Equal(reads+1, ddb.numGets)
+	assert.Equal(reads+1, ddb.NumGets())
 
 	lock, root := computeAddr([]byte("lock")), hash.Of([]byte("root"))
 	ddb.putRecord(db, lock[:], root[:], constants.NomsVersion, "")
 
-	reads = ddb.numGets
+	reads = ddb.NumGets()
 	exists, _, err = mm.ParseIfExists(context.Background(), stats, nil)
 	assert.NoError(err)
 	assert.True(exists)
-	assert.Equal(reads+1, ddb.numGets)
+	assert.Equal(reads+1, ddb.NumGets())
 
 	// When failing the optimistic lock, we should hit persistent storage.
-	reads = ddb.numGets
+	reads = ddb.NumGets()
 	contents := makeContents("lock2", "nuroot", []tableSpec{{computeAddr([]byte("a")), 3}})
 	upstream, err := mm.Update(context.Background(), addr{}, contents, stats, nil)
 	assert.NoError(err)
 	assert.NotEqual(contents.lock, upstream.lock)
-	assert.Equal(reads+1, ddb.numGets)
+	assert.Equal(reads+1, ddb.NumGets())
 
 	// Successful update should NOT hit persistent storage.
-	reads = ddb.numGets
+	reads = ddb.NumGets()
 	upstream, err = mm.Update(context.Background(), upstream.lock, contents, stats, nil)
 	assert.NoError(err)
 	assert.Equal(contents.lock, upstream.lock)
-	assert.Equal(reads, ddb.numGets)
+	assert.Equal(reads, ddb.NumGets())
 }
 
 func TestDynamoManifestUpdateEmpty(t *testing.T) {

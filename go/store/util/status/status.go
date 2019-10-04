@@ -24,6 +24,7 @@ package status
 
 import (
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -38,16 +39,27 @@ var (
 	lastArgs   []interface{}
 )
 
+var mu = &sync.Mutex{}
+
 func Clear() {
+	mu.Lock()
+	defer mu.Unlock()
+
 	fmt.Print(clearLine)
 	reset(time.Time{})
 }
 
 func WillPrint() bool {
+	mu.Lock()
+	defer mu.Unlock()
+
 	return time.Since(lastTime) >= Rate
 }
 
 func Printf(format string, args ...interface{}) {
+	mu.Lock()
+	defer mu.Unlock()
+
 	now := time.Now()
 	if now.Sub(lastTime) < Rate {
 		lastFormat, lastArgs = format, args
@@ -58,6 +70,9 @@ func Printf(format string, args ...interface{}) {
 }
 
 func Done() {
+	mu.Lock()
+	defer mu.Unlock()
+
 	if lastArgs != nil {
 		fmt.Printf(clearLine+lastFormat, lastArgs...)
 	}

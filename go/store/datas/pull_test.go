@@ -174,7 +174,7 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 //
 // Sink: Nada
 func (suite *PullSuite) TestPullEverything() {
-	expectedReads := suite.sinkCS.Reads
+	expectedReads := suite.sinkCS.Reads()
 
 	l := buildListOfHeight(2, suite.source)
 	sourceRef := suite.commitToSource(l, mustSet(types.NewSet(context.Background(), suite.source)))
@@ -182,7 +182,7 @@ func (suite *PullSuite) TestPullEverything() {
 
 	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 	suite.NoError(err)
-	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
+	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
 	v := mustValue(suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())).(types.Struct)
@@ -212,7 +212,7 @@ func (suite *PullSuite) TestPullEverything() {
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sink)
 	suite.commitToSink(sinkL, mustSet(types.NewSet(context.Background(), suite.sink)))
-	expectedReads := suite.sinkCS.Reads
+	expectedReads := suite.sinkCS.Reads()
 
 	srcL := buildListOfHeight(2, suite.source)
 	sourceRef := suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source)))
@@ -226,7 +226,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 	suite.NoError(err)
 
-	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
+	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
 	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
@@ -270,14 +270,14 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
 	suite.NoError(err)
 	sourceRef = suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source, sourceRef)))
-	preReads := suite.sinkCS.Reads
+	preReads := suite.sinkCS.Reads()
 
 	pt := startProgressTracker()
 
 	err = Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 	suite.NoError(err)
 
-	suite.True(preReads-suite.sinkCS.Reads <= suite.commitReads)
+	suite.True(preReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
 	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
@@ -305,7 +305,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sink)
 	suite.commitToSink(sinkL, mustSet(types.NewSet(context.Background(), suite.sink)))
-	expectedReads := suite.sinkCS.Reads
+	expectedReads := suite.sinkCS.Reads()
 
 	srcL := buildListOfHeight(4, suite.source)
 	sourceRef := suite.commitToSource(srcL, mustSet(types.NewSet(context.Background(), suite.source)))
@@ -327,7 +327,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	err = Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
 	suite.NoError(err)
 
-	suite.True(expectedReads-suite.sinkCS.Reads <= suite.commitReads)
+	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
 	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())

@@ -229,6 +229,7 @@ func (p *Pipeline) Start() {
 	go func() {
 		defer p.wg.Done()
 		p.outFunc(p, curr, p.badRowChan)
+		close(p.badRowChan)
 		p.runAfter()
 	}()
 
@@ -262,7 +263,7 @@ func runOnce(funcs []func()) func() {
 // Wait waits for the pipeline to complete and return any error that occurred during its execution.
 func (p *Pipeline) Wait() error {
 	if !p.isRunning {
-		panic("cannot Wait() a pipeline before a call to Start()")
+		panic("cannot Wait() on a pipeline before a call to Start()")
 	}
 
 	p.wg.Wait()
@@ -294,13 +295,13 @@ func (p *Pipeline) Abort() {
 
 // StopWithErr provides a method by the pipeline can be stopped when an error is encountered.  This would typically be
 // done in InFuncs and OutFuncs
-func (p Pipeline) StopWithErr(err error) {
+func (p *Pipeline) StopWithErr(err error) {
 	p.atomicErr.Store(err)
 	p.Abort()
 }
 
 // IsStopping returns true if the pipeline is currently stopping
-func (p Pipeline) IsStopping() bool {
+func (p *Pipeline) IsStopping() bool {
 	// exit if stop
 	select {
 	case <-p.stopChan:
@@ -317,8 +318,8 @@ func (p *Pipeline) processBadRows() {
 	if p.badRowCB != nil {
 		for {
 			select {
-			case bRow := <-p.badRowChan:
-				if bRow == &NoTransformRowFailure {
+			case bRow, ok := <-p.badRowChan:
+				if !ok {
 					return
 				}
 
@@ -338,9 +339,9 @@ func (p *Pipeline) processBadRows() {
 
 // Runs the ansync transform function given with the input channel given and returns its output channel.
 func transformAsync(transformer TransformFunc, wg *sync.WaitGroup, inChan <-chan RowWithProps, badRowChan chan<- *TransformRowFailure, stopChan <-chan struct{}) chan RowWithProps {
-	wg.Add(1)
 	outChan := make(chan RowWithProps, channelSize)
 
+	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer close(outChan)

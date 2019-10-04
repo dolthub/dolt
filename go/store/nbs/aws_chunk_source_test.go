@@ -75,11 +75,11 @@ func TestAWSChunkSource(t *testing.T) {
 			cache := newIndexCache(1024)
 			cache.put(h, index)
 
-			baseline := ddb.numGets
+			baseline := ddb.NumGets()
 			src := makeSrc(len(chunks)+1, cache)
 
 			// constructing the table reader shouldn't have resulted in any reads
-			assert.Zero(ddb.numGets - baseline)
+			assert.Zero(ddb.NumGets() - baseline)
 			assertChunksInReader(chunks, src, assert)
 		})
 	})

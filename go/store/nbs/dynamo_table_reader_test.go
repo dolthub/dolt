@@ -74,10 +74,10 @@ func TestDynamoTableReaderAt(t *testing.T) {
 				test(dts)
 
 				// Table should have been cached on read
-				baseline := ddb.numGets
+				baseline := ddb.NumGets()
 				_, err := dts.ReadTable(context.Background(), h, &Stats{})
 				assert.NoError(t, err)
-				assert.Zero(t, ddb.numGets-baseline)
+				assert.Zero(t, ddb.NumGets()-baseline)
 			})
 		})
 
@@ -101,11 +101,11 @@ func TestDynamoTableReaderAt(t *testing.T) {
 				assert.NoError(dts.Write(context.Background(), h, tableData))
 
 				// Table should have been cached on write
-				baseline := ddb.numGets
+				baseline := ddb.NumGets()
 				data, err := dts.ReadTable(context.Background(), h, &Stats{})
 				assert.NoError(err)
 				assert.Equal(tableData, data)
-				assert.Zero(ddb.numGets - baseline)
+				assert.Zero(ddb.NumGets() - baseline)
 			})
 		})
 	})
@@ -119,16 +119,16 @@ func TestDynamoTableReaderAt(t *testing.T) {
 
 		// First, read when table is not yet cached
 		scratch := make([]byte, len(tableData)/4)
-		baseline := ddb.numGets
+		baseline := ddb.NumGets()
 		_, err := tra.ReadAtWithStats(context.Background(), scratch, 0, stats)
 		assert.NoError(err)
-		assert.True(ddb.numGets > baseline)
+		assert.True(ddb.NumGets() > baseline)
 
 		// Table should have been cached on read so read again, a different slice this time
-		baseline = ddb.numGets
+		baseline = ddb.NumGets()
 		_, err = tra.ReadAtWithStats(context.Background(), scratch, int64(len(scratch)), stats)
 		assert.NoError(err)
-		assert.Zero(ddb.numGets - baseline)
+		assert.Zero(ddb.NumGets() - baseline)
 	})
 }
 
