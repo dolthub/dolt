@@ -74,7 +74,7 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 			}
 		}
 
-		currRoot, err = currRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+		currRoot, err = currRoot.PutTable(ctx, tblName, tbl)
 
 		if err != nil {
 			return err

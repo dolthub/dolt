@@ -69,7 +69,7 @@ func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue,
 			return err
 		}
 
-		root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, updatedTbl)
+		root, err = root.PutTable(ctx, tblName, updatedTbl)
 
 		if err != nil {
 			return err

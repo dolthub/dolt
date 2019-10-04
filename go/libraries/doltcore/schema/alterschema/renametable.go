@@ -48,5 +48,5 @@ func RenameTable(ctx context.Context, doltDb *doltdb.DoltDB, root *doltdb.RootVa
 		return nil, err
 	}
 
-	return root.PutTable(ctx, doltDb, newName, tbl)
+	return root.PutTable(ctx, newName, tbl)
 }

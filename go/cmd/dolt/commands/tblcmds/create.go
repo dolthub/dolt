@@ -87,7 +87,7 @@ func Create(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 					bdr.AddDetails("Use -f to overwrite the table with the specified schema and empty row data.")
 					verr = bdr.AddDetails("aborting").Build()
 				} else {
-					root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+					root, err = root.PutTable(ctx, tblName, tbl)
 
 					if err != nil {
 						verr = errhand.BuildDError("error: failed to write table back to database.").AddCause(err).Build()

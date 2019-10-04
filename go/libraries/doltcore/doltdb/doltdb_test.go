@@ -174,7 +174,7 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Failed to create test table with data")
 		}
 
-		root, err = root.PutTable(context.Background(), ddb, "test", tbl)
+		root, err = root.PutTable(context.Background(), "test", tbl)
 		assert.NoError(t, err)
 
 		valHash, err = ddb.WriteRootValue(context.Background(), root)

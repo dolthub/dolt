@@ -479,7 +479,7 @@ func sqlShow(ctx context.Context, root *doltdb.RootValue, show *sqlparser.Show) 
 // Pretty prints the output of the new SQL engine
 func prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	var chanErr error
-	doltSch := dsqle.SqlSchemaToDoltSchema(sqlSch)
+	doltSch := dsqle.SqlSchemaToDoltResultSchema(sqlSch)
 	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
 
 	if err != nil {

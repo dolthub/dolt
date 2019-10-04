@@ -61,7 +61,7 @@ func MergeCommits(ctx context.Context, ddb *doltdb.DoltDB, cm1, cm2 *doltdb.Comm
 			tblToStats[tblName] = stats
 
 			var err error
-			root, err = root.PutTable(ctx, ddb, tblName, mergedTable)
+			root, err = root.PutTable(ctx, tblName, mergedTable)
 
 			if err != nil {
 				return nil, nil, err

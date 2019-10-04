@@ -73,7 +73,7 @@ func Mv(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv
 				} else if !force && has {
 					verr = errhand.BuildDError("Data already exists in '%s'.  Use -f to overwrite.", new).Build()
 				} else {
-					working, err = working.PutTable(ctx, dEnv.DoltDB, new, tbl)
+					working, err = working.PutTable(ctx, new, tbl)
 
 					if err != nil {
 						verr = errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()

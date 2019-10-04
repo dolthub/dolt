@@ -107,7 +107,7 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	newWkRoot := headRoot
 	for tblName, tbl := range untrackedTables {
-		newWkRoot, err = newWkRoot.PutTable(ctx, dEnv.DoltDB, tblName, tbl)
+		newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to write table back to database").Build()

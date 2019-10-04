@@ -101,7 +101,7 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 					return err
 				}
 
-				working, err = working.PutTable(ctx, dEnv.DoltDB, tblName, clrTbl)
+				working, err = working.PutTable(ctx, tblName, clrTbl)
 
 				if err != nil {
 					return err

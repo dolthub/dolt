@@ -46,7 +46,7 @@ func TestTableDiff(t *testing.T) {
 	tbl1, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
-	root2, err := root.PutTable(context.Background(), ddb, "tbl1", tbl1)
+	root2, err := root.PutTable(context.Background(), "tbl1", tbl1)
 	assert.NoError(t, err)
 
 	added, modified, removed, err = root2.TableDiff(context.Background(), root)
@@ -66,7 +66,7 @@ func TestTableDiff(t *testing.T) {
 	rowData, _ := createTestRowData(t, ddb.ValueReadWriter(), sch)
 	tbl1Updated, _ := createTestTable(ddb.ValueReadWriter(), sch, rowData)
 
-	root3, err := root.PutTable(context.Background(), ddb, "tbl1", tbl1Updated)
+	root3, err := root.PutTable(context.Background(), "tbl1", tbl1Updated)
 	assert.NoError(t, err)
 
 	added, modified, removed, err = root3.TableDiff(context.Background(), root2)
@@ -83,7 +83,7 @@ func TestTableDiff(t *testing.T) {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	root4, err := root3.PutTable(context.Background(), ddb, "tbl2", tbl1)
+	root4, err := root3.PutTable(context.Background(), "tbl2", tbl1)
 	assert.NoError(t, err)
 
 	added, modified, removed, err = root2.TableDiff(context.Background(), root4)

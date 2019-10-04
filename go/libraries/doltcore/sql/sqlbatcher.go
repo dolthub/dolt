@@ -257,7 +257,7 @@ func (b *SqlBatcher) Commit(ctx context.Context) (*doltdb.RootValue, error) {
 			return nil, err
 		}
 
-		root, err = root.PutTable(ctx, b.db, tableName, table)
+		root, err = root.PutTable(ctx, tableName, table)
 
 		if err != nil {
 			return nil, err

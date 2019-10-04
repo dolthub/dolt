@@ -381,19 +381,19 @@ func setupMergeTest() (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, ty
 		panic(err)
 	}
 
-	mRoot, err = mRoot.PutTable(context.Background(), ddb, tableName, tbl)
+	mRoot, err = mRoot.PutTable(context.Background(), tableName, tbl)
 
 	if err != nil {
 		panic(err)
 	}
 
-	updatedRoot, err := mRoot.PutTable(context.Background(), ddb, tableName, updatedTbl)
+	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, updatedTbl)
 
 	if err != nil {
 		panic(err)
 	}
 
-	mergeRoot, err := mRoot.PutTable(context.Background(), ddb, tableName, mergeTbl)
+	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
 
 	if err != nil {
 		panic(err)

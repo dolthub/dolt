@@ -283,7 +283,7 @@ func addField(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, newTable)
+	root, err = root.PutTable(ctx, tblName, newTable)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write table back to database").Build()
@@ -318,7 +318,7 @@ func renameColumn(ctx context.Context, apr *argparser.ArgParseResults, root *dol
 		return errToVerboseErr(oldColName, newColName, err)
 	}
 
-	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, newTbl)
+	root, err = root.PutTable(ctx, tblName, newTbl)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write table back to database").Build()
@@ -366,7 +366,7 @@ func removeColumn(ctx context.Context, apr *argparser.ArgParseResults, root *dol
 		return errToVerboseErr(colName, "", err)
 	}
 
-	root, err = root.PutTable(ctx, dEnv.DoltDB, tblName, newTbl)
+	root, err = root.PutTable(ctx, tblName, newTbl)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write table back to database").AddCause(err).Build()

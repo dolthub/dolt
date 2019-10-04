@@ -16,10 +16,13 @@ package sqle
 
 import (
 	"context"
-
-	"github.com/src-d/go-mysql-server/sql"
+	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/store/types"
+
+	"github.com/src-d/go-mysql-server/sql"
 )
 
 // Database implements sql.Database for a dolt DB.
@@ -80,4 +83,70 @@ func (db *Database) Tables() map[string]sql.Table {
 // Root returns the root value for the database.
 func (db *Database) Root() *doltdb.RootValue {
 	return db.root
+}
+
+// DropTable drops the table with the name given
+func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
+	tableExists, err := db.root.HasTable(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
+	if !tableExists {
+		return sql.ErrTableNotFound.New(tableName)
+	}
+
+	newRoot, err := db.root.RemoveTables(ctx, tableName)
+	if err != nil {
+		return err
+	}
+
+	// TODO: races
+	db.root = newRoot
+
+	return nil
+}
+
+// CreateTable creates a table with the name and schema given.
+func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+
+	if !doltdb.IsValidTableName(tableName) {
+		return fmt.Errorf("Invalid table name: '%v'", tableName)
+	}
+
+	if exists, err := db.root.HasTable(ctx, tableName); err != nil {
+		return err
+	} else if exists {
+		return sql.ErrTableAlreadyExists.New(tableName)
+	}
+
+	doltSch, err := SqlSchemaToDoltSchema(schema)
+	if err != nil {
+		return err
+	}
+
+	schVal, err := encoding.MarshalAsNomsValue(ctx, db.root.VRW(), doltSch)
+	if err != nil {
+		return err
+	}
+
+	m, err := types.NewMap(ctx, db.root.VRW())
+	if err != nil {
+		return err
+	}
+
+	tbl, err := doltdb.NewTable(ctx, db.root.VRW(), schVal, m)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := db.root.PutTable(ctx, tableName, tbl)
+	if err != nil {
+		return err
+	}
+
+	// TODO: races
+	db.root = newRoot
+
+	return nil
 }
