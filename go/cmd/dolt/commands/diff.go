@@ -577,10 +577,14 @@ func diffSummary(ctx context.Context, v1, v2 types.Map, colLen int) errhand.Verb
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		diff.Summary(ctx, ae, ch, v2, v1)
+		err := diff.Summary(ctx, ch, v2, v1)
+
+		ae.SetIfError(err)
 	}()
 
 	acc := diff.DiffSummaryProgress{}
+	var count int64
+	var pos int
 	for p := range ch {
 		if ae.IsSet() {
 			break
@@ -592,7 +596,16 @@ func diffSummary(ctx context.Context, v1, v2 types.Map, colLen int) errhand.Verb
 		acc.CellChanges += p.CellChanges
 		acc.NewSize += p.NewSize
 		acc.OldSize += p.OldSize
+
+		if count % 10000 == 0 {
+			statusStr := fmt.Sprintf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
+			pos = cli.DeleteAndPrint(pos, statusStr)
+		}
+
+		count++
 	}
+
+	pos = cli.DeleteAndPrint(pos, "")
 
 	if err := ae.Get(); err != nil {
 		return errhand.BuildDError("").AddCause(err).Build()
