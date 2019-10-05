@@ -56,13 +56,26 @@ teardown() {
     [[ "$output" =~ "(4 Entries vs 3 Entries)" ]] || false
 }
 
-@test "diff summary comparing working table to last commit" {
+@test "diff summary comparing row with a deleted dolumn and an added column"
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add test
+    dolt commit -m "create table"
     dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add test
-    dolt commit -m "table created"
+    dolt commit -m "put row"
     dolt table put-row test pk:0 c1:1 c3:3 c4:4 c5:5
-    dolt diff --summary
+    run dolt diff --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0 Row Unmodified (0.00%)" ]] || false
+    [[ "$output" =~ "0 Row Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "1 Rows Modified (100.00%)" ]] || false
+    [[ "$output" =~ "1 Cells Modified (16.67%)" ]] || false
+    [[ "$output" =~ "(1 Entry vs 1 Entries)" ]] || false
+    dolt add test
+    dolt commit -m "row modified"
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0 Row Unmodified (0.00%)" ]] || false
     [[ "$output" =~ "0 Row Added (0.00%)" ]] || false
