@@ -17,8 +17,9 @@ package diff
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/store/diff"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/store/diff"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )

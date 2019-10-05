@@ -597,7 +597,7 @@ func diffSummary(ctx context.Context, v1, v2 types.Map, colLen int) errhand.Verb
 		acc.NewSize += p.NewSize
 		acc.OldSize += p.OldSize
 
-		if count % 10000 == 0 {
+		if count%10000 == 0 {
 			statusStr := fmt.Sprintf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
 			pos = cli.DeleteAndPrint(pos, statusStr)
 		}
