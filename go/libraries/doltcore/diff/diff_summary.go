@@ -36,7 +36,7 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, v1, v2 types.Map)
 	ad.Start(ctx, v1, v2)
 	defer ad.Close()
 
-	ch <- DiffSummaryProgress{OldSize: v1.Len(), NewSize: v2.Len()}
+	ch <- DiffSummaryProgress{OldSize: v2.Len(), NewSize: v1.Len()}
 
 	for !ad.IsDone() {
 		diffs, err := ad.GetDiffs(100, time.Millisecond)

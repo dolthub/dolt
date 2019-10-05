@@ -56,7 +56,7 @@ teardown() {
     [[ "$output" =~ "(4 Entries vs 3 Entries)" ]] || false
 }
 
-@test "diff summary comparing row with a deleted dolumn and an added column"
+@test "diff summary comparing row with a deleted dolumn and an added column" {
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "create table"

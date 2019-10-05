@@ -577,7 +577,7 @@ func diffSummary(ctx context.Context, v1, v2 types.Map, colLen int) errhand.Verb
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, v2, v1)
+		err := diff.Summary(ctx, ch, v1, v2)
 
 		ae.SetIfError(err)
 	}()
