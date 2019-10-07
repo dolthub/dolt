@@ -56,6 +56,35 @@ teardown() {
     [[ "$output" =~ "(4 Entries vs 3 Entries)" ]] || false
 }
 
+@test "diff summary comparing row with a deleted column and an added column" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add test
+    dolt commit -m "create table"
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt add test
+    dolt commit -m "put row"
+    dolt table put-row test pk:0 c1:1 c3:3 c4:4 c5:5
+    run dolt diff --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0 Rows Unmodified (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "1 Row Modified (100.00%)" ]] || false
+    [[ "$output" =~ "1 Cell Modified (16.67%)" ]] || false
+    [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
+    dolt add test
+    dolt commit -m "row modified"
+    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt diff --summary
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "0 Rows Unmodified (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Added (0.00%)" ]] || false
+    [[ "$output" =~ "0 Rows Deleted (0.00%)" ]] || false
+    [[ "$output" =~ "1 Row Modified (100.00%)" ]] || false
+    [[ "$output" =~ "1 Cell Modified (16.67%)" ]] || false
+    [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
+}
+
 @test "diff summary comparing two branches" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
@@ -81,9 +110,6 @@ teardown() {
     dolt add employees
     dolt commit -m "Added employees table with data"
     dolt schema --add-column employees city string
-    run dolt diff --summary
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "No data changes. See schema changes by using -s or --schema." ]] || false
     dolt table put-row employees id:3 "first name":taylor "last name":bantle title:"software engineer" "start date":"" "end date":"" city:"Santa Monica"
     run dolt diff --summary
     [ "$status" -eq 0 ]

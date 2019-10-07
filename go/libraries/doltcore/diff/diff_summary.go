@@ -17,59 +17,61 @@ package diff
 import (
 	"context"
 	"errors"
+	"time"
 
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
+	"github.com/liquidata-inc/dolt/go/store/diff"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
-
-type diffFunc func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{})
 
 type DiffSummaryProgress struct {
 	Adds, Removes, Changes, CellChanges, NewSize, OldSize uint64
 }
 
 // Summary reports a summary of diff changes between two values
-func Summary(ctx context.Context, ae *atomicerr.AtomicError, ch chan DiffSummaryProgress, v1, v2 types.Map) {
-	if !v1.Equals(v2) {
-		ch <- DiffSummaryProgress{OldSize: v1.Len(), NewSize: v2.Len()}
+func Summary(ctx context.Context, ch chan DiffSummaryProgress, v1, v2 types.Map) error {
+	ad := NewAsyncDiffer(1024)
+	ad.Start(ctx, v1, v2)
+	defer ad.Close()
 
-		changeChan := make(chan types.ValueChanged)
-		stopChan := make(chan struct{}, 1) // buffer size of 1, so this won't block if diff already finished
+	ch <- DiffSummaryProgress{OldSize: v2.Len(), NewSize: v1.Len()}
 
-		go func() {
-			defer close(changeChan)
-			v2.Diff(ctx, v1, ae, changeChan, stopChan)
-		}()
+	for !ad.IsDone() {
+		diffs, err := ad.GetDiffs(100, time.Millisecond)
 
-		reportChanges(ae, ch, changeChan)
-	}
-}
+		if err != nil {
+			return err
+		}
 
-func reportChanges(ae *atomicerr.AtomicError, ch chan<- DiffSummaryProgress, changeChan chan types.ValueChanged) {
-	var err error
-	for change := range changeChan {
-		switch change.ChangeType {
-		case types.DiffChangeAdded:
-			ch <- DiffSummaryProgress{Adds: 1}
-		case types.DiffChangeRemoved:
-			ch <- DiffSummaryProgress{Removes: 1}
-		case types.DiffChangeModified:
-			var cellChanges uint64
-			cellChanges, err = getCellChanges(change.NewValue, change.OldValue, change.Key)
-			ch <- DiffSummaryProgress{Changes: 1, CellChanges: cellChanges}
-		default:
-			err = errors.New("unknown change type")
+		for i := range diffs {
+			curr := diffs[i]
+			err := reportChanges(curr, ch)
+
+			if err != nil {
+				return err
+			}
 		}
 	}
-	ae.SetIfError(err)
+
+	return nil
 }
 
-func getCellChanges(oldVal, newVal, key types.Value) (uint64, error) {
-	oldTuple := oldVal.(types.Tuple)
-	newTuple := newVal.(types.Tuple)
-
-	if oldTuple.Len() > newTuple.Len() {
-		return oldTuple.CountDifferencesBetweenTupleFields(newTuple)
+func reportChanges(change *diff.Difference, ch chan<- DiffSummaryProgress) error {
+	switch change.ChangeType {
+	case types.DiffChangeAdded:
+		ch <- DiffSummaryProgress{Adds: 1}
+	case types.DiffChangeRemoved:
+		ch <- DiffSummaryProgress{Removes: 1}
+	case types.DiffChangeModified:
+		oldTuple := change.OldValue.(types.Tuple)
+		newTuple := change.NewValue.(types.Tuple)
+		cellChanges, err := oldTuple.CountDifferencesBetweenTupleFields(newTuple)
+		if err != nil {
+			return err
+		}
+		ch <- DiffSummaryProgress{Changes: 1, CellChanges: cellChanges}
+	default:
+		return errors.New("unknown change type")
 	}
-	return newTuple.CountDifferencesBetweenTupleFields(oldTuple)
+
+	return nil
 }

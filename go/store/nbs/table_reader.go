@@ -71,7 +71,7 @@ func (cmp CompressedChunk) ToChunk() (chunks.Chunk, error) {
 		return chunks.Chunk{}, err
 	}
 
-	return chunks.NewChunk(data), nil
+	return chunks.NewChunkWithHash(cmp.H, data), nil
 }
 
 func ChunkToCompressedChunk(chunk chunks.Chunk) CompressedChunk {
