@@ -108,7 +108,8 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 	return err
 }
 
-// TimeSortedCommits returns a reverse-chronological (latest-first) list of the ancestors of `commit`
+// TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.
+// Passing a negative value for `n` will result in all ancestors being returned.
 func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
 	hashToCommit := make(map[hash.Hash]*doltdb.Commit)
 	err := AddCommits(ctx, ddb, commit, hashToCommit, n)
