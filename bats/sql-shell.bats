@@ -24,7 +24,6 @@ teardown() {
 
 @test "bad sql in sql shell should error" {
     run dolt sql <<< "This is bad sql"
-    skip "This all returns 0 and continues to parse after a bad statement"
     [ $status -eq 1 ]
     run dolt sql <<< "select * from test; This is bad sql; insert into test (pk) values (666); select * from test;"
     [ $status -eq 1 ]
