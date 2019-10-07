@@ -20,11 +20,8 @@ import (
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/diff"
-
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
-
-type diffFunc func(changeChan chan<- types.ValueChanged, stopChan <-chan struct{})
 
 type DiffSummaryProgress struct {
 	Adds, Removes, Changes, CellChanges, NewSize, OldSize uint64
@@ -65,27 +62,16 @@ func reportChanges(change *diff.Difference, ch chan<- DiffSummaryProgress) error
 	case types.DiffChangeRemoved:
 		ch <- DiffSummaryProgress{Removes: 1}
 	case types.DiffChangeModified:
-		cellChanges, err := getCellChanges(change.NewValue, change.OldValue)
-
+		oldTuple := change.OldValue.(types.Tuple)
+		newTuple := change.NewValue.(types.Tuple)
+		cellChanges, err := oldTuple.CountDifferencesBetweenTupleFields(newTuple)
 		if err != nil {
 			return err
 		}
-
 		ch <- DiffSummaryProgress{Changes: 1, CellChanges: cellChanges}
 	default:
 		return errors.New("unknown change type")
 	}
 
 	return nil
-}
-
-func getCellChanges(oldVal, newVal types.Value) (uint64, error) {
-	oldTuple := oldVal.(types.Tuple)
-	newTuple := newVal.(types.Tuple)
-
-	if oldTuple.Len() > newTuple.Len() {
-		return oldTuple.CountDifferencesBetweenTupleFields(newTuple)
-	}
-
-	return newTuple.CountDifferencesBetweenTupleFields(oldTuple)
 }
