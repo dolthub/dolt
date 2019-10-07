@@ -203,7 +203,7 @@ func batchInsertEarlySemicolon(query string) bool {
 			midSingleQuote = true
 			for ; i < queryLength; i++ {
 				if query[i] == '\'' {
-					if query[i - 1] != '\\' {
+					if query[i-1] != '\\' {
 						midSingleQuote = false
 						break
 					}
@@ -214,7 +214,7 @@ func batchInsertEarlySemicolon(query string) bool {
 			midDoubleQuote = true
 			for ; i < queryLength; i++ {
 				if query[i] == '"' {
-					if query[i - 1] != '\\' {
+					if query[i-1] != '\\' {
 						midDoubleQuote = false
 						break
 					}
