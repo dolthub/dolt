@@ -121,7 +121,10 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	fi, err := os.Stdin.Stat()
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
-		root = runBatchMode(ctx, dEnv, root)
+		root, err = runBatchMode(ctx, dEnv, root)
+		if err != nil {
+			return 1
+		}
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
@@ -160,7 +163,7 @@ func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err err
 }
 
 // runBatchMode processes queries until EOF and returns the resulting root value
-func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) *doltdb.RootValue {
+func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Split(scanStatements)
 
@@ -169,6 +172,9 @@ func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	var query string
 	for scanner.Scan() {
 		query += scanner.Text()
+		if len(query) == 0 || query == "\n" {
+			continue
+		}
 		if !batchInsertEarlySemicolon(query) {
 			query += ";"
 			continue
@@ -177,6 +183,7 @@ func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 			root = newRoot
 		} else if err != nil {
 			_, _ = fmt.Fprintf(cli.CliErr, "Error processing query '%s': %s\n", query, err.Error())
+			return nil, err
 		}
 		query = ""
 	}
@@ -189,7 +196,7 @@ func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 		root = newRoot
 	}
 
-	return root
+	return root, nil
 }
 
 // batchInsertEarlySemicolon loops through a string to check if Scan stopped too early on a semicolon
