@@ -90,3 +90,13 @@ teardown() {
     # generated when making changes to NULL printing
     [[ ! "$output" =~ "|||||" ]] || false
 }
+
+@test "semicolons in quoted sql statements" {
+    run dolt sql -q "insert into test (pk,c1) values ('test', 'this; should; work')"
+    [ "$status" -eq 0 ]
+    run dolt sql <<< "insert into test (pk,c1) values ('test2', 'this; should; work')"
+    # This should probably not return 0
+    [ "$status" -eq 0 ]
+    skip "Parsing semicolons piped into sql in strings is busted"
+    [[ ! "$output" =~ "Error" ]]
+}
