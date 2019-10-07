@@ -166,13 +166,19 @@ func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 
 	batcher := dsql.NewSqlBatcher(dEnv.DoltDB, root)
 
+	var query string
 	for scanner.Scan() {
-		query := scanner.Text()
+		query += scanner.Text()
+		if !batchInsertEarlySemicolon(query) {
+			query += ";"
+			continue
+		}
 		if newRoot, err := processBatchQuery(ctx, query, dEnv, root, batcher); newRoot != nil {
 			root = newRoot
 		} else if err != nil {
 			_, _ = fmt.Fprintf(cli.CliErr, "Error processing query '%s': %s\n", query, err.Error())
 		}
+		query = ""
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -184,6 +190,42 @@ func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	}
 
 	return root
+}
+
+// batchInsertEarlySemicolon loops through a string to check if Scan stopped too early on a semicolon
+func batchInsertEarlySemicolon(query string) bool {
+	midSingleQuote := false
+	midDoubleQuote := false
+	queryLength := len(query)
+	for i := 0; i < queryLength; i++ {
+		if query[i] == '\'' {
+			i++
+			midSingleQuote = true
+			for ; i < queryLength; i++ {
+				if query[i] == '\'' {
+					if query[i - 1] != '\\' {
+						midSingleQuote = false
+						break
+					}
+				}
+			}
+		} else if query[i] == '"' {
+			i++
+			midDoubleQuote = true
+			for ; i < queryLength; i++ {
+				if query[i] == '"' {
+					if query[i - 1] != '\\' {
+						midDoubleQuote = false
+						break
+					}
+				}
+			}
+		}
+		if midSingleQuote || midDoubleQuote {
+			break
+		}
+	}
+	return !midSingleQuote && !midDoubleQuote
 }
 
 // runShell starts a SQL shell. Returns when the user exits the shell with the root value resulting from any queries.
