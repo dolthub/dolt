@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/diff"
-
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
