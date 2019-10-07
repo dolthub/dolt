@@ -23,7 +23,7 @@ var Commands = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "add-column", Desc: "Adds a column to specified table's schema.", Func: AddColumn, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 	{Name: "drop-column", Desc: "Removes a column of the specified table.", Func: DropColumn, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 	{Name: "export", Desc: "Exports a table's schema.", Func: Export, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
-	{Name: "import", Desc: "Creates a new table with an inferred schema.", Func: Import, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
+	//{Name: "import", Desc: "Creates a new table with an inferred schema.", Func: Import, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 	{Name: "rename-column", Desc: "Renames a column of the specified table.", Func: RenameColumn, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 	{Name: "show", Desc: "Shows the schema of one or more tables.", Func: Show, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
 })
