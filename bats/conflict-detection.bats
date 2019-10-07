@@ -144,11 +144,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
-    dolt schema --add-column test c0 int
+    dolt schema add-column test c0 int
     dolt add test
     dolt commit -m "added column c0"
     dolt checkout add-column
-    dolt schema --add-column test c0 int
+    dolt schema add-column test c0 int
     dolt add test
     dolt commit -m "added same column c0"
     dolt checkout master
@@ -163,11 +163,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
-    dolt schema --add-column test c0 int
+    dolt schema add-column test c0 int
     dolt add test
     dolt commit -m "added column c0"
     dolt checkout add-column
-    dolt schema --add-column test c6 int
+    dolt schema add-column test c6 int
     dolt add test
     dolt commit -m "added column c6"
     dolt checkout master
@@ -183,11 +183,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
-    dolt schema --add-column test c0 string
+    dolt schema add-column test c0 string
     dolt add test
     dolt commit -m "added column c0 as string"
     dolt checkout add-column
-    dolt schema --add-column test c0 int
+    dolt schema add-column test c0 int
     dolt add test
     dolt commit -m "added column c0 as int"
     dolt checkout master
@@ -202,11 +202,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch delete-column
-    dolt schema --drop-column test c5
+    dolt schema drop-column test c5
     dolt add test
     dolt commit -m "deleted c45 column"
     dolt checkout delete-column
-    dolt schema --drop-column test c5
+    dolt schema drop-column test c5
     dolt add test
     dolt commit -m "deleted c5 again"
     dolt checkout master
@@ -221,11 +221,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch delete-column
-    dolt schema --drop-column test c5
+    dolt schema drop-column test c5
     dolt add test
     dolt commit -m "deleted column c5"
     dolt checkout delete-column
-    dolt schema --drop-column test c4
+    dolt schema drop-column test c4
     dolt add test
     dolt commit -m "deleted column c4"
     dolt checkout master
@@ -240,11 +240,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
-    dolt schema --rename-column test c5 c0
+    dolt schema rename-column test c5 c0
     dolt add test
     dolt commit -m "renamed c5 to c0"
     dolt checkout rename-column
-    dolt schema --rename-column test c5 c0
+    dolt schema rename-column test c5 c0
     dolt add test
     dolt commit -m "renamed c5 to c0 again"
     dolt checkout master
@@ -259,11 +259,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
-    dolt schema --rename-column test c5 c0
+    dolt schema rename-column test c5 c0
     dolt add test
     dolt commit -m "renamed c5 to c0"
     dolt checkout rename-column
-    dolt schema --rename-column test c5 c6
+    dolt schema rename-column test c5 c6
     dolt add test
     dolt commit -m "renamed c5 to c6"
     dolt checkout master
@@ -280,11 +280,11 @@ teardown() {
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
-    dolt schema --rename-column test c5 c0
+    dolt schema rename-column test c5 c0
     dolt add test
     dolt commit -m "renamed c5 to c0"
     dolt checkout rename-column
-    dolt schema --rename-column test c4 c0
+    dolt schema rename-column test c4 c0
     dolt add test
     dolt commit -m "renamed c5 to c6"
     dolt checkout master

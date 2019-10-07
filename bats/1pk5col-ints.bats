@@ -610,8 +610,8 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.sql export.sql
 }
 
-@test "dolt schema" {
-    run dolt schema
+@test "dolt schema show" {
+    run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -622,7 +622,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
     [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
     [[ "$output" =~ "primary key (\`pk\`)" ]] || false
-    run dolt schema test
+    run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -635,14 +635,14 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "primary key (\`pk\`)" ]] || false
 }
 
-@test "dolt schema on non existant table" {
-    run dolt schema foo
+@test "dolt schema show on non existant table" {
+    run dolt schema show foo
     [ "$status" -eq 0 ]
     [ "$output" = "foo not found" ]
 }
 
-@test "dolt schema --export" {
-    run dolt schema --export test export.schema
+@test "dolt schema export" {
+    run dolt schema export test export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]

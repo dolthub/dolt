@@ -35,8 +35,8 @@ teardown() {
     [[ "$output" =~ "BBB" ]] || false
 }
 
-@test "capital letter col names. dolt schema" {
-    run dolt schema
+@test "capital letter col names. dolt schema show" {
+    run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Aaa" ]] || false
     [[ "$output" =~ "Bbb" ]] || false

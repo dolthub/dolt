@@ -90,8 +90,8 @@ teardown() {
     [[ "$output" =~ "Error parsing SQL" ]] || false
 }
 
-@test "dolt schema in new repository" {
-    run dolt schema
+@test "dolt schema show in new repository" {
+    run dolt schema show
     [ "$status" -eq 1 ]
     [[ "$output" =~ "usage" ]] || false
 }

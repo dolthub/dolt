@@ -213,7 +213,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
     # use bash -c so I can | the output to grep
-    run bash -c "dolt schema"
+    run bash -c "dolt schema show"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
@@ -229,7 +229,7 @@ teardown() {
     run dolt sql -q "create table test (pk1 int, pk2 int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk1), primary key (pk2))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run bash -c "dolt schema"
+    run bash -c "dolt schema show"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk1\` int not null comment 'tag:0'" ]] || false
@@ -246,7 +246,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt schema test
+    run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
@@ -262,7 +262,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 float, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt schema test
+    run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\` " ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
@@ -275,7 +275,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt schema test
+    run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
@@ -288,7 +288,7 @@ teardown() {
     run dolt sql -q "create table test (pk int not null, c1 int unsigned, primary key (pk))"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt schema test
+    run dolt schema show test
     [[ "$output" =~ "int unsigned" ]] || false
 }
 
