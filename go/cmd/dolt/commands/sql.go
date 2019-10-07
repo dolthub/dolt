@@ -165,7 +165,7 @@ func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err err
 // runBatchMode processes queries until EOF and returns the resulting root value
 func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (*doltdb.RootValue, error) {
 	scanner := bufio.NewScanner(os.Stdin)
-	const maxCapacity = 512*1024
+	const maxCapacity = 512 * 1024
 	buf := make([]byte, maxCapacity)
 	scanner.Buffer(buf, maxCapacity)
 	scanner.Split(scanStatements)
