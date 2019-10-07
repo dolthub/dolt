@@ -172,6 +172,9 @@ func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 	var query string
 	for scanner.Scan() {
 		query += scanner.Text()
+		if len(query) == 0 || query == "\n" {
+			continue
+		}
 		if !batchInsertEarlySemicolon(query) {
 			query += ";"
 			continue
