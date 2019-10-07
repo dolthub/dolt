@@ -173,7 +173,7 @@ Rows inserted: 1
 $ dolt sql --query 'UPDATE state_populations SET population=1 where state="My State"'
 Rows updated: 1
 ```
-Now you can see that you have changes to a table that are not staged for commit, in the same way an edited file is not automatically staged for commit:
+Now you can see that you have changes to a table that are not staged for commit, in the same way that Git does not automatically stage modified files for commit:
 ```
 $ dolt status
 On branch master
@@ -200,7 +200,7 @@ Well done, you updated a table, and committed your changes!
 
 ## Simple Branching Workflow
 
-When making changes it is advisable to create a new branch which will serve as the workspace for your changes. Choose a short branch name that describes the work you are planning to do. Again, this works identically to git:
+When making changes it is advisable to create a new branch which will serve as the workspace for your changes. Choose a short branch name that describes the work you are planning to do. Again, this works identically to Git:
 
     dolt checkout -b <branch>
 
