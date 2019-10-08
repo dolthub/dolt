@@ -1,18 +1,13 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:~/go/bin
-    export NOMS_VERSION_NEXT=1
-    cd $BATS_TMPDIR
-    mkdir "dolt-repo-$$"
-    cd "dolt-repo-$$"
-    dolt init
+    setup_common
     dolt table import -c -pk=Timestamp test `batshelper sql-reserved-column-name.csv`
 }
 
 teardown() {
-    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    teardown_common
 }
 
 @test "run sql select on a table with a column name that is an sql reserved word" {

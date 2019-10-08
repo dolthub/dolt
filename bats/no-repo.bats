@@ -1,15 +1,14 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:~/go/bin
-    export NOMS_VERSION_NEXT=1
-	cd $BATS_TMPDIR
+    setup_common
     mkdir no-dolt-dir-$$
 	cd no-dolt-dir-$$
 }
 
 teardown() {
+    teardown_common
     rm -rf $BATS_TMPDIR/no-dolt-dir-$$
 }
 
@@ -226,9 +225,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 }
 
 @test "initializing a dolt repository" {
-    cd $BATS_TMPDIR
-    mkdir dolt-repo-$$
-    cd dolt-repo-$$
+    mkdir dolt-repo-$$-new
+    cd dolt-repo-$$-new
     run dolt init
     [ "$status" -eq 0 ]
     [ "$output" = "Successfully initialized dolt data repository." ]
@@ -236,5 +234,5 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ -d .dolt/noms ]
     [ -f .dolt/config.json ]
     [ -f .dolt/repo_state.json ]
-    rm -rf $BATS_TMPDIR/dolt-repo-$$
+    rm -rf $BATS_TMPDIR/dolt-repo-$$-new
 }

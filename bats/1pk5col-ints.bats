@@ -1,20 +1,13 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:~/go/bin
-    export NOMS_VERSION_NEXT=1
-    cd $BATS_TMPDIR
-    # Append the directory name with the pid of the calling process so
-    # multiple tests can be run in parallel on the same machine
-    mkdir "dolt-repo-$$"
-    cd "dolt-repo-$$"
-    dolt init
+    setup_common
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
 }
 
 teardown() {
-    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    teardown_common
 }
 
 # Create a single primary key table and do stuff

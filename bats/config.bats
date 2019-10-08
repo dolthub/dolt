@@ -1,19 +1,16 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:~/go/bin
-    export NOMS_VERSION_NEXT=1
+    setup_no_dolt_init
     mkdir $BATS_TMPDIR/config-test$$
     nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-test$$ /p
-    cd $BATS_TMPDIR
-    mkdir "dolt-repo-$$"
-    cd "dolt-repo-$$"
+    cd $BATS_TMPDIR/dolt-repo-$$
 }
 
 teardown() {
+    teardown_common
     rm -rf "$BATS_TMPDIR/config-test$$"
-    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
 @test "make sure no dolt configuration for simulated fresh user" {

@@ -1,18 +1,13 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:~/go/bin
-    export NOMS_VERSION_NEXT=1
-    cd $BATS_TMPDIR
-    mkdir "dolt-repo-$$"
-    cd "dolt-repo-$$"
-    dolt init
+    setup_common
     dolt table import -c -s `batshelper capital-letter-column-names.schema` test `batshelper capital-letter-column-names.csv`
 }
 
 teardown() {
-    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    teardown_common
 }
 
 @test "capital letter col names. put a row in a table using dolt table put-row" {

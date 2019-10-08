@@ -1,25 +1,23 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 REMOTE=http://localhost:50051/test-org/test-repo
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:$GOPATH/bin
-    export NOMS_VERSION_NEXT=1
+    setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
-    mkdir dolt-repo-$$
     cd dolt-repo-$$
-    dolt init
     dolt remote add test-remote $REMOTE
     dolt push test-remote master
     export DOLT_HEAD_COMMIT=`get_head_commit`
 }
 
 teardown() {
-    rm -rf $BATS_TMPDIR/{git,dolt}-repo-$$
+    teardown_common
+    rm -rf $BATS_TMPDIR/git-repo-$$
     pgrep remotesrv | xargs kill
     rm -rf $BATS_TMPDIR/remotes-$$
 }

@@ -1,22 +1,19 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:~/go/bin
-    export NOMS_VERSION_NEXT=1
+    setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
     mkdir remotes-$$/test-org-empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
-    mkdir dolt-repo-$$
     cd dolt-repo-$$
-    dolt init
     mkdir "dolt-repo-clones"
 }
 
 teardown() {
-    rm -rf $BATS_TMPDIR/dolt-repo-$$
+    teardown_common
     pgrep remotesrv | xargs kill
     rm -rf $BATS_TMPDIR/remotes-$$
 }

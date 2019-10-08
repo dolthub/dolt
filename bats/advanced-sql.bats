@@ -1,13 +1,8 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    load $BATS_TEST_DIRNAME/helper/common.bash
-    export PATH=$PATH:~/go/bin
-    export NOMS_VERSION_NEXT=1
-    cd $BATS_TMPDIR
-    mkdir "dolt-repo-$$"
-    cd "dolt-repo-$$"
-    dolt init
+    setup_common
     dolt table create -s=`batshelper 1pk5col-ints.schema` one_pk
     dolt table create -s=`batshelper 2pk5col-ints.schema` two_pk
     dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (0,0,0,0,0,0),(1,10,10,10,10,10),(2,20,20,20,20,20),(3,30,30,30,30,30)"
@@ -15,7 +10,7 @@ setup() {
 }
 
 teardown() {
-    rm -rf "$BATS_TMPDIR/dolt-repo-$$"
+    teardown_common
 }
 
 @test "sql select from multiple tables" {
