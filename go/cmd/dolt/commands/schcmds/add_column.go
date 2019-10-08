@@ -44,7 +44,7 @@ var schAddColSynopsis = []string{
 
 func AddColumn(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
+	ap.ArgListHelp["table"] = "table where the new column should be added."
 	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
 	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new column.")
 	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this column will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")

@@ -34,7 +34,7 @@ var schExportSynopsis = []string{
 
 func Export(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
+	ap.ArgListHelp["table"] = "table whose schema is being exported."
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
 	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
 	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new column.")

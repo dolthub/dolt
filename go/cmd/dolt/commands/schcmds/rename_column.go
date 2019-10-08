@@ -36,7 +36,6 @@ var schRenameColSynopsis = []string{
 func RenameColumn(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table being modified."
-	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this column will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schRenameColShortDesc, schRenameColLongDesc, schRenameColSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
