@@ -2,8 +2,7 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    SKIP_DOLT_INIT=true
-    setup_common $SKIP_DOLT_INIT
+    setup_no_dolt_init
     mkdir $BATS_TMPDIR/config-test$$
     nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-test$$ /p
     cd $BATS_TMPDIR/dolt-repo-$$

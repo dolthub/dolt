@@ -13,19 +13,18 @@ set_dolt_user() {
 	dolt config --global --add user.email "$2" > /dev/null 2>&1
 }
 
-setup_common() {
+setup_no_dolt_init() {
 	export PATH=$PATH:~/go/bin
-	export NOMS_VERSION_NEXT=1
 	cd $BATS_TMPDIR
 	# Append the directory name with the pid of the calling process so
 	# multiple tests can be run in parallel on the same machine
 	mkdir "dolt-repo-$$"
 	cd "dolt-repo-$$"
+}
 
-	SKIP_INIT=$1
-	if [ "$SKIP_INIT" != true ] ; then
-		dolt init
-	fi
+setup_common() {
+	setup_no_dolt_init
+	dolt init
 }
 
 teardown_common() {
