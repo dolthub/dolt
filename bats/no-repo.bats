@@ -9,6 +9,7 @@ setup() {
 
 teardown() {
     teardown_common
+    rm -rf $BATS_TMPDIR/no-dolt-dir-$$
 }
 
 @test "checking we have a dolt executable available" {
