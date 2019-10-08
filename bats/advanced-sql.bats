@@ -245,14 +245,14 @@ teardown() {
     run dolt sql -q "describe one_pk"
     [ $status -eq 0 ]
     [[ "$output" =~ "c6" ]] || false
-    run dolt schema one_pk
+    run dolt schema show one_pk
     [[ "$output" =~ "c6" ]] || false
     run dolt sql -q "alter table one_pk drop column c6"
     [ $status -eq 0 ]
     run dolt sql -q "describe one_pk"
     [ $status -eq 0 ]
     [[ ! "$output" =~ "c6" ]] || false
-    run dolt schema one_pk
+    run dolt schema show one_pk
     [[ ! "$output" =~ "c6" ]] || false
 }
 

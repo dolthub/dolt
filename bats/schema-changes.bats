@@ -16,7 +16,7 @@ teardown() {
 
 @test "changing column types should not produce a data diff error" {
     dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
-    run dolt schema
+    run dolt schema show
     [[ "$output" =~ "varchar" ]] || false
     dolt add test
     dolt commit -m "Added test table"
@@ -32,9 +32,9 @@ teardown() {
 @test "dolt schema rename column" {
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-    run dolt schema --rename-column test c1 c0
+    run dolt schema rename-column test c1 c0
     [ "$status" -eq 0 ]
-    run dolt schema test
+    run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -52,9 +52,9 @@ teardown() {
 @test "dolt schema delete column" {
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-    run dolt schema --drop-column test c1
+    run dolt schema drop-column test c1
     [ "$status" -eq 0 ]
-    run dolt schema test
+    run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -72,7 +72,7 @@ teardown() {
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt schema --add-column test c0 int
+    dolt schema add-column test c0 int
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
@@ -94,7 +94,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
     [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
-    dolt schema --drop-column test c0
+    dolt schema drop-column test c0
     dolt diff
 }
 
@@ -113,8 +113,8 @@ teardown() {
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt schema --add-column test c0 int
-    dolt schema --drop-column test c0
+    dolt schema add-column test c0 int
+    dolt schema drop-column test c0
     run dolt diff
     skip "This produces a diff when it should not"
     [ "$status" -eq 0 ]

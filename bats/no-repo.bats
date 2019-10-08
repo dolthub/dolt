@@ -198,8 +198,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt schema outside of a dolt repository" {
-    run dolt schema
+@test "dolt schema show outside of a dolt repository" {
+    run dolt schema show
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
