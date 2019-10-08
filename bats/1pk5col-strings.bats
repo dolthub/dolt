@@ -97,4 +97,7 @@ teardown() {
     run dolt sql <<< "insert into test (pk,c1) values ('test2', 'this; should; work')"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows inserted: 1" ]]
+    run dolt sql <<< "insert into test (pk,c1) values ('test3', 'this \\\\'' should \\\\'' work')"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows inserted: 1" ]]
 }

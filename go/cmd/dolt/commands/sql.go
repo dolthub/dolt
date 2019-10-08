@@ -204,38 +204,32 @@ func runBatchMode(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue
 
 // batchInsertEarlySemicolon loops through a string to check if Scan stopped too early on a semicolon
 func batchInsertEarlySemicolon(query string) bool {
-	midSingleQuote := false
-	midDoubleQuote := false
+	quotes := []uint8{'\'', '"'}
+	midQuote := false
 	queryLength := len(query)
 	for i := 0; i < queryLength; i++ {
-		if query[i] == '\'' {
-			i++
-			midSingleQuote = true
-			for ; i < queryLength; i++ {
-				if query[i] == '\'' {
-					if query[i-1] != '\\' {
-						midSingleQuote = false
-						break
+		for _, quote := range quotes {
+			if query[i] == quote {
+				i++
+				midQuote = true
+				inEscapeMode := false
+				for ; i < queryLength; i++ {
+					if inEscapeMode {
+						inEscapeMode = false
+					} else {
+						if query[i] == quote {
+							midQuote = false
+							break
+						} else if query[i] == '\\' {
+							inEscapeMode = true
+						}
 					}
 				}
+				break
 			}
-		} else if query[i] == '"' {
-			i++
-			midDoubleQuote = true
-			for ; i < queryLength; i++ {
-				if query[i] == '"' {
-					if query[i-1] != '\\' {
-						midDoubleQuote = false
-						break
-					}
-				}
-			}
-		}
-		if midSingleQuote || midDoubleQuote {
-			break
 		}
 	}
-	return !midSingleQuote && !midDoubleQuote
+	return !midQuote
 }
 
 // runShell starts a SQL shell. Returns when the user exits the shell with the root value resulting from any queries.
