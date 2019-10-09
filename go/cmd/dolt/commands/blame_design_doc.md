@@ -31,8 +31,8 @@ but I don't currently see any reason to do forwards traversal of history
 like they do:
 
 - Build a graph on the fly (i.e. when the command is run)
-- For each row (uniquely identified across commits by primary key) in the query,
-  add a node
+- For each row (uniquely identified across commits by primary key) in the query
+  result, add a node
 - Each node starts with its blame pointing to the most recent commit
 - Traverse backwards through history, and for each node that remains
   unfinalized, diff that row in the current commit against the previous commit:
@@ -47,7 +47,7 @@ like they do:
    - What about commits that already exist without this information?
 2. Precompute the blame in a separate data structure like the one used in
    the chosen approach. This would also presumably happen at commit-time,
-   but could also potentially happen as a background job
+   but could potentially happen as a background job
 
 ### Advantages to the chosen approach
 
