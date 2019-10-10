@@ -97,7 +97,13 @@ func Clone(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 
 					if verr == nil {
 						evt := events.GetEventFromContext(ctx)
-						evt.SetAttribute(eventsapi.AttributeID_ACTIVE_REMOTE_URL, remoteUrl)
+						u, err := earl.Parse(remoteUrl)
+
+						if err == nil {
+							if u.Scheme != "" {
+								evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
+							}
+						}
 					}
 
 					// Make best effort to delete the directory we created.
