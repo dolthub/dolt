@@ -75,6 +75,21 @@ func createTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData t
 	return tbl, nil
 }
 
+func TestIsValidTableName(t *testing.T) {
+	assert.True(t, IsValidTableName("a"))
+	assert.True(t, IsValidTableName("a1"))
+	assert.True(t, IsValidTableName("a1_b_c------1"))
+	assert.True(t, IsValidTableName("Add-098234_lkjasdf0p98"))
+	assert.False(t, IsValidTableName("1"))
+	assert.False(t, IsValidTableName("-"))
+	assert.False(t, IsValidTableName("-a"))
+	assert.False(t, IsValidTableName("__a"))
+	assert.False(t, IsValidTableName(""))
+	assert.False(t, IsValidTableName("1a"))
+	assert.False(t, IsValidTableName("a1-"))
+	assert.False(t, IsValidTableName("ab!!c"))
+}
+
 func TestTables(t *testing.T) {
 	db, _ := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_7_18, nil, nil)
 
