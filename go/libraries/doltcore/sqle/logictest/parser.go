@@ -3,6 +3,7 @@ package logictest
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -36,6 +37,16 @@ type Record struct {
 	result []string
 }
 
+type lineScanner struct {
+	*bufio.Scanner
+	lineNum int
+}
+
+func (ls *lineScanner) Scan() bool {
+	ls.lineNum++
+	return ls.Scanner.Scan()
+}
+
 func ParseTestFile(f string) ([]*Record, error) {
 	file, err := os.Open(f)
 	if err != nil {
@@ -44,16 +55,18 @@ func ParseTestFile(f string) ([]*Record, error) {
 
 	var records []*Record
 
-	scanner := bufio.NewScanner(file)
+	scanner := lineScanner{bufio.NewScanner(file), 0 }
 
 	for {
-		record, err := parseRecord(scanner)
+		record, err := parseRecord(&scanner)
 		if err == io.EOF {
 			return records, nil
 		} else if err != nil {
 			return nil, err
 		}
-		records = append(records, record)
+		if record != nil {
+			records = append(records, record)
+		}
 	}
 }
 
@@ -65,7 +78,7 @@ const (
 	stateResults
 )
 
-var commentRegex = regexp.MustCompile("(.*)#?.*")
+var commentRegex = regexp.MustCompile("([^#]*)#?.*")
 
 // Parses a test record, the format of which is described here:
 // https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki
@@ -86,15 +99,23 @@ var commentRegex = regexp.MustCompile("(.*)#?.*")
 // 182
 // 1
 // 183
-func parseRecord(scanner *bufio.Scanner) (*Record, error) {
+// For control records, returns (nil, nil) on hash-threshold and (nil, EOF) for halt.
+func parseRecord(scanner *lineScanner) (*Record, error) {
 	record := &Record{}
 
 	state := stateStart
 	queryBuilder := strings.Builder{}
+	linesScanned := 0
 	for scanner.Scan() {
 		line := scanner.Text()
+		linesScanned++
 		isBlankLine := isBlankLine(line)
 		commentsRemoved := commentRegex.ReplaceAllString(line, "$1")
+
+		// skip lines that are entirely comments
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
 
 		fields := strings.Fields(commentsRemoved)
 		if len(fields) == 1 && fields[0] == halt {
@@ -104,12 +125,16 @@ func parseRecord(scanner *bufio.Scanner) (*Record, error) {
 		switch state {
 		case stateStart:
 			if isBlankLine {
-				return nil, errors.New("Unexpected blank line")
+				return nil, fmt.Errorf("Unexpected blank line on line %d", scanner.lineNum)
 			}
 
 			switch fields[0] {
-			case skipif, onlyif, hashThreshold:
-				// unhandled for now
+			case skipif, onlyif:
+			// unhandled for now
+			case hashThreshold:
+				// Advance the scanner past the following blank line
+				scanner.Scan()
+				return nil, nil
 			case "statement":
 				record.isStatement = true
 				if fields[1] == "ok" {
@@ -130,7 +155,7 @@ func parseRecord(scanner *bufio.Scanner) (*Record, error) {
 				}
 				state = stateQuery
 			default:
-				return nil, errors.New("Unhandled statement " + fields[0])
+				return nil, fmt.Errorf("Unhandled statement %s on line %d", fields[0], scanner.lineNum)
 			}
 
 		case stateStatement:
@@ -139,6 +164,9 @@ func parseRecord(scanner *bufio.Scanner) (*Record, error) {
 			}
 
 			record.query = commentsRemoved
+			// Advance past the following blank line
+			scanner.Scan()
+			return record, nil
 		case stateQuery:
 			if len(fields) == 1 && fields[0] == separator {
 				record.query = queryBuilder.String()
@@ -158,11 +186,15 @@ func parseRecord(scanner *bufio.Scanner) (*Record, error) {
 		}
 	}
 
-	if scanner.Err() == nil {
-		return record, io.EOF
+	if scanner.Err() != nil {
+		return nil, scanner.Err()
 	}
 
-	return record, scanner.Err()
+	if scanner.Err() == nil && linesScanned == 0{
+		return nil, io.EOF
+	}
+
+	return record, nil
 }
 
 func isBlankLine(line string) bool {
