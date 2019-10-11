@@ -16,4 +16,4 @@
 // https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki
 // A git-hub version of the original sqllogictest with all test cases can be found here:
 // https://github.com/gregrahn/sqllogictest
-package logictest
+package main

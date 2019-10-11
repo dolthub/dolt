@@ -1,4 +1,4 @@
-package logictest
+package main
 
 import (
 	"bufio"
@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -36,6 +37,39 @@ type Record struct {
 	query string
 	result []string
 }
+
+var hashRegex = regexp.MustCompile("(\\d+) values hashing to ([0-9a-f]+)")
+
+func (r *Record) NumRows() int {
+	if r.isStatement {
+		panic("No result rows for a statement record")
+	}
+
+	numVals := len(r.result)
+	if r.IsHashResult() {
+		valsStr := hashRegex.ReplaceAllString(r.result[0], "$1")
+		numVals, _ = strconv.Atoi(valsStr)
+	}
+
+	return numVals / len(r.schema)
+}
+
+func (r *Record) NumCols() int {
+	if r.isStatement {
+		panic("No result rows for a statement record")
+	}
+
+	return len(r.schema)
+}
+
+func (r *Record) IsHashResult() bool {
+	return len(r.result) == 1 && hashRegex.MatchString(r.result[0])
+}
+
+func (r *Record) HashResult() string {
+	return hashRegex.ReplaceAllString(r.result[0], "$2")
+}
+
 
 type lineScanner struct {
 	*bufio.Scanner
