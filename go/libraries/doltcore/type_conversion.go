@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dolttypes"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -59,66 +60,82 @@ func GetUnderlyingError(err error) error {
 	return ce.err
 }
 
-// ConvFunc is a function that converts one noms value to another of a different type.
-type ConvFunc func(types.Value) (types.Value, error)
+// ConvFunc is a function that converts one noms or dolt value to another of a different type.
+type ConvFunc func(types.Value, dolttypes.DoltKind) (types.Value, error)
 
 var convFuncMap = map[types.NomsKind]map[types.NomsKind]ConvFunc{
 	types.StringKind: {
-		types.StringKind: identityConvFunc,
-		types.UUIDKind:   convStringToUUID,
-		types.UintKind:   convStringToUint,
-		types.IntKind:    convStringToInt,
-		types.FloatKind:  convStringToFloat,
-		types.BoolKind:   convStringToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:          identityConvFunc,
+		types.UUIDKind:            convStringToUUID,
+		types.UintKind:            convStringToUint,
+		types.IntKind:             convStringToInt,
+		types.FloatKind:           convStringToFloat,
+		types.BoolKind:            convStringToBool,
+		types.UnderlyingArrayKind: convStringToUnderlyingArray,
+		types.NullKind:            convToNullFunc},
 	types.UUIDKind: {
-		types.StringKind: convUUIDToString,
-		types.UUIDKind:   identityConvFunc,
-		types.UintKind:   nil,
-		types.IntKind:    nil,
-		types.FloatKind:  nil,
-		types.BoolKind:   nil,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:          convUUIDToString,
+		types.UUIDKind:            identityConvFunc,
+		types.UintKind:            nil,
+		types.IntKind:             nil,
+		types.FloatKind:           nil,
+		types.BoolKind:            nil,
+		types.UnderlyingArrayKind: nil,
+		types.NullKind:            convToNullFunc},
 	types.UintKind: {
-		types.StringKind: convUintToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   identityConvFunc,
-		types.IntKind:    convUintToInt,
-		types.FloatKind:  convUintToFloat,
-		types.BoolKind:   convUintToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:          convUintToString,
+		types.UUIDKind:            nil,
+		types.UintKind:            identityConvFunc,
+		types.IntKind:             convUintToInt,
+		types.FloatKind:           convUintToFloat,
+		types.BoolKind:            convUintToBool,
+		types.UnderlyingArrayKind: convUintToUnderlyingArray,
+		types.NullKind:            convToNullFunc},
 	types.IntKind: {
-		types.StringKind: convIntToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   convIntToUint,
-		types.IntKind:    identityConvFunc,
-		types.FloatKind:  convIntToFloat,
-		types.BoolKind:   convIntToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:          convIntToString,
+		types.UUIDKind:            nil,
+		types.UintKind:            convIntToUint,
+		types.IntKind:             identityConvFunc,
+		types.FloatKind:           convIntToFloat,
+		types.BoolKind:            convIntToBool,
+		types.UnderlyingArrayKind: convIntToUnderlyingArray,
+		types.NullKind:            convToNullFunc},
 	types.FloatKind: {
-		types.StringKind: convFloatToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   convFloatToUint,
-		types.IntKind:    convFloatToInt,
-		types.FloatKind:  identityConvFunc,
-		types.BoolKind:   convFloatToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:          convFloatToString,
+		types.UUIDKind:            nil,
+		types.UintKind:            convFloatToUint,
+		types.IntKind:             convFloatToInt,
+		types.FloatKind:           identityConvFunc,
+		types.BoolKind:            convFloatToBool,
+		types.UnderlyingArrayKind: convFloatToUnderlyingArray,
+		types.NullKind:            convToNullFunc},
 	types.BoolKind: {
-		types.StringKind: convBoolToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   convBoolToUint,
-		types.IntKind:    convBoolToInt,
-		types.FloatKind:  convBoolToFloat,
-		types.BoolKind:   identityConvFunc,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:          convBoolToString,
+		types.UUIDKind:            nil,
+		types.UintKind:            convBoolToUint,
+		types.IntKind:             convBoolToInt,
+		types.FloatKind:           convBoolToFloat,
+		types.BoolKind:            identityConvFunc,
+		types.UnderlyingArrayKind: convBoolToUnderlyingArray,
+		types.NullKind:            convToNullFunc},
+	types.UnderlyingArrayKind: {
+		types.StringKind:          convUnderlyingArrayToString,
+		types.UUIDKind:            nil,
+		types.UintKind:            convUnderlyingArrayToUint,
+		types.IntKind:             convUnderlyingArrayToInt,
+		types.FloatKind:           convUnderlyingArrayToFloat,
+		types.BoolKind:            convUnderlyingArrayToBool,
+		types.UnderlyingArrayKind: convUnderlyingArrayToUnderlyingArray,
+		types.NullKind:            convToNullFunc},
 	types.NullKind: {
-		types.StringKind: convToNullFunc,
-		types.UUIDKind:   convToNullFunc,
-		types.UintKind:   convToNullFunc,
-		types.IntKind:    convToNullFunc,
-		types.FloatKind:  convToNullFunc,
-		types.BoolKind:   convToNullFunc,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:          convToNullFunc,
+		types.UUIDKind:            convToNullFunc,
+		types.UintKind:            convToNullFunc,
+		types.IntKind:             convToNullFunc,
+		types.FloatKind:           convToNullFunc,
+		types.BoolKind:            convToNullFunc,
+		types.UnderlyingArrayKind: convToNullFunc,
+		types.NullKind:            convToNullFunc},
 }
 
 // GetConvFunc takes in a source kind and a destination kind and returns a ConvFunc which can convert values of the
@@ -132,15 +149,15 @@ func GetConvFunc(srcKind, destKind types.NomsKind) ConvFunc {
 	return convFunc
 }
 
-var identityConvFunc = func(value types.Value) (types.Value, error) {
+var identityConvFunc = func(value types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	return value, nil
 }
 
-var convToNullFunc = func(types.Value) (types.Value, error) {
+var convToNullFunc = func(types.Value, dolttypes.DoltKind) (types.Value, error) {
 	return types.NullValue, nil
 }
 
-func convStringToFloat(val types.Value) (types.Value, error) {
+func convStringToFloat(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -148,7 +165,7 @@ func convStringToFloat(val types.Value) (types.Value, error) {
 	return stringToFloat(string(val.(types.String)))
 }
 
-func convStringToBool(val types.Value) (types.Value, error) {
+func convStringToBool(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -156,7 +173,7 @@ func convStringToBool(val types.Value) (types.Value, error) {
 	return stringToBool(string(val.(types.String)))
 }
 
-func convStringToInt(val types.Value) (types.Value, error) {
+func convStringToInt(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -164,7 +181,7 @@ func convStringToInt(val types.Value) (types.Value, error) {
 	return stringToInt(string(val.(types.String)))
 }
 
-func convStringToUint(val types.Value) (types.Value, error) {
+func convStringToUint(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -172,7 +189,7 @@ func convStringToUint(val types.Value) (types.Value, error) {
 	return stringToUint(string(val.(types.String)))
 }
 
-func convStringToUUID(val types.Value) (types.Value, error) {
+func convStringToUUID(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -180,7 +197,15 @@ func convStringToUUID(val types.Value) (types.Value, error) {
 	return stringToUUID(string(val.(types.String)))
 }
 
-func convUUIDToString(val types.Value) (types.Value, error) {
+func convStringToUnderlyingArray(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	return stringToUnderlyingArray(string(val.(types.String)), doltKind)
+}
+
+func convUUIDToString(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -188,7 +213,7 @@ func convUUIDToString(val types.Value) (types.Value, error) {
 	return types.String(val.(types.UUID).String()), nil
 }
 
-func convUintToString(val types.Value) (types.Value, error) {
+func convUintToString(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -199,7 +224,7 @@ func convUintToString(val types.Value) (types.Value, error) {
 	return types.String(str), nil
 }
 
-func convUintToInt(val types.Value) (types.Value, error) {
+func convUintToInt(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -208,7 +233,7 @@ func convUintToInt(val types.Value) (types.Value, error) {
 	return types.Int(int64(n)), nil
 }
 
-func convUintToFloat(val types.Value) (types.Value, error) {
+func convUintToFloat(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -217,7 +242,7 @@ func convUintToFloat(val types.Value) (types.Value, error) {
 	return types.Float(float64(n)), nil
 }
 
-func convUintToBool(val types.Value) (types.Value, error) {
+func convUintToBool(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -226,7 +251,26 @@ func convUintToBool(val types.Value) (types.Value, error) {
 	return types.Bool(n != 0), nil
 }
 
-func convIntToString(val types.Value) (types.Value, error) {
+func convUintToUnderlyingArray(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	n := uint64(val.(types.Uint))
+	doltType, err := doltKind.Type().UnmarshalUint(n)
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.UintKind, types.UnderlyingArrayKind, err}
+	}
+
+	data, err := doltType.Encode()
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.UintKind, types.UnderlyingArrayKind, err}
+	}
+
+	return types.UnderlyingArray(data), nil
+}
+
+func convIntToString(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -237,7 +281,7 @@ func convIntToString(val types.Value) (types.Value, error) {
 	return types.String(str), nil
 }
 
-func convIntToUint(val types.Value) (types.Value, error) {
+func convIntToUint(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -246,7 +290,7 @@ func convIntToUint(val types.Value) (types.Value, error) {
 	return types.Uint(uint64(n)), nil
 }
 
-func convIntToFloat(val types.Value) (types.Value, error) {
+func convIntToFloat(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -255,7 +299,7 @@ func convIntToFloat(val types.Value) (types.Value, error) {
 	return types.Float(float64(n)), nil
 }
 
-func convIntToBool(val types.Value) (types.Value, error) {
+func convIntToBool(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -264,7 +308,26 @@ func convIntToBool(val types.Value) (types.Value, error) {
 	return types.Bool(n != 0), nil
 }
 
-func convFloatToString(val types.Value) (types.Value, error) {
+func convIntToUnderlyingArray(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	n := int64(val.(types.Int))
+	doltType, err := doltKind.Type().UnmarshalInt(n)
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.IntKind, types.UnderlyingArrayKind, err}
+	}
+
+	data, err := doltType.Encode()
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.IntKind, types.UnderlyingArrayKind, err}
+	}
+
+	return types.UnderlyingArray(data), nil
+}
+
+func convFloatToString(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -274,7 +337,7 @@ func convFloatToString(val types.Value) (types.Value, error) {
 	return types.String(str), nil
 }
 
-func convFloatToUint(val types.Value) (types.Value, error) {
+func convFloatToUint(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -283,7 +346,7 @@ func convFloatToUint(val types.Value) (types.Value, error) {
 	return types.Uint(uint64(fl)), nil
 }
 
-func convFloatToInt(val types.Value) (types.Value, error) {
+func convFloatToInt(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -292,7 +355,7 @@ func convFloatToInt(val types.Value) (types.Value, error) {
 	return types.Int(int(fl)), nil
 }
 
-func convFloatToBool(val types.Value) (types.Value, error) {
+func convFloatToBool(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -301,10 +364,29 @@ func convFloatToBool(val types.Value) (types.Value, error) {
 	return types.Bool(fl != 0), nil
 }
 
+func convFloatToUnderlyingArray(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	fl := float64(val.(types.Float))
+	doltType, err := doltKind.Type().UnmarshalFloat(fl)
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.FloatKind, types.UnderlyingArrayKind, err}
+	}
+
+	data, err := doltType.Encode()
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.FloatKind, types.UnderlyingArrayKind, err}
+	}
+
+	return types.UnderlyingArray(data), nil
+}
+
 var trueValStr = types.String("true")
 var falseValStr = types.String("false")
 
-func convBoolToString(val types.Value) (types.Value, error) {
+func convBoolToString(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -321,7 +403,7 @@ func convBoolToString(val types.Value) (types.Value, error) {
 var zeroUintVal = types.Uint(0)
 var oneUintVal = types.Uint(1)
 
-func convBoolToUint(val types.Value) (types.Value, error) {
+func convBoolToUint(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -338,7 +420,7 @@ func convBoolToUint(val types.Value) (types.Value, error) {
 var zeroIntVal = types.Int(0)
 var oneIntVal = types.Int(1)
 
-func convBoolToInt(val types.Value) (types.Value, error) {
+func convBoolToInt(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -355,7 +437,7 @@ func convBoolToInt(val types.Value) (types.Value, error) {
 var zeroFloatVal = types.Float(0)
 var oneFloatVal = types.Float(1)
 
-func convBoolToFloat(val types.Value) (types.Value, error) {
+func convBoolToFloat(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if val == nil {
 		return nil, nil
 	}
@@ -368,3 +450,138 @@ func convBoolToFloat(val types.Value) (types.Value, error) {
 
 	return zeroFloatVal, nil
 }
+
+func convBoolToUnderlyingArray(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	b := bool(val.(types.Bool))
+	doltType, err := doltKind.Type().UnmarshalBool(b)
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.BoolKind, types.UnderlyingArrayKind, err}
+	}
+
+	data, err := doltType.Encode()
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.BoolKind, types.UnderlyingArrayKind, err}
+	}
+
+	return types.UnderlyingArray(data), nil
+}
+
+func convUnderlyingArrayToString(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	doltType, err := dolttypes.DecodeDoltType(val.(types.UnderlyingArray))
+	if err != nil {
+		return types.String(""), ConversionError{types.UnderlyingArrayKind, types.StringKind, err}
+	}
+
+	v, err := doltType.MarshalString()
+	if err != nil {
+		return types.String(""), ConversionError{types.UnderlyingArrayKind, types.StringKind, err}
+	}
+
+	return types.String(v), nil
+}
+
+func convUnderlyingArrayToUint(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	doltType, err := dolttypes.DecodeDoltType(val.(types.UnderlyingArray))
+	if err != nil {
+		return types.Uint(0), ConversionError{types.UnderlyingArrayKind, types.UintKind, err}
+	}
+
+	v, err := doltType.MarshalUint()
+	if err != nil {
+		return types.Uint(0), ConversionError{types.UnderlyingArrayKind, types.UintKind, err}
+	}
+
+	return types.Uint(v), nil
+}
+
+
+func convUnderlyingArrayToInt(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	doltType, err := dolttypes.DecodeDoltType(val.(types.UnderlyingArray))
+	if err != nil {
+		return types.Int(0), ConversionError{types.UnderlyingArrayKind, types.IntKind, err}
+	}
+
+	v, err := doltType.MarshalInt()
+	if err != nil {
+		return types.Int(0), ConversionError{types.UnderlyingArrayKind, types.IntKind, err}
+	}
+
+	return types.Int(v), nil
+}
+
+
+func convUnderlyingArrayToFloat(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	doltType, err := dolttypes.DecodeDoltType(val.(types.UnderlyingArray))
+	if err != nil {
+		return types.Float(0), ConversionError{types.UnderlyingArrayKind, types.FloatKind, err}
+	}
+
+	v, err := doltType.MarshalFloat()
+	if err != nil {
+		return types.Float(0), ConversionError{types.UnderlyingArrayKind, types.FloatKind, err}
+	}
+
+	return types.Float(v), nil
+}
+
+func convUnderlyingArrayToBool(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	doltType, err := dolttypes.DecodeDoltType(val.(types.UnderlyingArray))
+	if err != nil {
+		return types.Bool(false), ConversionError{types.UnderlyingArrayKind, types.BoolKind, err}
+	}
+
+	v, err := doltType.MarshalBool()
+	if err != nil {
+		return types.Bool(false), ConversionError{types.UnderlyingArrayKind, types.BoolKind, err}
+	}
+
+	return types.Bool(v), nil
+}
+
+func convUnderlyingArrayToUnderlyingArray(val types.Value, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	doltType, err := dolttypes.DecodeDoltType(val.(types.UnderlyingArray))
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.UnderlyingArrayKind, types.UnderlyingArrayKind, err}
+	}
+
+	newDoltType, err := doltType.MarshalDoltType(doltKind)
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.UnderlyingArrayKind, types.UnderlyingArrayKind, err}
+	}
+
+	v, err := newDoltType.Encode()
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.UnderlyingArrayKind, types.UnderlyingArrayKind, err}
+	}
+
+	return types.UnderlyingArray(v), nil
+}
+

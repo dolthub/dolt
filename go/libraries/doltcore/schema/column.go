@@ -15,22 +15,39 @@
 package schema
 
 import (
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dolttypes"
 	"math"
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// KindToLwrStr maps a noms kind to the kinds lowercased name
-var KindToLwrStr = make(map[types.NomsKind]string)
+// FullKind is the combination of both a DoltKind and NomsKind, represents the absolute kind
+type FullKind struct {
+	NomsKind types.NomsKind
+	DoltKind dolttypes.DoltKind
+}
 
-// LwrStrToKind maps a lowercase string to the noms kind it is referring to
-var LwrStrToKind = make(map[string]types.NomsKind)
+// KindToLwrStr maps a full kind to the kinds lowercased name
+var KindToLwrStr = make(map[FullKind]string)
+
+// LwrStrToKind maps a lowercase string to the full kind it is referring to
+var LwrStrToKind = make(map[string]FullKind)
 
 func init() {
 	for t, s := range types.KindToString {
-		KindToLwrStr[t] = strings.ToLower(s)
-		LwrStrToKind[strings.ToLower(s)] = t
+		if t != types.UnderlyingArrayKind {
+			s := strings.ToLower(s)
+			KindToLwrStr[FullKind{t, dolttypes.UnknownKind}] = s
+			LwrStrToKind[s] = FullKind{t, dolttypes.UnknownKind}
+		}
+	}
+	for t, s := range dolttypes.KindName {
+		if t != dolttypes.UnknownKind {
+			s := strings.ToLower(s)
+			KindToLwrStr[FullKind{types.UnderlyingArrayKind, t}] = s
+			LwrStrToKind[s] = FullKind{types.UnderlyingArrayKind, t}
+		}
 	}
 }
 
@@ -41,7 +58,7 @@ var InvalidTag uint64 = math.MaxUint64
 const ReservedTagMin uint64 = 1 << 63
 
 // InvalidCol is a Column instance that is returned when there is nothing to return and can be tested against.
-var InvalidCol = NewColumn("invalid", InvalidTag, types.NullKind, false)
+var InvalidCol = NewColumn("invalid", InvalidTag, types.NullKind, dolttypes.UnknownKind, false)
 
 // Column is a structure containing information about a column in a row in a table.
 type Column struct {
@@ -54,6 +71,9 @@ type Column struct {
 	// Kind is the types.NomsKind that values of this column will be
 	Kind types.NomsKind
 
+	// DoltKind is the Dolt type that values of this column will be (with Kind == types.UnderlyingArrayKind)
+	DoltKind dolttypes.DoltKind
+
 	// IsPartOfPK says whether this column is part of the primary key
 	IsPartOfPK bool
 
@@ -62,7 +82,7 @@ type Column struct {
 }
 
 // NewColumn creates a Column instance
-func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, constraints ...ColConstraint) Column {
+func NewColumn(name string, tag uint64, kind types.NomsKind, dKind dolttypes.DoltKind, partOfPK bool, constraints ...ColConstraint) Column {
 	for _, c := range constraints {
 		if c == nil {
 			panic("nil passed as a constraint")
@@ -73,6 +93,7 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 		name,
 		tag,
 		kind,
+		dKind,
 		partOfPK,
 		constraints,
 	}
@@ -93,11 +114,12 @@ func (c Column) Equals(other Column) bool {
 	return c.Name == other.Name &&
 		c.Tag == other.Tag &&
 		c.Kind == other.Kind &&
+		c.DoltKind == c.DoltKind &&
 		c.IsPartOfPK == other.IsPartOfPK &&
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 
 // KindString returns the string representation of the NomsKind stored in the column.
 func (c Column) KindString() string {
-	return KindToLwrStr[c.Kind]
+	return KindToLwrStr[FullKind{c.Kind, c.DoltKind}]
 }

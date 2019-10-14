@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dolttypes"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -37,18 +38,18 @@ const (
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newColName string, colNomsKind types.NomsKind, colDoltKind dolttypes.DoltKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if err := validateNewColumn(ctx, tbl, tag, newColName, colKind, nullable, defaultVal); err != nil {
+	if err := validateNewColumn(ctx, tbl, tag, newColName, colNomsKind, colDoltKind, nullable, defaultVal); err != nil {
 		return nil, err
 	}
 
-	newSchema, err := createNewSchema(sch, tag, newColName, colKind, nullable)
+	newSchema, err := createNewSchema(sch, tag, newColName, colNomsKind, colDoltKind, nullable)
 	if err != nil {
 		return nil, err
 	}
@@ -106,12 +107,12 @@ func updateTableWithNewSchema(ctx context.Context, db *doltdb.DoltDB, tbl *doltd
 }
 
 // createNewSchema Creates a new schema with a column as specified by the params.
-func createNewSchema(sch schema.Schema, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable) (schema.Schema, error) {
+func createNewSchema(sch schema.Schema, tag uint64, newColName string, colNomsKind types.NomsKind, colDoltKind dolttypes.DoltKind, nullable Nullable) (schema.Schema, error) {
 	var col schema.Column
 	if nullable {
-		col = schema.NewColumn(newColName, tag, colKind, false)
+		col = schema.NewColumn(newColName, tag, colNomsKind, colDoltKind, false)
 	} else {
-		col = schema.NewColumn(newColName, tag, colKind, false, schema.NotNullConstraint{})
+		col = schema.NewColumn(newColName, tag, colNomsKind, colDoltKind, false, schema.NotNullConstraint{})
 	}
 
 	updatedCols, err := sch.GetAllCols().Append(col)
@@ -123,7 +124,7 @@ func createNewSchema(sch schema.Schema, tag uint64, newColName string, colKind t
 }
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
-func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) error {
+func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colNomsKind types.NomsKind, colDoltKind dolttypes.DoltKind, nullable Nullable, defaultVal types.Value) error {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
@@ -156,8 +157,19 @@ func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newCo
 		return errors.New("When adding a column that may not be null to a table with existing rows, a default value must be provided.")
 	}
 
-	if !types.IsNull(defaultVal) && defaultVal.Kind() != colKind {
-		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[colKind])
+	if !types.IsNull(defaultVal) {
+		defaultValDoltKind := defaultVal.(types.UnderlyingArray).DoltKind()
+		if defaultVal.Kind() != colNomsKind && defaultValDoltKind != colDoltKind {
+			defaultValStr := types.KindToString[defaultVal.Kind()]
+			if defaultVal.Kind() == types.UnderlyingArrayKind {
+				defaultValStr = defaultVal.(types.UnderlyingArray).DoltKind().String()
+			}
+			colKindStr := types.KindToString[colNomsKind]
+			if colNomsKind == types.UnderlyingArrayKind {
+				colKindStr = colDoltKind.String()
+			}
+			return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", defaultValStr, colKindStr)
+		}
 	}
 
 	return nil

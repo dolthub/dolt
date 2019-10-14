@@ -16,17 +16,17 @@ package doltcore
 
 import (
 	"errors"
+	"github.com/google/uuid"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dolttypes"
 	"math"
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
-
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// StringToValue takes a string and a NomsKind and tries to convert the string to a noms Value.
-func StringToValue(s string, kind types.NomsKind) (types.Value, error) {
+// StringToValue takes a string, NomsKind, and DoltKind and tries to convert the string to a noms Value.
+func StringToValue(s string, kind types.NomsKind, doltKind dolttypes.DoltKind) (types.Value, error) {
 	if !types.IsPrimitiveKind(kind) || kind == types.BlobKind {
 		return nil, errors.New("Only primitive type support")
 	}
@@ -46,6 +46,8 @@ func StringToValue(s string, kind types.NomsKind) (types.Value, error) {
 		return stringToUUID(s)
 	case types.NullKind:
 		return types.NullValue, nil
+	case types.UnderlyingArrayKind:
+		return stringToUnderlyingArray(s, doltKind)
 	}
 
 	panic("Unsupported type " + kind.String())
@@ -119,4 +121,22 @@ func stringToUUID(s string) (types.Value, error) {
 	}
 
 	return types.UUID(u), nil
+}
+
+func stringToUnderlyingArray(s string, doltKind dolttypes.DoltKind) (types.Value, error) {
+	if len(s) == 0 {
+		return types.NullValue, nil
+	}
+
+	doltType, err := doltKind.Type().UnmarshalString(s)
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.StringKind, types.UnderlyingArrayKind, err}
+	}
+
+	data, err := doltType.Encode()
+	if err != nil {
+		return types.UnderlyingArray{}, ConversionError{types.StringKind, types.UnderlyingArrayKind, err}
+	}
+
+	return types.UnderlyingArray(data), nil
 }

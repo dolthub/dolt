@@ -291,6 +291,9 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	case StringKind:
 		r.skipKind()
 		return String(r.readString()), nil
+	case UnderlyingArrayKind:
+		r.skipKind()
+		return r.readUnderlyingArray()
 	case ListKind:
 		seq, err := r.readListSequence(nbf)
 
@@ -360,6 +363,9 @@ func (r *valueDecoder) skipValue(nbf *NomsBinFormat) error {
 	case StringKind:
 		r.skipKind()
 		r.skipString()
+	case UnderlyingArrayKind:
+		r.skipKind()
+		r.skipUnderlyingArray()
 	case ListKind:
 		err := r.skipList(nbf)
 
@@ -445,6 +451,10 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 		r.skipKind()
 		r.skipUint()
 		return UintType, nil
+	case UnderlyingArrayKind:
+		r.skipKind()
+		r.skipUnderlyingArray()
+		return UnderlyingArrayType, nil
 	case NullKind:
 		r.skipKind()
 		return NullType, nil
@@ -491,7 +501,7 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 }
 
 // isValueSameTypeForSure may return false even though the type of the value is
-// equal. We do that in cases wherer it would be too expensive to compute the
+// equal. We do that in cases where it would be too expensive to compute the
 // type.
 // If this returns false the decoder might not have visited the whole value and
 // its offset is no longer valid.
@@ -502,7 +512,7 @@ func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool
 	}
 
 	switch k {
-	case BlobKind, BoolKind, FloatKind, StringKind, UUIDKind, IntKind, UintKind, NullKind:
+	case BlobKind, BoolKind, FloatKind, StringKind, UUIDKind, IntKind, UintKind, UnderlyingArrayKind, NullKind:
 		err := r.skipValue(nbf)
 		if err != nil {
 			return false, err
