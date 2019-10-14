@@ -70,7 +70,6 @@ func (r *Record) HashResult() string {
 	return hashRegex.ReplaceAllString(r.result[0], "$2")
 }
 
-
 type lineScanner struct {
 	*bufio.Scanner
 	lineNum int

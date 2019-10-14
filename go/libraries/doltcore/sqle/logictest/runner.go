@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	sqle "github.com/src-d/go-mysql-server"
+	"strconv"
 	"strings"
 	"vitess.io/vitess/go/vt/proto/query"
 )
@@ -72,9 +73,7 @@ func runTestFile(file string) {
 	}
 
 	root = resetEnv(root)
-
 	engine := sqlNewEngine(root)
-
 	ctx := sql.NewEmptyContext()
 
 	testRecords, err := ParseTestFile(file)
@@ -86,12 +85,10 @@ func runTestFile(file string) {
 		sqlSch, rowIter, err := engine.Query(ctx, record.query)
 		if record.expectError {
 			if err != nil {
-
-			} else {
-
+				logrus.Error("Unexpected error but didn't get one for statement %v", record.query)
 			}
-		} else {
-
+		} else if err != nil {
+			logrus.Error("Unexpected error %v", err)
 		}
 
 		// For queries, examine the results
@@ -112,39 +109,64 @@ func verifyResults(record *Record, iter sql.RowIter) {
 }
 
 func verifyRows(record *Record, iter sql.RowIter) {
-	var row sql.Row
-	for i, val := range record.result {
-		colNum := i % record.NumCols()
-		if colNum == 0 {
-			var err error
-			row, err = iter.Next()
-			if err != nil {
-				logrus.Error("Unexpected error iterating on results: %v", err)
-				return
-			}
+	results := rowsToResultStrings(iter)
+	if len(results) != len(record.result) {
+		logrus.Error("Incorrect number of results. Expected %v, got %v", len(record.result), len(results))
+		return
+	}
+
+	for i := range record.result {
+		if record.result[i] != results[i] {
+			logrus.Error("Incorrect result. Expected %v, got %v", record.result[i], results[i])
 		}
-
-		verifyRowVal(val, row[colNum])
 	}
-
-	_, err := iter.Next()
-	if err != io.EOF {
-		logrus.Error("Extra results found")
-	}
-}
-
-func verifyRowVal(val string, rowVal interface{}) {
-
 }
 
 func verifyHash(record *Record, iter sql.RowIter) {
 	hash := record.HashResult()
+	results := rowsToResultStrings(iter)
+	computedHash, err := hashResults(results)
+	if err != nil {
+		logrus.Error("Error hashing results: %v", err)
+		return
+	}
 
+	if hash != computedHash {
+		logrus.Error("Hash of results differ. Expected %v, got %v", hash, computedHash)
+	}
 }
 
 // Returns the rows in the iterator given as an array of their string representations, as expected by the test files
 func rowsToResultStrings(iter sql.RowIter) []string {
-	
+	var results []string
+	for {
+		row, err := iter.Next()
+		if err == io.EOF {
+			return results
+		} else if err != nil {
+			logrus.Error("Error while iterating over results: %v", err)
+		} else {
+			for _, col := range row {
+				results = append(results, toSqlString(col))
+			}
+		}
+	}
+
+	panic("iterator never returned io.EOF")
+}
+
+func toSqlString(col interface{}) string {
+	switch v := col.(type) {
+	case float32, float64:
+		// exactly 3 decimal points for floats
+		return fmt.Sprintf("%.3f", v)
+	case int, uint, int8, uint8, int16, uint16, int32, uint32, int64, uint64:
+		return strconv.Itoa(v.(int))
+	case string:
+		return v
+	default:
+		panic(fmt.Sprintf("No conversion for value %v of type %T", col, col))
+	}
 }
 
 func hashResults(results []string) (string, error) {
