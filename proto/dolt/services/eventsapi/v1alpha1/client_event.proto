@@ -89,7 +89,7 @@ enum MetricID {
 
 enum AttributeID {
     ATTRIBUTE_UNSPECIFIED = 0;
-    ACTIVE_REMOTE_URL = 1;
+    REMOTE_URL_SCHEME = 2;
 }
 
 message ClientEventAttribute {

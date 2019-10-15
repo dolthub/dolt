@@ -234,7 +234,14 @@ func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, lo
 
 func pushToRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, srcRef, destRef, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) errhand.VerboseError {
 	evt := events.GetEventFromContext(ctx)
-	evt.SetAttribute(eventsapi.AttributeID_ACTIVE_REMOTE_URL, remote.Url)
+
+	u, err := earl.Parse(remote.Url)
+
+	if err == nil {
+		if u.Scheme != "" {
+			evt.SetAttribute(eventsapi.AttributeID_REMOTE_URL_SCHEME, u.Scheme)
+		}
+	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", srcRef.GetPath())
 	cm, err := localDB.Resolve(ctx, cs)
