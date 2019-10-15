@@ -142,7 +142,7 @@ $ dolt sql -q "select * from state_populations where state = 'New York'"
 Assuming you're satisfied, create a commit as follows:
 ```
 $ dolt add .
-$ dolt commit -m 'adding state populations from 1790.'
+$ dolt commit -m "Add state populations from 1790"
 $ dolt status
 On branch master
 nothing to commit, working tree clean
@@ -212,7 +212,7 @@ Once you've made your changes, add and commit the modified tables like you did p
 Then you'll need to add and commit the merged data:
 
     dolt add .
-    dolt commit -m "Merged work from <branch> into master"
+    dolt commit -m "Merge work from <branch> into master"
 
 
 ## Adding Remotes
