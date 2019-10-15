@@ -41,7 +41,7 @@ teardown() {
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "commit " ]] || false
-    [[ "$output" =~ "Data repository created." ]] || false
+    [[ "$output" =~ "Initialize data repository" ]] || false
 }
 
 @test "dolt add . in new repository" {
