@@ -35,6 +35,7 @@ type Record struct {
 	sortMode SortMode
 	label string
 	query string
+	lineNum int
 	result []string
 }
 
@@ -60,6 +61,11 @@ func (r *Record) NumCols() int {
 	}
 
 	return len(r.schema)
+}
+
+
+func (r *Record) LineNum() int {
+	return r.lineNum
 }
 
 func (r *Record) IsHashResult() bool {
@@ -139,6 +145,7 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 	state := stateStart
 	queryBuilder := strings.Builder{}
 	linesScanned := 0
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		linesScanned++
@@ -154,6 +161,8 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 		if len(fields) == 1 && fields[0] == halt {
 			return nil, io.EOF
 		}
+
+		record.lineNum = scanner.lineNum
 
 		switch state {
 		case stateStart:

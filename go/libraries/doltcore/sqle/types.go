@@ -49,7 +49,7 @@ func SqlTypeToNomsKind(t sql.Type) types.NomsKind {
 	switch t {
 	case sql.Boolean:
 		return types.BoolKind
-	case sql.Float64:
+	case sql.Float32, sql.Float64:
 		return types.FloatKind
 	case sql.Text:
 		// TODO: handle UUIDs
