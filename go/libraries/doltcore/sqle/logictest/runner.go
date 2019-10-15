@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -123,19 +124,21 @@ func drainIterator(iter sql.RowIter) {
 }
 
 func verifyResults(record *Record, iter sql.RowIter) {
-	if record.IsHashResult() {
-		verifyHash(record, iter)
-	} else {
-		verifyRows(record, iter)
-	}
-}
-
-func verifyRows(record *Record, iter sql.RowIter) {
 	results := rowsToResultStrings(iter)
-	if len(results) != len(record.result) {
+	if len(results) != record.NumRows() {
 		logFailure(fmt.Sprintf("Incorrect number of results. Expected %v, got %v", len(record.result), len(results)))
 		return
 	}
+
+	if record.IsHashResult() {
+		verifyHash(record, results)
+	} else {
+		verifyRows(record, results)
+	}
+}
+
+func verifyRows(record *Record, results []string) {
+	results = sortResults(record, results)
 
 	for i := range record.result {
 		if record.result[i] != results[i] {
@@ -147,17 +150,71 @@ func verifyRows(record *Record, iter sql.RowIter) {
 	logSuccess()
 }
 
-func verifyHash(record *Record, iter sql.RowIter) {
-	hash := record.HashResult()
-	results := rowsToResultStrings(iter)
+type rowSorter struct {
+	record *Record
+	values []string
+}
+
+func (r rowSorter) toRow(i int) []string {
+	return r.values[i*r.record.NumCols() : (i+1)*r.record.NumCols()]
+}
+
+func (r rowSorter) Len() int {
+	return len(r.values) / r.record.NumCols()
+}
+
+func (r rowSorter) Less(i, j int) bool {
+	rowI := r.toRow(i)
+	rowJ := r.toRow(j)
+	for k := range rowI {
+		if rowI[k] < rowJ[k] {
+			return true
+		}
+		if rowI[k] > rowJ[k] {
+			return false
+		}
+	}
+	return false
+}
+
+func (r rowSorter) Swap(i, j int) {
+	rowI := r.toRow(i)
+	rowJ := r.toRow(j)
+	for col := range rowI {
+		rowI[col], rowJ[col] = rowJ[col], rowI[col]
+	}
+}
+
+func sortResults(record *Record, results []string) []string {
+	switch record.sortMode {
+	case NoSort:
+		return results
+	case Rowsort:
+		sorter := rowSorter{
+			record: record,
+			values: results,
+		}
+		sort.Sort(sorter)
+		return sorter.values
+	case ValueSort:
+		sort.Strings(results)
+		return results
+	default:
+		panic(fmt.Sprintf("Uncrecognized sort mode %v", record.sortMode))
+	}
+}
+
+func verifyHash(record *Record, results []string) {
+	results = sortResults(record, results)
+
 	computedHash, err := hashResults(results)
 	if err != nil {
 		logFailure("Error hashing results: %v", err)
 		return
 	}
 
-	if hash != computedHash {
-		logFailure("Hash of results differ. Expected %v, got %v", hash, computedHash)
+	if record.HashResult() != computedHash {
+		logFailure("Hash of results differ. Expected %v, got %v", record.HashResult(), computedHash)
 	} else {
 		logSuccess()
 	}

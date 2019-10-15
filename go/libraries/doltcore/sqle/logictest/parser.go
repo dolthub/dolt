@@ -63,7 +63,6 @@ func (r *Record) NumCols() int {
 	return len(r.schema)
 }
 
-
 func (r *Record) LineNum() int {
 	return r.lineNum
 }
