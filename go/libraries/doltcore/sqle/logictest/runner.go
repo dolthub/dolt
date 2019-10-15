@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -61,7 +62,6 @@ func main() {
 	}
 
 	for _, file := range testFiles {
-		logrus.Info("Running test file", file)
 		runTestFile(file)
 	}
 }
@@ -182,8 +182,8 @@ func rowsToResultStrings(iter sql.RowIter) []string {
 	panic("iterator never returned io.EOF")
 }
 
-func toSqlString(col interface{}) string {
-	switch v := col.(type) {
+func toSqlString(val interface{}) string {
+	switch v := val.(type) {
 	case float32, float64:
 		// exactly 3 decimal points for floats
 		return fmt.Sprintf("%.3f", v)
@@ -210,7 +210,7 @@ func toSqlString(col interface{}) string {
 	case string:
 		return v
 	default:
-		panic(fmt.Sprintf("No conversion for value %v of type %T", col, col))
+		panic(fmt.Sprintf("No conversion for value %v of type %T", val, val))
 	}
 }
 
@@ -225,40 +225,27 @@ func hashResults(results []string) (string, error) {
 }
 
 func verifySchema(record *Record, sch sql.Schema) {
-	if len(record.schema) != len(sch) {
-		logFailure("Schemas have different lengths. Expected %d, was %d", len(record.schema), len(sch))
-		return
+	schemaString := schemaToSchemaString(sch)
+	if schemaString != record.schema {
+		logFailure("Schemas differ. Expected %s, got %s", record.schema, schemaString)
 	}
+}
 
-	for i := range record.schema {
-		typeChar := record.schema[i]
-		column := sch[i]
-		switch typeChar {
-		case 'I':
-		switch column.Type.Type() {
-			case query.Type_INT32, query.Type_INT64:
+func schemaToSchemaString(sch sql.Schema) string {
+	b := strings.Builder{}
+	for _, col := range sch {
+		switch col.Type.Type() {
+		case query.Type_INT32, query.Type_INT64:
+			b.WriteString("I")
+		case query.Type_TEXT, query.Type_VARCHAR:
+			b.WriteString("T")
+		case query.Type_FLOAT32, query.Type_FLOAT64:
+			b.WriteString("R")
 		default:
-			logFailure("Expected integer, got %s", column.Type.String())
-			return
-		}
-		case 'T':
-			switch column.Type.Type() {
-			case query.Type_TEXT, query.Type_VARCHAR:
-			default:
-				logFailure("Expected text, got %s", column.Type.String())
-				return
-			}
-		case 'R':
-			switch column.Type.Type() {
-			case query.Type_FLOAT32, query.Type_FLOAT64:
-			default:
-				logFailure("Expected float, got %s", column.Type.String())
-				return
-			}
+			panic("Unhandled type: " + col.Type.String())
 		}
 	}
-
-	logSuccess()
+	return b.String()
 }
 
 func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
@@ -282,15 +269,19 @@ func sqlNewEngine(root *doltdb.RootValue) *sqle.Engine {
 
 func logFailure(message string, args ...interface{}) {
 	newMsg := logMessagePrefix() + " not ok: " + message
-	logrus.Error(fmt.Sprintf(newMsg, args...))
+	fmt.Println(fmt.Sprintf(newMsg, args...))
 }
 
 func logSuccess() {
-	logrus.Info(logMessagePrefix(), " ok")
+	fmt.Println(logMessagePrefix(), "ok")
 }
 
 func logMessagePrefix() string {
-	return fmt.Sprintf("%s:%d: %s", testFilePath(currTestFile), currRecord.lineNum, truncateQuery(currRecord.query))
+	return fmt.Sprintf("%s %s:%d: %s",
+		time.Now().Format(time.RFC3339),
+		testFilePath(currTestFile),
+		currRecord.lineNum,
+		truncateQuery(currRecord.query))
 }
 
 func testFilePath(f string) string {
@@ -301,7 +292,7 @@ func testFilePath(f string) string {
 		pathElements = append([]string{file}, pathElements...)
 		filename = filepath.Clean(dir)
 	}
-	return filepath.Join(pathElements...)
+	return strings.ReplaceAll(filepath.Join(pathElements...), "\\", "/")
 }
 
 func truncateQuery(query string) string {

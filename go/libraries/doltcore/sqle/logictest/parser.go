@@ -162,8 +162,6 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 			return nil, io.EOF
 		}
 
-		record.lineNum = scanner.lineNum
-
 		switch state {
 		case stateStart:
 			if isBlankLine {
@@ -206,10 +204,15 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 			}
 
 			record.query = commentsRemoved
+			record.lineNum = scanner.lineNum
 			// Advance past the following blank line
 			scanner.Scan()
 			return record, nil
 		case stateQuery:
+			if record.lineNum == 0 {
+				record.lineNum = scanner.lineNum
+			}
+
 			if len(fields) == 1 && fields[0] == separator {
 				record.query = queryBuilder.String()
 				state = stateResults
