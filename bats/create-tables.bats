@@ -199,7 +199,6 @@ teardown() {
     [[ ! "$output" =~ "test" ]] || false
 }
 
-
 @test "create a basic table (int types) using sql" {
     run dolt sql -q "create table test (pk int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
     [ "$status" -eq 0 ]
@@ -315,6 +314,13 @@ teardown() {
     dolt table create -s=`batshelper 1pk5col-ints.schema` 1pk
     [ "$status" -eq 1 ]
     [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
+}
+
+@test "create a table with a mispelled primary key" {
+    run dolt sql -q "create table test (pk int, c1 int, c2 int, primary key
+(pk,noexist))"
+    skip "This succeeds right now and creates a table with just one primary key pk"
+    [ "$status" -eq 1 ]
 }
 
 @test "import a table with non UTF-8 characters in it" {
