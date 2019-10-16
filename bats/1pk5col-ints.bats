@@ -65,11 +65,11 @@ teardown() {
     run dolt log 
     [ "$status" -eq "0" ]
     [[ "$output" =~ "first commit" ]] || false
-    [[ "$output" =~ "Data repository created." ]] || false
+    [[ "$output" =~ "Initialize data repository" ]] || false
     run dolt log -n 1
     [ "$status" -eq "0" ]
     [[ "$output" =~ "first commit" ]] || false
-    [[ ! "$output" =~ "Data repository created." ]] || false
+    [[ ! "$output" =~ "Initialize data repository" ]] || false
 }
 
 @test "add a row to a created table using dolt table put-row" {
