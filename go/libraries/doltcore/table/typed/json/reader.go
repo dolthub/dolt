@@ -85,7 +85,7 @@ func NewJSONReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *JSONFileInfo
 	info.SetRows(decodedRows)
 	info.SetAbleToDecode(ableToDecode)
 
-	return &JSONReader{r, br, info, sch, 0}, nil
+	return &JSONReader{r, br, info, sch, 0}, err
 }
 
 // Close should release resources being held

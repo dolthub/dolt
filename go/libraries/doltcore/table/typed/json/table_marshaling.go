@@ -121,19 +121,32 @@ func convToRow(nbf *types.NomsBinFormat, sch schema.Schema, rowMap map[string]in
 			return nil, errors.New("column not found in schema")
 		}
 
+		var err error
 		switch val := v.(type) {
 		case int:
 			f := doltcore.GetConvFunc(types.IntKind, col.Kind)
-			taggedVals[col.Tag], _ = f(types.Int(val))
+			taggedVals[col.Tag], err = f(types.Int(val))
+			if err != nil {
+				return nil, err
+			}
 		case string:
 			f := doltcore.GetConvFunc(types.StringKind, col.Kind)
-			taggedVals[col.Tag], _ = f(types.String(val))
+			taggedVals[col.Tag], err = f(types.String(val))
+			if err != nil {
+				return nil, err
+			}
 		case bool:
 			f := doltcore.GetConvFunc(types.BoolKind, col.Kind)
-			taggedVals[col.Tag], _ = f(types.Bool(val))
+			taggedVals[col.Tag], err = f(types.Bool(val))
+			if err != nil {
+				return nil, err
+			}
 		case float64:
 			f := doltcore.GetConvFunc(types.FloatKind, col.Kind)
-			taggedVals[col.Tag], _ = f(types.Float(val))
+			taggedVals[col.Tag], err = f(types.Float(val))
+			if err != nil {
+				return nil, err
+			}
 		}
 
 	}
