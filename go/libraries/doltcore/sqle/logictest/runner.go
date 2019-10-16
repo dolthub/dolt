@@ -14,6 +14,7 @@ import (
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -24,6 +25,8 @@ import (
 
 var currTestFile string
 var currRecord *parser.Record
+
+var _, TruncateQueriesInLog = os.LookupEnv("SQLLOGICTEST_TRUNCATE_QUERIES")
 
 // Specify as many files / directories as requested as arguments. All test files specified will be run.
 func main() {
@@ -88,41 +91,72 @@ func runTestFile(file string) {
 	}
 
 	for _, record := range testRecords {
-		currRecord = record
-		if !record.ShouldExecuteForEngine("mysql") {
-			continue
+		if !executeRecord(engine, record) {
+			break
 		}
+	}
+}
 
-		switch record.Type() {
-		case parser.Statement:
-			ctx := sql.NewEmptyContext()
-			_, rowIter, err := engine.Query(ctx, record.Query())
-			drainIterator(rowIter)
+// Executes a single record and returns whether execution of records should continue
+func executeRecord(engine *sqle.Engine, record *parser.Record) (cont bool){
+	currRecord = record
 
-			if record.ExpectError() {
-				if err != nil {
-					logFailure("Expected error but didn't get one")
-					continue
-				}
-			} else if err != nil {
-				logFailure("Unexpected error %v", err)
-				continue
+	defer func() {
+		if r := recover(); r != nil {
+			toLog := r
+			if str, ok := r.(string); ok {
+				// attempt to keep entries on one line
+				toLog = strings.ReplaceAll(str, "\n", " ")
+			} else if err, ok := r.(error); ok {
+				// attempt to keep entries on one line
+				toLog = strings.ReplaceAll(err.Error(), "\n", " ")
 			}
+			logFailure("Caught panic: %v", toLog)
+		}
+	}()
 
-			logSuccess()
-		case parser.Query:
-			ctx := sql.NewEmptyContext()
-			sqlSch, rowIter, err := engine.Query(ctx, record.Query())
+	if !record.ShouldExecuteForEngine("mysql") {
+		// Log a skip for queries and statements only, not other control records
+		if record.Type() == parser.Query || record.Type() == parser.Statement {
+			logSkip()
+		}
+		return true
+	}
+
+	switch record.Type() {
+	case parser.Statement:
+		ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
+		_, rowIter, err := engine.Query(ctx, record.Query())
+		drainIterator(rowIter)
+
+		if record.ExpectError() {
 			if err != nil {
-				logFailure("Unexpected error %v", err)
-				continue
+				logFailure("Expected error but didn't get one")
+				return true
 			}
-
-			verifySchema(record, sqlSch)
-			verifyResults(record, rowIter)
-		case parser.Halt:
-			return
+		} else if err != nil {
+			logFailure("Unexpected error %v", err)
+			return true
 		}
+
+		logSuccess()
+	case parser.Query:
+		ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
+		sqlSch, rowIter, err := engine.Query(ctx, record.Query())
+		if err != nil {
+			logFailure("Unexpected error %v", err)
+			return true
+		}
+
+		if verifySchema(record, sqlSch) {
+			verifyResults(record, rowIter)
+		} else {
+			drainIterator(rowIter)
+		}
+	case parser.Halt:
+		return false
+	default:
+		panic (fmt.Sprintf("Uncrecognized record type %v", record.Type()))
 	}
 }
 
@@ -201,7 +235,7 @@ func rowsToResultStrings(iter sql.RowIter) []string {
 		}
 	}
 
-	panic("iterator never returned io.EOF")
+	panic("iterator never returned io.EOF") // unreachable, required for compile
 }
 
 func toSqlString(val interface{}) string {
@@ -257,11 +291,14 @@ func hashResults(results []string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-func verifySchema(record *parser.Record, sch sql.Schema) {
+// Returns whether the schema given matches the record's expected schema, and logging an error if not.
+func verifySchema(record *parser.Record, sch sql.Schema) bool {
 	schemaString := schemaToSchemaString(sch)
 	if schemaString != record.Schema() {
 		logFailure("Schemas differ. Expected %s, got %s", record.Schema(), schemaString)
+		return false
 	}
+	return true
 }
 
 func schemaToSchemaString(sch sql.Schema) string {
@@ -302,8 +339,12 @@ func sqlNewEngine(root *doltdb.RootValue) *sqle.Engine {
 }
 
 func logFailure(message string, args ...interface{}) {
-	newMsg := logMessagePrefix() + " not ok: " + message
+	newMsg := logMessagePrefix() + " not ok: " + strings.ReplaceAll(message, "\n", " ")
 	fmt.Println(fmt.Sprintf(newMsg, args...))
+}
+
+func logSkip() {
+	fmt.Println(logMessagePrefix(), "skipped")
 }
 
 func logSuccess() {
@@ -330,7 +371,7 @@ func testFilePath(f string) string {
 }
 
 func truncateQuery(query string) string {
-	if len(query) > 50 {
+	if TruncateQueriesInLog && len(query) > 50 {
 		return query[:47] + "..."
 	}
 	return query

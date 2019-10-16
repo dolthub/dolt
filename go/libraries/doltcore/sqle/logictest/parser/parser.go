@@ -147,7 +147,7 @@ func (r *Record) NumCols() int {
 }
 
 // LineNum returns the canonical line number for this record, which is the first line number of the SQL statement or
-// query to execute.
+// query to execute, excluding any comment lines and conditions.
 func (r *Record) LineNum() int {
 	return r.lineNum
 }
