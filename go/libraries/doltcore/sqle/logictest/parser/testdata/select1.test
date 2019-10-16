@@ -7,6 +7,9 @@ INSERT INTO t1(e,c,b,d,a) VALUES(103,102,100,101,104)
 statement error # a comment about this error
 INSERT INTO t1(a,c,d,e,b) VALUES(107,106,108,109,105)
 
+# you wouldn't see this in a real test file, but naked halts can be inserted for debugging
+halt
+
 query I nosort
 SELECT CASE WHEN c>(SELECT avg(c) FROM t1) THEN a*2 ELSE b*10 END
   FROM t1
@@ -16,6 +19,12 @@ SELECT CASE WHEN c>(SELECT avg(c) FROM t1) THEN a*2 ELSE b*10 END
 
 hash-threshold 8
 
+# A long comment
+# That goes on multiple lines
+
+# Followed by another one
+# With a blank line in between
+
 query II nosort label-1
 SELECT a+b*2+c*3+d*4+e*5,
        (a+b+c+d+e)/5
@@ -23,6 +32,9 @@ SELECT a+b*2+c*3+d*4+e*5,
  ORDER BY 1,2
 ----
 60 values hashing to 808146289313018fce25f1a280bd8c30
+
+onlyif mysql # tests below here won't work on mysql
+halt
 
 onlyif mysql # Comment
 query IIIII rowsort
@@ -45,7 +57,7 @@ SELECT a+b*2+c*3+d*4+e*5,
 5
 
 # This is a comment
-skipif mysql
+skipif mssql
 query II nosort  # This is a comment
 SELECT a-b,
        CASE WHEN a<b-3 THEN 111 WHEN a<=b THEN 222

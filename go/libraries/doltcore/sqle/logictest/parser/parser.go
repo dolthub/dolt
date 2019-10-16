@@ -30,10 +30,12 @@ const (
 
 // A test script contains many records, which can be either statements to execute or queries with results.
 type Record struct {
-	// Whether this record is a statement, as opposed to a query. Statements do not have results besides an error.
-	isStatement bool
+	// The type of this record
+	recordType RecordType
 	// Whether this record expects an error to occur on execution.
 	expectError bool
+	// The condition for executing this record, if applicable
+	condition *Condition
 	// The schema for results of this query record, in the form e.g. "ITTR"
 	schema string
 	// The sort mode for validating results of a query
@@ -49,12 +51,42 @@ type Record struct {
 	label string
 }
 
+type Condition struct {
+	isOnly bool
+	isSkip bool
+	engine string
+}
+
 var hashRegex = regexp.MustCompile("(\\d+) values hashing to ([0-9a-f]+)")
 
-// IsStatement returns whether this record is a statement, as opposed to a query. Statements do not have results
-// besides an error.
-func (r *Record) IsStatement() bool {
-	return r.isStatement
+type RecordType int
+const (
+	// Statement is a record to execute with no results to validate, such as create or insert
+	Statement RecordType = iota
+	// Query is a record to execute and validate that results are as expected
+	Query
+	// Halt is a record that terminates the current test script's execution
+	Halt
+)
+
+// Type returns the type of this record.
+func (r *Record) Type() RecordType {
+	return r.recordType
+}
+
+// ShouldExecuteForEngine returns whether this record should be executed for the engine with the identifier given.
+func (r *Record) ShouldExecuteForEngine(engine string) bool {
+	if r.condition == nil {
+		return true
+	}
+
+	if r.condition.isOnly {
+		return r.condition.engine == engine
+	} else if r.condition.isSkip {
+		return r.condition.engine != engine
+	} else {
+		panic("Incorrectly constructed condition for record: one of isSkip, isOnly must be true")
+	}
 }
 
 // ExpectError returns whether this record expects an error to occur on execution.
@@ -91,8 +123,8 @@ func (r *Record) HashResult() string {
 // NumRows returns the number of results (not rows) for this record. Panics if the record is a statement instead of a
 // query.
 func (r *Record) NumResults() int {
-	if r.isStatement {
-		panic("No result rows for a statement record")
+	if r.recordType != Query {
+		panic("Only query records have results")
 	}
 
 	numVals := len(r.result)
@@ -107,8 +139,8 @@ func (r *Record) NumResults() int {
 // NumCols returns the number of columns for results of this record's query. Panics if the record is a statement instead
 // of a query.
 func (r *Record) NumCols() int {
-	if r.isStatement {
-		panic("No result rows for a statement record")
+	if r.recordType != Query {
+		panic("Only query records have results")
 	}
 
 	return len(r.schema)
@@ -260,25 +292,29 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 		}
 
 		fields := strings.Fields(commentsRemoved)
-		if len(fields) == 1 && fields[0] == halt {
-			return nil, io.EOF
-		}
 
 		switch state {
 		case stateStart:
 			if isBlankLine {
-				return nil, fmt.Errorf("Unexpected blank line on line %d", scanner.lineNum)
+				continue
 			}
 
 			switch fields[0] {
+			case halt:
+				record.recordType = Halt
+				record.lineNum = scanner.lineNum
+				return record, nil
 			case skipif, onlyif:
-			// unhandled for now
+				record.condition = &Condition{
+					isOnly: fields[0] == onlyif,
+					isSkip: fields[0] == skipif,
+					engine: fields[1],
+				}
 			case hashThreshold:
-				// Advance the scanner past the following blank line
-				scanner.Scan()
+				// Ignored
 				return nil, nil
 			case "statement":
-				record.isStatement = true
+				record.recordType = Statement
 				if fields[1] == "ok" {
 					record.expectError = false
 				} else if fields[1] == "error" {
@@ -288,6 +324,7 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 				}
 				state = stateStatement
 			case "query":
+				record.recordType = Query
 				record.schema = fields[1]
 				if len(fields) > 2 {
 					record.sortMode = SortMode(fields[2])
@@ -307,8 +344,6 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 
 			record.query = commentsRemoved
 			record.lineNum = scanner.lineNum
-			// Advance past the following blank line
-			scanner.Scan()
 			return record, nil
 		case stateQuery:
 			if record.lineNum == 0 {
@@ -337,7 +372,7 @@ func parseRecord(scanner *lineScanner) (*Record, error) {
 		return nil, scanner.Err()
 	}
 
-	if scanner.Err() == nil && linesScanned == 0{
+	if scanner.Err() == nil && linesScanned == 0 {
 		return nil, io.EOF
 	}
 

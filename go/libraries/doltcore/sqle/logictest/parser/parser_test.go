@@ -32,13 +32,17 @@ func TestParseFile(t *testing.T) {
 			lineNum:     8,
 		},
 		{
+				isHalt: true,
+				lineNum: 11,
+		},
+		{
 			schema:      "I",
 			sortMode:    "nosort",
 			query:       removeNewlines(`SELECT CASE WHEN c>(SELECT avg(c) FROM t1) THEN a*2 ELSE b*10 END
   FROM t1
  ORDER BY 1`),
 			result:      []string { "30 values hashing to 3c13dee48d9356ae19af2515e05e6b54" },
-			lineNum:     11,
+			lineNum:     14,
 		},
 		{
 			schema:      "II",
@@ -49,7 +53,15 @@ func TestParseFile(t *testing.T) {
   FROM t1
  ORDER BY 1,2`),
 			result:      []string { "60 values hashing to 808146289313018fce25f1a280bd8c30" },
-			lineNum:     20,
+			lineNum:     29,
+		},
+		{
+			isHalt: true,
+			condition: &Condition{
+				isOnly: true,
+				engine: "mysql",
+			},
+			lineNum: 37,
 		},
 		{
 			schema:      "IIIII",
@@ -65,8 +77,12 @@ func TestParseFile(t *testing.T) {
    AND d>e
    AND EXISTS(SELECT 1 FROM t1 AS x WHERE x.b<t1.b)
  ORDER BY 4,2,1,3,5`),
+ 			condition: &Condition{
+				isOnly: true,
+				engine: "mysql",
+			},
 			result:      []string { "1", "2", "3", "4", "5" },
-			lineNum:     29,
+			lineNum:     41,
 		},
 		{
 			schema:      "II",
@@ -78,8 +94,12 @@ func TestParseFile(t *testing.T) {
  WHERE c>d
    AND b>c
  ORDER BY 2,1`),
+			condition: &Condition{
+				isSkip: true,
+				engine: "mssql",
+			},
 			result:      []string { "-3", "222", "-3", "222", "-1", "222", "-1", "222" },
-			lineNum:     50,
+			lineNum:     62,
 		},
 	}
 
