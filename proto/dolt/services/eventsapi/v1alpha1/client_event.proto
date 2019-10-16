@@ -12,12 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// WARNING: This file was is automatically generated. DO NOT EDIT BY HAND.
+
 syntax = "proto3";
 
 package dolt.services.eventsapi.v1alpha1;
 
 option go_package = "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1;eventsapi";
 
+import "dolt/services/eventsapi/v1alpha1/event_constants.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -25,75 +28,8 @@ service ClientEventsService {
   rpc LogEvents(LogEventsRequest) returns (LogEventsResponse);
 }
 
-enum Platform {
-    PLATFORM_UNSPECIFIED = 0;
-    LINUX = 1;
-    WINDOWS = 2;
-    DARWIN = 3;
-}
-
-enum ClientEventType {
-    TYPE_UNSPECIFIED = 0;
-    INIT = 1;
-    STATUS = 2;
-    ADD = 3;
-    RESET = 4;
-    COMMIT = 5;
-    SQL = 6;
-    SQL_SERVER = 7;
-    LOG = 8;
-    DIFF = 9;
-    MERGE = 10;
-    BRANCH = 11;
-    CHECKOUT = 12;
-    REMOTE = 13;
-    PUSH = 14;
-    PULL = 15;
-    FETCH = 16;
-    CLONE = 17;
-    LOGIN = 18;
-    VERSION = 19;
-    CONFIG = 20;
-    LS = 21;
-    SCHEMA = 22;
-    TABLE_IMPORT = 23;
-    TABLE_EXPORT = 24;
-    TABLE_CREATE = 25;
-    TABLE_RM = 26;
-    TABLE_MV = 27;
-    TABLE_CP = 28;
-    TABLE_SELECT = 29;
-    TABLE_PUT_ROW = 30;
-    TABLE_RM_ROW = 31;
-    CREDS_NEW = 32;
-    CREDS_RM = 33;
-    CREDS_LS = 34;
-    CONF_CAT = 35;
-    CONF_RESOLVE = 36;
-    REMOTEAPI_GET_REPO_METADATA = 37;
-    REMOTEAPI_HAS_CHUNKS = 38;
-    REMOTEAPI_GET_DOWNLOAD_LOCATIONS = 39;
-    REMOTEAPI_GET_UPLOAD_LOCATIONS = 40;
-    REMOTEAPI_REBASE = 41;
-    REMOTEAPI_ROOT = 42;
-    REMOTEAPI_COMMIT = 43;
-    REMOTEAPI_LIST_TABLE_FILES = 44;
-}
-
-enum MetricID {
-    METRIC_UNSPECIFIED = 0;
-    BYTES_DOWNLOADED = 1;
-    DOWNLOAD_MS_ELAPSED = 2;
-    REMOTEAPI_RPC_ERROR = 3;
-}
-
-enum AttributeID {
-    ATTRIBUTE_UNSPECIFIED = 0;
-    REMOTE_URL_SCHEME = 2;
-}
-
 message ClientEventAttribute {
-    AttributeID id = 1;
+    dolt.services.eventsapi.v1alpha1.AttributeID id = 1;
     string value = 2;
 }
 
@@ -103,14 +39,14 @@ message ClientEventMetric {
         int32 count = 2;
     }
 
-    MetricID metric_id = 100;
+    dolt.services.eventsapi.v1alpha1.MetricID metric_id = 100;
 }
 
 message ClientEvent {
     string id = 1;
     google.protobuf.Timestamp start_time = 2;
     google.protobuf.Timestamp end_time = 3;
-    ClientEventType type = 4;
+    dolt.services.eventsapi.v1alpha1.ClientEventType type = 4;
     repeated ClientEventAttribute attributes = 5;
     repeated ClientEventMetric metrics = 6;
 }
@@ -119,8 +55,9 @@ message LogEventsRequest {
     string machine_id = 1;
     string extra = 2;
     string version = 3;
-    Platform platform = 4;
+    dolt.services.eventsapi.v1alpha1.Platform platform = 4;
     repeated ClientEvent events = 5;
+    dolt.services.eventsapi.v1alpha1.AppID app = 6;
 }
 
 message LogEventsResponse {
