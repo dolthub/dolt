@@ -140,6 +140,7 @@ func executeRecord(engine *sqle.Engine, record *parser.Record) (cont bool){
 		}
 
 		logSuccess()
+		return true
 	case parser.Query:
 		ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
 		sqlSch, rowIter, err := engine.Query(ctx, record.Query())
@@ -153,10 +154,11 @@ func executeRecord(engine *sqle.Engine, record *parser.Record) (cont bool){
 		} else {
 			drainIterator(rowIter)
 		}
+		return true
 	case parser.Halt:
 		return false
 	default:
-		panic (fmt.Sprintf("Uncrecognized record type %v", record.Type()))
+		panic(fmt.Sprintf("Uncrecognized record type %v", record.Type()))
 	}
 }
 
@@ -339,8 +341,10 @@ func sqlNewEngine(root *doltdb.RootValue) *sqle.Engine {
 }
 
 func logFailure(message string, args ...interface{}) {
-	newMsg := logMessagePrefix() + " not ok: " + strings.ReplaceAll(message, "\n", " ")
-	fmt.Println(fmt.Sprintf(newMsg, args...))
+	newMsg := logMessagePrefix() + " not ok: " + message
+	failureMessage := fmt.Sprintf(newMsg, args...)
+	failureMessage = strings.ReplaceAll(strings.ReplaceAll(failureMessage, "\r", " "), "\n", " ")
+	fmt.Println(failureMessage)
 }
 
 func logSkip() {
@@ -362,11 +366,17 @@ func logMessagePrefix() string {
 func testFilePath(f string) string {
 	var pathElements []string
 	filename := f
+
 	for len(pathElements) < 4 && len(filename) > 0 {
 		dir, file := filepath.Split(filename)
+		// Stop recursing at the leading "test/" directory (root directory for the sqllogictest files)
+		if file == "test" {
+			break
+		}
 		pathElements = append([]string{file}, pathElements...)
 		filename = filepath.Clean(dir)
 	}
+
 	return strings.ReplaceAll(filepath.Join(pathElements...), "\\", "/")
 }
 

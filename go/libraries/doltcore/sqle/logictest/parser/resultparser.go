@@ -105,15 +105,15 @@ func parseLogEntry(scanner *lineScanner) (*ResultLogEntry, error) {
 		switch entry.result {
 		case NotOk:
 			eoq := strings.Index(line[colonIdx2+1:], "not ok: ") + colonIdx2+1
-			entry.query = line[colonIdx2+1:eoq-1]
+			entry.query = line[colonIdx2+2:eoq-1]
 			entry.errorMessage = line[eoq+len("not ok: "):]
 		case Ok:
 			eoq := strings.Index(line[colonIdx2+1:], "ok") + colonIdx2+1
-			entry.query = line[colonIdx2+1:eoq-1]
+			entry.query = line[colonIdx2+2:eoq-1]
 		case Skipped:
 			eoq := strings.Index(line[colonIdx2+1:], "skipped") + colonIdx2+1
-			entry.query = line[colonIdx2+1:eoq-1]
-		} 
+			entry.query = line[colonIdx2+2:eoq-1]
+		}
 
 		return entry, nil
 	}
