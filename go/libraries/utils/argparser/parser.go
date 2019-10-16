@@ -144,58 +144,56 @@ func (ap *ArgParser) Parse(args []string) (*ArgParseResults, error) {
 	for ; i < len(args); i++ {
 		arg := args[i]
 
-		if len(arg) == 0 || arg[0] != '-' { // empty strings should get passed through like other naked words
+		if len(arg) == 0 || arg[0] != '-' || arg == "--" { // empty strings should get passed through like other naked words
 			list = append(list, arg)
-		} else {
-			if arg == "--" {
-				break
+			continue
+		}
+
+		optName, value := splitOption(arg)
+
+		if optName == "help" || optName == "h" {
+			return nil, ErrHelp
+		}
+
+		supOpt, ok := ap.NameOrAbbrevToOpt[optName]
+
+		if !ok {
+			return nil, UnknownArgumentParam{optName}
+		}
+
+		if _, exists := results[optName]; exists {
+			//already provided
+			return nil, errors.New("error: flag `" + supOpt.Name + "' should not have a value")
+		}
+
+		if supOpt.OptType == OptionalFlag {
+			if value != nil {
+				return nil, errors.New("error: multiple values provided for `" + supOpt.Name + "'")
 			}
 
-			optName, value := splitOption(arg)
+			results[supOpt.Name] = ""
+			continue
+		}
 
-			if optName == "help" || optName == "h" {
-				return nil, ErrHelp
+		if value == nil {
+			i++
+			if i >= len(args) {
+				return nil, errors.New("error: no value for option `" + arg + "'")
 			}
 
-			supOpt, ok := ap.NameOrAbbrevToOpt[optName]
+			valueStr := args[i]
+			value = &valueStr
+		}
 
-			if !ok {
-				return nil, UnknownArgumentParam{optName}
-			} else {
-				if _, exists := results[optName]; exists {
-					//already provided
-					return nil, errors.New("error: flag `" + supOpt.Name + "' should not have a value")
-				}
+		if supOpt.Validator != nil {
+			err := supOpt.Validator(*value)
 
-				if supOpt.OptType == OptionalFlag {
-					if value != nil {
-						return nil, errors.New("error: multiple values provided for `" + supOpt.Name + "'")
-					}
-
-					results[supOpt.Name] = ""
-				} else {
-					if value == nil {
-						i++
-						if i >= len(args) {
-							return nil, errors.New("error: no value for option `" + arg + "'")
-						}
-
-						valueStr := args[i]
-						value = &valueStr
-					}
-
-					if supOpt.Validator != nil {
-						err := supOpt.Validator(*value)
-
-						if err != nil {
-							return nil, err
-						}
-					}
-
-					results[supOpt.Name] = *value
-				}
+			if err != nil {
+				return nil, err
 			}
 		}
+
+		results[supOpt.Name] = *value
 	}
 
 	if i < len(args) {
