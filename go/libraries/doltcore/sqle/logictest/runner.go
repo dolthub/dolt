@@ -89,31 +89,48 @@ func runTestFile(file string) {
 
 	for _, record := range testRecords {
 		currRecord = record
-		ctx := sql.NewEmptyContext()
-		sqlSch, rowIter, err := engine.Query(ctx, record.Query())
-		if record.ExpectError() {
-			if err != nil {
-				logFailure("Expected error but didn't get one")
-			} else {
-				logSuccess()
-			}
-		} else if err != nil {
-			logFailure("Unexpected error %v", err)
+		if !record.ShouldExecuteForEngine("mysql") {
 			continue
 		}
 
-		// For queries, examine the results
-		if !record.IsStatement() {
+		switch record.Type() {
+		case parser.Statement:
+			ctx := sql.NewEmptyContext()
+			_, rowIter, err := engine.Query(ctx, record.Query())
+			drainIterator(rowIter)
+
+			if record.ExpectError() {
+				if err != nil {
+					logFailure("Expected error but didn't get one")
+					continue
+				}
+			} else if err != nil {
+				logFailure("Unexpected error %v", err)
+				continue
+			}
+
+			logSuccess()
+		case parser.Query:
+			ctx := sql.NewEmptyContext()
+			sqlSch, rowIter, err := engine.Query(ctx, record.Query())
+			if err != nil {
+				logFailure("Unexpected error %v", err)
+				continue
+			}
+
 			verifySchema(record, sqlSch)
 			verifyResults(record, rowIter)
-		} else {
-			drainIterator(rowIter)
-			logSuccess()
+		case parser.Halt:
+			return
 		}
 	}
 }
 
 func drainIterator(iter sql.RowIter) {
+	if iter == nil {
+		return
+	}
+
 	for {
 		_, err := iter.Next()
 		if err == io.EOF {
@@ -188,6 +205,10 @@ func rowsToResultStrings(iter sql.RowIter) []string {
 }
 
 func toSqlString(val interface{}) string {
+	if val == nil {
+		return "NULL"
+	}
+
 	switch v := val.(type) {
 	case float32, float64:
 		// exactly 3 decimal points for floats
@@ -214,6 +235,13 @@ func toSqlString(val interface{}) string {
 		return strconv.Itoa(int(v))
 	case string:
 		return v
+	// Mysql returns 1 and 0 for boolean values, mimic that
+	case bool:
+		if v {
+			return "1"
+		} else {
+			return "0"
+		}
 	default:
 		panic(fmt.Sprintf("No conversion for value %v of type %T", val, val))
 	}
@@ -240,14 +268,15 @@ func schemaToSchemaString(sch sql.Schema) string {
 	b := strings.Builder{}
 	for _, col := range sch {
 		switch col.Type.Type() {
-		case query.Type_INT32, query.Type_INT64:
+		case query.Type_INT32, query.Type_INT64, query.Type_BIT:
 			b.WriteString("I")
 		case query.Type_TEXT, query.Type_VARCHAR:
 			b.WriteString("T")
 		case query.Type_FLOAT32, query.Type_FLOAT64:
 			b.WriteString("R")
 		default:
-			panic("Unhandled type: " + col.Type.String())
+			b.WriteString("X")
+			logFailure("Unhandled type: " + col.Type.String())
 		}
 	}
 	return b.String()

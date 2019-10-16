@@ -14,28 +14,29 @@ func TestParseFile(t *testing.T) {
 
 	expectedRecords := []*Record{
 		{
-			isStatement: true,
+			recordType:  Statement,
 			expectError: false,
 			query:       "CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)",
 			lineNum:     2,
 		},
 		{
-			isStatement: true,
+			recordType:  Statement,
 			expectError: false,
 			query:       "INSERT INTO t1(e,c,b,d,a) VALUES(103,102,100,101,104)",
 			lineNum:     5,
 		},
 		{
-			isStatement: true,
+			recordType:  Statement,
 			expectError: true,
 			query:       "INSERT INTO t1(a,c,d,e,b) VALUES(107,106,108,109,105)",
 			lineNum:     8,
 		},
 		{
-				isHalt: true,
+				recordType:  Halt,
 				lineNum: 11,
 		},
 		{
+			recordType:  Query,
 			schema:      "I",
 			sortMode:    "nosort",
 			query:       removeNewlines(`SELECT CASE WHEN c>(SELECT avg(c) FROM t1) THEN a*2 ELSE b*10 END
@@ -45,6 +46,7 @@ func TestParseFile(t *testing.T) {
 			lineNum:     14,
 		},
 		{
+			recordType:  Query,
 			schema:      "II",
 			sortMode:    "nosort",
 			label:       "label-1",
@@ -56,7 +58,7 @@ func TestParseFile(t *testing.T) {
 			lineNum:     29,
 		},
 		{
-			isHalt: true,
+			recordType:  Halt,
 			condition: &Condition{
 				isOnly: true,
 				engine: "mysql",
@@ -64,6 +66,7 @@ func TestParseFile(t *testing.T) {
 			lineNum: 37,
 		},
 		{
+			recordType:  Query,
 			schema:      "IIIII",
 			sortMode:    "rowsort",
 			query:       removeNewlines(`SELECT a+b*2+c*3+d*4+e*5,
@@ -85,6 +88,7 @@ func TestParseFile(t *testing.T) {
 			lineNum:     41,
 		},
 		{
+			recordType:  Query,
 			schema:      "II",
 			sortMode:    "nosort",
 			query:       removeNewlines(`SELECT a-b,
