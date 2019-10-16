@@ -8,6 +8,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/sirupsen/logrus"
 	sqle "github.com/src-d/go-mysql-server"
@@ -15,7 +16,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +23,7 @@ import (
 )
 
 var currTestFile string
-var currRecord *Record
+var currRecord *parser.Record
 
 // Specify as many files / directories as requested as arguments. All test files specified will be run.
 func main() {
@@ -82,7 +82,7 @@ func runTestFile(file string) {
 	root = resetEnv(root)
 	engine := sqlNewEngine(root)
 
-	testRecords, err := ParseTestFile(file)
+	testRecords, err := parser.ParseTestFile(file)
 	if err != nil {
 		panic(err)
 	}
@@ -90,8 +90,8 @@ func runTestFile(file string) {
 	for _, record := range testRecords {
 		currRecord = record
 		ctx := sql.NewEmptyContext()
-		sqlSch, rowIter, err := engine.Query(ctx, record.query)
-		if record.expectError {
+		sqlSch, rowIter, err := engine.Query(ctx, record.Query())
+		if record.ExpectError() {
 			if err != nil {
 				logFailure("Expected error but didn't get one")
 			} else {
@@ -103,11 +103,12 @@ func runTestFile(file string) {
 		}
 
 		// For queries, examine the results
-		if !record.isStatement {
+		if !record.IsStatement() {
 			verifySchema(record, sqlSch)
 			verifyResults(record, rowIter)
 		} else {
 			drainIterator(rowIter)
+			logSuccess()
 		}
 	}
 }
@@ -123,10 +124,11 @@ func drainIterator(iter sql.RowIter) {
 	}
 }
 
-func verifyResults(record *Record, iter sql.RowIter) {
+func verifyResults(record *parser.Record, iter sql.RowIter) {
 	results := rowsToResultStrings(iter)
-	if len(results) != record.NumRows() {
-		logFailure(fmt.Sprintf("Incorrect number of results. Expected %v, got %v", len(record.result), len(results)))
+
+	if len(results) != record.NumResults() {
+		logFailure(fmt.Sprintf("Incorrect number of results. Expected %v, got %v", record.NumResults(), len(results)))
 		return
 	}
 
@@ -137,12 +139,12 @@ func verifyResults(record *Record, iter sql.RowIter) {
 	}
 }
 
-func verifyRows(record *Record, results []string) {
-	results = sortResults(record, results)
+func verifyRows(record *parser.Record, results []string) {
+	results = record.SortResults(results)
 
-	for i := range record.result {
-		if record.result[i] != results[i] {
-			logFailure("Incorrect result at position %d. Expected %v, got %v", i, record.result[i], results[i])
+	for i := range record.Result() {
+		if record.Result()[i] != results[i] {
+			logFailure("Incorrect result at position %d. Expected %v, got %v", i, record.Result()[i], results[i])
 			return
 		}
 	}
@@ -150,62 +152,8 @@ func verifyRows(record *Record, results []string) {
 	logSuccess()
 }
 
-type rowSorter struct {
-	record *Record
-	values []string
-}
-
-func (r rowSorter) toRow(i int) []string {
-	return r.values[i*r.record.NumCols() : (i+1)*r.record.NumCols()]
-}
-
-func (r rowSorter) Len() int {
-	return len(r.values) / r.record.NumCols()
-}
-
-func (r rowSorter) Less(i, j int) bool {
-	rowI := r.toRow(i)
-	rowJ := r.toRow(j)
-	for k := range rowI {
-		if rowI[k] < rowJ[k] {
-			return true
-		}
-		if rowI[k] > rowJ[k] {
-			return false
-		}
-	}
-	return false
-}
-
-func (r rowSorter) Swap(i, j int) {
-	rowI := r.toRow(i)
-	rowJ := r.toRow(j)
-	for col := range rowI {
-		rowI[col], rowJ[col] = rowJ[col], rowI[col]
-	}
-}
-
-func sortResults(record *Record, results []string) []string {
-	switch record.sortMode {
-	case NoSort:
-		return results
-	case Rowsort:
-		sorter := rowSorter{
-			record: record,
-			values: results,
-		}
-		sort.Sort(sorter)
-		return sorter.values
-	case ValueSort:
-		sort.Strings(results)
-		return results
-	default:
-		panic(fmt.Sprintf("Uncrecognized sort mode %v", record.sortMode))
-	}
-}
-
-func verifyHash(record *Record, results []string) {
-	results = sortResults(record, results)
+func verifyHash(record *parser.Record, results []string) {
+	results = record.SortResults(results)
 
 	computedHash, err := hashResults(results)
 	if err != nil {
@@ -281,10 +229,10 @@ func hashResults(results []string) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
-func verifySchema(record *Record, sch sql.Schema) {
+func verifySchema(record *parser.Record, sch sql.Schema) {
 	schemaString := schemaToSchemaString(sch)
-	if schemaString != record.schema {
-		logFailure("Schemas differ. Expected %s, got %s", record.schema, schemaString)
+	if schemaString != record.Schema() {
+		logFailure("Schemas differ. Expected %s, got %s", record.Schema(), schemaString)
 	}
 }
 
@@ -335,10 +283,10 @@ func logSuccess() {
 
 func logMessagePrefix() string {
 	return fmt.Sprintf("%s %s:%d: %s",
-		time.Now().Format(time.RFC3339),
+		time.Now().Format(time.RFC3339Nano),
 		testFilePath(currTestFile),
-		currRecord.lineNum,
-		truncateQuery(currRecord.query))
+		currRecord.LineNum(),
+		truncateQuery(currRecord.Query()))
 }
 
 func testFilePath(f string) string {

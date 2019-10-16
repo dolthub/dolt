@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"github.com/stretchr/testify/assert"
@@ -12,21 +12,24 @@ func TestParseFile(t *testing.T) {
 	records, err := ParseTestFile(f)
 	require.NoError(t, err)
 
-	expectedRecords := []*Record {
+	expectedRecords := []*Record{
 		{
 			isStatement: true,
 			expectError: false,
 			query:       "CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)",
+			lineNum:     2,
 		},
 		{
 			isStatement: true,
 			expectError: false,
 			query:       "INSERT INTO t1(e,c,b,d,a) VALUES(103,102,100,101,104)",
+			lineNum:     5,
 		},
 		{
 			isStatement: true,
 			expectError: true,
 			query:       "INSERT INTO t1(a,c,d,e,b) VALUES(107,106,108,109,105)",
+			lineNum:     8,
 		},
 		{
 			schema:      "I",
@@ -35,6 +38,7 @@ func TestParseFile(t *testing.T) {
   FROM t1
  ORDER BY 1`),
 			result:      []string { "30 values hashing to 3c13dee48d9356ae19af2515e05e6b54" },
+			lineNum:     11,
 		},
 		{
 			schema:      "II",
@@ -45,6 +49,7 @@ func TestParseFile(t *testing.T) {
   FROM t1
  ORDER BY 1,2`),
 			result:      []string { "60 values hashing to 808146289313018fce25f1a280bd8c30" },
+			lineNum:     20,
 		},
 		{
 			schema:      "IIIII",
@@ -61,6 +66,7 @@ func TestParseFile(t *testing.T) {
    AND EXISTS(SELECT 1 FROM t1 AS x WHERE x.b<t1.b)
  ORDER BY 4,2,1,3,5`),
 			result:      []string { "1", "2", "3", "4", "5" },
+			lineNum:     29,
 		},
 		{
 			schema:      "II",
@@ -73,6 +79,7 @@ func TestParseFile(t *testing.T) {
    AND b>c
  ORDER BY 2,1`),
 			result:      []string { "-3", "222", "-3", "222", "-1", "222", "-1", "222" },
+			lineNum:     50,
 		},
 	}
 

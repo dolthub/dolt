@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package logictest contains code for executing sqllogictest test cases, as described here:
+// Package parser contains code for parsing sqllogictest test cases, as described here:
 // https://www.sqlite.org/sqllogictest/doc/trunk/about.wiki
 // A git-hub version of the original sqllogictest with all test cases can be found here:
 // https://github.com/gregrahn/sqllogictest
-package main
+package parser

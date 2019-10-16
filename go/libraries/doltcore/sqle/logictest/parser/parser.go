@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"bufio"
@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -29,19 +30,67 @@ const (
 
 // A test script contains many records, which can be either statements to execute or queries with results.
 type Record struct {
+	// Whether this record is a statement, as opposed to a query. Statements do not have results besides an error.
 	isStatement bool
+	// Whether this record expects an error to occur on execution.
 	expectError bool
-	schema string // string-based schema, such as ITTR
+	// The schema for results of this query record, in the form e.g. "ITTR"
+	schema string
+	// The sort mode for validating results of a query
 	sortMode SortMode
-	label string
+	// The query string or statement to execute
 	query string
+	// The canonical line number for this record, which is the first line number of the SQL statement or
+	// query to execute.
 	lineNum int
+	// The expected result of the query, represented as a strings
 	result []string
+	// Label used to store results for a query, currently unused.
+	label string
 }
 
 var hashRegex = regexp.MustCompile("(\\d+) values hashing to ([0-9a-f]+)")
 
-func (r *Record) NumRows() int {
+// IsStatement returns whether this record is a statement, as opposed to a query. Statements do not have results
+// besides an error.
+func (r *Record) IsStatement() bool {
+	return r.isStatement
+}
+
+// ExpectError returns whether this record expects an error to occur on execution.
+func (r *Record) ExpectError() bool {
+	return r.expectError
+}
+
+// Schema returns the schema for the results of this query, in the form e.g. "ITTR"
+func (r *Record) Schema() string {
+	return r.schema
+}
+
+// Query returns the query for this record, which is either a statement to execute or a query to validate results for.
+func (r *Record) Query() string {
+	return r.query
+}
+
+// Returns the expected results of the query for this record. For many records, this is a hash of sorted results
+// instead of the full list of values. Use IsHashResult to disambiguate.
+func (r *Record) Result() []string {
+	return r.result
+}
+
+// IsHashResult returns whether this record has a hash result (as opposed to enumerating each value).
+func (r *Record) IsHashResult() bool {
+	return len(r.result) == 1 && hashRegex.MatchString(r.result[0])
+}
+
+// HashResult returns the hash for result values for this record.
+func (r *Record) HashResult() string {
+	return hashRegex.ReplaceAllString(r.result[0], "$2")
+}
+
+// NumRows returns the number of results (not rows) for this record. Panics if the record is a statement instead of a
+// query.
+func (r *Record) NumResults() int {
 	if r.isStatement {
 		panic("No result rows for a statement record")
 	}
@@ -55,6 +104,8 @@ func (r *Record) NumRows() int {
 	return numVals / len(r.schema)
 }
 
+// NumCols returns the number of columns for results of this record's query. Panics if the record is a statement instead
+// of a query.
 func (r *Record) NumCols() int {
 	if r.isStatement {
 		panic("No result rows for a statement record")
@@ -63,16 +114,10 @@ func (r *Record) NumCols() int {
 	return len(r.schema)
 }
 
+// LineNum returns the canonical line number for this record, which is the first line number of the SQL statement or
+// query to execute.
 func (r *Record) LineNum() int {
 	return r.lineNum
-}
-
-func (r *Record) IsHashResult() bool {
-	return len(r.result) == 1 && hashRegex.MatchString(r.result[0])
-}
-
-func (r *Record) HashResult() string {
-	return hashRegex.ReplaceAllString(r.result[0], "$2")
 }
 
 type lineScanner struct {
@@ -85,6 +130,64 @@ func (ls *lineScanner) Scan() bool {
 	return ls.Scanner.Scan()
 }
 
+// rowSorter sorts a slice of result values with by-row semantics.
+type rowSorter struct {
+	record *Record
+	values []string
+}
+
+func (s rowSorter) toRow(i int) []string {
+	return s.values[i*s.record.NumCols():(i+1)*s.record.NumCols()]
+}
+
+func (s rowSorter) Len() int {
+	return len(s.values) / s.record.NumCols()
+}
+
+func (s rowSorter) Less(i, j int) bool {
+	rowI := s.toRow(i)
+	rowJ := s.toRow(j)
+	for k := range rowI {
+		if rowI[k] < rowJ[k] {
+			return true
+		}
+		if rowI[k] > rowJ[k] {
+			return false
+		}
+	}
+	return false
+}
+
+func (s rowSorter) Swap(i, j int) {
+	rowI := s.toRow(i)
+	rowJ := s.toRow(j)
+	for col := range rowI {
+		rowI[col], rowJ[col] = rowJ[col], rowI[col]
+	}
+}
+
+// Sort results sorts the input slice (the results of this record's query) according to the record's specification
+// (no sorting, row-based sorting, or value-based sorting) and returns it.
+func (r *Record) SortResults(results []string) []string {
+	switch r.sortMode {
+	case NoSort:
+		return results
+	case Rowsort:
+		sorter := rowSorter{
+			record: r,
+			values: results,
+		}
+		sort.Sort(sorter)
+		return sorter.values
+	case ValueSort:
+		sort.Strings(results)
+		return results
+	default:
+		panic(fmt.Sprintf("Uncrecognized sort mode %v", r.sortMode))
+	}
+}
+
+// ParseTestFile parses a sqllogictest file and returns the array of records it contains, or an error if it cannot.
 func ParseTestFile(f string) ([]*Record, error) {
 	file, err := os.Open(f)
 	if err != nil {
