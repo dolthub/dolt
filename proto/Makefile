@@ -12,7 +12,8 @@ PROTOC_FLAGS = --plugin=protoc-gen-go=$(PROTOC_GEN_GO) -I . -I $(GOOGLEAPIS) -I 
 pbgo_out := ../go/gen/proto
 
 EVENTSAPI_protos := \
-  dolt/services/eventsapi/v1alpha1/client_event.proto
+  dolt/services/eventsapi/v1alpha1/client_event.proto \
+  dolt/services/eventsapi/v1alpha1/event_constants.proto
 EVENTSAPI_pbgo_pkg_path := dolt/services/eventsapi/v1alpha1
 
 REMOTESAPI_protos := \
@@ -21,8 +22,10 @@ REMOTESAPI_protos := \
 REMOTESAPI_pbgo_pkg_path := dolt/services/remotesapi/v1alpha1
 
 PBGO_pkgs := \
+  CLIENTEVENTS \
   REMOTESAPI \
-  EVENTSAPI
+  EVENTSAPI \
+  EVENTSAPI2
 
 all:
 
