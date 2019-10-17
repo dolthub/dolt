@@ -54,7 +54,7 @@ func ParseResultFile(f string) ([]*ResultLogEntry, error) {
 
 	var entries []*ResultLogEntry
 
-	scanner := parser.LineScanner{bufio.NewScanner(file), 0}
+	scanner := parser.LineScanner{Scanner: bufio.NewScanner(file)}
 
 	for {
 		entry, err := parseLogEntry(&scanner)
