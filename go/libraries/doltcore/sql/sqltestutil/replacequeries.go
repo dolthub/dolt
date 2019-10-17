@@ -220,6 +220,7 @@ var BasicReplaceTests = []ReplaceTest{
 		ReplaceQuery: `replace into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", 100, false, 1, 5.1)`,
 		ExpectedErr: "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch int -> bool",
@@ -239,6 +240,7 @@ var BasicReplaceTests = []ReplaceTest{
 		ReplaceQuery: `replace into people (id, first, last, is_married, age, rating) values
 					("7", "Maggie", "Simpson", false, 1, 5.1)`,
 		ExpectedErr: "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch string -> float",
@@ -251,6 +253,7 @@ var BasicReplaceTests = []ReplaceTest{
 		ReplaceQuery: `replace into people (id, first, last, is_married, age, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, "100")`,
 		ExpectedErr: "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch string -> uuid",
@@ -276,12 +279,14 @@ var BasicReplaceTests = []ReplaceTest{
 		ReplaceQuery: `replace into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1.0, 5.1)`,
 		ExpectedErr: "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch bool -> int",
 		ReplaceQuery: `replace into people (id, first, last, is_married, age, rating) values
 					(true, "Maggie", "Simpson", false, 1, 5.1)`,
 		ExpectedErr: "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch bool -> float",

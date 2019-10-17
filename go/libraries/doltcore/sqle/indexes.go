@@ -119,7 +119,20 @@ func keyColToValue(v interface{}, column schema.Column) types.Value {
 	case types.BoolKind:
 		return types.Bool(v.(bool))
 	case types.IntKind:
-		return types.Int(v.(int64))
+		switch i := v.(type) {
+		case int:
+			return types.Int(i)
+		case int8:
+ 			return types.Int(i)
+		case int16:
+			return types.Int(i)
+		case int32:
+			return types.Int(i)
+		case int64:
+			return types.Int(i)
+		default:
+			panic(fmt.Sprintf("unhandled type %T", i))
+		}
 	case types.FloatKind:
 		return types.Float(v.(float64))
 	case types.UintKind:
@@ -129,7 +142,7 @@ func keyColToValue(v interface{}, column schema.Column) types.Value {
 	case types.StringKind:
 		return types.String(v.(string))
 	default:
-		panic("unhandled type")
+		panic(fmt.Sprintf("unhandled type %T", v))
 	}
 }
 
