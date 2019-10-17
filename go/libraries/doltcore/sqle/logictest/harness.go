@@ -1,4 +1,4 @@
-package harness
+package main
 
 // A Harness runs the queries in sqllogictest tests on an underlying SQL engine.
 type Harness interface {

@@ -6,7 +6,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/dolt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/harness"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
-	"github.com/sirupsen/logrus"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,11 +20,16 @@ var _, TruncateQueriesInLog = os.LookupEnv("SQLLOGICTEST_TRUNCATE_QUERIES")
 // Specify as many files / directories as requested as arguments. All test files specified will be run.
 func main() {
 	args := os.Args[1:]
+	harness := &dolt.DoltHarness{}
+	RunTestFiles(harness, args...)
+}
 
-	logrus.SetLevel(logrus.InfoLevel)
-
+// Runs the test files found under any of the paths given. Can specify individual test files, or directories that
+// contain test files somewhere underneath. All files named *.test enountered under a directory will be attempted to be
+// parsed as a test file, and will panic for malformed test files or paths that don't exist.
+func RunTestFiles(harness harness.Harness, paths ...string) {
 	var testFiles []string
-	for _, arg := range args {
+	for _, arg := range paths {
 		abs, err := filepath.Abs(arg)
 		if err != nil {
 			panic(err)
@@ -54,8 +58,6 @@ func main() {
 			testFiles = append(testFiles, abs)
 		}
 	}
-
-	harness := &dolt.DoltHarness{}
 
 	for _, file := range testFiles {
 		runTestFile(harness, file)
