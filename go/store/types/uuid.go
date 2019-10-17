@@ -90,7 +90,15 @@ func (v UUID) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 }
 
 func (v UUID) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	return v[:], nil
+	buff := make([]byte, 1+uuidNumBytes)
+	w := binaryNomsWriter{buff, 0}
+	err := v.writeTo(&w, nbf)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buff[:w.offset], err
 }
 
 func (v UUID) String() string {
