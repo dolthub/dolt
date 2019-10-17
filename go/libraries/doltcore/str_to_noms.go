@@ -16,6 +16,7 @@ package doltcore
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -79,7 +80,36 @@ func stringToBool(s string) (types.Value, error) {
 	return types.Bool(b), nil
 }
 
+func parseNumber(s string) (isNegative bool, decPos int, err error) {
+	decPos = -1
+	for i, c := range s {
+		if i == 0 && c == '-' {
+			isNegative = true
+		} else if c == '.' {
+			if decPos != -1 {
+				return false, -1, errors.New("not a valid number.  multiple decimal points found.")
+			}
+
+			decPos = i
+		} else if c > '9' || c < '0' {
+			return false, -1, fmt.Errorf("for the string '%s' found invalid character '%s' at pos %d", s, string(c), i)
+		}
+	}
+
+	return isNegative, decPos, nil
+}
+
 func stringToInt(s string) (types.Value, error) {
+	_, decPos, err := parseNumber(s)
+
+	if err != nil {
+		return types.Int(0), ConversionError{types.StringKind, types.IntKind, err}
+	}
+
+	if decPos != -1 {
+		s = s[:decPos]
+	}
+
 	if len(s) == 0 {
 		return types.NullValue, nil
 	}
