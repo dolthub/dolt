@@ -110,20 +110,23 @@ func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *do
 
 	i := 0
 	for _, arg := range args {
-		if cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.Head.Ref.String()); err == nil {
-			if cm, err := dEnv.DoltDB.Resolve(ctx, cs); err == nil {
-				roots[i], err = cm.GetRootValue()
-
-				if err != nil {
-					return nil, nil, nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
-				}
-
-				i++
-				continue
-			}
+		cs, err := doltdb.NewCommitSpec(arg, dEnv.RepoState.Head.Ref.String())
+		if err != nil {
+			break
 		}
 
-		break
+		cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+		if err != nil {
+			break
+		}
+
+		roots[i], err = cm.GetRootValue()
+
+		if err != nil {
+			return nil, nil, nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
+		}
+
+		i++
 	}
 
 	if i < 2 {
