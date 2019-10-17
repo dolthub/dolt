@@ -241,7 +241,8 @@ var BasicInsertTests = []InsertTest{
 		Name: "type mismatch string -> int",
 		InsertQuery: `insert into people (id, first, last, is_married, age, rating) values
 					("7", "Maggie", "Simpson", false, 1, 5.1)`,
-		ExpectedErr: "Type mismatch",
+		ExpectedErr:     "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch string -> float",
@@ -253,7 +254,8 @@ var BasicInsertTests = []InsertTest{
 		Name: "type mismatch string -> uint",
 		InsertQuery: `insert into people (id, first, last, is_married, age, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, "100")`,
-		ExpectedErr: "Type mismatch",
+		ExpectedErr:     "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch string -> uuid",
@@ -265,7 +267,8 @@ var BasicInsertTests = []InsertTest{
 		Name: "type mismatch float -> string",
 		InsertQuery: `insert into people (id, first, last, is_married, age, rating) values
 					(7, 8.1, "Simpson", false, 1, 5.1)`,
-		ExpectedErr: "Type mismatch",
+		ExpectedErr:     "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch float -> bool",
@@ -278,13 +281,15 @@ var BasicInsertTests = []InsertTest{
 		Name: "type mismatch float -> int",
 		InsertQuery: `insert into people (id, first, last, is_married, age, rating) values
 					(7, "Maggie", "Simpson", false, 1.0, 5.1)`,
-		ExpectedErr: "Type mismatch",
+		ExpectedErr:     "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch bool -> int",
 		InsertQuery: `insert into people (id, first, last, is_married, age, rating) values
 					(true, "Maggie", "Simpson", false, 1, 5.1)`,
-		ExpectedErr: "Type mismatch",
+		ExpectedErr:     "Type mismatch",
+		SkipOnSqlEngine: true,
 	},
 	{
 		Name: "type mismatch bool -> float",
