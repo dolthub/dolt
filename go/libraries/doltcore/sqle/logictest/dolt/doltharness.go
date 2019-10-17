@@ -123,8 +123,6 @@ func rowsToResultStrings(iter sql.RowIter) ([]string, error) {
 			}
 		}
 	}
-
-	panic("iterator never returned io.EOF") // unreachable, required for compile
 }
 
 func toSqlString(val interface{}) string {
