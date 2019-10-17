@@ -27,7 +27,7 @@ func ParseTestFile(f string) ([]*Record, error) {
 
 	var records []*Record
 
-	scanner := LineScanner{bufio.NewScanner(file), 0 }
+	scanner := LineScanner{bufio.NewScanner(file), 0}
 
 	for {
 		record, err := parseRecord(&scanner)
@@ -43,6 +43,7 @@ func ParseTestFile(f string) ([]*Record, error) {
 }
 
 type recordParseState int
+
 const (
 	stateStart recordParseState = iota
 	stateStatement

@@ -3,11 +3,12 @@ package logictest
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
 )
 
 var currTestFile string

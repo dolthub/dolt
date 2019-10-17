@@ -12,4 +12,3 @@ func (ls *LineScanner) Scan() bool {
 	ls.LineNum++
 	return ls.Scanner.Scan()
 }
-

@@ -8,6 +8,7 @@ import (
 )
 
 type SortMode string
+
 const (
 	NoSort    SortMode = "nosort"
 	Rowsort   SortMode = "rowsort"
@@ -15,6 +16,7 @@ const (
 )
 
 type RecordType int
+
 const (
 	// Statement is a record to execute with no results to validate, such as create or insert
 	Statement RecordType = iota

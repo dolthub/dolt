@@ -3,15 +3,17 @@ package logictest
 import (
 	"bufio"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
 	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
 )
 
 type ResultType int
+
 const (
 	Ok ResultType = iota
 	NotOk
@@ -20,11 +22,11 @@ const (
 
 // ResultLogEntry is a single line in a sqllogictest result log file.
 type ResultLogEntry struct {
-	entryTime time.Time
-	testFile string
-	lineNum int
-	query string
-	result ResultType
+	entryTime    time.Time
+	testFile     string
+	lineNum      int
+	query        string
+	result       ResultType
 	errorMessage string
 }
 
@@ -62,7 +64,7 @@ func parseLogEntry(scanner *parser.LineScanner) (*ResultLogEntry, error) {
 
 		// Sample line:
 		// 2019-10-16T12:20:29.0594292-07:00 index/random/10/slt_good_0.test:535: SELECT * FROM tab0 AS cor0 WHERE NULL <> 29 + col0 not ok: Schemas differ. Expected IIIIIII, got IIRTIRT
-		firstSpace := strings.Index(line," ")
+		firstSpace := strings.Index(line, " ")
 		if firstSpace == -1 {
 			// unrecognized log line, ignore and continue
 			continue
@@ -91,7 +93,7 @@ func parseLogEntry(scanner *parser.LineScanner) (*ResultLogEntry, error) {
 			colonIdx = colonIdx + firstSpace + 1
 		}
 
-		entry.testFile = line[firstSpace+1:colonIdx]
+		entry.testFile = line[firstSpace+1 : colonIdx]
 		colonIdx2 := strings.Index(line[colonIdx+1:], ":")
 		if colonIdx2 == -1 {
 			panic(fmt.Sprintf("Malformed line %v on line %d", line, scanner.LineNum))
@@ -99,22 +101,22 @@ func parseLogEntry(scanner *parser.LineScanner) (*ResultLogEntry, error) {
 			colonIdx2 = colonIdx + 1 + colonIdx2
 		}
 
-		entry.lineNum, err = strconv.Atoi(line[colonIdx+1:colonIdx2])
+		entry.lineNum, err = strconv.Atoi(line[colonIdx+1 : colonIdx2])
 		if err != nil {
 			panic(fmt.Sprintf("Failed to parse line number on line %v", scanner.LineNum))
 		}
 
 		switch entry.result {
 		case NotOk:
-			eoq := strings.Index(line[colonIdx2+1:], "not ok: ") + colonIdx2+1
-			entry.query = line[colonIdx2+2:eoq-1]
+			eoq := strings.Index(line[colonIdx2+1:], "not ok: ") + colonIdx2 + 1
+			entry.query = line[colonIdx2+2 : eoq-1]
 			entry.errorMessage = line[eoq+len("not ok: "):]
 		case Ok:
-			eoq := strings.Index(line[colonIdx2+1:], "ok") + colonIdx2+1
-			entry.query = line[colonIdx2+2:eoq-1]
+			eoq := strings.Index(line[colonIdx2+1:], "ok") + colonIdx2 + 1
+			entry.query = line[colonIdx2+2 : eoq-1]
 		case Skipped:
-			eoq := strings.Index(line[colonIdx2+1:], "skipped") + colonIdx2+1
-			entry.query = line[colonIdx2+2:eoq-1]
+			eoq := strings.Index(line[colonIdx2+1:], "skipped") + colonIdx2 + 1
+			entry.query = line[colonIdx2+2 : eoq-1]
 		}
 
 		return entry, nil

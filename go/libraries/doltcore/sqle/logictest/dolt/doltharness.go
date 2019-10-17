@@ -3,19 +3,21 @@ package dolt
 import (
 	"context"
 	"fmt"
+	"io"
+	"math/rand"
+	"strconv"
+	"strings"
+
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
+	"vitess.io/vitess/go/vt/proto/query"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
-	"io"
-	"math/rand"
-	"strconv"
-	"strings"
-	"vitess.io/vitess/go/vt/proto/query"
 )
 
 var _ logictest.Harness = &DoltHarness{}
