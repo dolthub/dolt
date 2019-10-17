@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 
@@ -431,6 +432,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 	}
 
 	// Open all the new upstream tables concurrently
+	var rp atomic.Value
 	ae := atomicerr.New()
 	merged.upstream = make(chunkSources, len(tablesToOpen))
 	wg := &sync.WaitGroup{}
@@ -439,7 +441,11 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		wg.Add(1)
 		go func(idx int, spec tableSpec) {
 			defer wg.Done()
-
+			defer func() {
+				if r := recover(); r != nil {
+					rp.Store(r)
+				}
+			}()
 			if !ae.IsSet() {
 				var err error
 				merged.upstream[idx], err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
@@ -449,6 +455,10 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		i++
 	}
 	wg.Wait()
+
+	if r := rp.Load(); r != nil {
+		panic(r)
+	}
 
 	if err := ae.Get(); err != nil {
 		return tableSet{}, err
