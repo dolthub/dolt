@@ -138,7 +138,7 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 	rec = func(t *Type) *Type {
 		kind := t.TargetKind()
 		switch kind {
-		case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, UUIDKind, IntKind, UintKind, NullKind:
+		case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
 			return t
 		case ListKind, MapKind, RefKind, SetKind, UnionKind, TupleKind:
 			elemTypes := make(typeSlice, len(t.Desc.(CompoundDesc).ElemTypes))
@@ -192,7 +192,7 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) (*Type, err
 
 	kind := t.TargetKind()
 	switch kind {
-	case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, CycleKind, UUIDKind, IntKind, UintKind, NullKind:
+	case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, CycleKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
 		break
 
 	case ListKind, MapKind, RefKind, SetKind, TupleKind:

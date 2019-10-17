@@ -29,7 +29,7 @@ import (
 	"strconv"
 	"sync"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
 	"github.com/google/uuid"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
@@ -372,6 +372,10 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	case NullKind:
 		w.write("null_value")
 
+	case InlineBlobKind:
+		uaStr := v.(InlineBlob).String()
+		w.write(uaStr)
+
 	default:
 		return ErrUnknownType
 	}
@@ -450,7 +454,7 @@ func (w *hrsWriter) writeSize(v Value) {
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case BlobKind, BoolKind, FloatKind, StringKind, TypeKind, ValueKind, UUIDKind, IntKind, UintKind, NullKind:
+	case BlobKind, BoolKind, FloatKind, StringKind, TypeKind, ValueKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
 		w.write(t.TargetKind().String())
 	case ListKind, RefKind, SetKind, MapKind, TupleKind:
 		w.write(t.TargetKind().String())

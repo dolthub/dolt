@@ -204,6 +204,12 @@ func (b *binaryNomsReader) readUint() Uint {
 	return Uint(v)
 }
 
+func (b *binaryNomsReader) readUint16() uint16 {
+	v := binary.BigEndian.Uint16(b.buff[b.offset:])
+	b.offset += 2
+	return v
+}
+
 func (b *binaryNomsReader) readUUID() UUID {
 	id := UUID{}
 	copy(id[:uuidNumBytes], b.buff[b.offset:])
@@ -235,6 +241,18 @@ func (b *binaryNomsReader) readString() string {
 func (b *binaryNomsReader) skipString() {
 	size := uint32(b.readCount())
 	b.offset += size
+}
+
+func (b *binaryNomsReader) readInlineBlob() (InlineBlob, error) {
+	len := uint32(b.readUint16())
+	v := make([]byte, len)
+	copy(v, b.buff[b.offset:b.offset+len])
+	b.offset += len
+	return InlineBlob(v), nil
+}
+
+func (b *binaryNomsReader) skipInlineBlob() {
+	b.offset += uint32(b.readUint16())
 }
 
 func (b *binaryNomsReader) readHash() hash.Hash {

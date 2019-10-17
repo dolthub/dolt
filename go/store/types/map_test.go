@@ -1627,6 +1627,26 @@ func TestMapOrdering(t *testing.T) {
 			Bool(true),
 		},
 	)
+
+	testMapOrder(assert, vrw,
+		InlineBlobType, StringType,
+		[]Value{
+			InlineBlob([]byte{00, 01, 1}), String("unused"),
+			InlineBlob([]byte{00, 01, 9}), String("unused"),
+			InlineBlob([]byte{00, 01, 2}), String("unused"),
+			InlineBlob([]byte{00, 01, 8}), String("unused"),
+			InlineBlob([]byte{00, 01, 3}), String("unused"),
+			InlineBlob([]byte{00, 01, 7}), String("unused"),
+		},
+		[]Value{
+			InlineBlob([]byte{00, 01, 1}),
+			InlineBlob([]byte{00, 01, 2}),
+			InlineBlob([]byte{00, 01, 3}),
+			InlineBlob([]byte{00, 01, 7}),
+			InlineBlob([]byte{00, 01, 8}),
+			InlineBlob([]byte{00, 01, 9}),
+		},
+	)
 }
 
 func TestMapEmpty(t *testing.T) {
