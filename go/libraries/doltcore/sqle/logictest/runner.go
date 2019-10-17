@@ -1,26 +1,16 @@
 package main
 
 import (
-	"context"
 	"crypto/md5"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/dolt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/harness"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/sirupsen/logrus"
-	sqle "github.com/src-d/go-mysql-server"
-	"github.com/src-d/go-mysql-server/sql"
-	"io"
-	"math/rand"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
-	"vitess.io/vitess/go/vt/proto/query"
 )
 
 var currTestFile string
@@ -65,18 +55,14 @@ func main() {
 		}
 	}
 
-	harness := &DoltHarness{}
+	harness := &dolt.DoltHarness{}
 
 	for _, file := range testFiles {
 		runTestFile(harness, file)
 	}
 }
 
-type DoltHarness struct {
-	engine *sqle.Engine
-}
-
-func runTestFile(harness *DoltHarness, file string) {
+func runTestFile(harness harness.Harness, file string) {
 	currTestFile = file
 
 	harness.Init()
@@ -93,41 +79,8 @@ func runTestFile(harness *DoltHarness, file string) {
 	}
 }
 
-func (h *DoltHarness) Init() {
-	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
-	if !dEnv.HasDoltDir() {
-		panic("Current directory must be a valid dolt repository")
-	}
-
-	root, verr := commands.GetWorkingWithVErr(dEnv)
-	if verr != nil {
-		panic(verr)
-	}
-
-	root = resetEnv(root)
-	h.engine = sqlNewEngine(root)
-}
-
-func (h *DoltHarness) ExecuteStatement(statement string) error {
-	ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
-	_, rowIter, err := h.engine.Query(ctx, statement)
-
-	drainIterator(rowIter)
-	return err
-}
-
-func (h *DoltHarness) ExecuteQuery(statement string) (string, []string, error) {
-	ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
-	sch, rowIter, err := h.engine.Query(ctx, statement)
-
-	schemaString := schemaToSchemaString(sch)
-	results := rowsToResultStrings(rowIter)
-
-	return schemaString, results, err
-}
-
 // Executes a single record and returns whether execution of records should continue
-func executeRecord(harness *DoltHarness, record *parser.Record) (cont bool) {
+func executeRecord(harness harness.Harness, record *parser.Record) (cont bool) {
 	currRecord = record
 
 	defer func() {
@@ -144,7 +97,7 @@ func executeRecord(harness *DoltHarness, record *parser.Record) (cont bool) {
 		}
 	}()
 
-	if !record.ShouldExecuteForEngine("mysql") {
+	if !record.ShouldExecuteForEngine(harness.EngineStr()) {
 		// Log a skip for queries and statements only, not other control records
 		if record.Type() == parser.Query || record.Type() == parser.Statement {
 			logSkip()
@@ -184,21 +137,6 @@ func executeRecord(harness *DoltHarness, record *parser.Record) (cont bool) {
 		return false
 	default:
 		panic(fmt.Sprintf("Uncrecognized record type %v", record.Type()))
-	}
-}
-
-func drainIterator(iter sql.RowIter) {
-	if iter == nil {
-		return
-	}
-
-	for {
-		_, err := iter.Next()
-		if err == io.EOF {
-			return
-		} else if err != nil {
-			logFailure("Unexpected error %v", err)
-		}
 	}
 }
 
@@ -244,72 +182,6 @@ func verifyHash(record *parser.Record, results []string) {
 	}
 }
 
-// Returns the rows in the iterator given as an array of their string representations, as expected by the test files
-func rowsToResultStrings(iter sql.RowIter) []string {
-	var results []string
-	if iter == nil {
-		return results
-	}
-
-	for {
-		row, err := iter.Next()
-		if err == io.EOF {
-			return results
-		} else if err != nil {
-			logFailure("Error while iterating over results: %v", err)
-		} else {
-			for _, col := range row {
-				results = append(results, toSqlString(col))
-			}
-		}
-	}
-
-	panic("iterator never returned io.EOF") // unreachable, required for compile
-}
-
-func toSqlString(val interface{}) string {
-	if val == nil {
-		return "NULL"
-	}
-
-	switch v := val.(type) {
-	case float32, float64:
-		// exactly 3 decimal points for floats
-		return fmt.Sprintf("%.3f", v)
-	case int:
-		return strconv.Itoa(v)
-	case uint:
-		return strconv.Itoa(int(v))
-	case int8:
-		return strconv.Itoa(int(v))
-	case uint8:
-		return strconv.Itoa(int(v))
-	case int16:
-		return strconv.Itoa(int(v))
-	case uint16:
-		return strconv.Itoa(int(v))
-	case int32:
-		return strconv.Itoa(int(v))
-	case uint32:
-		return strconv.Itoa(int(v))
-	case int64:
-		return strconv.Itoa(int(v))
-	case uint64:
-		return strconv.Itoa(int(v))
-	case string:
-		return v
-	// Mysql returns 1 and 0 for boolean values, mimic that
-	case bool:
-		if v {
-			return "1"
-		} else {
-			return "0"
-		}
-	default:
-		panic(fmt.Sprintf("No conversion for value %v of type %T", val, val))
-	}
-}
-
 func hashResults(results []string) (string, error) {
 	h := md5.New()
 	for _, r := range results {
@@ -327,43 +199,6 @@ func verifySchema(record *parser.Record, schemaStr string) bool {
 		return false
 	}
 	return true
-}
-
-func schemaToSchemaString(sch sql.Schema) string {
-	b := strings.Builder{}
-	for _, col := range sch {
-		switch col.Type.Type() {
-		case query.Type_INT32, query.Type_INT64, query.Type_BIT:
-			b.WriteString("I")
-		case query.Type_TEXT, query.Type_VARCHAR:
-			b.WriteString("T")
-		case query.Type_FLOAT32, query.Type_FLOAT64:
-			b.WriteString("R")
-		default:
-			b.WriteString("X")
-			logFailure("Unhandled type: " + col.Type.String())
-		}
-	}
-	return b.String()
-}
-
-func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
-	tableNames, err := root.GetTableNames(context.Background())
-	if err != nil {
-		panic(err)
-	}
-	newRoot, err := root.RemoveTables(context.Background(), tableNames...)
-	if err != nil {
-		panic(err)
-	}
-	return newRoot
-}
-
-func sqlNewEngine(root *doltdb.RootValue) *sqle.Engine {
-	db := dsqle.NewDatabase("dolt", root)
-	engine := sqle.NewDefault()
-	engine.AddDatabase(db)
-	return engine
 }
 
 func logFailure(message string, args ...interface{}) {
