@@ -119,7 +119,7 @@ func compareEncodedKey(a, b []byte) int {
 // compareEncodedNomsValues compares two slices. Each slice contains a first
 // byte that holds the nomsKind of the original key and an encoding for that key.
 // This method relies on knowledge about how bytes are arranged in a Noms
-// encoding and makes use of that for companing values efficiently.
+// encoding and makes use of that for comparing values efficiently.
 func compareEncodedNomsValues(a, b []byte) int {
 	if compared, res := compareEmpties(a, b); compared {
 		return res
@@ -179,6 +179,8 @@ func compareEncodedNomsValues(a, b []byte) int {
 		_, bCount := binary.Uvarint(b[1:])
 		res := bytes.Compare(a[1+aCount:], b[1+bCount:])
 		return res
+	case InlineBlobKind:
+		return bytes.Compare(a, b)
 	}
 	panic("unreachable")
 }
