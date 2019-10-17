@@ -65,13 +65,35 @@ func main() {
 		}
 	}
 
+	harness := &DoltHarness{}
+
 	for _, file := range testFiles {
-		runTestFile(file)
+		runTestFile(harness, file)
 	}
 }
 
-func runTestFile(file string) {
+type DoltHarness struct {
+	engine *sqle.Engine
+}
+
+func runTestFile(harness *DoltHarness, file string) {
 	currTestFile = file
+
+	harness.Init()
+
+	testRecords, err := parser.ParseTestFile(file)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, record := range testRecords {
+		if !executeRecord(harness, record) {
+			break
+		}
+	}
+}
+
+func (h *DoltHarness) Init() {
 	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 	if !dEnv.HasDoltDir() {
 		panic("Current directory must be a valid dolt repository")
@@ -83,22 +105,29 @@ func runTestFile(file string) {
 	}
 
 	root = resetEnv(root)
-	engine := sqlNewEngine(root)
+	h.engine = sqlNewEngine(root)
+}
 
-	testRecords, err := parser.ParseTestFile(file)
-	if err != nil {
-		panic(err)
-	}
+func (h *DoltHarness) ExecuteStatement(statement string) error {
+	ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
+	_, rowIter, err := h.engine.Query(ctx, statement)
 
-	for _, record := range testRecords {
-		if !executeRecord(engine, record) {
-			break
-		}
-	}
+	drainIterator(rowIter)
+	return err
+}
+
+func (h *DoltHarness) ExecuteQuery(statement string) (string, []string, error) {
+	ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
+	sch, rowIter, err := h.engine.Query(ctx, statement)
+
+	schemaString := schemaToSchemaString(sch)
+	results := rowsToResultStrings(rowIter)
+
+	return schemaString, results, err
 }
 
 // Executes a single record and returns whether execution of records should continue
-func executeRecord(engine *sqle.Engine, record *parser.Record) (cont bool){
+func executeRecord(harness *DoltHarness, record *parser.Record) (cont bool) {
 	currRecord = record
 
 	defer func() {
@@ -125,9 +154,7 @@ func executeRecord(engine *sqle.Engine, record *parser.Record) (cont bool){
 
 	switch record.Type() {
 	case parser.Statement:
-		ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
-		_, rowIter, err := engine.Query(ctx, record.Query())
-		drainIterator(rowIter)
+		err := harness.ExecuteStatement(record.Query())
 
 		if record.ExpectError() {
 			if err != nil {
@@ -142,17 +169,15 @@ func executeRecord(engine *sqle.Engine, record *parser.Record) (cont bool){
 		logSuccess()
 		return true
 	case parser.Query:
-		ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
-		sqlSch, rowIter, err := engine.Query(ctx, record.Query())
+		schemaStr, results, err := harness.ExecuteQuery(record.Query())
 		if err != nil {
 			logFailure("Unexpected error %v", err)
 			return true
 		}
 
-		if verifySchema(record, sqlSch) {
-			verifyResults(record, rowIter)
-		} else {
-			drainIterator(rowIter)
+		// Only log one error per record, so if schema comparison fails don't bother with result comparison
+		if verifySchema(record, schemaStr) {
+			verifyResults(record, results)
 		}
 		return true
 	case parser.Halt:
@@ -177,9 +202,7 @@ func drainIterator(iter sql.RowIter) {
 	}
 }
 
-func verifyResults(record *parser.Record, iter sql.RowIter) {
-	results := rowsToResultStrings(iter)
-
+func verifyResults(record *parser.Record, results []string) {
 	if len(results) != record.NumResults() {
 		logFailure(fmt.Sprintf("Incorrect number of results. Expected %v, got %v", record.NumResults(), len(results)))
 		return
@@ -224,6 +247,10 @@ func verifyHash(record *parser.Record, results []string) {
 // Returns the rows in the iterator given as an array of their string representations, as expected by the test files
 func rowsToResultStrings(iter sql.RowIter) []string {
 	var results []string
+	if iter == nil {
+		return results
+	}
+
 	for {
 		row, err := iter.Next()
 		if err == io.EOF {
@@ -294,10 +321,9 @@ func hashResults(results []string) (string, error) {
 }
 
 // Returns whether the schema given matches the record's expected schema, and logging an error if not.
-func verifySchema(record *parser.Record, sch sql.Schema) bool {
-	schemaString := schemaToSchemaString(sch)
-	if schemaString != record.Schema() {
-		logFailure("Schemas differ. Expected %s, got %s", record.Schema(), schemaString)
+func verifySchema(record *parser.Record, schemaStr string) bool {
+	if schemaStr != record.Schema() {
+		logFailure("Schemas differ. Expected %s, got %s", record.Schema(), schemaStr)
 		return false
 	}
 	return true
@@ -343,7 +369,7 @@ func sqlNewEngine(root *doltdb.RootValue) *sqle.Engine {
 func logFailure(message string, args ...interface{}) {
 	newMsg := logMessagePrefix() + " not ok: " + message
 	failureMessage := fmt.Sprintf(newMsg, args...)
-	failureMessage = strings.ReplaceAll(strings.ReplaceAll(failureMessage, "\r", " "), "\n", " ")
+	failureMessage = strings.ReplaceAll(failureMessage, "\n", " ")
 	fmt.Println(failureMessage)
 }
 
