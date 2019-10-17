@@ -1,4 +1,4 @@
-package main
+package logictest
 
 // A Harness runs the queries in sqllogictest tests on an underlying SQL engine.
 type Harness interface {
@@ -6,7 +6,9 @@ type Harness interface {
 	// values include mysql, postgresql, and mssql.  See test files for other examples.
 	EngineStr() string
 
-	// Init initializes this harness to begin executing query records. Called once per test file.
+	// Init initializes this harness to begin executing query records, beginning with a clean state for the underlying
+	// database. Called once per test file before any tests are run. Harnesses are re-used between test files for runs
+	// that request multiple test files, so this method should reset all relevant state.
 	Init()
 
 	// ExecuteStatement executes a DDL / insert / update statement on the underlying engine and returns any error. Some

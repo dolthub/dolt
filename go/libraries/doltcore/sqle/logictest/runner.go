@@ -1,10 +1,8 @@
-package main
+package logictest
 
 import (
 	"crypto/md5"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/dolt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/harness"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
 	"os"
 	"path/filepath"
@@ -17,17 +15,10 @@ var currRecord *parser.Record
 
 var _, TruncateQueriesInLog = os.LookupEnv("SQLLOGICTEST_TRUNCATE_QUERIES")
 
-// Specify as many files / directories as requested as arguments. All test files specified will be run.
-func main() {
-	args := os.Args[1:]
-	harness := &dolt.DoltHarness{}
-	RunTestFiles(harness, args...)
-}
-
 // Runs the test files found under any of the paths given. Can specify individual test files, or directories that
 // contain test files somewhere underneath. All files named *.test enountered under a directory will be attempted to be
 // parsed as a test file, and will panic for malformed test files or paths that don't exist.
-func RunTestFiles(harness harness.Harness, paths ...string) {
+func RunTestFiles(harness Harness, paths ...string) {
 	var testFiles []string
 	for _, arg := range paths {
 		abs, err := filepath.Abs(arg)
@@ -64,7 +55,7 @@ func RunTestFiles(harness harness.Harness, paths ...string) {
 	}
 }
 
-func runTestFile(harness harness.Harness, file string) {
+func runTestFile(harness Harness, file string) {
 	currTestFile = file
 
 	harness.Init()
@@ -82,7 +73,7 @@ func runTestFile(harness harness.Harness, file string) {
 }
 
 // Executes a single record and returns whether execution of records should continue
-func executeRecord(harness harness.Harness, record *parser.Record) (cont bool) {
+func executeRecord(harness Harness, record *parser.Record) (cont bool) {
 	currRecord = record
 
 	defer func() {

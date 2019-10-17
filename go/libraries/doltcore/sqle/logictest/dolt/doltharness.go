@@ -7,6 +7,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
@@ -16,6 +17,8 @@ import (
 	"strings"
 	"vitess.io/vitess/go/vt/proto/query"
 )
+
+var _ logictest.Harness = &DoltHarness{}
 
 type DoltHarness struct {
 	engine *sqle.Engine

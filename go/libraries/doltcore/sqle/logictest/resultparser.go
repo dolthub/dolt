@@ -1,8 +1,9 @@
-package parser
+package logictest
 
 import (
 	"bufio"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/parser"
 	"io"
 	"os"
 	"strconv"
@@ -17,6 +18,7 @@ const (
 	Skipped
 )
 
+// ResultLogEntry is a single line in a sqllogictest result log file.
 type ResultLogEntry struct {
 	entryTime time.Time
 	testFile string
@@ -36,7 +38,7 @@ func ParseResultFile(f string) ([]*ResultLogEntry, error) {
 
 	var entries []*ResultLogEntry
 
-	scanner := lineScanner{bufio.NewScanner(file), 0}
+	scanner := parser.LineScanner{bufio.NewScanner(file), 0}
 
 	for {
 		entry, err := parseLogEntry(&scanner)
@@ -49,7 +51,7 @@ func ParseResultFile(f string) ([]*ResultLogEntry, error) {
 	}
 }
 
-func parseLogEntry(scanner *lineScanner) (*ResultLogEntry, error) {
+func parseLogEntry(scanner *parser.LineScanner) (*ResultLogEntry, error) {
 	entry := &ResultLogEntry{}
 
 	var err error
@@ -84,7 +86,7 @@ func parseLogEntry(scanner *lineScanner) (*ResultLogEntry, error) {
 
 		colonIdx := strings.Index(line[firstSpace+1:], ":")
 		if colonIdx == -1 {
-			panic(fmt.Sprintf("Malformed line %v on line %d", line, scanner.lineNum))
+			panic(fmt.Sprintf("Malformed line %v on line %d", line, scanner.LineNum))
 		} else {
 			colonIdx = colonIdx + firstSpace + 1
 		}
@@ -92,14 +94,14 @@ func parseLogEntry(scanner *lineScanner) (*ResultLogEntry, error) {
 		entry.testFile = line[firstSpace+1:colonIdx]
 		colonIdx2 := strings.Index(line[colonIdx+1:], ":")
 		if colonIdx2 == -1 {
-			panic(fmt.Sprintf("Malformed line %v on line %d", line, scanner.lineNum))
+			panic(fmt.Sprintf("Malformed line %v on line %d", line, scanner.LineNum))
 		} else {
 			colonIdx2 = colonIdx + 1 + colonIdx2
 		}
 
 		entry.lineNum, err = strconv.Atoi(line[colonIdx+1:colonIdx2])
 		if err != nil {
-			panic(fmt.Sprintf("Failed to parse line number on line %v", scanner.lineNum))
+			panic(fmt.Sprintf("Failed to parse line number on line %v", scanner.LineNum))
 		}
 
 		switch entry.result {
