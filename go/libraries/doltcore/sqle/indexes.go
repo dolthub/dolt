@@ -123,7 +123,7 @@ func keyColToValue(v interface{}, column schema.Column) types.Value {
 		case int:
 			return types.Int(i)
 		case int8:
- 			return types.Int(i)
+			return types.Int(i)
 		case int16:
 			return types.Int(i)
 		case int32:
