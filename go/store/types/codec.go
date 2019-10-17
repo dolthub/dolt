@@ -106,7 +106,7 @@ type nomsWriter interface {
 	writeUint(v Uint)
 	writeString(v string)
 	writeUint8(v uint8)
-
+	writeUint16(v uint16)
 	writeRaw(buff []byte)
 }
 
@@ -332,6 +332,12 @@ func (b *binaryNomsWriter) writeUint(v Uint) {
 	b.ensureCapacity(binary.MaxVarintLen64)
 	count := binary.PutUvarint(b.buff[b.offset:], uint64(v))
 	b.offset += uint32(count)
+}
+
+func (b *binaryNomsWriter) writeUint16(v uint16) {
+	b.ensureCapacity(2)
+	binary.BigEndian.PutUint16(b.buff[b.offset:], v)
+	b.offset += 2
 }
 
 func (b *binaryNomsWriter) writeFloat(v Float, nbf *NomsBinFormat) {

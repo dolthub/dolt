@@ -15,9 +15,9 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"math"
 
@@ -36,36 +36,12 @@ func (v InlineBlob) Equals(other Value) bool {
 		return false
 	}
 
-	vlen := len(v)
-	if vlen != len(v2) {
-		return false
-	}
-
-	for i := 0; i < vlen; i++ {
-		if v[i] != v2[i] {
-			return false
-		}
-	}
-
-	return true
+	return bytes.Equal(v, v2)
 }
 
 func (v InlineBlob) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(InlineBlob); ok {
-		vlen := len(v)
-		v2len := len(v2)
-		if vlen == v2len {
-			for i := 0; i < vlen; i++ {
-				b1 := v[i]
-				b2 := v2[i]
-
-				if b1 != b2 {
-					return b1 < b2, nil
-				}
-			}
-			return false, nil
-		}
-		return vlen < v2len, nil
+		return bytes.Compare(v, v2) == -1, nil
 	}
 	return InlineBlobKind < other.Kind(), nil
 }
@@ -99,27 +75,28 @@ func (v InlineBlob) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	if byteLen > math.MaxUint16 {
 		return fmt.Errorf("InlineBlob has length %v when max is %v", byteLen, math.MaxUint16)
 	}
-	byteLenSl := make([]byte, 2)
-	binary.BigEndian.PutUint16(byteLenSl, uint16(byteLen))
 
 	err := InlineBlobKind.writeTo(w, nbf)
 	if err != nil {
 		return err
 	}
 
-	w.writeBytes(byteLenSl)
+	w.writeUint16(uint16(byteLen))
 	w.writeBytes(v)
 	return nil
 }
 
 func (v InlineBlob) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	byteLen := len(v)
-	if byteLen > math.MaxUint16 {
-		return nil, fmt.Errorf("InlineBlob has length %v when max is %v", byteLen, math.MaxUint16)
+	// Length is uint8(InlineBlobKind) + uint16(length_prefix) + data
+	buff := make([]byte, 3+len(v))
+	w := binaryNomsWriter{buff, 0}
+	err := v.writeTo(&w, nbf)
+
+	if err != nil {
+		return nil, err
 	}
-	byteLenSl := make([]byte, 2)
-	binary.BigEndian.PutUint16(byteLenSl, uint16(byteLen))
-	return append(byteLenSl, v...), nil
+
+	return buff[:w.offset], err
 }
 
 func (v InlineBlob) String() string {
