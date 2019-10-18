@@ -15,6 +15,7 @@
 package sqlserver
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -31,6 +32,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 )
 
+const skipSqlServerTestEnvVar = "SKIP_SQL_SERVER_TEST"
+var _, skipSqlServerTest = os.LookupEnv(skipSqlServerTestEnvVar)
+
 type testPerson struct {
 	Name       string
 	Age        int
@@ -45,6 +49,10 @@ var (
 )
 
 func TestServerArgs(t *testing.T) {
+	if skipSqlServerTest {
+		t.Skip("Skipping test since " + skipSqlServerTestEnvVar + " env var is set")
+	}
+
 	serverController := CreateServerController()
 	go func() {
 		sqlServerImpl(context.Background(), "dolt sql-server", []string{
@@ -69,6 +77,10 @@ func TestServerArgs(t *testing.T) {
 }
 
 func TestServerBadArgs(t *testing.T) {
+	if skipSqlServerTest {
+		t.Skip("Skipping test since " + skipSqlServerTestEnvVar + " env var is set")
+	}
+
 	env := createEnvWithSeedData(t)
 
 	tests := [][]string{
@@ -98,6 +110,10 @@ func TestServerBadArgs(t *testing.T) {
 }
 
 func TestServerGoodParams(t *testing.T) {
+	if skipSqlServerTest {
+		t.Skip("Skipping test since " + skipSqlServerTestEnvVar + " env var is set")
+	}
+
 	env := createEnvWithSeedData(t)
 	root, verr := commands.GetWorkingWithVErr(env)
 	require.NoError(t, verr)
@@ -137,6 +153,10 @@ func TestServerGoodParams(t *testing.T) {
 }
 
 func TestServerSelect(t *testing.T) {
+	if skipSqlServerTest {
+		t.Skip("Skipping test since " + skipSqlServerTestEnvVar + " env var is set")
+	}
+	
 	env := createEnvWithSeedData(t)
 	root, verr := commands.GetWorkingWithVErr(env)
 	require.NoError(t, verr)
