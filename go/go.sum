@@ -200,8 +200,8 @@ github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0 h1:phMgajKClM
 github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0/go.mod h1:YC1rI9k5gx8D02ljlbxDfZe80s/iq8bGvaaQsvR+qxs=
 github.com/liquidata-inc/mmap-go v1.0.3 h1:2LndAeAtup9rpvUmu4wZSYCsjCQ0Zpc+NqE+6+PnT7g=
 github.com/liquidata-inc/mmap-go v1.0.3/go.mod h1:w0doE7jfkuDEZyxb/zD3VWnRaQBYx1uDTS816kH8HoY=
-github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018190619-b1fefbc7954b h1:5ZYp1fU0t376RdUYemAOd2oZpAOVUVDCScrm3vr5Sb4=
-github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018190619-b1fefbc7954b/go.mod h1:1jLV4K3uIy4BnzlwrlSMB3Xvd94bOc47gZF+IvNYtw0=
+github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018203759-b07d72147b81 h1:e2UIXsjWHhKMnbWAl+8EHRUeHvCB49ccAO5jVPXm7sI=
+github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018203759-b07d72147b81/go.mod h1:blLdIvBBjiRug9sp05IzJaPl2wn38xNUxLEjl4iXpzA=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796 h1:oDEoe6JmyZKBl+sYaqB0kwoTTKYzApnoZ2pCjvjt7us=
 github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796/go.mod h1:Au9ry8xH1Bp0PbsWvLzQPPDo7H9YGDOWoms2W7yqNs0=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
@@ -303,6 +303,8 @@ github.com/stretchr/testify v0.0.0-20160524234229-8d64eb7173c7/go.mod h1:a8OnRci
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0Q=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJyk=
+github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b/go.mod h1:bmLyhP68RS6kStMGxByiQ23RP/odRBOTVjwp2cDyi6I=
 github.com/tealeg/xlsx v1.0.4-0.20190601071628-e2d23f3c43dc h1:WhjmAhd6qju7Jf7hseM3Gd26PMjJJbAcEYgfRnznnko=
 github.com/tealeg/xlsx v1.0.4-0.20190601071628-e2d23f3c43dc/go.mod h1:uxu5UY2ovkuRPWKQ8Q7JG0JbSivrISjdPzZQKeo74mA=
