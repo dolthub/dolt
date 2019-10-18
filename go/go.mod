@@ -32,6 +32,7 @@ require (
 	github.com/lib/pq v1.1.1 // indirect
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
+	github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018190619-b1fefbc7954b
 	github.com/mattn/go-isatty v0.0.8
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
