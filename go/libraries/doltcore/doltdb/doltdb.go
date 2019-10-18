@@ -127,7 +127,7 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 		return err
 	}
 
-	cm, _ := NewCommitMeta(name, email, "Data repository created.")
+	cm, _ := NewCommitMeta(name, email, "Initialize data repository")
 
 	parentSet, err := types.NewSet(ctx, ddb.db)
 

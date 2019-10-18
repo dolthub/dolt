@@ -196,6 +196,9 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	case StringKind:
 		r.skipKind()
 		r.skipString()
+	case InlineBlobKind:
+		r.skipKind()
+		r.skipInlineBlob()
 	case ListKind:
 		return r.walkList(nbf, cb)
 	case MapKind:

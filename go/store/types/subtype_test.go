@@ -60,6 +60,7 @@ func assertAll(tt *testing.T, t *Type, v Value) {
 		UUIDType,
 		IntType,
 		UintType,
+		InlineBlobType,
 	}
 
 	for _, at := range allTypes {
@@ -79,6 +80,7 @@ func TestAssertTypePrimitives(t *testing.T) {
 	assertSubtype(context.Background(), Format_7_18, UUIDType, UUID(uuid.Must(uuid.NewUUID())))
 	assertSubtype(context.Background(), Format_7_18, IntType, Int(-1))
 	assertSubtype(context.Background(), Format_7_18, UintType, Uint(0xffffffffffffffff))
+	assertSubtype(context.Background(), Format_7_18, InlineBlobType, InlineBlob{})
 
 	assertInvalid(t, BoolType, Float(1))
 	assertInvalid(t, BoolType, String("abc"))
@@ -87,6 +89,7 @@ func TestAssertTypePrimitives(t *testing.T) {
 	assertInvalid(t, UUIDType, String("abs"))
 	assertInvalid(t, IntType, Float(-1))
 	assertInvalid(t, UintType, Float(500))
+	assertInvalid(t, InlineBlobType, Int(742))
 }
 
 func TestAssertTypeValue(t *testing.T) {

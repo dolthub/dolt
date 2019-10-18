@@ -15,6 +15,10 @@
 package commands
 
 import (
+	"context"
+	"fmt"
+	"strings"
+
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -23,9 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/store/hash"
-
-	"context"
-	"strings"
 )
 
 const (
@@ -87,23 +88,37 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 	help, usage := cli.HelpAndUsagePrinters(commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	var cs *doltdb.CommitSpec
-	if apr.NArg() == 0 {
-		cs = dEnv.RepoState.CWBHeadSpec()
-	} else if apr.NArg() == 1 {
-		var err error
-		comSpecStr := apr.Arg(0)
-		cs, err = doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Head.Ref.String())
-
-		if err != nil {
-			cli.PrintErrf("Invalid commit %s\n", comSpecStr)
-			return 1
-		}
-	} else {
+	if apr.NArg() > 1 {
 		usage()
 		return 1
 	}
 
+	cs, err := getCommitSpec(dEnv, apr)
+	if err != nil {
+		cli.PrintErr(err)
+		return 1
+	}
+
+	numLines := apr.GetIntOrDefault(numLinesParam, -1)
+	return logCommits(ctx, dEnv, cs, loggerFunc, numLines)
+}
+
+func getCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
+	if apr.NArg() == 0 {
+		return dEnv.RepoState.CWBHeadSpec(), nil
+	}
+
+	comSpecStr := apr.Arg(0)
+	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Head.Ref.String())
+
+	if err != nil {
+		return nil, fmt.Errorf("invalid commit %s\n", comSpecStr)
+	}
+
+	return cs, nil
+}
+
+func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, loggerFunc commitLoggerFunc, numLines int) int {
 	commit, err := dEnv.DoltDB.Resolve(ctx, cs)
 
 	if err != nil {
@@ -111,8 +126,7 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	n := apr.GetIntOrDefault(numLinesParam, -1)
-	commits, err := actions.TimeSortedCommits(ctx, dEnv.DoltDB, commit, n)
+	commits, err := actions.TimeSortedCommits(ctx, dEnv.DoltDB, commit, numLines)
 
 	if err != nil {
 		cli.PrintErrln("Error retrieving commit.")

@@ -330,12 +330,15 @@ func buildBatches(nbf *NomsBinFormat, ae *atomicerr.AtomicError, rc chan chan ma
 
 	batchSize := batchSizeStart
 	nextEdit, err := edits.Next()
-	ae.SetIfError(err)
+
+	if ae.SetIfError(err) {
+		return
+	}
 
 	for {
 		batch := make([]*KVP, 0, batchSize)
 
-		for i := 0; i < batchSize; i++ {
+		for len(batch) < batchSize {
 			edit := nextEdit
 
 			if edit == nil {

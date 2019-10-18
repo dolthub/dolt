@@ -208,7 +208,7 @@ func IsValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type) (bool, bool, 
 
 func isValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type, hasExtra bool) (bool, bool, error) {
 	switch t.TargetKind() {
-	case BoolKind, FloatKind, StringKind, BlobKind, TypeKind, UUIDKind, IntKind, UintKind, NullKind:
+	case BoolKind, FloatKind, StringKind, BlobKind, TypeKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
 		return v.Kind() == t.TargetKind(), hasExtra, nil
 	case ValueKind:
 		return true, hasExtra, nil

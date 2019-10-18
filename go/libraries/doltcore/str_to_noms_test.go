@@ -44,6 +44,16 @@ var tests = []strToNomsTypeTests{
 		false},
 	{"0", types.UintKind, types.Uint(0), false},
 	{"", types.NullKind, types.NullValue, false},
+	{
+		"YWJjZGVmZw",
+		types.InlineBlobKind,
+		types.InlineBlob([]byte{0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67}),
+		false},
+	{
+		"YdGE4ZCD8J2Vqw",
+		types.InlineBlobKind,
+		types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
+		false},
 
 	{"test failure", types.FloatKind, nil, true},
 	{"test failure", types.BoolKind, nil, true},
@@ -63,7 +73,7 @@ func TestStrConversion(t *testing.T) {
 			t.Errorf("Conversion of \"%s\" returned unexpected error: %v", test.s, err)
 		}
 
-		if err == nil && val != test.expVal {
+		if err == nil && !val.Equals(test.expVal) {
 			t.Errorf("Conversion of \"%s\" returned unexpected error: %v", test.s, err)
 		}
 	}

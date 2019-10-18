@@ -41,6 +41,8 @@ func TestConv(t *testing.T) {
 		{types.String("-101"), types.Int(-101), convStringToInt, false},
 		{types.String("3.25"), types.Float(3.25), convStringToFloat, false},
 		{types.String("true"), types.Bool(true), convStringToBool, false},
+		{types.String("YdGE4ZCD8J2Vqw"), types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
+			convStringToInlineBlob, false},
 		{types.String("anything"), types.NullValue, convToNullFunc, false},
 
 		{types.UUID(zeroUUID), types.String(zeroUUIDStr), convUUIDToString, false},
@@ -49,6 +51,7 @@ func TestConv(t *testing.T) {
 		{types.UUID(zeroUUID), types.Int(0), nil, false},
 		{types.UUID(zeroUUID), types.Float(0), nil, false},
 		{types.UUID(zeroUUID), types.Bool(false), nil, false},
+		{types.UUID(zeroUUID), types.InlineBlob{}, nil, false},
 		{types.UUID(zeroUUID), types.NullValue, convToNullFunc, false},
 
 		{types.Uint(10), types.String("10"), convUintToString, false},
@@ -57,7 +60,8 @@ func TestConv(t *testing.T) {
 		{types.Uint(10000), types.Int(10000), convUintToInt, false},
 		{types.Uint(100000), types.Float(100000), convUintToFloat, false},
 		{types.Uint(1000000), types.Bool(true), convUintToBool, false},
-		{types.Uint(10000000), types.NullValue, convToNullFunc, false},
+		{types.Uint(10000000), types.InlineBlob{}, nil, false},
+		{types.Uint(100000000), types.NullValue, convToNullFunc, false},
 
 		{types.Int(-10), types.String("-10"), convIntToString, false},
 		{types.Int(-100), types.UUID(zeroUUID), nil, false},
@@ -65,7 +69,8 @@ func TestConv(t *testing.T) {
 		{types.Int(-10000), types.Int(-10000), identityConvFunc, false},
 		{types.Int(-100000), types.Float(-100000), convIntToFloat, false},
 		{types.Int(-1000000), types.Bool(true), convIntToBool, false},
-		{types.Int(-10000000), types.NullValue, convToNullFunc, false},
+		{types.Int(-10000000), types.InlineBlob{}, nil, false},
+		{types.Int(-100000000), types.NullValue, convToNullFunc, false},
 
 		{types.Float(1.5), types.String("1.5"), convFloatToString, false},
 		{types.Float(10.5), types.UUID(zeroUUID), nil, false},
@@ -73,7 +78,8 @@ func TestConv(t *testing.T) {
 		{types.Float(1000.5), types.Int(1000), convFloatToInt, false},
 		{types.Float(10000.5), types.Float(10000.5), identityConvFunc, false},
 		{types.Float(100000.5), types.Bool(true), convFloatToBool, false},
-		{types.Float(1000000.5), types.NullValue, convToNullFunc, false},
+		{types.Float(1000000.5), types.InlineBlob{}, nil, false},
+		{types.Float(10000000.5), types.NullValue, convToNullFunc, false},
 
 		{types.Bool(true), types.String("true"), convBoolToString, false},
 		{types.Bool(false), types.UUID(zeroUUID), nil, false},
@@ -81,7 +87,18 @@ func TestConv(t *testing.T) {
 		{types.Bool(false), types.Int(0), convBoolToInt, false},
 		{types.Bool(true), types.Float(1), convBoolToFloat, false},
 		{types.Bool(false), types.Bool(false), identityConvFunc, false},
+		{types.Bool(false), types.InlineBlob{}, nil, true},
 		{types.Bool(true), types.NullValue, convToNullFunc, false},
+
+		{types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
+			types.String("YdGE4ZCD8J2Vqw"), convInlineBlobToString, false},
+		{types.InlineBlob([]byte{}), types.UUID(zeroUUID), nil, false},
+		{types.InlineBlob([]byte{}), types.Uint(1583200922), nil, false},
+		{types.InlineBlob([]byte{}), types.Int(1901502183), nil, false},
+		{types.InlineBlob([]byte{}), types.Float(2219803444.4), nil, false},
+		{types.InlineBlob([]byte{}), types.Bool(false), nil, true},
+		{types.InlineBlob([]byte{1, 10, 100}), types.InlineBlob([]byte{1, 10, 100}), identityConvFunc, false},
+		{types.InlineBlob([]byte{}), types.NullValue, convToNullFunc, false},
 	}
 
 	for _, test := range tests {
@@ -103,7 +120,7 @@ func TestConv(t *testing.T) {
 	}
 }
 
-var convertibleTypes = []types.NomsKind{types.StringKind, types.UUIDKind, types.UintKind, types.IntKind, types.FloatKind, types.BoolKind}
+var convertibleTypes = []types.NomsKind{types.StringKind, types.UUIDKind, types.UintKind, types.IntKind, types.FloatKind, types.BoolKind, types.InlineBlobKind}
 
 func TestNullConversion(t *testing.T) {
 	for _, srcKind := range convertibleTypes {

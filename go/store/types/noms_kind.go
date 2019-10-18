@@ -52,52 +52,55 @@ const (
 	UintKind
 	NullKind
 	TupleKind
+	InlineBlobKind
 
 	UnknownKind NomsKind = 255
 )
 
 var SupportedKinds = map[NomsKind]struct{}{
-	BoolKind:   {},
-	FloatKind:  {},
-	StringKind: {},
-	BlobKind:   {},
-	ValueKind:  {},
-	ListKind:   {},
-	MapKind:    {},
-	RefKind:    {},
-	SetKind:    {},
-	StructKind: {},
-	CycleKind:  {},
-	TypeKind:   {},
-	UnionKind:  {},
-	hashKind:   {},
-	UUIDKind:   {},
-	IntKind:    {},
-	UintKind:   {},
-	NullKind:   {},
-	TupleKind:  {},
+	BoolKind:       {},
+	FloatKind:      {},
+	StringKind:     {},
+	BlobKind:       {},
+	ValueKind:      {},
+	ListKind:       {},
+	MapKind:        {},
+	RefKind:        {},
+	SetKind:        {},
+	StructKind:     {},
+	CycleKind:      {},
+	TypeKind:       {},
+	UnionKind:      {},
+	hashKind:       {},
+	UUIDKind:       {},
+	IntKind:        {},
+	UintKind:       {},
+	NullKind:       {},
+	TupleKind:      {},
+	InlineBlobKind: {},
 }
 
 var KindToString = map[NomsKind]string{
-	UnknownKind: "unknown",
-	BlobKind:    "Blob",
-	BoolKind:    "Bool",
-	CycleKind:   "Cycle",
-	ListKind:    "List",
-	MapKind:     "Map",
-	FloatKind:   "Float",
-	RefKind:     "Ref",
-	SetKind:     "Set",
-	StructKind:  "Struct",
-	StringKind:  "String",
-	TypeKind:    "Type",
-	UnionKind:   "Union",
-	ValueKind:   "Value",
-	UUIDKind:    "UUID",
-	IntKind:     "Int",
-	UintKind:    "Uint",
-	NullKind:    "Null",
-	TupleKind:   "Tuple",
+	UnknownKind:    "unknown",
+	BlobKind:       "Blob",
+	BoolKind:       "Bool",
+	CycleKind:      "Cycle",
+	ListKind:       "List",
+	MapKind:        "Map",
+	FloatKind:      "Float",
+	RefKind:        "Ref",
+	SetKind:        "Set",
+	StructKind:     "Struct",
+	StringKind:     "String",
+	TypeKind:       "Type",
+	UnionKind:      "Union",
+	ValueKind:      "Value",
+	UUIDKind:       "UUID",
+	IntKind:        "Int",
+	UintKind:       "Uint",
+	NullKind:       "Null",
+	TupleKind:      "Tuple",
+	InlineBlobKind: "InlineBlob",
 }
 
 // String returns the name of the kind.
@@ -108,7 +111,7 @@ func (k NomsKind) String() string {
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.
 func IsPrimitiveKind(k NomsKind) bool {
 	switch k {
-	case BoolKind, FloatKind, IntKind, UintKind, StringKind, BlobKind, UUIDKind, ValueKind, TypeKind, NullKind:
+	case BoolKind, FloatKind, IntKind, UintKind, StringKind, BlobKind, UUIDKind, ValueKind, TypeKind, NullKind, InlineBlobKind:
 		return true
 	default:
 		return false

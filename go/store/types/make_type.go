@@ -49,6 +49,8 @@ func MakePrimitiveType(k NomsKind) (*Type, error) {
 		return ValueType, nil
 	case TypeKind:
 		return TypeType, nil
+	case InlineBlobKind:
+		return InlineBlobType, nil
 	}
 
 	return nil, ErrUnknownType
@@ -136,6 +138,7 @@ var UUIDType = makePrimitiveType(UUIDKind)
 var IntType = makePrimitiveType(IntKind)
 var UintType = makePrimitiveType(UintKind)
 var NullType = makePrimitiveType(NullKind)
+var InlineBlobType = makePrimitiveType(InlineBlobKind)
 
 func makeCompoundType(kind NomsKind, elemTypes ...*Type) (*Type, error) {
 	for _, el := range elemTypes {

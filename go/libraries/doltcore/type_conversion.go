@@ -59,66 +59,82 @@ func GetUnderlyingError(err error) error {
 	return ce.err
 }
 
-// ConvFunc is a function that converts one noms value to another of a different type.
+// ConvFunc is a function that converts one noms or dolt value to another of a different type.
 type ConvFunc func(types.Value) (types.Value, error)
 
 var convFuncMap = map[types.NomsKind]map[types.NomsKind]ConvFunc{
 	types.StringKind: {
-		types.StringKind: identityConvFunc,
-		types.UUIDKind:   convStringToUUID,
-		types.UintKind:   convStringToUint,
-		types.IntKind:    convStringToInt,
-		types.FloatKind:  convStringToFloat,
-		types.BoolKind:   convStringToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:     identityConvFunc,
+		types.UUIDKind:       convStringToUUID,
+		types.UintKind:       convStringToUint,
+		types.IntKind:        convStringToInt,
+		types.FloatKind:      convStringToFloat,
+		types.BoolKind:       convStringToBool,
+		types.InlineBlobKind: convStringToInlineBlob,
+		types.NullKind:       convToNullFunc},
 	types.UUIDKind: {
-		types.StringKind: convUUIDToString,
-		types.UUIDKind:   identityConvFunc,
-		types.UintKind:   nil,
-		types.IntKind:    nil,
-		types.FloatKind:  nil,
-		types.BoolKind:   nil,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:     convUUIDToString,
+		types.UUIDKind:       identityConvFunc,
+		types.UintKind:       nil,
+		types.IntKind:        nil,
+		types.FloatKind:      nil,
+		types.BoolKind:       nil,
+		types.InlineBlobKind: nil,
+		types.NullKind:       convToNullFunc},
 	types.UintKind: {
-		types.StringKind: convUintToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   identityConvFunc,
-		types.IntKind:    convUintToInt,
-		types.FloatKind:  convUintToFloat,
-		types.BoolKind:   convUintToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:     convUintToString,
+		types.UUIDKind:       nil,
+		types.UintKind:       identityConvFunc,
+		types.IntKind:        convUintToInt,
+		types.FloatKind:      convUintToFloat,
+		types.BoolKind:       convUintToBool,
+		types.InlineBlobKind: nil,
+		types.NullKind:       convToNullFunc},
 	types.IntKind: {
-		types.StringKind: convIntToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   convIntToUint,
-		types.IntKind:    identityConvFunc,
-		types.FloatKind:  convIntToFloat,
-		types.BoolKind:   convIntToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:     convIntToString,
+		types.UUIDKind:       nil,
+		types.UintKind:       convIntToUint,
+		types.IntKind:        identityConvFunc,
+		types.FloatKind:      convIntToFloat,
+		types.BoolKind:       convIntToBool,
+		types.InlineBlobKind: nil,
+		types.NullKind:       convToNullFunc},
 	types.FloatKind: {
-		types.StringKind: convFloatToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   convFloatToUint,
-		types.IntKind:    convFloatToInt,
-		types.FloatKind:  identityConvFunc,
-		types.BoolKind:   convFloatToBool,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:     convFloatToString,
+		types.UUIDKind:       nil,
+		types.UintKind:       convFloatToUint,
+		types.IntKind:        convFloatToInt,
+		types.FloatKind:      identityConvFunc,
+		types.BoolKind:       convFloatToBool,
+		types.InlineBlobKind: nil,
+		types.NullKind:       convToNullFunc},
 	types.BoolKind: {
-		types.StringKind: convBoolToString,
-		types.UUIDKind:   nil,
-		types.UintKind:   convBoolToUint,
-		types.IntKind:    convBoolToInt,
-		types.FloatKind:  convBoolToFloat,
-		types.BoolKind:   identityConvFunc,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:     convBoolToString,
+		types.UUIDKind:       nil,
+		types.UintKind:       convBoolToUint,
+		types.IntKind:        convBoolToInt,
+		types.FloatKind:      convBoolToFloat,
+		types.BoolKind:       identityConvFunc,
+		types.InlineBlobKind: nil,
+		types.NullKind:       convToNullFunc},
+	types.InlineBlobKind: {
+		types.StringKind:     convInlineBlobToString,
+		types.UUIDKind:       nil,
+		types.UintKind:       nil,
+		types.IntKind:        nil,
+		types.FloatKind:      nil,
+		types.BoolKind:       nil,
+		types.InlineBlobKind: identityConvFunc,
+		types.NullKind:       convToNullFunc},
 	types.NullKind: {
-		types.StringKind: convToNullFunc,
-		types.UUIDKind:   convToNullFunc,
-		types.UintKind:   convToNullFunc,
-		types.IntKind:    convToNullFunc,
-		types.FloatKind:  convToNullFunc,
-		types.BoolKind:   convToNullFunc,
-		types.NullKind:   convToNullFunc},
+		types.StringKind:     convToNullFunc,
+		types.UUIDKind:       convToNullFunc,
+		types.UintKind:       convToNullFunc,
+		types.IntKind:        convToNullFunc,
+		types.FloatKind:      convToNullFunc,
+		types.BoolKind:       convToNullFunc,
+		types.InlineBlobKind: convToNullFunc,
+		types.NullKind:       convToNullFunc},
 }
 
 // GetConvFunc takes in a source kind and a destination kind and returns a ConvFunc which can convert values of the
@@ -178,6 +194,14 @@ func convStringToUUID(val types.Value) (types.Value, error) {
 	}
 
 	return stringToUUID(string(val.(types.String)))
+}
+
+func convStringToInlineBlob(val types.Value) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	return stringToInlineBlob(string(val.(types.String)))
 }
 
 func convUUIDToString(val types.Value) (types.Value, error) {
@@ -367,4 +391,12 @@ func convBoolToFloat(val types.Value) (types.Value, error) {
 	}
 
 	return zeroFloatVal, nil
+}
+
+func convInlineBlobToString(val types.Value) (types.Value, error) {
+	if val == nil {
+		return nil, nil
+	}
+
+	return types.String(val.(types.InlineBlob).String()), nil
 }

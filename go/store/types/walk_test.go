@@ -138,6 +138,7 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 		"v":  ValueType,
 		"i":  IntType,
 		"u":  UintType,
+		"ua": InlineBlobType,
 	})
 	suite.NoError(err)
 	suite.assertVisitedOnce(t, t)
@@ -150,6 +151,7 @@ func (suite *WalkAllTestSuite) TestWalkType() {
 	suite.assertVisitedOnce(t, BlobType)
 	suite.assertVisitedOnce(t, TypeType)
 	suite.assertVisitedOnce(t, ValueType)
+	suite.assertVisitedOnce(t, InlineBlobType)
 
 	{
 		t2 := mustType(MakeListType(BoolType))

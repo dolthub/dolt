@@ -249,6 +249,7 @@ func TestWriteHumanReadableType(t *testing.T) {
 	assertWriteHRSEqual(t, "UUID", UUIDType)
 	assertWriteHRSEqual(t, "Int", IntType)
 	assertWriteHRSEqual(t, "Uint", UintType)
+	assertWriteHRSEqual(t, "InlineBlob", InlineBlobType)
 	assertWriteHRSEqual(t, "Null", NullType)
 
 	assertWriteHRSEqual(t, "List<Float>", mustType(MakeListType(FloaTType)))

@@ -72,6 +72,7 @@ func TestTypeRefDescribe(t *testing.T) {
 	assert.Equal("UUID", mustString(UUIDType.Describe(context.Background())))
 	assert.Equal("Int", mustString(IntType.Describe(context.Background())))
 	assert.Equal("Uint", mustString(UintType.Describe(context.Background())))
+	assert.Equal("InlineBlob", mustString(InlineBlobType.Describe(context.Background())))
 	assert.Equal("Map<String, Float>", mustString(mapType.Describe(context.Background())))
 	assert.Equal("Set<String>", mustString(setType.Describe(context.Background())))
 
@@ -91,6 +92,7 @@ func TestTypeOrdered(t *testing.T) {
 	assert.True(isKindOrderedByValue(StringType.TargetKind()))
 	assert.True(isKindOrderedByValue(IntType.TargetKind()))
 	assert.True(isKindOrderedByValue(UintType.TargetKind()))
+	assert.True(isKindOrderedByValue(InlineBlobType.TargetKind()))
 	assert.True(isKindOrderedByValue(TupleKind))
 
 	assert.False(isKindOrderedByValue(BlobType.TargetKind()))

@@ -15,6 +15,7 @@
 package doltcore
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math"
@@ -47,6 +48,8 @@ func StringToValue(s string, kind types.NomsKind) (types.Value, error) {
 		return stringToUUID(s)
 	case types.NullKind:
 		return types.NullValue, nil
+	case types.InlineBlobKind:
+		return stringToInlineBlob(s)
 	}
 
 	panic("Unsupported type " + kind.String())
@@ -149,4 +152,17 @@ func stringToUUID(s string) (types.Value, error) {
 	}
 
 	return types.UUID(u), nil
+}
+
+func stringToInlineBlob(s string) (types.Value, error) {
+	if len(s) == 0 {
+		return types.NullValue, nil
+	}
+
+	data, err := base64.RawURLEncoding.DecodeString(s)
+	if err != nil {
+		return types.InlineBlob{}, ConversionError{types.StringKind, types.InlineBlobKind, err}
+	}
+
+	return types.InlineBlob(data), nil
 }
