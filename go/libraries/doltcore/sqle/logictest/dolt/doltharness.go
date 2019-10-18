@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/liquidata-inc/sqllogictest/go/logictest"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -30,7 +31,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
