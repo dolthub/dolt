@@ -33,6 +33,7 @@ import (
 )
 
 const skipSqlServerTestEnvVar = "SKIP_SQL_SERVER_TEST"
+
 var _, skipSqlServerTest = os.LookupEnv(skipSqlServerTestEnvVar)
 
 type testPerson struct {
@@ -156,7 +157,7 @@ func TestServerSelect(t *testing.T) {
 	if skipSqlServerTest {
 		t.Skip("Skipping test since " + skipSqlServerTestEnvVar + " env var is set")
 	}
-	
+
 	env := createEnvWithSeedData(t)
 	root, verr := commands.GetWorkingWithVErr(env)
 	require.NoError(t, verr)
