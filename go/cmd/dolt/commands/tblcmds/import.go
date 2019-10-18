@@ -49,7 +49,7 @@ const (
 	delimParam       = "delim"
 )
 
-var schemaFileHelp = "Schema definition files are json files in the format:" + `
+var SchemaFileHelp = "Schema definition files are json files in the format:" + `
 {
 	"<b>fields</b>": [
 		{"name":"<b>FIELD_NAME</b>", "kind":"<b>KIND</b>", "Required":[true|false]},
@@ -66,14 +66,13 @@ var schemaFileHelp = "Schema definition files are json files in the format:" + `
 	INTEGER_FIELD_INDEX must be the 0 based index of the primary key in the "fields" array
 `
 
-var mappingFileHelp = "A mapping file is json in the format:" + `
+var MappingFileHelp = "A mapping file is json in the format:" + `
 {
 	"<b>source_field_name</b>":"<b>dest_field_name</b>"
 	...
 }
 
-where source_field_name is the name of a field in the file being imported
-and dest_field_name is the name of a field in the table being imported to.
+where source_field_name is the name of a field in the file being imported and dest_field_name is the name of a field in the table being imported to.
 `
 
 var importShortDesc = `Imports data into a dolt table`
@@ -86,7 +85,7 @@ from the imported file.  All schemas, inferred or explicitly defined must define
 being imported does not support defining a primary key, then the <b>--pk</b> parameter must supply the name of the 
 field that should be used as the primary key.
 
-` + schemaFileHelp +
+` + SchemaFileHelp +
 	`
 If <b>--update-table | -u</b> is given the operation will update <table> with the contents of file. The table's existing 
 schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
@@ -104,12 +103,12 @@ overwrite both the table and the schema, use <b>-c -f</b>.
 A mapping file can be used to map fields between the file being imported and the table being written to.  This can 
 be used when creating a new table, or updating or replacing an existing table.
 
-` + mappingFileHelp +
+` + MappingFileHelp +
 
 	`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not 
 have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of 
-the file in one of the supported formats (csv, psv, nbf, json, xlsx).  For files separated by a delimiter other than a 
+the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a 
 ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimeter`
 
 var importSynopsis = []string{

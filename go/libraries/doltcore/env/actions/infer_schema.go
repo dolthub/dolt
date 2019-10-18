@@ -52,11 +52,11 @@ func (m MapMapper) Map(str string) (string, bool) {
 	return v, ok
 }
 
-// InferenceArgs are arguments that can be passed to the schema inferer to modify it's inference behavior.
+// InferenceArgs are arguments that can be passed to the schema inferrer to modify it's inference behavior.
 type InferenceArgs struct {
 	// ExistingSch is the schema for the existing schema.  If no schema exists schema.EmptySchema is expected.
 	ExistingSch schema.Schema
-	// ColMapper allows columns named X in the schema to be named Y in the infered schema.
+	// ColMapper allows columns named X in the schema to be named Y in the inferred schema.
 	ColMapper StrMapper
 	// FloatThreshold is the threshold at which a string representing a floating point number should be interpreted as
 	// a float versus an int.  If FloatThreshold is 0.0 then any number with a decimal point will be interpreted as a
@@ -65,7 +65,7 @@ type InferenceArgs struct {
 	// a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would
 	// be an int, 1.001 would be a float, 1.1 would be a float, etc)
 	FloatThreshold float64
-	// KeepTypes is a flag which tells the inferer, that if a column already exists in the ExistinchSch then use it's type
+	// KeepTypes is a flag which tells the inferrer, that if a column already exists in the ExistinchSch then use it's type
 	// without modification.
 	KeepTypes bool
 }

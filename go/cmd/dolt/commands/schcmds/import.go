@@ -25,6 +25,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -49,12 +50,43 @@ const (
 	mappingParam        = "map"
 	floatThresholdParam = "float-threshold"
 	keepTypesParam      = "keep-types"
+	delimParam          = "delim"
 )
 
 var schImportShortDesc = "Creates a new table with an inferred schema."
-var schImportLongDesc = ""
+var schImportLongDesc = "If <b>--create | -c</b> is given the operation will create <table> with a schema that it infers" +
+	"from the supplied file. One or more primary key columns must be specified using the <b>--pks</b> parameter.\n" +
+	"\n" +
+	//"If <b>--update | -u</b> is given the operation will update <table> any additional columns, or change the types of columns" +
+	//"based on the file supplied.  If the <b>--keep-types</b> parameter is supplied then the types for existing columns will" +
+	//"not be modified, even if they differ from what is in the supplied file." +
+	//"\n" +
+	"If <b>--replace | -r</b> is given the operation will replace <table> with a new table which has a schema inferred from" +
+	"the supplied file but columns tags will be maintained across schemas.  <b>--keep-types</b> can also be supplied here" +
+	"to guarantee that types are in the file and in the pre-existing table.\n" +
+	"\n" +
+	"A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can" +
+	"be used when creating a new table, or updating or replacing an existing table.\n" +
+	"\n" +
+	tblcmds.MappingFileHelp +
+	"\n" +
+	"In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not" +
+	"have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of" +
+	"the file in one of the supported formats csv.  For files separated by a delimiter other than a" +
+	"',', the --delim parameter can be used to specify a delimeter\n" +
+	"\n" +
+	"If the parameter <b>--dry-run</b> is supplied a sql statement will be generated showing what would be executed if this" +
+	"were run without the --dry-run flag\n" +
+	"\n" +
+	"<b>--float-threshold</b> is the threshold at which a string representing a floating point number should be interpreted as" +
+	"a float versus an int.  If FloatThreshold is 0.0 then any number with a decimal point will be interpreted as a" +
+	"float (such as 0.0, 1.0, etc).  If FloatThreshold is 1.0 then any number with a decimal point will be converted" +
+	"to an int (0.5 will be the int 0, 1.99 will be the int 1, etc.  If the FloatThreshold is 0.001 then numbers with" +
+	"a fractional component greater than or equal to 0.001 will be treated as a float (1.0 would be an int, 1.0009 would" +
+	"be an int, 1.001 would be a float, 1.1 would be a float, etc)"
+
 var schImportSynopsis = []string{
-	"[--create|--update|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type <type>] [--float-threshold] [--map <mapping-file>] --pks <field>,... <table> <file>",
+	"[--create|--replace] [--force] [--dry-run] [--lower|--upper] [--keep-types] [--file-type <type>] [--float-threshold] [--map <mapping-file>] [--delim <delimiter>]--pks <field>,... <table> <file>",
 }
 
 type importOp int
@@ -69,6 +101,7 @@ type importArgs struct {
 	op        importOp
 	fileType  string
 	fileName  string
+	delim     string
 	inferArgs *actions.InferenceArgs
 }
 
@@ -77,15 +110,16 @@ func Import(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "Name of the table to be created."
 	ap.ArgListHelp["file"] = "The file being used to infer the schema."
-	ap.SupportsFlag(dryRunFlag, "", "")
-	ap.SupportsFlag(createFlag, "c", "")
-	ap.SupportsFlag(updateFlag, "u", "")
-	ap.SupportsFlag(replaceFlag, "r", "")
-	ap.SupportsFlag(keepTypesParam, "", "")
-	ap.SupportsString(fileTypeParam, "", "type", "")
-	ap.SupportsString(pksParam, "", "comma-separated-col-names", "")
-	ap.SupportsString(mappingParam, "", "mapping-file", "")
-	ap.SupportsString(floatThresholdParam, "", "float", "")
+	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the <file> provided.")
+	//ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the <file> provided")
+	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the <file> provided.")
+	ap.SupportsFlag(dryRunFlag, "", "Print the sql statement that would be run if executed without the flag.")
+	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the <file> provided, use the type from the table.")
+	ap.SupportsString(fileTypeParam, "", "type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
+	ap.SupportsString(pksParam, "", "comma-separated-col-names", "List of columns used as the primary key cols.  Order of the columns will determine sort order.")
+	ap.SupportsString(mappingParam, "", "mapping-file", "A file that can map a column name in <file> to a new value.")
+	ap.SupportsString(floatThresholdParam, "", "float", "Minimum value at which the fractional component of a value must exceed in order to be considered a float.")
+	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schImportShortDesc, schImportLongDesc, schImportSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
@@ -118,7 +152,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 	op := createOp
 	if !apr.ContainsAny(createFlag, updateFlag, replaceFlag) {
-		return errhand.BuildDError("error: missing required parameter.").AddDetails("Must provide exactly one of the operation flags '--create', '--update', or '--replace'").SetPrintUsage().Build()
+		return errhand.BuildDError("error: missing required parameter.").AddDetails("Must provide exactly one of the operation flags '--create', or '--replace'").SetPrintUsage().Build()
 	} else if apr.Contains(updateFlag) {
 		if apr.ContainsAny(createFlag, replaceFlag) {
 			return errhand.BuildDError("error: multiple operations supplied").AddDetails("Only one of the flags '--create', '--update', or '--replace' may be provided").SetPrintUsage().Build()
@@ -199,9 +233,12 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return errhand.BuildDError("error: '%s' is not a valid float in the range 0.0 (all floats) to 1.0 (no floats)", floatThresholdStr).SetPrintUsage().Build()
 	}
 
+	delim := apr.GetValueOrDefault(delimParam, ",")
+
 	impArgs := importArgs{
 		op:       op,
 		fileName: fileName,
+		delim:    delim,
 		fileType: apr.GetValueOrDefault(fileTypeParam, filepath.Ext(fileName)),
 		inferArgs: &actions.InferenceArgs{
 			ExistingSch:    existingSch,
@@ -272,7 +309,7 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, pkCols [
 
 		defer f.Close()
 
-		rd, err = csv.NewCSVReader(nbf, f, csv.NewCSVInfo())
+		rd, err = csv.NewCSVReader(nbf, f, csv.NewCSVInfo().SetDelim(args.delim))
 
 		if err != nil {
 			return nil, errhand.BuildDError("error: failed to create a CSVReader.").AddCause(err).Build()
