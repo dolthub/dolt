@@ -127,6 +127,25 @@ func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), org, repoName, f
 	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
 }
 
+func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
+	tfd := req.GetTableFileDetails()
+
+	if len(tfd) == 0 {
+		_, hashToIdx := remotestorage.ParseByteSlices(req.TableFileHashes)
+
+		tfd = make([]*remotesapi.TableFileDetails, len(hashToIdx))
+		for h, i := range hashToIdx {
+			tfd[i] = &remotesapi.TableFileDetails{
+				Id:            h[:],
+				ContentLength: 0,
+				ContentHash:   nil,
+			}
+		}
+	}
+
+	return tfd
+}
+
 func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesapi.GetUploadLocsRequest) (*remotesapi.GetUploadLocsResponse, error) {
 	logger := getReqLogger("GRPC", "GetUploadLocations")
 	defer func() { logger("finished") }()
@@ -141,11 +160,11 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
-	hashes, _ := remotestorage.ParseByteSlices(req.TableFileHashes)
+	tfd := parseTableFileDetails(req)
 
 	var locs []*remotesapi.UploadLoc
-	for h := range hashes {
-		tmp := h
+	for _, tfd := range tfd {
+		h := hash.New(tfd.Id)
 		url, err := rs.getUploadUrl(logger, org, repoName, h.String())
 
 		if err != nil {
@@ -153,7 +172,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 		}
 
 		loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostTableFile{Url: url}}
-		locs = append(locs, &remotesapi.UploadLoc{TableFileHash: tmp[:], Location: loc})
+		locs = append(locs, &remotesapi.UploadLoc{TableFileHash: h[:], Location: loc})
 
 		logger(fmt.Sprintf("sending upload location for chunk %s: %s", h.String(), url))
 	}
