@@ -61,7 +61,7 @@ var schImportLongDesc = "If <b>--create | -c</b> is given the operation will cre
 	//"based on the file supplied.  If the <b>--keep-types</b> parameter is supplied then the types for existing columns will" +
 	//"not be modified, even if they differ from what is in the supplied file." +
 	//"\n" +
-	"If <b>--replace | -r</b> is given the operation will replace <table> with a new table which has a schema inferred from" +
+	"If <b>--replace | -r</b> is given the operation will replace <table> with a new, empty table which has a schema inferred from" +
 	"the supplied file but columns tags will be maintained across schemas.  <b>--keep-types</b> can also be supplied here" +
 	"to guarantee that types are in the file and in the pre-existing table.\n" +
 	"\n" +
@@ -112,7 +112,7 @@ func Import(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap.ArgListHelp["file"] = "The file being used to infer the schema."
 	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the <file> provided.")
 	//ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the <file> provided")
-	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the <file> provided.")
+	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the <file> provided. All previous data will be lost.")
 	ap.SupportsFlag(dryRunFlag, "", "Print the sql statement that would be run if executed without the flag.")
 	ap.SupportsFlag(keepTypesParam, "", "When a column already exists in the table, and it's also in the <file> provided, use the type from the table.")
 	ap.SupportsString(fileTypeParam, "", "type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
