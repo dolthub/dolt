@@ -162,6 +162,7 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 	if hasFileType {
 		if mvdata.DFFromString(fType) == mvdata.InvalidDataFormat {
+			// this might be an area to intercept an empty string and replace with/cast as null
 			cli.PrintErrln(color.RedString("'%s' is not a valid file type.", fType))
 			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 		}
@@ -170,6 +171,19 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	srcLoc := mvdata.NewDataLocation(path, fType)
 
 	switch val := srcLoc.(type) {
+		 // CASES: 
+		 // FileDataLocation
+		 // StreamDataLocation
+		 // TableDataLocation
+
+		 // create
+		 // dolt table import -c [-f] [--pk <field>] [--schema <file>] [--map <file>] [--continue] [--file-type <type>] <table> <file>
+		 // OR:
+		 // update
+		 // dolt table import -u [--map <file>] [--continue] [--file-type <type>] <table> <file>
+		 // OR: 
+		 // replace 
+		 // or: dolt table import -r [--map <file>] [--file-type <type>] <table> <file>
 	case mvdata.FileDataLocation:
 		if hasDelim {
 			if val.Format == mvdata.InvalidDataFormat {
