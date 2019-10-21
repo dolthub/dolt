@@ -17,9 +17,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/dolt"
-	"github.com/liquidata-inc/sqllogictest/go/logictest"
 	"os"
+
+	"github.com/liquidata-inc/sqllogictest/go/logictest"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/dolt"
 )
 
 // Runs all sqllogictest test files (or directories containing them) given as arguments.
@@ -67,7 +69,7 @@ func parseTestResults(f string) {
 
 // Custom json marshalling function is necessary to avoid escaping <, > and & to html unicode escapes
 func JSONMarshal(records []*DoltResultRecord) ([]byte, error) {
-	rows := &TestResultArray{Rows:records}
+	rows := &TestResultArray{Rows: records}
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	encoder.SetEscapeHTML(false)
@@ -85,7 +87,7 @@ func NewDoltRecordResult(e *logictest.ResultLogEntry) *DoltResultRecord {
 	case logictest.Skipped:
 		result = "skipped"
 	}
-	return &DoltResultRecord {
+	return &DoltResultRecord{
 		TestFile:     e.TestFile,
 		LineNum:      e.LineNum,
 		Query:        e.Query,
