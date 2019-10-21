@@ -77,13 +77,12 @@ func NewJSONReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *JSONFileInfo
 		return nil, err
 	}
 
-	ableToDecode := true
 	decodedRows, err := jsonRows.decodeJSONRows(nbf, sch)
 	if err != nil {
-		ableToDecode = false
+		return nil, err
 	}
+
 	info.SetRows(decodedRows)
-	info.SetAbleToDecode(ableToDecode)
 
 	return &JSONReader{r, br, info, sch, 0}, nil
 }
@@ -107,7 +106,7 @@ func (jsonr *JSONReader) GetSchema() schema.Schema {
 
 // VerifySchema checks that the incoming schema matches the schema from the existing table
 func (jsonr *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
-	return jsonr.info.AbleToDecode, nil
+	return true, nil
 }
 
 func (jsonr *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {

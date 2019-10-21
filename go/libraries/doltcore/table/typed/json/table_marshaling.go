@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 

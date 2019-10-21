@@ -18,19 +18,13 @@ import "github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 
 type JSONFileInfo struct {
 	Rows         []row.Row
-	AbleToDecode bool
 }
 
 func NewJSONInfo() *JSONFileInfo {
-	return &JSONFileInfo{nil, true}
+	return &JSONFileInfo{}
 }
 
 func (info *JSONFileInfo) SetRows(rows []row.Row) *JSONFileInfo {
 	info.Rows = rows
-	return info
-}
-
-func (info *JSONFileInfo) SetAbleToDecode(able bool) *JSONFileInfo {
-	info.AbleToDecode = able
 	return info
 }
