@@ -36,7 +36,7 @@ var ErrAlreadyFinished = errors.New("already Finished")
 
 // CmpChunkTableWriter writes CompressedChunks to a table file
 type CmpChunkTableWriter struct {
-	sink                  ByteSink
+	sink                  *HashingByteSink
 	totalCompressedData   uint64
 	totalUncompressedData uint64
 	prefixes              prefixIndexSlice // TODO: This is in danger of exploding memory
@@ -51,12 +51,22 @@ func NewCmpChunkTableWriter() (*CmpChunkTableWriter, error) {
 		return nil, err
 	}
 
-	return &CmpChunkTableWriter{s, 0, 0, nil, nil}, nil
+	return &CmpChunkTableWriter{NewHashingByteSink(s), 0, 0, nil, nil}, nil
 }
 
 // Size returns the number of compressed chunks that have been added
 func (tw *CmpChunkTableWriter) Size() int {
 	return len(tw.prefixes)
+}
+
+// Gets the size of the entire table file in bytes
+func (tw *CmpChunkTableWriter) ContentLength() uint64 {
+	return tw.sink.Size()
+}
+
+// Gets the MD5 of the entire table file
+func (tw *CmpChunkTableWriter) GetMD5() []byte {
+	return tw.sink.GetMD5()
 }
 
 // AddCmpChunk adds a compressed chunk

@@ -15,7 +15,9 @@
 package nbs
 
 import (
+	"crypto/md5"
 	"errors"
+	"hash"
 	"io"
 	"os"
 	"path/filepath"
@@ -286,4 +288,59 @@ func (sink *BufferedFileByteSink) FlushToFile(path string) (err error) {
 	}
 
 	return os.Rename(sink.path, path)
+}
+
+// HashingByteSink is a ByteSink that keeps an md5 hash of all the data written to it.
+type HashingByteSink struct {
+	backingSink ByteSink
+	hasher      hash.Hash
+	size        uint64
+}
+
+func NewHashingByteSink(backingSink ByteSink) *HashingByteSink {
+	return &HashingByteSink{backingSink: backingSink, hasher: md5.New(), size: 0}
+}
+
+// Write writes a byte array to the sink.
+func (sink *HashingByteSink) Write(src []byte) (int, error) {
+	nWritten, err := sink.backingSink.Write(src)
+
+	if err != nil {
+		return 0, err
+	}
+
+	nHashed, err := sink.hasher.Write(src[:nWritten])
+
+	if err != nil {
+		return 0, err
+	} else if nWritten != nHashed {
+		return 0, errors.New("failed to hash all the data that was written to the byte sink.")
+	}
+
+	sink.size += uint64(nWritten)
+
+	return nWritten, nil
+}
+
+// Flush writes all the data that was written to the ByteSink to the supplied writer
+func (sink *HashingByteSink) Flush(wr io.Writer) error {
+	return sink.backingSink.Flush(wr)
+}
+
+// FlushToFile writes all the data that was written to the ByteSink to a file at the given path
+func (sink *HashingByteSink) FlushToFile(path string) error {
+	return sink.backingSink.FlushToFile(path)
+}
+
+// GetMD5 gets the MD5 hash of all the bytes written to the sink
+func (sink *HashingByteSink) GetMD5() []byte {
+	result := make([]byte, 0, 128)
+	sink.hasher.Sum(result)
+
+	return result
+}
+
+// Size gets the number of bytes written to the sink
+func (sink *HashingByteSink) Size() uint64 {
+	return sink.size
 }

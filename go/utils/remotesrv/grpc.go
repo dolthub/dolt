@@ -165,7 +165,7 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	var locs []*remotesapi.UploadLoc
 	for _, tfd := range tfd {
 		h := hash.New(tfd.Id)
-		url, err := rs.getUploadUrl(logger, org, repoName, h.String())
+		url, err := rs.getUploadUrl(logger, org, repoName, tfd)
 
 		if err != nil {
 			return nil, status.Error(codes.Internal, "Failed to get upload Url.")
@@ -180,8 +180,10 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	return &remotesapi.GetUploadLocsResponse{Locs: locs}, nil
 }
 
-func (rs *RemoteChunkStore) getUploadUrl(logger func(string), org, repoName, fileId string) (string, error) {
-	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
+func (rs *RemoteChunkStore) getUploadUrl(logger func(string), org, repoName string, tfd *remotesapi.TableFileDetails) (string, error) {
+	fileID := hash.New(tfd.Id).String()
+	expectedFiles[fileID] = *tfd
+	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileID), nil
 }
 
 func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRequest) (*remotesapi.RebaseResponse, error) {
