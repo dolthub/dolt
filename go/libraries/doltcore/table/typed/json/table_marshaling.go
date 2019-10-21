@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
@@ -117,7 +118,7 @@ func convToRow(nbf *types.NomsBinFormat, sch schema.Schema, rowMap map[string]in
 	for k, v := range rowMap {
 		col, ok := allCols.GetByName(k)
 		if !ok {
-			return nil, errors.New("column not found in schema")
+			return nil, fmt.Errorf("column %s not found in schema", k)
 		}
 
 		switch val := v.(type) {
