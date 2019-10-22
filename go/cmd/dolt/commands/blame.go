@@ -132,6 +132,18 @@ func runBlame(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, tab
 	return nil
 }
 
+type blameInput struct {
+	Commit       *doltdb.Commit
+	Hash         string
+	Parent       *doltdb.Commit
+	ParentHash   string
+	ParentSchema schema.Schema
+	ParentTable  *doltdb.Table
+	Table        *doltdb.Table
+	TableName    string
+	Schema       schema.Schema
+}
+
 func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb.Commit, tableName string) (*blameGraph, error) {
 	// get the commits sorted from newest to oldest ending with `commit`
 	commits, err := actions.TimeSortedCommits(ctx, dEnv.DoltDB, commit, -1)
@@ -159,32 +171,91 @@ func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb
 		return nil, err
 	}
 
-	// for each unblamed node, see if it changed between `c` and `parent`.
-	// if so, mark it blamed with `c` as the blame origin
+	// precompute blame inputs for each commit
+	blameInputs, err := blameInputsFromCommits(ctx, dEnv, tableName, commits)
+	if err != nil {
+		return nil, err
+	}
+
 ROWLOOP:
-	for _, rowPK := range blameGraph.UnblamedNodeKeys() {
-		for _, c := range commits {
-			// get the first parent
-			parent, err := dEnv.DoltDB.ResolveParent(ctx, c, 0)
+	for _, node := range *blameGraph {
+		for _, blameInput := range *blameInputs {
+			// did the node change between the commit-parent pair represented by blameInput?
+			changed, err := rowChanged(ctx, blameInput, node.Key)
 			if err != nil {
 				return nil, err
 			}
 
-			changed, err := rowChanged(ctx, parent, c, tableName, rowPK)
-			if err != nil {
-				return nil, err
-			}
-
+			// if so, mark the commit as the blame origin
 			if changed {
-				blameGraph.AssignBlame(rowPK, nbf, c)
+				blameGraph.AssignBlame(node.Key, nbf, blameInput.Commit)
 				continue ROWLOOP
 			}
 		}
 		// didn't find blame for a row...something's wrong
-		return nil, fmt.Errorf("couldn't find blame for row with primary key %v", strings.Join(getPKStrs(ctx, rowPK), ", "))
+		return nil, fmt.Errorf("couldn't find blame for row with primary key %v", strings.Join(getPKStrs(ctx, node.Key), ", "))
 	}
 
 	return blameGraph, nil
+}
+
+func blameInputsFromCommits(ctx context.Context, dEnv *env.DoltEnv, tableName string, commits []*doltdb.Commit) (*[]blameInput, error) {
+	numCommits := len(commits)
+	blameInputs := make([]blameInput, numCommits)
+	for i, c := range commits {
+		// don't precompute inputs for the initial commit; we don't need them
+		if i == numCommits-1 {
+			break
+		}
+
+		parent, err := dEnv.DoltDB.ResolveParent(ctx, c, 0)
+		if err != nil {
+			return nil, err
+		}
+
+		parentHash, hash, err := getCommitHashes(parent, c)
+		if err != nil {
+			return nil, err
+		}
+
+		tbl, err := maybeTableFromCommit(ctx, c, tableName)
+		if err != nil {
+			return nil, fmt.Errorf("error getting table from child commit %s: %v", hash, err)
+		}
+		parentTbl, err := maybeTableFromCommit(ctx, parent, tableName)
+		if err != nil {
+			return nil, fmt.Errorf("error getting table from parent commit %s: %v", parentHash, err)
+		}
+
+		var s schema.Schema
+		if tbl != nil {
+			s, err = tbl.GetSchema(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("error getting schema from table %s in child commit %s: %v", tableName, hash, err)
+			}
+		}
+
+		var parentSchema schema.Schema
+		if parentTbl != nil {
+			parentSchema, err = parentTbl.GetSchema(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("error getting schema from table %s in parent commit %s: %v", tableName, parentHash, err)
+			}
+		}
+
+		blameInputs[i] = blameInput{
+			Commit:       c,
+			Hash:         hash,
+			Parent:       parent,
+			ParentHash:   parentHash,
+			ParentSchema: parentSchema,
+			ParentTable:  parentTbl,
+			Table:        tbl,
+			TableName:    tableName,
+			Schema:       s,
+		}
+	}
+	return &blameInputs, nil
 }
 
 // rowsFromCommit returns the row data of the table with the given name at the given commit
@@ -278,58 +349,40 @@ func pkColNamesFromCommit(ctx context.Context, c *doltdb.Commit, tableName strin
 	return schema.GetPKCols().GetColumnNames(), nil
 }
 
-// rowChanged returns true if the row identified by `rowPK` in `tableName` changed between commits `old` and `new`
-// It's a bit inefficient when used repeatedly on adjacent commits such as in blame; each iteration it will
-// retrieve a row that was already retrieved on the previous iteration (i.e. last iteration's "old" row
-// is this iteration's "new" row).
-func rowChanged(ctx context.Context, old, new *doltdb.Commit, tableName string, rowPK types.Value) (bool, error) {
-	oldHash, newHash, err := getCommitHashes(old, new)
-	if err != nil {
-		return false, err
-	}
+// rowChanged returns true if the row identified by `rowPK` changed between the parent-child commit pair
+// represented by `input`
+func rowChanged(ctx context.Context, input blameInput, rowPK types.Value) (bool, error) {
+	parentTable := input.ParentTable
+	childTable := input.Table
 
-	oldTable, err := maybeTableFromCommit(ctx, old, tableName)
-	if err != nil {
-		return false, fmt.Errorf("error getting table from old commit %s: %v", oldHash, err)
+	// if the table is in the parent commit but not the child one...something's wrong. bail!
+	if parentTable != nil && childTable == nil {
+		return false, fmt.Errorf("expected to find table with name %v in child commit %s, but didn't", input.TableName, input.Hash)
 	}
-	newTable, err := maybeTableFromCommit(ctx, new, tableName)
-	if err != nil {
-		return false, fmt.Errorf("error getting table from new commit %s: %v", newHash, err)
-	}
-
-	// if the table is in the old commit but not the new one...something's wrong. bail!
-	if oldTable != nil && newTable == nil {
-		return false, fmt.Errorf("expected to find table with name %v in new commit %s, but didn't", tableName, newHash)
-	}
-	// if the table is in the new commit but not the old one, it must be new; return true
-	if newTable != nil && oldTable == nil {
+	// if the table is in the child commit but not the parent one, it must be new; return true
+	if childTable != nil && parentTable == nil {
 		return true, nil
 	}
 
-	oldRow, err := maybeRowFromTable(ctx, oldTable, rowPK)
+	parentRow, err := maybeRowFromTable(ctx, parentTable, rowPK)
 	if err != nil {
-		return false, fmt.Errorf("error getting row from %s in old commit %s: %v", tableName, oldHash, err)
+		return false, fmt.Errorf("error getting row from %s in parent commit %s: %v", input.TableName, input.ParentHash, err)
 	}
-	newRow, err := maybeRowFromTable(ctx, newTable, rowPK)
+	childRow, err := maybeRowFromTable(ctx, childTable, rowPK)
 	if err != nil {
-		return false, fmt.Errorf("error getting row from %s in new commit %s: %v", tableName, newHash, err)
+		return false, fmt.Errorf("error getting row from %s in child commit %s: %v", input.TableName, input.Hash, err)
 	}
 
-	// if the row is in the old table but not the new one...something's wrong. bail!
-	if oldRow != nil && newRow == nil {
-		return false, fmt.Errorf("expected to find row with PK %v in table %s in new commit %s, but didn't", rowPK, tableName, newHash)
+	// if the row is in the parent table but not the child one...something's wrong. bail!
+	if parentRow != nil && childRow == nil {
+		return false, fmt.Errorf("expected to find row with PK %v in table %s in child commit %s, but didn't", rowPK, input.TableName, input.Hash)
 	}
-	// if the row is in the new table but not the old one, it must be new; return true
-	if newRow != nil && oldRow == nil {
+	// if the row is in the child table but not the parent one, it must be new; return true
+	if childRow != nil && parentRow == nil {
 		return true, nil
 	}
 
-	oldSchema, err := oldTable.GetSchema(ctx)
-	if err != nil {
-		return false, fmt.Errorf("error getting schema from %s in old commit %s: %v", tableName, oldHash, err)
-	}
-
-	return !row.AreEqual(*oldRow, *newRow, oldSchema), nil
+	return !row.AreEqual(*parentRow, *childRow, input.ParentSchema), nil
 }
 
 func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows types.Map) (*blameGraph, error) {
@@ -346,22 +399,6 @@ func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows type
 		return nil, err
 	}
 	return &graph, nil
-}
-
-// UnblamedNodeKeys returns a slice of primary keys which do not have blame information
-func (bg *blameGraph) UnblamedNodeKeys() []types.Value {
-	keys := []types.Value{}
-	for _, v := range *bg {
-		if v.CommitHash == "" {
-			keys = append(keys, v.Key)
-		}
-	}
-	return keys
-}
-
-// AllNodesBlamed returns true if there are no unblamed nodes in the blame graph
-func (bg *blameGraph) AllNodesBlamed() bool {
-	return len(bg.UnblamedNodeKeys()) == 0
 }
 
 // AssignBlame updates the blame graph to contain blame information from the given commit
