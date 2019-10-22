@@ -896,13 +896,16 @@ func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *
 func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
 	fileIdBytes := hash.Parse(fileId)
 	tfd := &remotesapi.TableFileDetails{
-		Id: fileIdBytes[:],
+		Id:            fileIdBytes[:],
 		ContentLength: contentLength,
-		ContentHash: contentHash,
+		ContentHash:   contentHash,
 	}
 	req := &remotesapi.GetUploadLocsRequest{
-		RepoId: dcs.getRepoId(),
+		RepoId:           dcs.getRepoId(),
 		TableFileDetails: []*remotesapi.TableFileDetails{tfd},
+
+		// redundant and deprecated.  Still setting for compatibility, but will remove promptly.
+		TableFileHashes: [][]byte{fileIdBytes[:]},
 	}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 

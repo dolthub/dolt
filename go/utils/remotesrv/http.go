@@ -19,7 +19,6 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
-	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -27,6 +26,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/hash"

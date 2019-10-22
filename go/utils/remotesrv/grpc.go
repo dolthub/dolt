@@ -160,10 +160,10 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
-	tfd := parseTableFileDetails(req)
+	tfds := parseTableFileDetails(req)
 
 	var locs []*remotesapi.UploadLoc
-	for _, tfd := range tfd {
+	for _, tfd := range tfds {
 		h := hash.New(tfd.Id)
 		url, err := rs.getUploadUrl(logger, org, repoName, tfd)
 
