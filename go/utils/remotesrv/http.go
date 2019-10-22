@@ -15,6 +15,8 @@
 package main
 
 import (
+	"bytes"
+	"crypto/md5"
 	"errors"
 	"fmt"
 	"io"
@@ -25,9 +27,13 @@ import (
 	"strconv"
 	"strings"
 
+	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
+
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
+
+var expectedFiles = make(map[string]remotesapi.TableFileDetails)
 
 func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	logger := getReqLogger("HTTP_"+req.Method, req.RequestURI)
@@ -57,7 +63,7 @@ func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 		}
 
 	case http.MethodPost, http.MethodPut:
-		statusCode = writeChunk(logger, org, repo, hashStr, req)
+		statusCode = writeTableFile(logger, org, repo, hashStr, req)
 	}
 
 	if statusCode != -1 {
@@ -65,7 +71,7 @@ func ServeHTTP(respWr http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func writeChunk(logger func(string), org, repo, fileId string, request *http.Request) int {
+func writeTableFile(logger func(string), org, repo, fileId string, request *http.Request) int {
 	_, ok := hash.MaybeParse(fileId)
 
 	if !ok {
@@ -73,8 +79,36 @@ func writeChunk(logger func(string), org, repo, fileId string, request *http.Req
 		return http.StatusBadRequest
 	}
 
+	tfd, ok := expectedFiles[fileId]
+
+	if !ok {
+		return http.StatusBadRequest
+	}
+
 	logger(fileId + " is valid")
 	data, err := ioutil.ReadAll(request.Body)
+
+	if tfd.ContentLength != 0 && tfd.ContentLength != uint64(len(data)) {
+		return http.StatusBadRequest
+	}
+
+	if len(tfd.ContentHash) > 0 {
+		hasher := md5.New()
+		n, err := hasher.Write(data)
+
+		if err != nil {
+			return http.StatusInternalServerError
+		} else if n != len(data) {
+			return http.StatusInternalServerError
+		}
+
+		actualMD5Bytes := make([]byte, 0, 128)
+		hasher.Sum(actualMD5Bytes)
+
+		if !bytes.Equal(tfd.ContentHash, actualMD5Bytes) {
+			return http.StatusBadRequest
+		}
+	}
 
 	if err != nil {
 		logger("failed to read body " + err.Error())

@@ -98,9 +98,16 @@ message GetDownloadLocsResponse {
   repeated DownloadLoc locs = 1;
 }
 
+message TableFileDetails {
+  bytes id = 1;
+  uint64 content_length = 2;
+  bytes content_hash = 3;
+}
+
 message GetUploadLocsRequest {
   RepoId repo_id = 1;
-  repeated bytes table_file_hashes = 2;
+  repeated bytes table_file_hashes = 2 [deprecated = true];
+  repeated TableFileDetails table_file_details = 3;
 }
 
 message GetUploadLocsResponse {

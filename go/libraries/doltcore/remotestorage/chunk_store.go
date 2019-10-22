@@ -893,9 +893,20 @@ func (dcs *DoltChunkStore) getDownloadWorkForLoc(ctx context.Context, getRange *
 }
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
-func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error {
+func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
 	fileIdBytes := hash.Parse(fileId)
-	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileHashes: [][]byte{fileIdBytes[:]}}
+	tfd := &remotesapi.TableFileDetails{
+		Id:            fileIdBytes[:],
+		ContentLength: contentLength,
+		ContentHash:   contentHash,
+	}
+	req := &remotesapi.GetUploadLocsRequest{
+		RepoId:           dcs.getRepoId(),
+		TableFileDetails: []*remotesapi.TableFileDetails{tfd},
+
+		// redundant and deprecated.  Still setting for compatibility, but will remove promptly.
+		TableFileHashes: [][]byte{fileIdBytes[:]},
+	}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 
 	if err != nil {
