@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jedib0t/go-pretty/table"
@@ -143,36 +144,46 @@ func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb
 		return nil, err
 	}
 
-	blameGraph, err := blameGraphFromRows(ctx, rows)
+	tbl, err := maybeTableFromCommit(ctx, commit, tableName)
+	if err != nil {
+		return nil, err
+	}
+	if tbl == nil {
+		return nil, fmt.Errorf("no table named %s found", tableName)
+	}
+
+	nbf := tbl.Format()
+
+	blameGraph, err := blameGraphFromRows(ctx, nbf, rows)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, c := range commits {
-		// get the first parent
-		parent, err := dEnv.DoltDB.ResolveParent(ctx, c, 0)
-		if err != nil {
-			return nil, err
-		}
+	// for each unblamed node, see if it changed between `c` and `parent`.
+	// if so, mark it blamed with `c` as the blame origin
+ROWLOOP:
+	for _, rowPK := range blameGraph.UnblamedNodeKeys() {
+		for _, c := range commits {
+			// get the first parent
+			parent, err := dEnv.DoltDB.ResolveParent(ctx, c, 0)
+			if err != nil {
+				return nil, err
+			}
 
-		// for each unblamed node, see if it changed between `c` and `parent`.
-		// if so, mark it blamed with `c` as the blame origin
-		for _, rowPK := range blameGraph.UnblamedNodeKeys() {
 			changed, err := rowChanged(ctx, parent, c, tableName, rowPK)
 			if err != nil {
 				return nil, err
 			}
 
 			if changed {
-				blameGraph.AssignBlame(rowPK, c)
+				blameGraph.AssignBlame(rowPK, nbf, c)
+				continue ROWLOOP
 			}
 		}
-
-		// if all nodes have blame, stop iterating commits
-		if blameGraph.AllNodesBlamed() {
-			break
-		}
+		// didn't find blame for a row...something's wrong
+		return nil, fmt.Errorf("couldn't find blame for row with primary key %v", strings.Join(getPKStrs(ctx, rowPK), ", "))
 	}
+
 	return blameGraph, nil
 }
 
@@ -321,10 +332,10 @@ func rowChanged(ctx context.Context, old, new *doltdb.Commit, tableName string, 
 	return !row.AreEqual(*oldRow, *newRow, oldSchema), nil
 }
 
-func blameGraphFromRows(ctx context.Context, rows types.Map) (*blameGraph, error) {
+func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows types.Map) (*blameGraph, error) {
 	graph := make(blameGraph)
-	err := rows.IterAll(ctx, func(key, _ types.Value) error {
-		hash, err := key.Hash(types.Format_7_18)
+	err := rows.IterAll(ctx, func(key, val types.Value) error {
+		hash, err := key.Hash(nbf)
 		if err != nil {
 			return err
 		}
@@ -355,7 +366,7 @@ func (bg *blameGraph) AllNodesBlamed() bool {
 
 // AssignBlame updates the blame graph to contain blame information from the given commit
 // for the row identified by the given primary key
-func (bg *blameGraph) AssignBlame(rowPK types.Value, c *doltdb.Commit) error {
+func (bg *blameGraph) AssignBlame(rowPK types.Value, nbf *types.NomsBinFormat, c *doltdb.Commit) error {
 	commitHash, err := c.HashOf()
 	if err != nil {
 		return fmt.Errorf("error getting commit hash: %v", err)
@@ -366,7 +377,7 @@ func (bg *blameGraph) AssignBlame(rowPK types.Value, c *doltdb.Commit) error {
 		return fmt.Errorf("error getting metadata for commit %s: %v", commitHash.String(), err)
 	}
 
-	pkHash, err := rowPK.Hash(types.Format_7_18)
+	pkHash, err := rowPK.Hash(nbf)
 	if err != nil {
 		return fmt.Errorf("error getting PK hash for commit %s: %v", commitHash.String(), err)
 	}
