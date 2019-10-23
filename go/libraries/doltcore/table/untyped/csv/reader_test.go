@@ -29,28 +29,32 @@ import (
 
 var PersonDB1 = `name, Age, Title
 Bill Billerson, 32, Senior Dufus
-Rob Robertson, 25, Dufus
-John Johnson, 21, Intern Dufus`
+Rob Robertson, 25, """"""
+John Johnson, 21, Intern Dufus
+Jeff Jefferson, 40, ""`
 
 var PersonDB2 = PersonDB1 + "\n"
 var PersonDB3 = strings.Replace(PersonDB2, "\n", "\n\n", -1)
 
 var PersonDBWithBadRow = `name, Age, Title
 Bill Billerson, 32, Senior Dufus
-Rob Robertson, 25, Dufus
-John Johnson, 21`
+Rob Robertson, 25, """"""
+John Johnson, 21
+Jeff Jefferson, 40, ""`
 
 var PersonDBWithBadRow2 = PersonDBWithBadRow + "\n"
 var PersonDBWithBadRow3 = strings.Replace(PersonDBWithBadRow2, "\n", "\n\n", -1)
 
 var PersonDBWithoutHeaders = `Bill Billerson, 32, Senior Dufus
-Rob Robertson, 25, Dufus
-John Johnson, 21, Intern Dufus`
+Rob Robertson, 25, """"""
+John Johnson, 21, Intern Dufus
+Jeff Jefferson, 40, ""`
 
 var PersonDBDifferentHeaders = `n, a, t
 Bill Billerson, 32, Senior Dufus
-Rob Robertson, 25, Dufus
-John Johnson, 21, Intern Dufus`
+Rob Robertson, 25, """"""
+John Johnson, 21, Intern Dufus
+Jeff Jefferson, 40, ""`
 
 func mustRow(r row.Row, err error) row.Row {
 	if err != nil {
@@ -65,12 +69,14 @@ func TestReader(t *testing.T) {
 	_, sch := untyped.NewUntypedSchema(colNames...)
 	goodExpectedRows := []row.Row{
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25"})),
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jeff Jefferson", "40"})),
 	}
 	badExpectedRows := []row.Row{
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jeff Jefferson", "40"})),
 	}
 
 	tests := []struct {
