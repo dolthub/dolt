@@ -337,3 +337,22 @@ teardown() {
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
     [ "${lines[1]}" = "added table" ]
 }
+
+@test "create a table with null values from csv import" {
+    run dolt table import -c test `batshelper empty-strings-null-values.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 11 ]
+    [ "${lines[3]}" = "| a  | <NULL>    | 1         |" ]
+    [ "${lines[4]}" = "| b  | <NULL>    | 4         |" ]
+    [ "${lines[5]}" = "| c  | <NULL>    | 5         |" ]
+    [ "${lines[6]}" = "| d  | row four  | <NULL>    |" ]
+    [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
+    [ "${lines[8]}" = "| f  | row six   | <NULL>    |" ]
+    [ "${lines[9]}" = "| g  | row seven | 7         |" ]
+}
