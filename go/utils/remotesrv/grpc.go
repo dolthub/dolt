@@ -27,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type RemoteChunkStore struct {
@@ -272,7 +273,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	logger := getReqLogger("GRPC", "GetRepoMetadata")
 	defer func() { logger("finished") }()
 
-	cs := rs.getStore(req.RepoId, "GetRepoMetadata")
+	cs := rs.getOrCreateStore(req.RepoId, "GetRepoMetadata", req.ClientRepoFormat.NbfVersion)
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
@@ -354,10 +355,14 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 }
 
 func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) *nbs.NomsBlockStore {
+	return rs.getOrCreateStore(repoId, rpcName, types.Format_Default.VersionString())
+}
+
+func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName, nbfVerStr string) *nbs.NomsBlockStore {
 	org := repoId.Org
 	repoName := repoId.RepoName
 
-	cs, err := rs.csCache.Get(org, repoName)
+	cs, err := rs.csCache.Get(org, repoName, nbfVerStr)
 
 	if err != nil {
 		log.Printf("Failed to retrieve chunkstore for %s/%s\n", org, repoName)

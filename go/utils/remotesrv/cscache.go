@@ -21,7 +21,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
-	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -43,7 +42,7 @@ func NewLocalCSCache(filesys filesys.Filesys) *DBCache {
 	}
 }
 
-func (cache *DBCache) Get(org, repo string) (*nbs.NomsBlockStore, error) {
+func (cache *DBCache) Get(org, repo, nbfVerStr string) (*nbs.NomsBlockStore, error) {
 	cache.mu.Lock()
 	defer cache.mu.Unlock()
 
@@ -61,7 +60,7 @@ func (cache *DBCache) Get(org, repo string) (*nbs.NomsBlockStore, error) {
 			return nil, err
 		}
 
-		newCS, err = nbs.NewLocalStore(context.TODO(), types.Format_Default.VersionString(), id, defaultMemTableSize)
+		newCS, err = nbs.NewLocalStore(context.TODO(), nbfVerStr, id, defaultMemTableSize)
 
 		if err != nil {
 			return nil, err
