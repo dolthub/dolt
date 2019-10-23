@@ -9,7 +9,7 @@ We also built [DoltHub](https://www.dolthub.com), a cloud based storage solution
 ## Dolt CLI
 
 ```
-timsehn$ dolt
+$ dolt
 Valid commands for dolt are
                 init - Create an empty Dolt data repository.
               status - Show the working tree status.
