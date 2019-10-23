@@ -93,19 +93,8 @@ func writeTableFile(logger func(string), org, repo, fileId string, request *http
 	}
 
 	if len(tfd.ContentHash) > 0 {
-		hasher := md5.New()
-		n, err := hasher.Write(data)
-
-		if err != nil {
-			return http.StatusInternalServerError
-		} else if n != len(data) {
-			return http.StatusInternalServerError
-		}
-
-		actualMD5Bytes := make([]byte, 0, 128)
-		hasher.Sum(actualMD5Bytes)
-
-		if !bytes.Equal(tfd.ContentHash, actualMD5Bytes) {
+		actualMD5Bytes := md5.Sum(data)
+		if !bytes.Equal(tfd.ContentHash, actualMD5Bytes[:]) {
 			return http.StatusBadRequest
 		}
 	}
