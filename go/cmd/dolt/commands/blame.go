@@ -25,7 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -145,8 +145,12 @@ type blameInput struct {
 }
 
 func blameGraphFromCommit(ctx context.Context, dEnv *env.DoltEnv, commit *doltdb.Commit, tableName string) (*blameGraph, error) {
-	// get the commits sorted from newest to oldest ending with `commit`
-	commits, err := actions.TimeSortedCommits(ctx, dEnv.DoltDB, commit, -1)
+	// get the commits in reverse topological order ending with `commit`
+	hash, err := commit.HashOf()
+	if err != nil {
+		return nil, err
+	}
+	commits, err := commitwalk.GetTopologicalOrderCommits(ctx, dEnv.DoltDB, hash)
 	if err != nil {
 		return nil, err
 	}
