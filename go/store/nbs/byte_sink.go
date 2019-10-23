@@ -334,10 +334,7 @@ func (sink *HashingByteSink) FlushToFile(path string) error {
 
 // GetMD5 gets the MD5 hash of all the bytes written to the sink
 func (sink *HashingByteSink) GetMD5() []byte {
-	result := make([]byte, 0, 128)
-	sink.hasher.Sum(result)
-
-	return result
+	return sink.hasher.Sum(nil)
 }
 
 // Size gets the number of bytes written to the sink
