@@ -17,9 +17,12 @@ package remotestorage
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -601,6 +604,8 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 
 	hashToCount := make(map[hash.Hash]int)
 	hashToData := make(map[hash.Hash][]byte)
+	hashToDetails := make(map[hash.Hash]remotesapi.TableFileDetails)
+
 	// structuring so this can be done as multiple files in the future.
 	{
 		name, data, err := nbs.WriteChunks(chnks)
@@ -612,12 +617,18 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		h := hash.Parse(name)
 		hashToData[h] = data
 		hashToCount[h] = len(chnks)
+
+		md5Bytes := md5.Sum(data)
+		hashToDetails[h] = remotesapi.TableFileDetails{
+			Id:            h[:],
+			ContentLength: uint64(len(data)),
+			ContentHash:   md5Bytes[:],
+		}
 	}
 
-	hashBytes := make([][]byte, 0, len(hashToChunk))
-	for h := range hashToData {
-		tmp := h
-		hashBytes = append(hashBytes, tmp[:])
+	tfds := make([]*remotesapi.TableFileDetails, 0, len(hashToDetails))
+	for _, v := range hashToDetails {
+		tfds = append(tfds, &v)
 	}
 
 	evt := events.NewEvent(eventsapi.ClientEventType_REMOTEAPI_GET_UPLOAD_LOCATIONS)
@@ -625,7 +636,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 
 	counter := events.NewCounter(eventsapi.MetricID_REMOTEAPI_RPC_ERROR)
 
-	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileHashes: hashBytes}
+	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileDetails: tfds}
 	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
 
 	if err != nil {
@@ -637,9 +648,10 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		var err error
 		h := hash.New(loc.TableFileHash)
 		data := hashToData[h]
+		details := hashToDetails[h]
 		switch typedLoc := loc.Location.(type) {
 		case *remotesapi.UploadLoc_HttpPost:
-			err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, bytes.NewBuffer(data))
+			err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, bytes.NewBuffer(data), details.ContentHash)
 		default:
 			break
 		}
@@ -657,7 +669,7 @@ type Sizer interface {
 	Size() int64
 }
 
-func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, rd io.Reader) error {
+func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, rd io.Reader, contentHash []byte) error {
 	req, err := http.NewRequest(http.MethodPut, post.Url, rd)
 	if err != nil {
 		return err
@@ -665,6 +677,11 @@ func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte,
 
 	if sizer, ok := rd.(Sizer); ok {
 		req.ContentLength = sizer.Size()
+	}
+
+	if len(contentHash) > 0 {
+		md5s := base64.StdEncoding.EncodeToString(contentHash)
+		req.Header.Set("Content-MD5", md5s)
 	}
 
 	var resp *http.Response
@@ -920,7 +937,7 @@ func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, nu
 	loc := resp.Locs[0]
 	switch typedLoc := loc.Location.(type) {
 	case *remotesapi.UploadLoc_HttpPost:
-		err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, rd)
+		err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, rd, contentHash)
 
 		if err != nil {
 			return err
