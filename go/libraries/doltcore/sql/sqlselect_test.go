@@ -16,6 +16,7 @@ package sql
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,6 +30,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 )
 
+var _, RUN_LEGACY_JOIN_TESTS = os.LookupEnv("RUN_LEGACY_JOIN_TESTS")
+
 func TestExecuteSelect(t *testing.T) {
 	for _, test := range BasicSelectTests {
 		t.Run(test.Name, func(t *testing.T) {
@@ -38,6 +41,9 @@ func TestExecuteSelect(t *testing.T) {
 }
 
 func TestJoins(t *testing.T) {
+	if !RUN_LEGACY_JOIN_TESTS {
+		t.Skip("Skipping join tests for legacy SQL engine. Set env RUN_LEGACY_JOIN_TESTS to run.")
+	}
 	for _, test := range JoinTests {
 		t.Run(test.Name, func(t *testing.T) {
 			runSelectTest(t, test)
