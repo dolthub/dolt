@@ -23,8 +23,8 @@ package types
 
 import (
 	"context"
-
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"strconv"
 )
 
 // Bool is a Noms Value wrapper around the primitive bool type.
@@ -50,6 +50,10 @@ func (b Bool) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(b, nbf)
 }
 
+func (b Bool) IsPrimitive() bool {
+	return true
+}
+
 func (b Bool) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -59,7 +63,7 @@ func (b Bool) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (b Bool) typeOf() (*Type, error) {
-	return BoolType, nil
+	return PrimitiveTypeMap[BoolKind], nil
 }
 
 func (b Bool) Kind() NomsKind {
@@ -82,9 +86,73 @@ func (b Bool) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func (b Bool) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	if bool(b) {
-		return []byte{byte(BoolKind), 1}, nil
+func (b Bool) readFrom(nbf *NomsBinFormat, bnr *binaryNomsReader) (Value, error) {
+	return Bool(bnr.readBool()), nil
+}
+
+func (b Bool) skip(nbf *NomsBinFormat, bnr *binaryNomsReader) {
+	bnr.skipUint8()
+}
+
+func (Bool) MarshalToKind(targetKind NomsKind) MarshalCallback {
+	switch targetKind {
+	case BoolKind:
+		return func(val Value) (Value, error) {
+			return val, nil
+		}
+	case FloatKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			b := val.(Bool)
+			if b {
+				return Float(1), nil
+			}
+			return Float(0), nil
+		}
+	case IntKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			b := val.(Bool)
+			if b {
+				return Int(1), nil
+			}
+			return Int(0), nil
+		}
+	case NullKind:
+		return func(Value) (Value, error) {
+			return NullValue, nil
+		}
+	case StringKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			b := val.(Bool)
+			if b {
+				return String("true"), nil
+			}
+			return String("false"), nil
+		}
+	case UintKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			b := val.(Bool)
+			if b {
+				return Uint(1), nil
+			}
+			return Uint(0), nil
+		}
 	}
-	return []byte{byte(BoolKind), 0}, nil
+
+	return nil
+}
+
+func (b Bool) HumanReadableString() string {
+	return strconv.FormatBool(bool(b))
 }

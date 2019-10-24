@@ -50,6 +50,10 @@ func (v InlineBlob) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(v, nbf)
 }
 
+func (v InlineBlob) IsPrimitive() bool {
+	return true
+}
+
 func (v InlineBlob) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -59,7 +63,7 @@ func (v InlineBlob) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (v InlineBlob) typeOf() (*Type, error) {
-	return InlineBlobType, nil
+	return PrimitiveTypeMap[InlineBlobKind], nil
 }
 
 func (v InlineBlob) Kind() NomsKind {
@@ -82,23 +86,43 @@ func (v InlineBlob) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	}
 
 	w.writeUint16(uint16(byteLen))
-	w.writeBytes(v)
+	w.writeRaw(v)
 	return nil
 }
 
-func (v InlineBlob) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	// Length is uint8(InlineBlobKind) + uint16(length_prefix) + data
-	buff := make([]byte, 3+len(v))
-	w := binaryNomsWriter{buff, 0}
-	err := v.writeTo(&w, nbf)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return buff[:w.offset], err
+func (v InlineBlob) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	size := uint32(b.readUint16())
+	ib := b.readBytes(size)
+	return InlineBlob(ib), nil
 }
 
-func (v InlineBlob) String() string {
+func (v InlineBlob) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	size := uint32(b.readUint16())
+	b.skipBytes(size)
+}
+
+func (InlineBlob) MarshalToKind(targetKind NomsKind) MarshalCallback {
+	switch targetKind {
+	case InlineBlobKind:
+		return func(val Value) (Value, error) {
+			return val, nil
+		}
+	case NullKind:
+		return func(Value) (Value, error) {
+			return NullValue, nil
+		}
+	case StringKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			return String(base64.RawURLEncoding.EncodeToString(val.(InlineBlob))), nil
+		}
+	}
+
+	return nil
+}
+
+func (v InlineBlob) HumanReadableString() string {
 	return base64.RawURLEncoding.EncodeToString(v)
 }

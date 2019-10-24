@@ -225,6 +225,10 @@ func (t Tuple) Len() uint64 {
 	return count
 }
 
+func (t Tuple) IsPrimitive() bool {
+	return false
+}
+
 func (t Tuple) Iterator() (*TupleIterator, error) {
 	return t.IteratorAt(0)
 }
@@ -490,4 +494,24 @@ func (t Tuple) fieldsToMap() (map[Value]Value, error) {
 	}
 
 	return valMap, nil
+}
+
+func (Tuple) MarshalToKind(NomsKind) MarshalCallback {
+	return nil
+}
+
+func (t Tuple) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (t Tuple) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (t Tuple) String() string {
+	panic("unreachable")
+}
+
+func (t Tuple) HumanReadableString() string {
+	panic("unreachable")
 }

@@ -23,9 +23,8 @@ package types
 
 import (
 	"context"
-	"encoding/binary"
-
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"strconv"
 )
 
 // Float is a Noms Value wrapper around the primitive float64 type.
@@ -51,6 +50,10 @@ func (v Float) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(v, nbf)
 }
 
+func (v Float) IsPrimitive() bool {
+	return true
+}
+
 func (v Float) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -60,7 +63,7 @@ func (v Float) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (v Float) typeOf() (*Type, error) {
-	return FloaTType, nil
+	return PrimitiveTypeMap[FloatKind], nil
 }
 
 func (v Float) Kind() NomsKind {
@@ -82,16 +85,62 @@ func (v Float) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func (v Float) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	// We know the size of the buffer here so allocate it once.
-	// FloatKind, int (Varint), exp (Varint)
-	buff := make([]byte, 1+2*binary.MaxVarintLen64)
-	w := binaryNomsWriter{buff, 0}
-	err := v.writeTo(&w, nbf)
+func (v Float) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	return Float(b.readFloat(nbf)), nil
+}
 
-	if err != nil {
-		return nil, err
+func (v Float) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	b.skipFloat(nbf)
+}
+
+func (Float) MarshalToKind(targetKind NomsKind) MarshalCallback {
+	switch targetKind {
+	case BoolKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			fl := float64(val.(Float))
+			return Bool(fl != 0), nil
+		}
+	case FloatKind:
+		return func(val Value) (Value, error) {
+			return val, nil
+		}
+	case IntKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			fl := float64(val.(Float))
+			return Int(int(fl)), nil
+		}
+	case NullKind:
+		return func(Value) (Value, error) {
+			return NullValue, nil
+		}
+	case StringKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			fl := float64(val.(Float))
+			str := strconv.FormatFloat(fl, 'f', -1, 64)
+			return String(str), nil
+		}
+	case UintKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			fl := float64(val.(Float))
+			return Uint(uint64(fl)), nil
+		}
 	}
 
-	return buff[:w.offset], nil
+	return nil
+}
+
+func (v Float) HumanReadableString() string {
+	return strconv.FormatFloat(float64(v), 'g', -1, 64)
 }

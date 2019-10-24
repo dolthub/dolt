@@ -23,9 +23,12 @@ package types
 
 import (
 	"context"
-	"encoding/binary"
-
+	"encoding/base64"
+	"github.com/google/uuid"
 	"github.com/liquidata-inc/dolt/go/store/hash"
+	"math"
+	"strconv"
+	"strings"
 )
 
 // String is a Noms Value wrapper around the primitive string type.
@@ -51,6 +54,10 @@ func (s String) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(s, nbf)
 }
 
+func (s String) IsPrimitive() bool {
+	return true
+}
+
 func (s String) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -60,7 +67,7 @@ func (s String) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (s String) typeOf() (*Type, error) {
-	return StringType, nil
+	return PrimitiveTypeMap[StringKind], nil
 }
 
 func (s String) Kind() NomsKind {
@@ -83,16 +90,119 @@ func (s String) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func (s String) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	// We know the size of the buffer here so allocate it once.
-	// StringKind, Length (UVarint), UTF-8 encoded string
-	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))
-	w := binaryNomsWriter{buff, 0}
-	err := s.writeTo(&w, nbf)
+func (s String) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	return String(b.readString()), nil
+}
 
-	if err != nil {
-		return nil, err
+func (s String) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	b.skipString()
+}
+
+func (String) MarshalToKind(targetKind NomsKind) MarshalCallback {
+	switch targetKind {
+	case BoolKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			b, err := strconv.ParseBool(strings.ToLower(string(s)))
+			if err != nil {
+				return Bool(false), CreateConversionError(s, BoolKind, err)
+			}
+			return Bool(b), nil
+		}
+	case FloatKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			f, err := strconv.ParseFloat(string(s), 64)
+			if err != nil {
+				return Float(math.NaN()), CreateConversionError(s, FloatKind, err)
+			}
+			return Float(f), nil
+		}
+	case InlineBlobKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			data, err := base64.RawURLEncoding.DecodeString(string(s))
+			if err != nil {
+				return InlineBlob{}, CreateConversionError(s, InlineBlobKind, err)
+			}
+			return InlineBlob(data), nil
+		}
+	case IntKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			n, err := strconv.ParseInt(string(s), 10, 64)
+			if err != nil {
+				return Int(0), CreateConversionError(s, IntKind, err)
+			}
+			return Int(n), nil
+		}
+	case NullKind:
+		return func(Value) (Value, error) {
+			return NullValue, nil
+		}
+	case StringKind:
+		return func(val Value) (Value, error) {
+			return val, nil
+		}
+	case UintKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			n, err := strconv.ParseUint(string(s), 10, 64)
+			if err != nil {
+				return Uint(0), CreateConversionError(s, UintKind, err)
+			}
+			return Uint(n), nil
+		}
+	case UUIDKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			u, err := uuid.Parse(string(s))
+			if err != nil {
+				return UUID(u), CreateConversionError(s, UUIDKind, err)
+			}
+			return UUID(u), nil
+		}
 	}
 
-	return buff[:w.offset], nil
+	return nil
+}
+
+func (s String) HumanReadableString() string {
+	return strconv.Quote(string(s))
 }

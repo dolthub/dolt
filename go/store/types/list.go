@@ -173,6 +173,10 @@ func (l List) Concat(ctx context.Context, other List) (List, error) {
 	return newList(seq), nil
 }
 
+func (l List) IsPrimitive() bool {
+	return false
+}
+
 // Iter iterates over the list and calls f for every element in the list. If f returns true then the
 // iteration stops.
 func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool)) error {
@@ -329,13 +333,15 @@ func iterRange(ctx context.Context, col Collection, startIdx, endIdx uint64, cb 
 
 		endIdx = endIdx - uint64(len(values))/valuesPerIdx - startIdx
 		startIdx = 0
-		bytes, err := seq.valueBytes(seq.format())
+
+		w := binaryNomsWriter{make([]byte, 4), 0}
+		err = seq.writeTo(&w, seq.format())
 
 		if err != nil {
 			return 0, err
 		}
 
-		numBytes += uint64(len(bytes)) // note: should really only include |values|
+		numBytes += uint64(w.offset) // note: should really only include |values|
 	}
 
 	return numBytes, nil
@@ -421,4 +427,24 @@ func makeListLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func newEmptyListSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
 	return newEmptySequenceChunker(ctx, vrw, makeListLeafChunkFn(vrw), newIndexedMetaSequenceChunkFn(ListKind, vrw), hashValueBytes)
+}
+
+func (List) MarshalToKind(NomsKind) MarshalCallback {
+	return nil
+}
+
+func (l List) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (l List) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (l List) String() string {
+	panic("unreachable")
+}
+
+func (l List) HumanReadableString() string {
+	panic("unreachable")
 }

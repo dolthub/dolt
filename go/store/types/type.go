@@ -96,6 +96,10 @@ func (t *Type) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(t, nbf)
 }
 
+func (t *Type) IsPrimitive() bool {
+	return true
+}
+
 func (t *Type) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	err := TypeKind.writeTo(w, nbf)
 
@@ -119,7 +123,7 @@ func (t *Type) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (t *Type) typeOf() (*Type, error) {
-	return TypeType, nil
+	return PrimitiveTypeMap[TypeKind], nil
 }
 
 func (t *Type) Kind() NomsKind {
@@ -183,4 +187,24 @@ func indexOfType(t *Type, tl []*Type) (uint32, bool) {
 		}
 	}
 	return 0, false
+}
+
+func (*Type) MarshalToKind(NomsKind) MarshalCallback {
+	return nil
+}
+
+func (t *Type) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (t *Type) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (t *Type) String() string {
+	panic("unreachable")
+}
+
+func (t *Type) HumanReadableString() string {
+	panic("unreachable")
 }

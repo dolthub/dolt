@@ -228,6 +228,10 @@ func (s Set) Has(ctx context.Context, v Value) (bool, error) {
 
 type setIterCallback func(v Value) (bool, error)
 
+func (s Set) IsPrimitive() bool {
+	return false
+}
+
 func (s Set) Iter(ctx context.Context, cb setIterCallback) error {
 	cur, err := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
 
@@ -348,4 +352,24 @@ func makeSetLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func newEmptySetSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
 	return newEmptySequenceChunker(ctx, vrw, makeSetLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(SetKind, vrw), hashValueBytes)
+}
+
+func (Set) MarshalToKind(NomsKind) MarshalCallback {
+	return nil
+}
+
+func (s Set) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (s Set) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (s Set) String() string {
+	panic("unreachable")
+}
+
+func (s Set) HumanReadableString() string {
+	panic("unreachable")
 }

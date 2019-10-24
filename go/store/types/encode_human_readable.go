@@ -30,8 +30,6 @@ import (
 	"sync"
 
 	"github.com/dustin/go-humanize"
-	"github.com/google/uuid"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/util/writers"
 )
@@ -196,13 +194,8 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 	}
 
 	switch v.Kind() {
-	case BoolKind:
-		w.write(strconv.FormatBool(bool(v.(Bool))))
-	case FloatKind:
+	case FloatKind: // We're special-casing floats since it requires floatFormat & most other kinds don't need anything special
 		w.write(strconv.FormatFloat(float64(v.(Float)), w.floatFormat, -1, 64))
-
-	case StringKind:
-		w.write(strconv.Quote(string(v.(String))))
 
 	case BlobKind:
 		w.write("blob {")
@@ -358,25 +351,11 @@ func (w *hrsWriter) Write(ctx context.Context, v Value) error {
 			return err
 		}
 
-	case UUIDKind:
-		id, _ := v.(UUID)
-		idStr := uuid.UUID(id).String()
-		w.write(idStr)
-
-	case IntKind:
-		w.write(strconv.FormatInt(int64(v.(Int)), 10))
-
-	case UintKind:
-		w.write(strconv.FormatUint(uint64(v.(Uint)), 10))
-
-	case NullKind:
-		w.write("null_value")
-
-	case InlineBlobKind:
-		uaStr := v.(InlineBlob).String()
-		w.write(uaStr)
-
 	default:
+		if IsPrimitiveKind(v.Kind()) {
+			w.write(v.HumanReadableString())
+			return nil
+		}
 		return ErrUnknownType
 	}
 
@@ -454,8 +433,6 @@ func (w *hrsWriter) writeSize(v Value) {
 
 func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 	switch t.TargetKind() {
-	case BlobKind, BoolKind, FloatKind, StringKind, TypeKind, ValueKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
-		w.write(t.TargetKind().String())
 	case ListKind, RefKind, SetKind, MapKind, TupleKind:
 		w.write(t.TargetKind().String())
 		w.write("<")
@@ -496,7 +473,11 @@ func (w *hrsWriter) writeType(t *Type, seenStructs map[*Type]struct{}) {
 			return
 		}
 	default:
-		panic("unreachable")
+		if IsPrimitiveKind(t.TargetKind()) {
+			w.write(t.TargetKind().String())
+		} else {
+			panic("unreachable")
+		}
 	}
 }
 

@@ -28,31 +28,9 @@ import (
 )
 
 func MakePrimitiveType(k NomsKind) (*Type, error) {
-	switch k {
-	case BoolKind:
-		return BoolType, nil
-	case FloatKind:
-		return FloaTType, nil
-	case UUIDKind:
-		return UUIDType, nil
-	case IntKind:
-		return IntType, nil
-	case UintKind:
-		return UintType, nil
-	case NullKind:
-		return NullType, nil
-	case StringKind:
-		return StringType, nil
-	case BlobKind:
-		return BlobType, nil
-	case ValueKind:
-		return ValueType, nil
-	case TypeKind:
-		return TypeType, nil
-	case InlineBlobKind:
-		return InlineBlobType, nil
+	if typ, ok := PrimitiveTypeMap[k]; ok {
+		return typ, nil
 	}
-
 	return nil, ErrUnknownType
 }
 
@@ -128,17 +106,11 @@ func makePrimitiveType(k NomsKind) *Type {
 	return newType(PrimitiveDesc(k))
 }
 
-var BoolType = makePrimitiveType(BoolKind)
-var FloaTType = makePrimitiveType(FloatKind)
-var StringType = makePrimitiveType(StringKind)
-var BlobType = makePrimitiveType(BlobKind)
-var TypeType = makePrimitiveType(TypeKind)
-var ValueType = makePrimitiveType(ValueKind)
-var UUIDType = makePrimitiveType(UUIDKind)
-var IntType = makePrimitiveType(IntKind)
-var UintType = makePrimitiveType(UintKind)
-var NullType = makePrimitiveType(NullKind)
-var InlineBlobType = makePrimitiveType(InlineBlobKind)
+// PrimitiveTypeMap auto populates with Value types that return true from IsPrimitive().
+// Only include a type here manually if it has no associated Value type.
+var PrimitiveTypeMap = map[NomsKind]*Type{
+	ValueKind: makePrimitiveType(ValueKind),
+}
 
 func makeCompoundType(kind NomsKind, elemTypes ...*Type) (*Type, error) {
 	for _, el := range elemTypes {
