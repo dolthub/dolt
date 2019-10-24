@@ -11,7 +11,6 @@ pipeline {
                     }
                     environment {
                         PATH = "${pwd()}/.ci_bin:${env.HOME}/go/bin:${env.PATH}"
-                        SKIP_SQL_SERVER_TEST = "true"
                     }
                     steps {
                         dir ("go") {
