@@ -292,8 +292,7 @@ func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithPro
 			}()
 
 			if val == nil {
-				count, _ := inf.colType[i][types.NullKind]
-				inf.colType[i][types.NullKind] = count + 1
+				inf.colType[i][types.NullKind]++
 				return false, nil
 			}
 
@@ -304,10 +303,7 @@ func (inf *inferrer) sinkRow(p *pipeline.Pipeline, ch <-chan pipeline.RowWithPro
 				inf.negatives[i] = true
 			}
 
-			count, _ := inf.colType[i][kind]
-			count++
-
-			inf.colType[i][kind] = count
+			inf.colType[i][kind]++
 
 			return false, nil
 		})
