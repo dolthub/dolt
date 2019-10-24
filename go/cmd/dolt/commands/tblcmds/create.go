@@ -33,7 +33,7 @@ var tblCreateShortDesc = "Creates or overwrite existing table(s) with an empty t
 var tblCreateLongDesc = `dolt table create will create a new table with a given schema.  Newly created tables are empty.
 If the <b>--force | -f</b> parameter is provided create will overwrite existing tables.
 
-` + schemaFileHelp + `
+` + SchemaFileHelp + `
 
 You may also consider using <b>dolt sql -q 'CREATE TABLE ...'</b>:
 `

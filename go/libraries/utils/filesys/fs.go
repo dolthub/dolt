@@ -15,6 +15,7 @@
 package filesys
 
 import (
+	"encoding/json"
 	"io"
 	"time"
 
@@ -91,4 +92,14 @@ type Filesys interface {
 	ReadableFS
 	WritableFS
 	WalkableFS
+}
+
+func UnmarshalJSONFile(fs ReadableFS, path string, dest interface{}) error {
+	data, err := fs.ReadFile(path)
+
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, dest)
 }
