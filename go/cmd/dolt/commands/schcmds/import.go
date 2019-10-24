@@ -63,7 +63,7 @@ var schImportLongDesc = "If <b>--create | -c</b> is given the operation will cre
 	//"\n" +
 	"If <b>--replace | -r</b> is given the operation will replace <table> with a new, empty table which has a schema inferred from" +
 	"the supplied file but columns tags will be maintained across schemas.  <b>--keep-types</b> can also be supplied here" +
-	"to guarantee that types are in the file and in the pre-existing table.\n" +
+	"to guarantee that types are the same in the file and in the pre-existing table.\n" +
 	"\n" +
 	"A mapping file can be used to map fields between the file being imported and the table's schema being inferred.  This can" +
 	"be used when creating a new table, or updating or replacing an existing table.\n" +
@@ -72,8 +72,8 @@ var schImportLongDesc = "If <b>--create | -c</b> is given the operation will cre
 	"\n" +
 	"In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not" +
 	"have the expected extension then the <b>--file-type</b> parameter should be used to explicitly define the format of" +
-	"the file in one of the supported formats csv.  For files separated by a delimiter other than a" +
-	"',', the --delim parameter can be used to specify a delimeter\n" +
+	"the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a" +
+	"',', the --delim parameter can be used to specify a delimeter.\n" +
 	"\n" +
 	"If the parameter <b>--dry-run</b> is supplied a sql statement will be generated showing what would be executed if this" +
 	"were run without the --dry-run flag\n" +
@@ -126,7 +126,7 @@ func Import(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 
 	if apr.NArg() != 2 {
 		usage()
-		return 0
+		return 1
 	}
 
 	verr := importSchema(ctx, dEnv, apr)
@@ -202,6 +202,10 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		}
 
 		pks = goodPKS
+
+		if len(pks) == 0 {
+			return errhand.BuildDError("error: no valid columns provided in --pks argument").Build()
+		}
 	} else {
 		return errhand.BuildDError("error: missing required parameter pks").SetPrintUsage().Build()
 	}
@@ -316,6 +320,9 @@ func inferSchemaFromFile(ctx context.Context, nbf *types.NomsBinFormat, pkCols [
 		}
 
 		defer rd.Close(ctx)
+
+	default:
+		return nil, errhand.BuildDError("error: unsupported file type '%s'", args.fileType).Build()
 	}
 
 	sch, err := actions.InferSchemaFromTableReader(ctx, rd, pkCols, args.inferArgs)
