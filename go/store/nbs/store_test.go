@@ -51,7 +51,7 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		data, addr, err := buildTable(chunkData)
 		fileID := addr.String()
 		fileToData[fileID] = data
-		err = st.WriteTableFile(ctx, fileID, i+1, bytes.NewReader(data))
+		err = st.WriteTableFile(ctx, fileID, i+1, bytes.NewReader(data), 0, nil)
 		require.NoError(t, err)
 	}
 

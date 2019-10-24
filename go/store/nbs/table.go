@@ -286,7 +286,7 @@ type TableFileStore interface {
 	Sources(ctx context.Context) (hash.Hash, []TableFile, error)
 
 	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-	WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error
+	WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error
 
 	// SetRootChunk changes the root chunk hash from the previous value to the new root.
 	SetRootChunk(ctx context.Context, root, previous hash.Hash) error

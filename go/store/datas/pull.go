@@ -132,7 +132,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 				}
 			}()
 
-			err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd)
+			err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
 
 			if err != nil {
 				if eventCh != nil {

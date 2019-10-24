@@ -933,7 +933,7 @@ func (nbs *NomsBlockStore) Sources(ctx context.Context) (hash.Hash, []TableFile,
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
 	fsPersister, ok := nbs.p.(*fsTablePersister)
 
 	if !ok {
@@ -980,5 +980,18 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 
 // SetRootChunk changes the root chunk hash from the previous value to the new root.
 func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash.Hash) error {
-	return nbs.updateManifest(ctx, root, previous)
+	for {
+		err := nbs.updateManifest(ctx, root, previous)
+
+		if err == nil {
+			return nil
+		} else if err == errOptimisticLockFailedTables {
+			continue
+		} else {
+			return err
+		}
+
+		// Same behavior as Commit
+		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables
+	}
 }

@@ -32,6 +32,7 @@ require (
 	github.com/lib/pq v1.1.1 // indirect
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
+	github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018231025-c428619832c3
 	github.com/mattn/go-isatty v0.0.8
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
@@ -45,7 +46,7 @@ require (
 	github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e
 	github.com/spf13/cobra v0.0.3
 	github.com/src-d/go-mysql-server v0.4.1-0.20190821121850-0e0249cf7bc0
-	github.com/stretchr/testify v1.3.0
+	github.com/stretchr/testify v1.4.0
 	github.com/tealeg/xlsx v1.0.4-0.20190601071628-e2d23f3c43dc
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7

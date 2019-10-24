@@ -182,9 +182,11 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 
 func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.AtomicError, completedTables <-chan FilledWriters) {
 	type tempTblFile struct {
-		id        string
-		path      string
-		numChunks int
+		id          string
+		path        string
+		numChunks   int
+		contentLen  uint64
+		contentHash []byte
 	}
 
 	var tblFiles []tempTblFile
@@ -209,7 +211,13 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 			continue
 		}
 
-		tblFiles = append(tblFiles, tempTblFile{id, path, tblFile.wr.Size()})
+		tblFiles = append(tblFiles, tempTblFile{
+			id:          id,
+			path:        path,
+			numChunks:   tblFile.wr.Size(),
+			contentLen:  tblFile.wr.ContentLength(),
+			contentHash: tblFile.wr.GetMD5(),
+		})
 	}
 
 	if ae.IsSet() {
@@ -239,7 +247,7 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 		p.eventCh <- NewTFPullerEvent(StartUploadTableFile, details)
 
 		fWithSize := FileReaderWithSize{f, fi.Size()}
-		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithSize)
+		err = p.sinkDB.chunkStore().(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithSize, tmpTblFile.contentLen, tmpTblFile.contentHash)
 
 		go func() {
 			_ = os.Remove(tmpTblFile.path)

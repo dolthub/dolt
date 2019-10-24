@@ -27,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/nbs"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 type RemoteChunkStore struct {
@@ -127,6 +128,25 @@ func (rs *RemoteChunkStore) getDownloadUrl(logger func(string), org, repoName, f
 	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
 }
 
+func parseTableFileDetails(req *remotesapi.GetUploadLocsRequest) []*remotesapi.TableFileDetails {
+	tfd := req.GetTableFileDetails()
+
+	if len(tfd) == 0 {
+		_, hashToIdx := remotestorage.ParseByteSlices(req.TableFileHashes)
+
+		tfd = make([]*remotesapi.TableFileDetails, len(hashToIdx))
+		for h, i := range hashToIdx {
+			tfd[i] = &remotesapi.TableFileDetails{
+				Id:            h[:],
+				ContentLength: 0,
+				ContentHash:   nil,
+			}
+		}
+	}
+
+	return tfd
+}
+
 func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotesapi.GetUploadLocsRequest) (*remotesapi.GetUploadLocsResponse, error) {
 	logger := getReqLogger("GRPC", "GetUploadLocations")
 	defer func() { logger("finished") }()
@@ -141,19 +161,19 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 
 	org := req.RepoId.Org
 	repoName := req.RepoId.RepoName
-	hashes, _ := remotestorage.ParseByteSlices(req.TableFileHashes)
+	tfds := parseTableFileDetails(req)
 
 	var locs []*remotesapi.UploadLoc
-	for h := range hashes {
-		tmp := h
-		url, err := rs.getUploadUrl(logger, org, repoName, h.String())
+	for _, tfd := range tfds {
+		h := hash.New(tfd.Id)
+		url, err := rs.getUploadUrl(logger, org, repoName, tfd)
 
 		if err != nil {
 			return nil, status.Error(codes.Internal, "Failed to get upload Url.")
 		}
 
 		loc := &remotesapi.UploadLoc_HttpPost{HttpPost: &remotesapi.HttpPostTableFile{Url: url}}
-		locs = append(locs, &remotesapi.UploadLoc{TableFileHash: tmp[:], Location: loc})
+		locs = append(locs, &remotesapi.UploadLoc{TableFileHash: h[:], Location: loc})
 
 		logger(fmt.Sprintf("sending upload location for chunk %s: %s", h.String(), url))
 	}
@@ -161,8 +181,10 @@ func (rs *RemoteChunkStore) GetUploadLocations(ctx context.Context, req *remotes
 	return &remotesapi.GetUploadLocsResponse{Locs: locs}, nil
 }
 
-func (rs *RemoteChunkStore) getUploadUrl(logger func(string), org, repoName, fileId string) (string, error) {
-	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileId), nil
+func (rs *RemoteChunkStore) getUploadUrl(logger func(string), org, repoName string, tfd *remotesapi.TableFileDetails) (string, error) {
+	fileID := hash.New(tfd.Id).String()
+	expectedFiles[fileID] = *tfd
+	return fmt.Sprintf("http://%s/%s/%s/%s", rs.HttpHost, org, repoName, fileID), nil
 }
 
 func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRequest) (*remotesapi.RebaseResponse, error) {
@@ -251,7 +273,7 @@ func (rs *RemoteChunkStore) GetRepoMetadata(ctx context.Context, req *remotesapi
 	logger := getReqLogger("GRPC", "GetRepoMetadata")
 	defer func() { logger("finished") }()
 
-	cs := rs.getStore(req.RepoId, "GetRepoMetadata")
+	cs := rs.getOrCreateStore(req.RepoId, "GetRepoMetadata", req.ClientRepoFormat.NbfVersion)
 	if cs == nil {
 		return nil, status.Error(codes.Internal, "Could not get chunkstore")
 	}
@@ -333,10 +355,14 @@ func (rs *RemoteChunkStore) AddTableFiles(ctx context.Context, req *remotesapi.A
 }
 
 func (rs *RemoteChunkStore) getStore(repoId *remotesapi.RepoId, rpcName string) *nbs.NomsBlockStore {
+	return rs.getOrCreateStore(repoId, rpcName, types.Format_Default.VersionString())
+}
+
+func (rs *RemoteChunkStore) getOrCreateStore(repoId *remotesapi.RepoId, rpcName, nbfVerStr string) *nbs.NomsBlockStore {
 	org := repoId.Org
 	repoName := repoId.RepoName
 
-	cs, err := rs.csCache.Get(org, repoName)
+	cs, err := rs.csCache.Get(org, repoName, nbfVerStr)
 
 	if err != nil {
 		log.Printf("Failed to retrieve chunkstore for %s/%s\n", org, repoName)
