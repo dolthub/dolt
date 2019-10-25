@@ -44,7 +44,7 @@ func TestReader(t *testing.T) {
 		]
 	}`
 
-	fs := filesys.EmptyInMemFS(".")
+	fs := filesys.EmptyInMemFS("/")
 	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
 
 	colColl, err := schema.NewColCollection(
@@ -120,7 +120,7 @@ func TestReaderBadJson(t *testing.T) {
 ]
 }`
 
-	fs := filesys.EmptyInMemFS(".")
+	fs := filesys.EmptyInMemFS("/")
 	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
 
 	colColl, err := schema.NewColCollection(
