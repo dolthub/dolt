@@ -95,6 +95,71 @@ func TestReader(t *testing.T) {
 	assert.Equal(t, expectedRows, rows)
 }
 
+func TestReaderBadJson(t *testing.T) {
+	testJSON := ` {
+   "rows": [
+   {
+   "id": 0,
+   "first name": "tim",
+   "last name": "sehn"
+   bad
+ },
+ {
+   "id": 1,
+   "first name": "aaron",
+   "last name": "son",
+ },
+ {
+   "id": 2,
+   "first name": "brian",
+   "last name": "hendricks",
+ }
+ }
+]
+}`
+
+	fs := filesys.EmptyInMemFS(".")
+	require.NoError(t, fs.WriteFile("file.json", []byte(testJSON)))
+
+	colColl, err := schema.NewColCollection(
+		schema.Column{
+			Name:       "id",
+			Tag:        0,
+			Kind:       types.IntKind,
+			IsPartOfPK: true,
+		},
+		schema.Column{
+			Name:       "first name",
+			Tag:        1,
+			Kind:       types.StringKind,
+			IsPartOfPK: false,
+		},
+		schema.Column{
+			Name:       "last name",
+			Tag:        2,
+			Kind:       types.StringKind,
+			IsPartOfPK: false,
+		},
+	)
+	require.NoError(t, err)
+
+	sch := schema.SchemaFromCols(colColl)
+
+	reader, err := OpenJSONReader(types.Format_LD_1, "file.json", fs, sch, "")
+	require.NoError(t, err)
+
+	err = nil
+	for {
+		_, err = reader.ReadRow(context.Background())
+		if err != nil {
+			break
+		}
+	}
+	assert.NotEqual(t, io.EOF, err)
+	assert.Error(t, err)
+}
+
+
 func newRow(sch schema.Schema, id int, first, last string) row.Row {
 	vals := row.TaggedValues{
 		0:        types.Int(id),

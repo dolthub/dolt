@@ -100,12 +100,16 @@ func (r *JSONReader) VerifySchema(sch schema.Schema) (bool, error) {
 	if r.sampleRow == nil {
 		var err error
 		r.sampleRow, err = r.ReadRow(context.Background())
-		return err == nil, err
+		return err == nil, nil
 	}
 	return true, nil
 }
 
 func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
+	if r.jsonStream.Err() != nil {
+		return nil, r.jsonStream.Err()
+	}
+
 	if r.sampleRow != nil {
 		ret := r.sampleRow
 		r.sampleRow = nil
@@ -118,8 +122,12 @@ func (r *JSONReader) ReadRow(ctx context.Context) (row.Row, error) {
 
 	row, ok := <-r.rowChan
 	if !ok {
+		if r.jsonStream.Err() != nil {
+			return nil, r.jsonStream.Err()
+		}
 		return nil, io.EOF
 	}
+
 	m, ok := row.Value.(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("Unexpected json value: %v", row.Value)

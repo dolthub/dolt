@@ -47,8 +47,8 @@ teardown() {
     run dolt table create -s `batshelper employees-sch-wrong.json` employees
     [ "$status" -eq 0 ]
     run dolt table import -u employees `batshelper employees-tbl.json`
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not found in schema" ]] || false
 }
 
 @test "update table using schema with json" {
@@ -64,8 +64,8 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" =~ "Import completed successfully." ]] || false
   run dolt table import -u employees `batshelper employees-tbl-schema-wrong.json`
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "Rows Processed: 0, Additions: 0, Modifications: 0, Had No Effect: 0" ]] || false
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "not found in schema" ]] || false
 }
 
 @test "update table with json when table does not exist" {
