@@ -16,14 +16,16 @@ package json
 
 import (
 	"context"
+	"io"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"io"
-	"testing"
 )
 
 func TestReader(t *testing.T) {
@@ -87,7 +89,7 @@ func TestReader(t *testing.T) {
 		rows = append(rows, r)
 	}
 
-	expectedRows := []row.Row {
+	expectedRows := []row.Row{
 		newRow(sch, 0, "tim", "sehn"),
 		newRow(sch, 1, "brian", "hendriks"),
 	}
@@ -159,12 +161,11 @@ func TestReaderBadJson(t *testing.T) {
 	assert.Error(t, err)
 }
 
-
 func newRow(sch schema.Schema, id int, first, last string) row.Row {
 	vals := row.TaggedValues{
-		0:        types.Int(id),
-		1:     types.String(first),
-		2:      types.String(last),
+		0: types.Int(id),
+		1: types.String(first),
+		2: types.String(last),
 	}
 
 	r, err := row.New(types.Format_LD_1, sch, vals)
