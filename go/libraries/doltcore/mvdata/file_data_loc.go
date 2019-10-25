@@ -124,7 +124,7 @@ func (dl FileDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue
 				return nil, false, errors.New(fmt.Sprintf("An error occurred attempting to read the table schema:\n%v", err.Error()))
 			}
 		}
-		rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, json.NewJSONInfo(), sch, schPath)
+		rd, err := json.OpenJSONReader(root.VRW().Format(), dl.Path, fs, sch, schPath)
 		return rd, false, err
 	}
 
@@ -142,7 +142,7 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts *MoveOp
 	case XlsxFile:
 		panic("writing to xlsx files is not supported yet")
 	case JsonFile:
-		return json.OpenJSONWriter(dl.Path, fs, outSch, json.NewJSONInfo())
+		return json.OpenJSONWriter(dl.Path, fs, outSch)
 	case SqlFile:
 		return sqlexport.OpenSQLExportWriter(dl.Path, mvOpts.TableName, fs, outSch)
 	}
