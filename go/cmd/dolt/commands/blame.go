@@ -368,6 +368,22 @@ func rowChanged(ctx context.Context, input blameInput, rowPK types.Value) (bool,
 		return true, nil
 	}
 
+	if input.Schema == nil {
+		return false, fmt.Errorf("unexpected nil schema for table %s in child commit %s", input.TableName, input.Hash)
+	}
+	if input.ParentSchema == nil {
+		return false, fmt.Errorf("unexpected nil schema for table %s in parent commit %s", input.TableName, input.ParentHash)
+	}
+
+	// if the table schema has changed, every row has changed (according to our current definition of blame)
+	schemasEql, err := schema.SchemasAreEqual(input.ParentSchema, input.Schema)
+	if err != nil {
+		return false, err
+	}
+	if !schemasEql {
+		return true, nil
+	}
+
 	parentRow, err := maybeRowFromTable(ctx, parentTable, rowPK)
 	if err != nil {
 		return false, fmt.Errorf("error getting row from %s in parent commit %s: %v", input.TableName, input.ParentHash, err)
