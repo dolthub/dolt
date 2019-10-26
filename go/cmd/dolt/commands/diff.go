@@ -46,13 +46,16 @@ import (
 )
 
 const (
-	SchemaOnlyDiff    = 1
-	DataOnlyDiff      = 2
+	SchemaOnlyDiff = 1
+	DataOnlyDiff   = 2
+	Summary        = 4
+
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
 	SummaryFlag = "summary"
+	whereParam  = "where"
 )
 
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
@@ -73,11 +76,17 @@ var diffSynopsis = []string{
 	"[options] <commit> <commit> [--data|--schema] [<tables>...]",
 }
 
+type diffArgs struct {
+	diffParts int
+	where     string
+}
+
 func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
+	ap.SupportsString(whereParam, "", "column", "")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -88,12 +97,23 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 		diffParts = SchemaOnlyDiff
 	}
 
-	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
-
 	summary := apr.Contains(SummaryFlag)
 
+	if summary {
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
+			cli.PrintErrln("Invalid Arguments: --summary cannot be combined with --schema or --data")
+			return 1
+		}
+
+		diffParts = Summary
+	}
+
+	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
+
 	if verr == nil {
-		verr = diffRoots(ctx, r1, r2, tables, diffParts, dEnv, summary)
+		whereClause := apr.GetValueOrDefault(whereParam, "")
+
+		verr = diffRoots(ctx, r1, r2, tables, dEnv, &diffArgs{diffParts, whereClause})
 	}
 
 	if verr != nil {
@@ -196,7 +216,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 	return h.String(), r, nil
 }
 
-func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv, summary bool) errhand.VerboseError {
+func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
 		tblNames, err = actions.AllTables(ctx, r1, r2)
@@ -307,17 +327,17 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 
 		var verr errhand.VerboseError
 
-		if summary {
+		if dArgs.diffParts&Summary != 0 {
 			colLen := sch2.GetAllCols().Size()
 			verr = diffSummary(ctx, rowData1, rowData2, colLen)
 		}
 
-		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash && !summary {
+		if dArgs.diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash {
 			verr = diffSchemas(tblName, sch2, sch1)
 		}
 
-		if diffParts&DataOnlyDiff != 0 && !summary {
-			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2)
+		if dArgs.diffParts&DataOnlyDiff != 0 {
+			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2, dArgs)
 		}
 
 		if verr != nil {
@@ -409,7 +429,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	return schema.SchemaFromCols(dumbColColl), nil
 }
 
-func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.VerboseError {
+func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema, dArgs *diffArgs) errhand.VerboseError {
 	dumbNewSch, err := dumbDownSchema(newSch)
 
 	if err != nil {

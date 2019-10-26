@@ -60,9 +60,9 @@ var selSynopsis = []string{
 	"[--limit <record_count>] [--where <col1=val1>] [--hide-conflicts] [<commit>] <table> [<column>...]",
 }
 
-type filterFn = func(r row.Row) (matchesFilter bool)
+type FilterFn = func(r row.Row) (matchesFilter bool)
 
-func parseWhere(sch schema.Schema, whereClause string) (filterFn, error) {
+func ParseWhere(sch schema.Schema, whereClause string) (FilterFn, error) {
 	if whereClause == "" {
 		return func(r row.Row) bool {
 			return true
@@ -103,14 +103,18 @@ func parseWhere(sch schema.Schema, whereClause string) (filterFn, error) {
 	}
 }
 
-type selectTransform struct {
+type SelectTransform struct {
 	p      *pipeline.Pipeline
-	filter filterFn
+	filter FilterFn
 	limit  int
 	count  int
 }
 
-func (st *selectTransform) LimitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
+func NewSelTrans(filter FilterFn, limit int) *SelectTransform {
+	return &SelectTransform{filter: filter, limit: limit}
+}
+
+func (st *SelectTransform) LimitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
 	if st.limit == -1 || st.count < st.limit {
 		if st.filter(inRow) {
 			st.count++
@@ -224,13 +228,13 @@ func printTable(ctx context.Context, root *doltdb.RootValue, selArgs *SelectArgs
 		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
 	}
 
-	whereFn, err := parseWhere(tblSch, selArgs.whereClause)
+	whereFn, err := ParseWhere(tblSch, selArgs.whereClause)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
 	}
 
-	selTrans := &selectTransform{nil, whereFn, selArgs.limit, 0}
+	selTrans := NewSelTrans(whereFn, selArgs.limit)
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
 	sch, err := maybeAddCnfColTransform(ctx, transforms, tbl, tblSch)
 
