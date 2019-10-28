@@ -20,6 +20,7 @@ Valid commands for dolt are
           sql-server - Starts a MySQL-compatible server.
                  log - Show commit logs.
                 diff - Diff a table.
+               blame - View an annotated version of a table showing the latest revision to each row.
                merge - Merge a branch.
               branch - Create, list, edit, delete branches.
             checkout - Checkout a branch or overwrite a table from HEAD.
@@ -33,7 +34,7 @@ Valid commands for dolt are
              version - Displays the current Dolt cli version.
               config - Dolt configuration.
                   ls - List tables in the working set.
-              schema - Display the schema for table(s)
+              schema - Commands for showing, and modifying table schemas.
                table - Commands for creating, reading, updating, and deleting tables.
            conflicts - Commands for viewing and resolving merge conflicts.
 ```
