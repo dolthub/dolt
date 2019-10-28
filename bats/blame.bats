@@ -59,6 +59,19 @@ setup_repository() {
     [[ "$output" =~ "add more people" ]] || false
 }
 
+@test "dolt blame blames HEAD when commit ref omitted" {
+    run dolt blame blame_test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Thomas Foolery" ]] || false
+    [[ "$output" =~ "create blame_test table" ]] || false
+    [[ ! "$output" =~ "Richard Tracy" ]] || false
+    [[ ! "$output" =~ "add richard to blame_test" ]] || false
+    [[ "$output" =~ "Harry Wombat" ]] || false
+    [[ "$output" =~ "replace richard" ]] || false
+    [[ "$output" =~ "Johnny Moolah" ]] || false
+    [[ "$output" =~ "add more people" ]] || false
+}
+
 @test "dolt blame works with HEAD as the commit ref" {
     run dolt blame HEAD blame_test
     [ "$status" -eq 0 ]
