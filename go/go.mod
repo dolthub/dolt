@@ -19,7 +19,7 @@ require (
 	github.com/go-openapi/strfmt v0.19.3 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gocraft/dbr v0.0.0-20190708200302-a54124dfc613
-	github.com/golang/protobuf v1.3.3-0.20190805180045-4c88cc3f1a34
+	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.3.0
 	github.com/google/uuid v1.1.1
@@ -32,6 +32,7 @@ require (
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/lib/pq v1.1.1 // indirect
+	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-00010101000000-000000000000
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018231025-c428619832c3
@@ -54,11 +55,13 @@ require (
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
 	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a
 	google.golang.org/api v0.7.0
-	google.golang.org/grpc v1.22.0
+	google.golang.org/grpc v1.24.0
 	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible
 )
+
+replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
 replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191017183442-4b9329eafa5b
 
