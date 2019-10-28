@@ -91,18 +91,16 @@ func Blame(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 	help, usage := cli.HelpAndUsagePrinters(commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	if apr.NArg() < 2 {
+	if apr.NArg() == 0 || apr.NArg() > 2 {
 		usage()
 		return 1
 	}
 
-	cs, err := parseCommitSpec(dEnv, apr)
+	cs, tableName, err := parseCommitSpecAndTableName(dEnv, apr)
 	if err != nil {
 		cli.PrintErr(err)
 		return 1
 	}
-
-	tableName := apr.Arg(1)
 
 	if err := runBlame(ctx, dEnv, cs, tableName); err != nil {
 		cli.PrintErr(err)
@@ -110,6 +108,29 @@ func Blame(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 	}
 
 	return 0
+}
+
+func parseCommitSpecAndTableName(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, string, error) {
+	// if passed a single arg, assume it's a table name and revision is HEAD
+	if apr.NArg() == 1 {
+		tableName := apr.Arg(0)
+		return dEnv.RepoState.CWBHeadSpec(), tableName, nil
+	}
+
+	comSpecStr := apr.Arg(0)
+	tableName := apr.Arg(1)
+
+	// support being passed -- as a revision like git does even though it's a little gross
+	if comSpecStr == "--" {
+		return dEnv.RepoState.CWBHeadSpec(), tableName, nil
+	}
+
+	cs, err := doltdb.NewCommitSpec(comSpecStr, dEnv.RepoState.Head.Ref.String())
+	if err != nil {
+		return nil, "", fmt.Errorf("invalid commit %s", comSpecStr)
+	}
+
+	return cs, tableName, nil
 }
 
 func runBlame(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, tableName string) error {
