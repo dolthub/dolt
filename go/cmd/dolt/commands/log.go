@@ -93,7 +93,7 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	cs, err := getCommitSpec(dEnv, apr)
+	cs, err := parseCommitSpec(dEnv, apr)
 	if err != nil {
 		cli.PrintErr(err)
 		return 1
@@ -103,8 +103,8 @@ func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dE
 	return logCommits(ctx, dEnv, cs, loggerFunc, numLines)
 }
 
-func getCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
-	if apr.NArg() == 0 {
+func parseCommitSpec(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*doltdb.CommitSpec, error) {
+	if apr.NArg() == 0 || apr.Arg(0) == "--" {
 		return dEnv.RepoState.CWBHeadSpec(), nil
 	}
 

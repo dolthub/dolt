@@ -8,9 +8,28 @@ fi
 nativebatsdir() { echo `nativepath $BATS_TEST_DIRNAME/$1`; }
 batshelper() { echo `nativebatsdir helper/$1`; }
 
+stash_current_dolt_user() {
+	export STASHED_DOLT_USER_NAME=`dolt config --global --get user.name`
+	export STASHED_DOLT_USER_EMAIL=`dolt config --global --get user.email`
+}
+
+restore_stashed_dolt_user() {
+	dolt config --global --add user.name "$STASHED_DOLT_USER_NAME"
+	dolt config --global --add user.email "$STASHED_DOLT_USER_EMAIL"
+	unset STASHED_DOLT_USER_NAME STASHED_DOLT_USER_EMAIL
+}
+
 set_dolt_user() {
 	dolt config --global --add user.name "$1" > /dev/null 2>&1
 	dolt config --global --add user.email "$2" > /dev/null 2>&1
+}
+
+current_dolt_user_name() {
+	dolt config --global --get user.name
+}
+
+current_dolt_user_email() {
+	dolt config --global --get user.email
 }
 
 setup_no_dolt_init() {

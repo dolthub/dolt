@@ -16,6 +16,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.7.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
+	github.com/go-openapi/strfmt v0.19.3 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gocraft/dbr v0.0.0-20190708200302-a54124dfc613
 	github.com/golang/protobuf v1.3.3-0.20190805180045-4c88cc3f1a34
@@ -23,6 +24,7 @@ require (
 	github.com/google/go-cmp v0.3.0
 	github.com/google/uuid v1.1.1
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/jedib0t/go-pretty v4.3.0+incompatible
 	github.com/jmoiron/sqlx v1.2.0 // indirect
 	github.com/jpillora/backoff v0.0.0-20180909062703-3050d21c67d7
 	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
