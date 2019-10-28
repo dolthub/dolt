@@ -32,7 +32,7 @@ require (
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/kr/pretty v0.1.0 // indirect
 	github.com/lib/pq v1.1.1 // indirect
-	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-00010101000000-000000000000
+	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20191028183537-58c3a6e4306d
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
 	github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018231025-c428619832c3
