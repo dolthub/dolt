@@ -53,7 +53,7 @@ var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
 	{Name: "sql-server", Desc: "Starts a MySQL-compatible server.", Func: sqlserver.SqlServer, ReqRepo: true, EventType: eventsapi.ClientEventType_SQL_SERVER},
 	{Name: "log", Desc: "Show commit logs.", Func: commands.Log, ReqRepo: true, EventType: eventsapi.ClientEventType_LOG},
 	{Name: "diff", Desc: "Diff a table.", Func: commands.Diff, ReqRepo: true, EventType: eventsapi.ClientEventType_DIFF},
-	{Name: "blame", Desc: "View an annotated version of a table showing the latest revision to each row.", Func: commands.Blame, ReqRepo: true, EventType: eventsapi.ClientEventType_BLAME},
+	{Name: "blame", Desc: "Show what revision and author last modified each row of a table.", Func: commands.Blame, ReqRepo: true, EventType: eventsapi.ClientEventType_BLAME},
 	{Name: "merge", Desc: "Merge a branch.", Func: commands.Merge, ReqRepo: true, EventType: eventsapi.ClientEventType_MERGE},
 	{Name: "branch", Desc: "Create, list, edit, delete branches.", Func: commands.Branch, ReqRepo: true, EventType: eventsapi.ClientEventType_BRANCH},
 	{Name: "checkout", Desc: "Checkout a branch or overwrite a table from HEAD.", Func: commands.Checkout, ReqRepo: true, EventType: eventsapi.ClientEventType_CHECKOUT},
