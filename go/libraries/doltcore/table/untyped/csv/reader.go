@@ -168,15 +168,10 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 
 	taggedVals := make(row.TaggedValues)
 	for i := 0; i < allCols.Size(); i++ {
-		col := allCols.GetByIndex(i)
-		if colVals[i] == "\"\"\"" {
-			taggedVals[col.Tag] = types.NullValue
-			continue
-		}
 		if len(colVals[i]) > 0 {
+			col := allCols.GetByIndex(i)
 			taggedVals[col.Tag] = types.String(colVals[i])
 		}
 	}
-
 	return row.New(csvr.nbf, sch, taggedVals)
 }

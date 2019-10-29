@@ -24,6 +24,10 @@ func TestCSVSplitLine(t *testing.T) {
 		escapeQuotes   bool
 		expectErr      bool
 	}{
+		{`"", one, ""`, ",", []string{`""`, `one`, `""`}, false, false},
+		{`"", one, ""`, ",", []string{`""`, `one`, `""`}, true, false},
+		{`"", "one", ""`, ",", []string{`""`, `"one"`, `""`}, false, false},
+		{`"", "one", ""`, ",", []string{`""`, "one", `""`}, true, false},
 		{``, ",", []string{""}, true, false},
 		{`one`, ",", []string{"one"}, true, false},
 		{`one,`, ",", []string{"one", ""}, true, false},

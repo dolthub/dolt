@@ -69,14 +69,14 @@ func TestReader(t *testing.T) {
 	_, sch := untyped.NewUntypedSchema(colNames...)
 	goodExpectedRows := []row.Row{
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "\"\"\""})),
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jeff Jefferson", "40"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jeff Jefferson", "40", "\"\""})),
 	}
 	badExpectedRows := []row.Row{
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25"})),
-		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jeff Jefferson", "40"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "\"\"\""})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jeff Jefferson", "40", "\"\""})),
 	}
 
 	tests := []struct {

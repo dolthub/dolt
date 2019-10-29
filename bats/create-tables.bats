@@ -347,12 +347,31 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ]
-    [ "${lines[3]}" = "| a  | <NULL>    | 1         |" ]
-    [ "${lines[4]}" = "| b  | <NULL>    | 4         |" ]
-    [ "${lines[5]}" = "| c  | <NULL>    | 5         |" ]
+    echo "output = $output"
+    [ "${#lines[@]}" -eq 10 ]
+    [ "${lines[3]}" = '| a  |           | 1         |' ]
+    [ "${lines[4]}" = '| b  |           | 2         |' ]
+    [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
+    [ "${lines[6]}" = '| d  | row four  |           |' ]
+    [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
+    [ "${lines[8]}" = "| f  | row six   | 6         |" ]
+}
+
+@test "create a table with null values from csv import with schema file" {
+    run dolt table import -c -s `batshelper empty-strings-null-values.schema` test `batshelper empty-strings-null-values.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+    run dolt table select test
+    [ "$status" -eq 0 ]
+    echo "output = $output"
+    [ "${#lines[@]}" -eq 10 ]
+    [ "${lines[3]}" = '| a  |           | 1         |' ]
+    [ "${lines[4]}" = '| b  |           | 2         |' ]
+    [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
     [ "${lines[6]}" = "| d  | row four  | <NULL>    |" ]
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
-    [ "${lines[8]}" = "| f  | row six   | <NULL>    |" ]
-    [ "${lines[9]}" = "| g  | row seven | 7         |" ]
+    [ "${lines[8]}" = "| f  | row six   | 6         |" ]
 }

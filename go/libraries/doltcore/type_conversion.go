@@ -133,6 +133,12 @@ func GetConvFunc(srcKind, destKind types.NomsKind) ConvFunc {
 }
 
 var identityConvFunc = func(value types.Value) (types.Value, error) {
+	if value == nil {
+		return nil, nil
+	}
+	if value.Equals(types.String("\"\"\"")) || value.Equals(types.String("\"\"")) {
+		return types.Value(types.String("")), nil
+	}
 	return value, nil
 }
 
@@ -145,12 +151,20 @@ func convStringToFloat(val types.Value) (types.Value, error) {
 		return nil, nil
 	}
 
+	if val.Equals(types.String("\"\"")) {
+		return types.NullValue, nil
+	}
+
 	return stringToFloat(string(val.(types.String)))
 }
 
 func convStringToBool(val types.Value) (types.Value, error) {
 	if val == nil {
 		return nil, nil
+	}
+
+	if val.Equals(types.String("\"\"")) {
+		return types.NullValue, nil
 	}
 
 	return stringToBool(string(val.(types.String)))
@@ -161,6 +175,10 @@ func convStringToInt(val types.Value) (types.Value, error) {
 		return nil, nil
 	}
 
+	if val.Equals(types.String("\"\"")) {
+		return types.NullValue, nil
+	}
+
 	return stringToInt(string(val.(types.String)))
 }
 
@@ -169,12 +187,20 @@ func convStringToUint(val types.Value) (types.Value, error) {
 		return nil, nil
 	}
 
+	if val.Equals(types.String("\"\"")) {
+		return types.NullValue, nil
+	}
+
 	return stringToUint(string(val.(types.String)))
 }
 
 func convStringToUUID(val types.Value) (types.Value, error) {
 	if val == nil {
 		return nil, nil
+	}
+
+	if val.Equals(types.String("\"\"")) {
+		return types.NullValue, nil
 	}
 
 	return stringToUUID(string(val.(types.String)))

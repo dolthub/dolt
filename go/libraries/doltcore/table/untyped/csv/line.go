@@ -96,8 +96,13 @@ func appendToken(tokens []string, line string, start, pos int, escapedQuotes boo
 		pos--
 	}
 
-	if quotations == 0 {
-		return append(tokens, line[start:pos])
+	emptyStringCell := pos-start == 2 && line[start] == '"' && line[pos-1] == '"'
+
+	if emptyStringCell {
+		return append(tokens, "\"\"")
+	} else if quotations == 0 {
+		lineTest := line[start:pos]
+		return append(tokens, lineTest)
 	} else if quotations == 2 && line[start] == '"' && line[pos-1] == '"' {
 		return append(tokens, line[start+1:pos-1])
 	}
