@@ -231,12 +231,14 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 		return manifestContents{}, err
 	}
 
-	nbs.upstream = updatedContents
-	nbs.tables, err = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+	newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 
 	if err != nil {
 		return manifestContents{}, err
 	}
+
+	nbs.upstream = updatedContents
+	nbs.tables = newTables
 
 	return updatedContents, nil
 }
@@ -319,12 +321,14 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 	}
 
 	if exists {
-		nbs.upstream = contents
-		nbs.tables, err = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+		newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 
 		if err != nil {
 			return nil, err
 		}
+
+		nbs.upstream = contents
+		nbs.tables = newTables
 	}
 
 	return nbs, nil
@@ -640,12 +644,14 @@ func (nbs *NomsBlockStore) Rebase(ctx context.Context) error {
 	}
 
 	if exists {
-		nbs.upstream = contents
-		nbs.tables, err = nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
+		newTables, err := nbs.tables.Rebase(ctx, contents.specs, nbs.stats)
 
 		if err != nil {
 			return err
 		}
+
+		nbs.upstream = contents
+		nbs.tables = newTables
 	}
 
 	return nil
@@ -743,13 +749,13 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 	}
 
 	handleOptimisticLockFailure := func(upstream manifestContents) error {
-		var err error
-		nbs.upstream = upstream
-		nbs.tables, err = nbs.tables.Rebase(ctx, upstream.specs, nbs.stats)
-
+		newTables, err := nbs.tables.Rebase(ctx, upstream.specs, nbs.stats)
 		if err != nil {
 			return err
 		}
+
+		nbs.upstream = upstream
+		nbs.tables = newTables
 
 		if last != upstream.root {
 			return errOptimisticLockFailedRoot
@@ -778,17 +784,20 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 
 	if nbs.c.ConjoinRequired(nbs.tables) {
 		var err error
-		nbs.upstream, err = nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
+		newUpstream, err := nbs.c.Conjoin(ctx, nbs.upstream, nbs.mm, nbs.p, nbs.stats)
 
 		if err != nil {
 			return err
 		}
 
-		nbs.tables, err = nbs.tables.Rebase(ctx, nbs.upstream.specs, nbs.stats)
+		newTables, err := nbs.tables.Rebase(ctx, newUpstream.specs, nbs.stats)
 
 		if err != nil {
 			return err
 		}
+
+		nbs.upstream = newUpstream
+		nbs.tables = newTables
 
 		return errOptimisticLockFailedTables
 	}
@@ -816,12 +825,14 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return handleOptimisticLockFailure(upstream)
 	}
 
-	nbs.upstream = newContents
-	nbs.tables, err = nbs.tables.Flatten()
+	newTables, err := nbs.tables.Flatten()
 
 	if err != nil {
 		return nil
 	}
+
+	nbs.upstream = newContents
+	nbs.tables = newTables
 
 	return nil
 }
