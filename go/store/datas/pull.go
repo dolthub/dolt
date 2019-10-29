@@ -29,6 +29,7 @@ import (
 	"math"
 	"math/rand"
 
+	"github.com/cenkalti/backoff"
 	"github.com/golang/snappy"
 
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
@@ -91,6 +92,18 @@ type TableFileEvent struct {
 	TableFiles []nbs.TableFile
 }
 
+func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile) {
+	fileIds := make([]string, len(tblFiles))
+	fileIDtoTblFile := make(map[string]nbs.TableFile)
+
+	for i, tblFile := range tblFiles {
+		fileIDtoTblFile[tblFile.FileID()] = tblFile
+		fileIds[i] = tblFile.FileID()
+	}
+
+	return fileIds, fileIDtoTblFile
+}
+
 func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
 	if eventCh != nil {
 		defer close(eventCh)
@@ -102,56 +115,108 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 		return err
 	}
 
+	desiredFiles, fileIDToTF := mapTableFiles(tblFiles)
+
 	if eventCh != nil {
 		eventCh <- TableFileEvent{Listed, tblFiles}
 	}
 
-	// should parallelize at some point
-	for _, tblFile := range tblFiles {
-		if eventCh != nil {
-			eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
-		}
+	i := 0
+	op := func() error {
+		var err error
+		for i < len(desiredFiles) {
+			fileID := desiredFiles[i]
+			tblFile, ok := fileIDToTF[fileID]
 
-		err := func() (err error) {
-			var rd io.ReadCloser
-			rd, err = tblFile.Open()
-
-			if err != nil {
-				if eventCh != nil {
-					eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
-				}
-
-				return err
+			if !ok {
+				// conjoin happened during clone
+				return backoff.Permanent(errors.New("table file not found. please try again"))
 			}
 
-			defer func() {
-				closeErr := rd.Close()
+			err = func() (err error) {
+				var rd io.ReadCloser
+				rd, err = tblFile.Open()
 
-				if err == nil {
-					err = closeErr
+				if err != nil {
+					return err
 				}
+
+				defer func() {
+					closeErr := rd.Close()
+
+					if err == nil && closeErr != nil {
+						err = closeErr
+					}
+				}()
+
+				if eventCh != nil {
+					eventCh <- TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}}
+				}
+
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
+
+				if err != nil {
+					if eventCh != nil {
+						eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
+					}
+
+					return err
+				}
+
+				if eventCh != nil {
+					eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
+				}
+
+				return nil
 			}()
 
-			err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
-
 			if err != nil {
-				if eventCh != nil {
-					eventCh <- TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}}
-				}
-
-				return err
+				break
 			}
 
-			if eventCh != nil {
-				eventCh <- TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}}
-			}
-
-			return nil
-		}()
+			i++
+		}
 
 		if err != nil {
+			var sourcesErr error
+			_, tblFiles, sourcesErr = srcTS.Sources(ctx)
+
+			if sourcesErr != nil {
+				return backoff.Permanent(sourcesErr)
+			}
+
+			_, fileIDToTF = mapTableFiles(tblFiles)
+
 			return err
 		}
+
+		return nil
+	}
+
+	const maxAttempts = 3
+	failureCount := 0
+
+	// Loop through all the files, and keep going as long as progress is being made.  If progress is not made retry up
+	// to maxAttempts times.
+	for failureCount < maxAttempts {
+		initialIdx := i
+		err = op()
+
+		if err == nil {
+			break
+		}
+
+		if permanent, ok := err.(*backoff.PermanentError); ok {
+			return permanent.Err
+		} else if i == initialIdx {
+			failureCount++
+		} else {
+			failureCount = 0
+		}
+	}
+
+	if err != nil {
+		return err
 	}
 
 	return sinkTS.SetRootChunk(ctx, root, hash.Hash{})
