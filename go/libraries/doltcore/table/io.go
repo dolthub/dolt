@@ -28,8 +28,9 @@ type TableReader interface {
 	// GetSchema gets the schema of the rows that this reader will return
 	GetSchema() schema.Schema
 
-	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
-	// will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
+	// ReadRow reads a row from a table.  If there is a bad row the returned error will be non nil, and calling
+	// IsBadRow(err) will be return true. This is a potentially non-fatal error and callers can decide if they want to
+	// continue on a bad row, or fail.
 	ReadRow(ctx context.Context) (row.Row, error)
 
 	// VerifySchema checks that the incoming schema matches the schema from the existing table

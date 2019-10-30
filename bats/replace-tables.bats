@@ -110,8 +110,7 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt table import -r employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Error creating reader" ]] || false
-    [[ "$output" =~ "employees-tbl-bad.json to" ]] || false
+    [[ "$output" =~ "An error occurred moving data" ]] || false
 }
 
 @test "replace table using xlsx file" {
