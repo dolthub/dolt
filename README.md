@@ -20,6 +20,7 @@ Valid commands for dolt are
           sql-server - Starts a MySQL-compatible server.
                  log - Show commit logs.
                 diff - Diff a table.
+               blame - Show what revision and author last modified each row of a table.
                merge - Merge a branch.
               branch - Create, list, edit, delete branches.
             checkout - Checkout a branch or overwrite a table from HEAD.
@@ -33,7 +34,7 @@ Valid commands for dolt are
              version - Displays the current Dolt cli version.
               config - Dolt configuration.
                   ls - List tables in the working set.
-              schema - Display the schema for table(s)
+              schema - Commands for showing, and modifying table schemas.
                table - Commands for creating, reading, updating, and deleting tables.
            conflicts - Commands for viewing and resolving merge conflicts.
 ```
@@ -284,7 +285,7 @@ Once that is succeeded others can clone the repository (assuming you've given th
 
 ## Interesting Datasets to Clone
 
-Just like Git you can run ```dolt clone Liquidata/open-images``` to get a clone from DoltHub of the Google Open Images repository locally. 
+Just like Git you can run `dolt clone Liquidata/open-images` to get a clone from DoltHub of the Google Open Images repository locally.
 
 Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
 Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
