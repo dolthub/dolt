@@ -118,7 +118,7 @@ func TestNewCommit(t *testing.T) {
 	et, err := makeCommitStructType(
 		types.EmptyStructType,
 		mustType(types.MakeSetType(mustType(types.MakeUnionType()))),
-		types.FloaTType,
+		types.PrimitiveTypeMap[types.FloatKind],
 	)
 	assert.NoError(err)
 	assertTypeEquals(et, at)

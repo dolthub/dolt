@@ -132,13 +132,14 @@ func (ml mapLeafSequence) getItem(idx int) (sequenceItem, error) {
 }
 
 func (ml mapLeafSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	bytes, err := ml.valueBytes(ml.format())
+	w := binaryNomsWriter{make([]byte, 4), 0}
+	err := ml.writeTo(&w, ml.format())
 
 	if err != nil {
 		return err
 	}
 
-	return walkRefs(bytes, ml.format(), cb)
+	return walkRefs(w.buff[:w.offset], ml.format(), cb)
 }
 
 func (ml mapLeafSequence) entries() (mapEntrySlice, error) {

@@ -499,16 +499,16 @@ func TestNomsDiffPrintType(t *testing.T) {
 
 	expected1 := "-   List<Float>\n+   List<String>\n"
 	expectedPaths1 := []string{""}
-	t1, err := types.MakeListType(types.FloaTType)
+	t1, err := types.MakeListType(types.PrimitiveTypeMap[types.FloatKind])
 	assert.NoError(err)
-	t2, err := types.MakeListType(types.StringType)
+	t2, err := types.MakeListType(types.PrimitiveTypeMap[types.StringKind])
 	assert.NoError(err)
 
 	expected2 := "-   List<Float>\n+   Set<String>\n"
 	expectedPaths2 := []string{``}
-	t3, err := types.MakeListType(types.FloaTType)
+	t3, err := types.MakeListType(types.PrimitiveTypeMap[types.FloatKind])
 	assert.NoError(err)
-	t4, err := types.MakeSetType(types.StringType)
+	t4, err := types.MakeSetType(types.PrimitiveTypeMap[types.StringKind])
 	assert.NoError(err)
 
 	tf := func(leftRight bool) {

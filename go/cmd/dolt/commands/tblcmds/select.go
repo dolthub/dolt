@@ -84,9 +84,12 @@ func parseWhere(sch schema.Schema, whereClause string) (filterFn, error) {
 		}
 
 		tag := col.Tag
-		convFunc := doltcore.GetConvFunc(types.StringKind, col.Kind)
-		val, err := convFunc(types.String(valStr))
+		convFunc, err := doltcore.GetConvFunc(types.StringKind, col.Kind)
+		if err != nil {
+			return nil, err
+		}
 
+		val, err := convFunc(types.String(valStr))
 		if err != nil {
 			return nil, errors.New("unable to convert '" + valStr + "' to " + col.KindString())
 		}

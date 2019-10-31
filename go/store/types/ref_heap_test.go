@@ -39,7 +39,7 @@ func TestRefByHeight(t *testing.T) {
 			return Ref{}, err
 		}
 
-		return constructRef(Format_7_18, h, FloaTType, height)
+		return constructRef(Format_7_18, h, PrimitiveTypeMap[FloatKind], height)
 	}
 
 	assert := assert.New(t)
@@ -120,7 +120,7 @@ func TestPopRefsOfHeight(t *testing.T) {
 	for i, n := range []int{6, 3, 6, 6, 2} {
 		hsh, err := Float(i).Hash(Format_7_18)
 		assert.NoError(t, err)
-		r, err := constructRef(Format_7_18, hsh, FloaTType, uint64(n))
+		r, err := constructRef(Format_7_18, hsh, PrimitiveTypeMap[FloatKind], uint64(n))
 		assert.NoError(t, err)
 		h.PushBack(r)
 	}

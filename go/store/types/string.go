@@ -23,7 +23,14 @@ package types
 
 import (
 	"context"
-	"encoding/binary"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -51,6 +58,10 @@ func (s String) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(s, nbf)
 }
 
+func (s String) isPrimitive() bool {
+	return true
+}
+
 func (s String) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -60,7 +71,7 @@ func (s String) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (s String) typeOf() (*Type, error) {
-	return StringType, nil
+	return PrimitiveTypeMap[StringKind], nil
 }
 
 func (s String) Kind() NomsKind {
@@ -83,16 +94,148 @@ func (s String) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func (s String) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	// We know the size of the buffer here so allocate it once.
-	// StringKind, Length (UVarint), UTF-8 encoded string
-	buff := make([]byte, 1+binary.MaxVarintLen64+len(s))
-	w := binaryNomsWriter{buff, 0}
-	err := s.writeTo(&w, nbf)
+func (s String) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	return String(b.readString()), nil
+}
 
-	if err != nil {
-		return nil, err
+func (s String) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	b.skipString()
+}
+
+func parseNumber(s String) (isNegative bool, decPos int, err error) {
+	decPos = -1
+	for i, c := range s {
+		if i == 0 && c == '-' {
+			isNegative = true
+		} else if c == '.' {
+			if decPos != -1 {
+				return false, -1, errors.New("not a valid number.  multiple decimal points found.")
+			}
+
+			decPos = i
+		} else if c > '9' || c < '0' {
+			return false, -1, fmt.Errorf("for the string '%s' found invalid character '%s' at pos %d", s, string(c), i)
+		}
 	}
 
-	return buff[:w.offset], nil
+	return isNegative, decPos, nil
+}
+
+func (String) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	switch targetKind {
+	case BoolKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			b, err := strconv.ParseBool(strings.ToLower(string(s)))
+			if err != nil {
+				return Bool(false), CreateConversionError(s.Kind(), BoolKind, err)
+			}
+			return Bool(b), nil
+		}, nil
+	case FloatKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			f, err := strconv.ParseFloat(string(s), 64)
+			if err != nil {
+				return Float(math.NaN()), CreateConversionError(s.Kind(), FloatKind, err)
+			}
+			return Float(f), nil
+		}, nil
+	case InlineBlobKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			data, err := hex.DecodeString(string(s))
+			if err != nil {
+				return InlineBlob{}, CreateConversionError(s.Kind(), InlineBlobKind, err)
+			}
+			return InlineBlob(data), nil
+		}, nil
+	case IntKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			isNegative, decPos, err := parseNumber(s)
+			if err != nil {
+				return Int(0), CreateConversionError(s.Kind(), IntKind, err)
+			}
+			if decPos == 0 || (decPos == 1 && isNegative) {
+				return Int(0), nil
+			}
+			if decPos != -1 {
+				s = s[:decPos]
+			}
+			n, err := strconv.ParseInt(string(s), 10, 64)
+			if err != nil {
+				return Int(0), CreateConversionError(s.Kind(), IntKind, err)
+			}
+			return Int(n), nil
+		}, nil
+	case NullKind:
+		return func(Value) (Value, error) {
+			return NullValue, nil
+		}, nil
+	case StringKind:
+		return func(val Value) (Value, error) {
+			return val, nil
+		}, nil
+	case UintKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			n, err := strconv.ParseUint(string(s), 10, 64)
+			if err != nil {
+				return Uint(0), CreateConversionError(s.Kind(), UintKind, err)
+			}
+			return Uint(n), nil
+		}, nil
+	case UUIDKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			u, err := uuid.Parse(string(s))
+			if err != nil {
+				return UUID(u), CreateConversionError(s.Kind(), UUIDKind, err)
+			}
+			return UUID(u), nil
+		}, nil
+	}
+
+	return nil, CreateNoConversionError(StringKind, targetKind)
+}
+
+func (s String) HumanReadableString() string {
+	return strconv.Quote(string(s))
 }

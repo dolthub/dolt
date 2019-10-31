@@ -340,6 +340,10 @@ func (m Map) Any(ctx context.Context, cb func(k, v Value) bool) (yep bool, err e
 	return yep, err
 }
 
+func (m Map) isPrimitive() bool {
+	return false
+}
+
 func (m Map) Iterator(ctx context.Context) (MapIterator, error) {
 	return m.IteratorAt(ctx, 0)
 }
@@ -503,4 +507,24 @@ func makeMapLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 
 func newEmptyMapSequenceChunker(ctx context.Context, vrw ValueReadWriter) (*sequenceChunker, error) {
 	return newEmptySequenceChunker(ctx, vrw, makeMapLeafChunkFn(vrw), newOrderedMetaSequenceChunkFn(MapKind, vrw), mapHashValueBytes)
+}
+
+func (Map) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	return nil, CreateNoConversionError(MapKind, targetKind)
+}
+
+func (m Map) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (m Map) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (m Map) String() string {
+	panic("unreachable")
+}
+
+func (m Map) HumanReadableString() string {
+	panic("unreachable")
 }

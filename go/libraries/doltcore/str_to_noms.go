@@ -15,14 +15,7 @@
 package doltcore
 
 import (
-	"encoding/base64"
 	"errors"
-	"fmt"
-	"math"
-	"strconv"
-	"strings"
-
-	"github.com/google/uuid"
 
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -33,136 +26,12 @@ func StringToValue(s string, kind types.NomsKind) (types.Value, error) {
 		return nil, errors.New("Only primitive type support")
 	}
 
-	switch kind {
-	case types.StringKind:
-		return types.String(s), nil
-	case types.FloatKind:
-		return stringToFloat(s)
-	case types.BoolKind:
-		return stringToBool(s)
-	case types.IntKind:
-		return stringToInt(s)
-	case types.UintKind:
-		return stringToUint(s)
-	case types.UUIDKind:
-		return stringToUUID(s)
-	case types.NullKind:
-		return types.NullValue, nil
-	case types.InlineBlobKind:
-		return stringToInlineBlob(s)
-	}
+	emptyStringType := types.KindToType[types.StringKind]
 
-	panic("Unsupported type " + kind.String())
-}
-
-func stringToFloat(s string) (types.Value, error) {
-	if len(s) == 0 {
-		return types.NullValue, nil
-	}
-
-	f, err := strconv.ParseFloat(s, 64)
-
+	marshalFunc, err := emptyStringType.GetMarshalFunc(kind)
 	if err != nil {
-		return types.Float(math.NaN()), ConversionError{types.StringKind, types.FloatKind, err}
+		panic("Unsupported type " + kind.String())
 	}
 
-	return types.Float(f), nil
-}
-
-func stringToBool(s string) (types.Value, error) {
-	if len(s) == 0 {
-		return types.NullValue, nil
-	}
-
-	b, err := strconv.ParseBool(strings.ToLower(s))
-
-	if err != nil {
-		return types.Bool(false), ConversionError{types.StringKind, types.BoolKind, err}
-	}
-
-	return types.Bool(b), nil
-}
-
-func parseNumber(s string) (isNegative bool, decPos int, err error) {
-	decPos = -1
-	for i, c := range s {
-		if i == 0 && c == '-' {
-			isNegative = true
-		} else if c == '.' {
-			if decPos != -1 {
-				return false, -1, errors.New("not a valid number.  multiple decimal points found.")
-			}
-
-			decPos = i
-		} else if c > '9' || c < '0' {
-			return false, -1, fmt.Errorf("for the string '%s' found invalid character '%s' at pos %d", s, string(c), i)
-		}
-	}
-
-	return isNegative, decPos, nil
-}
-
-func stringToInt(s string) (types.Value, error) {
-	_, decPos, err := parseNumber(s)
-
-	if err != nil {
-		return types.Int(0), ConversionError{types.StringKind, types.IntKind, err}
-	}
-
-	if decPos != -1 {
-		s = s[:decPos]
-	}
-
-	if len(s) == 0 {
-		return types.NullValue, nil
-	}
-
-	n, err := strconv.ParseInt(s, 10, 64)
-
-	if err != nil {
-		return types.Int(0), ConversionError{types.StringKind, types.IntKind, err}
-	}
-
-	return types.Int(n), nil
-}
-
-func stringToUint(s string) (types.Value, error) {
-	if len(s) == 0 {
-		return types.NullValue, nil
-	}
-
-	n, err := strconv.ParseUint(s, 10, 64)
-
-	if err != nil {
-		return types.Uint(0), ConversionError{types.StringKind, types.UintKind, err}
-	}
-
-	return types.Uint(n), nil
-}
-
-func stringToUUID(s string) (types.Value, error) {
-	if len(s) == 0 {
-		return types.NullValue, nil
-	}
-
-	u, err := uuid.Parse(s)
-
-	if err != nil {
-		return types.UUID(u), ConversionError{types.StringKind, types.UUIDKind, err}
-	}
-
-	return types.UUID(u), nil
-}
-
-func stringToInlineBlob(s string) (types.Value, error) {
-	if len(s) == 0 {
-		return types.NullValue, nil
-	}
-
-	data, err := base64.RawURLEncoding.DecodeString(s)
-	if err != nil {
-		return types.InlineBlob{}, ConversionError{types.StringKind, types.InlineBlobKind, err}
-	}
-
-	return types.InlineBlob(data), nil
+	return marshalFunc(types.String(s))
 }

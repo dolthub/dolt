@@ -211,6 +211,17 @@ func (b Blob) Value(ctx context.Context) (Value, error) {
 	return b, nil
 }
 
+func (b Blob) isPrimitive() bool {
+	return true
+}
+
+func (b Blob) Kind() NomsKind {
+	if b.sequence == nil {
+		return BlobKind
+	}
+	return b.sequence.Kind()
+}
+
 func (b Blob) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -463,4 +474,24 @@ func readBlob(ctx context.Context, r io.Reader, vrw ValueReadWriter) (Blob, erro
 	}
 
 	return newBlob(seq), nil
+}
+
+func (Blob) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	return nil, CreateNoConversionError(BlobKind, targetKind)
+}
+
+func (b Blob) readFrom(nbf *NomsBinFormat, bnr *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (b Blob) skip(nbf *NomsBinFormat, bnr *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (b Blob) String() string {
+	panic("unreachable")
+}
+
+func (b Blob) HumanReadableString() string {
+	panic("unreachable")
 }

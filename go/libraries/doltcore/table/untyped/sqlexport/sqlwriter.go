@@ -127,7 +127,11 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 		if seenOne {
 			b.WriteRune(',')
 		}
-		b.WriteString(w.sqlString(val))
+		sqlString, err := w.sqlString(val)
+		if err != nil {
+			return true, err
+		}
+		b.WriteString(sqlString)
 		seenOne = true
 		return false, nil
 	})
@@ -151,29 +155,38 @@ func (w *SqlExportWriter) dropCreateStatement() string {
 	return b.String()
 }
 
-func (w *SqlExportWriter) sqlString(value types.Value) string {
+func (w *SqlExportWriter) sqlString(value types.Value) (string, error) {
 	if types.IsNull(value) {
-		return "NULL"
+		return "NULL", nil
 	}
 
 	switch value.Kind() {
 	case types.BoolKind:
 		if value.(types.Bool) {
-			return "TRUE"
+			return "TRUE", nil
 		} else {
-			return "FALSE"
+			return "FALSE", nil
 		}
 	case types.UUIDKind:
-		convFn := doltcore.GetConvFunc(value.Kind(), types.StringKind)
+		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
+		if err != nil {
+			return "", err
+		}
 		str, _ := convFn(value)
-		return doubleQuot + string(str.(types.String)) + doubleQuot
+		return doubleQuot + string(str.(types.String)) + doubleQuot, nil
 	case types.StringKind:
 		s := string(value.(types.String))
 		s = strings.ReplaceAll(s, doubleQuot, "\\\"")
-		return doubleQuot + s + doubleQuot
+		return doubleQuot + s + doubleQuot, nil
 	default:
-		convFn := doltcore.GetConvFunc(value.Kind(), types.StringKind)
-		str, _ := convFn(value)
-		return string(str.(types.String))
+		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
+		if err != nil {
+			return "", err
+		}
+		str, err := convFn(value)
+		if err != nil {
+			return "", err
+		}
+		return string(str.(types.String)), nil
 	}
 }

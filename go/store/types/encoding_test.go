@@ -52,7 +52,7 @@ func toBinaryNomsReaderData(data []interface{}) []byte {
 			w.writeHash(v)
 		case []byte:
 			w.writeCount(uint64(len(v)))
-			w.writeBytes(v)
+			w.writeRaw(v)
 		case NomsKind:
 			w.writeUint8(uint8(v))
 		default:
@@ -341,9 +341,9 @@ func TestWriteCompoundBlob(t *testing.T) {
 			RefKind, r3, BlobKind, uint64(33), FloatKind, Float(60), uint64(60),
 		},
 		newBlob(mustSeq(newBlobMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r1, BlobType, 11)), mustOrdKey(orderedKeyFromInt(20, Format_7_18)), 20)),
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r2, BlobType, 22)), mustOrdKey(orderedKeyFromInt(40, Format_7_18)), 40)),
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r3, BlobType, 33)), mustOrdKey(orderedKeyFromInt(60, Format_7_18)), 60)),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r1, PrimitiveTypeMap[BlobKind], 11)), mustOrdKey(orderedKeyFromInt(20, Format_7_18)), 20)),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r2, PrimitiveTypeMap[BlobKind], 22)), mustOrdKey(orderedKeyFromInt(40, Format_7_18)), 40)),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r3, PrimitiveTypeMap[BlobKind], 33)), mustOrdKey(orderedKeyFromInt(60, Format_7_18)), 60)),
 		}, newTestValueStore()))),
 	)
 }
@@ -567,7 +567,7 @@ func TestWriteListOfStruct(t *testing.T) {
 func TestWriteListOfUnionWithType(t *testing.T) {
 	vrw := newTestValueStore()
 
-	structType, err := MakeStructType("S", StructField{"x", FloaTType, false})
+	structType, err := MakeStructType("S", StructField{"x", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(t, err)
 
 	assertEncoding(t,
@@ -580,8 +580,8 @@ func TestWriteListOfUnionWithType(t *testing.T) {
 		},
 		mustList(NewList(context.Background(), vrw,
 			Bool(true),
-			FloaTType,
-			TypeType,
+			PrimitiveTypeMap[FloatKind],
+			PrimitiveTypeMap[TypeKind],
 			structType,
 		)),
 	)
@@ -594,7 +594,7 @@ func TestWriteRef(t *testing.T) {
 		[]interface{}{
 			RefKind, r, FloatKind, uint64(4),
 		},
-		mustValue(constructRef(Format_7_18, r, FloaTType, 4)),
+		mustValue(constructRef(Format_7_18, r, PrimitiveTypeMap[FloatKind], 4)),
 	)
 }
 
@@ -606,7 +606,7 @@ func TestWriteListOfTypes(t *testing.T) {
 			ListKind, uint64(0), uint64(2), /* len */
 			TypeKind, BoolKind, TypeKind, StringKind,
 		},
-		mustValue(NewList(context.Background(), vrw, BoolType, StringType)),
+		mustValue(NewList(context.Background(), vrw, PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])),
 	)
 }
 
@@ -631,29 +631,4 @@ func TestWriteEmptyUnionList(t *testing.T) {
 		},
 		mustValue(NewList(context.Background(), vrw)),
 	)
-}
-
-type bogusType int
-
-func (bg bogusType) Value(ctx context.Context) (Value, error)                    { return bg, nil }
-func (bg bogusType) Equals(other Value) bool                                     { return false }
-func (bg bogusType) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) { return false, nil }
-func (bg bogusType) Hash(*NomsBinFormat) (hash.Hash, error)                      { return hash.Hash{}, nil }
-func (bg bogusType) WalkValues(ctx context.Context, cb ValueCallback) error      { return nil }
-func (bg bogusType) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error           { return nil }
-func (bg bogusType) Kind() NomsKind {
-	return CycleKind
-}
-func (bg bogusType) typeOf() (*Type, error) {
-	return MakeCycleType("ABC"), nil
-}
-func (bg bogusType) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
-	panic("abc")
-}
-
-func TestBogusValueWithUnresolvedCycle(t *testing.T) {
-	g := bogusType(1)
-	_, err := EncodeValue(g, Format_7_18)
-
-	assert.Equal(t, err, ErrUnknownType)
 }

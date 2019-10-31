@@ -207,6 +207,10 @@ func (s Struct) Empty() bool {
 }
 
 // Value interface
+func (s Struct) isPrimitive() bool {
+	return false
+}
+
 func (s Struct) Value(ctx context.Context) (Value, error) {
 	return s, nil
 }
@@ -650,4 +654,24 @@ func verifyStructName(name string) {
 	if name != "" {
 		verifyName(name, "")
 	}
+}
+
+func (Struct) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	return nil, CreateNoConversionError(StructKind, targetKind)
+}
+
+func (s Struct) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (s Struct) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (s Struct) String() string {
+	panic("unreachable")
+}
+
+func (s Struct) HumanReadableString() string {
+	panic("unreachable")
 }

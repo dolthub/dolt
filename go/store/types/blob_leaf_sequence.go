@@ -44,7 +44,7 @@ func newBlobLeafSequence(vrw ValueReadWriter, data []byte) (sequence, error) {
 	count := uint64(len(data))
 	w.writeCount(count)
 	offsets[sequencePartValues] = w.offset
-	w.writeBytes(data)
+	w.writeRaw(data)
 	return blobLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}, nil
 }
 
@@ -75,5 +75,5 @@ func (bl blobLeafSequence) getItem(idx int) (sequenceItem, error) {
 }
 
 func (bl blobLeafSequence) typeOf() (*Type, error) {
-	return BlobType, nil
+	return PrimitiveTypeMap[BlobKind], nil
 }

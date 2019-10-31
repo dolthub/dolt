@@ -139,9 +139,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return bytes.Compare(a, b)
 	case IntKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := reader.readInt()
+		aNum := Int(reader.readInt())
 		reader.buff, reader.offset = b[1:], 0
-		bNum := reader.readInt()
+		bNum := Int(reader.readInt())
 		if aNum == bNum {
 			return 0
 		}
@@ -151,9 +151,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case UintKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := reader.readUint()
+		aNum := Uint(reader.readUint())
 		reader.buff, reader.offset = b[1:], 0
-		bNum := reader.readUint()
+		bNum := Uint(reader.readUint())
 		if aNum == bNum {
 			return 0
 		}
@@ -163,9 +163,9 @@ func compareEncodedNomsValues(a, b []byte) int {
 		return 1
 	case FloatKind:
 		reader := binaryNomsReader{a[1:], 0}
-		aNum := reader.readFloat(Format_7_18)
+		aNum := Float(reader.readFloat(Format_7_18))
 		reader.buff, reader.offset = b[1:], 0
-		bNum := reader.readFloat(Format_7_18)
+		bNum := Float(reader.readFloat(Format_7_18))
 		if aNum == bNum {
 			return 0
 		}
@@ -309,7 +309,7 @@ func TestCompareTotalOrdering(t *testing.T) {
 
 		// The order of these are done by the hash.
 		mustValue(NewSet(context.Background(), vrw, Float(0), Float(1), Float(2), Float(3))),
-		BoolType,
+		PrimitiveTypeMap[BoolKind],
 
 		// Value - values cannot be value
 		// Cycle - values cannot be cycle

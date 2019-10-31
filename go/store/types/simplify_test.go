@@ -33,41 +33,41 @@ func TestSimplifyStructFields(t *testing.T) {
 
 	test([]structTypeFields{
 		{
-			StructField{"a", BoolType, false},
+			StructField{"a", PrimitiveTypeMap[BoolKind], false},
 		},
 		{
-			StructField{"a", BoolType, false},
+			StructField{"a", PrimitiveTypeMap[BoolKind], false},
 		},
 	},
 		structTypeFields{
-			StructField{"a", BoolType, false},
+			StructField{"a", PrimitiveTypeMap[BoolKind], false},
 		},
 	)
 
 	test([]structTypeFields{
 		{
-			StructField{"a", BoolType, false},
+			StructField{"a", PrimitiveTypeMap[BoolKind], false},
 		},
 		{
-			StructField{"b", BoolType, false},
+			StructField{"b", PrimitiveTypeMap[BoolKind], false},
 		},
 	},
 		structTypeFields{
-			StructField{"a", BoolType, true},
-			StructField{"b", BoolType, true},
+			StructField{"a", PrimitiveTypeMap[BoolKind], true},
+			StructField{"b", PrimitiveTypeMap[BoolKind], true},
 		},
 	)
 
 	test([]structTypeFields{
 		{
-			StructField{"a", BoolType, false},
+			StructField{"a", PrimitiveTypeMap[BoolKind], false},
 		},
 		{
-			StructField{"a", BoolType, true},
+			StructField{"a", PrimitiveTypeMap[BoolKind], true},
 		},
 	},
 		structTypeFields{
-			StructField{"a", BoolType, true},
+			StructField{"a", PrimitiveTypeMap[BoolKind], true},
 		},
 	)
 }
@@ -85,16 +85,16 @@ func TestSimplifyType(t *testing.T) {
 			test(t, t)
 		}
 
-		testSame(BlobType)
-		testSame(BoolType)
-		testSame(FloaTType)
-		testSame(StringType)
-		testSame(TypeType)
-		testSame(ValueType)
-		testSame(mustType(makeCompoundType(ListKind, BoolType)))
-		testSame(mustType(makeCompoundType(SetKind, BoolType)))
-		testSame(mustType(makeCompoundType(RefKind, BoolType)))
-		testSame(mustType(makeCompoundType(MapKind, BoolType, FloaTType)))
+		testSame(PrimitiveTypeMap[BlobKind])
+		testSame(PrimitiveTypeMap[BoolKind])
+		testSame(PrimitiveTypeMap[FloatKind])
+		testSame(PrimitiveTypeMap[StringKind])
+		testSame(PrimitiveTypeMap[TypeKind])
+		testSame(PrimitiveTypeMap[ValueKind])
+		testSame(mustType(makeCompoundType(ListKind, PrimitiveTypeMap[BoolKind])))
+		testSame(mustType(makeCompoundType(SetKind, PrimitiveTypeMap[BoolKind])))
+		testSame(mustType(makeCompoundType(RefKind, PrimitiveTypeMap[BoolKind])))
+		testSame(mustType(makeCompoundType(MapKind, PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))
 
 		{
 			// Cannot do equals on cycle types
@@ -103,39 +103,39 @@ func TestSimplifyType(t *testing.T) {
 			assert.Equal(in, act)
 		}
 
-		test(mustType(makeUnionType(BoolType)), BoolType)
-		test(mustType(makeUnionType(BoolType, BoolType)), BoolType)
-		testSame(mustType(makeUnionType(BoolType, FloaTType)))
-		test(mustType(makeUnionType(FloaTType, BoolType)), mustType(makeUnionType(BoolType, FloaTType)))
-		test(mustType(makeUnionType(FloaTType, BoolType)), mustType(makeUnionType(BoolType, FloaTType)))
+		test(mustType(makeUnionType(PrimitiveTypeMap[BoolKind])), PrimitiveTypeMap[BoolKind])
+		test(mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[BoolKind])), PrimitiveTypeMap[BoolKind])
+		testSame(mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))
+		test(mustType(makeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])), mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))
+		test(mustType(makeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])), mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))
 
-		testSame(mustType(makeCompoundType(ListKind, mustType(makeUnionType(BoolType, FloaTType)))))
-		test(mustType(makeCompoundType(ListKind, mustType(makeUnionType(BoolType)))), mustType(makeCompoundType(ListKind, BoolType)))
-		test(mustType(makeCompoundType(ListKind, mustType(makeUnionType(BoolType, BoolType)))), mustType(makeCompoundType(ListKind, BoolType)))
+		testSame(mustType(makeCompoundType(ListKind, mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))))
+		test(mustType(makeCompoundType(ListKind, mustType(makeUnionType(PrimitiveTypeMap[BoolKind])))), mustType(makeCompoundType(ListKind, PrimitiveTypeMap[BoolKind])))
+		test(mustType(makeCompoundType(ListKind, mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[BoolKind])))), mustType(makeCompoundType(ListKind, PrimitiveTypeMap[BoolKind])))
 
 		testSame(mustType(makeStructType("", nil)))
 		testSame(mustType(makeStructType("", structTypeFields{})))
 		testSame(mustType(makeStructType("", structTypeFields{
-			StructField{"b", BoolType, false},
-			StructField{"s", StringType, !intersectStructs},
+			StructField{"b", PrimitiveTypeMap[BoolKind], false},
+			StructField{"s", PrimitiveTypeMap[StringKind], !intersectStructs},
 		})))
 		test(
 			mustType(makeStructType("", structTypeFields{
-				StructField{"a", BoolType, false},
-				StructField{"b", mustType(makeUnionType(FloaTType, FloaTType)), false},
+				StructField{"a", PrimitiveTypeMap[BoolKind], false},
+				StructField{"b", mustType(makeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind])), false},
 			})),
 			mustType(makeStructType("", structTypeFields{
-				StructField{"a", BoolType, false},
-				StructField{"b", FloaTType, false},
+				StructField{"a", PrimitiveTypeMap[BoolKind], false},
+				StructField{"b", PrimitiveTypeMap[FloatKind], false},
 			})),
 		)
 		// non named structs do not create cycles.
 		testSame(mustType(makeStructType("", structTypeFields{
-			StructField{"b", BoolType, false},
+			StructField{"b", PrimitiveTypeMap[BoolKind], false},
 			StructField{
 				"s",
 				mustType(makeStructType("", structTypeFields{
-					StructField{"c", StringType, false},
+					StructField{"c", PrimitiveTypeMap[StringKind], false},
 				})),
 				!intersectStructs,
 			},
@@ -146,15 +146,15 @@ func TestSimplifyType(t *testing.T) {
 			mustType(makeCompoundType(
 				UnionKind,
 				mustType(makeStructType("", structTypeFields{
-					StructField{"a", BoolType, false},
+					StructField{"a", PrimitiveTypeMap[BoolKind], false},
 				})),
 				mustType(makeStructType("", structTypeFields{
-					StructField{"b", BoolType, false},
+					StructField{"b", PrimitiveTypeMap[BoolKind], false},
 				})),
 			)),
 			mustType(makeStructType("", structTypeFields{
-				StructField{"a", BoolType, !intersectStructs},
-				StructField{"b", BoolType, !intersectStructs},
+				StructField{"a", PrimitiveTypeMap[BoolKind], !intersectStructs},
+				StructField{"b", PrimitiveTypeMap[BoolKind], !intersectStructs},
 			})),
 		)
 
@@ -163,11 +163,11 @@ func TestSimplifyType(t *testing.T) {
 			test(
 				mustType(makeCompoundType(
 					UnionKind,
-					mustType(makeCompoundType(k, FloaTType)),
-					mustType(makeCompoundType(k, BoolType)),
+					mustType(makeCompoundType(k, PrimitiveTypeMap[FloatKind])),
+					mustType(makeCompoundType(k, PrimitiveTypeMap[BoolKind])),
 				)),
 				mustType(makeCompoundType(k,
-					mustType(makeUnionType(BoolType, FloaTType)),
+					mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])),
 				)),
 			)
 		}
@@ -176,12 +176,12 @@ func TestSimplifyType(t *testing.T) {
 		test(
 			mustType(makeCompoundType(
 				UnionKind,
-				mustType(makeCompoundType(MapKind, FloaTType, FloaTType)),
-				mustType(makeCompoundType(MapKind, BoolType, FloaTType)),
+				mustType(makeCompoundType(MapKind, PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind])),
+				mustType(makeCompoundType(MapKind, PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])),
 			)),
 			mustType(makeCompoundType(MapKind,
-				mustType(makeUnionType(BoolType, FloaTType)),
-				FloaTType,
+				mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])),
+				PrimitiveTypeMap[FloatKind],
 			)),
 		)
 
@@ -189,19 +189,19 @@ func TestSimplifyType(t *testing.T) {
 		test(
 			mustType(makeCompoundType(
 				UnionKind,
-				mustType(makeCompoundType(MapKind, FloaTType, FloaTType)),
-				mustType(makeCompoundType(MapKind, FloaTType, BoolType)),
+				mustType(makeCompoundType(MapKind, PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind])),
+				mustType(makeCompoundType(MapKind, PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])),
 			)),
 			mustType(makeCompoundType(MapKind,
-				FloaTType,
-				mustType(makeUnionType(BoolType, FloaTType)),
+				PrimitiveTypeMap[FloatKind],
+				mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])),
 			)),
 		)
 
 		// union flattening
 		test(
-			mustType(makeUnionType(FloaTType, mustType(makeUnionType(FloaTType, BoolType)))),
-			mustType(makeUnionType(BoolType, FloaTType)),
+			mustType(makeUnionType(PrimitiveTypeMap[FloatKind], mustType(makeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))),
+			mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])),
 		)
 
 		{
@@ -225,14 +225,14 @@ func TestSimplifyType(t *testing.T) {
 		testSame(mustType(makeStructType("A", nil)))
 		testSame(mustType(makeStructType("A", structTypeFields{})))
 		testSame(mustType(makeStructType("A", structTypeFields{
-			StructField{"a", BoolType, !intersectStructs},
+			StructField{"a", PrimitiveTypeMap[BoolKind], !intersectStructs},
 		})))
 		test(
 			mustType(makeStructType("A", structTypeFields{
-				StructField{"a", mustType(makeUnionType(BoolType, BoolType, FloaTType)), false},
+				StructField{"a", mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])), false},
 			})),
 			mustType(makeStructType("A", structTypeFields{
-				StructField{"a", mustType(makeUnionType(BoolType, FloaTType)), false},
+				StructField{"a", mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])), false},
 			})),
 		)
 
@@ -241,7 +241,7 @@ func TestSimplifyType(t *testing.T) {
 				StructField{
 					"a",
 					mustType(makeStructType("B", structTypeFields{
-						StructField{"b", BoolType, !intersectStructs},
+						StructField{"b", PrimitiveTypeMap[BoolKind], !intersectStructs},
 					})),
 					false,
 				},
@@ -253,7 +253,7 @@ func TestSimplifyType(t *testing.T) {
 			exp := mustType(makeStructType("A", structTypeFields{
 				StructField{
 					"a",
-					BoolType, // placeholder
+					PrimitiveTypeMap[BoolKind], // placeholder
 					!intersectStructs,
 				},
 			}))
@@ -284,18 +284,18 @@ func TestSimplifyType(t *testing.T) {
 
 		{
 			a := mustType(makeStructType("S", structTypeFields{
-				StructField{"a", BoolType, !intersectStructs},
-				StructField{"b", mustType(makeUnionType(BoolType, StringType)), false},
+				StructField{"a", PrimitiveTypeMap[BoolKind], !intersectStructs},
+				StructField{"b", mustType(makeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])), false},
 			}))
 			exp := mustType(makeCompoundType(MapKind, a, a))
 			test(
 				mustType(makeCompoundType(MapKind,
 					mustType(makeStructType("S", structTypeFields{
-						StructField{"a", BoolType, false},
-						StructField{"b", StringType, false},
+						StructField{"a", PrimitiveTypeMap[BoolKind], false},
+						StructField{"b", PrimitiveTypeMap[StringKind], false},
 					})),
 					mustType(makeStructType("S", structTypeFields{
-						StructField{"b", BoolType, false},
+						StructField{"b", PrimitiveTypeMap[BoolKind], false},
 					})),
 				)),
 				exp,
@@ -306,11 +306,11 @@ func TestSimplifyType(t *testing.T) {
 		testSame(
 			mustType(makeCompoundType(MapKind,
 				mustType(makeStructType("", structTypeFields{
-					StructField{"a", BoolType, false},
-					StructField{"b", StringType, false},
+					StructField{"a", PrimitiveTypeMap[BoolKind], false},
+					StructField{"b", PrimitiveTypeMap[StringKind], false},
 				})),
 				mustType(makeStructType("", structTypeFields{
-					StructField{"b", BoolType, false},
+					StructField{"b", PrimitiveTypeMap[BoolKind], false},
 				})),
 			)),
 		)
@@ -320,12 +320,12 @@ func TestSimplifyType(t *testing.T) {
 			a := mustType(makeStructType("A", structTypeFields{
 				StructField{
 					"a",
-					BoolType, // placeholder
+					PrimitiveTypeMap[BoolKind], // placeholder
 					!intersectStructs,
 				},
 			}))
 			a.Desc.(StructDesc).fields[0].Type = a
-			exp := mustType(makeUnionType(FloaTType, a, TypeType))
+			exp := mustType(makeUnionType(PrimitiveTypeMap[FloatKind], a, PrimitiveTypeMap[TypeKind]))
 			test(
 				mustType(makeCompoundType(UnionKind,
 					mustType(makeStructType("A", structTypeFields{
@@ -335,8 +335,8 @@ func TestSimplifyType(t *testing.T) {
 							false,
 						},
 					})),
-					FloaTType,
-					TypeType,
+					PrimitiveTypeMap[FloatKind],
+					PrimitiveTypeMap[TypeKind],
 				)),
 				exp,
 			)
@@ -346,20 +346,20 @@ func TestSimplifyType(t *testing.T) {
 			mustType(makeCompoundType(RefKind,
 				mustType(makeCompoundType(UnionKind,
 					mustType(makeCompoundType(ListKind,
-						BoolType,
+						PrimitiveTypeMap[BoolKind],
 					)),
 					mustType(makeCompoundType(SetKind,
-						mustType(makeUnionType(StringType, FloaTType)),
+						mustType(makeUnionType(PrimitiveTypeMap[StringKind], PrimitiveTypeMap[FloatKind])),
 					)),
 				)),
 			)),
 			mustType(makeCompoundType(RefKind,
 				mustType(makeCompoundType(UnionKind,
 					mustType(makeCompoundType(ListKind,
-						BoolType,
+						PrimitiveTypeMap[BoolKind],
 					)),
 					mustType(makeCompoundType(SetKind,
-						mustType(makeUnionType(FloaTType, StringType)),
+						mustType(makeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])),
 					)),
 				)),
 			)),

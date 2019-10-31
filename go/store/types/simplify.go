@@ -137,9 +137,12 @@ func cloneTypeTreeAndReplaceNamedStructs(t *Type, namedStructs map[string]struct
 	var rec func(t *Type) *Type
 	rec = func(t *Type) *Type {
 		kind := t.TargetKind()
-		switch kind {
-		case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
+
+		if IsPrimitiveKind(kind) {
 			return t
+		}
+
+		switch kind {
 		case ListKind, MapKind, RefKind, SetKind, UnionKind, TupleKind:
 			elemTypes := make(typeSlice, len(t.Desc.(CompoundDesc).ElemTypes))
 			for i, et := range t.Desc.(CompoundDesc).ElemTypes {
@@ -191,51 +194,53 @@ func foldUnions(t *Type, seenStructs typeset, intersectStructs bool) (*Type, err
 	var err error
 
 	kind := t.TargetKind()
-	switch kind {
-	case BoolKind, FloatKind, StringKind, BlobKind, ValueKind, TypeKind, CycleKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
-		break
-
-	case ListKind, MapKind, RefKind, SetKind, TupleKind:
-		elemTypes := t.Desc.(CompoundDesc).ElemTypes
-		for i, et := range elemTypes {
-			elemTypes[i], err = foldUnions(et, seenStructs, intersectStructs)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-
-	case StructKind:
-		if seenStructs.has(t) {
-			return t, nil
-		}
-		seenStructs.add(t)
-		fields := t.Desc.(StructDesc).fields
-		for i, f := range fields {
-			fields[i].Type, err = foldUnions(f.Type, seenStructs, intersectStructs)
-
-			if err != nil {
-				return nil, err
-			}
-		}
-
-	case UnionKind:
-		elemTypes := t.Desc.(CompoundDesc).ElemTypes
-		if len(elemTypes) == 0 {
+	if !IsPrimitiveKind(kind) {
+		switch kind {
+		case CycleKind:
 			break
-		}
-		ts := make(typeset, len(elemTypes))
-		for _, t := range elemTypes {
-			ts.add(t)
-		}
-		if len(ts) == 0 {
-			t.Desc = CompoundDesc{UnionKind, nil}
-			return t, nil
-		}
-		return foldUnionImpl(ts, seenStructs, intersectStructs)
 
-	default:
-		panic("Unknown noms kind")
+		case ListKind, MapKind, RefKind, SetKind, TupleKind:
+			elemTypes := t.Desc.(CompoundDesc).ElemTypes
+			for i, et := range elemTypes {
+				elemTypes[i], err = foldUnions(et, seenStructs, intersectStructs)
+
+				if err != nil {
+					return nil, err
+				}
+			}
+
+		case StructKind:
+			if seenStructs.has(t) {
+				return t, nil
+			}
+			seenStructs.add(t)
+			fields := t.Desc.(StructDesc).fields
+			for i, f := range fields {
+				fields[i].Type, err = foldUnions(f.Type, seenStructs, intersectStructs)
+
+				if err != nil {
+					return nil, err
+				}
+			}
+
+		case UnionKind:
+			elemTypes := t.Desc.(CompoundDesc).ElemTypes
+			if len(elemTypes) == 0 {
+				break
+			}
+			ts := make(typeset, len(elemTypes))
+			for _, t := range elemTypes {
+				ts.add(t)
+			}
+			if len(ts) == 0 {
+				t.Desc = CompoundDesc{UnionKind, nil}
+				return t, nil
+			}
+			return foldUnionImpl(ts, seenStructs, intersectStructs)
+
+		default:
+			panic("Unknown noms kind")
+		}
 	}
 	return t, nil
 }

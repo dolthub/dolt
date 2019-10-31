@@ -32,81 +32,86 @@ func TestConv(t *testing.T) {
 	tests := []struct {
 		input       types.Value
 		expectedOut types.Value
-		expectFunc  ConvFunc
+		expectFunc  bool
 		expectErr   bool
 	}{
-		{types.String("test"), types.String("test"), identityConvFunc, false},
-		{types.String(zeroUUIDStr), types.UUID(zeroUUID), convStringToUUID, false},
-		{types.String("10"), types.Uint(10), convStringToUint, false},
-		{types.String("-101"), types.Int(-101), convStringToInt, false},
-		{types.String("3.25"), types.Float(3.25), convStringToFloat, false},
-		{types.String("true"), types.Bool(true), convStringToBool, false},
-		{types.String("YdGE4ZCD8J2Vqw"), types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
-			convStringToInlineBlob, false},
-		{types.String("anything"), types.NullValue, convToNullFunc, false},
+		{types.String("test"), types.String("test"), true, false},
+		{types.String(zeroUUIDStr), types.UUID(zeroUUID), true, false},
+		{types.String("10"), types.Uint(10), true, false},
+		{types.String("-101"), types.Int(-101), true, false},
+		{types.String("3.25"), types.Float(3.25), true, false},
+		{types.String("true"), types.Bool(true), true, false},
+		{types.String("61D184E19083F09D95AB"), types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
+			true, false},
+		{types.String("anything"), types.NullValue, true, false},
 
-		{types.UUID(zeroUUID), types.String(zeroUUIDStr), convUUIDToString, false},
-		{types.UUID(zeroUUID), types.UUID(zeroUUID), identityConvFunc, false},
-		{types.UUID(zeroUUID), types.Uint(0), nil, false},
-		{types.UUID(zeroUUID), types.Int(0), nil, false},
-		{types.UUID(zeroUUID), types.Float(0), nil, false},
-		{types.UUID(zeroUUID), types.Bool(false), nil, false},
-		{types.UUID(zeroUUID), types.InlineBlob{}, nil, false},
-		{types.UUID(zeroUUID), types.NullValue, convToNullFunc, false},
+		{types.UUID(zeroUUID), types.String(zeroUUIDStr), true, false},
+		{types.UUID(zeroUUID), types.UUID(zeroUUID), true, false},
+		{types.UUID(zeroUUID), types.Uint(0), false, false},
+		{types.UUID(zeroUUID), types.Int(0), false, false},
+		{types.UUID(zeroUUID), types.Float(0), false, false},
+		{types.UUID(zeroUUID), types.Bool(false), false, false},
+		{types.UUID(zeroUUID), types.InlineBlob{}, false, false},
+		{types.UUID(zeroUUID), types.NullValue, true, false},
 
-		{types.Uint(10), types.String("10"), convUintToString, false},
-		{types.Uint(100), types.UUID(zeroUUID), nil, false},
-		{types.Uint(1000), types.Uint(1000), identityConvFunc, false},
-		{types.Uint(10000), types.Int(10000), convUintToInt, false},
-		{types.Uint(100000), types.Float(100000), convUintToFloat, false},
-		{types.Uint(1000000), types.Bool(true), convUintToBool, false},
-		{types.Uint(10000000), types.InlineBlob{}, nil, false},
-		{types.Uint(100000000), types.NullValue, convToNullFunc, false},
+		{types.Uint(10), types.String("10"), true, false},
+		{types.Uint(100), types.UUID(zeroUUID), false, false},
+		{types.Uint(1000), types.Uint(1000), true, false},
+		{types.Uint(10000), types.Int(10000), true, false},
+		{types.Uint(100000), types.Float(100000), true, false},
+		{types.Uint(1000000), types.Bool(true), true, false},
+		{types.Uint(10000000), types.InlineBlob{}, false, false},
+		{types.Uint(100000000), types.NullValue, true, false},
 
-		{types.Int(-10), types.String("-10"), convIntToString, false},
-		{types.Int(-100), types.UUID(zeroUUID), nil, false},
-		{types.Int(1000), types.Uint(1000), convIntToUint, false},
-		{types.Int(-10000), types.Int(-10000), identityConvFunc, false},
-		{types.Int(-100000), types.Float(-100000), convIntToFloat, false},
-		{types.Int(-1000000), types.Bool(true), convIntToBool, false},
-		{types.Int(-10000000), types.InlineBlob{}, nil, false},
-		{types.Int(-100000000), types.NullValue, convToNullFunc, false},
+		{types.Int(-10), types.String("-10"), true, false},
+		{types.Int(-100), types.UUID(zeroUUID), false, false},
+		{types.Int(1000), types.Uint(1000), true, false},
+		{types.Int(-10000), types.Int(-10000), true, false},
+		{types.Int(-100000), types.Float(-100000), true, false},
+		{types.Int(-1000000), types.Bool(true), true, false},
+		{types.Int(-10000000), types.InlineBlob{}, false, false},
+		{types.Int(-100000000), types.NullValue, true, false},
 
-		{types.Float(1.5), types.String("1.5"), convFloatToString, false},
-		{types.Float(10.5), types.UUID(zeroUUID), nil, false},
-		{types.Float(100.5), types.Uint(100), convFloatToUint, false},
-		{types.Float(1000.5), types.Int(1000), convFloatToInt, false},
-		{types.Float(10000.5), types.Float(10000.5), identityConvFunc, false},
-		{types.Float(100000.5), types.Bool(true), convFloatToBool, false},
-		{types.Float(1000000.5), types.InlineBlob{}, nil, false},
-		{types.Float(10000000.5), types.NullValue, convToNullFunc, false},
+		{types.Float(1.5), types.String("1.5"), true, false},
+		{types.Float(10.5), types.UUID(zeroUUID), false, false},
+		{types.Float(100.5), types.Uint(100), true, false},
+		{types.Float(1000.5), types.Int(1000), true, false},
+		{types.Float(10000.5), types.Float(10000.5), true, false},
+		{types.Float(100000.5), types.Bool(true), true, false},
+		{types.Float(1000000.5), types.InlineBlob{}, false, false},
+		{types.Float(10000000.5), types.NullValue, true, false},
 
-		{types.Bool(true), types.String("true"), convBoolToString, false},
-		{types.Bool(false), types.UUID(zeroUUID), nil, false},
-		{types.Bool(true), types.Uint(1), convBoolToUint, false},
-		{types.Bool(false), types.Int(0), convBoolToInt, false},
-		{types.Bool(true), types.Float(1), convBoolToFloat, false},
-		{types.Bool(false), types.Bool(false), identityConvFunc, false},
-		{types.Bool(false), types.InlineBlob{}, nil, true},
-		{types.Bool(true), types.NullValue, convToNullFunc, false},
+		{types.Bool(true), types.String("true"), true, false},
+		{types.Bool(false), types.UUID(zeroUUID), false, false},
+		{types.Bool(true), types.Uint(1), true, false},
+		{types.Bool(false), types.Int(0), true, false},
+		{types.Bool(true), types.Float(1), true, false},
+		{types.Bool(false), types.Bool(false), true, false},
+		{types.Bool(false), types.InlineBlob{}, false, true},
+		{types.Bool(true), types.NullValue, true, false},
 
 		{types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
-			types.String("YdGE4ZCD8J2Vqw"), convInlineBlobToString, false},
-		{types.InlineBlob([]byte{}), types.UUID(zeroUUID), nil, false},
-		{types.InlineBlob([]byte{}), types.Uint(1583200922), nil, false},
-		{types.InlineBlob([]byte{}), types.Int(1901502183), nil, false},
-		{types.InlineBlob([]byte{}), types.Float(2219803444.4), nil, false},
-		{types.InlineBlob([]byte{}), types.Bool(false), nil, true},
-		{types.InlineBlob([]byte{1, 10, 100}), types.InlineBlob([]byte{1, 10, 100}), identityConvFunc, false},
-		{types.InlineBlob([]byte{}), types.NullValue, convToNullFunc, false},
+			types.String("61D184E19083F09D95AB"), true, false},
+		{types.InlineBlob([]byte{}), types.UUID(zeroUUID), false, false},
+		{types.InlineBlob([]byte{}), types.Uint(1583200922), false, false},
+		{types.InlineBlob([]byte{}), types.Int(1901502183), false, false},
+		{types.InlineBlob([]byte{}), types.Float(2219803444.4), false, false},
+		{types.InlineBlob([]byte{}), types.Bool(false), false, true},
+		{types.InlineBlob([]byte{1, 10, 100}), types.InlineBlob([]byte{1, 10, 100}), true, false},
+		{types.InlineBlob([]byte{}), types.NullValue, true, false},
 	}
 
 	for _, test := range tests {
-		convFunc := GetConvFunc(test.input.Kind(), test.expectedOut.Kind())
+		convFunc, err := GetConvFunc(test.input.Kind(), test.expectedOut.Kind())
 
-		if convFunc == nil && test.expectFunc != nil {
-			t.Error("Did not receive correct conversion function for conversion from", test.input.Kind(), "to", test.expectedOut.Kind())
+		if convFunc == nil && err != nil && test.expectFunc == true {
+			t.Error("Did not receive conversion function for conversion from", test.input.Kind(), "to", test.expectedOut.Kind())
 		} else if convFunc != nil {
+			if test.expectFunc == false {
+				t.Error("Incorrectly received conversion function for conversion from", test.input.Kind(), "to", test.expectedOut.Kind())
+				continue
+			}
+
 			result, err := convFunc(test.input)
 
 			if (err != nil) != test.expectErr {
@@ -125,9 +130,9 @@ var convertibleTypes = []types.NomsKind{types.StringKind, types.UUIDKind, types.
 func TestNullConversion(t *testing.T) {
 	for _, srcKind := range convertibleTypes {
 		for _, destKind := range convertibleTypes {
-			convFunc := GetConvFunc(srcKind, destKind)
+			convFunc, err := GetConvFunc(srcKind, destKind)
 
-			if convFunc != nil {
+			if convFunc != nil && err == nil {
 				res, err := convFunc(nil)
 
 				if res != nil || err != nil {

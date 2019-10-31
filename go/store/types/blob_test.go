@@ -63,7 +63,7 @@ func newBlobTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 	return &blobTestSuite{
 		collectionTestSuite: collectionTestSuite{
 			col:                    blob,
-			expectType:             BlobType,
+			expectType:             PrimitiveTypeMap[BlobKind],
 			expectLen:              uint64(length),
 			expectChunkCount:       expectChunkCount,
 			expectPrependChunkDiff: expectPrependChunkDiff,
