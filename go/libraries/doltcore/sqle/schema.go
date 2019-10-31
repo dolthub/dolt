@@ -18,6 +18,7 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 )
 
 // doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.
@@ -26,7 +27,11 @@ func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, err
 
 	var i int
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		cols[i] = doltColToSqlCol(tableName, col)
+		var innerErr error
+		cols[i], innerErr = doltColToSqlCol(tableName, col)
+		if innerErr != nil {
+			return true, innerErr
+		}
 		i++
 		return false, nil
 	})
@@ -36,10 +41,14 @@ func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, err
 
 // SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
 // creating tables, use SqlSchemaToDoltSchema.
-func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) schema.Schema {
+func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	for i, col := range sqlSchema {
-		cols = append(cols, SqlColToDoltCol(uint64(i), col))
+		convertedCol, err := SqlColToDoltCol(uint64(i), col)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, convertedCol)
 	}
 
 	colColl, err := schema.NewColCollection(cols...)
@@ -47,7 +56,7 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) schema.Schema {
 		panic(err)
 	}
 
-	return schema.UnkeyedSchemaFromCols(colColl)
+	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
 
 // SqlSchemaToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
@@ -55,12 +64,16 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) schema.Schema {
 func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
 	for i, col := range sqlSchema {
-		cols = append(cols, SqlColToDoltCol(uint64(i), col))
+		convertedCol, err := SqlColToDoltCol(uint64(i), col)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, convertedCol)
 	}
 
 	colColl, err := schema.NewColCollection(cols...)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	err = schema.ValidateForInsert(colColl)
@@ -72,22 +85,29 @@ func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 }
 
 // doltColToSqlCol returns the SQL column corresponding to the dolt column given.
-func doltColToSqlCol(tableName string, col schema.Column) *sql.Column {
+func doltColToSqlCol(tableName string, col schema.Column) (*sql.Column, error) {
+	colType, err := types.NomsKindToSqlType(col.Kind)
+	if err != nil {
+		return nil, err
+	}
 	return &sql.Column{
 		Name:     col.Name,
-		Type:     nomsTypeToSqlType(col.Kind),
+		Type:     colType,
 		Default:  nil,
 		Nullable: col.IsNullable(),
 		Source:   tableName,
-	}
+	}, nil
 }
 
 // doltColToSqlCol returns the dolt column corresponding to the SQL column given
-func SqlColToDoltCol(tag uint64, col *sql.Column) schema.Column {
+func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	var constraints []schema.ColConstraint
 	if !col.Nullable {
 		constraints = append(constraints, schema.NotNullConstraint{})
 	}
-
-	return schema.NewColumn(col.Name, tag, SqlTypeToNomsKind(col.Type), col.PrimaryKey, constraints...)
+	kind, err := types.SqlTypeToNomsKind(col.Type)
+	if err != nil {
+		return schema.Column{}, err
+	}
+	return schema.NewColumn(col.Name, tag, kind, col.PrimaryKey, constraints...), nil
 }
