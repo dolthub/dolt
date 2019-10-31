@@ -22,6 +22,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	sqlTypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -83,8 +84,12 @@ func doltRowToSqlRow(doltRow row.Row, sch schema.Schema) (sql.Row, error) {
 
 	i := 0
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		var innerErr error
 		value, _ := doltRow.GetColVal(tag)
-		colVals[i] = doltColValToSqlColVal(value)
+		colVals[i], innerErr = sqlTypes.NomsValToSqlVal(value)
+		if innerErr != nil {
+			return true, innerErr
+		}
 		i++
 		return false, nil
 	})
@@ -105,7 +110,7 @@ func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Sche
 		schCol := allCols.TagToCol[tag]
 		if val != nil {
 			var err error
-			taggedVals[tag], err = SqlValToNomsVal(val, schCol.Kind)
+			taggedVals[tag], err = sqlTypes.SqlValToNomsVal(val, schCol.Kind)
 			if err != nil {
 				return nil, err
 			}
@@ -114,13 +119,4 @@ func SqlRowToDoltRow(nbf *types.NomsBinFormat, r sql.Row, doltSchema schema.Sche
 		}
 	}
 	return row.New(nbf, doltSchema, taggedVals)
-}
-
-// Returns the column value for a SQL column
-func doltColValToSqlColVal(val types.Value) interface{} {
-	if types.IsNull(val) {
-		return nil
-	}
-
-	return nomsValToSqlVal(val)
 }
