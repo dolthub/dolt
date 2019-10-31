@@ -176,29 +176,6 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	switch k {
 	case BlobKind:
 		return r.walkBlob(nbf, cb)
-	case BoolKind:
-		r.skipKind()
-		r.skipBool()
-	case FloatKind:
-		r.skipKind()
-		r.skipFloat(nbf)
-	case IntKind:
-		r.skipKind()
-		r.skipInt()
-	case UintKind:
-		r.skipKind()
-		r.skipUint()
-	case UUIDKind:
-		r.skipKind()
-		r.skipUUID()
-	case NullKind:
-		r.skipKind()
-	case StringKind:
-		r.skipKind()
-		r.skipString()
-	case InlineBlobKind:
-		r.skipKind()
-		r.skipInlineBlob()
 	case ListKind:
 		return r.walkList(nbf, cb)
 	case MapKind:
@@ -217,6 +194,13 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	case CycleKind, UnionKind, ValueKind:
 		d.Panic("A value instance can never have type %s", k)
 	default:
+		if IsPrimitiveKind(k) {
+			if emptyVal, ok := KindToType[k]; ok {
+				r.skipKind()
+				emptyVal.skip(nbf, &r.binaryNomsReader)
+				return nil
+			}
+		}
 		return ErrUnknownType
 	}
 

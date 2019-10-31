@@ -39,6 +39,8 @@ github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible/
 github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a/go.mod h1:ZRmQr0FajVIyZ4ZzBYKG5P3ZqPz9IHG41ZoMu1ADI3k=
 github.com/aws/aws-sdk-go v1.21.2 h1:CqbWrQzi7s8J2F0TRRdLvTr0+bt5Zxo2IDoFNGsAiUg=
 github.com/aws/aws-sdk-go v1.21.2/go.mod h1:KmX6BPdI08NWTb3/sm4ZGu5ShLoqVDhKgpiN924inxo=
+github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2 h1:M+TYzBcNIRyzPRg66ndEqUMd7oWDmhvdQmaPC6EZNwM=
+github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2/go.mod h1:RDu/qcrnpEdJC/p8tx34+YBFqqX71lB7dOX9QE+ZC4M=
 github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/boltdb/bolt v1.3.1 h1:JQmyP4ZBrce+ZQu0dY660FMfatumYDLun9hBCUVIkF4=

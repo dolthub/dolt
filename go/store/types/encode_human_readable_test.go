@@ -242,26 +242,26 @@ func TestWriteHumanReadableListOfBlob(t *testing.T) {
 }
 
 func TestWriteHumanReadableType(t *testing.T) {
-	assertWriteHRSEqual(t, "Bool", BoolType)
-	assertWriteHRSEqual(t, "Blob", BlobType)
-	assertWriteHRSEqual(t, "String", StringType)
-	assertWriteHRSEqual(t, "Float", FloaTType)
-	assertWriteHRSEqual(t, "UUID", UUIDType)
-	assertWriteHRSEqual(t, "Int", IntType)
-	assertWriteHRSEqual(t, "Uint", UintType)
-	assertWriteHRSEqual(t, "InlineBlob", InlineBlobType)
-	assertWriteHRSEqual(t, "Null", NullType)
+	assertWriteHRSEqual(t, "Bool", PrimitiveTypeMap[BoolKind])
+	assertWriteHRSEqual(t, "Blob", PrimitiveTypeMap[BlobKind])
+	assertWriteHRSEqual(t, "String", PrimitiveTypeMap[StringKind])
+	assertWriteHRSEqual(t, "Float", PrimitiveTypeMap[FloatKind])
+	assertWriteHRSEqual(t, "UUID", PrimitiveTypeMap[UUIDKind])
+	assertWriteHRSEqual(t, "Int", PrimitiveTypeMap[IntKind])
+	assertWriteHRSEqual(t, "Uint", PrimitiveTypeMap[UintKind])
+	assertWriteHRSEqual(t, "InlineBlob", PrimitiveTypeMap[InlineBlobKind])
+	assertWriteHRSEqual(t, "Null", PrimitiveTypeMap[NullKind])
 
-	assertWriteHRSEqual(t, "List<Float>", mustType(MakeListType(FloaTType)))
-	assertWriteHRSEqual(t, "Set<Float>", mustType(MakeSetType(FloaTType)))
-	assertWriteHRSEqual(t, "Ref<Float>", mustType(MakeRefType(FloaTType)))
-	assertWriteHRSEqual(t, "Map<Float, String>", mustType(MakeMapType(FloaTType, StringType)))
-	assertWriteHRSEqual(t, "Float | String", mustType(MakeUnionType(FloaTType, StringType)))
-	assertWriteHRSEqual(t, "Bool", mustType(MakeUnionType(BoolType)))
+	assertWriteHRSEqual(t, "List<Float>", mustType(MakeListType(PrimitiveTypeMap[FloatKind])))
+	assertWriteHRSEqual(t, "Set<Float>", mustType(MakeSetType(PrimitiveTypeMap[FloatKind])))
+	assertWriteHRSEqual(t, "Ref<Float>", mustType(MakeRefType(PrimitiveTypeMap[FloatKind])))
+	assertWriteHRSEqual(t, "Map<Float, String>", mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
+	assertWriteHRSEqual(t, "Float | String", mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
+	assertWriteHRSEqual(t, "Bool", mustType(MakeUnionType(PrimitiveTypeMap[BoolKind])))
 	assertWriteHRSEqual(t, "", mustType(MakeUnionType()))
-	assertWriteHRSEqual(t, "List<Float | String>", mustType(MakeListType(mustType(MakeUnionType(FloaTType, StringType)))))
-	assertWriteHRSEqual(t, "List<Int | Uint>", mustType(MakeListType(mustType(MakeUnionType(IntType, UintType)))))
-	assertWriteHRSEqual(t, "List<Int | Null>", mustType(MakeListType(mustType(MakeUnionType(IntType, NullType)))))
+	assertWriteHRSEqual(t, "List<Float | String>", mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))))
+	assertWriteHRSEqual(t, "List<Int | Uint>", mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[IntKind], PrimitiveTypeMap[UintKind])))))
+	assertWriteHRSEqual(t, "List<Int | Null>", mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[IntKind], PrimitiveTypeMap[NullKind])))))
 	assertWriteHRSEqual(t, "List<>", mustType(MakeListType(mustType(MakeUnionType()))))
 }
 
@@ -345,13 +345,13 @@ func TestEmptyCollections(t *testing.T) {
 	b, err := NewStruct(Format_7_18, "Rien", StructData{})
 	assert.NoError(t, err)
 	assertWriteHRSEqual(t, "struct Rien {}", b)
-	c, err := MakeMapType(BlobType, FloaTType)
+	c, err := MakeMapType(PrimitiveTypeMap[BlobKind], PrimitiveTypeMap[FloatKind])
 	assert.NoError(t, err)
 	assertWriteHRSEqual(t, "Map<Blob, Float>", c)
 	d, err := NewMap(context.Background(), vrw)
 	assert.NoError(t, err)
 	assertWriteHRSEqual(t, "map {}", d)
-	e, err := MakeSetType(StringType)
+	e, err := MakeSetType(PrimitiveTypeMap[StringKind])
 	assert.NoError(t, err)
 	assertWriteHRSEqual(t, "Set<String>", e)
 	f, err := NewSet(context.Background(), vrw)
@@ -378,8 +378,8 @@ func TestEncodedValueMaxLines(t *testing.T) {
 
 func TestWriteHumanReadableStructOptionalFields(t *testing.T) {
 	typ, err := MakeStructType("S1",
-		StructField{"a", BoolType, false},
-		StructField{"b", BoolType, true})
+		StructField{"a", PrimitiveTypeMap[BoolKind], false},
+		StructField{"b", PrimitiveTypeMap[BoolKind], true})
 	assert.NoError(t, err)
 	assertWriteHRSEqual(t, "Struct S1 {\n  a: Bool,\n  b?: Bool,\n}", typ)
 }

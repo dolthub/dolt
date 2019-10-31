@@ -629,10 +629,6 @@ func (es emptySequence) Less(nbf *NomsBinFormat, other LesserValuable) (bool, er
 	panic("empty sequence")
 }
 
-func (es emptySequence) valueBytes(*NomsBinFormat) ([]byte, error) {
-	panic("empty sequence")
-}
-
 func (es emptySequence) valuesSlice(from, to uint64) ([]Value, error) {
 	panic("empty sequence")
 }

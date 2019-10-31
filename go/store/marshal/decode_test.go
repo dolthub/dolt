@@ -606,13 +606,13 @@ func TestDecodeNomsTypePtr(t *testing.T) {
 	type S struct{ Type *types.Type }
 	var s S
 
-	primitive := types.StringType
+	primitive := types.PrimitiveTypeMap[types.StringKind]
 	testUnmarshal(mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": primitive})), &s, &S{primitive})
 
 	complex := mustType(types.MakeStructType("Complex",
 		types.StructField{
 			Name: "stuff",
-			Type: types.StringType,
+			Type: types.PrimitiveTypeMap[types.StringKind],
 		},
 	))
 	testUnmarshal(mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": complex})), &s, &S{complex})

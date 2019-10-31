@@ -98,29 +98,29 @@ func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 
 	if t.Implements(nomsValueInterface) {
 		if t == typeOfTypesType {
-			return types.TypeType, nil
+			return types.PrimitiveTypeMap[types.TypeKind], nil
 		}
 
 		// Use Name because List and Blob are convertible to each other on Go.
 		switch t.Name() {
 		case "Blob":
-			return types.BlobType, nil
+			return types.PrimitiveTypeMap[types.BlobKind], nil
 		case "Bool":
-			return types.BoolType, nil
+			return types.PrimitiveTypeMap[types.BoolKind], nil
 		case "List":
-			return types.MakeListType(types.ValueType)
+			return types.MakeListType(types.PrimitiveTypeMap[types.ValueKind])
 		case "Map":
-			return types.MakeMapType(types.ValueType, types.ValueType)
+			return types.MakeMapType(types.PrimitiveTypeMap[types.ValueKind], types.PrimitiveTypeMap[types.ValueKind])
 		case "Float":
-			return types.FloaTType, nil
+			return types.PrimitiveTypeMap[types.FloatKind], nil
 		case "Ref":
-			return types.MakeRefType(types.ValueType)
+			return types.MakeRefType(types.PrimitiveTypeMap[types.ValueKind])
 		case "Set":
-			return types.MakeSetType(types.ValueType)
+			return types.MakeSetType(types.PrimitiveTypeMap[types.ValueKind])
 		case "String":
-			return types.StringType, nil
+			return types.PrimitiveTypeMap[types.StringKind], nil
 		case "Value":
-			return types.ValueType, nil
+			return types.PrimitiveTypeMap[types.ValueKind], nil
 		}
 
 		return nil, fmt.Errorf("cannot marshal type %s, it requires type parameters", t)
@@ -128,11 +128,11 @@ func encodeType(nbf *types.NomsBinFormat, t reflect.Type, seenStructs map[string
 
 	switch t.Kind() {
 	case reflect.Bool:
-		return types.BoolType, nil
+		return types.PrimitiveTypeMap[types.BoolKind], nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
-		return types.FloaTType, nil
+		return types.PrimitiveTypeMap[types.FloatKind], nil
 	case reflect.String:
-		return types.StringType, nil
+		return types.PrimitiveTypeMap[types.StringKind], nil
 	case reflect.Struct:
 		return structEncodeType(nbf, t, seenStructs)
 	case reflect.Array, reflect.Slice:

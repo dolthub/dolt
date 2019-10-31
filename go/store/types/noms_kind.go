@@ -57,27 +57,26 @@ const (
 	UnknownKind NomsKind = 255
 )
 
-var SupportedKinds = map[NomsKind]struct{}{
-	BoolKind:       {},
-	FloatKind:      {},
-	StringKind:     {},
-	BlobKind:       {},
-	ValueKind:      {},
-	ListKind:       {},
-	MapKind:        {},
-	RefKind:        {},
-	SetKind:        {},
-	StructKind:     {},
-	CycleKind:      {},
-	TypeKind:       {},
-	UnionKind:      {},
-	hashKind:       {},
-	UUIDKind:       {},
-	IntKind:        {},
-	UintKind:       {},
-	NullKind:       {},
-	TupleKind:      {},
-	InlineBlobKind: {},
+var KindToType = map[NomsKind]Value{
+	BlobKind:       Blob{},
+	BoolKind:       Bool(false),
+	CycleKind:      nil,
+	ListKind:       List{},
+	MapKind:        Map{},
+	FloatKind:      Float(0),
+	RefKind:        Ref{},
+	SetKind:        Set{},
+	StructKind:     Struct{},
+	StringKind:     String(""),
+	TypeKind:       &Type{},
+	UnionKind:      nil,
+	ValueKind:      nil,
+	UUIDKind:       UUID{},
+	IntKind:        Int(0),
+	UintKind:       Uint(0),
+	NullKind:       NullValue,
+	TupleKind:      EmptyTuple(Format_7_18),
+	InlineBlobKind: InlineBlob{},
 }
 
 var KindToString = map[NomsKind]string{
@@ -110,12 +109,8 @@ func (k NomsKind) String() string {
 
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.
 func IsPrimitiveKind(k NomsKind) bool {
-	switch k {
-	case BoolKind, FloatKind, IntKind, UintKind, StringKind, BlobKind, UUIDKind, ValueKind, TypeKind, NullKind, InlineBlobKind:
-		return true
-	default:
-		return false
-	}
+	_, ok := PrimitiveTypeMap[k]
+	return ok
 }
 
 // isKindOrderedByValue determines if a value is ordered by its value instead of its hash.

@@ -142,10 +142,10 @@ func ParseKeyValues(nbf *types.NomsBinFormat, sch schema.Schema, args []string) 
 		}
 	}
 
-	convFuncs := make(map[uint64]doltcore.ConvFunc)
+	convFuncs := make(map[uint64]types.MarshalCallback)
 	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		convFunc := doltcore.GetConvFunc(types.StringKind, col.Kind)
-		if convFunc == nil {
+		convFunc, err := doltcore.GetConvFunc(types.StringKind, col.Kind)
+		if err != nil {
 			return false, ColumnError{col.Name, "Conversion from string to " + col.KindString() + "is not defined."}
 		}
 

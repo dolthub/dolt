@@ -32,7 +32,7 @@ type RowConverter struct {
 	*FieldMapping
 	// IdentityConverter is a bool which is true if the converter is doing nothing.
 	IdentityConverter bool
-	ConvFuncs         map[uint64]doltcore.ConvFunc
+	ConvFuncs         map[uint64]types.MarshalCallback
 }
 
 func newIdentityConverter(mapping *FieldMapping) *RowConverter {
@@ -47,7 +47,7 @@ func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 		return newIdentityConverter(mapping), nil
 	}
 
-	convFuncs := make(map[uint64]doltcore.ConvFunc, len(mapping.SrcToDest))
+	convFuncs := make(map[uint64]types.MarshalCallback, len(mapping.SrcToDest))
 	for srcTag, destTag := range mapping.SrcToDest {
 		destCol, destOk := mapping.DestSch.GetAllCols().GetByTag(destTag)
 		srcCol, srcOk := mapping.SrcSch.GetAllCols().GetByTag(srcTag)
@@ -56,11 +56,13 @@ func NewRowConverter(mapping *FieldMapping) (*RowConverter, error) {
 			return nil, fmt.Errorf("Could not find column being mapped. src tag: %d, dest tag: %d", srcTag, destTag)
 		}
 
-		convFuncs[srcTag] = doltcore.GetConvFunc(srcCol.Kind, destCol.Kind)
+		convFunc, err := doltcore.GetConvFunc(srcCol.Kind, destCol.Kind)
 
-		if convFuncs[srcTag] == nil {
+		if err != nil {
 			return nil, fmt.Errorf("Unsupported conversion from type %s to %s", srcCol.KindString(), destCol.KindString())
 		}
+
+		convFuncs[srcTag] = convFunc
 	}
 
 	return &RowConverter{mapping, false, convFuncs}, nil

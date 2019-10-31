@@ -100,17 +100,17 @@ func TestGenericStructSet(t *testing.T) {
 	s4, err := s.Set("b", Float(42))
 	assert.NoError(err)
 	assert.True(mustType(MakeStructType("S3",
-		StructField{"b", FloaTType, false},
-		StructField{"o", StringType, false},
+		StructField{"b", PrimitiveTypeMap[FloatKind], false},
+		StructField{"o", PrimitiveTypeMap[StringKind], false},
 	)).Equals(mustType(TypeOf(s4))))
 
 	// Adds a new field
 	s5, err := s.Set("x", Float(42))
 	assert.NoError(err)
 	assert.True(mustType(MakeStructType("S3",
-		StructField{"b", BoolType, false},
-		StructField{"o", StringType, false},
-		StructField{"x", FloaTType, false},
+		StructField{"b", PrimitiveTypeMap[BoolKind], false},
+		StructField{"o", PrimitiveTypeMap[StringKind], false},
+		StructField{"x", PrimitiveTypeMap[FloatKind], false},
 	)).Equals(mustType(TypeOf(s5))))
 
 	// Subtype is not equal.
@@ -119,7 +119,7 @@ func TestGenericStructSet(t *testing.T) {
 	s7, err := s6.Set("l", mustList(NewList(context.Background(), vs, Float(2), Float(3))))
 	assert.NoError(err)
 	t7, err := MakeStructTypeFromFields("", FieldMap{
-		"l": mustType(MakeListType(FloaTType)),
+		"l": mustType(MakeListType(PrimitiveTypeMap[FloatKind])),
 	})
 	assert.NoError(err)
 	assert.True(t7.Equals(mustType(TypeOf(s7))))

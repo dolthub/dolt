@@ -201,17 +201,17 @@ func (p *Parser) parseSingleType() (*types.Type, error) {
 func (p *Parser) parseSingleTypeWithToken(tok rune, tokenText string) (*types.Type, error) {
 	switch tokenText {
 	case "Bool":
-		return types.BoolType, nil
+		return types.PrimitiveTypeMap[types.BoolKind], nil
 	case "Blob":
-		return types.BlobType, nil
+		return types.PrimitiveTypeMap[types.BlobKind], nil
 	case "Float":
-		return types.FloaTType, nil
+		return types.PrimitiveTypeMap[types.FloatKind], nil
 	case "String":
-		return types.StringType, nil
+		return types.PrimitiveTypeMap[types.StringKind], nil
 	case "Type":
-		return types.TypeType, nil
+		return types.PrimitiveTypeMap[types.TypeKind], nil
 	case "Value":
-		return types.ValueType, nil
+		return types.PrimitiveTypeMap[types.ValueKind], nil
 	case "Struct":
 		return p.parseStructType()
 	case "Map":

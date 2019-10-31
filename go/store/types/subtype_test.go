@@ -51,20 +51,20 @@ func assertInvalid(tt *testing.T, t *Type, v Value) {
 
 func assertAll(tt *testing.T, t *Type, v Value) {
 	allTypes := []*Type{
-		BoolType,
-		FloaTType,
-		StringType,
-		BlobType,
-		TypeType,
-		ValueType,
-		UUIDType,
-		IntType,
-		UintType,
-		InlineBlobType,
+		PrimitiveTypeMap[BoolKind],
+		PrimitiveTypeMap[FloatKind],
+		PrimitiveTypeMap[StringKind],
+		PrimitiveTypeMap[BlobKind],
+		PrimitiveTypeMap[TypeKind],
+		PrimitiveTypeMap[ValueKind],
+		PrimitiveTypeMap[UUIDKind],
+		PrimitiveTypeMap[IntKind],
+		PrimitiveTypeMap[UintKind],
+		PrimitiveTypeMap[InlineBlobKind],
 	}
 
 	for _, at := range allTypes {
-		if at == ValueType || t.Equals(at) {
+		if at == PrimitiveTypeMap[ValueKind] || t.Equals(at) {
 			assertSubtype(context.Background(), Format_7_18, at, v)
 		} else {
 			assertInvalid(tt, at, v)
@@ -73,34 +73,34 @@ func assertAll(tt *testing.T, t *Type, v Value) {
 }
 
 func TestAssertTypePrimitives(t *testing.T) {
-	assertSubtype(context.Background(), Format_7_18, BoolType, Bool(true))
-	assertSubtype(context.Background(), Format_7_18, BoolType, Bool(false))
-	assertSubtype(context.Background(), Format_7_18, FloaTType, Float(42))
-	assertSubtype(context.Background(), Format_7_18, StringType, String("abc"))
-	assertSubtype(context.Background(), Format_7_18, UUIDType, UUID(uuid.Must(uuid.NewUUID())))
-	assertSubtype(context.Background(), Format_7_18, IntType, Int(-1))
-	assertSubtype(context.Background(), Format_7_18, UintType, Uint(0xffffffffffffffff))
-	assertSubtype(context.Background(), Format_7_18, InlineBlobType, InlineBlob{})
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[BoolKind], Bool(true))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[BoolKind], Bool(false))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[FloatKind], Float(42))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[StringKind], String("abc"))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[UUIDKind], UUID(uuid.Must(uuid.NewUUID())))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[IntKind], Int(-1))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[UintKind], Uint(0xffffffffffffffff))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[InlineBlobKind], InlineBlob{})
 
-	assertInvalid(t, BoolType, Float(1))
-	assertInvalid(t, BoolType, String("abc"))
-	assertInvalid(t, FloaTType, Bool(true))
-	assertInvalid(t, StringType, UUID(uuid.Must(uuid.NewUUID())))
-	assertInvalid(t, UUIDType, String("abs"))
-	assertInvalid(t, IntType, Float(-1))
-	assertInvalid(t, UintType, Float(500))
-	assertInvalid(t, InlineBlobType, Int(742))
+	assertInvalid(t, PrimitiveTypeMap[BoolKind], Float(1))
+	assertInvalid(t, PrimitiveTypeMap[BoolKind], String("abc"))
+	assertInvalid(t, PrimitiveTypeMap[FloatKind], Bool(true))
+	assertInvalid(t, PrimitiveTypeMap[StringKind], UUID(uuid.Must(uuid.NewUUID())))
+	assertInvalid(t, PrimitiveTypeMap[UUIDKind], String("abs"))
+	assertInvalid(t, PrimitiveTypeMap[IntKind], Float(-1))
+	assertInvalid(t, PrimitiveTypeMap[UintKind], Float(500))
+	assertInvalid(t, PrimitiveTypeMap[InlineBlobKind], Int(742))
 }
 
 func TestAssertTypeValue(t *testing.T) {
 	vs := newTestValueStore()
 
-	assertSubtype(context.Background(), Format_7_18, ValueType, Bool(true))
-	assertSubtype(context.Background(), Format_7_18, ValueType, Float(1))
-	assertSubtype(context.Background(), Format_7_18, ValueType, String("abc"))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[ValueKind], Bool(true))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[ValueKind], Float(1))
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[ValueKind], String("abc"))
 	l, err := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assert.NoError(t, err)
-	assertSubtype(context.Background(), Format_7_18, ValueType, l)
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[ValueKind], l)
 }
 
 func TestAssertTypeBlob(t *testing.T) {
@@ -108,87 +108,87 @@ func TestAssertTypeBlob(t *testing.T) {
 
 	blob, err := NewBlob(context.Background(), vs, bytes.NewBuffer([]byte{0x00, 0x01}))
 	assert.NoError(t, err)
-	assertAll(t, BlobType, blob)
+	assertAll(t, PrimitiveTypeMap[BlobKind], blob)
 }
 
 func TestAssertTypeList(tt *testing.T) {
 	vs := newTestValueStore()
 
-	listOfNumberType, err := MakeListType(FloaTType)
+	listOfNumberType, err := MakeListType(PrimitiveTypeMap[FloatKind])
 	l, err := NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, listOfNumberType, l)
 	assertAll(tt, listOfNumberType, l)
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeListType(ValueType)), l)
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeListType(PrimitiveTypeMap[ValueKind])), l)
 }
 
 func TestAssertTypeMap(tt *testing.T) {
 	vs := newTestValueStore()
 
-	mapOfNumberToStringType, err := MakeMapType(FloaTType, StringType)
+	mapOfNumberToStringType, err := MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])
 	assert.NoError(tt, err)
 	m, err := NewMap(context.Background(), vs, Float(0), String("a"), Float(2), String("b"))
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, mapOfNumberToStringType, m)
 	assertAll(tt, mapOfNumberToStringType, m)
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeMapType(ValueType, ValueType)), m)
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeMapType(PrimitiveTypeMap[ValueKind], PrimitiveTypeMap[ValueKind])), m)
 }
 
 func TestAssertTypeSet(tt *testing.T) {
 	vs := newTestValueStore()
 
-	setOfNumberType, err := MakeSetType(FloaTType)
+	setOfNumberType, err := MakeSetType(PrimitiveTypeMap[FloatKind])
 	assert.NoError(tt, err)
 	s, err := NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, setOfNumberType, s)
 	assertAll(tt, setOfNumberType, s)
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeSetType(ValueType)), s)
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeSetType(PrimitiveTypeMap[ValueKind])), s)
 }
 
 func TestAssertTypeType(tt *testing.T) {
-	t, err := MakeSetType(FloaTType)
+	t, err := MakeSetType(PrimitiveTypeMap[FloatKind])
 	assert.NoError(tt, err)
-	assertSubtype(context.Background(), Format_7_18, TypeType, t)
-	assertAll(tt, TypeType, t)
-	assertSubtype(context.Background(), Format_7_18, ValueType, t)
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[TypeKind], t)
+	assertAll(tt, PrimitiveTypeMap[TypeKind], t)
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[ValueKind], t)
 }
 
 func TestAssertTypeStruct(tt *testing.T) {
-	t, err := MakeStructType("Struct", StructField{"x", BoolType, false})
+	t, err := MakeStructType("Struct", StructField{"x", PrimitiveTypeMap[BoolKind], false})
 	assert.NoError(tt, err)
 
 	v, err := NewStruct(Format_7_18, "Struct", StructData{"x": Bool(true)})
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, t, v)
 	assertAll(tt, t, v)
-	assertSubtype(context.Background(), Format_7_18, ValueType, v)
+	assertSubtype(context.Background(), Format_7_18, PrimitiveTypeMap[ValueKind], v)
 }
 
 func TestAssertTypeUnion(tt *testing.T) {
 	vs := newTestValueStore()
 
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(FloaTType)), Float(42))
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(FloaTType, StringType)), Float(42))
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(FloaTType, StringType)), String("hi"))
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(FloaTType, StringType, BoolType)), Float(555))
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(FloaTType, StringType, BoolType)), String("hi"))
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(FloaTType, StringType, BoolType)), Bool(true))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(PrimitiveTypeMap[FloatKind])), Float(42))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])), Float(42))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])), String("hi"))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind], PrimitiveTypeMap[BoolKind])), Float(555))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind], PrimitiveTypeMap[BoolKind])), String("hi"))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind], PrimitiveTypeMap[BoolKind])), Bool(true))
 
-	lt, err := MakeListType(mustType(MakeUnionType(FloaTType, StringType)))
+	lt, err := MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, lt, mustList(NewList(context.Background(), vs, Float(1), String("hi"), Float(2), String("bye"))))
 
-	st, err := MakeSetType(StringType)
+	st, err := MakeSetType(PrimitiveTypeMap[StringKind])
 	assert.NoError(tt, err)
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(st, FloaTType)), Float(42))
-	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(st, FloaTType)), mustValue(NewSet(context.Background(), vs, String("a"), String("b"))))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(st, PrimitiveTypeMap[FloatKind])), Float(42))
+	assertSubtype(context.Background(), Format_7_18, mustType(MakeUnionType(st, PrimitiveTypeMap[FloatKind])), mustValue(NewSet(context.Background(), vs, String("a"), String("b"))))
 
 	assertInvalid(tt, mustType(MakeUnionType()), Float(42))
-	assertInvalid(tt, mustType(MakeUnionType(StringType)), Float(42))
-	assertInvalid(tt, mustType(MakeUnionType(StringType, BoolType)), Float(42))
-	assertInvalid(tt, mustType(MakeUnionType(st, StringType)), Float(42))
-	assertInvalid(tt, mustType(MakeUnionType(st, FloaTType)), mustValue(NewSet(context.Background(), vs, Float(1), Float(2))))
+	assertInvalid(tt, mustType(MakeUnionType(PrimitiveTypeMap[StringKind])), Float(42))
+	assertInvalid(tt, mustType(MakeUnionType(PrimitiveTypeMap[StringKind], PrimitiveTypeMap[BoolKind])), Float(42))
+	assertInvalid(tt, mustType(MakeUnionType(st, PrimitiveTypeMap[StringKind])), Float(42))
+	assertInvalid(tt, mustType(MakeUnionType(st, PrimitiveTypeMap[FloatKind])), mustValue(NewSet(context.Background(), vs, Float(1), Float(2))))
 }
 
 func TestAssertConcreteTypeIsUnion(tt *testing.T) {
@@ -196,32 +196,32 @@ func TestAssertConcreteTypeIsUnion(tt *testing.T) {
 		Format_7_18,
 		mustType(MakeStructTypeFromFields("", FieldMap{})),
 		mustType(MakeUnionType(
-			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})),
-			mustType(MakeStructTypeFromFields("", FieldMap{"bar": StringType}))))))
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": PrimitiveTypeMap[StringKind]})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"bar": PrimitiveTypeMap[StringKind]}))))))
 
 	assert.False(tt, IsSubtype(
 		Format_7_18,
 		mustType(MakeStructTypeFromFields("", FieldMap{})),
-		mustType(MakeUnionType(mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})), FloaTType))))
+		mustType(MakeUnionType(mustType(MakeStructTypeFromFields("", FieldMap{"foo": PrimitiveTypeMap[StringKind]})), PrimitiveTypeMap[FloatKind]))))
 
 	assert.True(tt, IsSubtype(
 		Format_7_18,
 		mustType(MakeUnionType(
-			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})),
-			mustType(MakeStructTypeFromFields("", FieldMap{"bar": StringType})))),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": PrimitiveTypeMap[StringKind]})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"bar": PrimitiveTypeMap[StringKind]})))),
 		mustType(MakeUnionType(
-			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType})),
-			mustType(MakeStructTypeFromFields("", FieldMap{"bar": StringType})))),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": PrimitiveTypeMap[StringKind], "bar": PrimitiveTypeMap[StringKind]})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"bar": PrimitiveTypeMap[StringKind]})))),
 	))
 
 	assert.False(tt, IsSubtype(
 		Format_7_18,
 		mustType(MakeUnionType(
-			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType})),
-			mustType(MakeStructTypeFromFields("", FieldMap{"bar": StringType})))),
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": PrimitiveTypeMap[StringKind]})),
+			mustType(MakeStructTypeFromFields("", FieldMap{"bar": PrimitiveTypeMap[StringKind]})))),
 		mustType(MakeUnionType(
-			mustType(MakeStructTypeFromFields("", FieldMap{"foo": StringType, "bar": StringType})),
-			FloaTType))))
+			mustType(MakeStructTypeFromFields("", FieldMap{"foo": PrimitiveTypeMap[StringKind], "bar": PrimitiveTypeMap[StringKind]})),
+			PrimitiveTypeMap[FloatKind]))))
 }
 
 func TestAssertTypeEmptyListUnion(tt *testing.T) {
@@ -239,7 +239,7 @@ func TestAssertTypeEmptyListUnion(tt *testing.T) {
 func TestAssertTypeEmptyList(tt *testing.T) {
 	vs := newTestValueStore()
 
-	lt, err := MakeListType(FloaTType)
+	lt, err := MakeListType(PrimitiveTypeMap[FloatKind])
 	assert.NoError(tt, err)
 	l, err := NewList(context.Background(), vs)
 	assert.NoError(tt, err)
@@ -252,7 +252,7 @@ func TestAssertTypeEmptyList(tt *testing.T) {
 func TestAssertTypeEmptySet(tt *testing.T) {
 	vs := newTestValueStore()
 
-	st, err := MakeSetType(FloaTType)
+	st, err := MakeSetType(PrimitiveTypeMap[FloatKind])
 	assert.NoError(tt, err)
 	s, err := NewSet(context.Background(), vs)
 	assert.NoError(tt, err)
@@ -265,7 +265,7 @@ func TestAssertTypeEmptySet(tt *testing.T) {
 func TestAssertTypeEmptyMap(tt *testing.T) {
 	vs := newTestValueStore()
 
-	mt, err := MakeMapType(FloaTType, StringType)
+	mt, err := MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])
 	assert.NoError(tt, err)
 	m, err := NewMap(context.Background(), vs)
 	assert.NoError(tt, err)
@@ -278,9 +278,9 @@ func TestAssertTypeEmptyMap(tt *testing.T) {
 }
 
 func TestAssertTypeStructSubtypeByName(tt *testing.T) {
-	namedT, err := MakeStructType("Name", StructField{"x", FloaTType, false})
+	namedT, err := MakeStructType("Name", StructField{"x", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(tt, err)
-	anonT, err := MakeStructType("", StructField{"x", FloaTType, false})
+	anonT, err := MakeStructType("", StructField{"x", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(tt, err)
 	namedV, err := NewStruct(Format_7_18, "Name", StructData{"x": Float(42)})
 	assert.NoError(tt, err)
@@ -301,9 +301,9 @@ func TestAssertTypeStructSubtypeByName(tt *testing.T) {
 func TestAssertTypeStructSubtypeExtraFields(tt *testing.T) {
 	at, err := MakeStructType("")
 	assert.NoError(tt, err)
-	bt, err := MakeStructType("", StructField{"x", FloaTType, false})
+	bt, err := MakeStructType("", StructField{"x", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(tt, err)
-	ct, err := MakeStructType("", StructField{"s", StringType, false}, StructField{"x", FloaTType, false})
+	ct, err := MakeStructType("", StructField{"s", PrimitiveTypeMap[StringKind], false}, StructField{"x", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(tt, err)
 	av, err := NewStruct(Format_7_18, "", StructData{})
 	assert.NoError(tt, err)
@@ -335,14 +335,14 @@ func TestAssertTypeStructSubtype(tt *testing.T) {
 	assert.NoError(tt, err)
 	t1, err := MakeStructType("Commit",
 		StructField{"parents", mustType(MakeSetType(mustType(MakeUnionType()))), false},
-		StructField{"value", FloaTType, false},
+		StructField{"value", PrimitiveTypeMap[FloatKind], false},
 	)
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, t1, c1)
 
 	t11, err := MakeStructType("Commit",
 		StructField{"parents", mustType(MakeSetType(mustType(MakeRefType(MakeCycleType("Commit"))))), false},
-		StructField{"value", FloaTType, false},
+		StructField{"value", PrimitiveTypeMap[FloatKind], false},
 	)
 	assert.NoError(tt, err)
 	assertSubtype(context.Background(), Format_7_18, t11, c1)
@@ -362,7 +362,7 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	// }
 	t1, err := MakeStructType("S",
 		StructField{"x", MakeCycleType("S"), false},
-		StructField{"y", FloaTType, false},
+		StructField{"y", PrimitiveTypeMap[FloatKind], false},
 	)
 	assert.NoError(tt, err)
 	// struct S {
@@ -371,7 +371,7 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	// }
 	t2, err := MakeStructType("S",
 		StructField{"x", MakeCycleType("S"), false},
-		StructField{"y", mustType(MakeUnionType(FloaTType, StringType)), false},
+		StructField{"y", mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])), false},
 	)
 
 	assert.NoError(tt, err)
@@ -383,8 +383,8 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   y: Float | String,
 	// }
 	t3, err := MakeStructType("S",
-		StructField{"x", mustType(MakeUnionType(MakeCycleType("S"), FloaTType)), false},
-		StructField{"y", mustType(MakeUnionType(FloaTType, StringType)), false},
+		StructField{"x", mustType(MakeUnionType(MakeCycleType("S"), PrimitiveTypeMap[FloatKind])), false},
+		StructField{"y", mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])), false},
 	)
 
 	assert.NoError(tt, err)
@@ -399,8 +399,8 @@ func TestAssertTypeCycleUnion(tt *testing.T) {
 	//   y: Float,
 	// }
 	t4, err := MakeStructType("S",
-		StructField{"x", mustType(MakeUnionType(MakeCycleType("S"), FloaTType)), false},
-		StructField{"y", FloaTType, false},
+		StructField{"x", mustType(MakeUnionType(MakeCycleType("S"), PrimitiveTypeMap[FloatKind])), false},
+		StructField{"y", PrimitiveTypeMap[FloatKind], false},
 	)
 
 	assert.NoError(tt, err)
@@ -453,7 +453,7 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	//   b: struct {},
 	// }
 	t1, err := MakeStructType("X",
-		StructField{"a", FloaTType, false},
+		StructField{"a", PrimitiveTypeMap[FloatKind], false},
 		StructField{"b", EmptyStructType, false},
 	)
 	assert.NoError(tt, err)
@@ -461,7 +461,7 @@ func TestIsSubtypeEmptySruct(tt *testing.T) {
 	// struct {
 	//   a: Float,
 	// }
-	t2, err := MakeStructType("X", StructField{"a", FloaTType, false})
+	t2, err := MakeStructType("X", StructField{"a", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(tt, err)
 
 	assert.False(tt, IsSubtype(Format_7_18, t1, t2))
@@ -472,9 +472,9 @@ func TestIsSubtypeCompoundUnion(tt *testing.T) {
 	rt, err := MakeListType(EmptyStructType)
 	assert.NoError(tt, err)
 
-	st1, err := MakeStructType("One", StructField{"a", FloaTType, false})
+	st1, err := MakeStructType("One", StructField{"a", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(tt, err)
-	st2, err := MakeStructType("Two", StructField{"b", StringType, false})
+	st2, err := MakeStructType("Two", StructField{"b", PrimitiveTypeMap[StringKind], false})
 	assert.NoError(tt, err)
 	ct, err := MakeListType(mustType(MakeUnionType(st1, st2)))
 	assert.NoError(tt, err)
@@ -482,7 +482,7 @@ func TestIsSubtypeCompoundUnion(tt *testing.T) {
 	assert.True(tt, IsSubtype(Format_7_18, rt, ct))
 	assert.False(tt, IsSubtype(Format_7_18, ct, rt))
 
-	ct2, err := MakeListType(mustType(MakeUnionType(st1, st2, FloaTType)))
+	ct2, err := MakeListType(mustType(MakeUnionType(st1, st2, PrimitiveTypeMap[FloatKind])))
 	assert.NoError(tt, err)
 	assert.False(tt, IsSubtype(Format_7_18, rt, ct2))
 	assert.False(tt, IsSubtype(Format_7_18, ct2, rt))
@@ -491,18 +491,18 @@ func TestIsSubtypeCompoundUnion(tt *testing.T) {
 func TestIsSubtypeOptionalFields(tt *testing.T) {
 	assert := assert.New(tt)
 
-	s1, err := MakeStructType("", StructField{"a", FloaTType, true})
+	s1, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[FloatKind], true})
 	assert.NoError(err)
-	s2, err := MakeStructType("", StructField{"a", FloaTType, false})
+	s2, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[FloatKind], false})
 	assert.NoError(err)
 	assert.True(IsSubtype(Format_7_18, s1, s2))
 	assert.False(IsSubtype(Format_7_18, s2, s1))
 
-	s3, err := MakeStructType("", StructField{"a", StringType, false})
+	s3, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[StringKind], false})
 	assert.False(IsSubtype(Format_7_18, s1, s3))
 	assert.False(IsSubtype(Format_7_18, s3, s1))
 
-	s4, err := MakeStructType("", StructField{"a", StringType, true})
+	s4, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[StringKind], true})
 	assert.False(IsSubtype(Format_7_18, s1, s4))
 	assert.False(IsSubtype(Format_7_18, s4, s1))
 
@@ -543,9 +543,9 @@ func TestIsSubtypeOptionalFields(tt *testing.T) {
 	test("a? c? e", "b d e", true, false)
 	test("a? c? e?", "b d", true, false)
 
-	t1, err := MakeStructType("", StructField{"a", BoolType, true})
+	t1, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[BoolKind], true})
 	assert.NoError(err)
-	t2, err := MakeStructType("", StructField{"a", FloaTType, true})
+	t2, err := MakeStructType("", StructField{"a", PrimitiveTypeMap[FloatKind], true})
 	assert.NoError(err)
 	assert.False(IsSubtype(Format_7_18, t1, t2))
 	assert.False(IsSubtype(Format_7_18, t2, t1))
@@ -564,7 +564,7 @@ func makeTestStructTypeFromFieldNames(s string) (*Type, error) {
 			f = f[:len(f)-1]
 			optional = true
 		}
-		fields[i] = StructField{f, BoolType, optional}
+		fields[i] = StructField{f, PrimitiveTypeMap[BoolKind], optional}
 	}
 	return MakeStructType("", fields...)
 }
@@ -649,15 +649,15 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		v Value
 		t *Type
 	}{
-		{Bool(true), BoolType},
-		{Float(42), FloaTType},
-		{String("s"), StringType},
-		{mustBlob(NewEmptyBlob(vs)), BlobType},
-		{BoolType, TypeType},
-		{mustList(NewList(context.Background(), vs, Float(42))), mustType(MakeListType(FloaTType))},
-		{mustValue(NewSet(context.Background(), vs, Float(42))), mustType(MakeSetType(FloaTType))},
-		{mustRef(NewRef(Float(42), Format_7_18)), mustType(MakeRefType(FloaTType))},
-		{mustValue(NewMap(context.Background(), vs, Float(42), String("a"))), mustType(MakeMapType(FloaTType, StringType))},
+		{Bool(true), PrimitiveTypeMap[BoolKind]},
+		{Float(42), PrimitiveTypeMap[FloatKind]},
+		{String("s"), PrimitiveTypeMap[StringKind]},
+		{mustBlob(NewEmptyBlob(vs)), PrimitiveTypeMap[BlobKind]},
+		{PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[TypeKind]},
+		{mustList(NewList(context.Background(), vs, Float(42))), mustType(MakeListType(PrimitiveTypeMap[FloatKind]))},
+		{mustValue(NewSet(context.Background(), vs, Float(42))), mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))},
+		{mustRef(NewRef(Float(42), Format_7_18)), mustType(MakeRefType(PrimitiveTypeMap[FloatKind]))},
+		{mustValue(NewMap(context.Background(), vs, Float(42), String("a"))), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))},
 		{mustValue(NewStruct(Format_7_18, "A", StructData{})), mustType(MakeStructType("A"))},
 		// Not including CycleType or Union here
 	}
@@ -673,19 +673,19 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	}
 
 	for _, rec := range allTypes {
-		assertTrue(rec.v, ValueType)
+		assertTrue(rec.v, PrimitiveTypeMap[ValueKind])
 	}
 
-	assertTrue(Bool(true), mustType((MakeUnionType(BoolType, FloaTType))))
-	assertTrue(Float(123), mustType(MakeUnionType(BoolType, FloaTType)))
-	assertFalse(String("abc"), mustType(MakeUnionType(BoolType, FloaTType)))
+	assertTrue(Bool(true), mustType((MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind]))))
+	assertTrue(Float(123), mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))
+	assertFalse(String("abc"), mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))
 	assertFalse(String("abc"), mustType(MakeUnionType()))
 
-	assertTrue(mustList(NewList(context.Background(), vs)), mustType(MakeListType(FloaTType)))
-	assertTrue(mustList(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeListType(FloaTType)))
-	assertFalse(mustList(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeListType(BoolType)))
-	assertTrue(mustList(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeListType(mustType(MakeUnionType(FloaTType, BoolType)))))
-	assertTrue(mustList(NewList(context.Background(), vs, Float(0), Bool(true))), mustType(MakeListType(mustType(MakeUnionType(FloaTType, BoolType)))))
+	assertTrue(mustList(NewList(context.Background(), vs)), mustType(MakeListType(PrimitiveTypeMap[FloatKind])))
+	assertTrue(mustList(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeListType(PrimitiveTypeMap[FloatKind])))
+	assertFalse(mustList(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeListType(PrimitiveTypeMap[BoolKind])))
+	assertTrue(mustList(NewList(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
+	assertTrue(mustList(NewList(context.Background(), vs, Float(0), Bool(true))), mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
 	assertFalse(mustList(NewList(context.Background(), vs, Float(0))), mustType(MakeListType(mustType(MakeUnionType()))))
 	assertTrue(mustList(NewList(context.Background(), vs)), mustType(MakeListType(mustType(MakeUnionType()))))
 
@@ -713,18 +713,18 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			return newList(mseq)
 		}
 
-		assertTrue(newChunkedList(Float(0), Float(1), Float(2), Float(3)), mustType(MakeListType(FloaTType)))
-		assertFalse(newChunkedList(Float(0), Float(1), Float(2), Float(3)), mustType(MakeListType(BoolType)))
-		assertTrue(newChunkedList(Float(0), Float(1), Float(2), Float(3)), mustType(MakeListType(mustType(MakeUnionType(FloaTType, BoolType)))))
-		assertTrue(newChunkedList(Float(0), Bool(true)), mustType(MakeListType(mustType(MakeUnionType(FloaTType, BoolType)))))
+		assertTrue(newChunkedList(Float(0), Float(1), Float(2), Float(3)), mustType(MakeListType(PrimitiveTypeMap[FloatKind])))
+		assertFalse(newChunkedList(Float(0), Float(1), Float(2), Float(3)), mustType(MakeListType(PrimitiveTypeMap[BoolKind])))
+		assertTrue(newChunkedList(Float(0), Float(1), Float(2), Float(3)), mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
+		assertTrue(newChunkedList(Float(0), Bool(true)), mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
 		assertFalse(newChunkedList(Float(0)), mustType(MakeListType(mustType(MakeUnionType()))))
 	}
 
-	assertTrue(mustValue(NewSet(context.Background(), vs)), mustType(MakeSetType(FloaTType)))
-	assertTrue(mustValue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeSetType(FloaTType)))
-	assertFalse(mustValue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeSetType(BoolType)))
-	assertTrue(mustValue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeSetType(mustType(MakeUnionType(FloaTType, BoolType)))))
-	assertTrue(mustValue(NewSet(context.Background(), vs, Float(0), Bool(true))), mustType(MakeSetType(mustType(MakeUnionType(FloaTType, BoolType)))))
+	assertTrue(mustValue(NewSet(context.Background(), vs)), mustType(MakeSetType(PrimitiveTypeMap[FloatKind])))
+	assertTrue(mustValue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeSetType(PrimitiveTypeMap[FloatKind])))
+	assertFalse(mustValue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeSetType(PrimitiveTypeMap[BoolKind])))
+	assertTrue(mustValue(NewSet(context.Background(), vs, Float(0), Float(1), Float(2), Float(3))), mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
+	assertTrue(mustValue(NewSet(context.Background(), vs, Float(0), Bool(true))), mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
 	assertFalse(mustValue(NewSet(context.Background(), vs, Float(0))), mustType(MakeSetType(mustType(MakeUnionType()))))
 	assertTrue(mustValue(NewSet(context.Background(), vs)), mustType(MakeSetType(mustType(MakeUnionType()))))
 
@@ -749,23 +749,23 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			}
 			return newSet(mustOrdSeq(newSetMetaSequence(1, tuples, vs)))
 		}
-		assertTrue(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), mustType(MakeSetType(FloaTType)))
-		assertFalse(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), mustType(MakeSetType(BoolType)))
-		assertTrue(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), mustType(MakeSetType(mustType(MakeUnionType(FloaTType, BoolType)))))
-		assertTrue(newChunkedSet(Float(0), Bool(true)), mustType(MakeSetType(mustType(MakeUnionType(FloaTType, BoolType)))))
+		assertTrue(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), mustType(MakeSetType(PrimitiveTypeMap[FloatKind])))
+		assertFalse(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), mustType(MakeSetType(PrimitiveTypeMap[BoolKind])))
+		assertTrue(newChunkedSet(Float(0), Float(1), Float(2), Float(3)), mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
+		assertTrue(newChunkedSet(Float(0), Bool(true)), mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
 		assertFalse(newChunkedSet(Float(0)), mustType(MakeSetType(mustType(MakeUnionType()))))
 	}
 
-	assertTrue(mustMap(NewMap(context.Background(), vs)), mustType(MakeMapType(FloaTType, StringType)))
-	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(FloaTType, StringType)))
-	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(BoolType, StringType)))
-	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(FloaTType, BoolType)))
-	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(mustType(MakeUnionType(FloaTType, BoolType)), StringType)))
-	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(FloaTType, mustType(MakeUnionType(BoolType, StringType)))))
-	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Bool(true), String("b"))), mustType(MakeMapType(mustType(MakeUnionType(FloaTType, BoolType)), StringType)))
-	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), Bool(true))), mustType(MakeMapType(FloaTType, mustType(MakeUnionType(BoolType, StringType)))))
-	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"))), mustType(MakeMapType(mustType(MakeUnionType()), StringType)))
-	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"))), mustType(MakeMapType(FloaTType, mustType(MakeUnionType()))))
+	assertTrue(mustMap(NewMap(context.Background(), vs)), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
+	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
+	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])))
+	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))
+	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])), PrimitiveTypeMap[StringKind])))
+	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), String("b"))), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])))))
+	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Bool(true), String("b"))), mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])), PrimitiveTypeMap[StringKind])))
+	assertTrue(mustMap(NewMap(context.Background(), vs, Float(0), String("a"), Float(1), Bool(true))), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])))))
+	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"))), mustType(MakeMapType(mustType(MakeUnionType()), PrimitiveTypeMap[StringKind])))
+	assertFalse(mustMap(NewMap(context.Background(), vs, Float(0), String("a"))), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], mustType(MakeUnionType()))))
 	assertTrue(mustMap(NewMap(context.Background(), vs)), mustType(MakeMapType(mustType(MakeUnionType()), mustType(MakeUnionType()))))
 
 	{
@@ -790,29 +790,29 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			return newMap(mustOrdSeq(newMapMetaSequence(1, tuples, vs)))
 		}
 
-		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(FloaTType, StringType)))
-		assertFalse(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(BoolType, StringType)))
-		assertFalse(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(FloaTType, BoolType)))
-		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(mustType(MakeUnionType(FloaTType, BoolType)), StringType)))
-		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(FloaTType, mustType(MakeUnionType(BoolType, StringType)))))
-		assertTrue(newChunkedMap(Float(0), String("a"), Bool(true), String("b")), mustType(MakeMapType(mustType(MakeUnionType(FloaTType, BoolType)), StringType)))
-		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), Bool(true)), mustType(MakeMapType(FloaTType, mustType(MakeUnionType(BoolType, StringType)))))
-		assertFalse(newChunkedMap(Float(0), String("a")), mustType(MakeMapType(mustType(MakeUnionType()), StringType)))
-		assertFalse(newChunkedMap(Float(0), String("a")), mustType(MakeMapType(FloaTType, mustType(MakeUnionType()))))
+		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])))
+		assertFalse(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])))
+		assertFalse(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))
+		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])), PrimitiveTypeMap[StringKind])))
+		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), String("b")), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])))))
+		assertTrue(newChunkedMap(Float(0), String("a"), Bool(true), String("b")), mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])), PrimitiveTypeMap[StringKind])))
+		assertTrue(newChunkedMap(Float(0), String("a"), Float(1), Bool(true)), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])))))
+		assertFalse(newChunkedMap(Float(0), String("a")), mustType(MakeMapType(mustType(MakeUnionType()), PrimitiveTypeMap[StringKind])))
+		assertFalse(newChunkedMap(Float(0), String("a")), mustType(MakeMapType(PrimitiveTypeMap[FloatKind], mustType(MakeUnionType()))))
 	}
 
-	assertTrue(mustRef(NewRef(Float(1), Format_7_18)), mustType(MakeRefType(FloaTType)))
-	assertFalse(mustRef(NewRef(Float(1), Format_7_18)), mustType(MakeRefType(BoolType)))
-	assertTrue(mustRef(NewRef(Float(1), Format_7_18)), mustType(MakeRefType(mustType(MakeUnionType(FloaTType, BoolType)))))
+	assertTrue(mustRef(NewRef(Float(1), Format_7_18)), mustType(MakeRefType(PrimitiveTypeMap[FloatKind])))
+	assertFalse(mustRef(NewRef(Float(1), Format_7_18)), mustType(MakeRefType(PrimitiveTypeMap[BoolKind])))
+	assertTrue(mustRef(NewRef(Float(1), Format_7_18)), mustType(MakeRefType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[BoolKind])))))
 	assertFalse(mustRef(NewRef(Float(1), Format_7_18)), mustType(MakeRefType(mustType(MakeUnionType()))))
 
 	assertTrue(
 		mustValue(NewStruct(Format_7_18, "Struct", StructData{"x": Bool(true)})),
-		mustType(MakeStructType("Struct", StructField{"x", BoolType, false})),
+		mustType(MakeStructType("Struct", StructField{"x", PrimitiveTypeMap[BoolKind], false})),
 	)
 	assertTrue(
 		mustValue(NewStruct(Format_7_18, "Struct", StructData{"x": Bool(true)})),
-		mustType(MakeStructType("Struct", StructField{"x", BoolType, true})),
+		mustType(MakeStructType("Struct", StructField{"x", PrimitiveTypeMap[BoolKind], true})),
 	)
 	assertTrue(
 		mustValue(NewStruct(Format_7_18, "Struct", StructData{"x": Bool(true)})),
@@ -832,15 +832,15 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 	)
 	assertTrue(
 		mustValue(NewStruct(Format_7_18, "Struct", StructData{"x": Bool(true)})),
-		mustType(MakeStructType("Struct", StructField{"x", mustType(MakeUnionType(BoolType, FloaTType)), true})),
+		mustType(MakeStructType("Struct", StructField{"x", mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])), true})),
 	)
 	assertTrue(
 		mustValue(NewStruct(Format_7_18, "Struct", StructData{"x": Bool(true)})),
-		mustType(MakeStructType("Struct", StructField{"y", BoolType, true})),
+		mustType(MakeStructType("Struct", StructField{"y", PrimitiveTypeMap[BoolKind], true})),
 	)
 	assertFalse(
 		mustValue(NewStruct(Format_7_18, "Struct", StructData{"x": Bool(true)})),
-		mustType(MakeStructType("Struct", StructField{"x", StringType, true})),
+		mustType(MakeStructType("Struct", StructField{"x", PrimitiveTypeMap[StringKind], true})),
 	)
 
 	assertTrue(
@@ -854,7 +854,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			)),
 		})),
 		mustType(MakeStructType("Node",
-			StructField{"value", FloaTType, false},
+			StructField{"value", PrimitiveTypeMap[FloatKind], false},
 			StructField{"children", mustType(MakeListType(MakeCycleType("Node"))), false},
 		)),
 	)
@@ -870,7 +870,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 			),
 		})),
 		mustType(MakeStructType("Node",
-			StructField{"value", FloaTType, false},
+			StructField{"value", PrimitiveTypeMap[FloatKind], false},
 			StructField{"children", mustType(MakeListType(MakeCycleType("Node"))), false},
 		)),
 	)
@@ -892,7 +892,7 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 		}
 
 		requiredType, err := MakeStructType("Node",
-			StructField{"value", FloaTType, false},
+			StructField{"value", PrimitiveTypeMap[FloatKind], false},
 			StructField{"children", mustType(MakeListType(mustType(MakeRefType(MakeCycleType("Node"))))), false},
 		)
 		assert.NoError(err)
@@ -912,12 +912,12 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 
 	{
 		t1, err := MakeStructType("A",
-			StructField{"a", FloaTType, false},
+			StructField{"a", PrimitiveTypeMap[FloatKind], false},
 			StructField{"b", MakeCycleType("A"), false},
 		)
 		assert.NoError(err)
 		t2, err := MakeStructType("A",
-			StructField{"a", FloaTType, false},
+			StructField{"a", PrimitiveTypeMap[FloatKind], false},
 			StructField{"b", MakeCycleType("A"), true},
 		)
 		assert.NoError(err)
@@ -935,8 +935,8 @@ func TestIsValueSubtypeOf(tt *testing.T) {
 
 	{
 		t, err := MakeStructType("A",
-			StructField{"aa", FloaTType, true},
-			StructField{"bb", BoolType, false},
+			StructField{"aa", PrimitiveTypeMap[FloatKind], true},
+			StructField{"bb", PrimitiveTypeMap[BoolKind], false},
 		)
 		assert.NoError(err)
 		v, err := NewStruct(Format_7_18, "A", StructData{

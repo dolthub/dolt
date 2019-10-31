@@ -107,7 +107,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 
 	length := 1 << size
 	elems := newTestList(length)
-	tr, err := MakeListType(FloaTType)
+	tr, err := MakeListType(PrimitiveTypeMap[FloatKind])
 	d.PanicIfError(err)
 	list, err := NewList(context.Background(), vrw, elems...)
 	d.PanicIfError(err)
@@ -1233,19 +1233,19 @@ func TestListTypeAfterMutations(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.asSequence())
-		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(FloaTType))))
+		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(PrimitiveTypeMap[FloatKind]))))
 
 		l, err = l.Edit().Append(String("a")).List(context.Background())
 		assert.NoError(err)
 		assert.Equal(l.Len(), uint64(n+1))
 		assert.IsType(c, l.asSequence())
-		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(mustType(MakeUnionType(FloaTType, StringType))))))
+		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))))))
 
 		l, err = l.Edit().Splice(l.Len()-1, 1).List(context.Background())
 		assert.NoError(err)
 		assert.Equal(l.Len(), uint64(n))
 		assert.IsType(c, l.asSequence())
-		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(FloaTType))))
+		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(PrimitiveTypeMap[FloatKind]))))
 	}
 
 	test(15, listLeafSequence{})
@@ -1371,8 +1371,8 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 	assert.NoError(err)
 	assert.True(
 		mustType(MakeListType(mustType(MakeStructType("Foo",
-			StructField{"a", FloaTType, false},
-			StructField{"b", StringType, true},
+			StructField{"a", PrimitiveTypeMap[FloatKind], false},
+			StructField{"b", PrimitiveTypeMap[StringKind], true},
 		)),
 		)).Equals(mustType(TypeOf(list))))
 }

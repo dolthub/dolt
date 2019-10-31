@@ -87,15 +87,15 @@ func TestPathStructType(t *testing.T) {
 	assert := assert.New(t)
 
 	typ, err := MakeStructType("MyStruct",
-		StructField{Name: "foo", Type: StringType},
-		StructField{Name: "bar", Type: BoolType},
-		StructField{Name: "baz", Type: FloaTType},
+		StructField{Name: "foo", Type: PrimitiveTypeMap[StringKind]},
+		StructField{Name: "bar", Type: PrimitiveTypeMap[BoolKind]},
+		StructField{Name: "baz", Type: PrimitiveTypeMap[FloatKind]},
 	)
 
 	assert.NoError(err)
-	assertResolvesTo(assert, StringType, typ, `.foo`)
-	assertResolvesTo(assert, BoolType, typ, `.bar`)
-	assertResolvesTo(assert, FloaTType, typ, `.baz`)
+	assertResolvesTo(assert, PrimitiveTypeMap[StringKind], typ, `.foo`)
+	assertResolvesTo(assert, PrimitiveTypeMap[BoolKind], typ, `.bar`)
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], typ, `.baz`)
 	assertResolvesTo(assert, nil, typ, `.notHere`)
 
 	typ2, err := MakeStructType("",
@@ -104,9 +104,9 @@ func TestPathStructType(t *testing.T) {
 
 	assert.NoError(err)
 	assertResolvesTo(assert, typ, typ2, `.typ`)
-	assertResolvesTo(assert, StringType, typ2, `.typ.foo`)
-	assertResolvesTo(assert, BoolType, typ2, `.typ.bar`)
-	assertResolvesTo(assert, FloaTType, typ2, `.typ.baz`)
+	assertResolvesTo(assert, PrimitiveTypeMap[StringKind], typ2, `.typ.foo`)
+	assertResolvesTo(assert, PrimitiveTypeMap[BoolKind], typ2, `.typ.bar`)
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], typ2, `.typ.baz`)
 	assertResolvesTo(assert, nil, typ2, `.typ.notHere`)
 	assertResolvesTo(assert, nil, typ2, `.notHere.typ`)
 }
@@ -154,7 +154,7 @@ func TestPathIndex(t *testing.T) {
 func TestPathIndexType(t *testing.T) {
 	assert := assert.New(t)
 
-	st, err := MakeSetType(FloaTType)
+	st, err := MakeSetType(PrimitiveTypeMap[FloatKind])
 	assert.NoError(err)
 	lt, err := MakeListType(st)
 	assert.NoError(err)
@@ -163,16 +163,16 @@ func TestPathIndexType(t *testing.T) {
 	ut, err := MakeUnionType(lt, mt, st)
 	assert.NoError(err)
 
-	assertResolvesTo(assert, FloaTType, st, "[0]")
-	assertResolvesTo(assert, FloaTType, st, "[-1]")
-	assertResolvesTo(assert, FloaTType, st, "@at(0)")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], st, "[0]")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], st, "[-1]")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], st, "@at(0)")
 	assertResolvesTo(assert, nil, st, "[1]")
 	assertResolvesTo(assert, nil, st, "[-2]")
 
 	assertResolvesTo(assert, st, lt, "[0]")
 	assertResolvesTo(assert, st, lt, "[-1]")
-	assertResolvesTo(assert, FloaTType, lt, "[0][0]")
-	assertResolvesTo(assert, FloaTType, lt, "@at(0)@at(0)")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], lt, "[0][0]")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], lt, "@at(0)@at(0)")
 	assertResolvesTo(assert, nil, lt, "[1]")
 	assertResolvesTo(assert, nil, lt, "[-2]")
 
@@ -180,8 +180,8 @@ func TestPathIndexType(t *testing.T) {
 	assertResolvesTo(assert, st, mt, "[-2]")
 	assertResolvesTo(assert, lt, mt, "[1]")
 	assertResolvesTo(assert, lt, mt, "[-1]")
-	assertResolvesTo(assert, FloaTType, mt, "[1][0][0]")
-	assertResolvesTo(assert, FloaTType, mt, "@at(1)@at(0)@at(0)")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], mt, "[1][0][0]")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], mt, "@at(1)@at(0)@at(0)")
 	assertResolvesTo(assert, nil, mt, "[2]")
 	assertResolvesTo(assert, nil, mt, "[-3]")
 
@@ -191,8 +191,8 @@ func TestPathIndexType(t *testing.T) {
 	assertResolvesTo(assert, mt, ut, "[-2]")
 	assertResolvesTo(assert, st, ut, "[2]")
 	assertResolvesTo(assert, st, ut, "[-1]")
-	assertResolvesTo(assert, FloaTType, ut, "[1][1][0][0]")
-	assertResolvesTo(assert, FloaTType, ut, "@at(1)@at(1)@at(0)@at(0)")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], ut, "[1][1][0][0]")
+	assertResolvesTo(assert, PrimitiveTypeMap[FloatKind], ut, "@at(1)@at(1)@at(0)@at(0)")
 	assertResolvesTo(assert, nil, ut, "[3]")
 	assertResolvesTo(assert, nil, ut, "[-4]")
 }
@@ -545,7 +545,7 @@ func TestPathType(t *testing.T) {
 	})
 
 	assert.NoError(err)
-	assertResolvesTo(assert, StringType, m, `["string"]@key@type`)
+	assertResolvesTo(assert, PrimitiveTypeMap[StringKind], m, `["string"]@key@type`)
 	assertResolvesTo(assert, mustType(TypeOf(m)), m, `@type`)
 	s, err := NewStruct(Format_7_18, "", StructData{
 		"str": String("foo"),

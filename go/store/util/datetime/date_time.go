@@ -46,7 +46,7 @@ type DateTime struct {
 // The field secSinceEpoch may contain fractions in cases where seconds are
 // not sufficient.
 var DateTimeType, _ = types.MakeStructTypeFromFields(datetypename, types.FieldMap{
-	"secSinceEpoch": types.FloaTType,
+	"secSinceEpoch": types.PrimitiveTypeMap[types.FloatKind],
 })
 
 var dateTimeTemplate = types.MakeStructTemplate(datetypename, []string{"secSinceEpoch"})

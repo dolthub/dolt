@@ -129,61 +129,61 @@ func (suite *WalkAllTestSuite) TestWalkMultilevelList() {
 
 func (suite *WalkAllTestSuite) TestWalkType() {
 	t, err := MakeStructTypeFromFields("TestStruct", FieldMap{
-		"s":  StringType,
-		"b":  BoolType,
-		"n":  FloaTType,
-		"id": UUIDType,
-		"bl": BlobType,
-		"t":  TypeType,
-		"v":  ValueType,
-		"i":  IntType,
-		"u":  UintType,
-		"ua": InlineBlobType,
+		"s":  PrimitiveTypeMap[StringKind],
+		"b":  PrimitiveTypeMap[BoolKind],
+		"n":  PrimitiveTypeMap[FloatKind],
+		"id": PrimitiveTypeMap[UUIDKind],
+		"bl": PrimitiveTypeMap[BlobKind],
+		"t":  PrimitiveTypeMap[TypeKind],
+		"v":  PrimitiveTypeMap[ValueKind],
+		"i":  PrimitiveTypeMap[IntKind],
+		"u":  PrimitiveTypeMap[UintKind],
+		"ib": PrimitiveTypeMap[InlineBlobKind],
 	})
 	suite.NoError(err)
 	suite.assertVisitedOnce(t, t)
-	suite.assertVisitedOnce(t, BoolType)
-	suite.assertVisitedOnce(t, FloaTType)
-	suite.assertVisitedOnce(t, UUIDType)
-	suite.assertVisitedOnce(t, IntType)
-	suite.assertVisitedOnce(t, UintType)
-	suite.assertVisitedOnce(t, StringType)
-	suite.assertVisitedOnce(t, BlobType)
-	suite.assertVisitedOnce(t, TypeType)
-	suite.assertVisitedOnce(t, ValueType)
-	suite.assertVisitedOnce(t, InlineBlobType)
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[BoolKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[FloatKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[UUIDKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[IntKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[UintKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[StringKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[BlobKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[TypeKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[ValueKind])
+	suite.assertVisitedOnce(t, PrimitiveTypeMap[InlineBlobKind])
 
 	{
-		t2 := mustType(MakeListType(BoolType))
+		t2 := mustType(MakeListType(PrimitiveTypeMap[BoolKind]))
 		suite.assertVisitedOnce(t2, t2)
-		suite.assertVisitedOnce(t2, BoolType)
+		suite.assertVisitedOnce(t2, PrimitiveTypeMap[BoolKind])
 	}
 
 	{
-		t2 := mustType(MakeSetType(BoolType))
+		t2 := mustType(MakeSetType(PrimitiveTypeMap[BoolKind]))
 		suite.assertVisitedOnce(t2, t2)
-		suite.assertVisitedOnce(t2, BoolType)
+		suite.assertVisitedOnce(t2, PrimitiveTypeMap[BoolKind])
 	}
 
 	{
-		t2 := mustType(MakeRefType(BoolType))
+		t2 := mustType(MakeRefType(PrimitiveTypeMap[BoolKind]))
 		suite.assertVisitedOnce(t2, t2)
-		suite.assertVisitedOnce(t2, BoolType)
+		suite.assertVisitedOnce(t2, PrimitiveTypeMap[BoolKind])
 	}
 
-	t2 := mustType(MakeMapType(FloaTType, StringType))
+	t2 := mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))
 	suite.assertVisitedOnce(t2, t2)
-	suite.assertVisitedOnce(t2, FloaTType)
-	suite.assertVisitedOnce(t2, StringType)
+	suite.assertVisitedOnce(t2, PrimitiveTypeMap[FloatKind])
+	suite.assertVisitedOnce(t2, PrimitiveTypeMap[StringKind])
 
-	t3 := mustType(MakeUnionType(FloaTType, StringType, BoolType, UUIDType))
+	t3 := mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind], PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[UUIDKind]))
 	suite.assertVisitedOnce(t3, t3)
-	suite.assertVisitedOnce(t3, BoolType)
-	suite.assertVisitedOnce(t3, FloaTType)
-	suite.assertVisitedOnce(t3, StringType)
-	suite.assertVisitedOnce(t3, UUIDType)
-	suite.assertVisitedOnce(t3, IntType)
-	suite.assertVisitedOnce(t3, UintType)
+	suite.assertVisitedOnce(t3, PrimitiveTypeMap[BoolKind])
+	suite.assertVisitedOnce(t3, PrimitiveTypeMap[FloatKind])
+	suite.assertVisitedOnce(t3, PrimitiveTypeMap[StringKind])
+	suite.assertVisitedOnce(t3, PrimitiveTypeMap[UUIDKind])
+	suite.assertVisitedOnce(t3, PrimitiveTypeMap[IntKind])
+	suite.assertVisitedOnce(t3, PrimitiveTypeMap[UintKind])
 
 	t4 := MakeCycleType("ABC")
 	suite.assertVisitedOnce(t4, t4)

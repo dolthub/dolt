@@ -54,6 +54,10 @@ func (v Null) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(NullValue, nbf)
 }
 
+func (v Null) isPrimitive() bool {
+	return true
+}
+
 func (v Null) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -63,7 +67,7 @@ func (v Null) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (v Null) typeOf() (*Type, error) {
-	return NullType, nil
+	return PrimitiveTypeMap[NullKind], nil
 }
 
 func (v Null) Kind() NomsKind {
@@ -78,14 +82,18 @@ func (v Null) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return NullKind.writeTo(w, nbf)
 }
 
-func (v Null) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	buff := make([]byte, 1)
-	w := binaryNomsWriter{buff, 0}
-	err := v.writeTo(&w, nbf)
+func (v Null) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	return NullValue, nil
+}
 
-	if err != nil {
-		return nil, err
-	}
+func (v Null) skip(nbf *NomsBinFormat, b *binaryNomsReader) {}
 
-	return buff, nil
+func (Null) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	return func(Value) (Value, error) {
+		return NullValue, nil
+	}, nil
+}
+
+func (v Null) HumanReadableString() string {
+	return "null_value"
 }

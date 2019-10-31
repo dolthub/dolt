@@ -95,10 +95,6 @@ func (ts testSequence) Equals(other Value) bool {
 	panic("not reached")
 }
 
-func (ts testSequence) valueBytes(*NomsBinFormat) ([]byte, error) {
-	panic("not reached")
-}
-
 func (ts testSequence) valuesSlice(from, to uint64) ([]Value, error) {
 	panic("not reached")
 }

@@ -67,7 +67,7 @@ func NewRef(v Value, nbf *NomsBinFormat) (Ref, error) {
 // ToRefOfValue returns a new Ref that points to the same target as |r|, but
 // with the type 'Ref<Value>'.
 func ToRefOfValue(r Ref, nbf *NomsBinFormat) (Ref, error) {
-	return constructRef(nbf, r.TargetHash(), ValueType, r.Height())
+	return constructRef(nbf, r.TargetHash(), PrimitiveTypeMap[ValueKind], r.Height())
 }
 
 func constructRef(nbf *NomsBinFormat, targetHash hash.Hash, targetType *Type, height uint64) (Ref, error) {
@@ -177,6 +177,10 @@ func (r Ref) TargetType() (*Type, error) {
 }
 
 // Value interface
+func (r Ref) isPrimitive() bool {
+	return false
+}
+
 func (r Ref) Value(ctx context.Context) (Value, error) {
 	return r, nil
 }
@@ -199,4 +203,24 @@ func (r Ref) isSameTargetType(other Ref) bool {
 	targetTypeBytes := r.buff[r.offsetAtPart(refPartTargetType):r.offsetAtPart(refPartHeight)]
 	otherTargetTypeBytes := other.buff[other.offsetAtPart(refPartTargetType):other.offsetAtPart(refPartHeight)]
 	return bytes.Equal(targetTypeBytes, otherTargetTypeBytes)
+}
+
+func (Ref) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	return nil, CreateNoConversionError(RefKind, targetKind)
+}
+
+func (r Ref) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	panic("unreachable")
+}
+
+func (r Ref) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	panic("unreachable")
+}
+
+func (r Ref) String() string {
+	panic("unreachable")
+}
+
+func (r Ref) HumanReadableString() string {
+	panic("unreachable")
 }

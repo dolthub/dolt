@@ -590,13 +590,13 @@ func TestEncodeNomsTypePtr(t *testing.T) {
 		Type *types.Type
 	}
 
-	primitive := types.StringType
+	primitive := types.PrimitiveTypeMap[types.StringKind]
 	testMarshal(S{primitive}, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": primitive})))
 
 	complex := mustType(types.MakeStructType("Complex",
 		types.StructField{
 			Name: "stuff",
-			Type: types.StringType,
+			Type: types.PrimitiveTypeMap[types.StringKind],
 		},
 	))
 	testMarshal(S{complex}, mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{"type": complex})))
@@ -627,7 +627,7 @@ func TestEncodeRecursive(t *testing.T) {
 		},
 		types.StructField{
 			Name: "value",
-			Type: types.FloaTType,
+			Type: types.PrimitiveTypeMap[types.FloatKind],
 		},
 	)
 	assert.NoError(err)
@@ -957,7 +957,7 @@ func TestEncodeOriginal(t *testing.T) {
 	assert.True(out.Equals(mustStruct(orig.Set("foo", types.Float(43)))))
 
 	st2 := mustType(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"foo": types.FloaTType,
+		"foo": types.PrimitiveTypeMap[types.FloatKind],
 	}))
 	assert.True(mustType(types.TypeOf(out)).Equals(st2))
 
@@ -987,7 +987,7 @@ func TestNomsTypes(t *testing.T) {
 		Bool:   types.Bool(true),
 		Number: types.Float(42),
 		String: types.String("hi"),
-		Type:   types.FloaTType,
+		Type:   types.PrimitiveTypeMap[types.FloatKind],
 	}
 	assert.True(mustValue(Marshal(context.Background(), vs, s)).Equals(
 		mustStruct(types.NewStruct(types.Format_7_18, "S", types.StructData{
@@ -995,7 +995,7 @@ func TestNomsTypes(t *testing.T) {
 			"bool":   types.Bool(true),
 			"number": types.Float(42),
 			"string": types.String("hi"),
-			"type":   types.FloaTType,
+			"type":   types.PrimitiveTypeMap[types.FloatKind],
 		})),
 	))
 }
