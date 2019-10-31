@@ -1030,5 +1030,10 @@ func (drtf DoltRemoteTableFile) Open() (io.ReadCloser, error) {
 		return nil, err
 	}
 
+	if resp.StatusCode/100 != 2 {
+		resp.Body.Close()
+		return nil, errors.New("failed to open file")
+	}
+
 	return resp.Body, nil
 }

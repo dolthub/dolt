@@ -110,6 +110,15 @@ func (cc *ColCollection) GetColumns() []Column {
 	return colsCopy
 }
 
+// GetColumnNames returns a list of names of the columns.
+func (cc *ColCollection) GetColumnNames() []string {
+	names := make([]string, len(cc.cols))
+	for i, col := range cc.cols {
+		names[i] = col.Name
+	}
+	return names
+}
+
 // AppendColl returns a new collection with the additional ColCollection's columns appended
 func (cc *ColCollection) AppendColl(colColl *ColCollection) (*ColCollection, error) {
 	return cc.Append(colColl.cols...)

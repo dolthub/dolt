@@ -56,7 +56,7 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 	return colNames, nil
 }
 
-// SchemasArEqual tests equality of two schemas.
+// SchemasAreEqual tests equality of two schemas.
 func SchemasAreEqual(sch1, sch2 Schema) (bool, error) {
 	all1 := sch1.GetAllCols()
 	all2 := sch2.GetAllCols()

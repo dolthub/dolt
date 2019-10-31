@@ -61,6 +61,22 @@ func (q *q) AddPendingIfUnseen(ctx context.Context, id hash.Hash) error {
 			if q.pending[i].height > c.height {
 				break
 			}
+			if q.pending[i].height < c.height {
+				continue
+			}
+
+			// if the commits have equal height, tiebreak on timestamp
+			pendingMeta, err := q.pending[i].commit.GetCommitMeta()
+			if err != nil {
+				return err
+			}
+			commitMeta, err := c.commit.GetCommitMeta()
+			if err != nil {
+				return err
+			}
+			if pendingMeta.Timestamp > commitMeta.Timestamp {
+				break
+			}
 		}
 		q.pending = append(q.pending, nil)
 		copy(q.pending[i+1:], q.pending[i:])
@@ -101,33 +117,32 @@ func (q *q) load(ctx context.Context, h hash.Hash) (*doltdb.Commit, error) {
 func (q *q) Get(ctx context.Context, id hash.Hash) (*c, error) {
 	if l, ok := q.loaded[id]; ok {
 		return l, nil
-	} else {
-		l, err := q.load(ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		h, err := l.Height()
-		if err != nil {
-			return nil, err
-		}
-		c := &c{commit: l, height: h}
-		q.loaded[id] = c
-		return c, nil
 	}
+
+	l, err := q.load(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	h, err := l.Height()
+	if err != nil {
+		return nil, err
+	}
+	c := &c{commit: l, height: h}
+	q.loaded[id] = c
+	return c, nil
 }
 
 func newQueue(ddb *doltdb.DoltDB) *q {
 	return &q{ddb: ddb, loaded: make(map[hash.Hash]*c)}
 }
 
-// Return the commits reachable from commit at hash `includedHead`
-// that are not reachable from hash `excludedHead`. `includedHead` and
-// `excludedHead` must be commits in `ddb`. Returns up to `num`
-// commits, in reverse topological order starting at `includedHead`,
+// GetDotDotRevisions returns the commits reachable from commit at hash
+// `includedHead` that are not reachable from hash `excludedHead`.
+// `includedHead` and `excludedHead` must be commits in `ddb`. Returns up
+// to `num` commits, in reverse topological order starting at `includedHead`,
 // with tie breaking based on the height of commit graph between
-// concurrent commits --- higher commits appear first. Beyond the
-// deterministic tie-break, concurrent commits are ordered
-// non-deterministically.
+// concurrent commits --- higher commits appear first. Remaining
+// ties are broken by timestamp; newer commits appear first.
 //
 // Roughly mimics `git log master..feature`.
 func GetDotDotRevisions(ctx context.Context, ddb *doltdb.DoltDB, includedHead hash.Hash, excludedHead hash.Hash, num int) ([]*doltdb.Commit, error) {
@@ -164,6 +179,31 @@ func GetDotDotRevisions(ctx context.Context, ddb *doltdb.DoltDB, includedHead ha
 				return commitList, nil
 			}
 		}
+	}
+	return commitList, nil
+}
+
+// GetTopologicalOrderCommits returns the commits reachable from the commit at hash `startCommitHash`
+// in reverse topological order, with tiebreaking done by the height of the commit graph -- higher commits
+// appear first. Remaining ties are broken by timestamp; newer commits appear first.
+func GetTopologicalOrderCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash hash.Hash) ([]*doltdb.Commit, error) {
+	var commitList []*doltdb.Commit
+	q := newQueue(ddb)
+	if err := q.AddPendingIfUnseen(ctx, startCommitHash); err != nil {
+		return nil, err
+	}
+	for q.NumVisiblePending() > 0 {
+		nextC := q.PopPending()
+		parents, err := nextC.commit.ParentHashes(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, parentID := range parents {
+			if err := q.AddPendingIfUnseen(ctx, parentID); err != nil {
+				return nil, err
+			}
+		}
+		commitList = append(commitList, nextC.commit)
 	}
 	return commitList, nil
 }

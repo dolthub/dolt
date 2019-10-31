@@ -37,12 +37,11 @@ var WriteBufSize = 256 * 1024
 type JSONWriter struct {
 	closer      io.Closer
 	bWr         *bufio.Writer
-	info        *JSONFileInfo
 	sch         schema.Schema
 	rowsWritten int
 }
 
-func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema, info *JSONFileInfo) (*JSONWriter, error) {
+func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema) (*JSONWriter, error) {
 	err := fs.MkDirs(filepath.Dir(path))
 
 	if err != nil {
@@ -55,17 +54,16 @@ func OpenJSONWriter(path string, fs filesys.WritableFS, outSch schema.Schema, in
 		return nil, err
 	}
 
-	return NewJSONWriter(wr, outSch, info)
+	return NewJSONWriter(wr, outSch)
 }
 
-func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema, info *JSONFileInfo) (*JSONWriter, error) {
-
+func NewJSONWriter(wr io.WriteCloser, outSch schema.Schema) (*JSONWriter, error) {
 	bwr := bufio.NewWriterSize(wr, WriteBufSize)
 	err := iohelp.WriteAll(bwr, []byte(jsonHeader))
 	if err != nil {
 		return nil, err
 	}
-	return &JSONWriter{wr, bwr, info, outSch, 0}, nil
+	return &JSONWriter{closer: wr, bWr: bwr, sch: outSch}, nil
 }
 
 func (jsonw *JSONWriter) GetSchema() schema.Schema {
