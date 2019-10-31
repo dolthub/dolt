@@ -92,6 +92,7 @@ type TableFileEvent struct {
 	TableFiles []nbs.TableFile
 }
 
+// mapTableFiles returns the list of all fileIDs for the table files, and a map from fileID to nbs.TableFile
 func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile) {
 	fileIds := make([]string, len(tblFiles))
 	fileIDtoTblFile := make(map[string]nbs.TableFile)
@@ -115,6 +116,9 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 		return err
 	}
 
+	// Initializes the list of fileIDs we are going to download, and the map of fileIDToTF.  If this clone takes a long
+	// time some of the urls within the nbs.TableFiles will expire and fail to download.  At that point we will retrieve
+	// the sources again, and update the fileIDToTF map with updated info, but not change the files we are downloading.
 	desiredFiles, fileIDToTF := mapTableFiles(tblFiles)
 
 	if eventCh != nil {
@@ -122,7 +126,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 	}
 
 	i := 0
-	op := func() error {
+	download := func() error {
 		var err error
 		for i < len(desiredFiles) {
 			fileID := desiredFiles[i]
@@ -178,6 +182,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 		}
 
 		if err != nil {
+			// If at any point there is an error we retrieve updated TableFile information before retrying.
 			var sourcesErr error
 			_, tblFiles, sourcesErr = srcTS.Sources(ctx)
 
@@ -196,11 +201,10 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 	const maxAttempts = 3
 	failureCount := 0
 
-	// Loop through all the files, and keep going as long as progress is being made.  If progress is not made retry up
-	// to maxAttempts times.
+	// keep going as long as progress is being made.  If progress is not made retry up to maxAttempts times.
 	for failureCount < maxAttempts {
 		initialIdx := i
-		err = op()
+		err = download()
 
 		if err == nil {
 			break
