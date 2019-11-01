@@ -1,0 +1,130 @@
+package rowconv
+
+import (
+	"errors"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/types"
+)
+
+type ColNamingFunc func(colName string) string
+
+type stringUint64Tuple struct {
+	str string
+	u64 uint64
+}
+
+type Joiner struct {
+	srcSchemas map[string]schema.Schema
+	tagMaps    map[string]map[uint64]uint64
+	revTagMap  map[uint64]stringUint64Tuple
+	tags       map[string][]uint64
+	joined     schema.Schema
+}
+
+func NewJoiner(namedSchemas map[string]schema.Schema, namers map[string]ColNamingFunc) (*Joiner, error) {
+	tags := make(map[string][]uint64)
+	revTagMap := make(map[uint64]stringUint64Tuple)
+	tagMaps := make(map[string]map[uint64]uint64, len(namedSchemas))
+	for name := range namedSchemas {
+		tagMaps[name] = make(map[uint64]uint64)
+	}
+
+	var cols []schema.Column
+	var destTag uint64
+	for name, sch := range namedSchemas {
+		allCols := sch.GetAllCols()
+		namer := namers[name]
+		err := allCols.Iter(func(srcTag uint64, col schema.Column) (stop bool, err error) {
+			newColName := namer(col.Name)
+			cols = append(cols, schema.NewColumn(newColName, destTag, col.Kind, false))
+			tagMaps[name][srcTag] = destTag
+			revTagMap[destTag] = stringUint64Tuple{str: name, u64: srcTag}
+			tags[name] = append(tags[name], destTag)
+			destTag++
+
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	joined := schema.SchemaFromCols(colColl)
+
+	return &Joiner{namedSchemas, tagMaps, revTagMap, tags, joined}, nil
+}
+
+func (j *Joiner) Join(namedRows map[string]row.Row) (row.Row, error) {
+	var nbf *types.NomsBinFormat
+	colVals := make(row.TaggedValues)
+	for name, r := range namedRows {
+		if r == nil {
+			continue
+		}
+
+		if nbf == nil {
+			nbf = r.Format()
+		} else if nbf.VersionString() != r.Format().VersionString() {
+			return nil, errors.New("not all rows have the same format")
+		}
+
+		_, err := r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
+			destTag := j.tagMaps[name][tag]
+			colVals[destTag] = val
+
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return row.New(nbf, j.joined, colVals)
+}
+
+func (j *Joiner) Split(r row.Row) (map[string]row.Row, error) {
+	colVals := make(map[string]row.TaggedValues, len(j.srcSchemas))
+	for name := range j.srcSchemas {
+		colVals[name] = make(row.TaggedValues)
+	}
+
+	_, err := r.IterCols(func(tag uint64, val types.Value) (stop bool, err error) {
+		schemaNameAndTag := j.revTagMap[tag]
+		colVals[schemaNameAndTag.str][schemaNameAndTag.u64] = val
+
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make(map[string]row.Row, len(colVals))
+	for name, sch := range j.srcSchemas {
+		var err error
+		rows[name], err = row.New(r.Format(), sch, colVals[name])
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return rows, nil
+}
+
+func (j *Joiner) GetSchema() schema.Schema {
+	return j.joined
+}
+
+func (j *Joiner) TagsForSchema(name string) []uint64 {
+	return j.tags[name]
+}
