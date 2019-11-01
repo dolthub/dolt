@@ -8,7 +8,10 @@ It should be easy to embed a Dolt repository inside a Git repository, and have
 changes tracked and synchronized without leaving Git.
 
 To this end, Git-Dolt creates persistent references to Dolt remotes in the form
-of pointer files. A Git-Dolt pointer file specifies everything necessary to
+of pointer files. This approach is very similar to how [git-lfs](https://git-lfs.github.com/) embeds
+large binary files inside of Git repositories.
+
+A Git-Dolt pointer file specifies everything necessary to
 reconstruct (clone) the Dolt repository at a given revision:
 
 ```
@@ -16,6 +19,11 @@ version 0
 remote http://dolthub.com/some-org/some-repo
 revision eidemcn2rsa5r1kpr5ds7mi0g5h8jt37
 ```
+
+In the future, we imagine `git-dolt` doing things like automatically proposing
+modifications to the pointer file when the cloned Dolt repo is modified. For
+now, if you want the pointer file to point to a different commit, you must update
+it manually; see the [`update`](#update) command below.
 
 ## Example
 
