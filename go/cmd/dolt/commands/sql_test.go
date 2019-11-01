@@ -198,8 +198,8 @@ func TestAlterTable(t *testing.T) {
 		query       string
 		expectedRes int
 	}{
-		{"alter table", 1},                           // bad syntax
-		{"alter table people rename", 1},             // bad syntax
+		{"alter table", 1},                                  // bad syntax
+		{"alter table people rename", 1},                    // bad syntax
 		{"alter table dne rename column id to newId", 1},    // unknown column
 		{"alter table people rename column id to newId", 0}, // no primary key
 		{"alter table people rename to newPeople", 0},
