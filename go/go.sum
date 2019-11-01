@@ -276,6 +276,8 @@ github.com/liquidata-inc/vitess v0.0.0-20191101191234-deacd6f4cf74 h1:WD//Z9ltFI
 github.com/liquidata-inc/vitess v0.0.0-20191101191234-deacd6f4cf74/go.mod h1:Nsj+4STKBq6IrTIrMPhRRRPFUGxCOXZTP/Bv4anHgxQ=
 github.com/liquidata-inc/vitess v0.0.0-20191101202731-c772828266ab h1:maqP/wpfRHZv6SsyEXl6qd+acFLatRy/xFKG9lTlCp0=
 github.com/liquidata-inc/vitess v0.0.0-20191101202731-c772828266ab/go.mod h1:Nsj+4STKBq6IrTIrMPhRRRPFUGxCOXZTP/Bv4anHgxQ=
+github.com/liquidata-inc/vitess v0.0.0-20191101223525-ff102131149a h1:T1N9/kbb+rpn9IcKCEOf0JxDiomb86OKq/o/3oMvqqI=
+github.com/liquidata-inc/vitess v0.0.0-20191101223525-ff102131149a/go.mod h1:Nsj+4STKBq6IrTIrMPhRRRPFUGxCOXZTP/Bv4anHgxQ=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/mattn/go-colorable v0.1.1 h1:G1f5SKeVxmagw/IyvzvtZE4Gybcc4Tr1tf7I8z0XgOg=
 github.com/mattn/go-colorable v0.1.1/go.mod h1:FuOcm+DKB9mbwrcAfNl7/TZVBZ6rcnceauSikq3lYCQ=
