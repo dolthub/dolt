@@ -1,13 +1,13 @@
 module github.com/liquidata-inc/dolt/go
 
 require (
-	cloud.google.com/go v0.43.0
+	cloud.google.com/go v0.45.1
 	github.com/BurntSushi/toml v0.3.1
 	github.com/DATA-DOG/go-sqlmock v1.3.3 // indirect
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
-	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
-	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
+	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
+	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
 	github.com/aws/aws-sdk-go v1.21.2
 	github.com/bcicen/jstream v0.0.0-20190220045926-16c1f8af81c2
@@ -31,7 +31,6 @@ require (
 	github.com/juju/fslock v0.0.0-20160525022230-4d5c94c67b4b
 	github.com/juju/gnuflag v0.0.0-20171113085948-2ce1bb71843d
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
-	github.com/kr/pretty v0.1.0 // indirect
 	github.com/lib/pq v1.1.1 // indirect
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20191028183537-58c3a6e4306d
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
@@ -41,7 +40,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
-	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.3.0
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
@@ -52,12 +50,11 @@ require (
 	github.com/src-d/go-mysql-server v0.4.1-0.20190821121850-0e0249cf7bc0
 	github.com/stretchr/testify v1.4.0
 	github.com/tealeg/xlsx v1.0.4-0.20190601071628-e2d23f3c43dc
-	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4
-	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7
-	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a
-	google.golang.org/api v0.7.0
+	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472
+	golang.org/x/net v0.0.0-20190926025831-c00fd9afed17
+	golang.org/x/sys v0.0.0-20190926180325-855e68c8590b
+	google.golang.org/api v0.13.0
 	google.golang.org/grpc v1.24.0
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1
 	vitess.io/vitess v3.0.0-rc.3.0.20190602171040-12bfde34629c+incompatible
 )
@@ -66,6 +63,6 @@ replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./
 
 replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191017183442-4b9329eafa5b
 
-replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20190625235908-66745781a796
+replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20191101202731-c772828266ab
 
 go 1.13

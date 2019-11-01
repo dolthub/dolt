@@ -597,22 +597,7 @@ func TestRenameColumn(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:  "alter rename column",
-			query: "alter table people rename rating newRating",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first", FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("last", LastTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("newRating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows,
-		},
-		{
-			name:  "alter rename column with optional column and as keywords",
+			name:  "alter rename column with column and as keywords",
 			query: "alter table people rename column rating as newRating",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
@@ -627,8 +612,8 @@ func TestRenameColumn(t *testing.T) {
 			expectedRows: AllPeopleRows,
 		},
 		{
-			name:  "alter rename column with with to keyword",
-			query: "alter table people rename rating to newRating",
+			name:  "alter rename column with column and to keyword",
+			query: "alter table people rename column rating to newRating",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first", FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -643,7 +628,7 @@ func TestRenameColumn(t *testing.T) {
 		},
 		{
 			name:  "alter rename primary key column",
-			query: "alter table people rename id to newId",
+			query: "alter table people rename column id to newId",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("newId", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("first", FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -663,12 +648,12 @@ func TestRenameColumn(t *testing.T) {
 		},
 		{
 			name:        "column not found",
-			query:       "alter table people rename notFound to newNotFound",
+			query:       "alter table people rename column notFound to newNotFound",
 			expectedErr: "Unknown column: 'notFound'",
 		},
 		{
 			name:        "column name collision",
-			query:       "alter table people rename id to age",
+			query:       "alter table people rename column id to age",
 			expectedErr: "A column with the name 'age' already exists",
 		},
 	}
