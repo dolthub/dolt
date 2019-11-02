@@ -21,6 +21,7 @@ var peopleCols, _ = schema.NewColCollection(
 	schema.NewColumn("age", ageTag, types.IntKind, false),
 	schema.NewColumn("city", cityTag, types.StringKind, false),
 )
+
 var peopleSch = schema.SchemaFromCols(peopleCols)
 
 type toJoinAndExpectedResult struct {
@@ -31,13 +32,13 @@ type toJoinAndExpectedResult struct {
 func TestJoiner(t *testing.T) {
 	tests := []struct {
 		name         string
-		namedSchemas map[string]schema.Schema
+		namedSchemas []NamedSchema
 		namers       map[string]ColNamingFunc
 		toJoin       []toJoinAndExpectedResult
 	}{
 		{
 			name:         "join diff versions of row",
-			namedSchemas: map[string]schema.Schema{"to": peopleSch, "from": peopleSch},
+			namedSchemas: []NamedSchema{{"to", peopleSch}, {"from", peopleSch}},
 			namers:       map[string]ColNamingFunc{"to": toNamer, "from": fromNamer},
 			toJoin: []toJoinAndExpectedResult{
 				{
@@ -60,10 +61,43 @@ func TestJoiner(t *testing.T) {
 						"from_first": types.String("Richard"),
 						"from_city":  types.String("San Francisco"),
 						"from_age":   types.Int(42),
-						"to_last":    types.String("Richardson"),
-						"to_first":   types.String("Richard"),
-						"to_city":    types.String("Los Angeles"),
-						"to_age":     types.Int(43),
+
+						"to_last":  types.String("Richardson"),
+						"to_first": types.String("Richard"),
+						"to_city":  types.String("Los Angeles"),
+						"to_age":   types.Int(43),
+					},
+				},
+				{
+					toJoinVals: map[string]row.TaggedValues{
+						"from": {
+							lastTag:  types.String("Richardson"),
+							firstTag: types.String("Richard"),
+							ageTag:   types.Int(42),
+							cityTag:  types.String("San Francisco"),
+						},
+					},
+					expected: map[string]types.Value{
+						"from_last":  types.String("Richardson"),
+						"from_first": types.String("Richard"),
+						"from_city":  types.String("San Francisco"),
+						"from_age":   types.Int(42),
+					},
+				},
+				{
+					toJoinVals: map[string]row.TaggedValues{
+						"to": {
+							lastTag:  types.String("Richardson"),
+							firstTag: types.String("Richard"),
+							ageTag:   types.Int(43),
+							cityTag:  types.String("Los Angeles"),
+						},
+					},
+					expected: map[string]types.Value{
+						"to_last":  types.String("Richardson"),
+						"to_first": types.String("Richard"),
+						"to_city":  types.String("Los Angeles"),
+						"to_age":   types.Int(43),
 					},
 				},
 			},
@@ -78,11 +112,11 @@ func TestJoiner(t *testing.T) {
 			for _, tj := range test.toJoin {
 				rows := map[string]row.Row{}
 
-				for name, vals := range tj.toJoinVals {
-					r, err := row.New(types.Format_Default, test.namedSchemas[name], vals)
+				for _, namedSch := range test.namedSchemas {
+					r, err := row.New(types.Format_Default, namedSch.Sch, tj.toJoinVals[namedSch.Name])
 					assert.NoError(t, err)
 
-					rows[name] = r
+					rows[namedSch.Name] = r
 				}
 
 				joinedRow, err := j.Join(rows)
@@ -104,9 +138,20 @@ func TestJoiner(t *testing.T) {
 				splitRows, err := j.Split(joinedRow)
 				assert.NoError(t, err)
 
-				for key, sch := range test.namedSchemas {
-					actual := splitRows[key]
-					expectedVals := tj.toJoinVals[key]
+				assert.Equal(t, len(tj.toJoinVals), len(splitRows))
+
+				for _, namedSch := range test.namedSchemas {
+					name := namedSch.Name
+					sch := namedSch.Sch
+					actual := splitRows[name]
+					expectedVals := tj.toJoinVals[name]
+
+					if actual == nil && expectedVals == nil {
+						continue
+					}
+
+					assert.False(t, actual == nil || expectedVals == nil)
+
 					expected, err := row.New(types.Format_Default, sch, expectedVals)
 					assert.NoError(t, err)
 					assert.True(t, row.AreEqual(actual, expected, sch))

@@ -14,6 +14,11 @@ type stringUint64Tuple struct {
 	u64 uint64
 }
 
+type NamedSchema struct {
+	Name string
+	Sch  schema.Schema
+}
+
 type Joiner struct {
 	srcSchemas map[string]schema.Schema
 	tagMaps    map[string]map[uint64]uint64
@@ -22,17 +27,21 @@ type Joiner struct {
 	joined     schema.Schema
 }
 
-func NewJoiner(namedSchemas map[string]schema.Schema, namers map[string]ColNamingFunc) (*Joiner, error) {
+func NewJoiner(namedSchemas []NamedSchema, namers map[string]ColNamingFunc) (*Joiner, error) {
 	tags := make(map[string][]uint64)
 	revTagMap := make(map[uint64]stringUint64Tuple)
 	tagMaps := make(map[string]map[uint64]uint64, len(namedSchemas))
-	for name := range namedSchemas {
-		tagMaps[name] = make(map[uint64]uint64)
+	srcSchemas := make(map[string]schema.Schema)
+	for _, namedSch := range namedSchemas {
+		tagMaps[namedSch.Name] = make(map[uint64]uint64)
+		srcSchemas[namedSch.Name] = namedSch.Sch
 	}
 
 	var cols []schema.Column
 	var destTag uint64
-	for name, sch := range namedSchemas {
+	for _, namedSch := range namedSchemas {
+		sch := namedSch.Sch
+		name := namedSch.Name
 		allCols := sch.GetAllCols()
 		namer := namers[name]
 		err := allCols.Iter(func(srcTag uint64, col schema.Column) (stop bool, err error) {
@@ -57,9 +66,9 @@ func NewJoiner(namedSchemas map[string]schema.Schema, namers map[string]ColNamin
 		return nil, err
 	}
 
-	joined := schema.SchemaFromCols(colColl)
+	joined := schema.UnkeyedSchemaFromCols(colColl)
 
-	return &Joiner{namedSchemas, tagMaps, revTagMap, tags, joined}, nil
+	return &Joiner{srcSchemas, tagMaps, revTagMap, tags, joined}, nil
 }
 
 func (j *Joiner) Join(namedRows map[string]row.Row) (row.Row, error) {
@@ -111,7 +120,14 @@ func (j *Joiner) Split(r row.Row) (map[string]row.Row, error) {
 	rows := make(map[string]row.Row, len(colVals))
 	for name, sch := range j.srcSchemas {
 		var err error
-		rows[name], err = row.New(r.Format(), sch, colVals[name])
+
+		currColVals := colVals[name]
+
+		if len(currColVals) == 0 {
+			continue
+		}
+
+		rows[name], err = row.New(r.Format(), sch, currColVals)
 
 		if err != nil {
 			return nil, err
@@ -127,4 +143,8 @@ func (j *Joiner) GetSchema() schema.Schema {
 
 func (j *Joiner) TagsForSchema(name string) []uint64 {
 	return j.tags[name]
+}
+
+func (j *Joiner) SchemaForName(name string) schema.Schema {
+	return j.srcSchemas[name]
 }
