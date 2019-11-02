@@ -279,5 +279,5 @@ teardown() {
     [[ ! "$output" =~ "one_pk" ]] || false
     run dolt sql -q "drop table poop"
     [ $status -eq 1 ]
-    [[ "$output" =~ "Unknown table" ]] || false
+    [ "$output" = "table not found: poop" ]
 }

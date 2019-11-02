@@ -202,7 +202,7 @@ teardown() {
 @test "create a basic table (int types) using sql" {
     run dolt sql -q "create table test (pk int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ -z "$output" ]
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
@@ -222,7 +222,7 @@ teardown() {
 @test "create a table with sql with multiple primary keys" {
     run dolt sql -q "create table test (pk1 int, pk2 int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk1), primary key (pk2))"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ -z "$output" ]
     run bash -c "dolt schema show"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -239,7 +239,7 @@ teardown() {
 @test "create a table using sql with not null constraint" {
     run dolt sql -q "create table test (pk int not null, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -255,7 +255,7 @@ teardown() {
 @test "create a table using sql with a float" {
     run dolt sql -q "create table test (pk int not null, c1 float, primary key (pk))"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\` " ]] || false
@@ -268,7 +268,7 @@ teardown() {
 @test "create a table using sql with a string" {
     run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
@@ -281,7 +281,7 @@ teardown() {
 @test "create a table using sql with an unsigned int" {
     run dolt sql -q "create table test (pk int not null, c1 int unsigned, primary key (pk))"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ -z "$output" ]
     run dolt schema show test
     [[ "$output" =~ "int unsigned" ]] || false
 }
@@ -289,13 +289,7 @@ teardown() {
 @test "create a table using sql with a boolean" {
     run dolt sql -q "create table test (pk int not null, c1 bool, primary key (pk))"
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-}
-
-@test "create a table using sql with a uuid type" {
-    run dolt sql -q "create table test (pk int not null, c1 uuid, primary key (pk))"
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [ -z "$output" ]
 }
 
 @test "create table with sql and dolt table create table. match success/failure" {
