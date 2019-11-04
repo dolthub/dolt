@@ -71,11 +71,15 @@ dolt diff [--options] <commit> [<tables>...]
 
 dolt diff [--options] <commit> <commit> [<tables>...]
    This is to view the changes between two arbitrary <commit>.
+
+The diffs displayed can be limited to show the first N by providing the parameter <b>--limit N</b> where N is the number of diffs to display.
+
+In order to filter which diffs are displayed <b>--where key=value</b> can be used.  The key in this case would be either to_COLUMN_NAME or from_COLUMN_NAME. where from_COLUMN_NAME=value would filter based on the original value and to_COLUMN_NAME would select based on its updated value.
 `
 
 var diffSynopsis = []string{
-	"[options] [<commit>] [--data|--schema] [<tables>...]",
-	"[options] <commit> <commit> [--data|--schema] [<tables>...]",
+	"[options] [options] [<commit>] [<tables>...]",
+	"[options] [options] <commit> <commit> [<tables>...]",
 }
 
 type diffArgs struct {
@@ -89,8 +93,8 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsString(whereParam, "", "column", "")
-	ap.SupportsInt(limitParam, "", "record_count", "")
+	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See dolt diff --help for details.")
+	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
