@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
@@ -56,6 +57,7 @@ const (
 	SchemaFlag  = "schema"
 	SummaryFlag = "summary"
 	whereParam  = "where"
+	limitParam  = "limit"
 )
 
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
@@ -78,6 +80,7 @@ var diffSynopsis = []string{
 
 type diffArgs struct {
 	diffParts int
+	limit     int
 	where     string
 }
 
@@ -87,6 +90,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
 	ap.SupportsString(whereParam, "", "column", "")
+	ap.SupportsInt(limitParam, "", "record_count", "")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -110,10 +114,13 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 
 	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
 
+	// default value of 0 used to signal no limit.
+	limit, _ := apr.GetInt(limitParam)
+
 	if verr == nil {
 		whereClause := apr.GetValueOrDefault(whereParam, "")
 
-		verr = diffRoots(ctx, r1, r2, tables, dEnv, &diffArgs{diffParts, whereClause})
+		verr = diffRoots(ctx, r1, r2, tables, dEnv, &diffArgs{diffParts, limit, whereClause})
 	}
 
 	if verr != nil {
@@ -446,47 +453,11 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		map[string]rowconv.ColNamingFunc{diff.To: toNamer, diff.From: fromNamer},
 	)
 
-	dumbNewSch, err := dumbDownSchema(newSch)
-
-	if err != nil {
-		return errhand.BuildDError("").AddCause(err).Build()
+	untypedUnionSch, ds, verr := createSplitter(newSch, oldSch, joiner)
+	if verr != nil {
+		return verr
 	}
 
-	dumbOldSch, err := dumbDownSchema(oldSch)
-
-	if err != nil {
-		return errhand.BuildDError("").AddCause(err).Build()
-	}
-
-	untypedUnionSch, err := untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
-
-	if err != nil {
-		return errhand.BuildDError("Failed to merge schemas").Build()
-	}
-
-	newToUnionConv := rowconv.IdentityConverter
-	if newSch != nil {
-		newToUnionMapping, err := rowconv.TagMapping(newSch, untypedUnionSch)
-
-		if err != nil {
-			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
-		}
-
-		newToUnionConv, _ = rowconv.NewRowConverter(newToUnionMapping)
-	}
-
-	oldToUnionConv := rowconv.IdentityConverter
-	if oldSch != nil {
-		oldToUnionMapping, err := rowconv.TagMapping(oldSch, untypedUnionSch)
-
-		if err != nil {
-			return errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
-		}
-
-		oldToUnionConv, _ = rowconv.NewRowConverter(oldToUnionMapping)
-	}
-
-	ds := diff.NewDiffSplitter(joiner, oldToUnionConv, newToUnionConv)
 	ad := diff.NewAsyncDiffer(1024)
 	ad.Start(ctx, newRows, oldRows)
 	defer ad.Close()
@@ -494,29 +465,16 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 	src := diff.NewRowDiffSource(ad, joiner)
 	defer src.Close()
 
-	oldColNames := make(map[uint64]string)
-	newColNames := make(map[uint64]string)
-	err = untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		oldCol, oldOk := oldSch.GetAllCols().GetByTag(tag)
-		newCol, newOk := newSch.GetAllCols().GetByTag(tag)
+	oldColNames, verr := mapTagToColName(oldSch, untypedUnionSch)
 
-		if oldOk {
-			oldColNames[tag] = oldCol.Name
-		} else {
-			oldColNames[tag] = ""
-		}
+	if verr != nil {
+		return verr
+	}
 
-		if newOk {
-			newColNames[tag] = newCol.Name
-		} else {
-			newColNames[tag] = ""
-		}
+	newColNames, verr := mapTagToColName(newSch, untypedUnionSch)
 
-		return false, nil
-	})
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to map columns to tags").Build()
+	if verr != nil {
+		return verr
 	}
 
 	schemasEqual := reflect.DeepEqual(oldColNames, newColNames)
@@ -533,33 +491,22 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 
 	defer sink.Close()
 
-	if err != nil {
-		return errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
-	}
-
-	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
-	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
-	transforms := pipeline.NewTransformCollection()
-
-	transforms.AppendTransforms(pipeline.NewNamedTransform("split_diffs", ds.SplitDiffIntoOldAndNew),
-		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
-		pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT},
-	)
-
-	var verr errhand.VerboseError
+	var badRowVErr errhand.VerboseError
 	badRowCallback := func(trf *pipeline.TransformRowFailure) (quit bool) {
-		verr = errhand.BuildDError("Failed transforming row").AddDetails(trf.TransformName).AddDetails(trf.Details).Build()
+		badRowVErr = errhand.BuildDError("Failed transforming row").AddDetails(trf.TransformName).AddDetails(trf.Details).Build()
 		return true
 	}
 
-	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
-	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src.NextDiff), sinkProcFunc, transforms, badRowCallback)
+	p, verr := buildPipeline(dArgs, joiner, ds, untypedUnionSch, src, sink, badRowCallback)
+	if verr != nil {
+		return verr
+	}
 
 	if schemasEqual {
 		schRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
 
 		if err != nil {
-
+			return errhand.BuildDError("error: creating diff header").AddCause(err).Build()
 		}
 
 		p.InjectRow(fwtStageName, schRow)
@@ -567,14 +514,14 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		newSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, oldColNames)
 
 		if err != nil {
-
+			return errhand.BuildDError("error: creating diff header").AddCause(err).Build()
 		}
 
 		p.InjectRowWithProps(fwtStageName, newSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
 		oldSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
 
 		if err != nil {
-
+			return errhand.BuildDError("error: creating diff header").AddCause(err).Build()
 		}
 
 		p.InjectRowWithProps(fwtStageName, oldSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
@@ -585,7 +532,117 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		return errhand.BuildDError("Error diffing: %v", err.Error()).Build()
 	}
 
-	return verr
+	if badRowVErr != nil {
+		return badRowVErr
+	}
+
+	return nil
+}
+
+func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitter, untypedUnionSch schema.Schema, src *diff.RowDiffSource, sink *diff.ColorDiffSink, badRowCB pipeline.BadRowCallback) (*pipeline.Pipeline, errhand.VerboseError) {
+	var where FilterFn
+	var selTrans *SelectTransform
+	where, err := ParseWhere(joiner.GetSchema(), dArgs.where)
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
+	}
+
+	transforms := pipeline.NewTransformCollection()
+
+	if where != nil || dArgs.limit != 0 {
+		if where == nil {
+			where = func(r row.Row) bool {
+				return true
+			}
+		}
+
+		selTrans = NewSelTrans(where, dArgs.limit)
+		transforms.AppendTransforms(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
+	}
+
+	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
+	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
+
+	transforms.AppendTransforms(pipeline.NewNamedTransform("split_diffs", ds.SplitDiffIntoOldAndNew),
+		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
+		pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT},
+	)
+
+	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
+	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src.NextDiff), sinkProcFunc, transforms, badRowCB)
+	if selTrans != nil {
+		selTrans.Pipeline = p
+	}
+
+	return p, nil
+}
+
+func mapTagToColName(sch, untypedUnionSch schema.Schema) (map[uint64]string, errhand.VerboseError) {
+	tagToCol := make(map[uint64]string)
+	allCols := sch.GetAllCols()
+	err := untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		col, ok := allCols.GetByTag(tag)
+
+		if ok {
+			tagToCol[tag] = col.Name
+		} else {
+			tagToCol[tag] = ""
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, errhand.BuildDError("error: failed to map columns to tags").Build()
+	}
+
+	return tagToCol, nil
+}
+
+func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.Joiner) (schema.Schema, *diff.DiffSplitter, errhand.VerboseError) {
+	dumbNewSch, err := dumbDownSchema(newSch)
+
+	if err != nil {
+		return nil, nil, errhand.BuildDError("").AddCause(err).Build()
+	}
+
+	dumbOldSch, err := dumbDownSchema(oldSch)
+
+	if err != nil {
+		return nil, nil, errhand.BuildDError("").AddCause(err).Build()
+	}
+
+	untypedUnionSch, err := untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
+
+	if err != nil {
+		return nil, nil, errhand.BuildDError("Failed to merge schemas").Build()
+	}
+
+	newToUnionConv := rowconv.IdentityConverter
+	if newSch != nil {
+		newToUnionMapping, err := rowconv.TagMapping(newSch, untypedUnionSch)
+
+		if err != nil {
+			return nil, nil, errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
+		}
+
+		newToUnionConv, _ = rowconv.NewRowConverter(newToUnionMapping)
+	}
+
+	oldToUnionConv := rowconv.IdentityConverter
+	if oldSch != nil {
+		oldToUnionMapping, err := rowconv.TagMapping(oldSch, untypedUnionSch)
+
+		if err != nil {
+			return nil, nil, errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
+		}
+
+		oldToUnionConv, _ = rowconv.NewRowConverter(oldToUnionMapping)
+	}
+
+	ds := diff.NewDiffSplitter(joiner, oldToUnionConv, newToUnionConv)
+	return untypedUnionSch, ds, nil
 }
 
 var emptyHash = hash.Hash{}
@@ -593,12 +650,12 @@ var emptyHash = hash.Hash{}
 func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
 	bold := color.New(color.Bold)
 
-	bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
+	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
 
 	if tbl1 == nil {
-		bold.Println("deleted table")
+		_, _ = bold.Println("deleted table")
 	} else if tbl2 == nil {
-		bold.Println("added table")
+		_, _ = bold.Println("added table")
 	} else {
 		h1, err := tbl1.HashOf()
 
@@ -606,7 +663,7 @@ func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
 			panic(err)
 		}
 
-		bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
+		_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
 
 		h2, err := tbl2.HashOf()
 
@@ -614,7 +671,7 @@ func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
 			panic(err)
 		}
 
-		bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
+		_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 	}
 }
 
