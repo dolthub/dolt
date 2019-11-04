@@ -16,12 +16,13 @@ package commands
 
 import (
 	"errors"
+	"strings"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"strings"
 )
 
 type FilterFn = func(r row.Row) (matchesFilter bool)
