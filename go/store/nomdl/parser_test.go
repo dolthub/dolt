@@ -88,45 +88,45 @@ func assertParseError(t *testing.T, code, msg string) {
 }
 
 func TestSimpleTypes(t *testing.T) {
-	assertParseType(t, "Blob", types.BlobType)
-	assertParseType(t, "Bool", types.BoolType)
-	assertParseType(t, "Float", types.FloaTType)
-	assertParseType(t, "String", types.StringType)
-	assertParseType(t, "Value", types.ValueType)
-	assertParseType(t, "Type", types.TypeType)
+	assertParseType(t, "Blob", types.PrimitiveTypeMap[types.BlobKind])
+	assertParseType(t, "Bool", types.PrimitiveTypeMap[types.BoolKind])
+	assertParseType(t, "Float", types.PrimitiveTypeMap[types.FloatKind])
+	assertParseType(t, "String", types.PrimitiveTypeMap[types.StringKind])
+	assertParseType(t, "Value", types.PrimitiveTypeMap[types.ValueKind])
+	assertParseType(t, "Type", types.PrimitiveTypeMap[types.TypeKind])
 }
 
 func TestWhitespace(t *testing.T) {
 	for _, r := range " \t\n\r" {
-		assertParseType(t, string(r)+"Blob", types.BlobType)
-		assertParseType(t, "Blob"+string(r), types.BlobType)
+		assertParseType(t, string(r)+"Blob", types.PrimitiveTypeMap[types.BlobKind])
+		assertParseType(t, "Blob"+string(r), types.PrimitiveTypeMap[types.BlobKind])
 	}
 }
 
 func TestComments(t *testing.T) {
-	assertParseType(t, "/* */Blob", types.BlobType)
-	assertParseType(t, "Blob/* */", types.BlobType)
-	assertParseType(t, "Blob//", types.BlobType)
-	assertParseType(t, "//\nBlob", types.BlobType)
+	assertParseType(t, "/* */Blob", types.PrimitiveTypeMap[types.BlobKind])
+	assertParseType(t, "Blob/* */", types.PrimitiveTypeMap[types.BlobKind])
+	assertParseType(t, "Blob//", types.PrimitiveTypeMap[types.BlobKind])
+	assertParseType(t, "//\nBlob", types.PrimitiveTypeMap[types.BlobKind])
 }
 
 func TestCompoundTypes(t *testing.T) {
 	assertParseType(t, "List<>", mustType(types.MakeListType(mustType(types.MakeUnionType()))))
-	assertParseType(t, "List<Bool>", mustType(types.MakeListType(types.BoolType)))
+	assertParseType(t, "List<Bool>", mustType(types.MakeListType(types.PrimitiveTypeMap[types.BoolKind])))
 	assertParseError(t, "List<Bool, Float>", `Unexpected token ",", expected ">", example:1:11`)
 	assertParseError(t, "List<Bool", `Unexpected token EOF, expected ">", example:1:10`)
 	assertParseError(t, "List<", `Unexpected token EOF, expected Ident, example:1:6`)
 	assertParseError(t, "List", `Unexpected token EOF, expected "<", example:1:5`)
 
 	assertParseType(t, "Set<>", mustType(types.MakeSetType(mustType(types.MakeUnionType()))))
-	assertParseType(t, "Set<Bool>", mustType(types.MakeSetType(types.BoolType)))
+	assertParseType(t, "Set<Bool>", mustType(types.MakeSetType(types.PrimitiveTypeMap[types.BoolKind])))
 	assertParseError(t, "Set<Bool, Float>", `Unexpected token ",", expected ">", example:1:10`)
 	assertParseError(t, "Set<Bool", `Unexpected token EOF, expected ">", example:1:9`)
 	assertParseError(t, "Set<", `Unexpected token EOF, expected Ident, example:1:5`)
 	assertParseError(t, "Set", `Unexpected token EOF, expected "<", example:1:4`)
 
 	assertParseError(t, "Ref<>", `Unexpected token ">", expected Ident, example:1:6`)
-	assertParseType(t, "Ref<Bool>", mustType(types.MakeRefType(types.BoolType)))
+	assertParseType(t, "Ref<Bool>", mustType(types.MakeRefType(types.PrimitiveTypeMap[types.BoolKind])))
 	assertParseError(t, "Ref<Float, Bool>", `Unexpected token ",", expected ">", example:1:11`)
 	assertParseError(t, "Ref<Float", `Unexpected token EOF, expected ">", example:1:10`)
 	assertParseError(t, "Ref<", `Unexpected token EOF, expected Ident, example:1:5`)
@@ -143,7 +143,7 @@ func TestCompoundTypes(t *testing.T) {
 	assertParseError(t, "Cycle", `Unexpected token EOF, expected "<", example:1:6`)
 
 	assertParseType(t, "Map<>", mustType(types.MakeMapType(mustType(types.MakeUnionType()), mustType(types.MakeUnionType()))))
-	assertParseType(t, "Map<Bool, String>", mustType(types.MakeMapType(types.BoolType, types.StringType)))
+	assertParseType(t, "Map<Bool, String>", mustType(types.MakeMapType(types.PrimitiveTypeMap[types.BoolKind], types.PrimitiveTypeMap[types.StringKind])))
 	assertParseError(t, "Map<Bool,>", `Unexpected token ">", expected Ident, example:1:11`)
 	assertParseError(t, "Map<,Bool>", `Unexpected token ",", expected Ident, example:1:6`)
 	assertParseError(t, "Map<,>", `Unexpected token ",", expected Ident, example:1:6`)
@@ -160,21 +160,21 @@ func TestStructTypes(t *testing.T) {
 
 	assertParseType(t, `Struct S {
                 x: Float
-        }`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType})))
+        }`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.PrimitiveTypeMap[types.FloatKind]})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,
-	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType})))
+	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.PrimitiveTypeMap[types.FloatKind]})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,
 	        y: String
-	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType, "y": types.StringType})))
+	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.PrimitiveTypeMap[types.FloatKind], "y": types.PrimitiveTypeMap[types.StringKind]})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,
 	        y: String,
-	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.FloaTType, "y": types.StringType})))
+	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{"x": types.PrimitiveTypeMap[types.FloatKind], "y": types.PrimitiveTypeMap[types.StringKind]})))
 
 	assertParseType(t, `Struct S {
 	        x: Float,
@@ -182,16 +182,16 @@ func TestStructTypes(t *testing.T) {
 	                z: String,
 	        },
 	}`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": types.FloaTType,
-		"y": mustType(types.MakeStructTypeFromFields("", types.FieldMap{"z": types.StringType})),
+		"x": types.PrimitiveTypeMap[types.FloatKind],
+		"y": mustType(types.MakeStructTypeFromFields("", types.FieldMap{"z": types.PrimitiveTypeMap[types.StringKind]})),
 	})))
 
 	assertParseType(t, `Struct S {
                 x?: Float,
                 y: String,
         }`, mustType(types.MakeStructType("S",
-		types.StructField{Name: "x", Type: types.FloaTType, Optional: true},
-		types.StructField{Name: "y", Type: types.StringType, Optional: false},
+		types.StructField{Name: "x", Type: types.PrimitiveTypeMap[types.FloatKind], Optional: true},
+		types.StructField{Name: "y", Type: types.PrimitiveTypeMap[types.StringKind], Optional: false},
 	)))
 
 	assertParseError(t, `Struct S {
@@ -219,26 +219,26 @@ func TestStructTypes(t *testing.T) {
 }
 
 func TestUnionTypes(t *testing.T) {
-	assertParseType(t, "Blob | Bool", mustType(types.MakeUnionType(types.BlobType, types.BoolType)))
-	assertParseType(t, "Bool | Float | String", mustType(types.MakeUnionType(types.BoolType, types.FloaTType, types.StringType)))
-	assertParseType(t, "List<Bool | Float>", mustType(types.MakeListType(mustType(types.MakeUnionType(types.BoolType, types.FloaTType)))))
+	assertParseType(t, "Blob | Bool", mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.BlobKind], types.PrimitiveTypeMap[types.BoolKind])))
+	assertParseType(t, "Bool | Float | String", mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.BoolKind], types.PrimitiveTypeMap[types.FloatKind], types.PrimitiveTypeMap[types.StringKind])))
+	assertParseType(t, "List<Bool | Float>", mustType(types.MakeListType(mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.BoolKind], types.PrimitiveTypeMap[types.FloatKind])))))
 	assertParseType(t, "Map<Bool | Float, Bool | Float>",
 		mustType(types.MakeMapType(
-			mustType(types.MakeUnionType(types.BoolType, types.FloaTType)),
-			mustType(types.MakeUnionType(types.BoolType, types.FloaTType)),
+			mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.BoolKind], types.PrimitiveTypeMap[types.FloatKind])),
+			mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.BoolKind], types.PrimitiveTypeMap[types.FloatKind])),
 		)),
 	)
 	assertParseType(t, `Struct S {
                 x: Float | Bool
                 }`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": mustType(types.MakeUnionType(types.BoolType, types.FloaTType)),
+		"x": mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.BoolKind], types.PrimitiveTypeMap[types.FloatKind])),
 	})))
 	assertParseType(t, `Struct S {
                 x: Float | Bool,
                 y: String
         }`, mustType(types.MakeStructTypeFromFields("S", types.FieldMap{
-		"x": mustType(types.MakeUnionType(types.BoolType, types.FloaTType)),
-		"y": types.StringType,
+		"x": mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.BoolKind], types.PrimitiveTypeMap[types.FloatKind])),
+		"y": types.PrimitiveTypeMap[types.StringKind],
 	})))
 
 	assertParseError(t, "Bool |", "Unexpected token EOF, expected Ident, example:1:7")
@@ -249,8 +249,8 @@ func TestUnionTypes(t *testing.T) {
 
 func TestValuePrimitives(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "Float", types.FloaTType)
-	assertParse(t, vs, "Float | String", mustType(types.MakeUnionType(types.FloaTType, types.StringType)))
+	assertParse(t, vs, "Float", types.PrimitiveTypeMap[types.FloatKind])
+	assertParse(t, vs, "Float | String", mustType(types.MakeUnionType(types.PrimitiveTypeMap[types.FloatKind], types.PrimitiveTypeMap[types.StringKind])))
 
 	assertParse(t, vs, "true", types.Bool(true))
 	assertParse(t, vs, "false", types.Bool(false))
@@ -306,10 +306,10 @@ func TestValueList(t *testing.T) {
 
 	assertParse(t, vs, `[42,
                 Bool,
-        ]`, mustValue(types.NewList(context.Background(), vs, types.Float(42), types.BoolType)))
+        ]`, mustValue(types.NewList(context.Background(), vs, types.Float(42), types.PrimitiveTypeMap[types.BoolKind])))
 	assertParse(t, vs, `[42,
                 Bool
-        ]`, mustValue(types.NewList(context.Background(), vs, types.Float(42), types.BoolType)))
+        ]`, mustValue(types.NewList(context.Background(), vs, types.Float(42), types.PrimitiveTypeMap[types.BoolKind])))
 }
 
 func TestValueSet(t *testing.T) {
@@ -328,10 +328,10 @@ func TestValueSet(t *testing.T) {
 
 	assertParse(t, vs, `set {42,
                 Bool,
-        }`, mustValue(types.NewSet(context.Background(), vs, types.Float(42), types.BoolType)))
+        }`, mustValue(types.NewSet(context.Background(), vs, types.Float(42), types.PrimitiveTypeMap[types.BoolKind])))
 	assertParse(t, vs, `set {42,
                 Bool
-        }`, mustValue(types.NewSet(context.Background(), vs, types.Float(42), types.BoolType)))
+        }`, mustValue(types.NewSet(context.Background(), vs, types.Float(42), types.PrimitiveTypeMap[types.BoolKind])))
 }
 
 func TestValueMap(t *testing.T) {
@@ -352,17 +352,17 @@ func TestValueMap(t *testing.T) {
 
 	assertParse(t, vs, `map {42:
                 Bool,
-        }`, mustValue(types.NewMap(context.Background(), vs, types.Float(42), types.BoolType)))
+        }`, mustValue(types.NewMap(context.Background(), vs, types.Float(42), types.PrimitiveTypeMap[types.BoolKind])))
 	assertParse(t, vs, `map {42:
                 Bool
-        }`, mustValue(types.NewMap(context.Background(), vs, types.Float(42), types.BoolType)))
+        }`, mustValue(types.NewMap(context.Background(), vs, types.Float(42), types.PrimitiveTypeMap[types.BoolKind])))
 }
 
 func TestValueType(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "Bool", types.BoolType)
-	assertParse(t, vs, "Float", types.FloaTType)
-	assertParse(t, vs, "String", types.StringType)
+	assertParse(t, vs, "Bool", types.PrimitiveTypeMap[types.BoolKind])
+	assertParse(t, vs, "Float", types.PrimitiveTypeMap[types.FloatKind])
+	assertParse(t, vs, "String", types.PrimitiveTypeMap[types.StringKind])
 }
 
 func TestValueStruct(t *testing.T) {
@@ -470,7 +470,7 @@ func TestRoundTrips(t *testing.T) {
 	test(mustValue(types.NewStruct(types.Format_7_18, "", nil)))
 	test(mustValue(types.NewStruct(types.Format_7_18, "Float", nil)))
 	test(mustValue(types.NewStruct(types.Format_7_18, "Float", types.StructData{
-		"Float": types.FloaTType,
+		"Float": types.PrimitiveTypeMap[types.FloatKind],
 	})))
 
 	test(mustType(types.MakeStructType("S", types.StructField{

@@ -23,7 +23,7 @@ package types
 
 import (
 	"context"
-	"encoding/binary"
+	"strconv"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -52,6 +52,10 @@ func (v Uint) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(v, nbf)
 }
 
+func (v Uint) isPrimitive() bool {
+	return true
+}
+
 func (v Uint) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -61,7 +65,7 @@ func (v Uint) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (v Uint) typeOf() (*Type, error) {
-	return UintType, nil
+	return PrimitiveTypeMap[UintKind], nil
 }
 
 func (v Uint) Kind() NomsKind {
@@ -84,16 +88,62 @@ func (v Uint) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func (v Uint) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	// We know the size of the buffer here so allocate it once.
-	// UintKind, int (Varint), exp (Varint)
-	buff := make([]byte, 1+2*binary.MaxVarintLen64)
-	w := binaryNomsWriter{buff, 0}
-	err := v.writeTo(&w, nbf)
+func (v Uint) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	return Uint(b.readUint()), nil
+}
 
-	if err != nil {
-		return nil, err
+func (v Uint) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	b.skipUint()
+}
+
+func (Uint) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	switch targetKind {
+	case BoolKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			n := uint64(val.(Uint))
+			return Bool(n != 0), nil
+		}, nil
+	case FloatKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			n := uint64(val.(Uint))
+			return Float(float64(n)), nil
+		}, nil
+	case IntKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			n := uint64(val.(Uint))
+			return Int(int64(n)), nil
+		}, nil
+	case NullKind:
+		return func(Value) (Value, error) {
+			return NullValue, nil
+		}, nil
+	case StringKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			n := uint64(val.(Uint))
+			str := strconv.FormatUint(n, 10)
+			return String(str), nil
+		}, nil
+	case UintKind:
+		return func(val Value) (Value, error) {
+			return val, nil
+		}, nil
 	}
 
-	return buff[:w.offset], nil
+	return nil, CreateNoConversionError(UintKind, targetKind)
+}
+
+func (v Uint) HumanReadableString() string {
+	return strconv.FormatUint(uint64(v), 10)
 }

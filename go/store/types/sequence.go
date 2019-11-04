@@ -51,7 +51,6 @@ type sequence interface {
 	seqLen() int
 	treeLevel() uint64
 	typeOf() (*Type, error)
-	valueBytes(*NomsBinFormat) ([]byte, error)
 	valueReadWriter() ValueReadWriter
 	valuesSlice(from, to uint64) ([]Value, error)
 	WalkRefs(nbf *NomsBinFormat, cb RefCallback) error

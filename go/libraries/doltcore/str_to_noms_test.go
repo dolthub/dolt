@@ -35,6 +35,10 @@ var tests = []strToNomsTypeTests{
 	{"False", types.BoolKind, types.Bool(false), false},
 	{"-123456", types.IntKind, types.Int(-123456), false},
 	{"123456", types.IntKind, types.Int(123456), false},
+	{"0.123", types.IntKind, types.Int(0), false},
+	{".123", types.IntKind, types.Int(0), false},
+	{"-0.123", types.IntKind, types.Int(0), false},
+	{"-.123", types.IntKind, types.Int(0), false},
 	{"100000000000", types.UintKind, types.Uint(100000000000), false},
 	{"0", types.UintKind, types.Uint(0), false},
 	{
@@ -45,12 +49,12 @@ var tests = []strToNomsTypeTests{
 	{"0", types.UintKind, types.Uint(0), false},
 	{"", types.NullKind, types.NullValue, false},
 	{
-		"YWJjZGVmZw",
+		"61626364656667",
 		types.InlineBlobKind,
 		types.InlineBlob([]byte{0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67}),
 		false},
 	{
-		"YdGE4ZCD8J2Vqw",
+		"61D184E19083F09D95AB",
 		types.InlineBlobKind,
 		types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
 		false},

@@ -340,11 +340,11 @@ func TestNewSet(t *testing.T) {
 
 	s, err = NewSet(context.Background(), vs, Float(0))
 	assert.NoError(err)
-	assert.True(mustType(MakeSetType(FloaTType)).Equals(mustType(TypeOf(s))))
+	assert.True(mustType(MakeSetType(PrimitiveTypeMap[FloatKind])).Equals(mustType(TypeOf(s))))
 
 	s, err = NewSet(context.Background(), vs)
 	assert.NoError(err)
-	assert.IsType(mustType(MakeSetType(FloaTType)), mustType(TypeOf(s)))
+	assert.IsType(mustType(MakeSetType(PrimitiveTypeMap[FloatKind])), mustType(TypeOf(s)))
 
 	se, err := s.Edit().Remove(Float(1))
 	assert.NoError(err)
@@ -905,7 +905,7 @@ func TestSetOrdering(t *testing.T) {
 	vs := newTestValueStore()
 
 	testSetOrder(assert, vs,
-		StringType,
+		PrimitiveTypeMap[StringKind],
 		[]Value{
 			String("a"),
 			String("z"),
@@ -925,7 +925,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert, vs,
-		FloaTType,
+		PrimitiveTypeMap[FloatKind],
 		[]Value{
 			Float(0),
 			Float(1000),
@@ -945,7 +945,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert, vs,
-		FloaTType,
+		PrimitiveTypeMap[FloatKind],
 		[]Value{
 			Float(0),
 			Float(-30),
@@ -965,7 +965,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert, vs,
-		FloaTType,
+		PrimitiveTypeMap[FloatKind],
 		[]Value{
 			Float(0.0001),
 			Float(0.000001),
@@ -985,7 +985,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert, vs,
-		ValueType,
+		PrimitiveTypeMap[ValueKind],
 		[]Value{
 			String("a"),
 			String("z"),
@@ -1006,7 +1006,7 @@ func TestSetOrdering(t *testing.T) {
 	)
 
 	testSetOrder(assert, vs,
-		BoolType,
+		PrimitiveTypeMap[BoolKind],
 		[]Value{
 			Bool(true),
 			Bool(false),
@@ -1030,13 +1030,13 @@ func TestSetType(t *testing.T) {
 
 	s, err = NewSet(context.Background(), vs, Float(0))
 	assert.NoError(err)
-	assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(FloaTType))))
+	assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 
 	se2, err := s.Edit().Remove(Float(1))
 	assert.NoError(err)
 	s2, err := se2.Set(context.Background())
 	assert.NoError(err)
-	assert.True(mustType(TypeOf(s2)).Equals(mustType(MakeSetType(FloaTType))))
+	assert.True(mustType(TypeOf(s2)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 
 	se2, err = s.Edit().Insert(Float(0), Float(1))
 	assert.NoError(err)
@@ -1048,12 +1048,12 @@ func TestSetType(t *testing.T) {
 	assert.NoError(err)
 	s3, err := se3.Set(context.Background())
 	assert.NoError(err)
-	assert.True(mustType(TypeOf(s3)).Equals(mustType(MakeSetType(mustType(MakeUnionType(BoolType, FloaTType))))))
+	assert.True(mustType(TypeOf(s3)).Equals(mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind]))))))
 	se4, err := s.Edit().Insert(Float(3), Bool(true))
 	assert.NoError(err)
 	s4, err := se4.Set(context.Background())
 	assert.NoError(err)
-	assert.True(mustType(TypeOf(s4)).Equals(mustType(MakeSetType(mustType(MakeUnionType(BoolType, FloaTType))))))
+	assert.True(mustType(TypeOf(s4)).Equals(mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind]))))))
 }
 
 func TestSetChunks(t *testing.T) {
@@ -1170,14 +1170,14 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.asSequence())
-		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(FloaTType))))
+		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 
 		se, err := s.Edit().Insert(String("a"))
 		assert.NoError(err)
 		s, err = se.Set(context.Background())
 		assert.Equal(s.Len(), uint64(n+1))
 		assert.IsType(c, s.asSequence())
-		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(mustType(MakeUnionType(FloaTType, StringType))))))
+		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))))))
 
 		se, err = s.Edit().Remove(String("a"))
 		assert.NoError(err)
@@ -1185,7 +1185,7 @@ func TestSetTypeAfterMutations(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(s.Len(), uint64(n))
 		assert.IsType(c, s.asSequence())
-		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(FloaTType))))
+		assert.True(mustType(TypeOf(s)).Equals(mustType(MakeSetType(PrimitiveTypeMap[FloatKind]))))
 	}
 
 	test(10, setLeafSequence{})
@@ -1316,8 +1316,8 @@ func TestSetWithStructShouldHaveOptionalFields(t *testing.T) {
 	assert.NoError(err)
 	assert.True(
 		mustType(MakeSetType(mustType(MakeStructType("Foo",
-			StructField{"a", FloaTType, false},
-			StructField{"b", StringType, true},
+			StructField{"a", PrimitiveTypeMap[FloatKind], false},
+			StructField{"b", PrimitiveTypeMap[StringKind], true},
 		),
 		))).Equals(mustType(TypeOf(list))))
 }

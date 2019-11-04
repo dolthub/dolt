@@ -208,8 +208,6 @@ func IsValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type) (bool, bool, 
 
 func isValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type, hasExtra bool) (bool, bool, error) {
 	switch t.TargetKind() {
-	case BoolKind, FloatKind, StringKind, BlobKind, TypeKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
-		return v.Kind() == t.TargetKind(), hasExtra, nil
 	case ValueKind:
 		return true, hasExtra, nil
 	case UnionKind:
@@ -263,6 +261,9 @@ func isValueSubtypeOfDetails(nbf *NomsBinFormat, v Value, t *Type, hasExtra bool
 	case CycleKind:
 		panic("unreachable") // CycleKind are ephemeral.
 	default:
+		if IsPrimitiveKind(t.TargetKind()) {
+			return v.Kind() == t.TargetKind(), hasExtra, nil
+		}
 		if v.Kind() != t.TargetKind() {
 			return false, hasExtra, nil
 		}

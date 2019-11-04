@@ -56,6 +56,10 @@ func (v UUID) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(v, nbf)
 }
 
+func (v UUID) isPrimitive() bool {
+	return true
+}
+
 func (v UUID) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
@@ -65,7 +69,7 @@ func (v UUID) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 }
 
 func (v UUID) typeOf() (*Type, error) {
-	return UUIDType, nil
+	return PrimitiveTypeMap[UUIDKind], nil
 }
 
 func (v UUID) Kind() NomsKind {
@@ -85,22 +89,46 @@ func (v UUID) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 		return err
 	}
 
-	w.writeBytes(byteSl)
+	w.writeRaw(byteSl)
 	return nil
 }
 
-func (v UUID) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	buff := make([]byte, 1+uuidNumBytes)
-	w := binaryNomsWriter{buff, 0}
-	err := v.writeTo(&w, nbf)
+func (v UUID) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+	id := UUID{}
+	copy(id[:uuidNumBytes], b.readBytes(uuidNumBytes))
+	return id, nil
+}
 
-	if err != nil {
-		return nil, err
+func (v UUID) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+	b.skipBytes(uuidNumBytes)
+}
+
+func (UUID) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
+	switch targetKind {
+	case NullKind:
+		return func(Value) (Value, error) {
+			return NullValue, nil
+		}, nil
+	case StringKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			return String(val.(UUID).String()), nil
+		}, nil
+	case UUIDKind:
+		return func(val Value) (Value, error) {
+			return val, nil
+		}, nil
 	}
 
-	return buff[:w.offset], err
+	return nil, CreateNoConversionError(UUIDKind, targetKind)
 }
 
 func (v UUID) String() string {
 	return uuid.UUID(v).String()
+}
+
+func (v UUID) HumanReadableString() string {
+	return v.String()
 }

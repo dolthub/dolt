@@ -210,7 +210,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 	keyType, err := TypeOf(mustValue(gen(0)))
 	d.PanicIfError(err)
 	elems := newSortedTestMap(length, gen)
-	tr, err := MakeMapType(keyType, FloaTType)
+	tr, err := MakeMapType(keyType, PrimitiveTypeMap[FloatKind])
 	d.PanicIfError(err)
 	tmap, err := NewMap(context.Background(), vrw, elems.FlattenAll()...)
 	d.PanicIfError(err)
@@ -1421,7 +1421,7 @@ func TestMapOrdering(t *testing.T) {
 	vrw := newTestValueStore()
 
 	testMapOrder(assert, vrw,
-		StringType, StringType,
+		PrimitiveTypeMap[StringKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			String("a"), String("unused"),
 			String("z"), String("unused"),
@@ -1441,7 +1441,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		FloaTType, StringType,
+		PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			Float(0), String("unused"),
 			Float(1000), String("unused"),
@@ -1461,7 +1461,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		UintType, StringType,
+		PrimitiveTypeMap[UintKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			Uint(0), String("unused"),
 			Uint(1000), String("unused"),
@@ -1481,7 +1481,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		UintType, NullType,
+		PrimitiveTypeMap[UintKind], PrimitiveTypeMap[NullKind],
 		[]Value{
 			Uint(0), NullValue,
 			Uint(1000), NullValue,
@@ -1501,7 +1501,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		NullType, StringType,
+		PrimitiveTypeMap[NullKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			NullValue, String("val 1"),
 			NullValue, String("val 2"),
@@ -1513,7 +1513,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		IntType, StringType,
+		PrimitiveTypeMap[IntKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			Int(0), String("unused"),
 			Int(1000), String("unused"),
@@ -1533,7 +1533,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		FloaTType, StringType,
+		PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			Float(0), String("unused"),
 			Float(-30), String("unused"),
@@ -1559,7 +1559,7 @@ func TestMapOrdering(t *testing.T) {
 		UUID(uuid.Must(uuid.Parse("10000000-0000-0001-0000-000000000001"))),
 		UUID(uuid.Must(uuid.Parse("20000000-0000-0000-0000-000000000001"))),
 	}
-	testMapOrder(assert, vrw, UUIDType, StringType,
+	testMapOrder(assert, vrw, PrimitiveTypeMap[UUIDKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			uuids[4], String("unused"),
 			uuids[1], String("unused"),
@@ -1577,7 +1577,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		FloaTType, StringType,
+		PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			Float(0.0001), String("unused"),
 			Float(0.000001), String("unused"),
@@ -1597,7 +1597,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		ValueType, StringType,
+		PrimitiveTypeMap[ValueKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			String("a"), String("unused"),
 			String("z"), String("unused"),
@@ -1617,7 +1617,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		BoolType, StringType,
+		PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			Bool(true), String("unused"),
 			Bool(false), String("unused"),
@@ -1629,7 +1629,7 @@ func TestMapOrdering(t *testing.T) {
 	)
 
 	testMapOrder(assert, vrw,
-		InlineBlobType, StringType,
+		PrimitiveTypeMap[InlineBlobKind], PrimitiveTypeMap[StringKind],
 		[]Value{
 			InlineBlob([]byte{00, 01, 1}), String("unused"),
 			InlineBlob([]byte{00, 01, 9}), String("unused"),
@@ -1696,7 +1696,7 @@ func TestMapType(t *testing.T) {
 	assert.NoError(err)
 	assert.True(emptyMapType.Equals(mustType(TypeOf(m2))))
 
-	tr, err := MakeMapType(StringType, FloaTType)
+	tr, err := MakeMapType(PrimitiveTypeMap[StringKind], PrimitiveTypeMap[FloatKind])
 	assert.NoError(err)
 	m2, err = m.Edit().Set(String("A"), Float(1)).Map(context.Background())
 	assert.NoError(err)
@@ -1708,10 +1708,10 @@ func TestMapType(t *testing.T) {
 
 	m3, err := m2.Edit().Set(String("A"), Bool(true)).Map(context.Background())
 	assert.NoError(err)
-	assert.True(mustType(MakeMapType(StringType, mustType(MakeUnionType(BoolType, FloaTType)))).Equals(mustType(TypeOf(m3))), mustString(mustType(TypeOf(m3)).Describe(context.Background())))
+	assert.True(mustType(MakeMapType(PrimitiveTypeMap[StringKind], mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))).Equals(mustType(TypeOf(m3))), mustString(mustType(TypeOf(m3)).Describe(context.Background())))
 	m4, err := m3.Edit().Set(Bool(true), Float(1)).Map(context.Background())
 	assert.NoError(err)
-	assert.True(mustType(MakeMapType(mustType(MakeUnionType(BoolType, StringType)), mustType(MakeUnionType(BoolType, FloaTType)))).Equals(mustType(TypeOf(m4))))
+	assert.True(mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[StringKind])), mustType(MakeUnionType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[FloatKind])))).Equals(mustType(TypeOf(m4))))
 }
 
 func TestMapChunks(t *testing.T) {
@@ -1829,19 +1829,19 @@ func TestMapTypeAfterMutations(t *testing.T) {
 		assert.NoError(err)
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.asSequence())
-		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(FloaTType, FloaTType))))
+		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind]))))
 
 		m, err = m.Edit().Set(String("a"), String("a")).Map(context.Background())
 		assert.NoError(err)
 		assert.Equal(m.Len(), uint64(n+1))
 		assert.IsType(c, m.asSequence())
-		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(mustType(MakeUnionType(FloaTType, StringType)), mustType(MakeUnionType(FloaTType, StringType))))))
+		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind])), mustType(MakeUnionType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[StringKind]))))))
 
 		m, err = m.Edit().Remove(String("a")).Map(context.Background())
 		assert.NoError(err)
 		assert.Equal(m.Len(), uint64(n))
 		assert.IsType(c, m.asSequence())
-		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(FloaTType, FloaTType))))
+		assert.True(mustType(TypeOf(m)).Equals(mustType(MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[FloatKind]))))
 	}
 
 	test(10, mapLeafSequence{})
@@ -2026,10 +2026,10 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 		}))),
 	)
 	assert.True(
-		mustType(MakeMapType(StringType,
+		mustType(MakeMapType(PrimitiveTypeMap[StringKind],
 			mustType(MakeStructType("Foo",
-				StructField{"a", FloaTType, false},
-				StructField{"b", StringType, true},
+				StructField{"a", PrimitiveTypeMap[FloatKind], false},
+				StructField{"b", PrimitiveTypeMap[StringKind], true},
 			)),
 		)).Equals(mustType(TypeOf(list))))
 
@@ -2048,10 +2048,10 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 	assert.True(
 		mustType(MakeMapType(
 			mustType(MakeStructType("Foo",
-				StructField{"a", FloaTType, false},
-				StructField{"b", StringType, true},
+				StructField{"a", PrimitiveTypeMap[FloatKind], false},
+				StructField{"b", PrimitiveTypeMap[StringKind], true},
 			)),
-			StringType,
+			PrimitiveTypeMap[StringKind],
 		)).Equals(mustType(TypeOf(list))))
 
 }

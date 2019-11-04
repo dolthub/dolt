@@ -148,16 +148,28 @@ func (r *JSONReader) convToRow(rowMap map[string]interface{}) (row.Row, error) {
 
 		switch val := v.(type) {
 		case int:
-			f := doltcore.GetConvFunc(types.IntKind, col.Kind)
+			f, err := doltcore.GetConvFunc(types.IntKind, col.Kind)
+			if err != nil {
+				return nil, err
+			}
 			taggedVals[col.Tag], _ = f(types.Int(val))
 		case string:
-			f := doltcore.GetConvFunc(types.StringKind, col.Kind)
+			f, err := doltcore.GetConvFunc(types.StringKind, col.Kind)
+			if err != nil {
+				return nil, err
+			}
 			taggedVals[col.Tag], _ = f(types.String(val))
 		case bool:
-			f := doltcore.GetConvFunc(types.BoolKind, col.Kind)
+			f, err := doltcore.GetConvFunc(types.BoolKind, col.Kind)
+			if err != nil {
+				return nil, err
+			}
 			taggedVals[col.Tag], _ = f(types.Bool(val))
 		case float64:
-			f := doltcore.GetConvFunc(types.FloatKind, col.Kind)
+			f, err := doltcore.GetConvFunc(types.FloatKind, col.Kind)
+			if err != nil {
+				return nil, err
+			}
 			taggedVals[col.Tag], _ = f(types.Float(val))
 		}
 

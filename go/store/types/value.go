@@ -30,6 +30,16 @@ import (
 
 type ValueCallback func(v Value) error
 type RefCallback func(ref Ref) error
+type MarshalCallback func(val Value) (Value, error)
+
+func init() {
+	for _, value := range KindToType {
+		if value != nil && value.isPrimitive() {
+			nomsKind := value.Kind()
+			PrimitiveTypeMap[nomsKind] = makePrimitiveType(nomsKind)
+		}
+	}
+}
 
 // Valuable is an interface from which a Value can be retrieved.
 type Valuable interface {
@@ -65,6 +75,9 @@ type Value interface {
 	// same hash they must be equal.
 	Hash(*NomsBinFormat) (hash.Hash, error)
 
+	// isPrimitive returns whether the Value is a primitive type
+	isPrimitive() bool
+
 	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
 	// Type()
 	WalkValues(context.Context, ValueCallback) error
@@ -73,6 +86,13 @@ type Value interface {
 	// chunked then this will return the refs of th sub trees of the prolly-tree.
 	WalkRefs(*NomsBinFormat, RefCallback) error
 
+	// GetMarshalFunc takes in a Kind and returns a function that accepts a Value of the calling type.
+	// The returned function then marshals the given type into the given Kind.
+	GetMarshalFunc(NomsKind) (MarshalCallback, error)
+
+	// HumanReadableString returns a human-readable string version of this Value (not meant for re-parsing)
+	HumanReadableString() string
+
 	// typeOf is the internal implementation of types.TypeOf. It is not normalized
 	// and unions might have a single element, duplicates and be in the wrong
 	// order.
@@ -80,6 +100,12 @@ type Value interface {
 
 	// writeTo writes the encoded version of the value to a nomsWriter.
 	writeTo(nomsWriter, *NomsBinFormat) error
+
+	// readFrom reads the encoded version of the value from a binaryNomsReader
+	readFrom(*NomsBinFormat, *binaryNomsReader) (Value, error)
+
+	// skip takes in a binaryNomsReader and skips the encoded version of the value
+	skip(*NomsBinFormat, *binaryNomsReader)
 }
 
 type ValueSlice []Value
@@ -146,10 +172,6 @@ func (v valueImpl) writeTo(enc nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-func (v valueImpl) valueBytes(nbf *NomsBinFormat) ([]byte, error) {
-	return v.buff, nil
-}
-
 // IsZeroValue can be used to test if a Value is the same as T{}.
 func (v valueImpl) IsZeroValue() bool {
 	return v.buff == nil
@@ -187,13 +209,14 @@ func (v valueImpl) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) 
 }
 
 func (v valueImpl) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	bts, err := v.valueBytes(nbf)
+	w := binaryNomsWriter{make([]byte, len(v.buff)+1), 0}
+	err := v.writeTo(&w, nbf)
 
 	if err != nil {
 		return err
 	}
 
-	return walkRefs(bts, nbf, cb)
+	return walkRefs(w.buff[:w.offset], nbf, cb)
 }
 
 type asValueImpl interface {

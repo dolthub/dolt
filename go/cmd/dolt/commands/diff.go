@@ -17,6 +17,13 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"reflect"
 	"sort"
 	"strconv"
@@ -30,17 +37,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
-	"github.com/liquidata-inc/dolt/go/store/atomicerr"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -429,7 +429,23 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	return schema.SchemaFromCols(dumbColColl), nil
 }
 
+func toNamer(name string) string {
+	return diff.To + "_" + name
+}
+
+func fromNamer(name string) string {
+	return diff.From + "_" + name
+}
+
 func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema, dArgs *diffArgs) errhand.VerboseError {
+	joiner, err := rowconv.NewJoiner(
+		[]rowconv.NamedSchema{
+			{Name: diff.From, Sch: oldSch},
+			{Name: diff.To, Sch: newSch},
+		},
+		map[string]rowconv.ColNamingFunc{diff.To: toNamer, diff.From: fromNamer},
+	)
+
 	dumbNewSch, err := dumbDownSchema(newSch)
 
 	if err != nil {
@@ -470,11 +486,12 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		oldToUnionConv, _ = rowconv.NewRowConverter(oldToUnionMapping)
 	}
 
+	ds := diff.NewDiffSplitter(joiner, oldToUnionConv, newToUnionConv)
 	ad := diff.NewAsyncDiffer(1024)
 	ad.Start(ctx, newRows, oldRows)
 	defer ad.Close()
 
-	src := diff.NewRowDiffSource(ad, oldToUnionConv, newToUnionConv, untypedUnionSch)
+	src := diff.NewRowDiffSource(ad, joiner)
 	defer src.Close()
 
 	oldColNames := make(map[uint64]string)
@@ -516,9 +533,15 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 
 	defer sink.Close()
 
+	if err != nil {
+		return errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
+	}
+
 	fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
 	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
-	transforms := pipeline.NewTransformCollection(
+	transforms := pipeline.NewTransformCollection()
+
+	transforms.AppendTransforms(pipeline.NewNamedTransform("split_diffs", ds.SplitDiffIntoOldAndNew),
 		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
 		pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT},
 	)

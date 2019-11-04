@@ -264,61 +264,29 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	switch k {
 	case BlobKind:
 		seq, err := r.readBlobSequence(nbf)
-
 		if err != nil {
 			return nil, err
 		}
-
 		return newBlob(seq), nil
-	case BoolKind:
-		r.skipKind()
-		return Bool(r.readBool()), nil
-	case FloatKind:
-		r.skipKind()
-		return r.readFloat(nbf), nil
-	case UUIDKind:
-		r.skipKind()
-		return r.readUUID(), nil
-	case IntKind:
-		r.skipKind()
-		return r.readInt(), nil
-	case UintKind:
-		r.skipKind()
-		return r.readUint(), nil
-	case NullKind:
-		r.skipKind()
-		return NullValue, nil
-	case StringKind:
-		r.skipKind()
-		return String(r.readString()), nil
-	case InlineBlobKind:
-		r.skipKind()
-		return r.readInlineBlob()
 	case ListKind:
 		seq, err := r.readListSequence(nbf)
-
 		if err != nil {
 			return nil, err
 		}
-
 		return newList(seq), nil
 	case MapKind:
 		seq, err := r.readMapSequence(nbf)
-
 		if err != nil {
 			return nil, err
 		}
-
 		return newMap(seq), nil
 	case RefKind:
 		return r.readRef(nbf)
 	case SetKind:
 		seq, err := r.readSetSequence(nbf)
-
 		if err != nil {
 			return nil, err
 		}
-
 		return newSet(seq), nil
 	case StructKind:
 		return r.readStruct(nbf)
@@ -331,6 +299,13 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		d.Panic("A value instance can never have type %s", k)
 	}
 
+	if IsPrimitiveKind(k) {
+		if emptyVal, ok := KindToType[k]; ok {
+			r.skipKind()
+			return emptyVal.readFrom(nbf, &r.binaryNomsReader)
+		}
+	}
+
 	return nil, ErrUnknownType
 }
 
@@ -339,79 +314,55 @@ func (r *valueDecoder) skipValue(nbf *NomsBinFormat) error {
 	switch k {
 	case BlobKind:
 		err := r.skipBlob(nbf)
-
 		if err != nil {
 			return err
 		}
-	case BoolKind:
-		r.skipKind()
-		r.skipBool()
-	case FloatKind:
-		r.skipKind()
-		r.skipFloat(nbf)
-	case UUIDKind:
-		r.skipKind()
-		r.skipUUID()
-	case NullKind:
-		r.skipKind()
-	case IntKind:
-		r.skipKind()
-		r.skipInt()
-	case UintKind:
-		r.skipKind()
-		r.skipUint()
-	case StringKind:
-		r.skipKind()
-		r.skipString()
-	case InlineBlobKind:
-		r.skipKind()
-		r.skipInlineBlob()
 	case ListKind:
 		err := r.skipList(nbf)
-
 		if err != nil {
 			return err
 		}
 	case MapKind:
 		err := r.skipMap(nbf)
-
 		if err != nil {
 			return err
 		}
 	case RefKind:
 		err := r.skipRef()
-
 		if err != nil {
 			return err
 		}
 	case SetKind:
 		err := r.skipSet(nbf)
-
 		if err != nil {
 			return err
 		}
 	case StructKind:
 		err := r.skipStruct(nbf)
-
 		if err != nil {
 			return err
 		}
 	case TupleKind:
 		err := r.skipTuple(nbf)
-
 		if err != nil {
 			return err
 		}
 	case TypeKind:
 		r.skipKind()
 		err := r.skipType()
-
 		if err != nil {
 			return err
 		}
 	case CycleKind, UnionKind, ValueKind:
 		d.Panic("A value instance can never have type %s", k)
 	default:
+		if IsPrimitiveKind(k) {
+			if emptyVal, ok := KindToType[k]; ok {
+				r.skipKind()
+				emptyVal.skip(nbf, &r.binaryNomsReader)
+				return nil
+			}
+		}
 		return ErrUnknownType
 	}
 
@@ -425,76 +376,44 @@ func (r *valueDecoder) readTypeOfValue(nbf *NomsBinFormat) (*Type, error) {
 	switch k {
 	case BlobKind:
 		err := r.skipBlob(nbf)
-
 		if err != nil {
 			return nil, err
 		}
-
-		return BlobType, nil
-	case BoolKind:
-		r.skipKind()
-		r.skipBool()
-		return BoolType, nil
-	case FloatKind:
-		r.skipKind()
-		r.skipFloat(nbf)
-		return FloaTType, nil
-	case UUIDKind:
-		r.skipKind()
-		r.skipUUID()
-		return UUIDType, nil
-	case IntKind:
-		r.skipKind()
-		r.skipInt()
-		return IntType, nil
-	case UintKind:
-		r.skipKind()
-		r.skipUint()
-		return UintType, nil
-	case InlineBlobKind:
-		r.skipKind()
-		r.skipInlineBlob()
-		return InlineBlobType, nil
-	case NullKind:
-		r.skipKind()
-		return NullType, nil
-	case StringKind:
-		r.skipKind()
-		r.skipString()
-		return StringType, nil
+		return PrimitiveTypeMap[BlobKind], nil
 	case ListKind, MapKind, RefKind, SetKind:
 		// These do not decode the actual values anyway.
 		val, err := r.readValue(nbf)
-
 		if err != nil {
 			return nil, err
 		}
-
 		d.Chk.True(val != nil)
 		return val.typeOf()
 	case StructKind:
 		return readStructTypeOfValue(nbf, r)
-
 	case TupleKind:
 		val, err := r.readValue(nbf)
-
 		if err != nil {
 			return nil, err
 		}
-
 		d.Chk.True(val != nil)
 		return val.typeOf()
 	case TypeKind:
 		r.skipKind()
 		err := r.skipType()
-
 		if err != nil {
 			return nil, err
 		}
-
-		return TypeType, nil
+		return PrimitiveTypeMap[TypeKind], nil
 	case CycleKind, UnionKind, ValueKind:
 		d.Panic("A value instance can never have type %s", k)
+	}
+
+	if IsPrimitiveKind(k) {
+		if emptyVal, ok := KindToType[k]; ok {
+			r.skipKind()
+			emptyVal.skip(nbf, &r.binaryNomsReader)
+			return PrimitiveTypeMap[k], nil
+		}
 	}
 
 	return nil, ErrUnknownType
@@ -512,13 +431,6 @@ func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool
 	}
 
 	switch k {
-	case BlobKind, BoolKind, FloatKind, StringKind, UUIDKind, IntKind, UintKind, InlineBlobKind, NullKind:
-		err := r.skipValue(nbf)
-		if err != nil {
-			return false, err
-		}
-
-		return true, nil
 	case ListKind, MapKind, RefKind, SetKind, TupleKind:
 		// TODO: Maybe do some simple cases here too. Performance metrics should determine
 		// what is going to be worth doing.
@@ -532,7 +444,17 @@ func (r *valueDecoder) isValueSameTypeForSure(nbf *NomsBinFormat, t *Type) (bool
 		d.Panic("A value instance can never have type %s", k)
 	}
 
-	panic("not reachable")
+	// Captures all other types that are not the above special cases
+	if IsPrimitiveKind(k) {
+		err := r.skipValue(nbf)
+		if err != nil {
+			return false, err
+		}
+
+		return true, nil
+	}
+
+	panic("non-primitive type not special cased")
 }
 
 // isStringSame checks if the next string in the decoder matches string. It
@@ -614,7 +536,7 @@ func (r *typedBinaryNomsReader) skipType() error {
 func (r *typedBinaryNomsReader) readTypeInner(seenStructs map[string]*Type) (*Type, error) {
 	k := r.readKind()
 
-	if _, supported := SupportedKinds[k]; !supported {
+	if _, supported := KindToType[k]; !supported {
 		return nil, ErrUnknownType
 	}
 

@@ -630,9 +630,9 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfRefs() {
 }
 
 func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
-	setOfStringType, err := types.MakeSetType(types.StringType)
+	setOfStringType, err := types.MakeSetType(types.PrimitiveTypeMap[types.StringKind])
 	suite.NoError(err)
-	setOfRefOfStringType, err := types.MakeSetType(mustType(types.MakeRefType(types.StringType)))
+	setOfRefOfStringType, err := types.MakeSetType(mustType(types.MakeRefType(types.PrimitiveTypeMap[types.StringKind])))
 	suite.NoError(err)
 
 	// Set<String>

@@ -77,21 +77,21 @@ func TestValueEquals(t *testing.T) {
 		func() (Value, error) { return NewSet(context.Background(), vrw) },
 		func() (Value, error) { return NewSet(context.Background(), vrw, String("hi")) },
 
-		func() (Value, error) { return BoolType, nil },
-		func() (Value, error) { return StringType, nil },
+		func() (Value, error) { return PrimitiveTypeMap[BoolKind], nil },
+		func() (Value, error) { return PrimitiveTypeMap[StringKind], nil },
 		func() (Value, error) { return MakeStructType("a") },
 		func() (Value, error) { return MakeStructType("b") },
-		func() (Value, error) { return MakeListType(BoolType) },
-		func() (Value, error) { return MakeListType(FloaTType) },
-		func() (Value, error) { return MakeSetType(BoolType) },
-		func() (Value, error) { return MakeSetType(FloaTType) },
-		func() (Value, error) { return MakeRefType(BoolType) },
-		func() (Value, error) { return MakeRefType(FloaTType) },
+		func() (Value, error) { return MakeListType(PrimitiveTypeMap[BoolKind]) },
+		func() (Value, error) { return MakeListType(PrimitiveTypeMap[FloatKind]) },
+		func() (Value, error) { return MakeSetType(PrimitiveTypeMap[BoolKind]) },
+		func() (Value, error) { return MakeSetType(PrimitiveTypeMap[FloatKind]) },
+		func() (Value, error) { return MakeRefType(PrimitiveTypeMap[BoolKind]) },
+		func() (Value, error) { return MakeRefType(PrimitiveTypeMap[FloatKind]) },
 		func() (Value, error) {
-			return MakeMapType(BoolType, ValueType)
+			return MakeMapType(PrimitiveTypeMap[BoolKind], PrimitiveTypeMap[ValueKind])
 		},
 		func() (Value, error) {
-			return MakeMapType(FloaTType, ValueType)
+			return MakeMapType(PrimitiveTypeMap[FloatKind], PrimitiveTypeMap[ValueKind])
 		},
 	}
 
