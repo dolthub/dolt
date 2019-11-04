@@ -203,9 +203,8 @@ teardown() {
     [ "$output" = "" ]
 }
 
-@test "unsupported branch characters" {
-    run dolt branch "are.dots.supported"
-    skip "branch names with . panic right now"
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+@test "branch names do not support ." {
+    run dolt branch "dots.are.not.supported"
+    [ "$status" -eq 1 ]
+    [ "$output" = "fatal: 'dots.are.not.supported' is an invalid branch name." ]
 }
