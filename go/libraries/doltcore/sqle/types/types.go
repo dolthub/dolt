@@ -37,6 +37,9 @@ type SqlType interface {
 	GetValueToSql() ValueToSql
 	// GetSqlToValue returns a function that accepts any variable and returns a Value if applicable.
 	GetSqlToValue() SqlToValue
+	// SqlTypeString returns the SQL representation of the type returned by SqlType().
+	// sql.Type.String() does not necessarily return a SQL-compliant string, so prefer this instead.
+	SqlTypeString() string
 	fmt.Stringer
 }
 
@@ -53,6 +56,7 @@ func init() {
 	for _, sqlTypeInit := range sqlTypeInitializers {
 		kind := sqlTypeInit.NomsKind()
 		nomsKindToSqlType[kind] = sqlTypeInit.SqlType()
+		nomsKindToSqlTypeStr[kind] = sqlTypeInit.SqlTypeString()
 		nomsValToSqlValFunc[kind] = sqlTypeInit.GetValueToSql()
 		nomsKindToValFunc[kind] = sqlTypeInit.GetSqlToValue()
 		for _, st := range sqlTypeInit.SqlTypes() {
@@ -65,10 +69,11 @@ func init() {
 }
 
 var (
-	nomsKindToSqlType   = make(map[dtypes.NomsKind]sql.Type)
-	nomsKindToValFunc   = make(map[dtypes.NomsKind]SqlToValue)
-	nomsValToSqlValFunc = make(map[dtypes.NomsKind]ValueToSql)
-	sqlTypeToNomsKind   = make(map[sql.Type]dtypes.NomsKind)
+	nomsKindToSqlType    = make(map[dtypes.NomsKind]sql.Type)
+	nomsKindToSqlTypeStr = make(map[dtypes.NomsKind]string)
+	nomsKindToValFunc    = make(map[dtypes.NomsKind]SqlToValue)
+	nomsValToSqlValFunc  = make(map[dtypes.NomsKind]ValueToSql)
+	sqlTypeToNomsKind    = make(map[sql.Type]dtypes.NomsKind)
 )
 
 func NomsKindToSqlType(nomsKind dtypes.NomsKind) (sql.Type, error) {
@@ -76,6 +81,13 @@ func NomsKindToSqlType(nomsKind dtypes.NomsKind) (sql.Type, error) {
 		return st, nil
 	}
 	return nil, fmt.Errorf("no corresponding SQL type found for %v", nomsKind)
+}
+
+func NomsKindToSqlTypeString(nomsKind dtypes.NomsKind) (string, error) {
+	if str, ok := nomsKindToSqlTypeStr[nomsKind]; ok {
+		return str, nil
+	}
+	return "", fmt.Errorf("no corresponding SQL type found for %v", nomsKind)
 }
 
 func NomsValToSqlVal(val dtypes.Value) (interface{}, error) {

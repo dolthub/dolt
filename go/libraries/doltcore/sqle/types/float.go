@@ -78,6 +78,10 @@ func (floatType) GetSqlToValue() SqlToValue {
 	}
 }
 
+func (floatType) SqlTypeString() string {
+	return "DOUBLE"
+}
+
 func (floatType) String() string {
 	return "floatType"
 }

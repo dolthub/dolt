@@ -33,14 +33,14 @@ func TestExecuteShow(t *testing.T) {
 	peopleSchemaStr := SchemaAsCreateStmt("people", PeopleTestSchema)
 
 	peopleSchemaRows := Rs(
-		NewResultSetRow(types.String("id"), types.String("int"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("first"), types.String("varchar(1024)"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("last"), types.String("varchar(1024)"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("is_married"), types.String("bool"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("age"), types.String("int"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("rating"), types.String("float"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("uuid"), types.String("uuid"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("num_episodes"), types.String("int unsigned"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("id"), types.String("BIGINT"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("first"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("last"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("is_married"), types.String("BOOLEAN"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("age"), types.String("BIGINT"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("rating"), types.String("DOUBLE"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("uuid"), types.String("CHAR(36)"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("num_episodes"), types.String("BIGINT UNSIGNED"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 	)
 
 	tests := []struct {

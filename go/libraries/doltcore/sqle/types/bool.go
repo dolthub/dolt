@@ -63,6 +63,10 @@ func (boolType) GetSqlToValue() SqlToValue {
 	}
 }
 
+func (boolType) SqlTypeString() string {
+	return "BOOLEAN"
+}
+
 func (boolType) String() string {
 	return "boolType"
 }

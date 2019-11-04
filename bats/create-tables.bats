@@ -200,7 +200,7 @@ teardown() {
 }
 
 @test "create a basic table (int types) using sql" {
-    run dolt sql -q "create table test (pk int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
+    run dolt sql -q "CREATE TABLE test (pk BIGINT, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     run dolt ls
@@ -210,90 +210,90 @@ teardown() {
     run bash -c "dolt schema show"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 @test "create a table with sql with multiple primary keys" {
-    run dolt sql -q "create table test (pk1 int, pk2 int, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk1), primary key (pk2))"
+    run dolt sql -q "CREATE TABLE test (pk1 BIGINT, pk2 BIGINT, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk1), PRIMARY KEY (pk2))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     run bash -c "dolt schema show"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk1\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`pk2\` int not null comment 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c1\` int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c2\` int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c3\` int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c4\` int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "\`c5\` int comment 'tag:6'" ]] || false
-    [[ "$output" =~ "primary key (\`pk1\`,\`pk2\`)" ]] || false
+    [[ "$output" =~ "\`pk1\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`pk2\` BIGINT NOT NULL COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:6'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk1\`,\`pk2\`)" ]] || false
 }
 
 @test "create a table using sql with not null constraint" {
-    run dolt sql -q "create table test (pk int not null, c1 int, c2 int, c3 int, c4 int, c5 int, primary key (pk))"
+    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 @test "create a table using sql with a float" {
-    run dolt sql -q "create table test (pk int not null, c1 float, primary key (pk))"
+    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 DOUBLE, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\` " ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` float comment 'tag:1'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` DOUBLE COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
    
 @test "create a table using sql with a string" {
-    run dolt sql -q "create table test (pk int not null, c1 varchar, primary key (pk))"
+    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 LONGTEXT, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` varchar(1024) comment 'tag:1'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` LONGTEXT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 
 @test "create a table using sql with an unsigned int" {
-    run dolt sql -q "create table test (pk int not null, c1 int unsigned, primary key (pk))"
+    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BIGINT UNSIGNED, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     run dolt schema show test
-    [[ "$output" =~ "int unsigned" ]] || false
+    [[ "$output" =~ "BIGINT UNSIGNED" ]] || false
 }
 
 @test "create a table using sql with a boolean" {
-    run dolt sql -q "create table test (pk int not null, c1 bool, primary key (pk))"
+    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 BOOLEAN, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
 }
 
 @test "create table with sql and dolt table create table. match success/failure" {
-    run dolt sql -q "create table 1pk (pk int not null, c1 int, primary key(pk))"
+    run dolt sql -q "CREATE TABLE 1pk (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY(pk))"
     [ "$status" -eq 1 ]
     skip "This case needs a lot of work."
     [ "$output" = "Invalid table name. Table names cannot start with digits." ] 
@@ -301,7 +301,7 @@ teardown() {
     dolt table create -s=`batshelper 1pk5col-ints.schema` 1pk
     [ "$status" -eq 1 ]
     [ "$output" = "Invalid table name. Table names cannot start with digits." ]
-    run dolt sql -q "create table one-pk (pk int not null, c1 int, primary key(pk))"
+    run dolt sql -q "CREATE TABLE one-pk (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY(pk))"
     [ "$status" -eq 1 ]
     skip "Need better error message"
     [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
@@ -311,7 +311,7 @@ teardown() {
 }
 
 @test "create a table with a mispelled primary key" {
-    run dolt sql -q "create table test (pk int, c1 int, c2 int, primary key
+    run dolt sql -q "CREATE TABLE test (pk BIGINT, c1 BIGINT, c2 BIGINT, PRIMARY KEY
 (pk,noexist))"
     skip "This succeeds right now and creates a table with just one primary key pk"
     [ "$status" -eq 1 ]
