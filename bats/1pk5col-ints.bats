@@ -608,24 +608,24 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
-    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
 @test "dolt schema show on non existant table" {

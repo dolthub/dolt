@@ -59,6 +59,10 @@ func (uuidType) GetSqlToValue() SqlToValue {
 	}
 }
 
+func (uuidType) SqlTypeString() string {
+	return "CHAR(36)"
+}
+
 func (uuidType) String() string {
 	return "uuidType"
 }

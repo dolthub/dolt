@@ -12,15 +12,15 @@ teardown() {
 @test "changing column types should not produce a data diff error" {
     dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
     run dolt schema show
-    [[ "$output" =~ "varchar" ]] || false
+    [[ "$output" =~ "LONGTEXT" ]] || false
     dolt add test
     dolt commit -m "Added test table"
     dolt table import -c -f -pk=pk -s=`batshelper 1pk5col-ints.schema` test `batshelper 1pk5col-ints.csv`
     run dolt diff
     skip "This produces a failed to merge schemas error message right now"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "int" ]] || false
-    [[ ! "$output" =~ "varchar" ]] || false
+    [[ "$output" =~ "BIGINT" ]] || false
+    [[ ! "$output" =~ "LONGTEXT" ]] || false
     [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
 }
 
@@ -33,14 +33,14 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
-    [[ "$output" =~ "\`c0\` int comment 'tag:1'" ]] || false
-    [[ ! "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+    [[ "$output" =~ "\`c0\` BIGINT COMMENT 'tag:1'" ]] || false
+    [[ ! "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
     dolt table select test
 }
 
@@ -53,13 +53,13 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test @ working" ]] || false
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
-    [[ "$output" =~ "\`pk\` int not null comment 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c2\` int comment 'tag:2'" ]] || false
-    [[ "$output" =~ "\`c3\` int comment 'tag:3'" ]] || false
-    [[ "$output" =~ "\`c4\` int comment 'tag:4'" ]] || false
-    [[ "$output" =~ "\`c5\` int comment 'tag:5'" ]] || false
-    [[ "$output" =~ "primary key (\`pk\`)" ]] || false
-    [[ ! "$output" =~ "\`c1\` int comment 'tag:1'" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'" ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'" ]] || false
+    [[ "$output" =~ "\`c4\` BIGINT COMMENT 'tag:4'" ]] || false
+    [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+    [[ ! "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
     dolt table select test
 }
 
@@ -101,7 +101,7 @@ teardown() {
     run dolt diff --schema
     [ "$status" -eq 0 ]
     skip "Schema diff output does not handle changing primary keys"
-    [[ "$output" =~ "primary key" ]] || false
+    [[ "$output" =~ "PRIMARY KEY" ]] || false
 }
 
 @test "adding and dropping column should produce no diff" {
