@@ -22,6 +22,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+// ColNamingFunc defines a function signature which takes the name of a column, and returns the name that should be used
+// for the column in the joined dataset.
 type ColNamingFunc func(colName string) string
 
 type stringUint64Tuple struct {
@@ -29,19 +31,27 @@ type stringUint64Tuple struct {
 	u64 uint64
 }
 
+// NamedSchema is an object that associates a schema with a string
 type NamedSchema struct {
+	// Name the name given to the schema
 	Name string
-	Sch  schema.Schema
+
+	// Sch is the schema
+	Sch schema.Schema
 }
 
+// Joiner is an object that can be used to join multiple rows together into a single row (See Join), and also to reverse
+// this operation by taking a joined row and getting back a map of rows (See Split).
 type Joiner struct {
 	srcSchemas map[string]schema.Schema
 	tagMaps    map[string]map[uint64]uint64
 	revTagMap  map[uint64]stringUint64Tuple
-	tags       map[string][]uint64
 	joined     schema.Schema
 }
 
+// NewJoiner creates a joiner from a slice of NamedSchemas and a map of ColNamingFuncs.  A new schema for joined rows will
+// be created, and the columns for joined schemas will be named according to the ColNamingFunc associated with each schema
+// name.
 func NewJoiner(namedSchemas []NamedSchema, namers map[string]ColNamingFunc) (*Joiner, error) {
 	tags := make(map[string][]uint64)
 	revTagMap := make(map[uint64]stringUint64Tuple)
@@ -83,9 +93,11 @@ func NewJoiner(namedSchemas []NamedSchema, namers map[string]ColNamingFunc) (*Jo
 
 	joined := schema.UnkeyedSchemaFromCols(colColl)
 
-	return &Joiner{srcSchemas, tagMaps, revTagMap, tags, joined}, nil
+	return &Joiner{srcSchemas, tagMaps, revTagMap, joined}, nil
 }
 
+// Join takes a map from schema name to row which has that schema, and returns a single joined row containing all the
+// data
 func (j *Joiner) Join(namedRows map[string]row.Row) (row.Row, error) {
 	var nbf *types.NomsBinFormat
 	colVals := make(row.TaggedValues)
@@ -115,6 +127,8 @@ func (j *Joiner) Join(namedRows map[string]row.Row) (row.Row, error) {
 	return row.New(nbf, j.joined, colVals)
 }
 
+// Split takes a row which has the created joined schema, and splits it into a map of rows where the key of the map is
+// the name of the schema for the associated row.
 func (j *Joiner) Split(r row.Row) (map[string]row.Row, error) {
 	colVals := make(map[string]row.TaggedValues, len(j.srcSchemas))
 	for name := range j.srcSchemas {
@@ -152,14 +166,12 @@ func (j *Joiner) Split(r row.Row) (map[string]row.Row, error) {
 	return rows, nil
 }
 
+// GetSchema returns the schema which all joined rows will have, and any row passed into split should have.
 func (j *Joiner) GetSchema() schema.Schema {
 	return j.joined
 }
 
-func (j *Joiner) TagsForSchema(name string) []uint64 {
-	return j.tags[name]
-}
-
+// SchemaForName retrieves the original schema which has the given name.
 func (j *Joiner) SchemaForName(name string) schema.Schema {
 	return j.srcSchemas[name]
 }
