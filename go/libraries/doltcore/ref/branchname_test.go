@@ -25,8 +25,8 @@ func TestBranchName(t *testing.T) {
 	assert.Equal(t, true, IsValidBranchName("☃️"))
 	assert.Equal(t, true, IsValidBranchName("user/in-progress/do-some-things"))
 	assert.Equal(t, true, IsValidBranchName("user/in-progress/{}"))
-	assert.Equal(t, true, IsValidBranchName("user/{/a.tt/}"))
 
+	assert.Equal(t, false, IsValidBranchName("user/{/a.tt/}"))
 	assert.Equal(t, false, IsValidBranchName(""))
 	assert.Equal(t, false, IsValidBranchName("this-is-a-..-test"))
 	assert.Equal(t, false, IsValidBranchName("this-is-a-@{-test"))
