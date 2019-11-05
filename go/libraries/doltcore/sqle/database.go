@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -30,13 +31,15 @@ type Database struct {
 	sql.Database
 	name string
 	root *doltdb.RootValue
+	dEnv *env.DoltEnv
 }
 
 // NewDatabase returns a new dolt databae to use in queries.
-func NewDatabase(name string, root *doltdb.RootValue) *Database {
+func NewDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Database {
 	return &Database{
 		name: name,
 		root: root,
+		dEnv: dEnv,
 	}
 }
 
@@ -74,8 +77,11 @@ func (db *Database) Tables() map[string]sql.Table {
 		if err != nil {
 			panic(err)
 		}
+
 		tables[name] = &DoltTable{name: name, table: table, sch: sch, db: db}
 	}
+
+	tables[logTableName] = NewLogTable(db.dEnv)
 
 	return tables
 }

@@ -30,7 +30,7 @@ import (
 // Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
 // the targetSchema given is used to prepare all rows.
 func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
-	db := NewDatabase("dolt", root)
+	db := NewDatabase("dolt", root, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
@@ -67,7 +67,7 @@ func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 
 // Runs the query given and returns the error (if any).
 func executeModify(ctx context.Context, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	db := NewDatabase("dolt", root)
+	db := NewDatabase("dolt", root, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.Init()
