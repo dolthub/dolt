@@ -27,8 +27,8 @@ func NewTransformCollection(namedTransforms ...NamedTransform) *TransformCollect
 
 // AppendTransform will mutate the internal slice of transforms by appending this new transform to the slice of
 // Transforms
-func (tc *TransformCollection) AppendTransforms(nt NamedTransform) {
-	tc.Transforms = append(tc.Transforms, nt)
+func (tc *TransformCollection) AppendTransforms(nt ...NamedTransform) {
+	tc.Transforms = append(tc.Transforms, nt...)
 }
 
 // NumTransforms returns the number of NamedTransforms in the collection

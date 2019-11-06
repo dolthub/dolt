@@ -23,68 +23,34 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/valutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
-	DiffTypeProp    = "difftype"
-	CollChangesProp = "collchanges"
+	From = "from"
+	To   = "to"
 )
-
-type DiffChType int
-
-const (
-	DiffAdded DiffChType = iota
-	DiffRemoved
-	DiffModifiedOld
-	DiffModifiedNew
-)
-
-type DiffTyped interface {
-	DiffType() DiffChType
-}
-
-type DiffRow struct {
-	row.Row
-	diffType DiffChType
-}
-
-func (dr *DiffRow) DiffType() DiffChType {
-	return dr.diffType
-}
 
 type RowDiffSource struct {
-	oldConv      *rowconv.RowConverter
-	newConv      *rowconv.RowConverter
-	ad           *AsyncDiffer
-	outSch       schema.Schema
-	bufferedRows []pipeline.RowWithProps
+	ad     *AsyncDiffer
+	joiner *rowconv.Joiner
 }
 
-func NewRowDiffSource(ad *AsyncDiffer, oldConv, newConv *rowconv.RowConverter, outSch schema.Schema) *RowDiffSource {
+func NewRowDiffSource(ad *AsyncDiffer, joiner *rowconv.Joiner) *RowDiffSource {
 	return &RowDiffSource{
-		oldConv,
-		newConv,
 		ad,
-		outSch,
-		make([]pipeline.RowWithProps, 0, 1024),
+		joiner,
 	}
 }
 
 // GetSchema gets the schema of the rows that this reader will return
 func (rdRd *RowDiffSource) GetSchema() schema.Schema {
-	return rdRd.outSch
+	return rdRd.joiner.GetSchema()
 }
 
 // NextDiff reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, error) {
-	if len(rdRd.bufferedRows) != 0 {
-		rowWithProps := rdRd.nextFromBuffer()
-		return rowWithProps.Row, rowWithProps.Props, nil
-	}
-
 	if rdRd.ad.isDone {
 		return nil, pipeline.NoProps, io.EOF
 	}
@@ -103,95 +69,39 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 		return nil, pipeline.NoProps, errors.New("timeout")
 	}
 
-	outCols := rdRd.outSch.GetAllCols()
-	for _, d := range diffs {
-		var mappedOld row.Row
-		var mappedNew row.Row
-
-		originalNewSch := rdRd.outSch
-		if !rdRd.newConv.IdentityConverter {
-			originalNewSch = rdRd.newConv.SrcSch
-		}
-
-		originalOldSch := rdRd.outSch
-		if !rdRd.oldConv.IdentityConverter {
-			originalOldSch = rdRd.oldConv.SrcSch
-		}
-
-		if d.OldValue != nil {
-			oldRow, err := row.FromNoms(originalOldSch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
-
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
-
-			mappedOld, _ = rdRd.oldConv.Convert(oldRow)
-		}
-
-		if d.NewValue != nil {
-			newRow, err := row.FromNoms(originalNewSch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
-
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
-
-			mappedNew, _ = rdRd.newConv.Convert(newRow)
-		}
-
-		var oldProps = map[string]interface{}{DiffTypeProp: DiffRemoved}
-		var newProps = map[string]interface{}{DiffTypeProp: DiffAdded}
-		if d.OldValue != nil && d.NewValue != nil {
-			oldColDiffs := make(map[string]DiffChType)
-			newColDiffs := make(map[string]DiffChType)
-			err := outCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				oldVal, _ := mappedOld.GetColVal(tag)
-				newVal, _ := mappedNew.GetColVal(tag)
-
-				_, inOld := originalOldSch.GetAllCols().GetByTag(tag)
-				_, inNew := originalNewSch.GetAllCols().GetByTag(tag)
-
-				if inOld && inNew {
-					if !valutil.NilSafeEqCheck(oldVal, newVal) {
-						newColDiffs[col.Name] = DiffModifiedNew
-						oldColDiffs[col.Name] = DiffModifiedOld
-					}
-				} else if inOld {
-					oldColDiffs[col.Name] = DiffRemoved
-				} else {
-					newColDiffs[col.Name] = DiffAdded
-				}
-
-				return false, nil
-			})
-
-			if err != nil {
-				return nil, pipeline.ImmutableProperties{}, err
-			}
-
-			oldProps = map[string]interface{}{DiffTypeProp: DiffModifiedOld, CollChangesProp: oldColDiffs}
-			newProps = map[string]interface{}{DiffTypeProp: DiffModifiedNew, CollChangesProp: newColDiffs}
-		}
-
-		if d.OldValue != nil {
-			rwp := pipeline.NewRowWithProps(mappedOld, oldProps)
-			rdRd.bufferedRows = append(rdRd.bufferedRows, rwp)
-		}
-
-		if d.NewValue != nil {
-			rwp := pipeline.NewRowWithProps(mappedNew, newProps)
-			rdRd.bufferedRows = append(rdRd.bufferedRows, rwp)
-		}
+	if len(diffs) != 1 {
+		panic("only a single diff requested, multiple returned.  bug in AsyncDiffer")
 	}
 
-	rwp := rdRd.nextFromBuffer()
-	return rwp.Row, rwp.Props, nil
-}
+	d := diffs[0]
+	rows := make(map[string]row.Row)
+	if d.OldValue != nil {
+		oldRow, err := row.FromNoms(rdRd.joiner.SchemaForName(From), d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
 
-func (rdRd *RowDiffSource) nextFromBuffer() pipeline.RowWithProps {
-	r := rdRd.bufferedRows[0]
-	rdRd.bufferedRows = rdRd.bufferedRows[1:]
+		if err != nil {
+			return nil, pipeline.ImmutableProperties{}, err
+		}
 
-	return r
+		rows[From] = oldRow
+	}
+
+	if d.NewValue != nil {
+		newRow, err := row.FromNoms(rdRd.joiner.SchemaForName(To), d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
+
+		if err != nil {
+			return nil, pipeline.ImmutableProperties{}, err
+		}
+
+		rows[To] = newRow
+	}
+
+	joinedRow, err := rdRd.joiner.Join(rows)
+
+	if err != nil {
+		return nil, pipeline.ImmutableProperties{}, err
+	}
+
+	return joinedRow, pipeline.ImmutableProperties{}, nil
 }
 
 // Close should release resources being held
