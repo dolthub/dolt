@@ -15,8 +15,9 @@
 package sqltestutil
 
 import (
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
