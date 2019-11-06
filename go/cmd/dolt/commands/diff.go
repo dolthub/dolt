@@ -34,6 +34,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
+	dtypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
@@ -390,8 +391,17 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errha
 			cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
 		case diff.SchDiffColModified:
 			// changed in sch2
-			n0, t0 := dff.Old.Name, sql.DoltToSQLType[dff.Old.Kind]
-			n1, t1 := dff.New.Name, sql.DoltToSQLType[dff.New.Kind]
+			oldType, err := dtypes.NomsKindToSqlTypeString(dff.Old.Kind)
+			if err != nil {
+				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
+			}
+			newType, err := dtypes.NomsKindToSqlTypeString(dff.New.Kind)
+			if err != nil {
+				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
+			}
+
+			n0, t0 := dff.Old.Name, oldType
+			n1, t1 := dff.New.Name, newType
 
 			nameLen := 0
 			typeLen := 0

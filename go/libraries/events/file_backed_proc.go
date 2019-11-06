@@ -209,6 +209,7 @@ func (fbp *FileBackedProc) WriteEvents(version string, evts []*eventsapi.ClientE
 			Version:   version,
 			Platform:  plat,
 			Events:    evts,
+			App:       eventsapi.AppID_APP_DOLT,
 		}
 
 		data, err := proto.Marshal(req)

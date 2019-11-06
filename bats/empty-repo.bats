@@ -199,7 +199,12 @@ teardown() {
 
 @test "branch names must support /" {
     run dolt branch tim/test-this-format-11
-    skip "Not supported right now"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+}
+
+@test "branch names do not support ." {
+    run dolt branch "dots.are.not.supported"
+    [ "$status" -eq 1 ]
+    [ "$output" = "fatal: 'dots.are.not.supported' is an invalid branch name." ]
 }

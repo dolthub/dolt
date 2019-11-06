@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	dtypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -221,9 +222,14 @@ func describeColumn(nbf *types.NomsBinFormat, col schema.Column) (row.Row, error
 		keyStr = "PRI"
 	}
 
+	sqlTypeStr, err := dtypes.NomsKindToSqlTypeString(col.Kind)
+	if err != nil {
+		return nil, err
+	}
+
 	taggedVals := row.TaggedValues{
 		0: types.String(col.Name),
-		1: types.String(DoltToSQLType[col.Kind]),
+		1: types.String(sqlTypeStr),
 		2: types.String(nullStr),
 		3: types.String(keyStr),
 		4: types.String("NULL"), // TODO: when schemas store defaults, use them here

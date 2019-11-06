@@ -25,15 +25,15 @@ import (
 )
 
 const expectedSQL = "CREATE TABLE `table_name` (\n" +
-	"  `id` int not null comment 'tag:0',\n" +
-	"  `first` varchar(1024) not null comment 'tag:1',\n" +
-	"  `last` varchar(1024) not null comment 'tag:2',\n" +
-	"  `is_married` bool comment 'tag:3',\n" +
-	"  `age` int comment 'tag:4',\n" +
-	"  `rating` float comment 'tag:6',\n" +
-	"  `uuid` uuid comment 'tag:7',\n" +
-	"  `num_episodes` int unsigned comment 'tag:8',\n" +
-	"  primary key (`id`)\n" +
+	"  `id` BIGINT NOT NULL COMMENT 'tag:0',\n" +
+	"  `first` LONGTEXT NOT NULL COMMENT 'tag:1',\n" +
+	"  `last` LONGTEXT NOT NULL COMMENT 'tag:2',\n" +
+	"  `is_married` BOOLEAN COMMENT 'tag:3',\n" +
+	"  `age` BIGINT COMMENT 'tag:4',\n" +
+	"  `rating` DOUBLE COMMENT 'tag:6',\n" +
+	"  `uuid` CHAR(36) COMMENT 'tag:7',\n" +
+	"  `num_episodes` BIGINT UNSIGNED COMMENT 'tag:8',\n" +
+	"  PRIMARY KEY (`id`)\n" +
 	");"
 
 func TestSchemaAsCreateStmt(t *testing.T) {
@@ -56,28 +56,28 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"`first` varchar(1024) comment 'tag:0'",
+			"`first` LONGTEXT COMMENT 'tag:0'",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),
 			2,
 			0,
 			0,
-			"  `last` int comment 'tag:123'",
+			"  `last` BIGINT COMMENT 'tag:123'",
 		},
 		{
 			schema.NewColumn("title", 2, types.UintKind, true),
 			0,
 			10,
 			0,
-			"   `title` int unsigned comment 'tag:2'",
+			"   `title` BIGINT UNSIGNED COMMENT 'tag:2'",
 		},
 		{
 			schema.NewColumn("aoeui", 52, types.UintKind, true),
 			0,
 			10,
 			15,
-			"   `aoeui`    int unsigned comment 'tag:52'",
+			"   `aoeui` BIGINT UNSIGNED COMMENT 'tag:52'",
 		},
 	}
 

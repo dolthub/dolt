@@ -21,12 +21,12 @@ import (
 
 // The following list of patterns are all forbidden in a branch name.
 var InvalidBranchNameRegex = regexp.MustCompile(strings.Join([]string{
+	// Any appearance of a period, currently unsupported by noms layer
+	`[.*]`,
 	// Any appearance of the following characters: :, ?, [, \, ^, ~, SPACE, TAB, *
 	`:`, `\?`, `\[`, `\\`, `\^`, `~`, ` `, `\t`, `\*`,
 	// Any ASCII control character.
 	`[\x00-\x1f]`, `\x7f`,
-	// Any component starting with a "."
-	`\A\.`, `/\.`,
 	// Any component ending with ".lock"
 	`\.lock\z`, `\.lock\/`,
 	// An exact name of "", "HEAD" or "-"

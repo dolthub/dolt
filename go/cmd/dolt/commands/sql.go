@@ -733,22 +733,13 @@ func sqlCheckThenDeleteAllRows(ctx context.Context, root *doltdb.RootValue, s *s
 // Executes a SQL DDL statement (create, update, etc.). Returns the new root value to be written as appropriate.
 func sqlDDL(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	switch ddl.Action {
-	case sqlparser.CreateStr:
-		newRoot, _, err := dsql.ExecuteCreate(ctx, dEnv.DoltDB, root, ddl, query)
-		if err != nil {
-			return nil, fmt.Errorf("Error creating table: %v", err)
-		}
-		return newRoot, nil
+	case sqlparser.CreateStr, sqlparser.DropStr:
+		newRoot, _, _, err := sqlNewEngine(query, root)
+		return newRoot, err
 	case sqlparser.AlterStr, sqlparser.RenameStr:
 		newRoot, err := dsql.ExecuteAlter(ctx, dEnv.DoltDB, root, ddl, query)
 		if err != nil {
 			return nil, fmt.Errorf("Error altering table: %v", err)
-		}
-		return newRoot, nil
-	case sqlparser.DropStr:
-		newRoot, err := dsql.ExecuteDrop(ctx, dEnv.DoltDB, root, ddl, query)
-		if err != nil {
-			return nil, fmt.Errorf("Error dropping table: %v", err)
 		}
 		return newRoot, nil
 	case sqlparser.TruncateStr:

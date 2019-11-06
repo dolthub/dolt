@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	dtypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 )
 
 // SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
@@ -44,7 +45,7 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 	firstPK := true
 	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if firstPK {
-			sb.WriteString(",\n  primary key (")
+			sb.WriteString(",\n  PRIMARY KEY (")
 			firstPK = false
 		} else {
 			sb.WriteRune(',')
@@ -65,7 +66,11 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 // FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
-	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, DoltToSQLType[col.Kind], col)
+	sqlTypeStr, err := dtypes.NomsKindToSqlTypeString(col.Kind)
+	if err != nil {
+		panic(err) // We can default or panic, as this would mean the type has no SQL interface
+	}
+	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, sqlTypeStr, col)
 }
 
 // FmtColWithNameAndType creates a string representing a column within a sql create table statement with a given indent
@@ -79,13 +84,13 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 	for _, cnst := range col.Constraints {
 		switch cnst.GetConstraintType() {
 		case schema.NotNullConstraintType:
-			colStr += " not null"
+			colStr += " NOT NULL"
 		default:
 			panic("FmtColWithNameAndType doesn't know how to format constraint type: " + cnst.GetConstraintType())
 		}
 	}
 
-	return colStr + fmt.Sprintf(" comment 'tag:%d'", col.Tag)
+	return colStr + fmt.Sprintf(" COMMENT 'tag:%d'", col.Tag)
 }
 
 // Quotes the identifier given with backticks.

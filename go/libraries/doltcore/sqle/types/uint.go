@@ -89,6 +89,10 @@ func (uintType) GetSqlToValue() SqlToValue {
 	}
 }
 
+func (uintType) SqlTypeString() string {
+	return "BIGINT UNSIGNED"
+}
+
 func (uintType) String() string {
 	return "uintType"
 }
