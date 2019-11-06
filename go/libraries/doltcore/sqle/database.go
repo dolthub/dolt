@@ -81,7 +81,7 @@ func (db *Database) Tables() map[string]sql.Table {
 		tables[name] = &DoltTable{name: name, table: table, sch: sch, db: db}
 	}
 
-	tables[logTableName] = NewLogTable(db.dEnv)
+	tables[LogTableName] = NewLogTable(db.dEnv)
 
 	return tables
 }

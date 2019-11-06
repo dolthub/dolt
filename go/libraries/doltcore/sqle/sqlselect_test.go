@@ -16,7 +16,9 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,6 +58,16 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 }
 
+type testCommitClock struct {
+	unixNano int64
+}
+
+func (tcc *testCommitClock) Now() time.Time {
+	now := time.Unix(0, tcc.unixNano)
+	tcc.unixNano += int64(time.Millisecond)
+	return now
+}
+
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.
 func testSelectQuery(t *testing.T, test SelectTest) {
@@ -71,6 +83,10 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		t.Skip("Skipping test broken on SQL engine")
 	}
 
+	tcc := &testCommitClock{}
+	doltdb.CommitNowFunc = tcc.Now
+	doltdb.CommitLoc = time.UTC
+
 	dEnv := dtestutils.CreateTestEnv()
 	CreateTestDatabase(dEnv, t)
 
@@ -79,7 +95,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	}
 
 	root, _ := dEnv.WorkingRoot(context.Background())
-	actualRows, sch, err := executeSelect(context.Background(), test.ExpectedSchema, root, test.Query)
+	actualRows, sch, err := executeSelect(context.Background(), dEnv, test.ExpectedSchema, root, test.Query)
 	if len(test.ExpectedErr) > 0 {
 		require.Error(t, err)
 		// Too much work to synchronize error messages between the two implementations, so for now we'll just assert that an error occurred.

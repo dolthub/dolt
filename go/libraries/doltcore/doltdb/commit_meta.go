@@ -33,6 +33,9 @@ const (
 	metaVersion = "1.0"
 )
 
+var CommitNowFunc = time.Now
+var CommitLoc = time.Local
+
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
 	Name        string
@@ -55,7 +58,7 @@ func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
 		return nil, errors.New("Aborting commit due to empty commit message.")
 	}
 
-	ns := uint64(time.Now().UnixNano())
+	ns := uint64(CommitNowFunc().UnixNano())
 	ms := ns / milliToNano
 
 	return &CommitMeta{n, e, ms, d}, nil
@@ -116,14 +119,19 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 	return types.NewStruct(nbf, "metadata", metadata)
 }
 
-// FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
-// which looks like: "Mon Jan 02 15:04:05 -0700 2006"
-func (cm *CommitMeta) FormatTS() string {
+// Time returns the time at which the commit occurred
+func (cm *CommitMeta) Time() time.Time {
 	seconds := cm.Timestamp / secToMilli
 	nanos := (cm.Timestamp % secToMilli) * milliToNano
 	now := time.Unix(int64(seconds), int64(nanos))
 
-	return now.Format(time.RubyDate)
+	return now
+}
+
+// FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format
+// which looks like: "Mon Jan 02 15:04:05 -0700 2006"
+func (cm *CommitMeta) FormatTS() string {
+	return cm.Time().In(CommitLoc).Format(time.RubyDate)
 }
 
 // String returns the human readable string representation of the commit data

@@ -25,50 +25,62 @@ import (
 )
 
 const (
-	logTableName = "__log__"
+	// LogTableName is the system table name
+	LogTableName = "__log__"
 )
 
 var _ sql.Table = (*LogTable)(nil)
 
+// LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
 	dEnv *env.DoltEnv
 }
 
+// NewLogTable creates a LogTable
 func NewLogTable(dEnv *env.DoltEnv) *LogTable {
 	return &LogTable{dEnv: dEnv}
 }
 
+// Name is a sql.Table interface function which returns the name of the table which is defined by the constant
+// LogTableName
 func (dt *LogTable) Name() string {
-	return logTableName
+	return LogTableName
 }
 
+// String is a sql.Table interface function which returns the name of the table which is defined by the constant
+// LogTableName
 func (dt *LogTable) String() string {
-	return logTableName
+	return LogTableName
 }
 
+// Schema is a sql.Table interface function that gets the sql.Schema of the log system table.
 func (dt *LogTable) Schema() sql.Schema {
 	return []*sql.Column{
-		{Name: "commit_hash", Type: sql.Text, Source: logTableName, PrimaryKey: true},
-		{Name: "committer", Type: sql.Text, Source: logTableName, PrimaryKey: false},
-		{Name: "email", Type: sql.Text, Source: logTableName, PrimaryKey: false},
-		{Name: "date", Type: sql.Text, Source: logTableName, PrimaryKey: false},
-		{Name: "message", Type: sql.Text, Source: logTableName, PrimaryKey: false},
+		{Name: "commit_hash", Type: sql.Text, Source: LogTableName, PrimaryKey: true},
+		{Name: "committer", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
+		{Name: "email", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
+		{Name: "date", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
+		{Name: "message", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
 	}
 }
 
+// Partitions is a sql.Table interface function that returns a partition of the data.  Currently the data is unpartitioned.
 func (dt *LogTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 	return &doltTablePartitionIter{}, nil
 }
 
+// PartitionRows is a sql.Table interface function that gets a row iterator for a partition
 func (dt *LogTable) PartitionRows(sqlCtx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	return NewLogItr(sqlCtx, dt.dEnv)
 }
 
+// LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
 	commits []*doltdb.Commit
 	idx     int
 }
 
+// NewLogItr creates a LogItr from the current environment.
 func NewLogItr(sqlCtx *sql.Context, dEnv *env.DoltEnv) (*LogItr, error) {
 	ddb := dEnv.DoltDB
 
@@ -120,7 +132,7 @@ func (itr *LogItr) Next() (sql.Row, error) {
 	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.FormatTS(), meta.Description), nil
 }
 
-// Close the iterator.
+// Close closes the iterator.
 func (itr *LogItr) Close() error {
 	return nil
 }
