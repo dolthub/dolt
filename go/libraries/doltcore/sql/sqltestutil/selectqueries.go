@@ -705,7 +705,7 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:  "select * from log system table",
-		Query: "select * from __log__",
+		Query: "select * from dolt_log",
 		ExpectedRows: []row.Row{mustRow(row.New(types.Format_7_18, LogSchema, row.TaggedValues{
 			0: types.String("uq724j7bn8u01u8j6mdgr0bhsq0bpead"),
 			1: types.String("billy bob"),

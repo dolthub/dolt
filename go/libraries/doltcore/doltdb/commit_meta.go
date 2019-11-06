@@ -123,9 +123,7 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 func (cm *CommitMeta) Time() time.Time {
 	seconds := cm.Timestamp / secToMilli
 	nanos := (cm.Timestamp % secToMilli) * milliToNano
-	now := time.Unix(int64(seconds), int64(nanos))
-
-	return now
+	return time.Unix(int64(seconds), int64(nanos))
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format

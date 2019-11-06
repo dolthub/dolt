@@ -169,7 +169,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 			return nil, nil, err
 		}
 
-		systemTables := []string{"__log__"}
+		systemTables := []string{"dolt_log"}
 		tableNames = append(tableNames, systemTables...)
 
 		sch := showTablesSchema()

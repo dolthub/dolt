@@ -26,7 +26,7 @@ import (
 
 const (
 	// LogTableName is the system table name
-	LogTableName = "__log__"
+	LogTableName = "dolt_log"
 )
 
 var _ sql.Table = (*LogTable)(nil)
