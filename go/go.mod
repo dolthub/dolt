@@ -22,7 +22,6 @@ require (
 	github.com/gocraft/dbr v0.0.0-20190708200302-a54124dfc613
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.1
-	github.com/google/btree v1.0.0 // indirect
 	github.com/google/go-cmp v0.3.0
 	github.com/google/uuid v1.1.1
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
@@ -41,6 +40,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
+	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.3.0
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
