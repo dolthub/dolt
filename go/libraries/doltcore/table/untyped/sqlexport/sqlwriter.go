@@ -55,24 +55,20 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
 }
 
-// diff --sql
 func NewSQLExportWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
 	return &SqlExportWriter{wr: wr, tableName: tableName, sch: sch}, nil
 }
 
-// sql export
 // Returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
 
-// diff --sql
 // TODO: clean up this design
 func (w *SqlExportWriter) SetWrittenFirstRow(b bool) {
 	w.writtenFirstRow = b
 }
 
-// sql export
 // WriteRow will write a row to a table
 func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	if err := w.maybeWriteDropCreate(); err != nil {
@@ -98,7 +94,19 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 	return nil
 }
 
-// diff --sql
+// Close should flush all writes, release resources being held
+func (w *SqlExportWriter) Close(ctx context.Context) error {
+	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
+	if err := w.maybeWriteDropCreate(); err != nil {
+		return err
+	}
+
+	if w.wr != nil {
+		return w.wr.Close()
+	}
+	return nil
+}
+
 func (w *SqlExportWriter) WriteInsertRow(ctx context.Context, r row.Row) error {
 	stmt, err := w.insertStatementForRow(r)
 
@@ -159,7 +167,6 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	return b.String(), nil
 }
 
-// diff --sql
 func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 	var b strings.Builder
 	b.WriteString("DELETE FROM ")
@@ -194,7 +201,7 @@ func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 	b.WriteString(");")
 	return iohelp.WriteLine(w.wr, b.String())
 }
-// diff --sql
+
 func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 	var b strings.Builder
 	b.WriteString("UPDATE ")
@@ -252,19 +259,6 @@ func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 
 	b.WriteString(");")
 	return iohelp.WriteLine(w.wr, b.String())
-}
-
-// Close should flush all writes, release resources being held
-func (w *SqlExportWriter) Close(ctx context.Context) error {
-	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
-	if err := w.maybeWriteDropCreate(); err != nil {
-		return err
-	}
-
-	if w.wr != nil {
-		return w.wr.Close()
-	}
-	return nil
 }
 
 func (w *SqlExportWriter) dropCreateStatement() string {
