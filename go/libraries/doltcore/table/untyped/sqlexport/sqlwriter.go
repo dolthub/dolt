@@ -66,6 +66,12 @@ func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
 
+// diff --sql
+// TODO: clean up this design
+func (w *SqlExportWriter) SetWrittenFirstRow(b bool) {
+	w.writtenFirstRow = b
+}
+
 // sql export
 // WriteRow will write a row to a table
 func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
@@ -93,12 +99,6 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 }
 
 // diff --sql
-// TODO: clean up this design
-func (w *SqlExportWriter) SetWrittenFirstRow(b bool) {
-	w.writtenFirstRow = b
-}
-
-// diff --sql
 func (w *SqlExportWriter) WriteInsertRow(ctx context.Context, r row.Row) error {
 	stmt, err := w.insertStatementForRow(r)
 
@@ -108,29 +108,6 @@ func (w *SqlExportWriter) WriteInsertRow(ctx context.Context, r row.Row) error {
 
 	return iohelp.WriteLine(w.wr, stmt)
 }
-
-// diff --sql
-func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
-	return nil
-}
-// diff --sql
-func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
-	return nil
-}
-
-// Close should flush all writes, release resources being held
-func (w *SqlExportWriter) Close(ctx context.Context) error {
-	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
-	if err := w.maybeWriteDropCreate(); err != nil {
-		return err
-	}
-
-	if w.wr != nil {
-		return w.wr.Close()
-	}
-	return nil
-}
-
 
 func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	var b strings.Builder
@@ -180,6 +157,28 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	b.WriteString(");")
 
 	return b.String(), nil
+}
+
+// diff --sql
+func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
+	return nil
+}
+// diff --sql
+func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
+	return nil
+}
+
+// Close should flush all writes, release resources being held
+func (w *SqlExportWriter) Close(ctx context.Context) error {
+	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
+	if err := w.maybeWriteDropCreate(); err != nil {
+		return err
+	}
+
+	if w.wr != nil {
+		return w.wr.Close()
+	}
+	return nil
 }
 
 func (w *SqlExportWriter) dropCreateStatement() string {
