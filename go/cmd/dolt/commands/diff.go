@@ -30,6 +30,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
@@ -51,10 +52,20 @@ const (
 	DataOnlyDiff      = 2
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
+	ColorDiffOutput = 1
+	SQLDiffOutput = 2
+
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
 	SummaryFlag = "summary"
+	SQLFlag = "sql"
 )
+
+type DiffSink interface {
+	GetSchema() schema.Schema
+	ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error
+	Close() error
+}
 
 var diffShortDesc = "Show changes between commits, commit and working tree, etc"
 var diffLongDesc = `Show changes between the working and staged tables, changes between the working tables and the tables within a commit, or changes between tables at two commits.
@@ -79,8 +90,14 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
+	ap.SupportsFlag(SQLFlag, "q", "Output changes as an SQL modification")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+
+	if apr.Contains(SQLFlag) {
+		cli.PrintErrln("command not yet supported")
+		return 1
+	}
 
 	diffParts := SchemaAndDataDiff
 	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
@@ -89,12 +106,17 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 		diffParts = SchemaOnlyDiff
 	}
 
+	diffOutput := ColorDiffOutput
+	if apr.Contains(SQLFlag) {
+		diffOutput = SQLDiffOutput
+	}
+
 	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
 
 	summary := apr.Contains(SummaryFlag)
 
 	if verr == nil {
-		verr = diffRoots(ctx, r1, r2, tables, diffParts, dEnv, summary)
+		verr = diffRoots(ctx, r1, r2, tables, diffParts, diffOutput, dEnv, summary)
 	}
 
 	if verr != nil {
@@ -197,7 +219,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 	return h.String(), r, nil
 }
 
-func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, dEnv *env.DoltEnv, summary bool) errhand.VerboseError {
+func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, diffParts int, diffOutput int, dEnv *env.DoltEnv, summary bool) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
 		tblNames, err = actions.AllTables(ctx, r1, r2)
@@ -313,12 +335,16 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 			verr = diffSummary(ctx, rowData1, rowData2, colLen)
 		}
 
+		if sch1Hash != sch2Hash && diffOutput&SQLDiffOutput != 0 {
+			return errhand.BuildDError("SQL output of schema diffs is not yet supported").Build()
+		}
+
 		if diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash && !summary {
 			verr = diffSchemas(tblName, sch2, sch1)
 		}
 
 		if diffParts&DataOnlyDiff != 0 && !summary {
-			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2)
+			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2, diffOutput)
 		}
 
 		if verr != nil {
@@ -419,7 +445,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	return schema.SchemaFromCols(dumbColColl), nil
 }
 
-func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema) errhand.VerboseError {
+func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema, diffOutput int) errhand.VerboseError {
 	dumbNewSch, err := dumbDownSchema(newSch)
 
 	if err != nil {
@@ -498,7 +524,14 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		numHeaderRows = 2
 	}
 
-	sink, err := diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+	// is there an easier way to do this?
+	sink, err := func(diffOutput int) (DiffSink, error) {
+		if diffOutput&ColorDiffOutput != 0 {
+			return diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+		} else {
+			return diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+		}
+	}(diffOutput)
 
 	if err != nil {
 		return errhand.BuildDError("").AddCause(err).Build()
