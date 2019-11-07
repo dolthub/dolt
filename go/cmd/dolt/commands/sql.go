@@ -734,7 +734,7 @@ func sqlCheckThenDeleteAllRows(ctx context.Context, root *doltdb.RootValue, s *s
 func sqlDDL(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
 	switch ddl.Action {
 	case sqlparser.CreateStr, sqlparser.DropStr:
-		newRoot, _, _, err := sqlNewEngine(query, root)
+		newRoot, _, _, err := sqlNewEngine(query, root, dEnv)
 		return newRoot, err
 	case sqlparser.AlterStr, sqlparser.RenameStr:
 		newRoot, err := dsql.ExecuteAlter(ctx, dEnv.DoltDB, root, ddl, query)
