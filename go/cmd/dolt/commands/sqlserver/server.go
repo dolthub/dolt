@@ -32,8 +32,8 @@ import (
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
-// serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController) (startError error, closeError error) {
+// Serve starts a MySQL-compatible server. Returns any errors that were encountered.
+func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()

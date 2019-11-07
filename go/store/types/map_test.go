@@ -28,6 +28,7 @@ import (
 	"math/rand"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -1645,6 +1646,26 @@ func TestMapOrdering(t *testing.T) {
 			InlineBlob([]byte{00, 01, 7}),
 			InlineBlob([]byte{00, 01, 8}),
 			InlineBlob([]byte{00, 01, 9}),
+		},
+	)
+
+	testMapOrder(assert, vrw,
+		PrimitiveTypeMap[TimestampKind], PrimitiveTypeMap[StringKind],
+		[]Value{
+			Timestamp(time.Unix(1000, 0).UTC()), String("unused"),
+			Timestamp(time.Unix(9000, 0).UTC()), String("unused"),
+			Timestamp(time.Unix(2000, 0).UTC()), String("unused"),
+			Timestamp(time.Unix(8000, 0).UTC()), String("unused"),
+			Timestamp(time.Unix(3000, 0).UTC()), String("unused"),
+			Timestamp(time.Unix(7000, 0).UTC()), String("unused"),
+		},
+		[]Value{
+			Timestamp(time.Unix(1000, 0).UTC()),
+			Timestamp(time.Unix(2000, 0).UTC()),
+			Timestamp(time.Unix(3000, 0).UTC()),
+			Timestamp(time.Unix(7000, 0).UTC()),
+			Timestamp(time.Unix(8000, 0).UTC()),
+			Timestamp(time.Unix(9000, 0).UTC()),
 		},
 	)
 }

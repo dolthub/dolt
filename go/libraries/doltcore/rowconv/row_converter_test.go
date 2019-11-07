@@ -17,6 +17,7 @@ package rowconv
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -34,7 +35,8 @@ var srcCols, _ = schema.NewColCollection(
 	schema.NewColumn("booltostr", 3, types.BoolKind, false),
 	schema.NewColumn("inttostr", 4, types.IntKind, false),
 	schema.NewColumn("stringtostr", 5, types.StringKind, false),
-	schema.NewColumn("nulltostr", 6, types.NullKind, false),
+	schema.NewColumn("timestamptostr", 6, types.TimestampKind, false),
+	schema.NewColumn("nulltostr", 7, types.NullKind, false),
 )
 
 var srcSch = schema.SchemaFromCols(srcCols)
@@ -51,6 +53,7 @@ func TestRowConverter(t *testing.T) {
 	}
 
 	id, _ := uuid.NewRandom()
+	tt := types.Timestamp(time.Now())
 	inRow, err := row.New(types.Format_7_18, srcSch, row.TaggedValues{
 		0: types.UUID(id),
 		1: types.Float(1.25),
@@ -58,7 +61,8 @@ func TestRowConverter(t *testing.T) {
 		3: types.Bool(true),
 		4: types.Int(-1234),
 		5: types.String("string string string"),
-		6: types.NullValue,
+		6: tt,
+		7: types.NullValue,
 	})
 
 	assert.NoError(t, err)
@@ -73,7 +77,8 @@ func TestRowConverter(t *testing.T) {
 		3: types.String("true"),
 		4: types.String("-1234"),
 		5: types.String("string string string"),
-		6: types.NullValue,
+		6: types.String(tt.String()),
+		7: types.NullValue,
 	})
 
 	assert.NoError(t, err)

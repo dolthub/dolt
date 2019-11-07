@@ -39,7 +39,7 @@ func TestExecuteShow(t *testing.T) {
 		NewResultSetRow(types.String("is_married"), types.String("BOOLEAN"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("age"), types.String("BIGINT"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("rating"), types.String("DOUBLE"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("uuid"), types.String("CHAR(36)"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("uuid"), types.String("LONGTEXT"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("num_episodes"), types.String("BIGINT UNSIGNED"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 	)
 

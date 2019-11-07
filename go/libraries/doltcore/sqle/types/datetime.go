@@ -16,53 +16,52 @@ package types
 
 import (
 	"fmt"
-	"math"
+	"time"
 
+	"github.com/araddon/dateparse"
 	"github.com/src-d/go-mysql-server/sql"
 
 	dtypes "github.com/liquidata-inc/dolt/go/store/types"
 )
 
-type boolType struct{}
+type datetimeType struct{}
 
-func (boolType) NomsKind() dtypes.NomsKind {
-	return dtypes.BoolKind
+func (datetimeType) NomsKind() dtypes.NomsKind {
+	return dtypes.TimestampKind
 }
 
-func (boolType) SqlType() sql.Type {
-	return sql.Boolean
+func (datetimeType) SqlType() sql.Type {
+	return sql.Datetime
 }
 
-func (boolType) SqlTypes() []sql.Type {
-	return []sql.Type{sql.Boolean}
+func (datetimeType) SqlTypes() []sql.Type {
+	return []sql.Type{sql.Date, sql.Datetime, sql.Timestamp}
 }
 
-func (boolType) GetValueToSql() ValueToSql {
+func (datetimeType) GetValueToSql() ValueToSql {
 	return func(val dtypes.Value) (interface{}, error) {
-		if v, ok := val.(dtypes.Bool); ok {
-			return bool(v), nil
+		if v, ok := val.(dtypes.Timestamp); ok {
+			return time.Time(v), nil
 		}
-		return nil, fmt.Errorf("expected Bool, recevied %v", val.Kind())
+		return nil, fmt.Errorf("expected Timestamp, recevied %v", val.Kind())
 	}
 }
 
-func (boolType) GetSqlToValue() SqlToValue {
+func (datetimeType) GetSqlToValue() SqlToValue {
 	return func(val interface{}) (dtypes.Value, error) {
 		switch e := val.(type) {
-		case bool:
-			return dtypes.Bool(e), nil
-		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-			return dtypes.Bool(e != 0), nil
-		case float32, float64:
-			return dtypes.Bool(int(math.Round(e.(float64))) != 0), nil
 		case string:
-			return dtypes.Bool(false), nil
+			t, err := dateparse.ParseStrict(e)
+			if err != nil {
+				return nil, err
+			}
+			return dtypes.Timestamp(t), nil
 		default:
-			return nil, fmt.Errorf("cannot convert SQL type <%T> val <%v> to Bool", val, val)
+			return nil, fmt.Errorf("cannot convert SQL type <%T> val <%v> to Timestamp", val, val)
 		}
 	}
 }
 
-func (boolType) String() string {
-	return "boolType"
+func (datetimeType) String() string {
+	return "datetimeType"
 }

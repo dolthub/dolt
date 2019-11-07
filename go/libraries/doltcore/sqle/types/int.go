@@ -82,10 +82,6 @@ func (intType) GetSqlToValue() SqlToValue {
 	}
 }
 
-func (intType) SqlTypeString() string {
-	return "BIGINT"
-}
-
 func (intType) String() string {
 	return "intType"
 }

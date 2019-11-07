@@ -30,6 +30,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/araddon/dateparse"
 	"github.com/google/uuid"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
@@ -200,6 +201,21 @@ func (String) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
 	case StringKind:
 		return func(val Value) (Value, error) {
 			return val, nil
+		}, nil
+	case TimestampKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			s := val.(String)
+			if len(s) == 0 {
+				return NullValue, nil
+			}
+			t, err := dateparse.ParseStrict(string(s))
+			if err != nil {
+				return nil, err
+			}
+			return Timestamp(t), nil
 		}, nil
 	case UintKind:
 		return func(val Value) (Value, error) {

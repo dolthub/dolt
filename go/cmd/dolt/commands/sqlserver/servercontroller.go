@@ -29,7 +29,7 @@ type ServerController struct {
 	closeError      error
 }
 
-// CreateServerController creates a `ServerController` for use with synchronizing on `serve`.
+// CreateServerController creates a `ServerController` for use with synchronizing on `Serve`.
 func CreateServerController() *ServerController {
 	sc := &ServerController{
 		serverClosed:    &sync.WaitGroup{},
@@ -43,7 +43,7 @@ func CreateServerController() *ServerController {
 	return sc
 }
 
-// registerCloseFunction is called within `serve` to associate the close function with a future `StopServer` call.
+// registerCloseFunction is called within `Serve` to associate the close function with a future `StopServer` call.
 // Only the first call will register and unblock, thus it is safe to be called multiple times.
 func (controller *ServerController) registerCloseFunction(startError error, closeFunc func() error) {
 	controller.closeRegistered.Do(func() {
@@ -55,7 +55,7 @@ func (controller *ServerController) registerCloseFunction(startError error, clos
 	})
 }
 
-// serverStopped is called within `serve` to signal that the server has stopped and set the exit code.
+// serverStopped is called within `Serve` to signal that the server has stopped and set the exit code.
 // Only the first call will register and unblock, thus it is safe to be called multiple times.
 func (controller *ServerController) serverStopped(closeError error) {
 	controller.stopRegistered.Do(func() {

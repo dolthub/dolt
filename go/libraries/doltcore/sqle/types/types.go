@@ -37,14 +37,12 @@ type SqlType interface {
 	GetValueToSql() ValueToSql
 	// GetSqlToValue returns a function that accepts any variable and returns a Value if applicable.
 	GetSqlToValue() SqlToValue
-	// SqlTypeString returns the SQL representation of the type returned by SqlType().
-	// sql.Type.String() does not necessarily return a SQL-compliant string, so prefer this instead.
-	SqlTypeString() string
 	fmt.Stringer
 }
 
-var sqlTypeInitializers = []SqlType{
+var SqlTypeInitializers = []SqlType{
 	boolType{},
+	datetimeType{},
 	floatType{},
 	intType{},
 	stringType{},
@@ -52,16 +50,45 @@ var sqlTypeInitializers = []SqlType{
 	uuidType{},
 }
 
+var sqlTypeString = map[sql.Type]string{
+	sql.Blob:      "LONGBLOB",
+	sql.Boolean:   "BOOLEAN",
+	sql.Date:      "DATE",
+	sql.Datetime:  "DATETIME",
+	sql.Float32:   "FLOAT",
+	sql.Float64:   "DOUBLE",
+	sql.Int8:      "TINYINT",
+	sql.Int16:     "SMALLINT",
+	sql.Int24:     "MEDIUMINT",
+	sql.Int32:     "INT",
+	sql.Int64:     "BIGINT",
+	sql.JSON:      "JSON",
+	sql.Text:      "LONGTEXT",
+	sql.Timestamp: "TIMESTAMP",
+	sql.Uint8:     "TINYINT UNSIGNED",
+	sql.Uint16:    "SMALLINT UNSIGNED",
+	sql.Uint24:    "MEDIUMINT UNSIGNED",
+	sql.Uint32:    "INT UNSIGNED",
+	sql.Uint64:    "BIGINT UNSIGNED",
+}
+
 func init() {
-	for _, sqlTypeInit := range sqlTypeInitializers {
+	for _, sqlTypeInit := range SqlTypeInitializers {
 		kind := sqlTypeInit.NomsKind()
 		nomsKindToSqlType[kind] = sqlTypeInit.SqlType()
-		nomsKindToSqlTypeStr[kind] = sqlTypeInit.SqlTypeString()
 		nomsValToSqlValFunc[kind] = sqlTypeInit.GetValueToSql()
 		nomsKindToValFunc[kind] = sqlTypeInit.GetSqlToValue()
+		if sqlStr, ok := sqlTypeString[sqlTypeInit.SqlType()]; ok {
+			nomsKindToSqlTypeStr[kind] = sqlStr
+		} else {
+			panic(fmt.Errorf("SQL type %v does not have a mapped string", sqlTypeInit.SqlType()))
+		}
 		for _, st := range sqlTypeInit.SqlTypes() {
 			if _, ok := sqlTypeToNomsKind[st]; ok {
 				panic(fmt.Errorf("SQL type %v already has a representation", st))
+			}
+			if _, ok := sqlTypeString[st]; !ok {
+				panic(fmt.Errorf("SQL type %v does not have a mapped string", st))
 			}
 			sqlTypeToNomsKind[st] = kind
 		}
@@ -105,6 +132,13 @@ func SqlTypeToNomsKind(t sql.Type) (dtypes.NomsKind, error) {
 		return kind, nil
 	}
 	return dtypes.UnknownKind, fmt.Errorf("unknown SQL type %v", t)
+}
+
+func SqlTypeToString(t sql.Type) (string, error) {
+	if str, ok := sqlTypeString[t]; ok {
+		return str, nil
+	}
+	return "", fmt.Errorf("no SQL string for SQL type %v", t.String())
 }
 
 func SqlValToNomsVal(val interface{}, kind dtypes.NomsKind) (dtypes.Value, error) {
