@@ -29,6 +29,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+var _ sql.Table = (*DoltTable)(nil)
+
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	name  string

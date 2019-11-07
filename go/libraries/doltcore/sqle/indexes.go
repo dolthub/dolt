@@ -65,7 +65,7 @@ func (i *DoltIndexDriver) LoadAll(db, table string) ([]sql.Index, error) {
 	}
 
 	if !ok {
-		panic(fmt.Sprintf("No table found with name %s", table))
+		return nil, nil
 	}
 
 	sch, err := tbl.GetSchema(context.TODO())

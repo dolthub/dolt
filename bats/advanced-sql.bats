@@ -221,7 +221,7 @@ teardown() {
 @test "sql show tables" {
     run dolt sql -q "show tables"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 7 ]
     [[ "$output" =~ "one_pk" ]] || false
     [[ "$output" =~ "two_pk" ]] || false
 }

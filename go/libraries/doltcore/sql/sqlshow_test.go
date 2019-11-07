@@ -73,6 +73,7 @@ func TestExecuteShow(t *testing.T) {
 				NewResultSetRow(types.String("appearances")),
 				NewResultSetRow(types.String("episodes")),
 				NewResultSetRow(types.String("people")),
+				NewResultSetRow(types.String("dolt_log")),
 			),
 			expectedSchema: showTablesSchema(),
 		},

@@ -76,7 +76,7 @@ func serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
-	sqlEngine.AddDatabase(dsqle.NewDatabase("dolt", rootValue))
+	sqlEngine.AddDatabase(dsqle.NewDatabase("dolt", rootValue, nil))
 
 	hostPort := net.JoinHostPort(serverConfig.Host, strconv.Itoa(serverConfig.Port))
 	timeout := time.Second * time.Duration(serverConfig.Timeout)

@@ -169,6 +169,9 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 			return nil, nil, err
 		}
 
+		systemTables := []string{"dolt_log"}
+		tableNames = append(tableNames, systemTables...)
+
 		sch := showTablesSchema()
 		rows, err := toRows(root.VRW().Format(), transpose(tableNames), sch)
 
@@ -179,6 +182,7 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		source := pipeline.SourceFuncForRows(rows)
 		p := pipeline.NewPartialPipeline(pipeline.ProcFuncForSourceFunc(source))
 		return p, sch, nil
+
 	default:
 		return nil, nil, errFmt("Unsupported show statement: '%v'", nodeToString(show))
 	}
