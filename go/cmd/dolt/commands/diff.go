@@ -535,7 +535,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		if diffOutput&ColorDiffOutput != 0 {
 			return diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
 		} else {
-			return diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, tableName)
+			return diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, newSch, tableName)
 		}
 	}(diffOutput)
 

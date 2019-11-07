@@ -40,12 +40,13 @@ type SQLDiffSink struct {
 // NewSQLDiffSink returns a SQLDiffSink that uses  the writer and schema given to print its output. numHeaderRows
 // will change how many rows of output are considered part of the table header. Use 1 for diffs where the schemas are
 // the same between the two table revisions, and 2 for when they differ.
-func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, tableName string) (*SQLDiffSink, error) {
-	sw, err := sqlexport.NewSQLExportWriter(wr, tableName, sch)
+func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, typedSch schema.Schema, tableName string) (*SQLDiffSink, error) {
+	sw, err := sqlexport.NewSQLExportWriter(wr, tableName, typedSch)
 
 	if err != nil {
 		return nil, err
 	}
+	sw.SetWrittenFirstRow(true)
 
 	return &SQLDiffSink{sch, sw}, nil
 }
@@ -78,21 +79,30 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 		return err
 	}
 
+	r, err = row.New(r.Format(), sds.sch, taggedVals)
+
+	if err != nil {
+		return err
+	}
+
 	taggedVals[diffColTag] = types.String("   ")
 	colorColumns := true
 	if prop, ok := props.Get(DiffTypeProp); ok {
 		if dt, convertedOK := prop.(DiffChType); convertedOK {
 			switch dt {
 			case DiffAdded:
-				taggedVals[diffColTag] = types.String(" + ")
-				colorColumns = false
+				return sds.sw.WriteInsertRow(context.TODO(), r)
+				//taggedVals[diffColTag] = types.String(" + ")
 			case DiffRemoved:
-				taggedVals[diffColTag] = types.String(" - ")
-				colorColumns = false
+				return sds.sw.WriteDeleteRow(context.TODO(), r)
+				//taggedVals[diffColTag] = types.String(" - ")
 			case DiffModifiedOld:
-				taggedVals[diffColTag] = types.String(" < ")
+				return nil
+				//taggedVals[diffColTag] = types.String(" < ")
 			case DiffModifiedNew:
-				taggedVals[diffColTag] = types.String(" > ")
+				return nil
+				//return sds.sw.WriteUpdateRow(context.TODO(), r)
+				//taggedVals[diffColTag] = types.String(" > ")
 			}
 			// Treat the diff indicator string as a diff of the same type
 			colDiffs[diffColName] = dt
@@ -125,17 +135,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 		return false, nil
 	})
 
-	if err != nil {
-		return err
-	}
-
-	r, err = row.New(r.Format(), sds.sch, taggedVals)
-
-	if err != nil {
-		return err
-	}
-
-	return sds.sw.WriteRow(context.TODO(), r)
+	return err
 }
 
 // Close should release resources being held
