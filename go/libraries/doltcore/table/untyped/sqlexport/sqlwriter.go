@@ -161,7 +161,38 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 
 // diff --sql
 func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
-	return nil
+	var b strings.Builder
+	b.WriteString("DELETE FROM ")
+	b.WriteString(sql.QuoteIdentifier(w.tableName))
+	b.WriteString(" ")
+
+	b.WriteString(" WHERE ( ")
+	seenOne := false
+	_, err := r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		// TODO: can I just access the col with index and grab kind?
+		col := w.sch.GetAllCols().TagToCol[tag]
+		if col.IsPartOfPK {
+			if seenOne {
+				b.WriteString("AND ")
+			}
+			sqlString, err := w.sqlString(val, col.Kind)
+			if err != nil {
+				return true, err
+			}
+			b.WriteString(col.Name)
+			b.WriteRune('=')
+			b.WriteString(sqlString)
+			seenOne = true
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	b.WriteString(");")
+	return iohelp.WriteLine(w.wr, b.String())
 }
 // diff --sql
 func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
