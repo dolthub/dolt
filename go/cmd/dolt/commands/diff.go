@@ -344,7 +344,7 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 		}
 
 		if diffParts&DataOnlyDiff != 0 && !summary {
-			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2, diffOutput)
+			verr = diffRows(ctx, rowData1, rowData2, sch1, sch2, tblName, diffOutput)
 		}
 
 		if verr != nil {
@@ -445,7 +445,7 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	return schema.SchemaFromCols(dumbColColl), nil
 }
 
-func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema, diffOutput int) errhand.VerboseError {
+func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch schema.Schema, tableName string, diffOutput int) errhand.VerboseError {
 	dumbNewSch, err := dumbDownSchema(newSch)
 
 	if err != nil {
@@ -529,7 +529,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		if diffOutput&ColorDiffOutput != 0 {
 			return diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
 		} else {
-			return diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+			return diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, tableName)
 		}
 	}(diffOutput)
 

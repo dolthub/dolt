@@ -55,6 +55,10 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
 }
 
+func NewSQLExportWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
+	return &SqlExportWriter{wr: wr, tableName: tableName, sch: sch}, nil
+}
+
 // Returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch

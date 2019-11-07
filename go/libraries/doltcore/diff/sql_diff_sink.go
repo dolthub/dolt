@@ -40,8 +40,8 @@ type SQLDiffSink struct {
 // NewSQLDiffSink returns a SQLDiffSink that uses  the writer and schema given to print its output. numHeaderRows
 // will change how many rows of output are considered part of the table header. Use 1 for diffs where the schemas are
 // the same between the two table revisions, and 2 for when they differ.
-func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema) (*SQLDiffSink, error) {
-	sw, err := sqlexport.NewSQLExportWriter(wr, sch)
+func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, tableName string) (*SQLDiffSink, error) {
+	sw, err := sqlexport.NewSQLExportWriter(wr, tableName, sch)
 
 	if err != nil {
 		return nil, err
