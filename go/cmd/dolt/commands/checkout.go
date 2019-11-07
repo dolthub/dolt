@@ -17,7 +17,7 @@ package commands
 import (
 	"context"
 
-	ref2 "github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -85,9 +85,9 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 				}
 
 				found := false
-				for _, ref := range refs {
-					if remRef, ok := ref.(ref2.RemoteRef); ok && remRef.GetBranch() == name {
-						verr = checkoutNewBranch(ctx, dEnv, name, ref.String())
+				for _, rf := range refs {
+					if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
+						verr = checkoutNewBranch(ctx, dEnv, name, rf.String())
 						found = true
 						break
 					}
