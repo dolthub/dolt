@@ -55,15 +55,18 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
 }
 
+// diff --sql
 func NewSQLExportWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
 	return &SqlExportWriter{wr: wr, tableName: tableName, sch: sch}, nil
 }
 
+// sql export
 // Returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
 
+// sql export
 // WriteRow will write a row to a table
 func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	if err := w.maybeWriteDropCreate(); err != nil {
@@ -89,6 +92,71 @@ func (w *SqlExportWriter) maybeWriteDropCreate() error {
 	return nil
 }
 
+// diff --sql
+// TODO: clean up this design
+func (w *SqlExportWriter) SetWrittenFirstRow(b bool) {
+	w.writtenFirstRow = b
+}
+
+// diff --sql
+func (w *SqlExportWriter) WriteInsertRow(ctx context.Context, r row.Row) error {
+	var b strings.Builder
+	b.WriteString("INSERT INTO ")
+	b.WriteString(sql.QuoteIdentifier(w.tableName))
+	b.WriteString(" ")
+
+	b.WriteString("(")
+	var seenOne bool
+	err := w.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		b.WriteString(sql.QuoteIdentifier(col.Name))
+		seenOne = true
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	b.WriteString(")")
+
+	b.WriteString(" VALUES (")
+	seenOne = false
+	_, err = r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		// TODO: can I just access the col with index and grab kind?
+		kind := w.sch.GetAllCols().TagToCol[tag].Kind
+		sqlString, err := w.typedSqlString(val, kind)
+		if err != nil {
+			return true, err
+		}
+		b.WriteString(sqlString)
+		seenOne = true
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	b.WriteString(");")
+
+	return iohelp.WriteLine(w.wr, b.String())
+}
+
+// diff --sql
+func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
+	return nil
+}
+// diff --sql
+func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
+	return nil
+}
+
 // Close should flush all writes, release resources being held
 func (w *SqlExportWriter) Close(ctx context.Context) error {
 	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
@@ -101,6 +169,7 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 	}
 	return nil
 }
+
 
 func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	var b strings.Builder
@@ -165,6 +234,43 @@ func (w *SqlExportWriter) sqlString(value types.Value) (string, error) {
 	}
 
 	switch value.Kind() {
+	case types.BoolKind:
+		if value.(types.Bool) {
+			return "TRUE", nil
+		} else {
+			return "FALSE", nil
+		}
+	case types.UUIDKind:
+		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
+		if err != nil {
+			return "", err
+		}
+		str, _ := convFn(value)
+		return doubleQuot + string(str.(types.String)) + doubleQuot, nil
+	case types.StringKind:
+		s := string(value.(types.String))
+		s = strings.ReplaceAll(s, doubleQuot, "\\\"")
+		return doubleQuot + s + doubleQuot, nil
+	default:
+		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
+		if err != nil {
+			return "", err
+		}
+		str, err := convFn(value)
+		if err != nil {
+			return "", err
+		}
+		return string(str.(types.String)), nil
+	}
+}
+
+// diff --sql
+func (w *SqlExportWriter) typedSqlString(value types.Value, kind types.NomsKind) (string, error) {
+	if types.IsNull(value) {
+		return "NULL", nil
+	}
+
+	switch kind {
 	case types.BoolKind:
 		if value.(types.Bool) {
 			return "TRUE", nil
