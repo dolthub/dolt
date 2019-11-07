@@ -282,7 +282,7 @@ teardown() {
     dolt add test
     dolt commit -m "modified first row"
 
-    #dolt diff --sql newbranch firstbranch > query
+    dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
     dolt sql < query
     rm query
