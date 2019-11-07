@@ -16,6 +16,7 @@ package doltcore
 
 import (
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -43,6 +44,9 @@ func TestConv(t *testing.T) {
 		{types.String("true"), types.Bool(true), true, false},
 		{types.String("61D184E19083F09D95AB"), types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
 			true, false},
+		{types.String("1970/12/31"),
+			types.Timestamp(time.Date(1970, 12, 31, 0, 0, 0, 0, time.UTC)),
+			true, false},
 		{types.String("anything"), types.NullValue, true, false},
 
 		{types.UUID(zeroUUID), types.String(zeroUUIDStr), true, false},
@@ -52,6 +56,7 @@ func TestConv(t *testing.T) {
 		{types.UUID(zeroUUID), types.Float(0), false, false},
 		{types.UUID(zeroUUID), types.Bool(false), false, false},
 		{types.UUID(zeroUUID), types.InlineBlob{}, false, false},
+		{types.UUID(zeroUUID), types.Timestamp{}, false, false},
 		{types.UUID(zeroUUID), types.NullValue, true, false},
 
 		{types.Uint(10), types.String("10"), true, false},
@@ -61,7 +66,8 @@ func TestConv(t *testing.T) {
 		{types.Uint(100000), types.Float(100000), true, false},
 		{types.Uint(1000000), types.Bool(true), true, false},
 		{types.Uint(10000000), types.InlineBlob{}, false, false},
-		{types.Uint(100000000), types.NullValue, true, false},
+		{types.Uint(100000000), types.Timestamp(time.Unix(100000000, 0).UTC()), true, false},
+		{types.Uint(1000000000), types.NullValue, true, false},
 
 		{types.Int(-10), types.String("-10"), true, false},
 		{types.Int(-100), types.UUID(zeroUUID), false, false},
@@ -70,7 +76,8 @@ func TestConv(t *testing.T) {
 		{types.Int(-100000), types.Float(-100000), true, false},
 		{types.Int(-1000000), types.Bool(true), true, false},
 		{types.Int(-10000000), types.InlineBlob{}, false, false},
-		{types.Int(-100000000), types.NullValue, true, false},
+		{types.Int(-100000000), types.Timestamp(time.Unix(-100000000, 0).UTC()), true, false},
+		{types.Int(-1000000000), types.NullValue, true, false},
 
 		{types.Float(1.5), types.String("1.5"), true, false},
 		{types.Float(10.5), types.UUID(zeroUUID), false, false},
@@ -79,7 +86,8 @@ func TestConv(t *testing.T) {
 		{types.Float(10000.5), types.Float(10000.5), true, false},
 		{types.Float(100000.5), types.Bool(true), true, false},
 		{types.Float(1000000.5), types.InlineBlob{}, false, false},
-		{types.Float(10000000.5), types.NullValue, true, false},
+		{types.Float(10000000.5), types.Timestamp(time.Unix(10000000, 500000000).UTC()), true, false},
+		{types.Float(100000000.5), types.NullValue, true, false},
 
 		{types.Bool(true), types.String("true"), true, false},
 		{types.Bool(false), types.UUID(zeroUUID), false, false},
@@ -88,6 +96,7 @@ func TestConv(t *testing.T) {
 		{types.Bool(true), types.Float(1), true, false},
 		{types.Bool(false), types.Bool(false), true, false},
 		{types.Bool(false), types.InlineBlob{}, false, true},
+		{types.Bool(false), types.Timestamp{}, false, true},
 		{types.Bool(true), types.NullValue, true, false},
 
 		{types.InlineBlob([]byte{0x61, 0xd1, 0x84, 0xe1, 0x90, 0x83, 0xf0, 0x9d, 0x95, 0xab}),
@@ -99,6 +108,23 @@ func TestConv(t *testing.T) {
 		{types.InlineBlob([]byte{}), types.Bool(false), false, true},
 		{types.InlineBlob([]byte{1, 10, 100}), types.InlineBlob([]byte{1, 10, 100}), true, false},
 		{types.InlineBlob([]byte{}), types.NullValue, true, false},
+
+		{types.Timestamp(time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)),
+			types.String("2000-01-01 00:00:00 +0000"), true, false},
+		{types.Timestamp(time.Date(2010, 2, 2, 1, 1, 1, 0, time.UTC)),
+			types.UUID(zeroUUID), false, false},
+		{types.Timestamp(time.Date(2020, 3, 3, 2, 2, 2, 0, time.UTC)),
+			types.Uint(1583200922), true, false},
+		{types.Timestamp(time.Date(2030, 4, 4, 3, 3, 3, 0, time.UTC)),
+			types.Int(1901502183), true, false},
+		{types.Timestamp(time.Date(2040, 5, 5, 4, 4, 4, 400000000, time.UTC)),
+			types.Float(2219803444.4), true, false},
+		{types.Timestamp(time.Date(2050, 6, 6, 5, 5, 5, 0, time.UTC)),
+			types.Bool(false), false, true},
+		{types.Timestamp(time.Date(2060, 7, 7, 6, 6, 6, 678912345, time.UTC)),
+			types.Timestamp(time.Unix(2856405966, 678912345).UTC()), true, false},
+		{types.Timestamp(time.Date(2070, 8, 8, 7, 7, 7, 0, time.UTC)),
+			types.NullValue, true, false},
 	}
 
 	for _, test := range tests {

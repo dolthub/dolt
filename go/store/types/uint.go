@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -134,6 +135,18 @@ func (Uint) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
 			n := uint64(val.(Uint))
 			str := strconv.FormatUint(n, 10)
 			return String(str), nil
+		}, nil
+	case TimestampKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			n := uint64(val.(Uint))
+			// There are comparison issues for times too large, so "200000000-12-31 23:59:59 UTC" seems like a reasonable maximum.
+			if n > 6311328264403199 {
+				n = 6311328264403199
+			}
+			return Timestamp(time.Unix(int64(n), 0).UTC()), nil
 		}, nil
 	case UintKind:
 		return func(val Value) (Value, error) {
