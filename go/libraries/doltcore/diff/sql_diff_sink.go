@@ -100,8 +100,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 				return nil
 				//taggedVals[diffColTag] = types.String(" < ")
 			case DiffModifiedNew:
-				return nil
-				//return sds.sw.WriteUpdateRow(context.TODO(), r)
+				return sds.sw.WriteUpdateRow(context.TODO(), r)
 				//taggedVals[diffColTag] = types.String(" > ")
 			}
 			// Treat the diff indicator string as a diff of the same type
