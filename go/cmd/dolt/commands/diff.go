@@ -48,9 +48,9 @@ import (
 )
 
 const (
-	SchemaOnlyDiff = 0b0001
-	DataOnlyDiff   = 0b0010
-	Summary        = 0b0100
+	SchemaOnlyDiff = 1 // 0b0001
+	DataOnlyDiff   = 2 // 0b0010
+	Summary        = 4 // 0b0100
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
