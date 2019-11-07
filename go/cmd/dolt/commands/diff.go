@@ -94,11 +94,6 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
-	//if apr.Contains(SQLFlag) {
-	//	cli.PrintErrln("command not yet supported")
-	//	return 1
-	//}
-
 	diffParts := SchemaAndDataDiff
 	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
 		diffParts = DataOnlyDiff
@@ -111,13 +106,9 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 		diffOutput = SQLDiffOutput
 	}
 
-	summary := apr.Contains(SummaryFlag)
-	//if diffOutput&SQLDiffOutput != 0 {
-	//	summary = false
-	//}
-
 	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
 
+	summary := apr.Contains(SummaryFlag)
 
 	if verr == nil {
 		verr = diffRoots(ctx, r1, r2, tables, diffParts, diffOutput, dEnv, summary)
@@ -530,7 +521,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		numHeaderRows = 2
 	}
 
-	// is there an easier way to do this?
+	// TODO: is there an easier way to do this?
 	sink, err := func(diffOutput int) (DiffSink, error) {
 		if diffOutput&ColorDiffOutput != 0 {
 			return diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
