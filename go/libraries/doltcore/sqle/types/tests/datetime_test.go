@@ -30,13 +30,7 @@ func TestDatetimeQueries(t *testing.T) {
 		inputSQLVal interface{}
 		inputValue  types.Timestamp
 	}{
-		{"1000-01-01 00:00:00 +1300", types.Timestamp(time.Date(1000, 1, 1, 0, 0, 0, 0, time.FixedZone("UTC+13", 46800)))},
-		{"9999-12-31 23:59:59 -1200", types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 0, time.FixedZone("UTC-12", -43200)))},
-		{"1970-01-01 00:00:00 +0300", types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.FixedZone("UTC+3", 10800)))},
-		{"1610-06-08 09:10:37 -0230", types.Timestamp(time.Date(1610, 6, 8, 9, 10, 37, 0, time.FixedZone("UTC-2:30", -9000)))},
-		{"1945-05-08 19:33:41 -0900", types.Timestamp(time.Date(1945, 5, 8, 19, 33, 41, 0, time.FixedZone("UTC-9", -32400)))},
-		{"3005-02-14 10:02:25 +0100", types.Timestamp(time.Date(3005, 2, 14, 10, 02, 25, 0, time.FixedZone("UTC+1", 3600)))},
-		{"2019-11-01 03:23:48 -0700", types.Timestamp(time.Date(2019, 11, 1, 3, 23, 48, 0, time.FixedZone("UTC-7", -25200)))},
+		{"2020-10-07 06:24:11.472294", types.Timestamp(time.Date(2020, 10, 7, 6, 24, 11, 472294000, time.UTC))},
 		{"1000-01-01 00:00:00", types.Timestamp(time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC))},
 		{"9999-12-31 23:59:59", types.Timestamp(time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC))},
 		{"1970-01-01 00:00:00", types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC))},
@@ -51,13 +45,6 @@ func TestDatetimeQueries(t *testing.T) {
 		{"1945-05-08", types.Timestamp(time.Date(1945, 5, 8, 0, 0, 0, 0, time.UTC))},
 		{"3005-02-14", types.Timestamp(time.Date(3005, 2, 14, 0, 0, 0, 0, time.UTC))},
 		{"2019-11-01", types.Timestamp(time.Date(2019, 11, 1, 0, 0, 0, 0, time.UTC))},
-		{"1000", types.Timestamp(time.Date(1000, 1, 1, 0, 0, 0, 0, time.UTC))},
-		{"9999", types.Timestamp(time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC))},
-		{"1970", types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC))},
-		{"1610", types.Timestamp(time.Date(1610, 1, 1, 0, 0, 0, 0, time.UTC))},
-		{"1945", types.Timestamp(time.Date(1945, 1, 1, 0, 0, 0, 0, time.UTC))},
-		{"3005", types.Timestamp(time.Date(3005, 1, 1, 0, 0, 0, 0, time.UTC))},
-		{"2019", types.Timestamp(time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC))},
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test.inputSQLVal), func(t *testing.T) {
@@ -75,6 +62,7 @@ func TestDatetimeRoundtrip(t *testing.T) {
 		"1945-05-08 19:33:41",
 		"3005-02-14 10:02:25",
 		"2019-11-01 03:23:48",
+		"2020-10-07 06:24:11.472294",
 	}
 
 	conn, serverController := runServer(t)

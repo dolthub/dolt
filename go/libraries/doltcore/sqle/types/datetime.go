@@ -50,6 +50,8 @@ func (datetimeType) GetValueToSql() ValueToSql {
 func (datetimeType) GetSqlToValue() SqlToValue {
 	return func(val interface{}) (dtypes.Value, error) {
 		switch e := val.(type) {
+		case time.Time:
+			return dtypes.Timestamp(e), nil
 		case string:
 			t, err := dateparse.ParseStrict(e)
 			if err != nil {
