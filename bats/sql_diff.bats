@@ -129,7 +129,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "sql diff supports all types" { skip
+@test "sql diff supports all types" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pksupportedtypes.schema` test
     dolt table import -u test `batshelper 1pksupportedtypes.csv`
@@ -139,7 +139,7 @@ teardown() {
     # for each query file in helper/queries/1pksuppportedtypes/
     # run query on db, create sql diff patch, confirm they're equivalent
     dolt branch newbranch
-    for query in delete # add update
+    for query in delete add update
     do
         dolt checkout newbranch
         dolt sql < `batshelper queries/1pksupportedtypes/$query.sql`
