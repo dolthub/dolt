@@ -499,13 +499,10 @@ func sqlNewEngine(query string, root *doltdb.RootValue, dEnv *env.DoltEnv) (*dol
 	engine.AddDatabase(db)
 	ctx := sql.NewEmptyContext()
 
-	// Indexes are not well tested enough to use in production yet.
-	if _, ok := os.LookupEnv(UseIndexedJoinsEnv); ok {
-		engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
-		err := engine.Init()
-		if err != nil {
-			return nil, nil, nil, err
-		}
+	engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
+	err := engine.Init()
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
 	sqlSch, rowIter, err := engine.Query(ctx, query)
