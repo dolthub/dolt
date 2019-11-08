@@ -36,6 +36,8 @@ func TestConv(t *testing.T) {
 		expectErr   bool
 	}{
 		{types.String("test"), types.String("test"), true, false},
+		{types.String(""), types.String(""), true, false},
+		{types.String(`""`), types.String(`""`), true, false},
 		{types.String(zeroUUIDStr), types.UUID(zeroUUID), true, false},
 		{types.String("10"), types.Uint(10), true, false},
 		{types.String("-101"), types.Int(-101), true, false},

@@ -16,44 +16,77 @@ package csv
 
 import "testing"
 
+func toPointer(input []string) []*string {
+	output := make([]*string, len(input))
+	for i := range input {
+		var pointer *string
+		pointer = &input[i]
+		output[i] = pointer
+	}
+	return output
+}
+
+func fromPointer(input []*string) []string {
+	output := make([]string, len(input))
+	for i := range input {
+		var value string
+		value = *input[i]
+		output[i] = value
+	}
+	return output
+}
+
+func addr(s string) *string {
+	return &s
+}
+
 func TestCSVSplitLine(t *testing.T) {
 	splitTests := []struct {
 		ToSplit        string
 		Delim          string
-		expectedTokens []string
+		expectedTokens []*string
 		escapeQuotes   bool
 		expectErr      bool
 	}{
-		{``, ",", []string{""}, true, false},
-		{`one`, ",", []string{"one"}, true, false},
-		{`one,`, ",", []string{"one", ""}, true, false},
-		{`one,two, three`, ",", []string{"one", "two", "three"}, true, false},
-		{`one,"two", three`, ",", []string{"one", "two", "three"}, true, false},
-		{`one," two", three`, ",", []string{"one", " two", "three"}, true, false},
-		{`one," two", three`, ",", []string{"one", `" two"`, "three"}, false, false},
-		{`one,"two, three"`, ",", []string{"one", "two, three"}, true, false},
-		{`one,""two three""`, ",", []string{"one", `"two three"`}, true, false},
-		{`one,"two, ""three""`, ",", []string{"one", `two, "three"`}, true, false},
-		{`brian ""the great"" hendriks,mr.,1.7526`, ",", []string{`brian "the great" hendriks`, "mr.", "1.7526"}, true, false},
-		{`col1,"Industriepark ""De Bruwaan""",col3`, ",", []string{"col1", `Industriepark "De Bruwaan"`, "col3"}, true, false},
-		{`|a|`, "|", []string{"", "a", ""}, true, false},
-		{`72470|30|0|40|0||||`, "|", []string{"72470", "30", "0", "40", "0", "", "", "", ""}, true, false},
-		{`"one","two"`, ",", []string{`"one"`, `"two"`}, false, false},
-		{`"one","two"`, ",", []string{`one`, `two`}, true, false},
-		{`one,  two`, ",", []string{`one`, `two`}, true, false},
-		{`one,"  two"`, ",", []string{`one`, `  two`}, true, false},
+		{`"", one, ""`, ",", toPointer([]string{``, `one`, ``}), true, false},
+		{`"", "", ""`, ",", toPointer([]string{``, ``, ``}), true, false},
+		{`"", one, ""`, ",", toPointer([]string{`""`, `one`, `""`}), false, false},
+		{`"", "one", ""`, ",", toPointer([]string{``, `one`, ``}), true, false},
+		{`"", "one", ""`, ",", toPointer([]string{`""`, `"one"`, `""`}), false, false},
+		{`"""""","one"`, ",", toPointer([]string{`""`, `one`}), true, false},
+		{`"""""","one"`, ",", toPointer([]string{`""""""`, `"one"`}), false, false},
+		{`,,`, ",", []*string{nil, nil, nil}, true, false},
+		{`,,`, ",", []*string{nil, nil, nil}, false, false},
+		{``, ",", []*string{nil}, true, false},
+		{`one`, ",", toPointer([]string{"one"}), true, false},
+		{`one,`, ",", []*string{addr("one"), nil}, true, false},
+		{`one,two, three`, ",", toPointer([]string{"one", "two", "three"}), true, false},
+		{`one,"two", three`, ",", toPointer([]string{"one", "two", "three"}), true, false},
+		{`one," two", three`, ",", toPointer([]string{"one", " two", "three"}), true, false},
+		{`one," two", three`, ",", toPointer([]string{"one", `" two"`, "three"}), false, false},
+		{`one,"two, three"`, ",", toPointer([]string{"one", "two, three"}), true, false},
+		{`one,"""two three"""`, ",", toPointer([]string{"one", `"two three"`}), true, false},
+		{`one,"two, ""three""`, ",", toPointer([]string{"one", `two, "three"`}), true, false},
+		{`"brian ""the great"" hendriks",mr.,1.7526`, ",", toPointer([]string{`brian "the great" hendriks`, "mr.", "1.7526"}), true, false},
+		{`col1,"Industriepark ""De Bruwaan""",col3`, ",", toPointer([]string{"col1", `Industriepark "De Bruwaan"`, "col3"}), true, false},
+		{`|a|`, "|", []*string{nil, addr("a"), nil}, true, false},
+		{`72470|30|0|40|0||||`, "|", []*string{addr("72470"), addr("30"), addr("0"), addr("40"), addr("0"), nil, nil, nil, nil}, true, false},
+		{`"one","two"`, ",", toPointer([]string{`"one"`, `"two"`}), false, false},
+		{`"one","two"`, ",", toPointer([]string{`one`, `two`}), true, false},
+		{`one,  two`, ",", toPointer([]string{`one`, `two`}), true, false},
+		{`one,"  two"`, ",", toPointer([]string{`one`, `  two`}), true, false},
 		{
 			`23660|1300|"Beef, brisket, flat half, separable lean and fat, trimmed to 1/8"""`,
 			"|",
-			[]string{"23660", "1300", `Beef, brisket, flat half, separable lean and fat, trimmed to 1/8"`},
+			toPointer([]string{"23660", "1300", `Beef, brisket, flat half, separable lean and fat, trimmed to 1/8"`}),
 			true,
 			false,
 		},
-		{`72470<delim>30<delim>0<delim>40<delim>0<delim>"<delim>"<delim><delim><delim>`, "<delim>", []string{"72470", "30", "0", "40", "0", "<delim>", "", "", ""}, true, false},
-		{`72470<delim>30<delim>0<delim>40<delim>0<delim>"""<delim>"""<delim><delim><delim>`, "<delim>", []string{"72470", "30", "0", "40", "0", `"<delim>"`, "", "", ""}, true, false},
-		{`"the ""word"" is true","a ""quoted-field"""`, ",", []string{`the "word" is true`, `a "quoted-field"`}, true, false},
-		{`"not closed,`, ",", []string{}, true, true},
-		{`"closed", "not closed,`, ",", []string{"closed"}, true, true},
+		{`72470<delim>30<delim>0<delim>40<delim>0<delim>"<delim>"<delim><delim><delim>`, "<delim>", []*string{addr("72470"), addr("30"), addr("0"), addr("40"), addr("0"), addr("<delim>"), nil, nil, nil}, true, false},
+		{`72470<delim>30<delim>0<delim>40<delim>0<delim>"""<delim>"""<delim><delim><delim>`, "<delim>", []*string{addr("72470"), addr("30"), addr("0"), addr("40"), addr("0"), addr(`"<delim>"`), nil, nil, nil}, true, false},
+		{`"the ""word"" is true","a ""quoted-field"""`, ",", toPointer([]string{`the "word" is true`, `a "quoted-field"`}), true, false},
+		{`"not closed,`, ",", toPointer([]string{}), true, true},
+		{`"closed", "not closed,`, ",", toPointer([]string{"closed"}), true, true},
 	}
 
 	for _, test := range splitTests {
@@ -77,8 +110,19 @@ func TestCSVSplitLine(t *testing.T) {
 		}
 
 		for i, token := range results {
-			if token != test.expectedTokens[i] {
-				t.Errorf("%s split test failure. expected: %v, actual: %v", test.ToSplit, test.expectedTokens, results)
+			if token == nil && test.expectedTokens[i] == nil {
+				break
+			}
+			if token != nil && test.expectedTokens[i] == nil {
+				t.Errorf("%s split test failure. expected: %v, actual: %v\n", test.ToSplit, test.expectedTokens, results)
+				break
+			}
+			if token == nil && test.expectedTokens[i] != nil {
+				t.Errorf("%s split test failure. expected: %v, actual: %v\n", test.ToSplit, test.expectedTokens, results)
+				break
+			}
+			if *token != *test.expectedTokens[i] {
+				t.Errorf("%s split test failure. expected: %v, actual: %v\n", test.ToSplit, fromPointer(test.expectedTokens), fromPointer(results))
 				break
 			}
 		}

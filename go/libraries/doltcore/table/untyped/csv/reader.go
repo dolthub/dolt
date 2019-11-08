@@ -90,7 +90,11 @@ func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
 		}
 
 		if colStrs == nil {
-			colStrs = colStrsFromFile
+			cols := make([]string, len(colStrsFromFile))
+			for i := range colStrsFromFile {
+				cols[i] = *colStrsFromFile[i]
+			}
+			colStrs = cols
 		}
 	}
 
@@ -168,10 +172,12 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 
 	taggedVals := make(row.TaggedValues)
 	for i := 0; i < allCols.Size(); i++ {
-		if len(colVals[i]) > 0 {
-			col := allCols.GetByIndex(i)
-			taggedVals[col.Tag] = types.String(colVals[i])
+		col := allCols.GetByIndex(i)
+		if colVals[i] == nil {
+			taggedVals[col.Tag] = nil
+			continue
 		}
+		taggedVals[col.Tag] = types.String(*colVals[i])
 	}
 
 	return row.New(csvr.nbf, sch, taggedVals)
