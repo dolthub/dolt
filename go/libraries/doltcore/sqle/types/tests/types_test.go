@@ -43,25 +43,27 @@ import (
 
 func TestSqlTypes(t *testing.T) {
 	for _, sqlTypeInit := range dtypes.SqlTypeInitializers {
-		if sqlTypeInit.SqlType() == sql.Boolean {
-			t.Skip("Skipping tests involving Boolean until that's changed in go-mysql-server")
-		}
-		for _, sqlType := range sqlTypeInit.SqlTypes() {
-			sqlTypeStr, err := dtypes.SqlTypeToString(sqlType)
-			require.NoError(t, err)
-			root, dEnv := getEmptyRoot()
-			root, err = runQuery(root, dEnv, fmt.Sprintf("CREATE TABLE test (pk BIGINT, v %v, PRIMARY KEY (pk))", sqlTypeStr))
-			require.NoError(t, err)
-			table, exists, err := root.GetTable(context.Background(), "test")
-			require.NoError(t, err)
-			require.True(t, exists)
-			schema, err := table.GetSchema(context.Background())
-			require.NoError(t, err)
-			cols := schema.GetNonPKCols().GetColumns()
-			require.Len(t, cols, 1)
-			col := cols[0]
-			require.Equal(t, sqlTypeInit.NomsKind(), col.Kind, "Expected %v on %v but got %v", sqlTypeInit.NomsKind(), sqlTypeInit, col.Kind)
-		}
+		t.Run(sqlTypeInit.String(), func(t *testing.T) {
+			if sqlTypeInit.SqlType() == sql.Boolean {
+				t.Skip("Skipping tests involving Boolean until that's changed in go-mysql-server")
+			}
+			for _, sqlType := range sqlTypeInit.SqlTypes() {
+				sqlTypeStr, err := dtypes.SqlTypeToString(sqlType)
+				require.NoError(t, err)
+				root, dEnv := getEmptyRoot()
+				root, err = runQuery(root, dEnv, fmt.Sprintf("CREATE TABLE test (pk BIGINT, v %v, PRIMARY KEY (pk))", sqlTypeStr))
+				require.NoError(t, err)
+				table, exists, err := root.GetTable(context.Background(), "test")
+				require.NoError(t, err)
+				require.True(t, exists)
+				schema, err := table.GetSchema(context.Background())
+				require.NoError(t, err)
+				cols := schema.GetNonPKCols().GetColumns()
+				require.Len(t, cols, 1)
+				col := cols[0]
+				require.Equal(t, sqlTypeInit.NomsKind(), col.Kind, "Expected %v on %v but got %v", sqlTypeInit.NomsKind(), sqlTypeInit, col.Kind)
+			}
+		})
 	}
 }
 
