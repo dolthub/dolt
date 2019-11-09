@@ -180,7 +180,7 @@ func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 		col := w.sch.GetAllCols().TagToCol[tag]
 		if col.IsPartOfPK {
 			if seenOne {
-				b.WriteString("AND ")
+				b.WriteString(" AND ")
 			}
 			sqlString, err := w.sqlString(val, col.Kind)
 			if err != nil {
@@ -239,7 +239,7 @@ func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 		col := w.sch.GetAllCols().TagToCol[tag]
 		if col.IsPartOfPK {
 			if seenOne {
-				b.WriteString("AND ")
+				b.WriteString(" AND ")
 			}
 			sqlString, err := w.sqlString(val, col.Kind)
 			if err != nil {
@@ -276,7 +276,8 @@ func (w *SqlExportWriter) sqlString(value types.Value, kind types.NomsKind) (str
 		return "NULL", nil
 	}
 
-	switch kind {
+	//switch kind {
+	switch value.Kind() {
 	case types.BoolKind:
 		if value.(types.Bool) {
 			return "TRUE", nil

@@ -60,7 +60,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 
 	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if val, ok := r.GetColVal(tag); ok {
-			taggedVals[tag] = val.(types.String)
+			taggedVals[tag] = val
 		}
 		return false, nil
 	})
