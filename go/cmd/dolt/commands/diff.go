@@ -613,7 +613,7 @@ func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitte
 
 	if dArgs.diffOutput&ColorDiffOutput != 0 {
 		fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
-		transforms = pipeline.NewTransformCollection(pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT})
+		transforms.AppendTransforms(pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT})
 	}
 
 	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
