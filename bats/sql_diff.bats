@@ -22,7 +22,7 @@ teardown() {
     dolt commit -m "Added three rows"
 
     # confirm a difference exists
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" != "" ]] || false
 
@@ -34,7 +34,7 @@ teardown() {
     dolt commit -m "Reconciled with newbranch"
 
     # confirm difference was reconciled
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -52,7 +52,7 @@ teardown() {
     dolt commit -m "modified first row"
 
     # confirm a difference exists
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" != "" ]] || false
 
@@ -64,7 +64,7 @@ teardown() {
     dolt commit -m "Reconciled with newbranch"
 
     # confirm difference was reconciled
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -82,7 +82,7 @@ teardown() {
     dolt commit -m "deleted first row"
 
     # confirm a difference exists
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" != "" ]] || false
 
@@ -94,7 +94,7 @@ teardown() {
     dolt commit -m "Reconciled with newbranch"
 
     # confirm difference was reconciled
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -112,7 +112,7 @@ teardown() {
     dolt commit -m "modified first row"
 
     # confirm a difference exists
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" != "" ]] || false
 
@@ -124,7 +124,7 @@ teardown() {
     dolt commit -m "Reconciled with newbranch"
 
     # confirm difference was reconciled
-    run dolt diff newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
@@ -147,7 +147,7 @@ teardown() {
         dolt commit -m "applied $query query"
 
         # confirm a difference exists
-        run dolt diff newbranch firstbranch
+        run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
         [[ "$output" != "" ]] || false
 
@@ -159,7 +159,7 @@ teardown() {
         dolt commit -m "Reconciled with newbranch"
 
         # confirm difference was reconciled
-        run dolt diff newbranch firstbranch
+        run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
         [[ "$output" = "" ]] || false
     done
@@ -180,11 +180,12 @@ teardown() {
         dolt checkout newbranch
         dolt sql < `batshelper queries/2pk5col-ints/$query.sql`
         dolt add test
-        dolt diff
+        dolt diff --sql
         dolt commit -m "applied $query query "
 
         # confirm a difference exists
-        run dolt diff newbranch firstbranch
+
+        run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
         [[ "$output" != "" ]] || false
 
@@ -196,7 +197,7 @@ teardown() {
         dolt commit -m "Reconciled with newbranch"
 
         # confirm difference was reconciled
-        run dolt diff newbranch firstbranch
+        run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
         [[ "$output" = "" ]] || false
     done
