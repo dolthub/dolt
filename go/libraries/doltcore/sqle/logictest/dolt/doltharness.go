@@ -198,7 +198,7 @@ func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
 }
 
 func sqlNewEngine(root *doltdb.RootValue) *sqle.Engine {
-	db := dsql.NewDatabase("dolt", root)
+	db := dsql.NewDatabase("dolt", root, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	return engine

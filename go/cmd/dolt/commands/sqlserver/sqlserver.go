@@ -45,10 +45,10 @@ var sqlServerSynopsis = []string{
 }
 
 func SqlServer(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return sqlServerImpl(ctx, commandStr, args, dEnv, nil)
+	return SqlServerImpl(ctx, commandStr, args, dEnv, nil)
 }
 
-func sqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	serverConfig := DefaultServerConfig()
 
 	ap := argparser.NewArgParser()
@@ -90,7 +90,7 @@ func sqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		serverConfig.LogLevel = LogLevel(logLevel)
 	}
-	if startError, closeError := serve(ctx, serverConfig, root, serverController); startError != nil || closeError != nil {
+	if startError, closeError := Serve(ctx, serverConfig, root, serverController); startError != nil || closeError != nil {
 		if startError != nil {
 			cli.PrintErrln(startError)
 		}

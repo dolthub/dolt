@@ -31,7 +31,7 @@ const expectedSQL = "CREATE TABLE `table_name` (\n" +
 	"  `is_married` BOOLEAN COMMENT 'tag:3',\n" +
 	"  `age` BIGINT COMMENT 'tag:4',\n" +
 	"  `rating` DOUBLE COMMENT 'tag:6',\n" +
-	"  `uuid` CHAR(36) COMMENT 'tag:7',\n" +
+	"  `uuid` LONGTEXT COMMENT 'tag:7',\n" +
 	"  `num_episodes` BIGINT UNSIGNED COMMENT 'tag:8',\n" +
 	"  PRIMARY KEY (`id`)\n" +
 	");"

@@ -47,6 +47,11 @@ func (rr RemoteRef) GetRemote() string {
 	return rr.remote
 }
 
+// GetBranch returns the name of a remote branch
+func (rr RemoteRef) GetBranch() string {
+	return rr.branch
+}
+
 // NewRemoteRef creates a remote ref from an origin name and a path
 func NewRemoteRef(remote, branch string) RemoteRef {
 	return RemoteRef{remote, branch}

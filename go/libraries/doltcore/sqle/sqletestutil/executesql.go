@@ -109,7 +109,7 @@ func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query
 // Executes the select statement given and returns the resulting rows, or an error if one is encountered.
 // This uses the index functionality, which is not ready for prime time. Use with caution.
 func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
-	db := dsqle.NewDatabase("dolt", root)
+	db := dsqle.NewDatabase("dolt", root, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))

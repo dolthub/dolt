@@ -1,3 +1,6 @@
 **/.idea/
 .vscode
 
+
+go.sum
+go.mod

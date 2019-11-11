@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -128,6 +129,25 @@ func (Float) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
 			fl := float64(val.(Float))
 			str := strconv.FormatFloat(fl, 'f', -1, 64)
 			return String(str), nil
+		}, nil
+	case TimestampKind:
+		return func(val Value) (Value, error) {
+			if val == nil {
+				return nil, nil
+			}
+			fl := float64(val.(Float))
+			// If Float is too large, we'll clamp it to the max time representable
+			// There are comparison issues for times too large, so "200000000-12-31 23:59:59 UTC" seems like a reasonable maximum.
+			if fl > 6311328264403199 {
+				fl = 6311328264403199
+				// I could not find anything pointing to a minimum allowed time, so "-200000000-01-01 00:00:00 UTC" seems reasonable
+			} else if fl < -6311452567219200 {
+				fl = -6311452567219200
+			}
+			// We treat a Float as seconds and nanoseconds, unlike integers which are just seconds
+			seconds := int64(fl)
+			nanoseconds := int64((fl - float64(seconds)) * float64(time.Second/time.Nanosecond))
+			return Timestamp(time.Unix(seconds, nanoseconds).UTC()), nil
 		}, nil
 	case UintKind:
 		return func(val Value) (Value, error) {

@@ -106,6 +106,7 @@ func (em *GrpcEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent) 
 		Version:   version,
 		Platform:  plat,
 		Events:    evts,
+		App:       eventsapi.AppID_APP_DOLT,
 	}
 
 	_, err := em.client.LogEvents(ctx, &req)
