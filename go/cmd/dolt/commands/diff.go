@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"reflect"
 	"sort"
 	"strconv"
@@ -38,6 +36,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	dtypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
@@ -455,7 +455,6 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		return errhand.BuildDError("").AddCause(err).Build()
 	}
 
-	// here
 	untypedUnionSch, err := untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 
 	if err != nil {
@@ -463,6 +462,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 	}
 
 	if diffOutput&SQLDiffOutput != 0 {
+		// sql diffs don't support schema changes yet => newSch == oldSch
 		untypedUnionSch = newSch
 	}
 
@@ -530,7 +530,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 	if diffOutput&ColorDiffOutput != 0 {
 		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
 	} else {
-		sink, err =  diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, newSch, tableName)
+		sink, err =  diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, tableName)
 	}
 
 	if err != nil {
@@ -562,30 +562,32 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
 	p := pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src.NextDiff), sinkProcFunc, transforms, badRowCallback)
 
-	//if schemasEqual {
-	//	schRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
-	//
-	//	if err != nil {
-	//
-	//	}
-	//
-	//	p.InjectRow(fwtStageName, schRow)
-	//} else {
-	//	newSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, oldColNames)
-	//
-	//	if err != nil {
-	//
-	//	}
-	//
-	//	p.InjectRowWithProps(fwtStageName, newSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
-	//	oldSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
-	//
-	//	if err != nil {
-	//
-	//	}
-	//
-	//	p.InjectRowWithProps(fwtStageName, oldSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
-	//}
+	if diffOutput&SQLDiffOutput == 0 {
+		if schemasEqual {
+			schRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
+
+			if err != nil {
+
+			}
+
+			p.InjectRow(fwtStageName, schRow)
+		} else {
+			newSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, oldColNames)
+
+			if err != nil {
+
+			}
+
+			p.InjectRowWithProps(fwtStageName, newSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
+			oldSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
+
+			if err != nil {
+
+			}
+
+			p.InjectRowWithProps(fwtStageName, oldSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedNew})
+		}
+	}
 
 	p.Start()
 	if err = p.Wait(); err != nil {
