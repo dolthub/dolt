@@ -142,7 +142,7 @@ teardown() {
     for query in delete add update
     do
         dolt checkout newbranch
-        dolt sql < `batshelper queries/1pksupportedtypes/$query.sql`
+        dolt sql < $BATS_TEST_DIRNAME/helper/queries/1pksupportedtypes/$query.sql
         dolt add test
         dolt commit -m "applied $query query"
 
@@ -178,7 +178,7 @@ teardown() {
     for query in delete add update single_pk_update all_pk_update
     do
         dolt checkout newbranch
-        dolt sql < `batshelper queries/2pk5col-ints/$query.sql`
+        dolt sql < $BATS_TEST_DIRNAME/helper/queries/2pk5col-ints/$query.sql
         dolt add test
         dolt diff --sql
         dolt commit -m "applied $query query "
