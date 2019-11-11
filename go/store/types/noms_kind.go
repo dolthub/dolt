@@ -81,6 +81,8 @@ var KindToType = map[NomsKind]Value{
 	TimestampKind:  Timestamp{},
 }
 
+var KindToTypeSlice []Value
+
 var KindToString = map[NomsKind]string{
 	UnknownKind:    "unknown",
 	BlobKind:       "Blob",
@@ -112,8 +114,8 @@ func (k NomsKind) String() string {
 
 // IsPrimitiveKind returns true if k represents a Noms primitive type, which excludes collections (List, Map, Set), Refs, Structs, Symbolic and Unresolved types.
 func IsPrimitiveKind(k NomsKind) bool {
-	_, ok := PrimitiveTypeMap[k]
-	return ok
+	i := int(k)
+	return i < len(PrimitiveKindMask) && PrimitiveKindMask[i]
 }
 
 // isKindOrderedByValue determines if a value is ordered by its value instead of its hash.
