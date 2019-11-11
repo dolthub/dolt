@@ -25,6 +25,7 @@ import (
 
 var AllowedAuthors = map[string]*struct{}{
 	"Aaron Son <aaron@liquidata.co>":       nil,
+	"Andy Arthur <andy@liquidata.co>":       nil,
 	"Brian Hendriks <brian@liquidata.co>":  nil,
 	"Daylon Wilkins <daylon@liquidata.co>": nil,
 	"Dustin Brown <dustin@liquidata.co>":   nil,
@@ -41,6 +42,7 @@ var AllowedAuthors = map[string]*struct{}{
 
 var AllowedCommitters = map[string]*struct{}{
 	"Aaron Son <aaron@liquidata.co>":       nil,
+	"Andy Arthur <andy@liquidata.co>":       nil,
 	"Brian Hendriks <brian@liquidata.co>":  nil,
 	"Daylon Wilkins <daylon@liquidata.co>": nil,
 	"Dustin Brown <dustin@liquidata.co>":   nil,
