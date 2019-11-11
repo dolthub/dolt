@@ -55,10 +55,6 @@ func (stringType) GetSqlToValue() SqlToValue {
 	}
 }
 
-func (stringType) SqlTypeString() string {
-	return "LONGTEXT"
-}
-
 func (stringType) String() string {
 	return "stringType"
 }

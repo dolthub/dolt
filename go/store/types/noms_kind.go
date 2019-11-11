@@ -53,6 +53,7 @@ const (
 	NullKind
 	TupleKind
 	InlineBlobKind
+	TimestampKind
 
 	UnknownKind NomsKind = 255
 )
@@ -77,6 +78,7 @@ var KindToType = map[NomsKind]Value{
 	NullKind:       NullValue,
 	TupleKind:      EmptyTuple(Format_7_18),
 	InlineBlobKind: InlineBlob{},
+	TimestampKind:  Timestamp{},
 }
 
 var KindToString = map[NomsKind]string{
@@ -100,6 +102,7 @@ var KindToString = map[NomsKind]string{
 	NullKind:       "Null",
 	TupleKind:      "Tuple",
 	InlineBlobKind: "InlineBlob",
+	TimestampKind:  "Timestamp",
 }
 
 // String returns the name of the kind.

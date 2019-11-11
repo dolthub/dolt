@@ -32,8 +32,8 @@ import (
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
-// serve starts a MySQL-compatible server. Returns any errors that were encountered.
-func serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController) (startError error, closeError error) {
+// Serve starts a MySQL-compatible server. Returns any errors that were encountered.
+func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.RootValue, serverController *ServerController) (startError error, closeError error) {
 	if serverConfig == nil {
 		cli.Println("No configuration given, using defaults")
 		serverConfig = DefaultServerConfig()
@@ -76,7 +76,7 @@ func serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
-	sqlEngine.AddDatabase(dsqle.NewDatabase("dolt", rootValue))
+	sqlEngine.AddDatabase(dsqle.NewDatabase("dolt", rootValue, nil))
 
 	hostPort := net.JoinHostPort(serverConfig.Host, strconv.Itoa(serverConfig.Port))
 	timeout := time.Second * time.Duration(serverConfig.Timeout)

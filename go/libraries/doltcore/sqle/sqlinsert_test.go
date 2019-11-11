@@ -71,7 +71,7 @@ func testInsertQuery(t *testing.T, test InsertTest) {
 		require.NoError(t, err)
 	}
 
-	actualRows, sch, err := executeSelect(context.Background(), test.ExpectedSchema, root, test.SelectQuery)
+	actualRows, sch, err := executeSelect(context.Background(), dEnv, test.ExpectedSchema, root, test.SelectQuery)
 	require.NoError(t, err)
 
 	assert.Equal(t, test.ExpectedRows, actualRows)

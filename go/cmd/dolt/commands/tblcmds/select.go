@@ -16,15 +16,12 @@ package tblcmds
 
 import (
 	"context"
-	"errors"
-	"strings"
 
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -58,72 +55,6 @@ var selShortDesc = "print a selection of a table"
 var selLongDesc = `The dolt table select command selects rows from a table and prints out some or all of the table's columns`
 var selSynopsis = []string{
 	"[--limit <record_count>] [--where <col1=val1>] [--hide-conflicts] [<commit>] <table> [<column>...]",
-}
-
-type filterFn = func(r row.Row) (matchesFilter bool)
-
-func parseWhere(sch schema.Schema, whereClause string) (filterFn, error) {
-	if whereClause == "" {
-		return func(r row.Row) bool {
-			return true
-		}, nil
-	} else {
-		tokens := strings.Split(whereClause, "=")
-
-		if len(tokens) != 2 {
-			return nil, errors.New("'" + whereClause + "' is not in the format key=value")
-		}
-
-		key := tokens[0]
-		valStr := tokens[1]
-
-		col, ok := sch.GetAllCols().GetByName(key)
-
-		if !ok {
-			return nil, errors.New("where clause is invalid. '" + key + "' is not a known column.")
-		}
-
-		tag := col.Tag
-		convFunc, err := doltcore.GetConvFunc(types.StringKind, col.Kind)
-		if err != nil {
-			return nil, err
-		}
-
-		val, err := convFunc(types.String(valStr))
-		if err != nil {
-			return nil, errors.New("unable to convert '" + valStr + "' to " + col.KindString())
-		}
-
-		return func(r row.Row) bool {
-			rowVal, ok := r.GetColVal(tag)
-
-			if !ok {
-				return false
-			}
-
-			return val.Equals(rowVal)
-		}, nil
-	}
-}
-
-type selectTransform struct {
-	p      *pipeline.Pipeline
-	filter filterFn
-	limit  int
-	count  int
-}
-
-func (st *selectTransform) LimitAndFilter(inRow row.Row, props pipeline.ReadableMap) ([]*pipeline.TransformedRowResult, string) {
-	if st.limit == -1 || st.count < st.limit {
-		if st.filter(inRow) {
-			st.count++
-			return []*pipeline.TransformedRowResult{{RowData: inRow, PropertyUpdates: nil}}, ""
-		}
-	} else if st.count == st.limit {
-		st.p.NoMore()
-	}
-
-	return nil, ""
 }
 
 type SelectArgs struct {
@@ -227,13 +158,13 @@ func printTable(ctx context.Context, root *doltdb.RootValue, selArgs *SelectArgs
 		return errhand.BuildDError("error: failed to get schema").AddCause(err).Build()
 	}
 
-	whereFn, err := parseWhere(tblSch, selArgs.whereClause)
+	whereFn, err := commands.ParseWhere(tblSch, selArgs.whereClause)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
 	}
 
-	selTrans := &selectTransform{nil, whereFn, selArgs.limit, 0}
+	selTrans := commands.NewSelTrans(whereFn, selArgs.limit)
 	transforms := pipeline.NewTransformCollection(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
 	sch, err := maybeAddCnfColTransform(ctx, transforms, tbl, tblSch)
 
@@ -253,7 +184,7 @@ func printTable(ctx context.Context, root *doltdb.RootValue, selArgs *SelectArgs
 		return errhand.BuildDError("error: failed to setup pipeline").AddCause(err).Build()
 	}
 
-	selTrans.p = p
+	selTrans.Pipeline = p
 
 	p.Start()
 	err = p.Wait()
