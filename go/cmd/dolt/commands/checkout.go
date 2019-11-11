@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -76,7 +78,24 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 			} else if isBranch {
 				verr = checkoutBranch(ctx, dEnv, name)
 			} else {
-				verr = errhand.BuildDError("error: could not find %s", name).Build()
+				refs, err := dEnv.DoltDB.GetRefs(ctx)
+
+				if err != nil {
+					verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
+				}
+
+				found := false
+				for _, rf := range refs {
+					if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
+						verr = checkoutNewBranch(ctx, dEnv, name, rf.String())
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					verr = errhand.BuildDError("error: could not find %s", name).Build()
+				}
 			}
 		}
 

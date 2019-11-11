@@ -22,6 +22,7 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -29,8 +30,8 @@ import (
 
 // Runs the query given and returns the result. The schema result of the query's execution is currently ignored, and
 // the targetSchema given is used to prepare all rows.
-func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
-	db := NewDatabase("dolt", root)
+func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Schema, root *doltdb.RootValue, query string) ([]row.Row, schema.Schema, error) {
+	db := NewDatabase("dolt", root, dEnv)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.Catalog.RegisterIndexDriver(&DoltIndexDriver{db})
@@ -67,7 +68,7 @@ func executeSelect(ctx context.Context, targetSch schema.Schema, root *doltdb.Ro
 
 // Runs the query given and returns the error (if any).
 func executeModify(ctx context.Context, root *doltdb.RootValue, query string) (*doltdb.RootValue, error) {
-	db := NewDatabase("dolt", root)
+	db := NewDatabase("dolt", root, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.Init()

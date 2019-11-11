@@ -17,13 +17,22 @@ package sqltestutil
 import (
 	"testing"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+func mustRow(r row.Row, err error) row.Row {
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
 
 // This file defines test queries and expected results. The purpose of defining them here is to make them portable --
 // usable in multiple contexts as we implement SQL support.
@@ -49,6 +58,15 @@ type SelectTest struct {
 	// Over time, this should become false for every query.
 	SkipOnSqlEngine bool
 }
+
+var logSchColColl, _ = schema.NewColCollection(
+	schema.NewColumn("commit_hash", 0, types.StringKind, true),
+	schema.NewColumn("committer", 1, types.StringKind, false),
+	schema.NewColumn("email", 2, types.StringKind, false),
+	schema.NewColumn("date", 3, types.StringKind, false),
+	schema.NewColumn("message", 4, types.StringKind, false),
+)
+var LogSchema schema.Schema = schema.SchemaFromCols(logSchColColl)
 
 //
 // Collection of query tests for conformance and performance testing, grouped by categories.
@@ -622,8 +640,8 @@ var BasicSelectTests = []SelectTest{
 	{
 		Name: "column aliases, all columns",
 		Query: `select id as i, first as f, last as l, is_married as m, age as a,
-				rating as r, uuid as u, num_episodes as n from people
-				where age >= 40`,
+					rating as r, uuid as u, num_episodes as n from people
+					where age >= 40`,
 		ExpectedRows: CompressRows(PeopleTestSchema, Homer, Moe, Barney),
 		ExpectedSchema: NewResultSetSchema("i", types.IntKind, "f", types.StringKind,
 			"l", types.StringKind, "m", types.BoolKind, "a", types.IntKind, "r", types.FloatKind,
@@ -684,6 +702,18 @@ var BasicSelectTests = []SelectTest{
 		Query:           `select * from people where id = "0"`,
 		ExpectedErr:     "Type mismatch:",
 		SkipOnSqlEngine: true,
+	},
+	{
+		Name:  "select * from log system table",
+		Query: "select * from dolt_log",
+		ExpectedRows: []row.Row{mustRow(row.New(types.Format_7_18, LogSchema, row.TaggedValues{
+			0: types.String("uq724j7bn8u01u8j6mdgr0bhsq0bpead"),
+			1: types.String("billy bob"),
+			2: types.String("bigbillieb@fake.horse"),
+			3: types.String("Thu Jan 01 00:00:00 +0000 1970"),
+			4: types.String("Initialize data repository"),
+		}))},
+		ExpectedSchema: LogSchema,
 	},
 }
 
