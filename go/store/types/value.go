@@ -32,6 +32,9 @@ type ValueCallback func(v Value) error
 type RefCallback func(ref Ref) error
 type MarshalCallback func(val Value) (Value, error)
 
+var MaxPrimitiveKind int
+var PrimitiveKindMask []bool
+
 func init() {
 	for _, value := range KindToType {
 		if value != nil && value.isPrimitive() {
@@ -39,6 +42,27 @@ func init() {
 			PrimitiveTypeMap[nomsKind] = makePrimitiveType(nomsKind)
 		}
 	}
+	for k := range PrimitiveTypeMap {
+		if int(k) > MaxPrimitiveKind {
+			MaxPrimitiveKind = int(k)
+		}
+	}
+	PrimitiveKindMask = make([]bool, MaxPrimitiveKind+1)
+	for k := range PrimitiveTypeMap {
+		PrimitiveKindMask[int(k)] = true
+	}
+
+	maxKindInKindToType := 0
+	for k := range KindToType {
+		if int(k) > maxKindInKindToType {
+			maxKindInKindToType = int(k)
+		}
+	}
+	KindToTypeSlice = make([]Value, maxKindInKindToType+1)
+	for k, v := range KindToType {
+		KindToTypeSlice[int(k)] = v
+	}
+
 }
 
 // Valuable is an interface from which a Value can be retrieved.

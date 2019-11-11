@@ -268,6 +268,29 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 			return nil, err
 		}
 		return newBlob(seq), nil
+	// The following primitive kinds, through StringKind, are also
+	// able to be processed by the IsPrimitiveKind branch below.
+	// But we include them here for efficiency, since it is about
+	// 30% faster to dispatch statically to the correct reader for
+	// these very common primitive types.
+	case BoolKind:
+		r.skipKind()
+		return Bool(r.readBool()), nil
+	case FloatKind:
+		r.skipKind()
+		return Float(r.readFloat(nbf)), nil
+	case IntKind:
+		r.skipKind()
+		return Int(r.readInt()), nil
+	case UintKind:
+		r.skipKind()
+		return Uint(r.readUint()), nil
+	case NullKind:
+		r.skipKind()
+		return NullValue, nil
+	case StringKind:
+		r.skipKind()
+		return String(r.readString()), nil
 	case ListKind:
 		seq, err := r.readListSequence(nbf)
 		if err != nil {
@@ -300,9 +323,12 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	}
 
 	if IsPrimitiveKind(k) {
-		if emptyVal, ok := KindToType[k]; ok {
-			r.skipKind()
-			return emptyVal.readFrom(nbf, &r.binaryNomsReader)
+		if int(k) < len(KindToTypeSlice) {
+			emptyVal := KindToTypeSlice[int(k)]
+			if emptyVal != nil {
+				r.skipKind()
+				return emptyVal.readFrom(nbf, &r.binaryNomsReader)
+			}
 		}
 	}
 
@@ -317,6 +343,28 @@ func (r *valueDecoder) skipValue(nbf *NomsBinFormat) error {
 		if err != nil {
 			return err
 		}
+	// The following primitive kinds, through StringKind, are also
+	// able to be processed by the IsPrimitiveKind branch below.
+	// But we include them here for efficiency, since it is about
+	// 30% faster to dispatch statically to the correct reader for
+	// these very common primitive types.
+	case BoolKind:
+		r.skipKind()
+		r.skipBool()
+	case FloatKind:
+		r.skipKind()
+		r.skipFloat(nbf)
+	case NullKind:
+		r.skipKind()
+	case IntKind:
+		r.skipKind()
+		r.skipInt()
+	case UintKind:
+		r.skipKind()
+		r.skipUint()
+	case StringKind:
+		r.skipKind()
+		r.skipString()
 	case ListKind:
 		err := r.skipList(nbf)
 		if err != nil {
@@ -357,10 +405,13 @@ func (r *valueDecoder) skipValue(nbf *NomsBinFormat) error {
 		d.Panic("A value instance can never have type %s", k)
 	default:
 		if IsPrimitiveKind(k) {
-			if emptyVal, ok := KindToType[k]; ok {
-				r.skipKind()
-				emptyVal.skip(nbf, &r.binaryNomsReader)
-				return nil
+			if int(k) < len(KindToTypeSlice) {
+				emptyVal := KindToTypeSlice[int(k)]
+				if emptyVal != nil {
+					r.skipKind()
+					emptyVal.skip(nbf, &r.binaryNomsReader)
+					return nil
+				}
 			}
 		}
 		return ErrUnknownType
