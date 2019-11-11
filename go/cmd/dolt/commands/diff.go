@@ -55,14 +55,14 @@ const (
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
 	ColorDiffOutput = 1
-	SQLDiffOutput = 2
+	SQLDiffOutput   = 2
 
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
 	SummaryFlag = "summary"
 	whereParam  = "where"
 	limitParam  = "limit"
-	SQLFlag = "sql"
+	SQLFlag     = "sql"
 )
 
 type DiffSink interface {
@@ -94,10 +94,10 @@ var diffSynopsis = []string{
 }
 
 type diffArgs struct {
-	diffParts int
+	diffParts  int
 	diffOutput int
-	limit     int
-	where     string
+	limit      int
+	where      string
 }
 
 func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -473,9 +473,8 @@ func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
 	return schema.SchemaFromCols(dumbColColl), nil
 }
 
-
 func toNamer(name string) string {
-return diff.To + "_" + name
+	return diff.To + "_" + name
 }
 
 func fromNamer(name string) string {
@@ -525,7 +524,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 	if dArgs.diffOutput&ColorDiffOutput != 0 {
 		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
 	} else {
-		sink, err =  diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, tblName)
+		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, tblName)
 	}
 
 	if err != nil {
