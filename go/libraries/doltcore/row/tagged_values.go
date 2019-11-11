@@ -138,15 +138,18 @@ func ParseTaggedValues(tpl types.Tuple) (TaggedValues, error) {
 	}
 
 	taggedTuple := make(TaggedValues, tpl.Len()/2)
-	for i := uint64(0); i < tpl.Len(); i += 2 {
-		tag, err := tpl.Get(i)
-
+	i, err := tpl.Iterator()
+	if err != nil {
+		return nil, err
+	}
+	for i.HasMore() {
+		_, tag, err := i.Next()
 		if err != nil {
 			return nil, err
 		}
 
-		val, err := tpl.Get(i + 1)
-
+		// i.HasMore() is true here because of assertion above.
+		_, val, err := i.Next()
 		if err != nil {
 			return nil, err
 		}
