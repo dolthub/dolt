@@ -20,16 +20,16 @@ import (
 	"strings"
 )
 
-func csvSplitLineRuneDelim(str string, delim rune, escapedQuotes bool) ([]string, error) {
+func csvSplitLineRuneDelim(str string, delim rune, escapedQuotes bool) ([]*string, error) {
 	return csvSplitLine(str, string(delim), escapedQuotes)
 }
 
-func csvSplitLine(str string, delim string, escapedQuotes bool) ([]string, error) {
+func csvSplitLine(str string, delim string, escapedQuotes bool) ([]*string, error) {
 	if strings.IndexRune(delim, '"') != -1 {
 		panic("delims cannot contain quotes")
 	}
 
-	var tokens []string
+	var tokens []*string
 	delimLen := len(delim)
 
 	done := false
@@ -61,7 +61,6 @@ func csvSplitLine(str string, delim string, escapedQuotes bool) ([]string, error
 			if escapedQuotes {
 				return nil, errors.New(str[cellStart:] + ` has an unclosed quotation mark`)
 			}
-
 			break
 		}
 	}
@@ -69,37 +68,37 @@ func csvSplitLine(str string, delim string, escapedQuotes bool) ([]string, error
 	return tokens, nil
 }
 
-func appendToken(tokens []string, line string, start, pos int, escapedQuotes bool) []string {
-	quotations := 0
-
-	if escapedQuotes {
-		for _, c := range line {
-			if c == '"' {
-				quotations++
-			}
-		}
-	}
-
-	if start == pos {
-		return append(tokens, "")
+func appendToken(tokens []*string, line string, start, pos int, escapedQuotes bool) []*string {
+	if pos == start {
+		return append(tokens, nil)
 	}
 
 	for isWhitespace(line[start]) {
 		start++
 	}
 
-	if start == pos {
-		return append(tokens, "")
-	}
-
-	for isWhitespace(line[pos-1]) {
+	for pos-1 >= 0 && pos-1 < len(line) {
+		if !isWhitespace(line[pos-1]) {
+			break
+		}
 		pos--
 	}
 
-	if quotations == 0 {
-		return append(tokens, line[start:pos])
-	} else if quotations == 2 && line[start] == '"' && line[pos-1] == '"' {
-		return append(tokens, line[start+1:pos-1])
+	if escapedQuotes {
+		if line[start] == '"' && line[pos-1] == '"' {
+			start++
+			pos--
+		} else {
+			escapedQuotes = false
+			if start == pos {
+				return append(tokens, nil)
+			}
+		}
+	}
+
+	if !escapedQuotes {
+		startToPosNoQuotes := line[start:pos]
+		return append(tokens, &startToPosNoQuotes)
 	}
 
 	token := make([]byte, len(line)-start)
@@ -121,7 +120,7 @@ func appendToken(tokens []string, line string, start, pos int, escapedQuotes boo
 	}
 
 	s := string(token[:end])
-	return append(tokens, s)
+	return append(tokens, &s)
 }
 
 func isWhitespace(c uint8) bool {
