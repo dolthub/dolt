@@ -31,13 +31,13 @@ type SQLDiffSink struct {
 	sw  *sqlexport.SqlExportWriter
 }
 
-func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, typedSch schema.Schema, tableName string) (*SQLDiffSink, error) {
-	sw, err := sqlexport.NewSQLExportWriter(wr, tableName, typedSch)
+func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, tableName string) (*SQLDiffSink, error) {
+	sw, err := sqlexport.NewSQLDiffWriter(wr, tableName, sch)
 
 	if err != nil {
 		return nil, err
 	}
-	sw.SetWrittenFirstRow(true)
+	//sw.SetWrittenFirstRow(true)
 
 	return &SQLDiffSink{sch, sw}, nil
 }

@@ -55,18 +55,14 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
 }
 
-func NewSQLExportWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
-	return &SqlExportWriter{wr: wr, tableName: tableName, sch: sch}, nil
+func NewSQLDiffWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
+	// set writtenFirstRow = true to prevent table drop statement from being written
+	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr, writtenFirstRow: true}, nil
 }
 
 // Returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
-}
-
-// TODO: clean up this design
-func (w *SqlExportWriter) SetWrittenFirstRow(b bool) {
-	w.writtenFirstRow = b
 }
 
 // WriteRow will write a row to a table
@@ -146,10 +142,7 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 		if seenOne {
 			b.WriteRune(',')
 		}
-		// TODO: can I just access the col with index and grab kind?
-		kind := w.sch.GetAllCols().TagToCol[tag].Kind
-		sqlString, err := w.sqlString(val, kind)
-		//sqlString, err := w.sqlString(val, val.Kind())
+		sqlString, err := w.sqlString(val)
 		if err != nil {
 			return true, err
 		}
@@ -176,13 +169,12 @@ func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 	b.WriteString(" WHERE ( ")
 	seenOne := false
 	_, err := r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
-		// TODO: can I just access the col with index and grab kind?
 		col := w.sch.GetAllCols().TagToCol[tag]
 		if col.IsPartOfPK {
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := w.sqlString(val, col.Kind)
+			sqlString, err := w.sqlString(val)
 			if err != nil {
 				return true, err
 			}
@@ -216,7 +208,7 @@ func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 			if seenOne {
 				b.WriteRune(',')
 			}
-			sqlString, err := w.sqlString(val, col.Kind)
+			sqlString, err := w.sqlString(val)
 			if err != nil {
 				return true, err
 			}
@@ -235,13 +227,12 @@ func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 	b.WriteString(" WHERE ( ")
 	seenOne = false
 	_, err = r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
-		// TODO: can I just access the col with index and grab kind?
 		col := w.sch.GetAllCols().TagToCol[tag]
 		if col.IsPartOfPK {
 			if seenOne {
 				b.WriteString(" AND ")
 			}
-			sqlString, err := w.sqlString(val, col.Kind)
+			sqlString, err := w.sqlString(val)
 			if err != nil {
 				return true, err
 			}
@@ -271,12 +262,11 @@ func (w *SqlExportWriter) dropCreateStatement() string {
 	return b.String()
 }
 
-func (w *SqlExportWriter) sqlString(value types.Value, kind types.NomsKind) (string, error) {
+func (w *SqlExportWriter) sqlString(value types.Value) (string, error) {
 	if types.IsNull(value) {
 		return "NULL", nil
 	}
 
-	//switch kind {
 	switch value.Kind() {
 	case types.BoolKind:
 		if value.(types.Bool) {
