@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -255,6 +256,19 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 		return errhand.BuildDError("error: unable to read tables").AddCause(err).Build()
 	}
 
+	if dArgs.diffOutput&SQLDiffOutput != 0 {
+		tblDiff, err := tableDiffs(ctx, r1, r2)
+
+		if err != nil {
+			return errhand.BuildDError("error: unable to read tables").AddCause(err).Build()
+		}
+
+		tblNames = tblDiff.same
+		// add created tables to tables to be diffed so
+		// inserts to these tables will be processed
+		tblNames = append(tblNames, tblDiff.adds...)
+	}
+
 	for _, tblName := range tblNames {
 		tbl1, ok1, err := r1.GetTable(ctx, tblName)
 
@@ -465,6 +479,97 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 	}
 
 	return nil
+}
+
+type tableDiff struct {
+	adds    []string
+	drops   []string
+	renames map[string]string
+	same    []string
+}
+
+func tableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, error) {
+
+	hashToName := func(ctx context.Context, r *doltdb.RootValue) (map[hash.Hash]string, []hash.Hash, error) {
+		tblNames, err := r.GetTableNames(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		hashToName := make(map[hash.Hash]string)
+		hashes := make([]hash.Hash, 0)
+		for _, name := range tblNames {
+			tblHash, found, err := r.GetTableHash(ctx, name)
+
+			if err != nil {
+				return nil, nil, err
+			}
+
+			if !found {
+				return nil, nil, errors.New("can't find table name in root, even tho that's where we got it")
+			}
+
+			hashes = append(hashes, tblHash)
+			hashToName[tblHash] = name
+		}
+
+		return hashToName, hashes, nil
+	}
+
+	hashToName1, tblHashes1, err := hashToName(ctx, r1)
+
+	if err != nil {
+		return nil, err
+	}
+
+	hashToName2, tblHashes2, err := hashToName(ctx, r2)
+
+	if err != nil {
+		return nil, err
+	}
+
+	renames := make(map[string]string)
+	same := make([]string, 0)
+	for _, h1 := range tblHashes1 {
+		for _, h2 := range tblHashes2 {
+			if hashToName1[h1] == hashToName2[h2] {
+				// assume it's the same table
+				// DROP TABLE, ADD TABLE with the same name will
+				// be interpreted as a schema change for the table
+				same = append(same, hashToName1[h1])
+				// mark names as consumed
+				hashToName1[h1] = ""
+				hashToName2[h2] = ""
+				break
+			}
+			// This only works if tables are not changed. Renaming
+			// tables with changes will result in a DROP and ADD
+			if h1.Equal(h2) && hashToName1[h1] != hashToName2[h2] {
+				renames[hashToName1[h1]] = hashToName2[h2]
+				// mark names as consumed
+				hashToName1[h1] = ""
+				hashToName2[h2] = ""
+				break
+			}
+		}
+	}
+
+	drops := make([]string, 0)
+	for _, h1 := range tblHashes1 {
+		if hashToName1[h1] != "" {
+			drops = append(drops, hashToName1[h1])
+		}
+	}
+
+	adds := make([]string, 0)
+	for _, h2 := range tblHashes2 {
+		if hashToName2[h2] != "" {
+			adds = append(adds, hashToName2[h2])
+		}
+	}
+
+	return &tableDiff{ adds, drops, renames, same}, nil
 }
 
 func dumbDownSchema(in schema.Schema) (schema.Schema, error) {

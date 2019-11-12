@@ -128,6 +128,11 @@ func (h Hash) Greater(other Hash) bool {
 	return bytes.Compare(h[:], other[:]) > 0
 }
 
+// Equal compares two hashes returning whether this Hash is equal to other.
+func (h Hash) Equal(other Hash) bool {
+	return bytes.Compare(h[:], other[:]) == 0
+}
+
 // HashSet is a set of Hashes.
 type HashSet map[Hash]struct{}
 
