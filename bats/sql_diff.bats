@@ -202,14 +202,3 @@ teardown() {
         [[ "$output" = "" ]] || false
     done
 }
-
-@test "sql diff correctly exits on schema change" {
-    dolt table import -c -s=`batshelper employees-sch.json` employees `batshelper employees-tbl.json`
-    dolt add employees
-    dolt commit -m "Added employees table with data"
-    dolt schema add-column employees city string
-    dolt table put-row employees id:3 "first name":taylor "last name":bantle title:"software engineer" "start date":"" "end date":"" city:"Santa Monica"
-    run dolt diff --sql
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "SQL output of schema diffs is not yet supported" ]] || false
-}

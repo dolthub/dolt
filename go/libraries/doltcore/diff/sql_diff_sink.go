@@ -37,7 +37,6 @@ func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, tableName string) (*SQ
 	if err != nil {
 		return nil, err
 	}
-	//sw.SetWrittenFirstRow(true)
 
 	return &SQLDiffSink{sch, sw}, nil
 }
