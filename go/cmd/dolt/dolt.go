@@ -40,7 +40,7 @@ import (
 )
 
 const (
-	Version = "0.10.0"
+	Version = "0.11.0"
 )
 
 var doltCommand = cli.GenSubCommandHandler([]*cli.Command{

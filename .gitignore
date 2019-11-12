@@ -4,3 +4,4 @@
 
 go.sum
 go.mod
+.DS_Store
