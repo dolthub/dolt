@@ -415,7 +415,7 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 				cli.Println(color.GreenString("+ ", colStr ))
 			} else {
 				colStr := sql.FmtCol(0, 0, 0, *dff.New)
-				cli.Println("ALTER TABLE", tableName, " ADD ", colStr, ";")
+				cli.Println("ALTER TABLE", tableName, "ADD", colStr, ";")
 			}
 		case diff.SchDiffColRemoved:
 			// removed from sch2
@@ -423,7 +423,7 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 				colStr := sql.FmtCol(2, 0, 0, *dff.Old)
 				cli.Println(color.RedString("- ", colStr))
 			} else {
-				cli.Println("ALTER TABLE", tableName, " DROP ", dff.Old.Name, ";")
+				cli.Println("ALTER TABLE", tableName, "DROP", dff.Old.Name, ";")
 			}
 		case diff.SchDiffColModified:
 			// changed in sch2
@@ -461,8 +461,8 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 
 	if dArgs.diffOutput&SQLDiffOutput == 0 {
 		cli.Println("  );")
+		cli.Println()
 	}
-	cli.Println()
 
 	return nil
 }
