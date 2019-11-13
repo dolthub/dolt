@@ -299,7 +299,7 @@ func (root *RootValue) HashOf() (hash.Hash, error) {
 // TableDiff returns the slices of tables added, modified, and removed when compared with another root value.  Tables
 // In this instance that are not in the other instance are considered added, and tables in the other instance and not
 // this instance are considered removed.
-// TODO: is this logic duplicitous of doltcore/diff ?
+// TODO: is this logic redundant of doltcore/diff ?
 func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, modified, removed []string, err error) {
 	added = []string{}
 	modified = []string{}
