@@ -415,7 +415,7 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 
 
 
-	if dArgs.diffOutput&SQLDiffOutput == 0 {
+	if dArgs.diffOutput == TabularDiffOutput {
 		cli.Println("  CREATE TABLE", tableName, "(")
 	}
 
@@ -423,24 +423,22 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 		dff := diffs[tag]
 		switch dff.DiffType {
 		case diff.SchDiffNone:
-			if dArgs.diffOutput&SQLDiffOutput == 0 {
+			if dArgs.diffOutput == TabularDiffOutput {
 				cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
 			}
 		case diff.SchDiffColAdded:
-			if dArgs.diffOutput&SQLDiffOutput == 0 {
-				colStr := sql.FmtCol(2, 0, 0, *dff.New)
-				cli.Println(color.GreenString("+ ", colStr ))
+			if dArgs.diffOutput == TabularDiffOutput {
+				cli.Println(color.GreenString("+ " + sql.FmtCol(2, 0, 0, *dff.New)))
 			} else {
 				colStr := sql.FmtCol(0, 0, 0, *dff.New)
 				cli.Println("ALTER TABLE", tableName, "ADD", colStr, ";")
 			}
 		case diff.SchDiffColRemoved:
 			// removed from sch2
-			if dArgs.diffOutput&SQLDiffOutput == 0 {
-				colStr := sql.FmtCol(2, 0, 0, *dff.Old)
-				cli.Println(color.RedString("- ", colStr))
+			if dArgs.diffOutput == TabularDiffOutput{
+				cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
 			} else {
-				cli.Println("ALTER TABLE", tableName, "DROP", dff.Old.Name, ";")
+				cli.Println("ALTER TABLE", tableName, "DROP", sql.QuoteIdentifier(dff.Old.Name), ";")
 			}
 		case diff.SchDiffColModified:
 			// changed in sch2
