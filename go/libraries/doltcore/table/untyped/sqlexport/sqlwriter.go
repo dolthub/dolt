@@ -55,6 +55,11 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
 }
 
+func NewSQLDiffWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
+	// set writtenFirstRow = true to prevent table drop statement from being written
+	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr, writtenFirstRow: true}, nil
+}
+
 // Returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
@@ -98,6 +103,16 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 	return nil
 }
 
+func (w *SqlExportWriter) WriteInsertRow(ctx context.Context, r row.Row) error {
+	stmt, err := w.insertStatementForRow(r)
+
+	if err != nil {
+		return err
+	}
+
+	return iohelp.WriteLine(w.wr, stmt)
+}
+
 func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	var b strings.Builder
 	b.WriteString("INSERT INTO ")
@@ -105,7 +120,7 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	b.WriteString(" ")
 
 	b.WriteString("(")
-	var seenOne bool
+	seenOne := false
 	err := w.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if seenOne {
 			b.WriteRune(',')
@@ -143,6 +158,97 @@ func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
 	b.WriteString(");")
 
 	return b.String(), nil
+}
+
+func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
+	var b strings.Builder
+	b.WriteString("DELETE FROM ")
+	b.WriteString(sql.QuoteIdentifier(w.tableName))
+
+	b.WriteString(" WHERE (")
+	seenOne := false
+	_, err := r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		col := w.sch.GetAllCols().TagToCol[tag]
+		if col.IsPartOfPK {
+			if seenOne {
+				b.WriteString(" AND ")
+			}
+			sqlString, err := w.sqlString(val)
+			if err != nil {
+				return true, err
+			}
+			b.WriteString(sql.QuoteIdentifier(col.Name))
+			b.WriteRune('=')
+			b.WriteString(sqlString)
+			seenOne = true
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	b.WriteString(");")
+	return iohelp.WriteLine(w.wr, b.String())
+}
+
+func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
+	var b strings.Builder
+	b.WriteString("UPDATE ")
+	b.WriteString(sql.QuoteIdentifier(w.tableName))
+	b.WriteString(" ")
+
+	b.WriteString("SET ")
+	seenOne := false
+	_, err := r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		col := w.sch.GetAllCols().TagToCol[tag]
+		if !col.IsPartOfPK {
+			if seenOne {
+				b.WriteRune(',')
+			}
+			sqlString, err := w.sqlString(val)
+			if err != nil {
+				return true, err
+			}
+			b.WriteString(sql.QuoteIdentifier(col.Name))
+			b.WriteRune('=')
+			b.WriteString(sqlString)
+			seenOne = true
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	b.WriteString(" WHERE (")
+	seenOne = false
+	_, err = r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		col := w.sch.GetAllCols().TagToCol[tag]
+		if col.IsPartOfPK {
+			if seenOne {
+				b.WriteString(" AND ")
+			}
+			sqlString, err := w.sqlString(val)
+			if err != nil {
+				return true, err
+			}
+			b.WriteString(sql.QuoteIdentifier(col.Name))
+			b.WriteRune('=')
+			b.WriteString(sqlString)
+			seenOne = true
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	b.WriteString(");")
+	return iohelp.WriteLine(w.wr, b.String())
 }
 
 func (w *SqlExportWriter) dropCreateStatement() string {
