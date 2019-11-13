@@ -129,36 +129,6 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql output reconciles column datatype change" { skip
-
-    dolt checkout -b firstbranch
-    dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
-    dolt add .
-    dolt commit -m "created table"
-
-    dolt checkout -b newbranch
-    dolt table import -c -f -pk=pk -s=`batshelper 1pk5col-ints.schema` test `batshelper 1pk5col-ints.csv`
-    dolt add .
-    dolt commit -m "changed column datatypes"
-
-    # confirm a difference exists
-    run dolt diff --sql newbranch firstbranch
-    [ "$status" -eq 0 ]
-    [[ "$output" != "" ]] || false
-
-    dolt diff --sql newbranch firstbranch > query
-    dolt checkout firstbranch
-    dolt sql < query
-    rm query
-    dolt add test
-    dolt commit -m "Reconciled with newbranch"
-
-    # confirm difference was reconciled
-    run dolt diff --sql newbranch firstbranch
-    [ "$status" -eq 0 ]
-    [[ "$output" = "" ]] || false
-}
-
 @test "diff sql output reconciles column rename" { skip
 
     dolt checkout -b firstbranch
@@ -231,36 +201,6 @@ teardown() {
     dolt schema add-column test c0 int
     dolt add .
     dolt commit -m "dropped column"
-
-    # confirm a difference exists
-    run dolt diff --sql newbranch firstbranch
-    [ "$status" -eq 0 ]
-    [[ "$output" != "" ]] || false
-
-    dolt diff --sql newbranch firstbranch > query
-    dolt checkout firstbranch
-    dolt sql < query
-    rm query
-    dolt add test
-    dolt commit -m "Reconciled with newbranch"
-
-    # confirm difference was reconciled
-    run dolt diff --sql newbranch firstbranch
-    [ "$status" -eq 0 ]
-    [[ "$output" = "" ]] || false
-}
-
-@test "diff sql output reconciles changing primary key of table" { skip
-    skip "Schema diff output does not handle changing primary keys"
-    dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt add test
-    dolt commit -m "created table"
-
-    dolt checkout -b newbranch
-    dolt table create -f -s=`batshelper 1pk5col-ints-diff-pk.schema` test
-    dolt add .
-    dolt commit -m "changed primary key"
 
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
