@@ -18,10 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
-
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/src-d/go-mysql-server/sql"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -107,12 +106,22 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 }
 
 type tableEditor struct {
-	t  *DoltTable
-	ed *types.MapEditor
+	t           *DoltTable
+	ed          *types.MapEditor
+	addedKeys   map[hash.Hash]bool
+	deletedKeys map[hash.Hash]bool
+}
+
+func newTableEditor(t *DoltTable) *tableEditor {
+	return &tableEditor{
+		t:         t,
+		addedKeys: make(map[hash.Hash]bool),
+		deletedKeys: make(map[hash.Hash]bool),
+	}
 }
 
 var _ sql.RowReplacer = (*tableEditor)(nil)
-var _ sql.RowUpdater = (*tableEditor)(nil)
+var _ sql.RowUpdater = (*tableUpdater)(nil)
 var _ sql.RowInserter = (*tableEditor)(nil)
 var _ sql.RowDeleter = (*tableEditor)(nil)
 
@@ -130,9 +139,16 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if err != nil {
 		return errhand.BuildDError("failed to read table").AddCause(err).Build()
 	}
-	if rowExists {
+
+	hash, err := key.Hash(dRow.Format())
+	if err != nil {
+		return err
+	}
+
+	if (rowExists && !te.deletedKeys[hash]) || te.addedKeys[hash] {
 		return errors.New("duplicate primary key given")
 	}
+	te.addedKeys[hash] = true
 
 	if te.ed == nil {
 		te.ed, err = te.t.newMapEditor(ctx)
@@ -164,6 +180,12 @@ func (te *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	if err != nil {
 		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
 	}
+	hash, err := key.Hash(dRow.Format())
+	if err != nil {
+		return err
+	}
+	delete(te.addedKeys, hash)
+	te.deletedKeys[hash] = true
 
 	if te.ed == nil {
 		te.ed, err = te.t.newMapEditor(ctx)
@@ -176,52 +198,85 @@ func (te *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	return nil
 }
 
-func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := SqlRowToDoltRow(te.t.table.Format(), oldRow, te.t.sch)
+// tableUpdater wraps tableEditor to override the close method, necessary to enforce primary key constraints when
+// updates to primary key columns are applied in an arbitrary order
+type tableUpdater struct {
+	t           *DoltTable
+	ed          *types.MapEditor
+	addedKeys   map[hash.Hash]types.LesserValuable
+	removedKeys map[hash.Hash]types.LesserValuable
+}
+
+func (tu *tableUpdater) Close(ctx *sql.Context) error {
+	// For all added keys, check for and report a collision
+	for hash, addedKey := range tu.addedKeys {
+		if _, ok := tu.removedKeys[hash]; !ok {
+			_, rowExists, err := tu.t.table.GetRow(ctx, addedKey.(types.Tuple), tu.t.sch)
+			if err != nil {
+				return errhand.BuildDError("failed to read table").AddCause(err).Build()
+			}
+			if rowExists {
+				return fmt.Errorf("primary key collision: (%v)", addedKey)
+			}
+		}
+	}
+	// For all removed keys, remove the map entries that weren't added elsewhere by other updates
+	for hash, removedKey := range tu.removedKeys {
+		if _, ok := tu.addedKeys[hash]; !ok {
+			tu.ed.Remove(removedKey)
+		}
+	}
+
+	if tu.ed != nil {
+		return tu.t.updateTable(ctx, tu.ed)
+	}
+	return nil
+}
+
+func (tu *tableUpdater) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	dOldRow, err := SqlRowToDoltRow(tu.t.table.Format(), oldRow, tu.t.sch)
 	if err != nil {
 		return err
 	}
-	dNewRow, err := SqlRowToDoltRow(te.t.table.Format(), newRow, te.t.sch)
+	dNewRow, err := SqlRowToDoltRow(tu.t.table.Format(), newRow, tu.t.sch)
 	if err != nil {
 		return err
 	}
 
 	// If the PK is changed then we have to delete the old row first
-	// This is assuming that the new PK is not taken
-	dOldKey := dOldRow.NomsMapKey(te.t.sch)
+	dOldKey := dOldRow.NomsMapKey(tu.t.sch)
 	dOldKeyVal, err := dOldKey.Value(ctx)
 	if err != nil {
 		return err
 	}
-	dNewKey := dNewRow.NomsMapKey(te.t.sch)
+	dNewKey := dNewRow.NomsMapKey(tu.t.sch)
 	dNewKeyVal, err := dNewKey.Value(ctx)
 	if err != nil {
 		return err
 	}
 
-	if te.ed == nil {
-		te.ed, err = te.t.newMapEditor(ctx)
+	if tu.ed == nil {
+		tu.ed, err = tu.t.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
 	if !dOldKeyVal.Equals(dNewKeyVal) {
-		_, rowExists, err := te.t.table.GetRow(ctx, dNewKeyVal.(types.Tuple), te.t.sch)
+		oldHash, err := dOldKeyVal.Hash(dOldRow.Format())
 		if err != nil {
-			return errhand.BuildDError("failed to read table").AddCause(err).Build()
+			return err
 		}
-		if rowExists {
-			newRowAsStrings := make([]string, len(newRow))
-			for i, val := range newRow {
-				newRowAsStrings[i] = fmt.Sprintf("%v", val)
-			}
-			return fmt.Errorf("primary key collision: (%v)", strings.Join(newRowAsStrings, ", "))
+		newHash, err := dNewKeyVal.Hash(dNewRow.Format())
+		if err != nil {
+			return err
 		}
-		te.ed.Remove(dOldKey)
+
+		tu.addedKeys[newHash] = dNewKeyVal
+		tu.removedKeys[oldHash] = dOldKey
 	}
 
-	te.ed.Set(dNewKey, dNewRow.NomsMapValue(te.t.sch))
+	tu.ed.Set(dNewKey, dNewRow.NomsMapValue(tu.t.sch))
 	return nil
 }
 
@@ -233,26 +288,22 @@ func (te *tableEditor) Close(ctx *sql.Context) error {
 }
 
 func (t *DoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
-	return &tableEditor{
-		t: t,
-	}
+	return newTableEditor(t)
 }
 
 func (t *DoltTable) Deleter(*sql.Context) sql.RowDeleter {
-	return &tableEditor{
-		t: t,
-	}
+	return newTableEditor(t)
 }
 
 func (t *DoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	return &tableEditor{
-		t: t,
-	}
+	return newTableEditor(t)
 }
 
 func (t *DoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return &tableEditor{
-		t: t,
+	return &tableUpdater{
+		t:           t,
+		addedKeys:   make(map[hash.Hash]types.LesserValuable),
+		removedKeys: make(map[hash.Hash]types.LesserValuable),
 	}
 }
 
