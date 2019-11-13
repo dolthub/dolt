@@ -145,7 +145,6 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	return nil
 }
 
-
 func (t *DoltTable) newMapEditor(ctx context.Context) (*types.MapEditor, error) {
 	typesMap, err := t.table.GetRowData(ctx)
 	if err != nil {
