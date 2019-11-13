@@ -166,7 +166,7 @@ func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 	b.WriteString(sql.QuoteIdentifier(w.tableName))
 	b.WriteString(" ")
 
-	b.WriteString("WHERE (")
+	b.WriteString(" WHERE (")
 	seenOne := false
 	_, err := r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col := w.sch.GetAllCols().TagToCol[tag]
