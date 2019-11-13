@@ -22,8 +22,7 @@ var initialReadme = "This is a repository level README. Either edit it, add it, 
 var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file."
 
 type Notes struct {
-	Readme  string
-	License string
+	key map[string]string
 
 	fs filesys.ReadWriteFS
 }
@@ -50,15 +49,22 @@ func LoadNotes(fs filesys.ReadWriteFS) (*Notes, error) {
 	}
 
 	var notes Notes
-	notes.Readme = string(readmeData)
-	notes.License = string(licenseData)
+	notesMap := map[string]string{
+		"readme":  string(readmeData),
+		"license": string(licenseData),
+	}
+	notes.key = notesMap
 	notes.fs = fs
 
 	return &notes, nil
 }
 
 func CreateNotes(fs filesys.ReadWriteFS) (*Notes, error) {
-	nts := &Notes{initialReadme, initialLicense, fs}
+	notesMap := map[string]string{
+		"readme":  initialReadme,
+		"license": initialLicense,
+	}
+	nts := &Notes{notesMap, fs}
 	err := nts.Save()
 	if err != nil {
 		return nil, err
@@ -70,11 +76,11 @@ func (nts *Notes) Save() error {
 	readmePath := getReadmeFile()
 	licensePath := getLicenseFile()
 
-	err := nts.fs.WriteFile(readmePath, []byte(nts.Readme))
+	err := nts.fs.WriteFile(readmePath, []byte(nts.key["readme"]))
 	if err != nil {
 		return err
 	}
-	err = nts.fs.WriteFile(licensePath, []byte(nts.License))
+	err = nts.fs.WriteFile(licensePath, []byte(nts.key["license"]))
 	if err != nil {
 		return err
 	}
