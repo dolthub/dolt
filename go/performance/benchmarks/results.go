@@ -1,0 +1,193 @@
+// Copyright 2019 Liquidata, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/types"
+)
+
+type result struct {
+	name    string
+	format  string
+	rows    int
+	columns int
+	br      testing.BenchmarkResult
+}
+
+// RDSImpl is a Dataset containing results of benchmarking
+type RSImpl struct {
+	// Schema defines the structure of the Dataset
+	Schema *SeedSchema
+
+	// Results are results of benchmarking
+	Results []result
+
+	// TableName is the name of the results table
+	TableName string
+
+	wc io.Writer
+}
+
+// NewRSImpl creates a new RSImpl
+func NewRSImpl(wc io.Writer, sch *SeedSchema, results []result, tableName string) *RSImpl {
+	return &RSImpl{
+		Schema:    sch,
+		Results:   results,
+		TableName: tableName,
+		wc: wc,
+	}
+}
+
+//// String returns a string of the dataset formatted based on the RSImpl's Schema
+//func (rds *RSImpl) String() string {
+//	return generateResultsData(rds.Results, rds.Schema.Columns, rds.TableName, rds.Schema.FileFormatExt)
+//}
+
+//// Bytes returns a byte slice of the dataset formatted based on the RSImpl's Schema
+//func (rds *RSImpl) Bytes() []byte {
+//	str := generateResultsData(rds.Results, rds.Schema.Columns, rds.TableName, rds.Schema.FileFormatExt)
+//	return []byte(str)
+//}
+
+func (rds *RSImpl) GenerateData() {
+	generateResultsData(rds.wc, rds.Results, rds.Schema.Columns, rds.TableName, rds.Schema.FileFormatExt)
+}
+
+// Change returns a DataSet that is a mutation of this Dataset by the given percentage
+func (rds *RSImpl) Change(pct float32) Dataset {
+	// TODO
+	return &RSImpl{}
+}
+
+func generateResultsData(wc io.Writer, results []result, cols []*SeedColumn, tableName, format string) {
+	switch format {
+	case csvExt:
+		generateCSVResults(wc, results, cols, tableName, format)
+	default:
+		log.Fatalf("cannot generate results data, file format %s unsupported \n", format)
+	}
+}
+
+func generateCSVResults(wc io.Writer, results []result, cols []*SeedColumn, tableName, format string) {
+	//strs := make([]string, len(results)+1)
+	//header := makeHeaderStr(cols, tableName, format)
+
+	header := makeHeaderStr(cols, tableName, format)
+	//strs[0] = header
+	_, err := wc.Write([]byte(header + "\n"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	//strs[0] = header
+
+	var prevRow []string
+	for i, result := range results {
+		row := getResultsRow(prevRow, result, cols, format)
+
+		//strs[i+1] = formatRow(row, cols, tableName, format)
+		_, err := wc.Write([]byte(formatRow(row, cols, i, len(results) - 1, tableName, format)))
+		if err != nil {
+			log.Fatal(err)
+		}
+		prevRow = row[:]
+	}
+
+	//dataStr := formatDataStr(strs, cols, tableName, format)
+	//return dataStr
+}
+
+func getResultsRow(prevRow []string, res result, cols []*SeedColumn, format string) []string {
+	row := make([]string, len(cols))
+	// set id
+	if len(cols) > 0 && prevRow != nil {
+		row[0] = genNomsTypeValueIncrement(prevRow, 0, cols[0], format)
+	} else {
+		row[0] = "1"
+	}
+	// set name
+	row[1] = res.name
+	// set format
+	row[2] = res.format
+	// set rows
+	row[3] = fmt.Sprintf("%d", res.rows)
+	// set cols
+	row[4] = fmt.Sprintf("%d", res.columns)
+	// set iterations
+	row[5] = fmt.Sprintf("%d", res.br.N)
+	// set time
+	row[6] = res.br.T.String()
+	// set bytes
+	row[7] = fmt.Sprintf("%v", res.br.Bytes)
+	// set mem_allocs
+	row[8] = fmt.Sprintf("%v", res.br.MemAllocs)
+	// set mem_bytes
+	row[9] = fmt.Sprintf("%v", res.br.MemBytes)
+	// set alloced_bytes_per_op
+	row[10] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
+	//set allocs_per_op
+	row[11] = fmt.Sprintf("%v", res.br.AllocsPerOp())
+	return row
+}
+
+func genResultsCols() []*SeedColumn {
+	return []*SeedColumn{
+		NewSeedColumn("id", true, types.IntKind, increment),
+		NewSeedColumn("name", false, types.StringKind, supplied),
+		NewSeedColumn("format", false, types.StringKind, supplied),
+		NewSeedColumn("rows", false, types.StringKind, supplied),
+		NewSeedColumn("columns", false, types.StringKind, supplied),
+		NewSeedColumn("iterations", false, types.StringKind, supplied),
+		NewSeedColumn("time", false, types.TimestampKind, supplied),
+		NewSeedColumn("bytes", false, types.IntKind, supplied),
+		NewSeedColumn("mem_allocs", false, types.IntKind, supplied),
+		NewSeedColumn("mem_bytes", false, types.IntKind, supplied),
+		NewSeedColumn("alloced_bytes_per_op", false, types.StringKind, supplied),
+		NewSeedColumn("allocs_per_op", false, types.StringKind, supplied),
+	}
+}
+
+func serializeResults(results []result, path, tableName, format string) error {
+	var sch *SeedSchema
+	switch format {
+	case csvExt:
+		sch = NewSeedSchema(len(results), genResultsCols(), csvExt)
+	default:
+		log.Fatalf("cannot serialize results, unsupported file format %s \n", format)
+	}
+	now := time.Now()
+	fs := filesys.LocalFS
+	resultsFile := filepath.Join(path, fmt.Sprintf("benchmark_results-%04d-%02d-%02d%s", now.Year(), now.Month(), now.Day(), format))
+	wc, err := fs.OpenForWrite(resultsFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer wc.Close()
+
+	ds := NewRSImpl(wc, sch, results, tableName)
+	ds.GenerateData()
+
+	return nil
+
+	//return fs.WriteFile(resultsFile, ds.Bytes())
+}
