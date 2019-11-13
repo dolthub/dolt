@@ -129,7 +129,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql output reconciles column rename" { skip
+@test "diff sql output reconciles column rename" {
 
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test

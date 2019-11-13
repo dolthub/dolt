@@ -441,36 +441,42 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 				cli.Println("ALTER TABLE", tableName, "DROP", sql.QuoteIdentifier(dff.Old.Name), ";")
 			}
 		case diff.SchDiffColModified:
-			// changed in sch2
-			oldType, err := dtypes.NomsKindToSqlTypeString(dff.Old.Kind)
-			if err != nil {
-				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
+			if dArgs.diffOutput == SQLDiffOutput {
+				oldColName := sql.QuoteIdentifier(dff.Old.Name)
+				newColName := sql.QuoteIdentifier(dff.New.Name)
+				cli.Println("ALTER TABLE", tableName, "RENAME COLUMN", oldColName, "TO", newColName, ";")
+			} else {
+				// changed in sch2
+				oldType, err := dtypes.NomsKindToSqlTypeString(dff.Old.Kind)
+				if err != nil {
+					return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
+				}
+				newType, err := dtypes.NomsKindToSqlTypeString(dff.New.Kind)
+				if err != nil {
+					return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
+				}
+
+				n0, t0 := dff.Old.Name, oldType
+				n1, t1 := dff.New.Name, newType
+
+				nameLen := 0
+				typeLen := 0
+
+				if n0 != n1 {
+					n0 = color.YellowString(n0)
+					n1 = color.YellowString(n1)
+					nameLen = mathutil.Max(len(n0), len(n1))
+				}
+
+				if t0 != t1 {
+					t0 = color.YellowString(t0)
+					t1 = color.YellowString(t1)
+					typeLen = mathutil.Max(len(t0), len(t1))
+				}
+
+				cli.Println("< " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
+				cli.Println("> " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
 			}
-			newType, err := dtypes.NomsKindToSqlTypeString(dff.New.Kind)
-			if err != nil {
-				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
-			}
-
-			n0, t0 := dff.Old.Name, oldType
-			n1, t1 := dff.New.Name, newType
-
-			nameLen := 0
-			typeLen := 0
-
-			if n0 != n1 {
-				n0 = color.YellowString(n0)
-				n1 = color.YellowString(n1)
-				nameLen = mathutil.Max(len(n0), len(n1))
-			}
-
-			if t0 != t1 {
-				t0 = color.YellowString(t0)
-				t1 = color.YellowString(t1)
-				typeLen = mathutil.Max(len(t0), len(t1))
-			}
-
-			cli.Println("< " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n0, t0, *dff.Old))
-			cli.Println("> " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
 		}
 	}
 
