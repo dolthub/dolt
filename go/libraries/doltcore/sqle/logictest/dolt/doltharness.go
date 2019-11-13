@@ -57,7 +57,10 @@ func (h *DoltHarness) Init() error {
 
 	root = resetEnv(root)
 	h.engine = sqlNewEngine(root)
+<<<<<<< HEAD
 
+=======
+>>>>>>> zachmu/sql-indexes2
 	return nil
 }
 
