@@ -166,7 +166,7 @@ func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 	b.WriteString(sql.QuoteIdentifier(w.tableName))
 	b.WriteString(" ")
 
-	b.WriteString(" WHERE ( ")
+	b.WriteString("WHERE (")
 	seenOne := false
 	_, err := r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col := w.sch.GetAllCols().TagToCol[tag]
@@ -178,7 +178,7 @@ func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(col.Name)
+			b.WriteString(sql.QuoteIdentifier(col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 			seenOne = true
@@ -212,7 +212,7 @@ func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(col.Name)
+			b.WriteString(sql.QuoteIdentifier(col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 			seenOne = true
@@ -224,7 +224,7 @@ func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 		return err
 	}
 
-	b.WriteString(" WHERE ( ")
+	b.WriteString(" WHERE (")
 	seenOne = false
 	_, err = r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
 		col := w.sch.GetAllCols().TagToCol[tag]
@@ -236,7 +236,7 @@ func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
 			if err != nil {
 				return true, err
 			}
-			b.WriteString(col.Name)
+			b.WriteString(sql.QuoteIdentifier(col.Name))
 			b.WriteRune('=')
 			b.WriteString(sqlString)
 			seenOne = true
