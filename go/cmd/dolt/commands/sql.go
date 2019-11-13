@@ -52,7 +52,7 @@ import (
 )
 
 // An environment variable to set to get indexed join behavior, currently experimental
-const UseIndexedJoinsEnv = "DOLT_USE_INDEXED_JOINS"
+const UseIndexesEnv = "DOLT_USE_INDEXES"
 
 var sqlShortDesc = "Runs a SQL query"
 var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
@@ -499,10 +499,13 @@ func sqlNewEngine(query string, root *doltdb.RootValue, dEnv *env.DoltEnv) (*dol
 	engine.AddDatabase(db)
 	ctx := sql.NewEmptyContext()
 
-	engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
-	err := engine.Init()
-	if err != nil {
-		return nil, nil, nil, err
+	// SQL engine still gives buggy results with indexes on
+	if _, ok := os.LookupEnv(UseIndexesEnv); ok {
+		engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
+		err := engine.Init()
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
 	sqlSch, rowIter, err := engine.Query(ctx, query)
