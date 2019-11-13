@@ -44,7 +44,6 @@ type test struct {
 	expectedOutput string
 }
 
-
 func TestWriteRow(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
@@ -131,10 +130,9 @@ func TestDeleteRow(t *testing.T) {
 
 	tests := []test{
 		{
-			name:
-			"negative values and columns with spaces",
-			rows: rs(dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42))),
-			sch:  trickySch,
+			name:           "negative values and columns with spaces",
+			rows:           rs(dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42))),
+			sch:            trickySch,
 			expectedOutput: "DELETE FROM `tricky` WHERE (`a name with spaces`=-42);" + "\n",
 		},
 	}
@@ -162,15 +160,15 @@ func TestUpdateRow(t *testing.T) {
 
 	tests := []test{
 		{
-			name: "simple row",
-			rows: rs(dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie"))),
-			sch:  dtestutils.TypedSchema,
+			name:           "simple row",
+			rows:           rs(dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie"))),
+			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`=\"some guy\",`age`=100,`is_married`=FALSE,`title`=\"normie\" WHERE (`id`=\"00000000-0000-0000-0000-000000000000\");" + "\n",
 		},
 		{
-			name: "embedded quotes",
-			rows: rs(dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie"))),
-			sch:  dtestutils.TypedSchema,
+			name:           "embedded quotes",
+			rows:           rs(dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie"))),
+			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`=\"It's \\\"Mister Perfect\\\" to you\",`age`=100,`is_married`=FALSE,`title`=\"normie\" WHERE (`id`=\"00000000-0000-0000-0000-000000000000\");" + "\n",
 		},
 		{
@@ -183,9 +181,9 @@ func TestUpdateRow(t *testing.T) {
 				"UPDATE `people` SET `name`=\"guy personson\",`age`=0,`is_married`=TRUE,`title`=\"officially a person\" WHERE (`id`=\"00000000-0000-0000-0000-000000000000\");" + "\n",
 		},
 		{
-			name: "null values",
-			rows: rs(dtestutils.NewTypedRow(id, "some guy", 100, false, nil)),
-			sch:  dtestutils.TypedSchema,
+			name:           "null values",
+			rows:           rs(dtestutils.NewTypedRow(id, "some guy", 100, false, nil)),
+			sch:            dtestutils.TypedSchema,
 			expectedOutput: "UPDATE `people` SET `name`=\"some guy\",`age`=100,`is_married`=FALSE,`title`=NULL WHERE (`id`=\"00000000-0000-0000-0000-000000000000\");" + "\n",
 		},
 	}
@@ -196,9 +194,9 @@ func TestUpdateRow(t *testing.T) {
 	)
 
 	tests = append(tests, test{
-		name: "negative values and columns with spaces",
-		rows: rs(dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42))),
-		sch:  trickySch,
+		name:           "negative values and columns with spaces",
+		rows:           rs(dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42))),
+		sch:            trickySch,
 		expectedOutput: "UPDATE `people` SET `a name with spaces`=-3.14 WHERE (`anotherColumn`=-42);" + "\n",
 	})
 

@@ -48,7 +48,7 @@ import (
 )
 
 type diffOutput int
-type diffPart 	int
+type diffPart int
 
 const (
 	SchemaOnlyDiff diffPart = 1 // 0b0001
@@ -95,8 +95,6 @@ var diffSynopsis = []string{
 	"[options] [options] [<commit>] [<tables>...]",
 	"[options] [options] <commit> <commit> [<tables>...]",
 }
-
-
 
 type diffArgs struct {
 	diffParts  diffPart
