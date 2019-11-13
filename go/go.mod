@@ -42,6 +42,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b
+	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.3.0
 	github.com/rivo/uniseg v0.0.0-20190513083848-b9f5b9457d44
@@ -63,7 +64,7 @@ require (
 
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191108165608-d1ae6a2391d0
+replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191113003141-4c6a7a752f04
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20191101223525-ff102131149a
 
