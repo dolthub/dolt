@@ -116,17 +116,17 @@ var _ sql.RowUpdater = (*tableEditor)(nil)
 var _ sql.RowInserter = (*tableEditor)(nil)
 var _ sql.RowDeleter = (*tableEditor)(nil)
 
-func (r *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := SqlRowToDoltRow(r.t.table.Format(), sqlRow, r.t.sch)
+func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	dRow, err := SqlRowToDoltRow(te.t.table.Format(), sqlRow, te.t.sch)
 	if err != nil {
 		return err
 	}
 
-	key, err := dRow.NomsMapKey(r.t.sch).Value(ctx)
+	key, err := dRow.NomsMapKey(te.t.sch).Value(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
 	}
-	_, rowExists, err := r.t.table.GetRow(ctx, key.(types.Tuple), r.t.sch)
+	_, rowExists, err := te.t.table.GetRow(ctx, key.(types.Tuple), te.t.sch)
 	if err != nil {
 		return errhand.BuildDError("failed to read table").AddCause(err).Build()
 	}
@@ -134,14 +134,14 @@ func (r *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return errors.New("duplicate primary key given")
 	}
 
-	if r.ed == nil {
-		r.ed, err = r.t.newMapEditor(ctx)
+	if te.ed == nil {
+		te.ed, err = te.t.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	r.ed = r.ed.Set(key, dRow.NomsMapValue(r.t.sch))
+	te.ed = te.ed.Set(key, dRow.NomsMapValue(te.t.sch))
 	return nil
 }
 
@@ -155,60 +155,60 @@ func (t *DoltTable) newMapEditor(ctx context.Context) (*types.MapEditor, error) 
 	return typesMap.Edit(), nil
 }
 
-func (r *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := SqlRowToDoltRow(r.t.table.Format(), sqlRow, r.t.sch)
+func (te *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+	dRow, err := SqlRowToDoltRow(te.t.table.Format(), sqlRow, te.t.sch)
 	if err != nil {
 		return err
 	}
 
-	key, err := dRow.NomsMapKey(r.t.sch).Value(ctx)
+	key, err := dRow.NomsMapKey(te.t.sch).Value(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
 	}
 
-	if r.ed == nil {
-		r.ed, err = r.t.newMapEditor(ctx)
+	if te.ed == nil {
+		te.ed, err = te.t.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	r.ed = r.ed.Remove(key)
+	te.ed = te.ed.Remove(key)
 	return nil
 }
 
-func (u *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := SqlRowToDoltRow(u.t.table.Format(), oldRow, u.t.sch)
+func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	dOldRow, err := SqlRowToDoltRow(te.t.table.Format(), oldRow, te.t.sch)
 	if err != nil {
 		return err
 	}
-	dNewRow, err := SqlRowToDoltRow(u.t.table.Format(), newRow, u.t.sch)
+	dNewRow, err := SqlRowToDoltRow(te.t.table.Format(), newRow, te.t.sch)
 	if err != nil {
 		return err
 	}
 
 	// If the PK is changed then we have to delete the old row first
 	// This is assuming that the new PK is not taken
-	dOldKey := dOldRow.NomsMapKey(u.t.sch)
+	dOldKey := dOldRow.NomsMapKey(te.t.sch)
 	dOldKeyVal, err := dOldKey.Value(ctx)
 	if err != nil {
 		return err
 	}
-	dNewKey := dNewRow.NomsMapKey(u.t.sch)
+	dNewKey := dNewRow.NomsMapKey(te.t.sch)
 	dNewKeyVal, err := dNewKey.Value(ctx)
 	if err != nil {
 		return err
 	}
 
-	if u.ed == nil {
-		u.ed, err = u.t.newMapEditor(ctx)
+	if te.ed == nil {
+		te.ed, err = te.t.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
 	if !dOldKeyVal.Equals(dNewKeyVal) {
-		_, rowExists, err := u.t.table.GetRow(ctx, dNewKeyVal.(types.Tuple), u.t.sch)
+		_, rowExists, err := te.t.table.GetRow(ctx, dNewKeyVal.(types.Tuple), te.t.sch)
 		if err != nil {
 			return errhand.BuildDError("failed to read table").AddCause(err).Build()
 		}
@@ -219,17 +219,16 @@ func (u *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) e
 			}
 			return fmt.Errorf("primary key collision: (%v)", strings.Join(newRowAsStrings, ", "))
 		}
-		u.ed.Remove(dOldKey)
-	} else {
-		u.ed.Set(dOldKey, dNewRow.NomsMapValue(u.t.sch))
+		te.ed.Remove(dOldKey)
 	}
 
+	te.ed.Set(dNewKey, dNewRow.NomsMapValue(te.t.sch))
 	return nil
 }
 
-func (r *tableEditor) Close(ctx *sql.Context) error {
-	if r.ed != nil {
-		return r.t.updateTable(ctx, r.ed)
+func (te *tableEditor) Close(ctx *sql.Context) error {
+	if te.ed != nil {
+		return te.t.updateTable(ctx, te.ed)
 	}
 	return nil
 }
