@@ -33,7 +33,7 @@ teardown() {
     dolt add test
     dolt commit -m "Reconciled with newbranch"
 
-    # confirm difference was reconciled
+    # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -63,7 +63,7 @@ teardown() {
     dolt add test
     dolt commit -m "Reconciled with newbranch"
 
-    # confirm difference was reconciled
+    # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -93,7 +93,7 @@ teardown() {
     dolt add test
     dolt commit -m "Reconciled with newbranch"
 
-    # confirm difference was reconciled
+    # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -123,7 +123,7 @@ teardown() {
     dolt add test
     dolt commit -m "Reconciled with newbranch"
 
-    # confirm difference was reconciled
+    # confirm that both branches have the same content
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -158,7 +158,7 @@ teardown() {
         dolt add test
         dolt commit -m "Reconciled with newbranch"
 
-        # confirm difference was reconciled
+        # confirm that both branches have the same content
         run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
         [[ "$output" = "" ]] || false
@@ -196,7 +196,7 @@ teardown() {
         dolt add test
         dolt commit -m "Reconciled with newbranch"
 
-        # confirm difference was reconciled
+        # confirm that both branches have the same content
         run dolt diff --sql newbranch firstbranch
         [ "$status" -eq 0 ]
         [[ "$output" = "" ]] || false

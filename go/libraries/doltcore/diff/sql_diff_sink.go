@@ -86,6 +86,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 			case DiffModifiedOld:
 				return nil
 			case DiffModifiedNew:
+				// TODO: minimize update statement to modified rows
 				return sds.sw.WriteUpdateRow(context.TODO(), r)
 			}
 			// Treat the diff indicator string as a diff of the same type
