@@ -48,15 +48,18 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+type diffOutput int
+type diffPart int
+
 const (
-	SchemaOnlyDiff = 1 // 0b0001
-	DataOnlyDiff   = 2 // 0b0010
-	Summary        = 4 // 0b0100
+	SchemaOnlyDiff diffPart = 1 // 0b0001
+	DataOnlyDiff   diffPart = 2 // 0b0010
+	Summary        diffPart = 4 // 0b0100
 
 	SchemaAndDataDiff = SchemaOnlyDiff | DataOnlyDiff
 
-	ColorDiffOutput = 1
-	SQLDiffOutput   = 2
+	TabularDiffOutput diffOutput = 1
+	SQLDiffOutput     diffOutput = 2
 
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
@@ -95,8 +98,8 @@ var diffSynopsis = []string{
 }
 
 type diffArgs struct {
-	diffParts  int
-	diffOutput int
+	diffParts  diffPart
+	diffOutput diffOutput
 	limit      int
 	where      string
 }
@@ -106,7 +109,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
 	ap.SupportsFlag(SummaryFlag, "", "Show summary of data changes")
-	ap.SupportsFlag(SQLFlag, "q", "Output changes as an SQL modification")
+	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of INSERT/ UPDATE / DELETE statements")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See dolt diff --help for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
@@ -119,7 +122,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 		diffParts = SchemaOnlyDiff
 	}
 
-	diffOutput := ColorDiffOutput
+	diffOutput := TabularDiffOutput
 	if apr.Contains(SQLFlag) {
 		diffOutput = SQLDiffOutput
 	}
@@ -304,7 +307,7 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 			}
 		}
 
-		if dArgs.diffOutput&SQLDiffOutput == 0 {
+		if dArgs.diffOutput == TabularDiffOutput {
 			printTableDiffSummary(tblName, tbl1, tbl2)
 		}
 
@@ -641,7 +644,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 	}
 
 	var sink DiffSink
-	if dArgs.diffOutput&ColorDiffOutput != 0 {
+	if dArgs.diffOutput == TabularDiffOutput {
 		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, numHeaderRows)
 	} else {
 		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, tblName)
@@ -664,7 +667,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		return verr
 	}
 
-	if dArgs.diffOutput&SQLDiffOutput == 0 {
+	if dArgs.diffOutput != SQLDiffOutput {
 		if schemasEqual {
 			schRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), unionSch, newColNames)
 
@@ -730,7 +733,7 @@ func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitte
 		pipeline.NewNamedTransform("split_diffs", ds.SplitDiffIntoOldAndNew),
 	)
 
-	if dArgs.diffOutput&ColorDiffOutput != 0 {
+	if dArgs.diffOutput == TabularDiffOutput {
 		nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
 		fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
 		transforms.AppendTransforms(
@@ -774,7 +777,7 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 
 	var unionSch schema.Schema
 	var err error
-	if dArgs.diffOutput&SQLDiffOutput == 0 {
+	if dArgs.diffOutput == TabularDiffOutput{
 		dumbNewSch, err := dumbDownSchema(newSch)
 
 		if err != nil {
