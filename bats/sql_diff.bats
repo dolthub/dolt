@@ -220,15 +220,16 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql reconciles CREATE TABLE" { skip
+@test "diff sql reconciles CREATE TABLE" {
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    # dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt add .
     dolt commit -m "created new table"
 
     # confirm a difference exists
+    dolt diff --sql newbranch firstbranch
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" != "" ]] || false
@@ -241,12 +242,13 @@ teardown() {
     dolt commit -m "Reconciled with newbranch"
 
     # confirm difference was reconciled
+    dolt diff --sql newbranch firstbranch
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql reconciles DROP TABLE" { skip
+@test "diff sql reconciles DROP TABLE" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'

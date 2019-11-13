@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
+	"strings"
 
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -259,11 +260,51 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 		return errhand.BuildDError("error: unable to read tables").AddCause(err).Build()
 	}
 
-	if dArgs.diffOutput&SQLDiffOutput != 0 {
+	if dArgs.diffOutput == SQLDiffOutput {
 		tblDiff, err := tableDiffs(ctx, r1, r2)
 
 		if err != nil {
 			return errhand.BuildDError("error: unable to read tables").AddCause(err).Build()
+		}
+
+		// drop tables
+		for _, tblName := range tblDiff.drops {
+			cli.Println("DROP TABLE", sql.QuoteIdentifier(tblName))
+		}
+
+		// add tables
+		for _, tblName := range tblDiff.adds {
+			if tbl, ok, err := r1.GetTable(ctx, tblName); err != nil {
+				return errhand.BuildDError("error: unable to write SQL diff output for new table").AddCause(err).Build()
+			} else if !ok {
+				continue
+			} else {
+				if sch, err := tbl.GetSchema(ctx); err != nil {
+					return errhand.BuildDError("error unable to get schema for table " + tblName).AddCause(err).Build()
+				} else {
+					var b strings.Builder
+					b.WriteString("CREATE TABLE")
+					b.WriteString(sql.QuoteIdentifier(tblName))
+					b.WriteString("(\n")
+					for _, col := range sch.GetAllCols().GetColumns() {
+						b.WriteString(sql.FmtCol(4, 0, 0, col))
+						b.WriteString(",\n")
+					}
+					seenOne := false
+					b.WriteString("\tPRIMARY KEY (")
+					for _, col := range sch.GetAllCols().GetColumns() {
+						if seenOne {
+							b.WriteString(",")
+						}
+						if col.IsPartOfPK {
+							b.WriteString(sql.QuoteIdentifier(col.Name))
+						}
+					}
+					b.WriteString(")")
+					b.WriteString("\n  );")
+					cli.Println(b.String())
+				}
+			}
 		}
 
 		tblNames = tblDiff.same
@@ -520,13 +561,13 @@ func tableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, erro
 		return hashToName, hashes, nil
 	}
 
-	hashToName1, tblHashes1, err := hashToName(ctx, r1)
+	hashToOldName, oldTblHashes, err := hashToName(ctx, r2)
 
 	if err != nil {
 		return nil, err
 	}
 
-	hashToName2, tblHashes2, err := hashToName(ctx, r2)
+	hashToNewName, newTblHashes, err := hashToName(ctx, r1)
 
 	if err != nil {
 		return nil, err
@@ -534,41 +575,41 @@ func tableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, erro
 
 	renames := make(map[string]string)
 	same := make([]string, 0)
-	for _, h1 := range tblHashes1 {
-		for _, h2 := range tblHashes2 {
-			if hashToName1[h1] == hashToName2[h2] {
+	for _, newHash := range newTblHashes {
+		for _, oldHash := range oldTblHashes {
+			if hashToNewName[newHash] == hashToOldName[oldHash] {
 				// assume it's the same table
 				// DROP TABLE, ADD TABLE with the same name will
 				// be interpreted as a schema change for the table
-				same = append(same, hashToName1[h1])
+				same = append(same, hashToNewName[newHash])
 				// mark names as consumed
-				hashToName1[h1] = ""
-				hashToName2[h2] = ""
+				hashToNewName[newHash] = ""
+				hashToOldName[oldHash] = ""
 				break
 			}
 			// This only works if tables are not changed. Renaming
 			// tables with changes will result in a DROP and ADD
-			if h1.Equal(h2) && hashToName1[h1] != hashToName2[h2] {
-				renames[hashToName1[h1]] = hashToName2[h2]
+			if newHash.Equal(oldHash) && hashToNewName[newHash] != hashToOldName[oldHash] {
+				renames[hashToNewName[newHash]] = hashToOldName[oldHash]
 				// mark names as consumed
-				hashToName1[h1] = ""
-				hashToName2[h2] = ""
+				hashToNewName[newHash] = ""
+				hashToOldName[oldHash] = ""
 				break
 			}
 		}
 	}
 
 	drops := make([]string, 0)
-	for _, h1 := range tblHashes1 {
-		if hashToName1[h1] != "" {
-			drops = append(drops, hashToName1[h1])
+	for _, oldHash := range oldTblHashes {
+		if hashToOldName[oldHash] != "" {
+			drops = append(drops, hashToOldName[oldHash])
 		}
 	}
 
 	adds := make([]string, 0)
-	for _, h2 := range tblHashes2 {
-		if hashToName2[h2] != "" {
-			adds = append(adds, hashToName2[h2])
+	for _, newHash := range newTblHashes {
+		if hashToNewName[newHash] != "" {
+			adds = append(adds, hashToNewName[newHash])
 		}
 	}
 
