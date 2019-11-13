@@ -44,7 +44,7 @@ func (h *DoltHarness) EngineStr() string {
 	return "mysql"
 }
 
-func (h *DoltHarness) Init() {
+func (h *DoltHarness) Init() error {
 	dEnv := env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB)
 	if !dEnv.HasDoltDir() {
 		panic("Current directory must be a valid dolt repository")
@@ -52,11 +52,13 @@ func (h *DoltHarness) Init() {
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 	if verr != nil {
-		panic(verr)
+		return verr
 	}
 
 	root = resetEnv(root)
 	h.engine = sqlNewEngine(root)
+
+	return nil
 }
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {

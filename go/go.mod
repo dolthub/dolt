@@ -36,7 +36,7 @@ require (
 	github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20191028183537-58c3a6e4306d
 	github.com/liquidata-inc/ishell v0.0.0-20190514193646-693241f1f2a0
 	github.com/liquidata-inc/mmap-go v1.0.3
-	github.com/liquidata-inc/sqllogictest/go v0.0.0-20191018231025-c428619832c3
+	github.com/liquidata-inc/sqllogictest/go v0.0.0-20191113180533-029ff69a9a21
 	github.com/mattn/go-isatty v0.0.8
 	github.com/mattn/go-runewidth v0.0.4
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
@@ -63,7 +63,7 @@ require (
 
 replace github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
 
-replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191102000214-fa72192f51a9
+replace github.com/src-d/go-mysql-server => github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191113181502-9b6ae60379a4
 
 replace vitess.io/vitess => github.com/liquidata-inc/vitess v0.0.0-20191101223525-ff102131149a
 
