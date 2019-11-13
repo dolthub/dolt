@@ -18,13 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/hash"
-	"github.com/src-d/go-mysql-server/sql"
 	"io"
+
+	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -114,8 +115,8 @@ type tableEditor struct {
 
 func newTableEditor(t *DoltTable) *tableEditor {
 	return &tableEditor{
-		t:         t,
-		addedKeys: make(map[hash.Hash]bool),
+		t:           t,
+		addedKeys:   make(map[hash.Hash]bool),
 		deletedKeys: make(map[hash.Hash]bool),
 	}
 }
