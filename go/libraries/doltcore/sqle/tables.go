@@ -33,6 +33,7 @@ var _ sql.Table = (*DoltTable)(nil)
 var _ sql.UpdatableTable = (*DoltTable)(nil)
 var _ sql.DeletableTable = (*DoltTable)(nil)
 var _ sql.InsertableTable = (*DoltTable)(nil)
+var _ sql.ReplaceableTable = (*DoltTable)(nil)
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
@@ -105,47 +106,27 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 	return newRowIterator(t, ctx)
 }
 
-type inserter struct {
+type tableEditor struct {
 	t  *DoltTable
 	ed *types.MapEditor
 }
 
-var _ sql.RowInserter = (*inserter)(nil)
+var _ sql.RowReplacer = (*tableEditor)(nil)
+var _ sql.RowUpdater = (*tableEditor)(nil)
+var _ sql.RowInserter = (*tableEditor)(nil)
+var _ sql.RowDeleter = (*tableEditor)(nil)
 
-func (i *inserter) init(ctx context.Context) error {
-	if i.ed != nil {
-		return nil
-	}
-
-	var err error
-	i.ed, err = i.t.newMapEditor(ctx)
+func (r *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	dRow, err := SqlRowToDoltRow(r.t.table.Format(), sqlRow, r.t.sch)
 	if err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (d *DoltTable) newMapEditor(ctx context.Context) (*types.MapEditor, error) {
-	typesMap, err := d.table.GetRowData(ctx)
-	if err != nil {
-		return nil, errhand.BuildDError("failed to get row data.").AddCause(err).Build()
-	}
-
-	return typesMap.Edit(), nil
-}
-
-func (i *inserter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := SqlRowToDoltRow(i.t.table.Format(), sqlRow, i.t.sch)
-	if err != nil {
-		return err
-	}
-
-	key, err := dRow.NomsMapKey(i.t.sch).Value(ctx)
+	key, err := dRow.NomsMapKey(r.t.sch).Value(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
 	}
-	_, rowExists, err := i.t.table.GetRow(ctx, key.(types.Tuple), i.t.sch)
+	_, rowExists, err := r.t.table.GetRow(ctx, key.(types.Tuple), r.t.sch)
 	if err != nil {
 		return errhand.BuildDError("failed to read table").AddCause(err).Build()
 	}
@@ -153,78 +134,50 @@ func (i *inserter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return errors.New("duplicate primary key given")
 	}
 
-	if err = i.init(ctx); err != nil {
-		return err
-	}
-	i.ed = i.ed.Set(key, dRow.NomsMapValue(i.t.sch))
-
-	return nil
-}
-
-func (i *inserter) Close(ctx *sql.Context) error {
-	return i.t.updateTable(ctx, i.ed)
-}
-
-// Inserter returns a RowInserter for this table
-func (t *DoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
-	return &inserter{
-		t:  t,
-	}
-}
-
-type deleter struct {
-	t  *DoltTable
-	ed *types.MapEditor
-}
-
-var _ sql.RowDeleter = (*deleter)(nil)
-
-func (t *DoltTable) Deleter(*sql.Context, sql.Row) sql.RowDeleter {
-	return &deleter{
-		t:  t,
-	}
-}
-
-func (d *deleter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := SqlRowToDoltRow(d.t.table.Format(), sqlRow, d.t.sch)
-	if err != nil {
-		return err
-	}
-
-	key, err := dRow.NomsMapKey(d.t.sch).Value(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
-	}
-
-	if d.ed == nil {
-		d.ed, err = d.t.newMapEditor(ctx)
+	if r.ed == nil {
+		r.ed, err = r.t.newMapEditor(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
-	d.ed = d.ed.Remove(key)
+	r.ed = r.ed.Set(key, dRow.NomsMapValue(r.t.sch))
 	return nil
 }
 
-func (d *deleter) Close(ctx *sql.Context) error {
-	return d.t.updateTable(ctx, d.ed)
-}
 
-type updater struct {
-	t  *DoltTable
-	ed *types.MapEditor
-}
-
-var _ sql.RowUpdater = (*updater)(nil)
-
-func (t *DoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return &updater{
-		t:  t,
+func (t *DoltTable) newMapEditor(ctx context.Context) (*types.MapEditor, error) {
+	typesMap, err := t.table.GetRowData(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("failed to get row data.").AddCause(err).Build()
 	}
+
+	return typesMap.Edit(), nil
 }
 
-func (u *updater) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+func (r *tableEditor) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+	dRow, err := SqlRowToDoltRow(r.t.table.Format(), sqlRow, r.t.sch)
+	if err != nil {
+		return err
+	}
+
+	key, err := dRow.NomsMapKey(r.t.sch).Value(ctx)
+	if err != nil {
+		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
+	}
+
+	if r.ed == nil {
+		r.ed, err = r.t.newMapEditor(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	r.ed = r.ed.Remove(key)
+	return nil
+}
+
+func (u *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
 	dOldRow, err := SqlRowToDoltRow(u.t.table.Format(), oldRow, u.t.sch)
 	if err != nil {
 		return err
@@ -274,8 +227,35 @@ func (u *updater) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error
 	return nil
 }
 
-func (u *updater) Close(ctx *sql.Context) error {
-	return u.t.updateTable(ctx, u.ed)
+func (r *tableEditor) Close(ctx *sql.Context) error {
+	if r.ed != nil {
+		return r.t.updateTable(ctx, r.ed)
+	}
+	return nil
+}
+
+func (t *DoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
+	return &tableEditor{
+		t: t,
+	}
+}
+
+func (t *DoltTable) Deleter(*sql.Context) sql.RowDeleter {
+	return &tableEditor{
+		t: t,
+	}
+}
+
+func (t *DoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+	return &tableEditor{
+		t: t,
+	}
+}
+
+func (t *DoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	return &tableEditor{
+		t: t,
+	}
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
