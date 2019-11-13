@@ -413,39 +413,20 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 		return tags[i] < tags[j]
 	})
 
-
-
 	if dArgs.diffOutput == TabularDiffOutput {
 		cli.Println("  CREATE TABLE", tableName, "(")
-	}
 
-	for _, tag := range tags {
-		dff := diffs[tag]
-		switch dff.DiffType {
-		case diff.SchDiffNone:
-			if dArgs.diffOutput == TabularDiffOutput {
+		for _, tag := range tags {
+			dff := diffs[tag]
+			switch dff.DiffType {
+			case diff.SchDiffNone:
 				cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
-			}
-		case diff.SchDiffColAdded:
-			if dArgs.diffOutput == TabularDiffOutput {
+			case diff.SchDiffColAdded:
 				cli.Println(color.GreenString("+ " + sql.FmtCol(2, 0, 0, *dff.New)))
-			} else {
-				colStr := sql.FmtCol(0, 0, 0, *dff.New)
-				cli.Println("ALTER TABLE", tableName, "ADD", colStr, ";")
-			}
-		case diff.SchDiffColRemoved:
-			// removed from sch2
-			if dArgs.diffOutput == TabularDiffOutput{
+			case diff.SchDiffColRemoved:
+				// removed from sch2
 				cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
-			} else {
-				cli.Println("ALTER TABLE", tableName, "DROP", sql.QuoteIdentifier(dff.Old.Name), ";")
-			}
-		case diff.SchDiffColModified:
-			if dArgs.diffOutput == SQLDiffOutput {
-				oldColName := sql.QuoteIdentifier(dff.Old.Name)
-				newColName := sql.QuoteIdentifier(dff.New.Name)
-				cli.Println("ALTER TABLE", tableName, "RENAME COLUMN", oldColName, "TO", newColName, ";")
-			} else {
+			case diff.SchDiffColModified:
 				// changed in sch2
 				oldType, err := dtypes.NomsKindToSqlTypeString(dff.Old.Kind)
 				if err != nil {
@@ -478,11 +459,26 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 				cli.Println("> " + sql.FmtColWithNameAndType(2, nameLen, typeLen, n1, t1, *dff.New))
 			}
 		}
-	}
 
-	if dArgs.diffOutput&SQLDiffOutput == 0 {
 		cli.Println("  );")
 		cli.Println()
+
+	} else { 	// dArgs.diffOuput == SQLDiffOutput
+		for _, tag := range tags {
+			dff := diffs[tag]
+			switch dff.DiffType {
+			case diff.SchDiffNone:
+			case diff.SchDiffColAdded:
+				colStr := sql.FmtCol(0, 0, 0, *dff.New)
+				cli.Println("ALTER TABLE", tableName, "ADD", colStr, ";")
+			case diff.SchDiffColRemoved:
+				cli.Println("ALTER TABLE", tableName, "DROP", sql.QuoteIdentifier(dff.Old.Name), ";")
+			case diff.SchDiffColModified:
+				oldColName := sql.QuoteIdentifier(dff.Old.Name)
+				newColName := sql.QuoteIdentifier(dff.New.Name)
+				cli.Println("ALTER TABLE", tableName, "RENAME COLUMN", oldColName, "TO", newColName, ";")
+			}
+		}
 	}
 
 	return nil
