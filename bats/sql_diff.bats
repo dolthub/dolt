@@ -9,7 +9,7 @@ teardown() {
     teardown_common
 }
 
-@test "diff sql output reconciles INSERT query" { skip
+@test "diff sql output reconciles INSERT query" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table import -u test `batshelper 1pk5col-ints.csv`
@@ -39,7 +39,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql output reconciles UPDATE query" { skip
+@test "diff sql output reconciles UPDATE query" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table import -u test `batshelper 1pk5col-ints.csv`
@@ -69,7 +69,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql output reconciles DELETE query" { skip
+@test "diff sql output reconciles DELETE query" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table import -u test `batshelper 1pk5col-ints.csv`
@@ -99,7 +99,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql output reconciles change to PRIMARY KEY field in row " { skip
+@test "diff sql output reconciles change to PRIMARY KEY field in row " {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table import -u test `batshelper 1pk5col-ints.csv`
@@ -367,7 +367,7 @@ teardown() {
 
 @test "diff sql recreates tables with all types" {
 
-    skip "This test fails do to type incompatibility between SQL and Noms"
+    skip "This test fails due to type incompatibility between SQL and Noms"
 
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
@@ -395,7 +395,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "sql diff supports all types" { skip
+@test "sql diff supports all types" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pksupportedtypes.schema` test
     dolt table import -u test `batshelper 1pksupportedtypes.csv`
@@ -431,7 +431,7 @@ teardown() {
     done
 }
 
-@test "sql diff supports multiple primary keys" { skip
+@test "sql diff supports multiple primary keys" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 2pk5col-ints.schema` test
     dolt table import -u test `batshelper 2pk5col-ints.csv`
