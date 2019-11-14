@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"reflect"
 	"sort"
 	"strconv"
@@ -309,9 +310,41 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 					b.WriteString(")")
 					b.WriteString("\n  );")
 					cli.Println(b.String())
-				}
-				// Insert all rows
 
+					// Insert all rows
+					transforms := pipeline.NewTransformCollection()
+					nullPrinter := nullprinter.NewNullPrinter(sch)
+					transforms.AppendTransforms(
+						pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
+					)
+					sink, err := diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), sch, tblName)
+					if err != nil {
+						return errhand.BuildDError("error: unable to create SQL diff sink").AddCause(err).Build()
+					}
+
+					rowData, err := tbl.GetRowData(ctx)
+
+					if err != nil {
+						return errhand.BuildDError("error: unable to get row data").AddCause(err).Build()
+					}
+
+					rd, err := noms.NewNomsMapReader(ctx, rowData, sch)
+
+					if err != nil {
+						return errhand.BuildDError("error: unable to create map reader").AddCause(err).Build()
+					}
+
+					badRowCallback := func(tff *pipeline.TransformRowFailure) (quit bool) {
+						cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, sch)))
+						return true
+					}
+
+					rdProcFunc := pipeline.ProcFuncForReader(ctx, rd)
+
+					sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowForExport)
+					p := pipeline.NewAsyncPipeline(rdProcFunc, sinkProcFunc, transforms, badRowCallback)
+					p.Start()
+				}
 			}
 
 		}

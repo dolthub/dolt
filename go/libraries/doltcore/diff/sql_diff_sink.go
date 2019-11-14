@@ -96,6 +96,10 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 	return err
 }
 
+func (sds *SQLDiffSink) ProcRowForExport(r row.Row, props pipeline.ReadableMap) error {
+	return sds.sw.WriteInsertRow(context.TODO(), r)
+}
+
 // Close should release resources being held
 func (sds *SQLDiffSink) Close() error {
 	if sds.sw != nil {
