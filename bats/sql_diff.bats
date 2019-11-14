@@ -246,7 +246,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql includes row INSERTSs to new tables after CREATE TABLE" { skip
+@test "diff sql includes row INSERTSs to new tables after CREATE TABLE" {
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
@@ -305,7 +305,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql outputs RENAME TABLE if underlying data is unchanged" { skip
+@test "diff sql outputs RENAME TABLE if underlying data is unchanged" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
@@ -313,9 +313,10 @@ teardown() {
     dolt commit -m "created table"
 
     dolt checkout -b newbranch
-    dolt sql -q='RENAME TABLE test TO newname'
+    dolt table mv test newname
+    dolt diff -q
     dolt add .
-    dolt commit -m "dropped column"
+    dolt commit -m "renamed table"
 
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
