@@ -267,6 +267,12 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 			return errhand.BuildDError("error: unable to read tables").AddCause(err).Build()
 		}
 
+		//rename tables
+		for k, v := range tblDiff.renames {
+			println(k, v)
+			cli.Println("RENAME TABLE",sql.QuoteIdentifier(k),"TO",sql.QuoteIdentifier(v))
+		}
+
 		// drop tables
 		for _, tblName := range tblDiff.drops {
 			cli.Println("DROP TABLE", sql.QuoteIdentifier(tblName))
@@ -304,7 +310,10 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 					b.WriteString("\n  );")
 					cli.Println(b.String())
 				}
+				// Insert all rows
+
 			}
+
 		}
 
 		tblNames = tblDiff.same
@@ -573,8 +582,8 @@ func tableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, erro
 		return nil, err
 	}
 
-	renames := make(map[string]string)
 	same := make([]string, 0)
+	renames := make(map[string]string)
 	for _, newHash := range newTblHashes {
 		for _, oldHash := range oldTblHashes {
 			if hashToNewName[newHash] == hashToOldName[oldHash] {
@@ -590,7 +599,7 @@ func tableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, erro
 			// This only works if tables are not changed. Renaming
 			// tables with changes will result in a DROP and ADD
 			if newHash.Equal(oldHash) && hashToNewName[newHash] != hashToOldName[oldHash] {
-				renames[hashToNewName[newHash]] = hashToOldName[oldHash]
+				renames[hashToOldName[oldHash]] = hashToNewName[newHash]
 				// mark names as consumed
 				hashToNewName[newHash] = ""
 				hashToOldName[oldHash] = ""
