@@ -301,7 +301,6 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 			}
 		}
 
-		// TODO: fold this into table_diff
 		if dArgs.diffOutput == TabularDiffOutput {
 			printTableDiffSummary(tblName, tbl1, tbl2)
 		}
