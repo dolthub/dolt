@@ -464,12 +464,16 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 			case diff.SchDiffNone:
 			case diff.SchDiffColAdded:
 				colStr := sql.FmtCol(0, 0, 0, *dff.New)
+				tableName = sql.QuoteIdentifier(tableName)
 				cli.Println("ALTER TABLE", tableName, "ADD", colStr, ";")
 			case diff.SchDiffColRemoved:
-				cli.Println("ALTER TABLE", tableName, "DROP", sql.QuoteIdentifier(dff.Old.Name), ";")
+				oldTableName := sql.QuoteIdentifier(dff.Old.Name)
+				tableName = sql.QuoteIdentifier(tableName)
+				cli.Println("ALTER TABLE", tableName, "DROP", oldTableName, ";")
 			case diff.SchDiffColModified:
 				oldColName := sql.QuoteIdentifier(dff.Old.Name)
 				newColName := sql.QuoteIdentifier(dff.New.Name)
+				tableName = sql.QuoteIdentifier(tableName)
 				cli.Println("ALTER TABLE", tableName, "RENAME COLUMN", oldColName, "TO", newColName, ";")
 			}
 		}
