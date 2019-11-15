@@ -164,7 +164,6 @@ func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
 	var b strings.Builder
 	b.WriteString("DELETE FROM ")
 	b.WriteString(sql.QuoteIdentifier(w.tableName))
-	b.WriteString(" ")
 
 	b.WriteString(" WHERE (")
 	seenOne := false

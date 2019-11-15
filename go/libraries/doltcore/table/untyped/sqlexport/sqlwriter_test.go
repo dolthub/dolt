@@ -133,7 +133,7 @@ func TestDeleteRow(t *testing.T) {
 			name:           "negative values and columns with spaces",
 			rows:           rs(dtestutils.NewRow(trickySch, types.Float(-3.14), types.Int(-42))),
 			sch:            trickySch,
-			expectedOutput: "DELETE FROM `tricky`  WHERE (`a name with spaces`=-42);" + "\n",
+			expectedOutput: "DELETE FROM `tricky` WHERE (`a name with spaces`=-42);" + "\n",
 		},
 	}
 
