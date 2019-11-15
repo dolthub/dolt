@@ -16,15 +16,17 @@ package sqle
 
 import (
 	"context"
+	"strings"
+
+	"github.com/src-d/go-mysql-server/sql"
+	"github.com/src-d/go-mysql-server/sql/expression"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/src-d/go-mysql-server/sql"
-	"github.com/src-d/go-mysql-server/sql/expression"
-	"strings"
 )
 
 const (
