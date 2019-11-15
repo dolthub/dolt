@@ -17,10 +17,8 @@ package diff
 import (
 	"context"
 	"errors"
-	"io"
-	"strings"
-
 	"github.com/fatih/color"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -122,7 +120,7 @@ func (sds *SQLDiffSink) Close() error {
 	}
 }
 
-func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
+func PrintSqlTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
 	adds, _, drops, err := r1.TableDiff(ctx, r2)
 
 	if err != nil {
@@ -159,28 +157,8 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteClo
 			if sch, err := tbl.GetSchema(ctx); err != nil {
 				return errors.New("error unable to get schema for table " + tblName)
 			} else {
-				var b strings.Builder
-				b.WriteString("CREATE TABLE ")
-				b.WriteString(sql.QuoteIdentifier(tblName))
-				b.WriteString("(\n")
-				for _, col := range sch.GetAllCols().GetColumns() {
-					b.WriteString(sql.FmtCol(4, 0, 0, col))
-					b.WriteString(",\n")
-				}
-				seenOne := false
-				b.WriteString("    PRIMARY KEY (")
-				for _, col := range sch.GetAllCols().GetColumns() {
-					if col.IsPartOfPK {
-						if seenOne {
-							b.WriteString(",")
-						}
-						b.WriteString(sql.QuoteIdentifier(col.Name))
-						seenOne = true
-					}
-				}
-				b.WriteString(")")
-				b.WriteString("\n  );")
-				if err = iohelp.WriteLine(wr, b.String()); err != nil {
+				stmt := sql.SchemaAsCreateStmt(tblName, sch)
+				if err = iohelp.WriteLine(wr, stmt); err != nil {
 					return err
 				}
 
