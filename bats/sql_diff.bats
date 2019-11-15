@@ -308,7 +308,6 @@ teardown() {
 @test "diff sql outputs RENAME TABLE if underlying data is unchanged" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt add .
     dolt commit -m "created table"
 
@@ -327,7 +326,7 @@ teardown() {
     dolt checkout firstbranch
     dolt sql < query
     rm query
-    dolt add test
+    dolt add .
     dolt commit -m "Reconciled with newbranch"
 
     # confirm difference was reconciled
@@ -336,7 +335,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql reconciles RENAME TABLE with DROP+ADD if data is changed" { skip
+@test "diff sql reconciles RENAME TABLE with DROP+ADD if data is changed" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
@@ -357,7 +356,7 @@ teardown() {
     dolt checkout firstbranch
     dolt sql < query
     rm query
-    dolt add test
+    dolt add .
     dolt commit -m "Reconciled with newbranch"
 
     # confirm difference was reconciled
