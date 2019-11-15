@@ -16,16 +16,26 @@ package diff
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+type StringBuilderCloser struct {
+	strings.Builder
+}
+
+func (*StringBuilderCloser) Close() error {
+	return nil
+}
 
 func TestPrintSqlTableDiffs(t *testing.T) {
 	dEnv := dtestutils.CreateTestEnv()
@@ -37,7 +47,6 @@ func TestPrintSqlTableDiffs(t *testing.T) {
 	dropColColl, _ := schema.NewColCollection(dropCols...)
 	dropSch := schema.SchemaFromCols(dropColColl)
 
-
 	renameCols := []schema.Column{
 		schema.NewColumn("pk", 0, types.StringKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("data", 1, types.IntKind, false),
@@ -47,10 +56,7 @@ func TestPrintSqlTableDiffs(t *testing.T) {
 
 	addCols := []schema.Column{
 		schema.NewColumn("pk", 0, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("boolData", 1, types.BoolKind, false),
-		schema.NewColumn("intData", 2, types.IntKind, false),
-		schema.NewColumn("floatData", 3, types.FloatKind, false),
-		schema.NewColumn("stringData", 4, types.StringKind, false),
+		schema.NewColumn("data", 1, types.IntKind, false),
 	}
 	addColColl, _ := schema.NewColCollection(addCols...)
 	addSch := schema.SchemaFromCols(addColColl)
@@ -68,6 +74,11 @@ func TestPrintSqlTableDiffs(t *testing.T) {
 		added, _, removed, _ := newRoot.TableDiff(ctx, oldRoot)
 		adds, _, _, _ := findRenames(ctx, newRoot, oldRoot, added, removed)
 		assert.Equal(t, []string{"addTable"}, adds)
+
+		expectedOutput := sql.SchemaAsCreateStmt("addTable", addSch) + "\n"
+		var stringWr StringBuilderCloser
+		_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
+		assert.Equal(t, expectedOutput, stringWr.String())
 	}
 	{
 		ctx := context.Background()
@@ -78,6 +89,11 @@ func TestPrintSqlTableDiffs(t *testing.T) {
 		added, _, removed, _ := newRoot.TableDiff(ctx, oldRoot)
 		_, drops, _, _ := findRenames(ctx, newRoot, oldRoot, added, removed)
 		assert.Equal(t, []string{"dropTable"}, drops)
+
+		expectedOutput := "DROP TABLE `dropTable`;\n"
+		var stringWr StringBuilderCloser
+		_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
+		assert.Equal(t, expectedOutput, stringWr.String())
 	}
 	{
 		ctx := context.Background()
@@ -87,6 +103,11 @@ func TestPrintSqlTableDiffs(t *testing.T) {
 		newRoot, _ := alterschema.RenameTable(ctx, dEnv.DoltDB, oldRoot, "renameTable", "newTableName")
 		added, _, removed, _ := newRoot.TableDiff(ctx, oldRoot)
 		_, _, renames, _ := findRenames(ctx, newRoot, oldRoot, added, removed)
-		assert.Equal(t,  map[string]string{"renameTable":"newTableName"}, renames)
+		assert.Equal(t, map[string]string{"renameTable": "newTableName"}, renames)
+
+		expectedOutput := "RENAME TABLE `renameTable` TO `newTableName`\n"
+		var stringWr StringBuilderCloser
+		_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
+		assert.Equal(t, expectedOutput, stringWr.String())
 	}
 }

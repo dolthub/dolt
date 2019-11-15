@@ -136,14 +136,14 @@ func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 
 	// rename tables
 	for k, v := range renames {
-		if err = iohelp.WriteLine(wr, "RENAME TABLE"+sql.QuoteIdentifier(k)+"TO"+sql.QuoteIdentifier(v)); err != nil {
+		if err = iohelp.WriteLine(wr, "RENAME TABLE "+sql.QuoteIdentifier(k)+" TO "+sql.QuoteIdentifier(v)); err != nil {
 			return err
 		}
 	}
 
 	// drop tables
 	for _, tblName := range drops {
-		if err = iohelp.WriteLine(wr, "DROP TABLE"+sql.QuoteIdentifier(tblName)+";"); err != nil {
+		if err = iohelp.WriteLine(wr, "DROP TABLE "+sql.QuoteIdentifier(tblName)+";"); err != nil {
 			return err
 		}
 	}
