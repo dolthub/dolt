@@ -704,7 +704,6 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 		unionSch = newSch
 	}
 
-
 	newToUnionConv := rowconv.IdentityConverter
 	if newSch != nil {
 		newToUnionMapping, err := rowconv.TagMapping(newSch, unionSch)

@@ -17,20 +17,21 @@ package diff
 import (
 	"context"
 	"errors"
-	"github.com/fatih/color"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"io"
 	"strings"
 
+	"github.com/fatih/color"
+
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/sqlexport"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -136,14 +137,14 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteClo
 
 	// rename tables
 	for k, v := range renames {
-		if err = iohelp.WriteLine(wr,"RENAME TABLE" + sql.QuoteIdentifier(k) + "TO" + sql.QuoteIdentifier(v)); err != nil {
+		if err = iohelp.WriteLine(wr, "RENAME TABLE"+sql.QuoteIdentifier(k)+"TO"+sql.QuoteIdentifier(v)); err != nil {
 			return err
 		}
 	}
 
 	// drop tables
 	for _, tblName := range drops {
-		if err = iohelp.WriteLine(wr,"DROP TABLE" + sql.QuoteIdentifier(tblName) + ";"); err != nil {
+		if err = iohelp.WriteLine(wr, "DROP TABLE"+sql.QuoteIdentifier(tblName)+";"); err != nil {
 			return err
 		}
 	}
@@ -179,7 +180,7 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteClo
 				}
 				b.WriteString(")")
 				b.WriteString("\n  );")
-				if err = iohelp.WriteLine(wr,b.String()); err != nil {
+				if err = iohelp.WriteLine(wr, b.String()); err != nil {
 					return err
 				}
 
