@@ -79,6 +79,11 @@ func (db *Database) Tables() map[string]sql.Table {
 		}
 
 		tables[name] = &DoltTable{name: name, table: table, sch: sch, db: db}
+
+		if db.dEnv != nil {
+			dfTbl := NewDiffTable(name, db.dEnv)
+			tables[dfTbl.Name()] = dfTbl
+		}
 	}
 
 	tables[LogTableName] = NewLogTable(db.dEnv)
