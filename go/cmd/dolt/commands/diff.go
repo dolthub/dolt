@@ -17,11 +17,12 @@ package commands
 import (
 	"context"
 	"fmt"
-	humanize "github.com/dustin/go-humanize"
-	"github.com/fatih/color"
 	"reflect"
 	"sort"
 	"strconv"
+
+	humanize "github.com/dustin/go-humanize"
+	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -457,7 +458,7 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 		cli.Println("  );")
 		cli.Println()
 
-	} else { 	// dArgs.diffOuput == SQLDiffOutput
+	} else { // dArgs.diffOuput == SQLDiffOutput
 		for _, tag := range tags {
 			dff := diffs[tag]
 			switch dff.DiffType {
@@ -631,7 +632,6 @@ func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitte
 		transforms.AppendTransforms(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
 	}
 
-
 	transforms.AppendTransforms(
 		pipeline.NewNamedTransform("split_diffs", ds.SplitDiffIntoOldAndNew),
 	)
@@ -680,7 +680,7 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 
 	var unionSch schema.Schema
 	var err error
-	if dArgs.diffOutput == TabularDiffOutput{
+	if dArgs.diffOutput == TabularDiffOutput {
 		dumbNewSch, err := dumbDownSchema(newSch)
 
 		if err != nil {

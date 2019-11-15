@@ -1,11 +1,12 @@
 package diff
 
 import (
+	"context"
 	"errors"
 	"strings"
-	"context"
 
 	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -38,7 +39,7 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 
 	// rename tables
 	for k, v := range renames {
-		cli.Println("RENAME TABLE",sql.QuoteIdentifier(k),"TO",sql.QuoteIdentifier(v))
+		cli.Println("RENAME TABLE", sql.QuoteIdentifier(k), "TO", sql.QuoteIdentifier(v))
 	}
 
 	// drop tables
@@ -122,7 +123,7 @@ func findRenames(ctx context.Context, r1, r2 *doltdb.RootValue, adds []string, d
 
 	renames := make(map[string]string, 0)
 	for i, add := range adds {
-		for j, drop := range drops{
+		for j, drop := range drops {
 			addHash, foundAdd, err := r1.GetTableHash(ctx, add)
 
 			if err != nil {
@@ -148,14 +149,14 @@ func findRenames(ctx context.Context, r1, r2 *doltdb.RootValue, adds []string, d
 
 	outAdds := make([]string, 0)
 	for _, tbl := range adds {
-		if tbl  != "" {
+		if tbl != "" {
 			outAdds = append(outAdds, tbl)
 		}
 	}
 
 	outDrops := make([]string, 0)
 	for _, tbl := range drops {
-		if tbl  != "" {
+		if tbl != "" {
 			outDrops = append(outDrops, tbl)
 		}
 	}
