@@ -35,7 +35,7 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 
 	// drop tables
 	for _, tblName := range drops {
-		cli.Println("DROP TABLE", sql.QuoteIdentifier(tblName))
+		cli.Println("DROP TABLE", sql.QuoteIdentifier(tblName), ";")
 	}
 
 	// add tables
@@ -49,7 +49,7 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 				return errors.New("error unable to get schema for table " + tblName)
 			} else {
 				var b strings.Builder
-				b.WriteString("CREATE TABLE")
+				b.WriteString("CREATE TABLE ")
 				b.WriteString(sql.QuoteIdentifier(tblName))
 				b.WriteString("(\n")
 				for _, col := range sch.GetAllCols().GetColumns() {
@@ -103,10 +103,11 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 				sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowForExport)
 				p := pipeline.NewAsyncPipeline(rdProcFunc, sinkProcFunc, transforms, badRowCallback)
 				p.Start()
+				err = p.Wait()
 			}
 		}
 	}
-	return nil
+	return err
 }
 
 func diffTables(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, error) {
