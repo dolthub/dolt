@@ -259,7 +259,7 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 	}
 
 	if dArgs.diffOutput == SQLDiffOutput {
-		err = diff.SQLTableDIffs(ctx, r1, r2)
+		err = diff.SQLTableDIffs(ctx, r1, r2, iohelp.NopWrCloser(cli.CliOut))
 
 		if err != nil {
 			return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
@@ -682,7 +682,6 @@ func mapTagToColName(sch, untypedUnionSch schema.Schema) (map[uint64]string, err
 func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.Joiner, dArgs *diffArgs) (schema.Schema, *diff.DiffSplitter, errhand.VerboseError) {
 
 	var unionSch schema.Schema
-	var err error
 	if dArgs.diffOutput == TabularDiffOutput {
 		dumbNewSch, err := dumbDownSchema(newSch)
 
@@ -697,13 +696,14 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 		}
 
 		unionSch, err = untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
+		if err != nil {
+			return nil, nil, errhand.BuildDError("Failed to merge schemas").Build()
+		}
+
 	} else {
 		unionSch = newSch
 	}
 
-	if err != nil {
-		return nil, nil, errhand.BuildDError("Failed to merge schemas").Build()
-	}
 
 	newToUnionConv := rowconv.IdentityConverter
 	if newSch != nil {

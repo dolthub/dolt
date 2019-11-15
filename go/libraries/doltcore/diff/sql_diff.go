@@ -17,28 +17,111 @@ package diff
 import (
 	"context"
 	"errors"
-	"strings"
-
 	"github.com/fatih/color"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
+	"io"
+	"strings"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/sqlexport"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-type tableDiff struct {
-	adds    []string
-	drops   []string
-	renames map[string]string
-	same    []string
+type SQLDiffSink struct {
+	sch schema.Schema
+	sw  *sqlexport.SqlExportWriter
 }
 
-func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
+func NewSQLDiffSink(wr io.WriteCloser, sch schema.Schema, tableName string) (*SQLDiffSink, error) {
+	sw, err := sqlexport.NewSQLDiffWriter(wr, tableName, sch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &SQLDiffSink{sch, sw}, nil
+}
+
+func (sds *SQLDiffSink) GetSchema() schema.Schema {
+	return sds.sch
+}
+
+func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
+
+	taggedVals := make(row.TaggedValues)
+	allCols := sds.sch.GetAllCols()
+	colDiffs := make(map[string]DiffChType)
+
+	if prop, ok := props.Get(CollChangesProp); ok {
+		if convertedVal, convertedOK := prop.(map[string]DiffChType); convertedOK {
+			colDiffs = convertedVal
+		}
+	}
+
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if val, ok := r.GetColVal(tag); ok {
+			taggedVals[tag] = val
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	r, err = row.New(r.Format(), sds.sch, taggedVals)
+
+	if err != nil {
+		return err
+	}
+
+	taggedVals[diffColTag] = types.String("   ")
+	if prop, ok := props.Get(DiffTypeProp); ok {
+		if dt, convertedOK := prop.(DiffChType); convertedOK {
+			switch dt {
+			case DiffAdded:
+				return sds.sw.WriteInsertRow(context.TODO(), r)
+			case DiffRemoved:
+				return sds.sw.WriteDeleteRow(context.TODO(), r)
+			case DiffModifiedOld:
+				return nil
+			case DiffModifiedNew:
+				// TODO: minimize update statement to modified rows
+				return sds.sw.WriteUpdateRow(context.TODO(), r)
+			}
+			// Treat the diff indicator string as a diff of the same type
+			colDiffs[diffColName] = dt
+		}
+	}
+
+	return err
+}
+
+func (sds *SQLDiffSink) ProcRowForExport(r row.Row, props pipeline.ReadableMap) error {
+	return sds.sw.WriteInsertRow(context.TODO(), r)
+}
+
+// Close should release resources being held
+func (sds *SQLDiffSink) Close() error {
+	if sds.sw != nil {
+		if err := sds.sw.Close(context.TODO()); err != nil {
+			return err
+		}
+		sds.sw = nil
+		return nil
+	} else {
+		return errors.New("Already closed.")
+	}
+}
+
+func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
 	adds, _, drops, err := r1.TableDiff(ctx, r2)
 
 	if err != nil {
@@ -53,12 +136,16 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 
 	// rename tables
 	for k, v := range renames {
-		cli.Println("RENAME TABLE", sql.QuoteIdentifier(k), "TO", sql.QuoteIdentifier(v))
+		if err = iohelp.WriteLine(wr,"RENAME TABLE" + sql.QuoteIdentifier(k) + "TO" + sql.QuoteIdentifier(v)); err != nil {
+			return err
+		}
 	}
 
 	// drop tables
 	for _, tblName := range drops {
-		cli.Println("DROP TABLE", sql.QuoteIdentifier(tblName), ";")
+		if err = iohelp.WriteLine(wr,"DROP TABLE" + sql.QuoteIdentifier(tblName) + ";"); err != nil {
+			return err
+		}
 	}
 
 	// add tables
@@ -92,7 +179,9 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 				}
 				b.WriteString(")")
 				b.WriteString("\n  );")
-				cli.Println(b.String())
+				if err = iohelp.WriteLine(wr,b.String()); err != nil {
+					return err
+				}
 
 				// Insert all rows
 				transforms := pipeline.NewTransformCollection()
@@ -100,7 +189,7 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 				transforms.AppendTransforms(
 					pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
 				)
-				sink, err := NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), sch, tblName)
+				sink, err := NewSQLDiffSink(wr, sch, tblName)
 				if err != nil {
 					return errors.New("error: unable to create SQL diff sink")
 				}
