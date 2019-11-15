@@ -14,7 +14,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 type tableDiff struct {
@@ -25,18 +24,20 @@ type tableDiff struct {
 }
 
 func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
-	//tblDiff, err := diffTables(ctx, r1, r2)
-
 	adds, _, drops, err := r1.TableDiff(ctx, r2)
 
 	if err != nil {
 		return err
 	}
 
-	renames := make(map[string]string)
-	//rename tables
+	adds, drops, renames, err := findRenames(ctx, r1, r2, adds, drops)
+
+	if err != nil {
+		return err
+	}
+
+	// rename tables
 	for k, v := range renames {
-		println(k, v)
 		cli.Println("RENAME TABLE",sql.QuoteIdentifier(k),"TO",sql.QuoteIdentifier(v))
 	}
 
@@ -117,86 +118,47 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 	return err
 }
 
-func diffTables(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, error) {
+func findRenames(ctx context.Context, r1, r2 *doltdb.RootValue, adds []string, drops []string) ([]string, []string, map[string]string, error) {
 
-	hashToName := func(ctx context.Context, r *doltdb.RootValue) (map[hash.Hash]string, []hash.Hash, error) {
-		tblNames, err := r.GetTableNames(ctx)
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		hashToName := make(map[hash.Hash]string)
-		hashes := make([]hash.Hash, 0)
-		for _, name := range tblNames {
-			tblHash, found, err := r.GetTableHash(ctx, name)
+	renames := make(map[string]string, 0)
+	for i, add := range adds {
+		for j, drop := range drops{
+			addHash, foundAdd, err := r1.GetTableHash(ctx, add)
 
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 
-			if !found {
-				return nil, nil, errors.New("can't find table name in root, even tho that's where we got it")
+			dropHash, foundDrop, err := r2.GetTableHash(ctx, drop)
+
+			if err != nil {
+				return nil, nil, nil, err
 			}
 
-			hashes = append(hashes, tblHash)
-			hashToName[tblHash] = name
-		}
-
-		return hashToName, hashes, nil
-	}
-
-	hashToOldName, oldTblHashes, err := hashToName(ctx, r2)
-
-	if err != nil {
-		return nil, err
-	}
-
-	hashToNewName, newTblHashes, err := hashToName(ctx, r1)
-
-	if err != nil {
-		return nil, err
-	}
-
-	same := make([]string, 0)
-	renames := make(map[string]string)
-	for _, newHash := range newTblHashes {
-		for _, oldHash := range oldTblHashes {
-			if hashToNewName[newHash] == hashToOldName[oldHash] {
-				// assume it's the same table
-				// DROP TABLE, ADD TABLE with the same name will
-				// be interpreted as a schema change for the table
-				same = append(same, hashToNewName[newHash])
-				// mark names as consumed
-				hashToNewName[newHash] = ""
-				hashToOldName[oldHash] = ""
-				break
-			}
-			// This only works if tables are not changed. Renaming
-			// tables with changes will result in a DROP and ADD
-			if newHash.Equal(oldHash) && hashToNewName[newHash] != hashToOldName[oldHash] {
-				renames[hashToOldName[oldHash]] = hashToNewName[newHash]
-				// mark names as consumed
-				hashToNewName[newHash] = ""
-				hashToOldName[oldHash] = ""
-				break
+			if foundAdd && foundDrop {
+				if addHash.Equal(dropHash) {
+					renames[drop] = add
+					// mark tables as consumed
+					adds[i] = ""
+					drops[j] = ""
+				}
 			}
 		}
 	}
 
-	drops := make([]string, 0)
-	for _, oldHash := range oldTblHashes {
-		if hashToOldName[oldHash] != "" {
-			drops = append(drops, hashToOldName[oldHash])
+	outAdds := make([]string, 0)
+	for _, tbl := range adds {
+		if tbl  != "" {
+			outAdds = append(outAdds, tbl)
 		}
 	}
 
-	adds := make([]string, 0)
-	for _, newHash := range newTblHashes {
-		if hashToNewName[newHash] != "" {
-			adds = append(adds, hashToNewName[newHash])
+	outDrops := make([]string, 0)
+	for _, tbl := range drops {
+		if tbl  != "" {
+			outDrops = append(outDrops, tbl)
 		}
 	}
 
-	return &tableDiff{ adds, drops, renames, same}, nil
+	return outAdds, outDrops, renames, nil
 }
