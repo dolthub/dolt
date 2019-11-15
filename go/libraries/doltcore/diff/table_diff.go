@@ -25,24 +25,21 @@ type tableDiff struct {
 }
 
 func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
-	tblDiff, err := tableDiffs(ctx, r1, r2)
+	//tblDiff, err := diffTables(ctx, r1, r2)
+
+	adds, _, drops, err := r1.TableDiff(ctx, r2)
 
 	if err != nil {
-		return errors.New("error: unable to read tables")
-	}
-
-	//rename tables
-	for k, v := range tblDiff.renames {
-		cli.Println("RENAME TABLE",sql.QuoteIdentifier(k),"TO",sql.QuoteIdentifier(v))
+		return err
 	}
 
 	// drop tables
-	for _, tblName := range tblDiff.drops {
+	for _, tblName := range drops {
 		cli.Println("DROP TABLE", sql.QuoteIdentifier(tblName))
 	}
 
 	// add tables
-	for _, tblName := range tblDiff.adds {
+	for _, tblName := range adds {
 		if tbl, ok, err := r1.GetTable(ctx, tblName); err != nil {
 			return errors.New("error: unable to write SQL diff output for new table")
 		} else if !ok {
@@ -112,7 +109,7 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 	return nil
 }
 
-func tableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, error) {
+func diffTables(ctx context.Context, r1, r2 *doltdb.RootValue) (*tableDiff, error) {
 
 	hashToName := func(ctx context.Context, r *doltdb.RootValue) (map[hash.Hash]string, []hash.Hash, error) {
 		tblNames, err := r.GetTableNames(ctx)
