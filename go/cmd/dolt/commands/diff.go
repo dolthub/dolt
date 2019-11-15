@@ -259,7 +259,7 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 	}
 
 	if dArgs.diffOutput == SQLDiffOutput {
-		err = diff.PrintSqlTableDIffs(ctx, r1, r2, iohelp.NopWrCloser(cli.CliOut))
+		err = diff.PrintSqlTableDiffs(ctx, r1, r2, iohelp.NopWrCloser(cli.CliOut))
 
 		if err != nil {
 			return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()

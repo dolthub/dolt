@@ -121,7 +121,7 @@ func (sds *SQLDiffSink) Close() error {
 	}
 }
 
-func PrintSqlTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
+func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
 	adds, _, drops, err := r1.TableDiff(ctx, r2)
 
 	if err != nil {
@@ -203,7 +203,7 @@ func PrintSqlTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.Wri
 	return err
 }
 
-func findRenames(ctx context.Context, r1, r2 *doltdb.RootValue, adds []string, drops []string) ([]string, []string, map[string]string, error) {
+func findRenames(ctx context.Context, r1, r2 *doltdb.RootValue, adds []string, drops []string) (added, dropped []string, renamed map[string]string, err error) {
 
 	renames := make(map[string]string, 0)
 	for i, add := range adds {
