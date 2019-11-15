@@ -467,9 +467,9 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs
 				tableName = sql.QuoteIdentifier(tableName)
 				cli.Println("ALTER TABLE", tableName, "ADD", colStr, ";")
 			case diff.SchDiffColRemoved:
-				oldTableName := sql.QuoteIdentifier(dff.Old.Name)
+				oldColumnName := sql.QuoteIdentifier(dff.Old.Name)
 				tableName = sql.QuoteIdentifier(tableName)
-				cli.Println("ALTER TABLE", tableName, "DROP", oldTableName, ";")
+				cli.Println("ALTER TABLE", tableName, "DROP", oldColumnName, ";")
 			case diff.SchDiffColModified:
 				oldColName := sql.QuoteIdentifier(dff.Old.Name)
 				newColName := sql.QuoteIdentifier(dff.New.Name)
