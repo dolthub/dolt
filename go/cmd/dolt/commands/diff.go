@@ -698,7 +698,6 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 
 		unionSch, err = untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
 	} else {
-		//unionSch, err = typed.TypedSchemaUnion(newSch, oldSch)
 		unionSch = newSch
 	}
 

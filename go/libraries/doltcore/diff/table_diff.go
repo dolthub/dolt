@@ -80,13 +80,14 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 					b.WriteString(",\n")
 				}
 				seenOne := false
-				b.WriteString("\tPRIMARY KEY (")
+				b.WriteString("    PRIMARY KEY (")
 				for _, col := range sch.GetAllCols().GetColumns() {
-					if seenOne {
-						b.WriteString(",")
-					}
 					if col.IsPartOfPK {
+						if seenOne {
+							b.WriteString(",")
+						}
 						b.WriteString(sql.QuoteIdentifier(col.Name))
+						seenOne = true
 					}
 				}
 				b.WriteString(")")

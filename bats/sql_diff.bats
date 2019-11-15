@@ -406,11 +406,11 @@ teardown() {
     # for each query file in helper/queries/1pksuppportedtypes/
     # run query on db, create sql diff patch, confirm they're equivalent
     dolt branch newbranch
-    for query in delete add update
+    for query in delete add update create_table
     do
         dolt checkout newbranch
         dolt sql < $BATS_TEST_DIRNAME/helper/queries/1pksupportedtypes/$query.sql
-        dolt add test
+        dolt add .
         dolt commit -m "applied $query query"
 
         # confirm a difference exists
@@ -422,7 +422,7 @@ teardown() {
         dolt checkout firstbranch
         dolt sql < patch.sql
         rm patch.sql
-        dolt add test
+        dolt add .
         dolt commit -m "Reconciled with newbranch"
 
         # confirm that both branches have the same content
@@ -442,11 +442,11 @@ teardown() {
     # for each query file in helper/queries/2pk5col-ints/
     # run query on db, create sql diff patch, confirm they're equivalent
     dolt branch newbranch
-    for query in delete add update single_pk_update all_pk_update
+    for query in delete add update single_pk_update all_pk_update create_table
     do
         dolt checkout newbranch
         dolt sql < $BATS_TEST_DIRNAME/helper/queries/2pk5col-ints/$query.sql
-        dolt add test
+        dolt add .
         dolt diff --sql
         dolt commit -m "applied $query query "
 
@@ -460,7 +460,7 @@ teardown() {
         dolt checkout firstbranch
         dolt sql < patch.sql
         rm patch.sql
-        dolt add test
+        dolt add .
         dolt commit -m "Reconciled with newbranch"
 
         # confirm that both branches have the same content
