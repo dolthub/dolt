@@ -10,19 +10,21 @@ import (
 )
 
 const (
-	HomeDir = "/users/home"
-	TblName = "test_table"
+	homeDir = "/users/home"
 )
 
+// CreateTestEnv creates an unitialized DoltEnv.  This is the state of a dolt repository before 'dolt init' is run
 func CreateTestEnv(ctx context.Context) *env.DoltEnv {
 	hdp := func() (s string, e error) {
-		return HomeDir, nil
+		return homeDir, nil
 	}
 
-	fs := filesys.NewInMemFS([]string{HomeDir + "/datasets/test"}, map[string][]byte{}, HomeDir+"/datasets/test")
+	fs := filesys.NewInMemFS([]string{homeDir + "/datasets/test"}, map[string][]byte{}, homeDir+"/datasets/test")
 	return env.Load(ctx, hdp, fs, "mem://")
 }
 
+// CreateInitializedTestEnv creates an initialized DoltEnv.  This is the state of a dolt repository after 'dolt init' is
+// run
 func CreateInitializedTestEnv(t *testing.T, ctx context.Context) *env.DoltEnv {
 	dEnv := CreateTestEnv(ctx)
 

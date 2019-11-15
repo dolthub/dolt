@@ -13,19 +13,35 @@ import (
 	"testing"
 )
 
+// TableUpdate defines a list of modifications that should be made to a table
 type TableUpdate struct {
-	NewSch     schema.Schema
+	// NewSch is an updated schema for this table. It overwrites the existing value.  If not provided the existing value
+	// will not change
+	NewSch schema.Schema
+
+	// NewRowData if provided overwrites the entirety of the row data in the table.
 	NewRowData *types.Map
+
+	// RowUpdates are new values for rows that should be set in the map.  They can be updates or inserts.
 	RowUpdates []row.Row
 }
 
+// HistoryNode represents a commit to be made
 type HistoryNode struct {
-	Branch    string
+	// Branch the branch that the commit should be on
+	Branch string
+
+	// CommitMessag is the commit message that should be applied
 	CommitMsg string
-	Children  []HistoryNode
-	Updates   map[string]TableUpdate
+
+	// Updates are the changes that should be made to the table's states before committing
+	Updates map[string]TableUpdate
+
+	// Children are the child commits of this commit
+	Children []HistoryNode
 }
 
+// InitializeWithHistory will go through the provided historyNodes and create the intended commit graph
 func InitializeWithHistory(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, historyNodes ...HistoryNode) {
 	for _, node := range historyNodes {
 		cs, err := doltdb.NewCommitSpec("HEAD", "master")
