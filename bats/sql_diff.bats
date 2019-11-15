@@ -200,7 +200,7 @@ teardown() {
     dolt checkout -b newbranch
     dolt schema add-column test c0 int
     dolt add .
-    dolt commit -m "dropped column"
+    dolt commit -m "added column"
 
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
@@ -285,7 +285,7 @@ teardown() {
     dolt checkout -b newbranch
     dolt table rm test
     dolt add .
-    dolt commit -m "dropped column"
+    dolt commit -m "removed table"
 
     # confirm a difference exists
     run dolt diff --sql newbranch firstbranch
@@ -317,10 +317,11 @@ teardown() {
     dolt add .
     dolt commit -m "renamed table"
 
-    # confirm a difference exists
-    run dolt diff --sql newbranch firstbranch
+    # confirm RENAME statement is being used
+    dolt diff --sql newbranch firstbranch > output
+    # grep will exit error if it doesn't match the pattern
+    run grep RENAME output
     [ "$status" -eq 0 ]
-    [[ "$output" != "" ]] || false
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
@@ -344,14 +345,14 @@ teardown() {
 
     dolt checkout -b newbranch
     dolt sql -q='RENAME TABLE test TO newname'
+    dolt sql -q 'insert into newname values (2,1,1,1,1,1)'
     dolt add .
-    dolt commit -m "dropped column"
+    dolt commit -m "renamed table and added data"
 
-    # confirm RENAME statement is being used
-    dolt diff --sql newbranch firstbranch > output
-    # grep will exit error if it doesn't match the pattern
-    run grep RENAME output
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
