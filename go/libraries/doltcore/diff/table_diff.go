@@ -33,6 +33,13 @@ func SQLTableDIffs(ctx context.Context, r1, r2 *doltdb.RootValue) error {
 		return err
 	}
 
+	renames := make(map[string]string)
+	//rename tables
+	for k, v := range renames {
+		println(k, v)
+		cli.Println("RENAME TABLE",sql.QuoteIdentifier(k),"TO",sql.QuoteIdentifier(v))
+	}
+
 	// drop tables
 	for _, tblName := range drops {
 		cli.Println("DROP TABLE", sql.QuoteIdentifier(tblName), ";")

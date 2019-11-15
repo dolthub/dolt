@@ -347,10 +347,10 @@ teardown() {
     dolt add .
     dolt commit -m "dropped column"
 
-    # confirm a difference exists
+    # confirm RENAME statement is being used
     run dolt diff --sql newbranch firstbranch
     [ "$status" -eq 0 ]
-    [[ "$output" != "" ]] || false
+    [[ "$output" = "RENAME TABLE 'test' TO 'newname'" ]] || false
 
     dolt diff --sql newbranch firstbranch > query
     dolt checkout firstbranch
