@@ -17,8 +17,9 @@ package diff
 import (
 	"context"
 	"errors"
-	"github.com/fatih/color"
 	"io"
+
+	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
