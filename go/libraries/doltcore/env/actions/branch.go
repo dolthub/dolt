@@ -227,13 +227,17 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes)
+	wrkNts, err := ntsForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
+
+	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes, wrkNts)
 
 	if err != nil {
 		return err
 	}
 
-	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes)
+	stgNts, err := ntsForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
+
+	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes, stgNts)
 
 	if err != nil {
 		return err
@@ -319,14 +323,86 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 	return resultMap, nil
 }
 
-func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, error) {
+var emptyString string
+
+func ntsForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) (map[string]string, error) {
+	resultMap := make(map[string]string)
+	ntNames, err := newRoot.GetNotesNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ntName := range ntNames {
+
+		oldString, _, err := oldRoot.GetNoteString(ctx, ntName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		newString, _, err := newRoot.GetNoteString(ctx, ntName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		changedString, _, err := changedRoot.GetNoteString(ctx, ntName)
+
+		if err != nil {
+			return nil, err
+		}
+
+		if oldString == changedString {
+			resultMap[ntName] = newString
+		} else if oldString == newString {
+			resultMap[ntName] = changedString
+		} else if newString == changedString {
+			resultMap[ntName] = oldString
+		} else {
+			conflicts.Add(ntName)
+		}
+	}
+
+	ntNames, err = changedRoot.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ntName := range ntNames {
+		if _, exists := resultMap[ntName]; !exists {
+			oldString, _, err := oldRoot.GetNoteString(ctx, ntName)
+
+			if err != nil {
+				return nil, err
+			}
+
+			changedString, _, err := changedRoot.GetNoteString(ctx, ntName)
+
+			if err != nil {
+				return nil, err
+			}
+
+			if oldString == emptyString {
+				resultMap[ntName] = changedString
+			} else if oldString != changedString {
+				conflicts.Add(ntName)
+			}
+		}
+	}
+
+	return resultMap, nil
+}
+
+func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash, nts map[string]string) (hash.Hash, error) {
 	for k, v := range tblHashes {
 		if v == emptyHash {
 			delete(tblHashes, k)
 		}
 	}
 
-	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes)
+	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes, nts)
 
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {

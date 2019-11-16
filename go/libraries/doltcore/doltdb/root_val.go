@@ -25,6 +25,7 @@ const (
 	ddbRootStructName = "dolt_db_root"
 
 	tablesKey = "tables"
+	notesKey  = "notes"
 )
 
 // RootValue defines the structure used inside all Liquidata noms dbs
@@ -33,12 +34,12 @@ type RootValue struct {
 	valueSt types.Struct
 }
 
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
-	values := make([]types.Value, 2*len(tables))
+func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, notes map[string]string) (*RootValue, error) {
+	tblValues := make([]types.Value, 2*len(tables))
 
 	index := 0
 	for k, v := range tables {
-		values[index] = types.String(k)
+		tblValues[index] = types.String(k)
 		valForHash, err := vrw.ReadValue(ctx, v)
 
 		if err != nil {
@@ -49,7 +50,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 			return nil, ErrHashNotFound
 		}
 
-		values[index+1], err = types.NewRef(valForHash, vrw.Format())
+		tblValues[index+1], err = types.NewRef(valForHash, vrw.Format())
 
 		if err != nil {
 			return nil, err
@@ -58,13 +59,23 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 		index += 2
 	}
 
-	tblMap, err := types.NewMap(ctx, vrw, values...)
+	tblMap, err := types.NewMap(ctx, vrw, tblValues...)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return newRootFromTblMap(vrw, tblMap)
+	ntsValues := make([]types.Value, 2*len(notes))
+	index = 0
+	for k, v := range notes {
+		ntsValues[index] = types.String(k)
+		ntsValues[index+1] = types.String(v)
+		index += 2
+	}
+
+	ntsMap, err := types.NewMap(ctx, vrw, ntsValues...)
+
+	return newRootFromTblMapAndNtsMap(vrw, tblMap, ntsMap)
 }
 
 func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
@@ -78,12 +89,13 @@ func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 		return nil, err
 	}
 
-	return newRootFromTblMap(vrw, m)
+	return newRootFromTblMapAndNtsMap(vrw, m, m)
 }
 
-func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) (*RootValue, error) {
+func newRootFromTblMapAndNtsMap(vrw types.ValueReadWriter, tblMap types.Map, ntsMap types.Map) (*RootValue, error) {
 	sd := types.StructData{
 		tablesKey: tblMap,
+		notesKey:  ntsMap,
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
@@ -202,6 +214,60 @@ func (root *RootValue) getTableMap() (types.Map, error) {
 
 	tableMap := val.(types.Map)
 	return tableMap, err
+}
+
+// GetNotesNames retrieves the lists of all notes for a RootValue
+func (root *RootValue) GetNotesNames(ctx context.Context) ([]string, error) {
+	notesMap, err := root.getNotesMap()
+
+	if err != nil {
+		return nil, err
+	}
+
+	numNotes := int(notesMap.Len())
+	notes := make([]string, 0, numNotes)
+
+	err = notesMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
+		notes = append(notes, string(key.(types.String)))
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return notes, nil
+}
+
+func (root *RootValue) getNotesMap() (types.Map, error) {
+	val, found, err := root.valueSt.MaybeGet(notesKey)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	if !found || val == nil {
+		return types.EmptyMap, err
+	}
+
+	notesMap := val.(types.Map)
+	return notesMap, err
+}
+
+func (root *RootValue) GetNoteString(ctx context.Context, ntName string) (string, bool, error) {
+	noteMap, err := root.getNotesMap()
+
+	if err != nil {
+		return "", false, err
+	}
+
+	ntVal, found, err := noteMap.MaybeGet(ctx, types.String(ntName))
+
+	if ntVal == nil || !found {
+		return "", false, nil
+	}
+
+	return string(ntVal.(types.String)), true, nil
 }
 
 func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
