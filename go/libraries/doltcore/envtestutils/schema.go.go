@@ -16,6 +16,7 @@ package envtestutils
 
 import "github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 
+// MustSchema takes a variable number of columns and returns a schema.
 func MustSchema(cols ...schema.Column) schema.Schema {
 	hasPKCols := false
 	for _, col := range cols {
