@@ -129,22 +129,22 @@ func (ss *SuperSchemaGen) GenerateSuperSchema(additionalCols ...NameKindPair) (s
 
 	if len(additionalCols) > 0 {
 		nextReserved := schema.ReservedTagMin
-		for {
-			if _, ok := ss.usedTags[nextReserved]; !ok {
-				break
-			}
-			nextReserved++
-		}
 
 		for _, nameKindPair := range additionalCols {
+			for {
+				if _, ok := ss.usedTags[nextReserved]; !ok {
+					break
+				}
+				nextReserved++
+			}
+
 			var err error
+			ss.usedTags[nextReserved] = struct{}{}
 			colColl, err = colColl.Append(schema.NewColumn(nameKindPair.Name, nextReserved, nameKindPair.Kind, false))
 
 			if err != nil {
 				return nil, err
 			}
-
-			nextReserved++
 		}
 	}
 
