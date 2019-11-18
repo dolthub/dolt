@@ -69,7 +69,7 @@ func NewJoiner(namedSchemas []NamedSchema, namers map[string]ColNamingFunc) (*Jo
 		name := namedSch.Name
 		allCols := sch.GetAllCols()
 		namer := namers[name]
-		err := allCols.Iter(func(srcTag uint64, col schema.Column) (stop bool, err error) {
+		allCols.IterInSortedOrder(func(srcTag uint64, col schema.Column) (stop bool) {
 			newColName := namer(col.Name)
 			cols = append(cols, schema.NewColumn(newColName, destTag, col.Kind, false))
 			tagMaps[name][srcTag] = destTag
@@ -77,12 +77,8 @@ func NewJoiner(namedSchemas []NamedSchema, namers map[string]ColNamingFunc) (*Jo
 			tags[name] = append(tags[name], destTag)
 			destTag++
 
-			return false, nil
+			return false
 		})
-
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	colColl, err := schema.NewColCollection(cols...)

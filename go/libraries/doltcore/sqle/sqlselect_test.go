@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"testing"
 	"time"
 
@@ -37,6 +39,14 @@ func TestExecuteSelect(t *testing.T) {
 	for _, test := range BasicSelectTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectQuery(t, test)
+		})
+	}
+}
+
+func TestExecuteSelectDiff(t *testing.T) {
+	for _, test := range SelectDiffTests {
+		t.Run(test.Name, func(t *testing.T) {
+			testSelectDiffQuery(t, test)
 		})
 	}
 }
@@ -106,5 +116,63 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 	}
 
 	assert.Equal(t, test.ExpectedRows, actualRows)
+
+	// this is meaningless as executeSelect just returns the schema that is passed in.
 	assert.Equal(t, test.ExpectedSchema, sch)
+}
+
+func testSelectDiffQuery(t *testing.T, test SelectTest) {
+	if (test.ExpectedRows == nil) != (test.ExpectedSchema == nil) {
+		require.Fail(t, "Incorrect test setup: schema and rows must both be provided if one is")
+	}
+
+	if len(singleSelectQueryTest) > 0 && test.Name != singleSelectQueryTest {
+		t.Skip("Skipping tests until " + singleSelectQueryTest)
+	}
+
+	if len(singleSelectQueryTest) == 0 && test.SkipOnSqlEngine && skipBrokenSelect {
+		t.Skip("Skipping test broken on SQL engine")
+	}
+
+	ctx := context.Background()
+	tcc := &testCommitClock{}
+	doltdb.CommitNowFunc = tcc.Now
+	doltdb.CommitLoc = time.UTC
+
+	dEnv := dtestutils.CreateTestEnv()
+	envtestutils.InitializeWithHistory(t, ctx, dEnv, CreateHistory(ctx, dEnv, t)...)
+	if test.AdditionalSetup != nil {
+		test.AdditionalSetup(t, dEnv)
+	}
+
+	cs, err := doltdb.NewCommitSpec("HEAD", "master")
+	require.NoError(t, err)
+
+	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	require.NoError(t, err)
+
+	root, err := cm.GetRootValue()
+	require.NoError(t, err)
+
+	err = dEnv.UpdateWorkingRoot(ctx, root)
+	require.NoError(t, err)
+
+	root, err = dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+
+	actualRows, sch, err := executeSelect(ctx, dEnv, test.ExpectedSchema, root, test.Query)
+	if len(test.ExpectedErr) > 0 {
+		require.Error(t, err)
+		// Too much work to synchronize error messages between the two implementations, so for now we'll just assert that an error occurred.
+		// require.Contains(t, err.Error(), test.ExpectedErr)
+		return
+	} else {
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, test.ExpectedSchema, sch)
+	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
+	for i := 0; i < len(test.ExpectedRows); i++ {
+		assert.True(t, row.AreEqual(test.ExpectedRows[i], actualRows[i], test.ExpectedSchema))
+	}
 }
