@@ -46,6 +46,7 @@ type DiffTable struct {
 	toRoot        *doltdb.RootValue
 	fromCommitVal string
 	toCommitVal   string
+	filters       []sql.Expression
 }
 
 func NewDiffTable(name string, dEnv *env.DoltEnv) *DiffTable {
@@ -89,7 +90,7 @@ func NewDiffTable(name string, dEnv *env.DoltEnv) *DiffTable {
 		panic(err)
 	}
 
-	return &DiffTable{name, dEnv, sch, j, root2, root1, "current", "HEAD"}
+	return &DiffTable{name, dEnv, sch, j, root2, root1, "current", "HEAD", nil}
 }
 
 func (dt *DiffTable) Name() string {
@@ -188,12 +189,12 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 		panic("missing required column")
 	}
 
-	return NewDiffRowItr(dt.joiner, fromData, toData, fromConv, toConv, dt.fromCommitVal, dt.toCommitVal, fromCol.Tag, toCol.Tag), nil
+	return newDiffRowItr(ctx, dt.joiner, fromData, toData, fromConv, toConv, dt.fromCommitVal, dt.toCommitVal, fromCol.Tag, toCol.Tag), nil
 }
 
-var _ sql.RowIter = (*DiffRowItr)(nil)
+var _ sql.RowIter = (*diffRowItr)(nil)
 
-type DiffRowItr struct {
+type diffRowItr struct {
 	ad      *diff.AsyncDiffer
 	diffSrc *diff.RowDiffSource
 	sch     schema.Schema
@@ -203,17 +204,18 @@ type DiffRowItr struct {
 	toTag   uint64
 }
 
-func NewDiffRowItr(joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to string, fromTag, toTag uint64) *DiffRowItr {
+func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, rowDataTo types.Map, convFrom, convTo *rowconv.RowConverter, from, to string, fromTag, toTag uint64) *diffRowItr {
 	ad := diff.NewAsyncDiffer(1024)
-	ad.Start(context.TODO(), rowDataTo, rowDataFrom)
+	ad.Start(ctx, rowDataTo, rowDataFrom)
 
 	src := diff.NewRowDiffSource(ad, joiner)
 	src.AddInputRowConversion(convFrom, convTo)
 
-	return &DiffRowItr{ad, src, joiner.GetSchema(), to, from, fromTag, toTag}
+	return &diffRowItr{ad, src, joiner.GetSchema(), to, from, fromTag, toTag}
 }
 
-func (itr *DiffRowItr) Next() (sql.Row, error) {
+// Next returns the next row
+func (itr *diffRowItr) Next() (sql.Row, error) {
 	r, _, err := itr.diffSrc.NextDiff()
 
 	if err != nil {
@@ -235,7 +237,8 @@ func (itr *DiffRowItr) Next() (sql.Row, error) {
 	return doltRowToSqlRow(r, itr.sch)
 }
 
-func (itr *DiffRowItr) Close() (err error) {
+// Close closes the iterator
+func (itr *diffRowItr) Close() (err error) {
 	defer itr.ad.Close()
 	defer func() {
 		closeErr := itr.diffSrc.Close()
@@ -248,9 +251,14 @@ func (itr *DiffRowItr) Close() (err error) {
 	return nil
 }
 
+// HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	handled := make([]sql.Expression, 0, len(filters))
 	for _, f := range filters {
+		if _, ok := f.(*expression.Equals); !ok {
+			continue
+		}
+
 		expression.Inspect(f, func(e sql.Expression) bool {
 			if e, ok := e.(*expression.GetField); ok {
 				if e.Table() == dt.Name() && e.Name() == toCommit || e.Name() == fromCommit {
@@ -265,10 +273,15 @@ func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	return handled
 }
 
+// WithFilters returns a new sql.Table instance with the filters applied
 func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 	ctx := context.TODO()
 
 	for _, f := range filters {
+		if _, ok := f.(*expression.Equals); !ok {
+			continue
+		}
+
 		var fieldName string
 		var value string
 		expression.Inspect(f, func(e sql.Expression) bool {
@@ -316,9 +329,11 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 		}
 	}
 
+	dt.filters = filters
 	return dt
 }
 
+// Filters returns the list of filters that are applied to this table.
 func (dt *DiffTable) Filters() []sql.Expression {
-	return []sql.Expression{}
+	return dt.filters
 }

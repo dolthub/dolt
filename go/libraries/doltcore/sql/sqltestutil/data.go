@@ -370,14 +370,15 @@ var diffSchema = envtestutils.MustSchema(
 	schema.NewColumn("from_commit", 13, types.StringKind, false),
 )
 
+const tblName = "test_table"
+
+var initialSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var addAddrAt3Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var addAgeAt3Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt)
+var readdAgeAt4Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint)
+
 func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envtestutils.HistoryNode {
 	vrw := dEnv.DoltDB.ValueReadWriter()
-
-	const tblName = "test_table"
-	initialSch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
-	addAddrAt3Sch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
-	addAgeAt3Sch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt)
-	readdAgeAt4Sch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint)
 
 	return []envtestutils.HistoryNode{
 		{
@@ -446,6 +447,18 @@ func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envte
 						},
 					},
 				},
+			},
+		},
+	}
+}
+
+func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
+	return map[string]envtestutils.TableUpdate{
+		tblName: {
+			RowUpdates: []row.Row{
+				mustRow(row.New(types.Format_Default, readdAgeAt4Sch, row.TaggedValues{
+					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
+				})),
 			},
 		},
 	}

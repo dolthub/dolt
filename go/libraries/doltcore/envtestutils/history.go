@@ -89,7 +89,7 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 	root, err := cm.GetRootValue()
 	require.NoError(t, err)
 
-	root = updateTables(t, ctx, root, node.Updates)
+	root = UpdateTables(t, ctx, root, node.Updates)
 	h, err := dEnv.DoltDB.WriteRootValue(ctx, root)
 	require.NoError(t, err)
 
@@ -104,7 +104,7 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 	}
 }
 
-func updateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tblUpdates map[string]TableUpdate) *doltdb.RootValue {
+func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tblUpdates map[string]TableUpdate) *doltdb.RootValue {
 	for tblName, updates := range tblUpdates {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 		require.NoError(t, err)

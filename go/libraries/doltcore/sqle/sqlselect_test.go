@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -154,10 +156,18 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	root, err := cm.GetRootValue()
 	require.NoError(t, err)
 
+	_, err = dEnv.UpdateStagedRoot(ctx, root)
+	require.NoError(t, err)
+
 	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
 
 	root, err = dEnv.WorkingRoot(context.Background())
+	require.NoError(t, err)
+
+	root = envtestutils.UpdateTables(t, ctx, root, CreateWorkingRootUpdate())
+
+	err = dEnv.UpdateWorkingRoot(ctx, root)
 	require.NoError(t, err)
 
 	actualRows, sch, err := executeSelect(ctx, dEnv, test.ExpectedSchema, root, test.Query)
@@ -173,6 +183,22 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	assert.Equal(t, test.ExpectedSchema, sch)
 	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
 	for i := 0; i < len(test.ExpectedRows); i++ {
-		assert.True(t, row.AreEqual(test.ExpectedRows[i], actualRows[i], test.ExpectedSchema))
+		eq := row.AreEqual(test.ExpectedRows[i], actualRows[i], test.ExpectedSchema)
+
+		if !eq {
+			expVal, err := test.ExpectedRows[i].NomsMapValue(test.ExpectedSchema).Value(ctx)
+			require.NoError(t, err)
+
+			expValStr, err := types.EncodedValue(ctx, expVal)
+			require.NoError(t, err)
+
+			actVal, err := actualRows[i].NomsMapValue(test.ExpectedSchema).Value(ctx)
+			require.NoError(t, err)
+
+			actValStr, err := types.EncodedValue(ctx, actVal)
+			require.NoError(t, err)
+
+			assert.Fail(t, fmt.Sprintf("%s\n\t!=\n%s", expValStr, actValStr))
+		}
 	}
 }
