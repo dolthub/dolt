@@ -258,6 +258,14 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 		return errhand.BuildDError("error: unable to read tables").AddCause(err).Build()
 	}
 
+	if dArgs.diffOutput == SQLDiffOutput {
+		err = diff.PrintSqlTableDiffs(ctx, r1, r2, iohelp.NopWrCloser(cli.CliOut))
+
+		if err != nil {
+			return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
+		}
+	}
+
 	for _, tblName := range tblNames {
 		tbl1, ok1, err := r1.GetTable(ctx, tblName)
 
@@ -366,12 +374,8 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 			verr = diffSummary(ctx, rowData1, rowData2, colLen)
 		}
 
-		if sch1Hash != sch2Hash && dArgs.diffOutput == SQLDiffOutput {
-			return errhand.BuildDError("SQL output of schema diffs is not yet supported").Build()
-		}
-
 		if dArgs.diffParts&SchemaOnlyDiff != 0 && sch1Hash != sch2Hash {
-			verr = diffSchemas(tblName, sch2, sch1)
+			verr = diffSchemas(tblName, sch2, sch1, dArgs)
 		}
 
 		if dArgs.diffParts&DataOnlyDiff != 0 {
@@ -386,7 +390,7 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 	return nil
 }
 
-func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errhand.VerboseError {
+func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema, dArgs *diffArgs) errhand.VerboseError {
 	diffs, err := diff.DiffSchemas(sch1, sch2)
 
 	if err != nil {
@@ -403,6 +407,18 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errha
 		return tags[i] < tags[j]
 	})
 
+	if dArgs.diffOutput == TabularDiffOutput {
+		if verr := tabularSchemaDiff(tableName, tags, diffs); verr != nil {
+			return verr
+		}
+	} else {
+		sqlSchemaDiff(tableName, tags, diffs)
+	}
+
+	return nil
+}
+
+func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.SchemaDifference) errhand.VerboseError {
 	cli.Println("  CREATE TABLE", tableName, "(")
 
 	for _, tag := range tags {
@@ -451,8 +467,29 @@ func diffSchemas(tableName string, sch1 schema.Schema, sch2 schema.Schema) errha
 
 	cli.Println("  );")
 	cli.Println()
-
 	return nil
+}
+
+func sqlSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.SchemaDifference) {
+	for _, tag := range tags {
+		dff := diffs[tag]
+		switch dff.DiffType {
+		case diff.SchDiffNone:
+		case diff.SchDiffColAdded:
+			colStr := sql.FmtCol(0, 0, 0, *dff.New)
+			tableName = sql.QuoteIdentifier(tableName)
+			cli.Println("ALTER TABLE", tableName, "ADD", colStr, ";")
+		case diff.SchDiffColRemoved:
+			oldColumnName := sql.QuoteIdentifier(dff.Old.Name)
+			tableName = sql.QuoteIdentifier(tableName)
+			cli.Println("ALTER TABLE", tableName, "DROP", oldColumnName, ";")
+		case diff.SchDiffColModified:
+			oldColName := sql.QuoteIdentifier(dff.Old.Name)
+			newColName := sql.QuoteIdentifier(dff.New.Name)
+			tableName = sql.QuoteIdentifier(tableName)
+			cli.Println("ALTER TABLE", tableName, "RENAME COLUMN", oldColName, "TO", newColName, ";")
+		}
+	}
 }
 
 func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
@@ -493,7 +530,7 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		map[string]rowconv.ColNamingFunc{diff.To: toNamer, diff.From: fromNamer},
 	)
 
-	untypedUnionSch, ds, verr := createSplitter(newSch, oldSch, joiner, dArgs)
+	unionSch, ds, verr := createSplitter(newSch, oldSch, joiner, dArgs)
 	if verr != nil {
 		return verr
 	}
@@ -505,13 +542,13 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 	src := diff.NewRowDiffSource(ad, joiner)
 	defer src.Close()
 
-	oldColNames, verr := mapTagToColName(oldSch, untypedUnionSch)
+	oldColNames, verr := mapTagToColName(oldSch, unionSch)
 
 	if verr != nil {
 		return verr
 	}
 
-	newColNames, verr := mapTagToColName(newSch, untypedUnionSch)
+	newColNames, verr := mapTagToColName(newSch, unionSch)
 
 	if verr != nil {
 		return verr
@@ -525,9 +562,9 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 
 	var sink DiffSink
 	if dArgs.diffOutput == TabularDiffOutput {
-		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, numHeaderRows)
+		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, numHeaderRows)
 	} else {
-		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), untypedUnionSch, tblName)
+		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), unionSch, tblName)
 	}
 
 	if err != nil {
@@ -542,14 +579,14 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 		return true
 	}
 
-	p, verr := buildPipeline(dArgs, joiner, ds, untypedUnionSch, src, sink, badRowCallback)
+	p, verr := buildPipeline(dArgs, joiner, ds, unionSch, src, sink, badRowCallback)
 	if verr != nil {
 		return verr
 	}
 
 	if dArgs.diffOutput != SQLDiffOutput {
 		if schemasEqual {
-			schRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
+			schRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), unionSch, newColNames)
 
 			if err != nil {
 				return errhand.BuildDError("error: creating diff header").AddCause(err).Build()
@@ -557,14 +594,14 @@ func diffRows(ctx context.Context, newRows, oldRows types.Map, newSch, oldSch sc
 
 			p.InjectRow(fwtStageName, schRow)
 		} else {
-			newSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, oldColNames)
+			newSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), unionSch, oldColNames)
 
 			if err != nil {
 				return errhand.BuildDError("error: creating diff header").AddCause(err).Build()
 			}
 
 			p.InjectRowWithProps(fwtStageName, newSchRow, map[string]interface{}{diff.DiffTypeProp: diff.DiffModifiedOld})
-			oldSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), untypedUnionSch, newColNames)
+			oldSchRow, err := untyped.NewRowFromTaggedStrings(newRows.Format(), unionSch, newColNames)
 
 			if err != nil {
 				return errhand.BuildDError("error: creating diff header").AddCause(err).Build()
@@ -608,15 +645,17 @@ func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitte
 		transforms.AppendTransforms(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
 	}
 
-	nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
 	transforms.AppendTransforms(
 		pipeline.NewNamedTransform("split_diffs", ds.SplitDiffIntoOldAndNew),
-		pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
 	)
 
 	if dArgs.diffOutput == TabularDiffOutput {
+		nullPrinter := nullprinter.NewNullPrinter(untypedUnionSch)
 		fwtTr := fwt.NewAutoSizingFWTTransformer(untypedUnionSch, fwt.HashFillWhenTooLong, 1000)
-		transforms.AppendTransforms(pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT})
+		transforms.AppendTransforms(
+			pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow),
+			pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT},
+		)
 	}
 
 	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
@@ -651,32 +690,33 @@ func mapTagToColName(sch, untypedUnionSch schema.Schema) (map[uint64]string, err
 }
 
 func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.Joiner, dArgs *diffArgs) (schema.Schema, *diff.DiffSplitter, errhand.VerboseError) {
-	dumbNewSch, err := dumbDownSchema(newSch)
 
-	if err != nil {
-		return nil, nil, errhand.BuildDError("").AddCause(err).Build()
-	}
+	var unionSch schema.Schema
+	if dArgs.diffOutput == TabularDiffOutput {
+		dumbNewSch, err := dumbDownSchema(newSch)
 
-	dumbOldSch, err := dumbDownSchema(oldSch)
+		if err != nil {
+			return nil, nil, errhand.BuildDError("").AddCause(err).Build()
+		}
 
-	if err != nil {
-		return nil, nil, errhand.BuildDError("").AddCause(err).Build()
-	}
+		dumbOldSch, err := dumbDownSchema(oldSch)
 
-	untypedUnionSch, err := untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
+		if err != nil {
+			return nil, nil, errhand.BuildDError("").AddCause(err).Build()
+		}
 
-	if err != nil {
-		return nil, nil, errhand.BuildDError("Failed to merge schemas").Build()
-	}
+		unionSch, err = untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
+		if err != nil {
+			return nil, nil, errhand.BuildDError("Failed to merge schemas").Build()
+		}
 
-	if dArgs.diffOutput == SQLDiffOutput {
-		// sql diffs don't support schema changes yet => newSch == oldSch
-		untypedUnionSch = newSch
+	} else {
+		unionSch = newSch
 	}
 
 	newToUnionConv := rowconv.IdentityConverter
 	if newSch != nil {
-		newToUnionMapping, err := rowconv.TagMapping(newSch, untypedUnionSch)
+		newToUnionMapping, err := rowconv.TagMapping(newSch, unionSch)
 
 		if err != nil {
 			return nil, nil, errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
@@ -687,7 +727,7 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 
 	oldToUnionConv := rowconv.IdentityConverter
 	if oldSch != nil {
-		oldToUnionMapping, err := rowconv.TagMapping(oldSch, untypedUnionSch)
+		oldToUnionMapping, err := rowconv.TagMapping(oldSch, unionSch)
 
 		if err != nil {
 			return nil, nil, errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
@@ -697,7 +737,7 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 	}
 
 	ds := diff.NewDiffSplitter(joiner, oldToUnionConv, newToUnionConv)
-	return untypedUnionSch, ds, nil
+	return unionSch, ds, nil
 }
 
 var emptyHash = hash.Hash{}

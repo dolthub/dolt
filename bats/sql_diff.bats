@@ -99,7 +99,7 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "diff sql output reconciles primary key change" {
+@test "diff sql output reconciles change to PRIMARY KEY field in row " {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt table import -u test `batshelper 1pk5col-ints.csv`
@@ -107,7 +107,7 @@ teardown() {
     dolt commit -m "Added one initial row"
 
     dolt checkout -b newbranch
-        dolt sql -q 'UPDATE test SET pk=2 WHERE pk=1'
+    dolt sql -q 'UPDATE test SET pk=2 WHERE pk=1'
     dolt add test
     dolt commit -m "modified first row"
 
@@ -129,6 +129,274 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
+@test "diff sql output reconciles column rename" {
+
+    dolt checkout -b firstbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "added row"
+
+    dolt checkout -b newbranch
+    dolt schema rename-column test c1 c0
+    dolt add .
+    dolt commit -m "renamed column"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add test
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql output reconciles DROP column query" {
+    dolt checkout -b firstbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "added row"
+
+    dolt checkout -b newbranch
+    dolt schema drop-column test c1
+    dolt add .
+    dolt commit -m "dropped column"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add test
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql output reconciles ADD column query" {
+    dolt checkout -b firstbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "added row"
+
+    dolt checkout -b newbranch
+    dolt schema add-column test c0 int
+    dolt add .
+    dolt commit -m "added column"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add test
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql reconciles CREATE TABLE" {
+    dolt checkout -b firstbranch
+    dolt checkout -b newbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add .
+    dolt commit -m "created new table"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add test
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    dolt diff --sql newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql includes row INSERTSs to new tables after CREATE TABLE" {
+    dolt checkout -b firstbranch
+    dolt checkout -b newbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt sql -q 'insert into test values (2,2,2,2,2,2)'
+    dolt sql -q 'insert into test values (3,3,3,3,3,3)'
+    dolt add .
+    dolt commit -m "created new table"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add test
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    dolt diff --sql newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql reconciles DROP TABLE" {
+    dolt checkout -b firstbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "setup table"
+
+    dolt checkout -b newbranch
+    dolt table rm test
+    dolt add .
+    dolt commit -m "removed table"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add test
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql outputs RENAME TABLE if underlying data is unchanged" {
+    dolt checkout -b firstbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add .
+    dolt commit -m "created table"
+
+    dolt checkout -b newbranch
+    dolt table mv test newname
+    dolt diff -q
+    dolt add .
+    dolt commit -m "renamed table"
+
+    # confirm RENAME statement is being used
+    dolt diff --sql newbranch firstbranch > output
+    # grep will exit error if it doesn't match the pattern
+    run grep RENAME output
+    [ "$status" -eq 0 ]
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add .
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql reconciles RENAME TABLE with DROP+ADD if data is changed" {
+    dolt checkout -b firstbranch
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql -q 'insert into test values (1,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "created table"
+
+    dolt checkout -b newbranch
+    dolt sql -q='RENAME TABLE test TO newname'
+    dolt sql -q 'insert into newname values (2,1,1,1,1,1)'
+    dolt add .
+    dolt commit -m "renamed table and added data"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add .
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "diff sql recreates tables with all types" {
+
+    skip "This test fails due to type incompatibility between SQL and Noms"
+
+    dolt checkout -b firstbranch
+    dolt checkout -b newbranch
+    dolt table create -s=`batshelper 1pksupportedtypes.schema` test
+    # dolt table import -u test `batshelper 1pksupportedtypes.csv`
+    dolt add .
+    dolt commit -m "created new table"
+
+    # confirm a difference exists
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" != "" ]] || false
+
+    dolt diff --sql newbranch firstbranch > query
+    dolt checkout firstbranch
+    dolt sql < query
+    rm query
+    dolt add test
+    dolt commit -m "Reconciled with newbranch"
+
+    # confirm that both branches have the same content
+    dolt diff --sql newbranch firstbranch
+    run dolt diff --sql newbranch firstbranch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
 @test "sql diff supports all types" {
     dolt checkout -b firstbranch
     dolt table create -s=`batshelper 1pksupportedtypes.schema` test
@@ -139,11 +407,11 @@ teardown() {
     # for each query file in helper/queries/1pksuppportedtypes/
     # run query on db, create sql diff patch, confirm they're equivalent
     dolt branch newbranch
-    for query in delete add update
+    for query in delete add update create_table
     do
         dolt checkout newbranch
         dolt sql < $BATS_TEST_DIRNAME/helper/queries/1pksupportedtypes/$query.sql
-        dolt add test
+        dolt add .
         dolt commit -m "applied $query query"
 
         # confirm a difference exists
@@ -155,7 +423,7 @@ teardown() {
         dolt checkout firstbranch
         dolt sql < patch.sql
         rm patch.sql
-        dolt add test
+        dolt add .
         dolt commit -m "Reconciled with newbranch"
 
         # confirm that both branches have the same content
@@ -175,11 +443,11 @@ teardown() {
     # for each query file in helper/queries/2pk5col-ints/
     # run query on db, create sql diff patch, confirm they're equivalent
     dolt branch newbranch
-    for query in delete add update single_pk_update all_pk_update
+    for query in delete add update single_pk_update all_pk_update create_table
     do
         dolt checkout newbranch
         dolt sql < $BATS_TEST_DIRNAME/helper/queries/2pk5col-ints/$query.sql
-        dolt add test
+        dolt add .
         dolt diff --sql
         dolt commit -m "applied $query query "
 
@@ -193,7 +461,7 @@ teardown() {
         dolt checkout firstbranch
         dolt sql < patch.sql
         rm patch.sql
-        dolt add test
+        dolt add .
         dolt commit -m "Reconciled with newbranch"
 
         # confirm that both branches have the same content
@@ -201,15 +469,4 @@ teardown() {
         [ "$status" -eq 0 ]
         [[ "$output" = "" ]] || false
     done
-}
-
-@test "sql diff correctly exits on schema change" {
-    dolt table import -c -s=`batshelper employees-sch.json` employees `batshelper employees-tbl.json`
-    dolt add employees
-    dolt commit -m "Added employees table with data"
-    dolt schema add-column employees city string
-    dolt table put-row employees id:3 "first name":taylor "last name":bantle title:"software engineer" "start date":"" "end date":"" city:"Santa Monica"
-    run dolt diff --sql
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "SQL output of schema diffs is not yet supported" ]] || false
 }
