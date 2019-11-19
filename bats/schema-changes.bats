@@ -104,6 +104,17 @@ teardown() {
     [[ "$output" =~ "PRIMARY KEY" ]] || false
 }
 
+@test "add another primary key. view the schema diff" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add test
+    dolt commit -m "committed table so we can see diffs"
+    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk.schema` test
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    skip "Schema diff output does not handle adding primary keys. Additionally, rows that should not be in the diff show up."
+    [[ "$output" =~ "PRIMARY KEY" ]] || false
+}
+
 @test "adding and dropping column should produce no diff" {
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
