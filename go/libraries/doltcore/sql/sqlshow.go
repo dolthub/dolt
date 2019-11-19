@@ -170,9 +170,9 @@ func BuildShowPipeline(ctx context.Context, root *doltdb.RootValue, show *sqlpar
 		}
 
 		systemTables := []string{"dolt_log"}
-		for _, tblName := range tableNames {
-			systemTables = append(systemTables, "dolt_diff_"+tblName)
-		}
+		//for _, tblName := range tableNames {
+		//	systemTables = append(systemTables, "dolt_diff_"+tblName)
+		//}
 
 		tableNames = append(tableNames, systemTables...)
 
