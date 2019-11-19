@@ -36,36 +36,6 @@ var ageColTag3TypeInt = schema.NewColumn("age", 3, types.IntKind, false)
 var ageColTag4TypeInt = schema.NewColumn("age", 4, types.IntKind, false)
 var ageColTag4TypeUint = schema.NewColumn("age", 4, types.UintKind, false)
 
-func mustMap(m types.Map, err error) types.Map {
-	if err != nil {
-		panic(err)
-	}
-
-	return m
-}
-
-func mustSchema(cols ...schema.Column) schema.Schema {
-	hasPKCols := false
-	for _, col := range cols {
-		if col.IsPartOfPK {
-			hasPKCols = true
-			break
-		}
-	}
-
-	colColl, err := schema.NewColCollection(cols...)
-
-	if err != nil {
-		panic(err)
-	}
-
-	if !hasPKCols {
-		return schema.UnkeyedSchemaFromCols(colColl)
-	} else {
-		return schema.SchemaFromCols(colColl)
-	}
-}
-
 func mustSchemaFromTagAndKind(tts map[string]TagKindPair) schema.Schema {
 	cols := make([]schema.Column, 0, len(tts))
 	for name, tt := range tts {
@@ -91,7 +61,7 @@ func TestSuperSchemaGen(t *testing.T) {
 		{
 			"base schema",
 			[]schema.Schema{
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
 				"0_UUID":   TagKindPair{0, types.UUIDKind},
@@ -102,8 +72,8 @@ func TestSuperSchemaGen(t *testing.T) {
 		{
 			"differing keys",
 			[]schema.Schema{
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
-				mustSchema(idColTag0TypeUint, firstColTag1TypeStr, lastColTag2TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUint, firstColTag1TypeStr, lastColTag2TypeStr),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
 				"0_UUID":   TagKindPair{0, types.UUIDKind},
@@ -115,9 +85,9 @@ func TestSuperSchemaGen(t *testing.T) {
 		{
 			"tag conflict",
 			[]schema.Schema{
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
 				"0_UUID":   TagKindPair{0, types.UUIDKind},
@@ -130,9 +100,9 @@ func TestSuperSchemaGen(t *testing.T) {
 		{
 			"tag type conflict",
 			[]schema.Schema{
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, titleColTag3TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, titleColTag3TypeStr),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
 				"0_UUID":   TagKindPair{0, types.UUIDKind},
@@ -144,11 +114,11 @@ func TestSuperSchemaGen(t *testing.T) {
 		{
 			"multiple tag conflicts",
 			[]schema.Schema{
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeInt),
-				mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeInt),
+				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
 				"0_UUID":   TagKindPair{0, types.UUIDKind},
@@ -183,10 +153,10 @@ func TestSuperSchemaGen(t *testing.T) {
 
 func TestSuperSchemaFromHistory(t *testing.T) {
 	const tblName = "test_table"
-	initialSch := mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
-	addAddrAt3Sch := mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
-	addAgeAt3Sch := mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt)
-	readdAgeAt4Sch := mustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint)
+	initialSch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+	addAddrAt3Sch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+	addAgeAt3Sch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt)
+	readdAgeAt4Sch := envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint)
 
 	ctx := context.Background()
 	dEnv := envtestutils.CreateInitializedTestEnv(t, ctx)

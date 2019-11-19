@@ -59,6 +59,7 @@ func executeSelect(ctx context.Context, dEnv *env.DoltEnv, targetSch schema.Sche
 
 		doltRows = append(doltRows, sqlR)
 	}
+
 	if err != io.EOF {
 		return nil, nil, err
 	}
