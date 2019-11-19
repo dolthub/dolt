@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
@@ -343,4 +344,122 @@ func CreateEmptyTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 	dtestutils.CreateTestTable(t, dEnv, PeopleTableName, PeopleTestSchema)
 	dtestutils.CreateTestTable(t, dEnv, EpisodesTableName, EpisodesTestSchema)
 	dtestutils.CreateTestTable(t, dEnv, AppearancesTableName, AppearancesTestSchema)
+}
+
+var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
+var firstColTag1TypeStr = schema.NewColumn("first", 1, types.StringKind, false)
+var lastColTag2TypeStr = schema.NewColumn("last", 2, types.StringKind, false)
+var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
+var ageColTag3TypeInt = schema.NewColumn("age", 3, types.IntKind, false)
+var ageColTag4TypeUint = schema.NewColumn("age", 4, types.UintKind, false)
+
+var diffSchema = envtestutils.MustSchema(
+	schema.NewColumn("to_0_Int", 0, types.IntKind, false),
+	schema.NewColumn("to_1_String", 1, types.StringKind, false),
+	schema.NewColumn("to_2_String", 2, types.StringKind, false),
+	schema.NewColumn("to_3_Int", 3, types.IntKind, false),
+	schema.NewColumn("to_4_Uint", 4, types.UintKind, false),
+	schema.NewColumn("to_3_String", 5, types.StringKind, false),
+	schema.NewColumn("to_commit", 6, types.StringKind, false),
+	schema.NewColumn("from_0_Int", 7, types.IntKind, false),
+	schema.NewColumn("from_1_String", 8, types.StringKind, false),
+	schema.NewColumn("from_2_String", 9, types.StringKind, false),
+	schema.NewColumn("from_3_Int", 10, types.IntKind, false),
+	schema.NewColumn("from_4_Uint", 11, types.UintKind, false),
+	schema.NewColumn("from_3_String", 12, types.StringKind, false),
+	schema.NewColumn("from_commit", 13, types.StringKind, false),
+)
+
+const tblName = "test_table"
+
+var initialSch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr)
+var addAddrAt3Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr)
+var addAgeAt3Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt)
+var readdAgeAt4Sch = envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint)
+
+func CreateHistory(ctx context.Context, dEnv *env.DoltEnv, t *testing.T) []envtestutils.HistoryNode {
+	vrw := dEnv.DoltDB.ValueReadWriter()
+
+	return []envtestutils.HistoryNode{
+		{
+			Branch:    "seed",
+			CommitMsg: "Seeding with initial user data",
+			Updates: map[string]envtestutils.TableUpdate{
+				tblName: {
+					NewSch: initialSch,
+					NewRowData: envtestutils.MustRowData(t, ctx, vrw, initialSch, []row.TaggedValues{
+						{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son")},
+						{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks")},
+						{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn")},
+					}),
+				},
+			},
+			Children: []envtestutils.HistoryNode{
+				{
+					Branch:    "add-age",
+					CommitMsg: "Adding int age to users with tag 3",
+					Updates: map[string]envtestutils.TableUpdate{
+						tblName: {
+							NewSch: addAgeAt3Sch,
+							NewRowData: envtestutils.MustRowData(t, ctx, vrw, addAgeAt3Sch, []row.TaggedValues{
+								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.Int(35)},
+								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.Int(38)},
+								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.Int(37)},
+								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.Int(37)},
+							}),
+						},
+					},
+					Children: nil,
+				},
+				{
+					Branch:    "master",
+					CommitMsg: "Adding string address to users with tag 3",
+					Updates: map[string]envtestutils.TableUpdate{
+						tblName: {
+							NewSch: addAddrAt3Sch,
+							NewRowData: envtestutils.MustRowData(t, ctx, vrw, addAddrAt3Sch, []row.TaggedValues{
+								{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St")},
+								{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln")},
+								{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct")},
+								{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave")},
+								{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
+							}),
+						},
+					},
+					Children: []envtestutils.HistoryNode{
+						{
+							Branch:    "master",
+							CommitMsg: "Re-add age as a uint with tag 4",
+							Updates: map[string]envtestutils.TableUpdate{
+								tblName: {
+									NewSch: readdAgeAt4Sch,
+									NewRowData: envtestutils.MustRowData(t, ctx, vrw, readdAgeAt4Sch, []row.TaggedValues{
+										{0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 3: types.String("123 Fake St"), 4: types.Uint(35)},
+										{0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 3: types.String("456 Bull Ln"), 4: types.Uint(38)},
+										{0: types.Int(2), 1: types.String("Tim"), 2: types.String("Sehn"), 3: types.String("789 Not Real Ct"), 4: types.Uint(37)},
+										{0: types.Int(3), 1: types.String("Zach"), 2: types.String("Musgrave"), 3: types.String("-1 Imaginary Wy"), 4: types.Uint(37)},
+										{0: types.Int(4), 1: types.String("Matt"), 2: types.String("Jesuele")},
+										{0: types.Int(5), 1: types.String("Daylon"), 2: types.String("Wilkins")},
+									}),
+								},
+							},
+							Children: nil,
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func CreateWorkingRootUpdate() map[string]envtestutils.TableUpdate {
+	return map[string]envtestutils.TableUpdate{
+		tblName: {
+			RowUpdates: []row.Row{
+				mustRow(row.New(types.Format_Default, readdAgeAt4Sch, row.TaggedValues{
+					0: types.Int(6), 1: types.String("Katie"), 2: types.String("McCulloch"),
+				})),
+			},
+		},
+	}
 }

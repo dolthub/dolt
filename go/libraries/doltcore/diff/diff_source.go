@@ -32,15 +32,24 @@ const (
 )
 
 type RowDiffSource struct {
-	ad     *AsyncDiffer
-	joiner *rowconv.Joiner
+	ad         *AsyncDiffer
+	joiner     *rowconv.Joiner
+	oldRowConv *rowconv.RowConverter
+	newRowConv *rowconv.RowConverter
 }
 
 func NewRowDiffSource(ad *AsyncDiffer, joiner *rowconv.Joiner) *RowDiffSource {
 	return &RowDiffSource{
 		ad,
 		joiner,
+		rowconv.IdentityConverter,
+		rowconv.IdentityConverter,
 	}
+}
+
+func (rdRd *RowDiffSource) AddInputRowConversion(oldConv, newConv *rowconv.RowConverter) {
+	rdRd.oldRowConv = oldConv
+	rdRd.newRowConv = newConv
 }
 
 // GetSchema gets the schema of the rows that this reader will return
@@ -76,23 +85,41 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 	d := diffs[0]
 	rows := make(map[string]row.Row)
 	if d.OldValue != nil {
-		oldRow, err := row.FromNoms(rdRd.joiner.SchemaForName(From), d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
+		sch := rdRd.joiner.SchemaForName(From)
+		if !rdRd.oldRowConv.IdentityConverter {
+			sch = rdRd.oldRowConv.SrcSch
+		}
+
+		oldRow, err := row.FromNoms(sch, d.KeyValue.(types.Tuple), d.OldValue.(types.Tuple))
 
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}
 
-		rows[From] = oldRow
+		rows[From], err = rdRd.oldRowConv.Convert(oldRow)
+
+		if err != nil {
+			return nil, pipeline.NoProps, err
+		}
 	}
 
 	if d.NewValue != nil {
-		newRow, err := row.FromNoms(rdRd.joiner.SchemaForName(To), d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
+		sch := rdRd.joiner.SchemaForName(To)
+		if !rdRd.newRowConv.IdentityConverter {
+			sch = rdRd.newRowConv.SrcSch
+		}
+
+		newRow, err := row.FromNoms(sch, d.KeyValue.(types.Tuple), d.NewValue.(types.Tuple))
 
 		if err != nil {
 			return nil, pipeline.ImmutableProperties{}, err
 		}
 
-		rows[To] = newRow
+		rows[To], err = rdRd.newRowConv.Convert(newRow)
+
+		if err != nil {
+			return nil, pipeline.NoProps, err
+		}
 	}
 
 	joinedRow, err := rdRd.joiner.Join(rows)
