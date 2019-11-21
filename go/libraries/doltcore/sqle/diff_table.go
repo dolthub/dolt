@@ -73,7 +73,6 @@ func NewDiffTable(name string, dEnv *env.DoltEnv) (*DiffTable, error) {
 
 	if err != nil {
 		return nil, err
-		panic(err)
 	}
 
 	root1, err := dEnv.WorkingRoot(ctx)
