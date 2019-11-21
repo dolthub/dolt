@@ -141,10 +141,10 @@ func TestSuperSchemaGen(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			err := ssg.GenerateSuperSchema()
+			ss, err := ssg.GenerateSuperSchema()
 			require.NoError(t, err)
 
-			result := ssg.GetSchema()
+			result := ss.GetSchema()
 			eq, err := schema.SchemasAreEqual(result, test.expected)
 			require.NoError(t, err)
 			assert.True(t, eq)
@@ -211,10 +211,10 @@ func TestSuperSchemaFromHistory(t *testing.T) {
 	err := ssg.AddHistoryOfTable(ctx, tblName, dEnv.DoltDB)
 	require.NoError(t, err)
 
-	err = ssg.GenerateSuperSchema(NameKindPair{"extra", types.StringKind})
+	ss, err := ssg.GenerateSuperSchema(NameKindPair{"extra", types.StringKind})
 	require.NoError(t, err)
 
-	result := ssg.GetSchema()
+	result := ss.GetSchema()
 
 	expected := mustSchemaFromTagAndKind(map[string]TagKindPair{
 		"id":         TagKindPair{0, types.UUIDKind},

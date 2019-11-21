@@ -45,7 +45,7 @@ func TestExecuteSelect(t *testing.T) {
 	}
 }
 
-func SkipTestExecuteSelectDiff(t *testing.T) {
+func TestExecuteSelectDiff(t *testing.T) {
 	for _, test := range SelectDiffTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testSelectDiffQuery(t, test)

@@ -354,19 +354,19 @@ var ageColTag3TypeInt = schema.NewColumn("age", 3, types.IntKind, false)
 var ageColTag4TypeUint = schema.NewColumn("age", 4, types.UintKind, false)
 
 var diffSchema = envtestutils.MustSchema(
-	schema.NewColumn("to_0_Int", 0, types.IntKind, false),
-	schema.NewColumn("to_1_String", 1, types.StringKind, false),
-	schema.NewColumn("to_2_String", 2, types.StringKind, false),
-	schema.NewColumn("to_3_Int", 3, types.IntKind, false),
-	schema.NewColumn("to_4_Uint", 4, types.UintKind, false),
-	schema.NewColumn("to_3_String", 5, types.StringKind, false),
+	schema.NewColumn("to_id", 0, types.IntKind, false),
+	schema.NewColumn("to_first", 1, types.StringKind, false),
+	schema.NewColumn("to_last", 2, types.StringKind, false),
+	schema.NewColumn("to_age_Int_3", 3, types.IntKind, false),
+	schema.NewColumn("to_age_Uint_4", 4, types.UintKind, false),
+	schema.NewColumn("to_addr", 5, types.StringKind, false),
 	schema.NewColumn("to_commit", 6, types.StringKind, false),
-	schema.NewColumn("from_0_Int", 7, types.IntKind, false),
-	schema.NewColumn("from_1_String", 8, types.StringKind, false),
-	schema.NewColumn("from_2_String", 9, types.StringKind, false),
-	schema.NewColumn("from_3_Int", 10, types.IntKind, false),
-	schema.NewColumn("from_4_Uint", 11, types.UintKind, false),
-	schema.NewColumn("from_3_String", 12, types.StringKind, false),
+	schema.NewColumn("from_id", 7, types.IntKind, false),
+	schema.NewColumn("from_first", 8, types.StringKind, false),
+	schema.NewColumn("from_last", 9, types.StringKind, false),
+	schema.NewColumn("from_age_Int_3", 10, types.IntKind, false),
+	schema.NewColumn("from_age_Uint_4", 11, types.UintKind, false),
+	schema.NewColumn("from_addr", 12, types.StringKind, false),
 	schema.NewColumn("from_commit", 13, types.StringKind, false),
 )
 
