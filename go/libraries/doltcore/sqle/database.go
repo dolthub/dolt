@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
 
@@ -25,6 +26,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+var _ sql.Database = (*Database)(nil)
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
@@ -48,47 +51,54 @@ func (db *Database) Name() string {
 	return db.name
 }
 
-// Tables returns the tables in this database, currently exactly the same tables as in the current working root.
-func (db *Database) Tables() map[string]sql.Table {
-	ctx := context.Background()
+func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sql.Table, bool, error) {
+	lwrName := strings.ToLower(tblName)
+	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
+		tblName = tblName[len(DoltDiffTablePrefix):]
+		dt, err := NewDiffTable(tblName, db.dEnv)
 
-	tables := make(map[string]sql.Table)
+		if err != nil {
+			return nil, false, err
+		}
+
+		return dt, true, nil
+	}
+
+	if lwrName == LogTableName {
+		return NewLogTable(db.dEnv), true, nil
+	}
+
 	tableNames, err := db.root.GetTableNames(ctx)
 
-	// TODO: fix panics
 	if err != nil {
-		panic(err)
+		return nil, false, err
 	}
 
-	for _, name := range tableNames {
-		table, ok, err := db.root.GetTable(ctx, name)
+	exactName, ok := sql.GetTableNameInsensitive(tblName, tableNames)
 
-		// TODO: fix panics
-		if err != nil {
-			panic(err)
-		}
-
-		if !ok {
-			panic("Error loading table " + name)
-		}
-
-		sch, err := table.GetSchema(ctx)
-		// TODO: fix panics
-		if err != nil {
-			panic(err)
-		}
-
-		tables[name] = &DoltTable{name: name, table: table, sch: sch, db: db}
-
-		//if db.dEnv != nil {
-		//	dfTbl := NewDiffTable(name, db.dEnv)
-		//	tables[dfTbl.Name()] = dfTbl
-		//}
+	if !ok {
+		return nil, false, nil
 	}
 
-	tables[LogTableName] = NewLogTable(db.dEnv)
+	tbl, ok, err := db.root.GetTable(ctx, exactName)
 
-	return tables
+	if err != nil {
+		return nil, false, err
+	} else if !ok {
+		panic("Name '" + exactName + "'had already been verified... This is a bug")
+	}
+
+	sch, err := tbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	return &DoltTable{name: tblName, table: tbl, sch: sch, db: db}, true, nil
+}
+
+func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
+	return db.root.GetTableNames(ctx)
 }
 
 // Root returns the root value for the database.
