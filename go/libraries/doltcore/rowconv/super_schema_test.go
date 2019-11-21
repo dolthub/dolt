@@ -64,9 +64,9 @@ func TestSuperSchemaGen(t *testing.T) {
 				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
-				"0_UUID":   TagKindPair{0, types.UUIDKind},
-				"1_String": TagKindPair{1, types.StringKind},
-				"2_String": TagKindPair{2, types.StringKind},
+				"id":    TagKindPair{0, types.UUIDKind},
+				"first": TagKindPair{1, types.StringKind},
+				"last":  TagKindPair{2, types.StringKind},
 			}),
 		},
 		{
@@ -76,10 +76,10 @@ func TestSuperSchemaGen(t *testing.T) {
 				envtestutils.MustSchema(idColTag0TypeUint, firstColTag1TypeStr, lastColTag2TypeStr),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
-				"0_UUID":   TagKindPair{0, types.UUIDKind},
-				"0_Uint":   TagKindPair{schema.ReservedTagMin, types.UintKind},
-				"1_String": TagKindPair{1, types.StringKind},
-				"2_String": TagKindPair{2, types.StringKind},
+				"id_UUID_0": TagKindPair{0, types.UUIDKind},
+				"id_Uint_0": TagKindPair{schema.ReservedTagMin, types.UintKind},
+				"first":     TagKindPair{1, types.StringKind},
+				"last":      TagKindPair{2, types.StringKind},
 			}),
 		},
 		{
@@ -90,11 +90,11 @@ func TestSuperSchemaGen(t *testing.T) {
 				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, ageColTag3TypeInt),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
-				"0_UUID":   TagKindPair{0, types.UUIDKind},
-				"1_String": TagKindPair{1, types.StringKind},
-				"2_String": TagKindPair{2, types.StringKind},
-				"3_String": TagKindPair{3, types.StringKind},
-				"3_Int":    TagKindPair{schema.ReservedTagMin, types.IntKind},
+				"id":    TagKindPair{0, types.UUIDKind},
+				"first": TagKindPair{1, types.StringKind},
+				"last":  TagKindPair{2, types.StringKind},
+				"addr":  TagKindPair{3, types.StringKind},
+				"age":   TagKindPair{schema.ReservedTagMin, types.IntKind},
 			}),
 		},
 		{
@@ -105,9 +105,9 @@ func TestSuperSchemaGen(t *testing.T) {
 				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, titleColTag3TypeStr),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
-				"0_UUID":   TagKindPair{0, types.UUIDKind},
-				"1_String": TagKindPair{1, types.StringKind},
-				"2_String": TagKindPair{2, types.StringKind},
+				"id":       TagKindPair{0, types.UUIDKind},
+				"first":    TagKindPair{1, types.StringKind},
+				"last":     TagKindPair{2, types.StringKind},
 				"3_String": TagKindPair{3, types.StringKind},
 			}),
 		},
@@ -121,13 +121,13 @@ func TestSuperSchemaGen(t *testing.T) {
 				envtestutils.MustSchema(idColTag0TypeUUID, firstColTag1TypeStr, lastColTag2TypeStr, addrColTag3TypeStr, ageColTag4TypeUint),
 			},
 			mustSchemaFromTagAndKind(map[string]TagKindPair{
-				"0_UUID":   TagKindPair{0, types.UUIDKind},
-				"1_String": TagKindPair{1, types.StringKind},
-				"2_String": TagKindPair{2, types.StringKind},
-				"3_String": TagKindPair{3, types.StringKind},
-				"3_Int":    TagKindPair{schema.ReservedTagMin, types.IntKind},
-				"4_Int":    TagKindPair{4, types.IntKind},
-				"4_Uint":   TagKindPair{schema.ReservedTagMin + 1, types.UintKind},
+				"id":         TagKindPair{0, types.UUIDKind},
+				"first":      TagKindPair{1, types.StringKind},
+				"last":       TagKindPair{2, types.StringKind},
+				"addr":       TagKindPair{3, types.StringKind},
+				"age_Int_3":  TagKindPair{schema.ReservedTagMin, types.IntKind},
+				"age_Int_4":  TagKindPair{4, types.IntKind},
+				"age_Uint_4": TagKindPair{schema.ReservedTagMin + 1, types.UintKind},
 			}),
 		},
 	}
@@ -141,9 +141,10 @@ func TestSuperSchemaGen(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			result, err := ssg.GenerateSuperSchema()
+			err := ssg.GenerateSuperSchema()
 			require.NoError(t, err)
 
+			result := ssg.GetSchema()
 			eq, err := schema.SchemasAreEqual(result, test.expected)
 			require.NoError(t, err)
 			assert.True(t, eq)
@@ -210,17 +211,19 @@ func TestSuperSchemaFromHistory(t *testing.T) {
 	err := ssg.AddHistoryOfTable(ctx, tblName, dEnv.DoltDB)
 	require.NoError(t, err)
 
-	result, err := ssg.GenerateSuperSchema(NameKindPair{"extra", types.StringKind})
+	err = ssg.GenerateSuperSchema(NameKindPair{"extra", types.StringKind})
 	require.NoError(t, err)
 
+	result := ssg.GetSchema()
+
 	expected := mustSchemaFromTagAndKind(map[string]TagKindPair{
-		"0_UUID":   TagKindPair{0, types.UUIDKind},
-		"1_String": TagKindPair{1, types.StringKind},
-		"2_String": TagKindPair{2, types.StringKind},
-		"3_Int":    TagKindPair{3, types.IntKind},
-		"3_String": TagKindPair{schema.ReservedTagMin, types.StringKind},
-		"4_Uint":   TagKindPair{4, types.UintKind},
-		"extra":    {schema.ReservedTagMin + 1, types.StringKind},
+		"id":         TagKindPair{0, types.UUIDKind},
+		"first":      TagKindPair{1, types.StringKind},
+		"last":       TagKindPair{2, types.StringKind},
+		"age_Int_3":  TagKindPair{3, types.IntKind},
+		"addr":       TagKindPair{schema.ReservedTagMin, types.StringKind},
+		"age_Uint_4": TagKindPair{4, types.UintKind},
+		"extra":      {schema.ReservedTagMin + 1, types.StringKind},
 	})
 
 	eq, err := schema.SchemasAreEqual(result, expected)

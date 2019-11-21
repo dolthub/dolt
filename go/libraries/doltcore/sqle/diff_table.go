@@ -40,7 +40,7 @@ var _ sql.FilteredTable = (*DiffTable)(nil)
 type DiffTable struct {
 	name          string
 	dEnv          *env.DoltEnv
-	superSch      schema.Schema
+	ssg           *rowconv.SuperSchemaGen
 	joiner        *rowconv.Joiner
 	fromRoot      *doltdb.RootValue
 	toRoot        *doltdb.RootValue
@@ -58,11 +58,13 @@ func NewDiffTable(name string, dEnv *env.DoltEnv) (*DiffTable, error) {
 		return nil, err
 	}
 
-	sch, err := ssg.GenerateSuperSchema(rowconv.NameKindPair{Name: "commit", Kind: types.StringKind})
+	err = ssg.GenerateSuperSchema(rowconv.NameKindPair{Name: "commit", Kind: types.StringKind})
 
 	if err != nil {
 		panic(err)
 	}
+
+	sch := ssg.GetSchema()
 
 	j, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{{Name: diff.To, Sch: sch}, {Name: diff.From, Sch: sch}},
@@ -87,7 +89,7 @@ func NewDiffTable(name string, dEnv *env.DoltEnv) (*DiffTable, error) {
 		return nil, err
 	}
 
-	return &DiffTable{name, dEnv, sch, j, root2, root1, "current", "HEAD", nil}, nil
+	return &DiffTable{name, dEnv, ssg, j, root2, root1, "current", "HEAD", nil}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -161,13 +163,13 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 		return nil, err
 	}
 
-	fromConv, err := rowconv.RowConvForSuperSchema(fromSch, dt.superSch)
+	fromConv, err := dt.ssg.RowConvForSuperSchema(fromSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toConv, err := rowconv.RowConvForSuperSchema(toSch, dt.superSch)
+	toConv, err := dt.ssg.RowConvForSuperSchema(toSch)
 
 	if err != nil {
 		return nil, err

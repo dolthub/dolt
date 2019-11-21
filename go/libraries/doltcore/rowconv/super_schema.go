@@ -16,36 +16,15 @@ package rowconv
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
-
-// RowConvForSuperSchema creates a RowConverter for transforming rows with the the given schema to the given super schema.
-// This is done by mapping the column tag and type to the super schema column representing that tag and type.
-func RowConvForSuperSchema(sch, super schema.Schema) (*RowConverter, error) {
-	inNameToOutName := make(map[string]string)
-	allCols := sch.GetAllCols()
-	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		inNameToOutName[col.Name] = fmt.Sprintf("%d_%s", col.Tag, col.Kind.String())
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	fm, err := NewFieldMappingFromNameMap(sch, super, inNameToOutName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return NewRowConverter(fm)
-}
 
 // TagKindPair is a simple tuple that holds a tag and a NomsKind of a column
 type TagKindPair struct {
@@ -69,27 +48,65 @@ type NameKindPair struct {
 type SuperSchemaGen struct {
 	tagKindToDestTag map[TagKindPair]uint64
 	usedTags         map[uint64]struct{}
+	names            map[TagKindPair]*set.StrSet
+	namedCols        map[TagKindPair]string
+	sch              schema.Schema
 }
 
 // NewSuperSchemaGen creates a new SuperSchemaGen
 func NewSuperSchemaGen() *SuperSchemaGen {
-	return &SuperSchemaGen{make(map[TagKindPair]uint64), make(map[uint64]struct{})}
+	return &SuperSchemaGen{
+		tagKindToDestTag: make(map[TagKindPair]uint64),
+		usedTags:         make(map[uint64]struct{}),
+		names:            make(map[TagKindPair]*set.StrSet),
+	}
+}
+
+func (ssg *SuperSchemaGen) nameCols() map[TagKindPair]string {
+	if ssg.namedCols == nil {
+		colNames := map[string][]TagKindPair{}
+		for tagKind, names := range ssg.names {
+			name := fmt.Sprintf("%d_%s", tagKind.Tag, tagKind.Kind.String())
+			if names.Size() == 1 {
+				name = names.AsSlice()[0]
+			}
+			colNames[name] = append(colNames[name], tagKind)
+		}
+
+		results := map[TagKindPair]string{}
+		for name, tagKinds := range colNames {
+			if len(tagKinds) == 1 {
+				results[tagKinds[0]] = name
+				continue
+			}
+
+			for _, tagKind := range tagKinds {
+				name := fmt.Sprintf("%s_%s_%d", name, tagKind.Kind.String(), tagKind.Tag)
+				results[tagKind] = name
+			}
+		}
+
+		ssg.namedCols = results
+	}
+
+	return ssg.namedCols
 }
 
 // AddSchema will add a schema which will be incorporated into the superset of schemas
-func (ss *SuperSchemaGen) AddSchema(sch schema.Schema) error {
+func (ssg *SuperSchemaGen) AddSchema(sch schema.Schema) error {
 	err := sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tagKind := TagKindPair{Tag: tag, Kind: col.Kind}
-		_, exists := ss.tagKindToDestTag[tagKind]
+		_, exists := ssg.tagKindToDestTag[tagKind]
 
 		if !exists {
 			destTag := tag
 
 			for {
-				_, collides := ss.usedTags[destTag]
+				_, collides := ssg.usedTags[destTag]
 				if !collides {
-					ss.tagKindToDestTag[tagKind] = destTag
-					ss.usedTags[destTag] = struct{}{}
+					ssg.tagKindToDestTag[tagKind] = destTag
+					ssg.usedTags[destTag] = struct{}{}
+					ssg.names[tagKind] = set.NewStrSet([]string{col.Name})
 					return false, nil
 				}
 
@@ -99,6 +116,8 @@ func (ss *SuperSchemaGen) AddSchema(sch schema.Schema) error {
 					destTag++
 				}
 			}
+		} else {
+			ssg.names[tagKind].Add(col.Name)
 		}
 
 		return false, nil
@@ -111,19 +130,38 @@ func (ss *SuperSchemaGen) AddSchema(sch schema.Schema) error {
 	return nil
 }
 
+func (ssg *SuperSchemaGen) GetSchema() schema.Schema {
+	if ssg.sch == nil {
+		panic("Bug: super schema not generated.")
+	}
+
+	return ssg.sch
+}
+
 // GenerateSuperSchema takes all the accumulated schemas and generates a schema which is the superset of all of
 // those schemas.
-func (ss *SuperSchemaGen) GenerateSuperSchema(additionalCols ...NameKindPair) (schema.Schema, error) {
+func (ssg *SuperSchemaGen) GenerateSuperSchema(additionalCols ...NameKindPair) error {
+	if ssg.sch != nil {
+		panic("Bug: Generate schema can only be called once.")
+	}
+
+	namedCols := ssg.nameCols()
+
 	colColl, _ := schema.NewColCollection()
-	for tagKind, destTag := range ss.tagKindToDestTag {
-		colName := fmt.Sprintf("%d_%s", tagKind.Tag, tagKind.Kind.String())
+	for tagKind, colName := range namedCols {
+		destTag, ok := ssg.tagKindToDestTag[tagKind]
+
+		if !ok {
+			panic("mismatch between namedCols and tagKindToDestTag")
+		}
+
 		col := schema.NewColumn(colName, destTag, tagKind.Kind, false)
 
 		var err error
 		colColl, err = colColl.Append(col)
 
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
@@ -131,35 +169,70 @@ func (ss *SuperSchemaGen) GenerateSuperSchema(additionalCols ...NameKindPair) (s
 		nextReserved := schema.ReservedTagMin
 
 		for _, nameKindPair := range additionalCols {
+			if _, ok := colColl.GetByName(nameKindPair.Name); ok {
+				return errors.New("Additional column name collision: " + nameKindPair.Name)
+			}
+
 			for {
-				if _, ok := ss.usedTags[nextReserved]; !ok {
+				if _, ok := ssg.usedTags[nextReserved]; !ok {
 					break
 				}
 				nextReserved++
 			}
 
 			var err error
-			ss.usedTags[nextReserved] = struct{}{}
+			ssg.usedTags[nextReserved] = struct{}{}
 			colColl, err = colColl.Append(schema.NewColumn(nameKindPair.Name, nextReserved, nameKindPair.Kind, false))
 
 			if err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
 
-	return schema.UnkeyedSchemaFromCols(colColl), nil
+	ssg.sch = schema.UnkeyedSchemaFromCols(colColl)
+	return nil
+}
+
+// RowConvForSuperSchema creates a RowConverter for transforming rows with the the given schema to the given super schema.
+// This is done by mapping the column tag and type to the super schema column representing that tag and type.
+func (ssg *SuperSchemaGen) RowConvForSuperSchema(sch schema.Schema) (*RowConverter, error) {
+	inNameToOutName := make(map[string]string)
+	allCols := sch.GetAllCols()
+	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		tkp := TagKindPair{Tag: tag, Kind: col.Kind}
+		outName, ok := ssg.namedCols[tkp]
+
+		if !ok {
+			return false, errors.New("failed to map columns")
+		}
+
+		inNameToOutName[col.Name] = outName
+		return false, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	fm, err := NewFieldMappingFromNameMap(sch, ssg.sch, inNameToOutName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return NewRowConverter(fm)
 }
 
 // AddHistoryOfTableAtCommit will traverse a commit graph adding all versions of a tables schema to the schemas being
 // supersetted.
-func (ss *SuperSchemaGen) AddHistoryOfTableAtCommit(ctx context.Context, tblName string, ddb *doltdb.DoltDB, cm *doltdb.Commit) error {
+func (ssg *SuperSchemaGen) AddHistoryOfTableAtCommit(ctx context.Context, tblName string, ddb *doltdb.DoltDB, cm *doltdb.Commit) error {
 	addedSchemas := make(map[hash.Hash]struct{})
 	processedCommits := make(map[hash.Hash]struct{})
-	return ss.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
+	return ssg.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
 }
 
-func (ss *SuperSchemaGen) addHistoryOfTableAtCommit(ctx context.Context, tblName string, addedSchemas, processedCommits map[hash.Hash]struct{}, ddb *doltdb.DoltDB, cm *doltdb.Commit) error {
+func (ssg *SuperSchemaGen) addHistoryOfTableAtCommit(ctx context.Context, tblName string, addedSchemas, processedCommits map[hash.Hash]struct{}, ddb *doltdb.DoltDB, cm *doltdb.Commit) error {
 	cmHash, err := cm.HashOf()
 
 	if err != nil {
@@ -200,7 +273,7 @@ func (ss *SuperSchemaGen) addHistoryOfTableAtCommit(ctx context.Context, tblName
 				return err
 			}
 
-			err = ss.AddSchema(sch)
+			err = ssg.AddSchema(sch)
 
 			if err != nil {
 				return err
@@ -221,7 +294,7 @@ func (ss *SuperSchemaGen) addHistoryOfTableAtCommit(ctx context.Context, tblName
 			return err
 		}
 
-		err = ss.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
+		err = ssg.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
 
 		if err != nil {
 			return err
@@ -233,7 +306,7 @@ func (ss *SuperSchemaGen) addHistoryOfTableAtCommit(ctx context.Context, tblName
 
 // AddHistoryOfTable will traverse all commit graphs which have local branches associated with them and add all
 // passed versions of a table's schema to the schemas being supersetted
-func (ss *SuperSchemaGen) AddHistoryOfTable(ctx context.Context, tblName string, ddb *doltdb.DoltDB) error {
+func (ssg *SuperSchemaGen) AddHistoryOfTable(ctx context.Context, tblName string, ddb *doltdb.DoltDB) error {
 	refs, err := ddb.GetRefs(ctx)
 
 	if err != nil {
@@ -256,7 +329,7 @@ func (ss *SuperSchemaGen) AddHistoryOfTable(ctx context.Context, tblName string,
 			return err
 		}
 
-		err = ss.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
+		err = ssg.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
 
 		if err != nil {
 			return err
