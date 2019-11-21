@@ -49,19 +49,17 @@ type DiffTable struct {
 	filters       []sql.Expression
 }
 
-func NewDiffTable(name string, dEnv *env.DoltEnv) *DiffTable {
+func NewDiffTable(name string, dEnv *env.DoltEnv) (*DiffTable, error) {
 	ctx := context.TODO()
 	ssg := rowconv.NewSuperSchemaGen()
 	err := ssg.AddHistoryOfTable(ctx, name, dEnv.DoltDB)
 
-	// TODO: fix panics
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	sch, err := ssg.GenerateSuperSchema(rowconv.NameKindPair{Name: "commit", Kind: types.StringKind})
 
-	// TODO: fix panics
 	if err != nil {
 		panic(err)
 	}
@@ -73,24 +71,24 @@ func NewDiffTable(name string, dEnv *env.DoltEnv) *DiffTable {
 			diff.From: fromNamer,
 		})
 
-	// TODO: fix panics
 	if err != nil {
+		return nil, err
 		panic(err)
 	}
 
 	root1, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	root2, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	return &DiffTable{name, dEnv, sch, j, root2, root1, "current", "HEAD", nil}
+	return &DiffTable{name, dEnv, sch, j, root2, root1, "current", "HEAD", nil}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -259,7 +257,7 @@ func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 			continue
 		}
 
-		expression.Inspect(f, func(e sql.Expression) bool {
+		sql.Inspect(f, func(e sql.Expression) bool {
 			if e, ok := e.(*expression.GetField); ok {
 				if e.Table() == dt.Name() && e.Name() == toCommit || e.Name() == fromCommit {
 					handled = append(handled, f)
@@ -284,7 +282,7 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 
 		var fieldName string
 		var value string
-		expression.Inspect(f, func(e sql.Expression) bool {
+		sql.Inspect(f, func(e sql.Expression) bool {
 			if e == nil {
 				return true
 			}
