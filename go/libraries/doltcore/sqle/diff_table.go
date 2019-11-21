@@ -163,13 +163,13 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 		return nil, err
 	}
 
-	fromConv, err := dt.ss.RowConvForSuperSchema(fromSch)
+	fromConv, err := dt.ss.RowConvForSchema(fromSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toConv, err := dt.ss.RowConvForSuperSchema(toSch)
+	toConv, err := dt.ss.RowConvForSchema(toSch)
 
 	if err != nil {
 		return nil, err
