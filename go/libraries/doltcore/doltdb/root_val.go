@@ -26,6 +26,8 @@ const (
 
 	tablesKey = "tables"
 	notesKey  = "notes"
+	licensePk = "LICENSE.md"
+	readmePk  = "README.md"
 )
 
 // RootValue defines the structure used inside all Liquidata noms dbs
@@ -34,7 +36,7 @@ type RootValue struct {
 	valueSt types.Struct
 }
 
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, notes map[string]string) (*RootValue, error) {
+func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, notes map[string]hash.Hash) (*RootValue, error) {
 	tblValues := make([]types.Value, 2*len(tables))
 
 	index := 0
@@ -69,11 +71,25 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 	index = 0
 	for k, v := range notes {
 		ntsValues[index] = types.String(k)
-		ntsValues[index+1] = types.String(v)
+		valForHash, err := vrw.ReadValue(ctx, v)
+
+		if err != nil {
+			return nil, err
+		}
+
+		ntsValues[index+1], err = types.NewRef(valForHash, vrw.Format())
+
+		if err != nil {
+			return nil, err
+		}
 		index += 2
 	}
 
 	ntsMap, err := types.NewMap(ctx, vrw, ntsValues...)
+
+	if err != nil {
+		return nil, err
+	}
 
 	return newRootFromTblMapAndNtsMap(vrw, tblMap, ntsMap)
 }
@@ -88,8 +104,11 @@ func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 	if err != nil {
 		return nil, err
 	}
-
-	return newRootFromTblMapAndNtsMap(vrw, m, m)
+	n, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+	return newRootFromTblMapAndNtsMap(vrw, m, n)
 }
 
 func newRootFromTblMapAndNtsMap(vrw types.ValueReadWriter, tblMap types.Map, ntsMap types.Map) (*RootValue, error) {
@@ -216,60 +235,6 @@ func (root *RootValue) getTableMap() (types.Map, error) {
 	return tableMap, err
 }
 
-// GetNotesNames retrieves the lists of all notes for a RootValue
-func (root *RootValue) GetNotesNames(ctx context.Context) ([]string, error) {
-	notesMap, err := root.getNotesMap()
-
-	if err != nil {
-		return nil, err
-	}
-
-	numNotes := int(notesMap.Len())
-	notes := make([]string, 0, numNotes)
-
-	err = notesMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
-		notes = append(notes, string(key.(types.String)))
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	return notes, nil
-}
-
-func (root *RootValue) getNotesMap() (types.Map, error) {
-	val, found, err := root.valueSt.MaybeGet(notesKey)
-
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	if !found || val == nil {
-		return types.EmptyMap, err
-	}
-
-	notesMap := val.(types.Map)
-	return notesMap, err
-}
-
-func (root *RootValue) GetNoteString(ctx context.Context, ntName string) (string, bool, error) {
-	noteMap, err := root.getNotesMap()
-
-	if err != nil {
-		return "", false, err
-	}
-
-	ntVal, found, err := noteMap.MaybeGet(ctx, types.String(ntName))
-
-	if ntVal == nil || !found {
-		return "", false, nil
-	}
-
-	return string(ntVal.(types.String)), true, nil
-}
-
 func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
 	tableMap, err := root.getTableMap()
 
@@ -307,12 +272,13 @@ func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
 
 func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	cnfTbls, err := root.TablesInConflict(ctx)
+	cnfNotes, err := root.NotesInConflict(ctx)
 
 	if err != nil {
 		return false, err
 	}
 
-	return len(cnfTbls) > 0, nil
+	return len(cnfTbls) > 0 || len(cnfNotes) > 0, nil
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -540,4 +506,154 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 	}
 
 	return newRootValue(root.vrw, rootValSt), nil
+}
+
+// NoteDiff returns the slices of notes added, modified, and removed when compared with another root value.  Notes
+// In this instance that are not in the other instance are considered added, and notes in the other instance and not
+// this instance are considered removed.
+func (root *RootValue) NoteDiff(ctx context.Context, newerLicenseBytes, newerReadmeBytes []byte) (added, modified, removed []string, err error) {
+	added = []string{}
+	modified = []string{}
+	removed = []string{}
+
+	noteMap, err := root.getNoteMap()
+
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if noteMap != types.EmptyMap {
+		licenseVal, found, err := noteMap.MaybeGet(ctx, types.String(licensePk))
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if !found && newerLicenseBytes != nil {
+			added = append(added, licensePk)
+		} else if found {
+			if newerLicenseBytes == nil {
+				removed = append(removed, licensePk)
+			} else if string(newerLicenseBytes) != licenseVal.HumanReadableString() {
+				modified = append(modified, licensePk)
+			}
+		}
+
+		readmeVal, found, err := noteMap.MaybeGet(ctx, types.String(readmePk))
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		if !found && newerReadmeBytes != nil {
+			added = append(added, readmePk)
+		} else if found {
+			if newerReadmeBytes == nil {
+				removed = append(removed, readmePk)
+			} else if string(newerReadmeBytes) != readmeVal.HumanReadableString() {
+				modified = append(modified, readmePk)
+			}
+		}
+	}
+
+	return added, modified, removed, nil
+}
+
+// GetNotesNames retrieves the lists of all notes for a RootValue
+func (root *RootValue) GetNotesNames(ctx context.Context) ([]string, error) {
+	notesMap, err := root.getNoteMap()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if notesMap != types.EmptyMap {
+		numNotes := int(notesMap.Len())
+		notes := make([]string, 0, numNotes)
+
+		err = notesMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
+			notes = append(notes, string(key.(types.String)))
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		return notes, nil
+	}
+	var emptyMap []string
+	return emptyMap, nil
+}
+
+func (root *RootValue) getNoteMap() (types.Map, error) {
+	val, found, err := root.valueSt.MaybeGet(notesKey)
+
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	if !found || val == nil {
+		return types.EmptyMap, err
+	}
+
+	notesMap := val.(types.Map)
+	return notesMap, err
+}
+
+func (root *RootValue) GetNoteHash(ctx context.Context, ntName string) (hash.Hash, bool, error) {
+	noteMap, err := root.getNoteMap()
+
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+
+	if noteMap != types.EmptyMap {
+		ntVal, found, err := noteMap.MaybeGet(ctx, types.String(ntName))
+
+		if err != nil {
+			return hash.Hash{}, false, nil
+		}
+
+		if ntVal == nil || !found {
+			return hash.Hash{}, false, nil
+		}
+
+		ntValRef := ntVal.(types.Ref)
+		return ntValRef.TargetHash(), true, nil
+	}
+	return hash.Hash{}, false, nil
+}
+
+func (root *RootValue) NotesInConflict(ctx context.Context) ([]string, error) {
+	noteMap, err := root.getNoteMap()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if noteMap != types.EmptyMap {
+		numNotes := int(noteMap.Len())
+		notes := make([]string, 0, numNotes)
+
+		err = noteMap.Iter(ctx, func(key, noteRefVal types.Value) (stop bool, err error) {
+			ntVal, err := noteRefVal.(types.Ref).TargetValue(ctx, root.vrw)
+			ntSt := ntVal.(types.Struct)
+			nt := &Note{root.vrw, ntSt}
+			if has, err := nt.HasConflicts(); err != nil {
+				return false, err
+			} else if has {
+				notes = append(notes, string(key.(types.String)))
+			}
+
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
+
+		return notes, nil
+	}
+
+	var notes []string
+	return notes, nil
 }

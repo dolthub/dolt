@@ -51,7 +51,7 @@ func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 }
 
 func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
-	staged, notStaged, err := GetTableDiffs(ctx, dEnv)
+	stagedTbls, notStagedTbls, err := GetTableDiffs(ctx, dEnv)
 
 	if msg == "" {
 		return ErrEmptyCommitMessage
@@ -61,8 +61,15 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 		return err
 	}
 
-	if len(staged.Tables) == 0 && dEnv.RepoState.Merge == nil && !allowEmpty {
-		return NothingStaged{notStaged}
+	_, notStagedNts, err := GetNoteDiffs(ctx, dEnv)
+
+	if err != nil {
+		return err
+	}
+
+	// I will add stagedNts here once we have them via `dolt add`
+	if len(stagedTbls.Tables) == 0 && dEnv.RepoState.Merge == nil && !allowEmpty {
+		return NothingStaged{notStagedTbls, notStagedNts}
 	}
 
 	name, email, err := getNameAndEmail(dEnv.Config)

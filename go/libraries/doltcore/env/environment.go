@@ -162,6 +162,50 @@ func (dEnv *DoltEnv) HasLocalConfig() bool {
 	return ok
 }
 
+// GetLicenseFile returns the path to the LICENSE.md file if it exists
+func (dEnv *DoltEnv) GetLicenseFile() string {
+	if !dEnv.hasLicenseFile() {
+		return ""
+	}
+	return getLicenseFile()
+}
+
+func (dEnv *DoltEnv) hasLicenseFile() bool {
+	exists, isDir := dEnv.FS.Exists(getLicenseFile())
+	return exists && !isDir
+}
+
+// GetReadmeFile returns the path to the README.md file if it exists
+func (dEnv *DoltEnv) GetReadmeFile() string {
+	if !dEnv.hasReadmeFile() {
+		return ""
+	}
+	return getReadmeFile()
+}
+
+func (dEnv *DoltEnv) hasReadmeFile() bool {
+	exists, isDir := dEnv.FS.Exists(getReadmeFile())
+	return exists && !isDir
+}
+
+// GetLocalLicenseText returns a byte slice of the LICENSE.md file contents if it exists
+func (dEnv *DoltEnv) GetLocalLicenseText() ([]byte, error) {
+	licensePath := dEnv.GetLicenseFile()
+	if licensePath != "" {
+		return dEnv.FS.ReadFile(licensePath)
+	}
+	return nil, nil
+}
+
+// GetLocalReadmeText returns a byte slice of the README.md file contents if it exists
+func (dEnv *DoltEnv) GetLocalReadmeText() ([]byte, error) {
+	readmePath := dEnv.GetReadmeFile()
+	if readmePath != "" {
+		return dEnv.FS.ReadFile(readmePath)
+	}
+	return nil, nil
+}
+
 func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 	fileToIsDir := make(map[string]bool)
 	dEnv.FS.Iter(dir, false, func(path string, size int64, isDir bool) (stop bool) {
@@ -178,7 +222,7 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 	}
 }
 
-// InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
+// InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, uncommitted license and readme, and creates a noms
 // database with dolt structure.
 func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")

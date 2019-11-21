@@ -28,6 +28,8 @@ teardown() {
 }
 
 @test "modify both tables, commit only one" {
+    rm "LICENSE.md"
+    rm "README.md"
     dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add test1
@@ -51,6 +53,8 @@ teardown() {
 }
 
 @test "dolt add --all and dolt add . adds all changes" {
+    rm "LICENSE.md"
+    rm "README.md"
     dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add --all
@@ -72,6 +76,8 @@ teardown() {
 }
 
 @test "dolt reset . resets all tables" {
+    rm "LICENSE.md"
+    rm "README.md"
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -85,6 +91,8 @@ teardown() {
 }
 
 @test "dolt reset --hard" {
+    rm "LICENSE.md"
+    rm "README.md"
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false

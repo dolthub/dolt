@@ -453,6 +453,8 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "generate a merge conflict and try to roll back using dolt merge --abort" {
+    rm "LICENSE.md" 
+    rm "README.md"
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -645,6 +647,8 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "rm a staged but uncommitted table" {
+    rm "LICENSE.md"
+    rm "README.md"
     run dolt add test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]

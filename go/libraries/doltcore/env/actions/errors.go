@@ -189,7 +189,8 @@ func CheckoutWouldOverwriteTables(err error) []string {
 }
 
 type NothingStaged struct {
-	NotStaged *TableDiffs
+	NotStagedTbls *TableDiffs
+	NotStagedNts  *NoteDiffs
 }
 
 func (ns NothingStaged) Error() string {
@@ -201,12 +202,22 @@ func IsNothingStaged(err error) bool {
 	return ok
 }
 
-func NothingStagedDiffs(err error) *TableDiffs {
+func NothingStagedTblDiffs(err error) *TableDiffs {
 	ns, ok := err.(NothingStaged)
 
 	if !ok {
 		panic("Must validate with IsCheckoutWouldOverwrite before calling CheckoutWouldOverwriteTables")
 	}
 
-	return ns.NotStaged
+	return ns.NotStagedTbls
+}
+
+func NothingStagedNtsDiffs(err error) *NoteDiffs {
+	ns, ok := err.(NothingStaged)
+
+	if !ok {
+		panic("Must validate with IsCheckoutWouldOverwrite before calling CheckoutWouldOverwriteTables")
+	}
+
+	return ns.NotStagedNts
 }

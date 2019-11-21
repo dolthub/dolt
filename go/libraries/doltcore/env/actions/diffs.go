@@ -38,6 +38,22 @@ type TableDiffs struct {
 	Tables      []string
 }
 
+type NoteDiffType int
+
+const (
+	AddedNote NoteDiffType = iota
+	ModifiedNote
+	RemovedNote
+)
+
+type NoteDiffs struct {
+	NumAdded    int
+	NumModified int
+	NumRemoved  int
+	NoteToType  map[string]NoteDiffType
+	Notes       []string
+}
+
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
 	added, modified, removed, err := newer.TableDiff(ctx, older)
 
@@ -103,4 +119,84 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	}
 
 	return stagedDiffs, notStagedDiffs, nil
+}
+
+func NewNoteDiffs(ctx context.Context, newerLicenseBytes, newReadmeBytes []byte, older *doltdb.RootValue) (*NoteDiffs, error) {
+	added, modified, removed, err := older.NoteDiff(ctx, newerLicenseBytes, newReadmeBytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var nts []string
+	nts = append(nts, added...)
+	nts = append(nts, modified...)
+	nts = append(nts, removed...)
+	sort.Strings(nts)
+
+	ntsToType := make(map[string]NoteDiffType)
+	for _, nt := range added {
+		ntsToType[nt] = AddedNote
+	}
+
+	for _, nt := range modified {
+		ntsToType[nt] = ModifiedNote
+	}
+
+	for _, nt := range removed {
+		ntsToType[nt] = RemovedNote
+	}
+
+	return &NoteDiffs{len(added), len(modified), len(removed), ntsToType, nts}, err
+}
+
+func (nd *NoteDiffs) Len() int {
+	return len(nd.Notes)
+}
+
+func GetNoteDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *NoteDiffs, error) {
+	// headRoot, err := dEnv.HeadRoot(ctx)
+
+	// if err != nil {
+	// 	return nil, nil, RootValueUnreadable{HeadRoot, err}
+	// }
+
+	// stagedRoot, err := dEnv.StagedRoot(ctx)
+
+	// if err != nil {
+	// 	return nil, nil, RootValueUnreadable{StagedRoot, err}
+	// }
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+
+	if err != nil {
+		return nil, nil, RootValueUnreadable{WorkingRoot, err}
+	}
+
+	licenseText, err := dEnv.GetLocalLicenseText()
+	if err != nil {
+		return nil, nil, err
+	}
+	readmeText, err := dEnv.GetLocalReadmeText()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// TO DO: Implement diffs on staged notes
+	// stagedTblDiffs, err := NewStagedNoteDiffs(ctx, stagedRoot, headRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	notStagedNtDiffs, err := NewNoteDiffs(ctx, licenseText, readmeText, workingRoot)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// return empty staged note diffs until I have `dolt add` working
+	var emptyStagedNoteDiffs *TableDiffs
+
+	return emptyStagedNoteDiffs, notStagedNtDiffs, nil
 }

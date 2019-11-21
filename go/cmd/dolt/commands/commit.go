@@ -94,8 +94,9 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 	}
 
 	if actions.IsNothingStaged(err) {
-		notStaged := actions.NothingStagedDiffs(err)
-		n := printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
+		notStagedTbls := actions.NothingStagedTblDiffs(err)
+		notStagedNts := actions.NothingStagedNtsDiffs(err)
+		n := printDiffsNotStaged(cli.CliOut, notStagedTbls, notStagedNts, false, 0, []string{}, []string{})
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -128,17 +129,23 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.Head.Ref
-	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
-	buf := bytes.NewBuffer([]byte{})
-
-	workingInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
-
+	stagedTblDiffs, notStagedTblDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
+	
+	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
-		workingInConflict = []string{}
+		workingTblsInConflict = []string{}
 	}
-
-	n := printStagedDiffs(buf, stagedDiffs, true)
-	n = printDiffsNotStaged(buf, notStagedDiffs, true, n, workingInConflict)
+	
+	_, notStagedNtDiffs, _ := actions.GetNoteDiffs(ctx, dEnv)
+	
+	workingNtsInConflict, _, _, err := actions.GetNotesInConflict(ctx, dEnv)
+	if err != nil {
+		workingNtsInConflict = []string{}
+	}
+	
+	buf := bytes.NewBuffer([]byte{})
+	n := printStagedDiffs(buf, stagedTblDiffs, true)
+	n = printDiffsNotStaged(buf, notStagedTblDiffs, notStagedNtDiffs, true, n, workingTblsInConflict, workingNtsInConflict)
 
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
