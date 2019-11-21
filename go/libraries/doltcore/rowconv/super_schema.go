@@ -61,9 +61,9 @@ func (ss SuperSchema) GetSchema() schema.Schema {
 	return ss.sch
 }
 
-// RowConvForSuperSchema creates a RowConverter for transforming rows with the the given schema to this super schema.
+// RowConvForSchema creates a RowConverter for transforming rows with the the given schema to this super schema.
 // This is done by mapping the column tag and type to the super schema column representing that tag and type.
-func (ss SuperSchema) RowConvForSuperSchema(sch schema.Schema) (*RowConverter, error) {
+func (ss SuperSchema) RowConvForSchema(sch schema.Schema) (*RowConverter, error) {
 	inNameToOutName := make(map[string]string)
 	allCols := sch.GetAllCols()
 	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -146,7 +146,7 @@ func (ssg *SuperSchemaGen) AddSchema(sch schema.Schema) error {
 }
 
 func (ssg *SuperSchemaGen) nameCols() map[TagKindPair]string {
-	colNames := map[string][]TagKindPair{}
+	colNames := make(map[string][]TagKindPair)
 	for tagKind, names := range ssg.names {
 		name := fmt.Sprintf("%d_%s", tagKind.Tag, tagKind.Kind.String())
 		if names.Size() == 1 {
@@ -155,7 +155,7 @@ func (ssg *SuperSchemaGen) nameCols() map[TagKindPair]string {
 		colNames[name] = append(colNames[name], tagKind)
 	}
 
-	results := map[TagKindPair]string{}
+	results := make(map[TagKindPair]string)
 	for name, tagKinds := range colNames {
 		if len(tagKinds) == 1 {
 			results[tagKinds[0]] = name
