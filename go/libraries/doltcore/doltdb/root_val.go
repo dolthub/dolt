@@ -25,7 +25,7 @@ const (
 	ddbRootStructName = "dolt_db_root"
 
 	tablesKey = "tables"
-	notesKey  = "notes"
+	docsKey  = "docs"
 	licensePk = "LICENSE.md"
 	readmePk  = "README.md"
 )
@@ -36,7 +36,7 @@ type RootValue struct {
 	valueSt types.Struct
 }
 
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, notes map[string]hash.Hash) (*RootValue, error) {
+func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, docs map[string]hash.Hash) (*RootValue, error) {
 	tblValues := make([]types.Value, 2*len(tables))
 
 	index := 0
@@ -67,21 +67,21 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 		return nil, err
 	}
 
-	if notes == nil {
+	if docs == nil {
 		return newRootFromTblMapAndNtsMap(vrw, tblMap, nil)
 	}
 
-	ntsValues := make([]types.Value, 2*len(notes))
+	dcsValues := make([]types.Value, 2*len(docs))
 	index = 0
-	for k, v := range notes {
-		ntsValues[index] = types.String(k)
+	for k, v := range docs {
+		dcsValues[index] = types.String(k)
 		valForHash, err := vrw.ReadValue(ctx, v)
 
 		if err != nil {
 			return nil, err
 		}
 
-		ntsValues[index+1], err = types.NewRef(valForHash, vrw.Format())
+		dcsValues[index+1], err = types.NewRef(valForHash, vrw.Format())
 
 		if err != nil {
 			return nil, err
@@ -89,13 +89,13 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 		index += 2
 	}
 
-	ntsMap, err := types.NewMap(ctx, vrw, ntsValues...)
+	dcsMap, err := types.NewMap(ctx, vrw, dcsValues...)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return newRootFromTblMapAndNtsMap(vrw, tblMap, &ntsMap)
+	return newRootFromTblMapAndNtsMap(vrw, tblMap, &dcsMap)
 }
 
 func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
@@ -115,16 +115,16 @@ func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 	return newRootFromTblMapAndNtsMap(vrw, m, &n)
 }
 
-func newRootFromTblMapAndNtsMap(vrw types.ValueReadWriter, tblMap types.Map, ntsMap *types.Map) (*RootValue, error) {
+func newRootFromTblMapAndNtsMap(vrw types.ValueReadWriter, tblMap types.Map, dcsMap *types.Map) (*RootValue, error) {
 	var sd types.StructData
-	if ntsMap == nil {
+	if dcsMap == nil {
 		sd = types.StructData{
 			tablesKey: tblMap,
 		}
 	} else {
 		sd = types.StructData{
 			tablesKey: tblMap,
-			notesKey:  ntsMap,
+			docsKey:  dcsMap,
 		}
 	}
 
@@ -283,13 +283,13 @@ func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
 
 func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	cnfTbls, err := root.TablesInConflict(ctx)
-	cnfNotes, err := root.NotesInConflict(ctx)
+	cnfDocs, err := root.DocsInConflict(ctx)
 
 	if err != nil {
 		return false, err
 	}
 
-	return len(cnfTbls) > 0 || len(cnfNotes) > 0, nil
+	return len(cnfTbls) > 0 || len(cnfDocs) > 0, nil
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -519,22 +519,22 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 	return newRootValue(root.vrw, rootValSt), nil
 }
 
-// NoteDiff returns the slices of notes added, modified, and removed when compared with another root value.  Notes
-// In this instance that are not in the other instance are considered added, and notes in the other instance and not
+// DocDiff returns the slices of docs added, modified, and removed when compared with another root value.  Docs
+// In this instance that are not in the other instance are considered added, and docs in the other instance and not
 // this instance are considered removed.
-func (root *RootValue) NoteDiff(ctx context.Context, newerLicenseBytes, newerReadmeBytes []byte) (added, modified, removed []string, err error) {
+func (root *RootValue) DocDiff(ctx context.Context, newerLicenseBytes, newerReadmeBytes []byte) (added, modified, removed []string, err error) {
 	added = []string{}
 	modified = []string{}
 	removed = []string{}
 
-	noteMap, err := root.getNoteMap()
+	docMap, err := root.getDocMap()
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	if noteMap != nil {
-		licenseVal, found, err := noteMap.MaybeGet(ctx, types.String(licensePk))
+	if docMap != nil {
+		licenseVal, found, err := docMap.MaybeGet(ctx, types.String(licensePk))
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -549,7 +549,7 @@ func (root *RootValue) NoteDiff(ctx context.Context, newerLicenseBytes, newerRea
 			}
 		}
 
-		readmeVal, found, err := noteMap.MaybeGet(ctx, types.String(readmePk))
+		readmeVal, found, err := docMap.MaybeGet(ctx, types.String(readmePk))
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -568,20 +568,20 @@ func (root *RootValue) NoteDiff(ctx context.Context, newerLicenseBytes, newerRea
 	return added, modified, removed, nil
 }
 
-// GetNotesNames retrieves the lists of all notes for a RootValue
-func (root *RootValue) GetNotesNames(ctx context.Context) ([]string, error) {
-	notesMap, err := root.getNoteMap()
+// GetDocsNames retrieves the lists of all docs for a RootValue
+func (root *RootValue) GetDocsNames(ctx context.Context) ([]string, error) {
+	docsMap, err := root.getDocMap()
 
 	if err != nil {
 		return nil, err
 	}
 
-	if notesMap != nil && notesMap != &types.EmptyMap {
-		numNotes := int(notesMap.Len())
-		notes := make([]string, 0, numNotes)
+	if docsMap != nil && docsMap != &types.EmptyMap {
+		numDocs := int(docsMap.Len())
+		docs := make([]string, 0, numDocs)
 
-		err = notesMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
-			notes = append(notes, string(key.(types.String)))
+		err = docsMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
+			docs = append(docs, string(key.(types.String)))
 			return false, nil
 		})
 
@@ -589,13 +589,13 @@ func (root *RootValue) GetNotesNames(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 
-		return notes, nil
+		return docs, nil
 	}
 	return nil, nil
 }
 
-func (root *RootValue) getNoteMap() (*types.Map, error) {
-	val, found, err := root.valueSt.MaybeGet(notesKey)
+func (root *RootValue) getDocMap() (*types.Map, error) {
+	val, found, err := root.valueSt.MaybeGet(docsKey)
 
 	if err != nil {
 		return nil, err
@@ -605,19 +605,19 @@ func (root *RootValue) getNoteMap() (*types.Map, error) {
 		return nil, err
 	}
 
-	notesMap := val.(types.Map)
-	return &notesMap, err
+	docsMap := val.(types.Map)
+	return &docsMap, err
 }
 
-func (root *RootValue) GetNoteHash(ctx context.Context, ntName string) (hash.Hash, bool, error) {
-	noteMap, err := root.getNoteMap()
+func (root *RootValue) GetDocHash(ctx context.Context, ntName string) (hash.Hash, bool, error) {
+	docMap, err := root.getDocMap()
 
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 
-	if noteMap != nil {
-		ntVal, found, err := noteMap.MaybeGet(ctx, types.String(ntName))
+	if docMap != nil {
+		ntVal, found, err := docMap.MaybeGet(ctx, types.String(ntName))
 
 		if err != nil {
 			return hash.Hash{}, false, nil
@@ -633,25 +633,25 @@ func (root *RootValue) GetNoteHash(ctx context.Context, ntName string) (hash.Has
 	return hash.Hash{}, false, nil
 }
 
-func (root *RootValue) NotesInConflict(ctx context.Context) ([]string, error) {
-	noteMap, err := root.getNoteMap()
+func (root *RootValue) DocsInConflict(ctx context.Context) ([]string, error) {
+	docMap, err := root.getDocMap()
 
 	if err != nil {
 		return nil, err
 	}
 
-	if noteMap != nil {
-		numNotes := int(noteMap.Len())
-		notes := make([]string, 0, numNotes)
+	if docMap != nil {
+		numDocs := int(docMap.Len())
+		docs := make([]string, 0, numDocs)
 
-		err = noteMap.Iter(ctx, func(key, noteRefVal types.Value) (stop bool, err error) {
-			ntVal, err := noteRefVal.(types.Ref).TargetValue(ctx, root.vrw)
+		err = docMap.Iter(ctx, func(key, docRefVal types.Value) (stop bool, err error) {
+			ntVal, err := docRefVal.(types.Ref).TargetValue(ctx, root.vrw)
 			ntSt := ntVal.(types.Struct)
-			nt := &Note{root.vrw, ntSt}
+			nt := &Doc{root.vrw, ntSt}
 			if has, err := nt.HasConflicts(); err != nil {
 				return false, err
 			} else if has {
-				notes = append(notes, string(key.(types.String)))
+				docs = append(docs, string(key.(types.String)))
 			}
 
 			return false, nil
@@ -661,9 +661,9 @@ func (root *RootValue) NotesInConflict(ctx context.Context) ([]string, error) {
 			return nil, err
 		}
 
-		return notes, nil
+		return docs, nil
 	}
 
-	var notes []string
-	return notes, nil
+	var docs []string
+	return docs, nil
 }

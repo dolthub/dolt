@@ -125,7 +125,7 @@ func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfl
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
 
-func GetNotesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
+func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConflict, stagedInConflict, headInConflict []string, err error) {
 	var headRoot, stagedRoot, workingRoot *doltdb.RootValue
 
 	headRoot, err = dEnv.HeadRoot(ctx)
@@ -146,19 +146,19 @@ func GetNotesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfli
 		return nil, nil, nil, err
 	}
 
-	headInConflict, err = headRoot.NotesInConflict(ctx)
+	headInConflict, err = headRoot.DocsInConflict(ctx)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	stagedInConflict, err = stagedRoot.NotesInConflict(ctx)
+	stagedInConflict, err = stagedRoot.DocsInConflict(ctx)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	workingInConflict, err = workingRoot.NotesInConflict(ctx)
+	workingInConflict, err = workingRoot.DocsInConflict(ctx)
 
 	if err != nil {
 		return nil, nil, nil, err

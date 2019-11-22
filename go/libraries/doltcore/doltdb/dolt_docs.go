@@ -21,60 +21,60 @@ import (
 )
 
 const (
-	noteStructName = "note"
+	docStructName = "doc"
 
-	noteRefKey       = "note_ref"
-	noteTextKey      = "note_text_ref"
-	conflictNotesKey = "conflict_notes"
+	docRefKey       = "doc_ref"
+	docTextKey      = "doc_text_ref"
+	conflictDocsKey = "conflict_docs"
 )
 
-// Note is a struct which holds note text.
-type Note struct {
+// Doc is a struct which holds doc text.
+type Doc struct {
 	vrw        types.ValueReadWriter
-	noteStruct types.Struct
+	docStruct types.Struct
 }
 
-func NewNote(ctx context.Context, vrw types.ValueReadWriter, name types.Value, text types.Value) (*Note, error) {
-	noteRef, err := writeValAndGetRef(ctx, vrw, name)
+func NewDoc(ctx context.Context, vrw types.ValueReadWriter, name types.Value, text types.Value) (*Doc, error) {
+	docRef, err := writeValAndGetRef(ctx, vrw, name)
 
 	if err != nil {
 		return nil, err
 	}
 
-	noteTextRef, err := writeValAndGetRef(ctx, vrw, text)
+	docTextRef, err := writeValAndGetRef(ctx, vrw, text)
 
 	sd := types.StructData{
-		noteRefKey:  noteRef,
-		noteTextKey: noteTextRef,
+		docRefKey:  docRef,
+		docTextKey: docTextRef,
 	}
 
-	noteStruct, err := types.NewStruct(vrw.Format(), noteStructName, sd)
+	docStruct, err := types.NewStruct(vrw.Format(), docStructName, sd)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &Note{vrw, noteStruct}, nil
+	return &Doc{vrw, docStruct}, nil
 }
 
-func (n *Note) Format() *types.NomsBinFormat {
+func (n *Doc) Format() *types.NomsBinFormat {
 	return n.vrw.Format()
 }
 
-func (n *Note) SetConflicts(ctx context.Context, notes Conflict, conflictData types.Map) (*Note, error) {
+func (n *Doc) SetConflicts(ctx context.Context, docs Conflict, conflictData types.Map) (*Doc, error) {
 	conflictsRef, err := writeValAndGetRef(ctx, n.vrw, conflictData)
 
 	if err != nil {
 		return nil, err
 	}
 
-	ntl, err := notes.ToNomsList(n.vrw)
+	dcl, err := docs.ToNomsList(n.vrw)
 
 	if err != nil {
 		return nil, err
 	}
 
-	updatedSt, err := n.noteStruct.Set(conflictNotesKey, ntl)
+	updatedSt, err := n.docStruct.Set(conflictDocsKey, dcl)
 
 	if err != nil {
 		return nil, err
@@ -86,15 +86,15 @@ func (n *Note) SetConflicts(ctx context.Context, notes Conflict, conflictData ty
 		return nil, err
 	}
 
-	return &Note{n.vrw, updatedSt}, nil
+	return &Doc{n.vrw, updatedSt}, nil
 }
 
-func (n *Note) HasConflicts() (bool, error) {
+func (n *Doc) HasConflicts() (bool, error) {
 	if n == nil {
 		return false, nil
 	}
 
-	_, ok, err := n.noteStruct.MaybeGet(conflictNotesKey)
+	_, ok, err := n.docStruct.MaybeGet(conflictDocsKey)
 
 	return ok, err
 }

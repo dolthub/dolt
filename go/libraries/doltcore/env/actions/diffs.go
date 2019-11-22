@@ -38,20 +38,20 @@ type TableDiffs struct {
 	Tables      []string
 }
 
-type NoteDiffType int
+type DocDiffType int
 
 const (
-	AddedNote NoteDiffType = iota
-	ModifiedNote
-	RemovedNote
+	AddedDoc DocDiffType = iota
+	ModifiedDoc
+	RemovedDoc
 )
 
-type NoteDiffs struct {
+type DocDiffs struct {
 	NumAdded    int
 	NumModified int
 	NumRemoved  int
-	NoteToType  map[string]NoteDiffType
-	Notes       []string
+	DocToType  map[string]DocDiffType
+	Docs       []string
 }
 
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
@@ -121,40 +121,40 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	return stagedDiffs, notStagedDiffs, nil
 }
 
-func NewNoteDiffs(ctx context.Context, newerLicenseBytes, newReadmeBytes []byte, older *doltdb.RootValue) (*NoteDiffs, error) {
-	added, modified, removed, err := older.NoteDiff(ctx, newerLicenseBytes, newReadmeBytes)
+func NewDocDiffs(ctx context.Context, newerLicenseBytes, newReadmeBytes []byte, older *doltdb.RootValue) (*DocDiffs, error) {
+	added, modified, removed, err := older.DocDiff(ctx, newerLicenseBytes, newReadmeBytes)
 
 	if err != nil {
 		return nil, err
 	}
 
-	var nts []string
-	nts = append(nts, added...)
-	nts = append(nts, modified...)
-	nts = append(nts, removed...)
-	sort.Strings(nts)
+	var dcs []string
+	dcs = append(dcs, added...)
+	dcs = append(dcs, modified...)
+	dcs = append(dcs, removed...)
+	sort.Strings(dcs)
 
-	ntsToType := make(map[string]NoteDiffType)
+	dcsToType := make(map[string]DocDiffType)
 	for _, nt := range added {
-		ntsToType[nt] = AddedNote
+		dcsToType[nt] = AddedDoc
 	}
 
 	for _, nt := range modified {
-		ntsToType[nt] = ModifiedNote
+		dcsToType[nt] = ModifiedDoc
 	}
 
 	for _, nt := range removed {
-		ntsToType[nt] = RemovedNote
+		dcsToType[nt] = RemovedDoc
 	}
 
-	return &NoteDiffs{len(added), len(modified), len(removed), ntsToType, nts}, err
+	return &DocDiffs{len(added), len(modified), len(removed), dcsToType, dcs}, err
 }
 
-func (nd *NoteDiffs) Len() int {
-	return len(nd.Notes)
+func (nd *DocDiffs) Len() int {
+	return len(nd.Docs)
 }
 
-func GetNoteDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *NoteDiffs, error) {
+func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *DocDiffs, error) {
 	// headRoot, err := dEnv.HeadRoot(ctx)
 
 	// if err != nil {
@@ -182,21 +182,21 @@ func GetNoteDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *NoteDif
 		return nil, nil, err
 	}
 
-	// TO DO: Implement diffs on staged notes
-	// stagedTblDiffs, err := NewStagedNoteDiffs(ctx, stagedRoot, headRoot)
+	// TO DO: Implement diffs on staged docs
+	// stagedTblDiffs, err := NewStagedDocDiffs(ctx, stagedRoot, headRoot)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	notStagedNtDiffs, err := NewNoteDiffs(ctx, licenseText, readmeText, workingRoot)
+	notStagedNtDiffs, err := NewDocDiffs(ctx, licenseText, readmeText, workingRoot)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// return empty staged note diffs until I have `dolt add` working
-	var emptyStagedNoteDiffs *TableDiffs
+	// return empty staged doc diffs until I have `dolt add` working
+	var emptyStagedDocDiffs *TableDiffs
 
-	return emptyStagedNoteDiffs, notStagedNtDiffs, nil
+	return emptyStagedDocDiffs, notStagedNtDiffs, nil
 }

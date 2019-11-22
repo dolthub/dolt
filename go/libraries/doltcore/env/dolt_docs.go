@@ -21,13 +21,13 @@ import (
 var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file."
 var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file."
 
-type Notes struct {
+type Docs struct {
 	key map[string]string
 
 	fs filesys.ReadWriteFS
 }
 
-func LoadNotes(fs filesys.ReadWriteFS) (*Notes, error) {
+func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 	readmePath := getReadmeFile()
 	var readmeData []byte
 	if readmePath != "" {
@@ -48,39 +48,39 @@ func LoadNotes(fs filesys.ReadWriteFS) (*Notes, error) {
 		licenseData = data
 	}
 
-	var notes Notes
-	notesMap := map[string]string{
+	var docs Docs
+	docsMap := map[string]string{
 		"readme":  string(readmeData),
 		"license": string(licenseData),
 	}
-	notes.key = notesMap
-	notes.fs = fs
+	docs.key = docsMap
+	docs.fs = fs
 
-	return &notes, nil
+	return &docs, nil
 }
 
-func CreateNotes(fs filesys.ReadWriteFS) (*Notes, error) {
-	notesMap := map[string]string{
+func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
+	docsMap := map[string]string{
 		"readme":  initialReadme,
 		"license": initialLicense,
 	}
-	nts := &Notes{notesMap, fs}
-	err := nts.Save()
+	dcs := &Docs{docsMap, fs}
+	err := dcs.Save()
 	if err != nil {
 		return nil, err
 	}
-	return nts, nil
+	return dcs, nil
 }
 
-func (nts *Notes) Save() error {
+func (dcs *Docs) Save() error {
 	readmePath := getReadmeFile()
 	licensePath := getLicenseFile()
 
-	err := nts.fs.WriteFile(readmePath, []byte(nts.key["readme"]))
+	err := dcs.fs.WriteFile(readmePath, []byte(dcs.key["readme"]))
 	if err != nil {
 		return err
 	}
-	err = nts.fs.WriteFile(licensePath, []byte(nts.key["license"]))
+	err = dcs.fs.WriteFile(licensePath, []byte(dcs.key["license"]))
 	if err != nil {
 		return err
 	}

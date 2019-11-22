@@ -52,7 +52,7 @@ var ErrPreexistingDoltDir = errors.New(".dolt dir already exists")
 var ErrStateUpdate = errors.New("error updating local data repo state")
 var ErrMarshallingSchema = errors.New("error marshalling schema")
 var ErrInvalidCredsFile = errors.New("invalid creds file")
-var ErrNotesUpdate = errors.New("error updating local notes")
+var ErrDocsUpdate = errors.New("error updating local docs")
 
 // DoltEnv holds the state of the current environment used by the cli.
 type DoltEnv struct {
@@ -62,7 +62,7 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	Notes      *Notes
+	Docs      *Docs
 	NtsLoadErr error
 
 	DoltDB      *doltdb.DoltDB
@@ -77,7 +77,7 @@ type DoltEnv struct {
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	notes, ntsErr := LoadNotes(fs)
+	docs, dcsErr := LoadDocs(fs)
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
 
 	dEnv := &DoltEnv{
@@ -85,8 +85,8 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 		cfgErr,
 		repoState,
 		rsErr,
-		notes,
-		ntsErr,
+		docs,
+		dcsErr,
 		ddb,
 		dbLoadErr,
 		fs,
@@ -324,10 +324,10 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinForma
 		return ErrStateUpdate
 	}
 
-	dEnv.Notes, err = CreateNotes(dEnv.FS)
+	dEnv.Docs, err = CreateDocs(dEnv.FS)
 
 	if err != nil {
-		return ErrNotesUpdate
+		return ErrDocsUpdate
 	}
 
 	return nil
