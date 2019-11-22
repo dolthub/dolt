@@ -77,13 +77,24 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	lwrName := strings.ToLower(tblName)
 	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
 		tblName = tblName[len(DoltDiffTablePrefix):]
-		dt, err := NewDiffTable(tblName, db.dEnv)
+		dt, err := NewDiffTable(ctx, tblName, db.dEnv)
 
 		if err != nil {
 			return nil, false, err
 		}
 
 		return dt, true, nil
+	}
+
+	if strings.HasPrefix(lwrName, DoltHistoryTablePrefix) {
+		tblName = tblName[len(DoltHistoryTablePrefix):]
+		dh, err := NewHistoryTable(ctx, tblName, db.dEnv)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		return dh, true, nil
 	}
 
 	if lwrName == LogTableName {
