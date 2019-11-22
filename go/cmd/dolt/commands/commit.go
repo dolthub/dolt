@@ -130,19 +130,19 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 
 	currBranch := dEnv.RepoState.Head.Ref
 	stagedTblDiffs, notStagedTblDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
-	
+
 	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
 		workingTblsInConflict = []string{}
 	}
-	
+
 	_, notStagedNtDiffs, _ := actions.GetNoteDiffs(ctx, dEnv)
-	
+
 	workingNtsInConflict, _, _, err := actions.GetNotesInConflict(ctx, dEnv)
 	if err != nil {
 		workingNtsInConflict = []string{}
 	}
-	
+
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, true)
 	n = printDiffsNotStaged(buf, notStagedTblDiffs, notStagedNtDiffs, true, n, workingTblsInConflict, workingNtsInConflict)

@@ -331,6 +331,10 @@ func ntHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.Ro
 		return nil, err
 	}
 
+	if ntNames == nil {
+		return nil, nil
+	}
+
 	for _, ntName := range ntNames {
 
 		oldHash, _, err := oldRoot.GetNoteHash(ctx, ntName)
@@ -400,14 +404,15 @@ func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash
 		}
 	}
 
-	for k, v := range ntHashes {
-		if v == emptyHash {
-			delete(ntHashes, k)
+	if ntHashes != nil {
+		for k, v := range ntHashes {
+			if v == emptyHash {
+				delete(ntHashes, k)
+			}
 		}
 	}
 
 	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes, ntHashes)
-
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
 			return emptyHash, errors.New("corrupted database? Can't find hash of current table")
@@ -416,6 +421,7 @@ func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash
 	}
 
 	return dEnv.DoltDB.WriteRootValue(ctx, root)
+
 }
 
 func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootTypeSet, error) {
