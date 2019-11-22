@@ -702,6 +702,8 @@ func extractNomsValueFromSQLVal(val *sqlparser.SQLVal, kind types.NomsKind) (typ
 			return types.Float(intVal), nil
 		case types.UintKind:
 			return types.Uint(intVal), nil
+		case types.BoolKind:
+			return types.Bool(intVal != 0), nil
 		default:
 			return nil, errFmt("Type mismatch: numeric value but non-numeric column: %v", nodeToString(val))
 		}

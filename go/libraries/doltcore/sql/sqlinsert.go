@@ -245,7 +245,7 @@ func makeRow(nbf *types.NomsBinFormat, columns []schema.Column, tableSch schema.
 		case *sqlparser.SQLVal:
 			nomsVal, err := extractNomsValueFromSQLVal(val, column.Kind)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("Error inserting value %v into column %s", val, columns[i].Name)
 			}
 			taggedVals[column.Tag] = nomsVal
 		case *sqlparser.NullVal:
