@@ -106,6 +106,13 @@ func (db *Database) Root() *doltdb.RootValue {
 	return db.root
 }
 
+// Set a new root value for the database. Can be used if the dolt working
+// set value changes outside of the basic SQL execution engine.
+func (db *Database) SetRoot(newRoot *doltdb.RootValue) {
+	// TODO: races
+	db.root = newRoot
+}
+
 // DropTable drops the table with the name given
 func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 	tableExists, err := db.root.HasTable(ctx, tableName)
@@ -122,8 +129,7 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	// TODO: races
-	db.root = newRoot
+	db.SetRoot(newRoot)
 
 	return nil
 }
@@ -166,8 +172,7 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return err
 	}
 
-	// TODO: races
-	db.root = newRoot
+	db.SetRoot(newRoot)
 
 	return nil
 }
