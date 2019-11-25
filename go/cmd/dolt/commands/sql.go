@@ -166,7 +166,7 @@ func scanStatements(data []byte, atEOF bool) (advance int, token []byte, err err
 	return 0, nil, nil
 }
 
-// runBatchMode processes queries until EOF and returns the resulting root value
+// runBatchMode processes queries until EOF. The Root of the sqlEngine may be updated.
 func runBatchMode(ctx context.Context, se *sqlEngine) error {
 	scanner := bufio.NewScanner(os.Stdin)
 	const maxCapacity = 512 * 1024
@@ -234,7 +234,8 @@ func batchInsertEarlySemicolon(query string) bool {
 	return !midQuote
 }
 
-// runShell starts a SQL shell. Returns when the user exits the shell with the root value resulting from any queries.
+// runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
+// be updated by any queries which were processed.
 func runShell(ctx context.Context, se *sqlEngine) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
@@ -416,7 +417,7 @@ func prepend(s string, ss []string) []string {
 	return newSs
 }
 
-// Processes a single query and returns the new root value of the DB, or an error encountered.
+// Processes a single query. The Root of the sqlEngine will be updated if necessary.
 func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
@@ -453,7 +454,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 }
 
-// Processes a single query in batch mode and returns the result. The RootValue may or may not be changed.
+// Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
 func processBatchQuery(ctx context.Context, query string, se *sqlEngine, batcher *dsql.SqlBatcher) error {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err != nil {
@@ -671,8 +672,8 @@ type stats struct {
 var batchEditStats stats
 var displayStrLen int
 
-// Executes a SQL insert statement in batch mode and returns the new root value (which is usually unchanged) or an
-// error. No output is written to the console in batch mode.
+// Executes a SQL insert statement in batch mode. If the root value changes, sqlEngine's root will be updated.
+// No output is written to the console in batch mode.
 func (se *sqlEngine) insertBatch(ctx context.Context, stmt *sqlparser.Insert, batcher *dsql.SqlBatcher) error {
 	result, err := dsql.ExecuteBatchInsert(ctx, se.db.Root(), stmt, batcher)
 	if err != nil {
@@ -697,7 +698,7 @@ func mergeResultIntoStats(result *dsql.InsertResult, stats *stats) {
 	stats.numErrorsIgnored += result.NumErrorsIgnored
 }
 
-// Checks if the query is a naked delete and then deletes all rows if so
+// Checks if the query is a naked delete and then deletes all rows if so. Returns true if it did so, false otherwise.
 func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.Delete) bool {
 	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
 		if ate, ok := s.TableExprs[0].(*sqlparser.AliasedTableExpr); ok {
@@ -733,7 +734,8 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 	return false
 }
 
-// Executes a SQL DDL statement (create, update, etc.). Returns the new root value to be written as appropriate.
+// Executes a SQL DDL statement (create, update, etc.). Updates the new root value in
+// the sqlEngine if necessary.
 func (se *sqlEngine) ddl(ctx context.Context, ddl *sqlparser.DDL, query string) error {
 	switch ddl.Action {
 	case sqlparser.CreateStr, sqlparser.DropStr:
