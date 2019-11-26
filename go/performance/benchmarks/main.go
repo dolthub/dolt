@@ -55,6 +55,9 @@ func main() {
 	testFmts := make([]string, 0)
 	for _, fs := range flagStrs {
 		if *fs.b {
+			if fs.s == sqlExt {
+				log.Fatal("benchmarking dolt sql imports currently disabled")
+			}
 			testFmts = append(testFmts, fs.s)
 		}
 	}
