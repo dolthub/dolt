@@ -50,8 +50,8 @@ type DocDiffs struct {
 	NumAdded    int
 	NumModified int
 	NumRemoved  int
-	DocToType  map[string]DocDiffType
-	Docs       []string
+	DocToType   map[string]DocDiffType
+	Docs        []string
 }
 
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
@@ -154,49 +154,32 @@ func (nd *DocDiffs) Len() int {
 	return len(nd.Docs)
 }
 
-func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *DocDiffs, error) {
-	// headRoot, err := dEnv.HeadRoot(ctx)
-
-	// if err != nil {
-	// 	return nil, nil, RootValueUnreadable{HeadRoot, err}
-	// }
-
-	// stagedRoot, err := dEnv.StagedRoot(ctx)
-
-	// if err != nil {
-	// 	return nil, nil, RootValueUnreadable{StagedRoot, err}
-	// }
-
+func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
-		return nil, nil, RootValueUnreadable{WorkingRoot, err}
+		return nil, RootValueUnreadable{WorkingRoot, err}
 	}
 
 	licenseText, err := dEnv.GetLocalLicenseText()
+
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	readmeText, err := dEnv.GetLocalReadmeText()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-
-	// TO DO: Implement diffs on staged docs
-	// stagedTblDiffs, err := NewStagedDocDiffs(ctx, stagedRoot, headRoot)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	notStagedNtDiffs, err := NewDocDiffs(ctx, licenseText, readmeText, workingRoot)
+	notStagedDcDiffs, err := NewDocDiffs(ctx, licenseText, readmeText, workingRoot)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	// return empty staged doc diffs until I have `dolt add` working
-	var emptyStagedDocDiffs *TableDiffs
-
-	return emptyStagedDocDiffs, notStagedNtDiffs, nil
+	return notStagedDcDiffs, nil
 }

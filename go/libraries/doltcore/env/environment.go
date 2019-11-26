@@ -62,8 +62,8 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	Docs      *Docs
-	NtsLoadErr error
+	Docs       *Docs
+	DcsLoadErr error
 
 	DoltDB      *doltdb.DoltDB
 	DBLoadError error

@@ -227,17 +227,13 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return CheckoutWouldOverwrite{conflicts.AsSlice()}
 	}
 
-	wrkNtHashes, err := dcHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[WorkingRoot], conflicts)
-
-	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes, wrkNtHashes)
+	wrkHash, err := writeRoot(ctx, dEnv, wrkTblHashes)
 
 	if err != nil {
 		return err
 	}
 
-	stgNtHashes, err := dcHashesForCO(ctx, currRoots[HeadRoot], newRoot, currRoots[StagedRoot], conflicts)
-
-	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes, stgNtHashes)
+	stgHash, err := writeRoot(ctx, dEnv, stgTblHashes)
 
 	if err != nil {
 		return err
@@ -323,96 +319,14 @@ func tblHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.R
 	return resultMap, nil
 }
 
-func dcHashesForCO(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) (map[string]hash.Hash, error) {
-	resultMap := make(map[string]hash.Hash)
-	dcNames, err := newRoot.GetDocsNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if dcNames == nil {
-		return nil, nil
-	}
-
-	for _, dcName := range dcNames {
-
-		oldHash, _, err := oldRoot.GetDocHash(ctx, dcName)
-
-		if err != nil {
-			return nil, err
-		}
-
-		newHash, _, err := newRoot.GetDocHash(ctx, dcName)
-
-		if err != nil {
-			return nil, err
-		}
-
-		changedHash, _, err := changedRoot.GetDocHash(ctx, dcName)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if oldHash == changedHash {
-			resultMap[dcName] = newHash
-		} else if oldHash == newHash {
-			resultMap[dcName] = changedHash
-		} else if newHash == changedHash {
-			resultMap[dcName] = oldHash
-		} else {
-			conflicts.Add(dcName)
-		}
-	}
-
-	dcNames, err = changedRoot.GetTableNames(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	for _, dcName := range dcNames {
-		if _, exists := resultMap[dcName]; !exists {
-			oldHash, _, err := oldRoot.GetDocHash(ctx, dcName)
-
-			if err != nil {
-				return nil, err
-			}
-
-			changedHash, _, err := changedRoot.GetDocHash(ctx, dcName)
-
-			if err != nil {
-				return nil, err
-			}
-
-			if oldHash == emptyHash {
-				resultMap[dcName] = changedHash
-			} else if oldHash != changedHash {
-				conflicts.Add(dcName)
-			}
-		}
-	}
-
-	return resultMap, nil
-}
-
-func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash, dcHashes map[string]hash.Hash) (hash.Hash, error) {
+func writeRoot(ctx context.Context, dEnv *env.DoltEnv, tblHashes map[string]hash.Hash) (hash.Hash, error) {
 	for k, v := range tblHashes {
 		if v == emptyHash {
 			delete(tblHashes, k)
 		}
 	}
 
-	if dcHashes != nil {
-		for k, v := range dcHashes {
-			if v == emptyHash {
-				delete(dcHashes, k)
-			}
-		}
-	}
-
-	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes, dcHashes)
+	root, err := doltdb.NewRootValue(ctx, dEnv.DoltDB.ValueReadWriter(), tblHashes)
 	if err != nil {
 		if err == doltdb.ErrHashNotFound {
 			return emptyHash, errors.New("corrupted database? Can't find hash of current table")

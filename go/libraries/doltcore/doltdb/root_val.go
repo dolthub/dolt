@@ -24,10 +24,10 @@ import (
 const (
 	ddbRootStructName = "dolt_db_root"
 
-	tablesKey = "tables"
-	docsKey  = "docs"
-	licensePk = "LICENSE.md"
-	readmePk  = "README.md"
+	tablesKey    = "tables"
+	docTableName = "dolt_docs"
+	licensePk    = "LICENSE.md"
+	readmePk     = "README.md"
 )
 
 // RootValue defines the structure used inside all Liquidata noms dbs
@@ -36,12 +36,12 @@ type RootValue struct {
 	valueSt types.Struct
 }
 
-func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash, docs map[string]hash.Hash) (*RootValue, error) {
-	tblValues := make([]types.Value, 2*len(tables))
+func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
+	values := make([]types.Value, 2*len(tables))
 
 	index := 0
 	for k, v := range tables {
-		tblValues[index] = types.String(k)
+		values[index] = types.String(k)
 		valForHash, err := vrw.ReadValue(ctx, v)
 
 		if err != nil {
@@ -52,7 +52,7 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 			return nil, ErrHashNotFound
 		}
 
-		tblValues[index+1], err = types.NewRef(valForHash, vrw.Format())
+		values[index+1], err = types.NewRef(valForHash, vrw.Format())
 
 		if err != nil {
 			return nil, err
@@ -61,41 +61,13 @@ func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[str
 		index += 2
 	}
 
-	tblMap, err := types.NewMap(ctx, vrw, tblValues...)
+	tblMap, err := types.NewMap(ctx, vrw, values...)
 
 	if err != nil {
 		return nil, err
 	}
 
-	if docs == nil {
-		return newRootFromTblMapAndNtsMap(vrw, tblMap, nil)
-	}
-
-	dcsValues := make([]types.Value, 2*len(docs))
-	index = 0
-	for k, v := range docs {
-		dcsValues[index] = types.String(k)
-		valForHash, err := vrw.ReadValue(ctx, v)
-
-		if err != nil {
-			return nil, err
-		}
-
-		dcsValues[index+1], err = types.NewRef(valForHash, vrw.Format())
-
-		if err != nil {
-			return nil, err
-		}
-		index += 2
-	}
-
-	dcsMap, err := types.NewMap(ctx, vrw, dcsValues...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return newRootFromTblMapAndNtsMap(vrw, tblMap, &dcsMap)
+	return newRootFromTblMap(vrw, tblMap)
 }
 
 func newRootValue(vrw types.ValueReadWriter, st types.Struct) *RootValue {
@@ -108,24 +80,12 @@ func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 	if err != nil {
 		return nil, err
 	}
-	n, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return nil, err
-	}
-	return newRootFromTblMapAndNtsMap(vrw, m, &n)
+	return newRootFromTblMap(vrw, m)
 }
 
-func newRootFromTblMapAndNtsMap(vrw types.ValueReadWriter, tblMap types.Map, dcsMap *types.Map) (*RootValue, error) {
-	var sd types.StructData
-	if dcsMap == nil {
-		sd = types.StructData{
-			tablesKey: tblMap,
-		}
-	} else {
-		sd = types.StructData{
-			tablesKey: tblMap,
-			docsKey:  dcsMap,
-		}
+func newRootFromTblMap(vrw types.ValueReadWriter, tblMap types.Map) (*RootValue, error) {
+	sd := types.StructData{
+		tablesKey: tblMap,
 	}
 
 	st, err := types.NewStruct(vrw.Format(), ddbRootStructName, sd)
@@ -283,13 +243,12 @@ func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
 
 func (root *RootValue) HasConflicts(ctx context.Context) (bool, error) {
 	cnfTbls, err := root.TablesInConflict(ctx)
-	cnfDocs, err := root.DocsInConflict(ctx)
 
 	if err != nil {
 		return false, err
 	}
 
-	return len(cnfTbls) > 0 || len(cnfDocs) > 0, nil
+	return len(cnfTbls) > 0, nil
 }
 
 // PutTable inserts a table by name into the map of tables. If a table already exists with that name it will be replaced
@@ -519,7 +478,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 	return newRootValue(root.vrw, rootValSt), nil
 }
 
-// DocDiff returns the slices of docs added, modified, and removed when compared with another root value.  Docs
+// DocDiff returns the slices of the dolt docs on the filesystem that are added, modified, and removed when compared with a root value.  Docs
 // In this instance that are not in the other instance are considered added, and docs in the other instance and not
 // this instance are considered removed.
 func (root *RootValue) DocDiff(ctx context.Context, newerLicenseBytes, newerReadmeBytes []byte) (added, modified, removed []string, err error) {
@@ -527,143 +486,44 @@ func (root *RootValue) DocDiff(ctx context.Context, newerLicenseBytes, newerRead
 	modified = []string{}
 	removed = []string{}
 
-	docMap, err := root.getDocMap()
+	docTable, found, err := root.GetTable(ctx, docTableName)
 
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	if docMap != nil {
-		licenseVal, found, err := docMap.MaybeGet(ctx, types.String(licensePk))
+	var rowMap types.Map
+	var licenseVal types.Value
+	var readmeVal types.Value
+	if found {
+		rowMap, err = docTable.GetRowData(ctx)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		if !found && newerLicenseBytes != nil {
-			added = append(added, licensePk)
-		} else if found {
-			if newerLicenseBytes == nil {
-				removed = append(removed, licensePk)
-			} else if string(newerLicenseBytes) != licenseVal.HumanReadableString() {
-				modified = append(modified, licensePk)
-			}
-		}
+		licenseVal, _, err = rowMap.MaybeGet(ctx, types.String(licensePk))
+		readmeVal, _, err = rowMap.MaybeGet(ctx, types.String(readmePk))
+	}
 
-		readmeVal, found, err := docMap.MaybeGet(ctx, types.String(readmePk))
-		if err != nil {
-			return nil, nil, nil, err
+	if licenseVal == nil && newerLicenseBytes != nil {
+		added = append(added, licensePk)
+	} else if licenseVal != nil {
+		if newerLicenseBytes == nil {
+			removed = append(removed, licensePk)
+		} else if string(newerLicenseBytes) != licenseVal.HumanReadableString() {
+			modified = append(modified, licensePk)
 		}
+	}
 
-		if !found && newerReadmeBytes != nil {
-			added = append(added, readmePk)
-		} else if found {
-			if newerReadmeBytes == nil {
-				removed = append(removed, readmePk)
-			} else if string(newerReadmeBytes) != readmeVal.HumanReadableString() {
-				modified = append(modified, readmePk)
-			}
+	if readmeVal == nil && newerReadmeBytes != nil {
+		added = append(added, readmePk)
+	} else if readmeVal != nil {
+		if newerReadmeBytes == nil {
+			removed = append(removed, readmePk)
+		} else if string(newerReadmeBytes) != readmeVal.HumanReadableString() {
+			modified = append(modified, readmePk)
 		}
 	}
 
 	return added, modified, removed, nil
-}
-
-// GetDocsNames retrieves the lists of all docs for a RootValue
-func (root *RootValue) GetDocsNames(ctx context.Context) ([]string, error) {
-	docsMap, err := root.getDocMap()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if docsMap != nil && docsMap != &types.EmptyMap {
-		numDocs := int(docsMap.Len())
-		docs := make([]string, 0, numDocs)
-
-		err = docsMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
-			docs = append(docs, string(key.(types.String)))
-			return false, nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		return docs, nil
-	}
-	return nil, nil
-}
-
-func (root *RootValue) getDocMap() (*types.Map, error) {
-	val, found, err := root.valueSt.MaybeGet(docsKey)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !found || val == nil {
-		return nil, err
-	}
-
-	docsMap := val.(types.Map)
-	return &docsMap, err
-}
-
-func (root *RootValue) GetDocHash(ctx context.Context, ntName string) (hash.Hash, bool, error) {
-	docMap, err := root.getDocMap()
-
-	if err != nil {
-		return hash.Hash{}, false, err
-	}
-
-	if docMap != nil {
-		ntVal, found, err := docMap.MaybeGet(ctx, types.String(ntName))
-
-		if err != nil {
-			return hash.Hash{}, false, nil
-		}
-
-		if ntVal == nil || !found {
-			return hash.Hash{}, false, nil
-		}
-
-		ntValRef := ntVal.(types.Ref)
-		return ntValRef.TargetHash(), true, nil
-	}
-	return hash.Hash{}, false, nil
-}
-
-func (root *RootValue) DocsInConflict(ctx context.Context) ([]string, error) {
-	docMap, err := root.getDocMap()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if docMap != nil {
-		numDocs := int(docMap.Len())
-		docs := make([]string, 0, numDocs)
-
-		err = docMap.Iter(ctx, func(key, docRefVal types.Value) (stop bool, err error) {
-			ntVal, err := docRefVal.(types.Ref).TargetValue(ctx, root.vrw)
-			ntSt := ntVal.(types.Struct)
-			nt := &Doc{root.vrw, ntSt}
-			if has, err := nt.HasConflicts(); err != nil {
-				return false, err
-			} else if has {
-				docs = append(docs, string(key.(types.String)))
-			}
-
-			return false, nil
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		return docs, nil
-	}
-
-	var docs []string
-	return docs, nil
 }

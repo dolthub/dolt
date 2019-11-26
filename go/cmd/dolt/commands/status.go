@@ -54,19 +54,13 @@ func Status(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 		panic(err) // fix
 	}
 
-	_, notStagedDcDiffs, err := actions.GetDocDiffs(ctx, dEnv)
+	notStagedDcDiffs, err := actions.GetDocDiffs(ctx, dEnv)
 
 	if err != nil {
 		panic(err)
 	}
 
-	workingDcsInConflicts, _, _, err := actions.GetDocsInConflict(ctx, dEnv)
-
-	if err != nil {
-		panic(err)
-	}
-
-	printStatus(dEnv, stagedTblDiffs, notStagedTblDiffs, workingTblsInConflict, notStagedDcDiffs, workingDcsInConflicts)
+	printStatus(dEnv, stagedTblDiffs, notStagedTblDiffs, workingTblsInConflict, notStagedDcDiffs)
 	return 0
 }
 
@@ -116,27 +110,19 @@ const (
 	bothModifiedLabel = "both modified:"
 )
 
-func printStagedDiffs(wr io.Writer, stagedTbls *actions.TableDiffs, printHelp bool) int {
-	if stagedTbls.Len() > 0 {
+func printStagedDiffs(wr io.Writer, staged *actions.TableDiffs, printHelp bool) int {
+	if staged.Len() > 0 {
 		iohelp.WriteLine(wr, stagedHeader)
 
 		if printHelp {
 			iohelp.WriteLine(wr, stagedHeaderHelp)
 		}
 
-		lines := make([]string, 0, stagedTbls.Len())
-		for _, tblName := range stagedTbls.Tables {
-			tdt := stagedTbls.TableToType[tblName]
+		lines := make([]string, 0, staged.Len())
+		for _, tblName := range staged.Tables {
+			tdt := staged.TableToType[tblName]
 			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 		}
-
-		// This code is irrelevant until docs can be staged via `dolt add`
-		// if stagedDcs.Len() > 0 {
-		// 	for _, dcName := range stagedDcs.Docs {
-		// 		ndt := stagedDcs.DocToType[dcName]
-		// 		lines = append(lines, fmt.Sprintf(statusFmt, dcDiffTypeToLabel[ddt], dcName))
-		// 	}
-		// }
 
 		iohelp.WriteLine(wr, color.GreenString(strings.Join(lines, "\n")))
 	}
@@ -144,9 +130,8 @@ func printStagedDiffs(wr io.Writer, stagedTbls *actions.TableDiffs, printHelp bo
 	return 0
 }
 
-func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notStagedDcs *actions.DocDiffs, printHelp bool, linesPrinted int, workingTblsInConflict []string, workingDcsInConflict []string) int {
-	inCnfTblSet := set.NewStrSet(workingTblsInConflict)
-	inCnfDcSet := set.NewStrSet(workingDcsInConflict)
+func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notStagedDcs *actions.DocDiffs, printHelp bool, linesPrinted int, workingTblsInConflict []string) int {
+	inCnfSet := set.NewStrSet(workingTblsInConflict)
 
 	if len(workingTblsInConflict) > 0 {
 		if linesPrinted > 0 {
@@ -168,27 +153,7 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 		linesPrinted += len(lines)
 	}
 
-	if len(workingDcsInConflict) > 0 {
-		if linesPrinted > 0 {
-			cli.Println()
-		}
-
-		iohelp.WriteLine(wr, mergedTableHeader)
-
-		if printHelp {
-			iohelp.WriteLine(wr, mergedTableHelp)
-		}
-
-		lines := make([]string, 0, notStagedDcs.Len())
-		for _, dcName := range workingDcsInConflict {
-			lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, dcName))
-		}
-
-		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-		linesPrinted += len(lines)
-	}
-
-	if notStagedTbls.NumRemoved+notStagedTbls.NumModified-inCnfTblSet.Size() > 0 {
+	if notStagedTbls.NumRemoved+notStagedTbls.NumModified-inCnfSet.Size() > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
@@ -203,7 +168,7 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 
-			if tdt != actions.AddedTable && !inCnfTblSet.Contains(tblName) {
+			if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) {
 				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}
 		}
@@ -212,31 +177,7 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 		linesPrinted += len(lines)
 	}
 
-	if notStagedDcs.NumRemoved+notStagedDcs.NumModified-inCnfDcSet.Size() > 0 {
-		if linesPrinted > 0 {
-			cli.Println()
-		}
-
-		iohelp.WriteLine(wr, workingHeader)
-
-		if printHelp {
-			iohelp.WriteLine(wr, workingHeaderHelp)
-		}
-
-		lines := make([]string, 0, notStagedDcs.Len())
-		for _, dcName := range notStagedDcs.Docs {
-			ddt := notStagedDcs.DocToType[dcName]
-
-			if ddt != actions.AddedDoc && !inCnfTblSet.Contains(dcName) {
-				lines = append(lines, fmt.Sprintf(statusFmt, dcDiffTypeToLabel[ddt], dcName))
-			}
-		}
-
-		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-		linesPrinted += len(lines)
-	}
-
-	if notStagedTbls.NumAdded > 0 {
+	if notStagedTbls.NumAdded > 0 || notStagedDcs.NumAdded > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
@@ -247,7 +188,7 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 			iohelp.WriteLine(wr, untrackedHeaderHelp)
 		}
 
-		lines := make([]string, 0, notStagedTbls.Len())
+		lines := make([]string, 0, notStagedTbls.Len()+notStagedDcs.Len())
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 
@@ -256,22 +197,6 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 			}
 		}
 
-		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-		linesPrinted += len(lines)
-	}
-
-	if notStagedDcs.NumAdded > 0 {
-		if linesPrinted > 0 {
-			cli.Println()
-		}
-
-		iohelp.WriteLine(wr, untrackedHeader)
-
-		if printHelp {
-			iohelp.WriteLine(wr, untrackedHeaderHelp)
-		}
-
-		lines := make([]string, 0, notStagedDcs.Len())
 		for _, dcName := range notStagedDcs.Docs {
 			dct := notStagedDcs.DocToType[dcName]
 
@@ -287,11 +212,11 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 	return linesPrinted
 }
 
-func printStatus(dEnv *env.DoltEnv, stagedTbls, notStagedTbls *actions.TableDiffs, workingTblsInConflict []string, notStagedDcs *actions.DocDiffs, workingDcsInConflict []string) {
+func printStatus(dEnv *env.DoltEnv, stagedTbls, notStagedTbls *actions.TableDiffs, workingTblsInConflict []string, notStagedDcs *actions.DocDiffs) {
 	cli.Printf(branchHeader, dEnv.RepoState.Head.Ref.GetPath())
 
 	if dEnv.RepoState.Merge != nil {
-		if len(workingTblsInConflict) > 0 || len(workingDcsInConflict) > 0 {
+		if len(workingTblsInConflict) > 0 {
 			cli.Println(unmergedTablesHeader)
 		} else {
 			cli.Println(allMergedHeader)
@@ -299,7 +224,7 @@ func printStatus(dEnv *env.DoltEnv, stagedTbls, notStagedTbls *actions.TableDiff
 	}
 
 	n := printStagedDiffs(cli.CliOut, stagedTbls, true)
-	n = printDiffsNotStaged(cli.CliOut, notStagedTbls, notStagedDcs, true, n, workingTblsInConflict, workingDcsInConflict)
+	n = printDiffsNotStaged(cli.CliOut, notStagedTbls, notStagedDcs, true, n, workingTblsInConflict)
 
 	if dEnv.RepoState.Merge == nil && n == 0 {
 		cli.Println("nothing to commit, working tree clean")
