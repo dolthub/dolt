@@ -16,10 +16,11 @@ package main
 
 import (
 	"flag"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"log"
 	"os"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -31,16 +32,37 @@ const (
 var outputPath = flag.String("outputPath", "./", "the path where the serialized results file will be stored.")
 var outputFormat = flag.String("outputFormat", ".csv", "the format used to serialize the benchmarking results.")
 var resultsTableName = flag.String("resultsTableName", "results", "the name of the results table.")
+var csvFlag = flag.Bool("csv", false, "test importing .csv file into dolt")
+var jsonFlag = flag.Bool("json", false, "test importing .json file into dolt")
+var sqlFlag = flag.Bool("sql", false, "test importing .sql file into dolt")
+
+var flagStrs = []flagStr{
+	{b: csvFlag, s: csvExt},
+	{b: jsonFlag, s: jsonExt},
+	{b: sqlFlag, s: sqlExt},
+}
+
+type flagStr struct {
+	b *bool
+	s string
+}
 
 func main() {
 	flag.Parse()
 
 	results := make([]result, 0)
 
-	// supported dolt formats we want to benchmark
-	testFmts := []string{csvExt, sqlExt, jsonExt}
+	testFmts := make([]string, 0)
+	for _, fs := range flagStrs {
+		if *fs.b {
+			testFmts = append(testFmts, fs.s)
+		}
+	}
 
-	// benchmark dolt import with all formats
+	if len(testFmts) == 0 {
+		log.Fatal("must provide flag(s) format for testing dolt imports, ie -csv, -json, -sql \n")
+	}
+
 	for _, frmt := range testFmts {
 		benchmarks := []struct {
 			Name    string
@@ -151,9 +173,8 @@ func main() {
 		}
 	}
 
-	if err := serializeResults(results, *outputPath, *resultsTableName, *outputFormat); err != nil {
-		log.Fatal(err)
-	}
+	// write results data
+	serializeResults(results, *outputPath, *resultsTableName, *outputFormat)
 
 	// cleanup temp dolt data dir
 	removeTempDoltDataDir(filesys.LocalFS)

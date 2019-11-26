@@ -25,12 +25,14 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// Container is used to correctly format sql strings
+type seedFunc func(col *SeedColumn, format string) string
+
+// Container is used to correctly format strings enclosed in brackets
 type Container struct {
 	c []string
 }
 
-// NewContainer creates a new SQLContainer
+// NewContainer creates a new Container
 func NewContainer(format string) *Container {
 	c := make([]string, 3)
 	switch format {
@@ -46,18 +48,18 @@ func NewContainer(format string) *Container {
 	return &Container{c: c}
 }
 
-// InsertPayload returns the SQLContainer with the payload inserted, separated by the separator
+// InsertPayload returns the Container with the payload inserted, separated by the separator
 func (sc *Container) InsertPayload(payload []string, separator string) string {
 	sc.c[1] = strings.Join(payload, separator)
 	return strings.Join(sc.c, "")
 }
 
-func getColValue(row []string, colIndex int, col *SeedColumn, format string) string {
+func getColValue(row []string, colIndex int, col *SeedColumn, sf seedFunc, format string) string {
 	switch col.GenType {
 	case increment:
 		return genNomsTypeValueIncrement(row, colIndex, col, format)
 	case random:
-		return getNomsTypeValueRandom(col, format)
+		return getNomsTypeValueRandom(col, sf, format)
 	default:
 		log.Fatalf("cannot get column value, unsupported gen type %s \n", col.GenType)
 	}
@@ -81,7 +83,13 @@ func genNomsTypeValueIncrement(row []string, colIndex int, col *SeedColumn, form
 	return ""
 }
 
-func getNomsTypeValueRandom(col *SeedColumn, format string) string {
+func getNomsTypeValueRandom(col *SeedColumn, sf seedFunc, format string) string {
+	return sf(col, format)
+}
+
+// seedRandom is a seedFunc that returns variably random strings for each supported
+// nomsKind type
+func seedRandom(col *SeedColumn, format string) string {
 	switch col.Type {
 	case types.IntKind:
 		return fmt.Sprintf("%d", rand.Intn(1000))
@@ -181,14 +189,4 @@ func getSQLHeader(cols []*SeedColumn, tableName, format string) string {
 	statement = append(statement, schemaStatement+"; \n")
 
 	return strings.Join(statement, "")
-}
-
-func formatJSONStr(jsonRows []string, cols []*SeedColumn, tableName, format string) string {
-	prefix := "{\"Rows\":["
-	//suffix := "]}\n"
-	structure := make([]string, 0)
-	structure = append(structure, prefix)
-	//structure = append(structure, strings.Join(jsonRows, ","))
-	//structure = append(structure, suffix)
-	return strings.Join(structure, "")
 }

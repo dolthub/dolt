@@ -17,7 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"io/ioutil"
 	"log"
 	"os"
@@ -25,13 +24,13 @@ import (
 	"testing"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/store/types"
-
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/test"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 const (
@@ -58,7 +57,7 @@ func removeTempDoltDataDir(fs filesys.Filesys) {
 func getWorkingDir(fs filesys.Filesys) string {
 	workingDir := test.TestDir(testHomeDir)
 	err := fs.MkDirs(workingDir)
-	if  err != nil {
+	if err != nil {
 		log.Fatal(err)
 	}
 	return workingDir
@@ -66,7 +65,7 @@ func getWorkingDir(fs filesys.Filesys) string {
 
 func createTestEnvWithFS(fs filesys.Filesys, workingDir string) *env.DoltEnv {
 	removeTempDoltDataDir(fs)
-	testHomeDirFunc := func()(string, error){return workingDir, nil}
+	testHomeDirFunc := func() (string, error) { return workingDir, nil }
 	const name = "test mcgibbins"
 	const email = "bigfakeytester@fake.horse"
 	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.LocalDirDoltDB)
@@ -206,7 +205,7 @@ func setupDEnvImport(fs filesys.Filesys, sch *SeedSchema, workingDir, tableName,
 	}
 	defer wc.Close()
 
-	ds := NewDSImpl(wc, sch, tableName)
+	ds := NewDSImpl(wc, sch, seedRandom, tableName)
 
 	if pathToSchemaFile != "" {
 		// write schema file
@@ -215,12 +214,6 @@ func setupDEnvImport(fs filesys.Filesys, sch *SeedSchema, workingDir, tableName,
 			panic("unable to write data file to filesystem")
 		}
 	}
-	//
-	//// write data file
-	//err := fs.WriteFile(pathToImportFile, ds.Ge)
-	//if err != nil {
-	//	panic("unable to write data file to filesystem")
-	//}
 
 	ds.GenerateData()
 	return createTestEnvWithFS(fs, workingDir)

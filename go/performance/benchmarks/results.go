@@ -45,32 +45,23 @@ type RSImpl struct {
 	// TableName is the name of the results table
 	TableName string
 
-	wc io.Writer
+	// w is the writer where the results will be written
+	w io.Writer
 }
 
 // NewRSImpl creates a new RSImpl
-func NewRSImpl(wc io.Writer, sch *SeedSchema, results []result, tableName string) *RSImpl {
+func NewRSImpl(w io.Writer, sch *SeedSchema, results []result, tableName string) *RSImpl {
 	return &RSImpl{
 		Schema:    sch,
 		Results:   results,
 		TableName: tableName,
-		wc: wc,
+		w:         w,
 	}
 }
 
-//// String returns a string of the dataset formatted based on the RSImpl's Schema
-//func (rds *RSImpl) String() string {
-//	return generateResultsData(rds.Results, rds.Schema.Columns, rds.TableName, rds.Schema.FileFormatExt)
-//}
-
-//// Bytes returns a byte slice of the dataset formatted based on the RSImpl's Schema
-//func (rds *RSImpl) Bytes() []byte {
-//	str := generateResultsData(rds.Results, rds.Schema.Columns, rds.TableName, rds.Schema.FileFormatExt)
-//	return []byte(str)
-//}
-
+// GenerateData writes the results to a io.Writer
 func (rds *RSImpl) GenerateData() {
-	generateResultsData(rds.wc, rds.Results, rds.Schema.Columns, rds.TableName, rds.Schema.FileFormatExt)
+	writeResultsToWriter(rds.w, rds.Results, rds.Schema.Columns, rds.TableName, rds.Schema.FileFormatExt)
 }
 
 // Change returns a DataSet that is a mutation of this Dataset by the given percentage
@@ -79,7 +70,7 @@ func (rds *RSImpl) Change(pct float32) Dataset {
 	return &RSImpl{}
 }
 
-func generateResultsData(wc io.Writer, results []result, cols []*SeedColumn, tableName, format string) {
+func writeResultsToWriter(wc io.Writer, results []result, cols []*SeedColumn, tableName, format string) {
 	switch format {
 	case csvExt:
 		generateCSVResults(wc, results, cols, tableName, format)
@@ -89,36 +80,28 @@ func generateResultsData(wc io.Writer, results []result, cols []*SeedColumn, tab
 }
 
 func generateCSVResults(wc io.Writer, results []result, cols []*SeedColumn, tableName, format string) {
-	//strs := make([]string, len(results)+1)
-	//header := makeHeaderStr(cols, tableName, format)
+	header := makeCSVHeaderStr(cols, tableName, format)
 
-	header := makeHeaderStr(cols, tableName, format)
-	//strs[0] = header
-	_, err := wc.Write([]byte(header + "\n"))
+	_, err := wc.Write([]byte(header))
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	//strs[0] = header
 
 	var prevRow []string
 	for i, result := range results {
 		row := getResultsRow(prevRow, result, cols, format)
 
-		//strs[i+1] = formatRow(row, cols, tableName, format)
-		_, err := wc.Write([]byte(formatRow(row, cols, i, len(results) - 1, tableName, format)))
+		_, err := wc.Write([]byte(formatRow(row, cols, i, len(results)-1, tableName, format)))
 		if err != nil {
 			log.Fatal(err)
 		}
 		prevRow = row[:]
 	}
-
-	//dataStr := formatDataStr(strs, cols, tableName, format)
-	//return dataStr
 }
 
 func getResultsRow(prevRow []string, res result, cols []*SeedColumn, format string) []string {
 	row := make([]string, len(cols))
+
 	// set id
 	if len(cols) > 0 && prevRow != nil {
 		row[0] = genNomsTypeValueIncrement(prevRow, 0, cols[0], format)
@@ -147,6 +130,9 @@ func getResultsRow(prevRow []string, res result, cols []*SeedColumn, format stri
 	row[10] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
 	//set allocs_per_op
 	row[11] = fmt.Sprintf("%v", res.br.AllocsPerOp())
+	// set datetime
+	t := time.Now()
+	row[12] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
@@ -164,10 +150,11 @@ func genResultsCols() []*SeedColumn {
 		NewSeedColumn("mem_bytes", false, types.IntKind, supplied),
 		NewSeedColumn("alloced_bytes_per_op", false, types.StringKind, supplied),
 		NewSeedColumn("allocs_per_op", false, types.StringKind, supplied),
+		NewSeedColumn("date_time", false, types.StringKind, supplied),
 	}
 }
 
-func serializeResults(results []result, path, tableName, format string) error {
+func serializeResults(results []result, path, tableName, format string) {
 	var sch *SeedSchema
 	switch format {
 	case csvExt:
@@ -186,8 +173,4 @@ func serializeResults(results []result, path, tableName, format string) error {
 
 	ds := NewRSImpl(wc, sch, results, tableName)
 	ds.GenerateData()
-
-	return nil
-
-	//return fs.WriteFile(resultsFile, ds.Bytes())
 }
