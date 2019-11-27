@@ -21,12 +21,12 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -92,13 +92,13 @@ func normalizeStatement(statement string) string {
 	if !ok {
 		panic("Expected CREATE TABLE statement")
 	}
-	
+
 	lastParen := strings.LastIndex(statement, ")")
 	normalized := statement[:lastParen] + ", PRIMARY KEY ("
 	for i, column := range create.TableSpec.Columns {
 		normalized += column.Name.String()
-		if i != len(create.TableSpec.Columns) -1 {
-			normalized +=", "
+		if i != len(create.TableSpec.Columns)-1 {
+			normalized += ", "
 		}
 	}
 	normalized += "))"
