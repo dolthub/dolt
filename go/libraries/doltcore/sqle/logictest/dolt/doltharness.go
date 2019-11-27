@@ -26,6 +26,7 @@ import (
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -63,6 +64,8 @@ func (h *DoltHarness) Init() error {
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {
 	ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
+	statement = normalizeStatement(statement)
+
 	_, rowIter, err := h.engine.Query(ctx, statement)
 	if err != nil {
 		return err
@@ -71,9 +74,52 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 	return drainIterator(rowIter)
 }
 
-func (h *DoltHarness) ExecuteQuery(statement string) (string, []string, error) {
-	ctx := sql.NewContext(context.Background(), sql.WithPid(rand.Uint64()))
-	sch, rowIter, err := h.engine.Query(ctx, statement)
+// We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently
+// support. Until we do, we just make every column in such tables part of the primary key.
+func normalizeStatement(statement string) string {
+	if !strings.Contains(statement, "CREATE TABLE") {
+		return statement
+	}
+	if strings.Contains(statement, "PRIMARY KEY") {
+		return statement
+	}
+
+	stmt, err := sqlparser.Parse(statement)
+	if err != nil {
+		panic(err)
+	}
+	create, ok := stmt.(*sqlparser.DDL)
+	if !ok {
+		panic("Expected CREATE TABLE statement")
+	}
+
+	lastParen := strings.LastIndex(statement, ")")
+	normalized := statement[:lastParen] + ", PRIMARY KEY ("
+	for i, column := range create.TableSpec.Columns {
+		normalized += column.Name.String()
+		if i != len(create.TableSpec.Columns)-1 {
+			normalized += ", "
+		}
+	}
+	normalized += "))"
+	return normalized
+}
+
+func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []string, err error) {
+	pid := rand.Uint32()
+	ctx := sql.NewContext(context.Background(), sql.WithPid(uint64(pid)))
+
+	var sch sql.Schema
+	var rowIter sql.RowIter
+	defer func() {
+		if r := recover(); r != nil {
+			// Panics leave the engine in a bad state that we have to clean up
+			h.engine.Catalog.ProcessList.Kill(pid)
+			panic(r)
+		}
+	}()
+
+	sch, rowIter, err = h.engine.Query(ctx, statement)
 	if err != nil {
 		return "", nil, err
 	}
@@ -83,7 +129,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (string, []string, error) {
 		return "", nil, err
 	}
 
-	results, err := rowsToResultStrings(rowIter)
+	results, err = rowsToResultStrings(rowIter)
 	if err != nil {
 		return "", nil, err
 	}
@@ -106,6 +152,21 @@ func drainIterator(iter sql.RowIter) error {
 	}
 }
 
+// This shouldn't be necessary -- the fact that an iterator can return an error but not clean up after itself in all
+// cases is a bug.
+func drainIteratorIgnoreErrors(iter sql.RowIter) {
+	if iter == nil {
+		return
+	}
+
+	for {
+		_, err := iter.Next()
+		if err == io.EOF {
+			return
+		}
+	}
+}
+
 // Returns the rows in the iterator given as an array of their string representations, as expected by the test files
 func rowsToResultStrings(iter sql.RowIter) ([]string, error) {
 	var results []string
@@ -118,6 +179,7 @@ func rowsToResultStrings(iter sql.RowIter) ([]string, error) {
 		if err == io.EOF {
 			return results, nil
 		} else if err != nil {
+			drainIteratorIgnoreErrors(iter)
 			return nil, err
 		} else {
 			for _, col := range row {
@@ -174,7 +236,9 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 	b := strings.Builder{}
 	for _, col := range sch {
 		switch col.Type.Type() {
-		case query.Type_INT32, query.Type_INT64, query.Type_BIT:
+		case query.Type_INT8, query.Type_INT16, query.Type_INT24, query.Type_INT32, query.Type_INT64,
+			query.Type_UINT8, query.Type_UINT16, query.Type_UINT24, query.Type_UINT32, query.Type_UINT64,
+			query.Type_BIT:
 			b.WriteString("I")
 		case query.Type_TEXT, query.Type_VARCHAR:
 			b.WriteString("T")
