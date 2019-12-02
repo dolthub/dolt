@@ -29,15 +29,15 @@ func TestParseDate(t *testing.T) {
 		expErr  bool
 	}{
 		{"1901/09/30", time.Date(1901, 9, 30, 0, 0, 0, 0, time.UTC), false},
-		//{"2019/01/20", time.Date(2019, 1, 20, 0, 0, 0, 0, time.UTC), false},
-		//{"2019-1-20", time.Date(2019, 1, 20, 0, 0, 0, 0, time.UTC), true},
-		//{"2019.01.20", time.Date(2019, 1, 20, 0, 0, 0, 0, time.UTC), false},
-		//{"2019/01/20T13:49:59", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), false},
-		//{"2019-01-20T13:49:59", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), false},
-		//{"2019.01.20T13:49:59", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), false},
-		//{"2019.01.20T13:49", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), true},
-		//{"2019.01.20T13", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), true},
-		//{"2019.01", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), true},
+		{"2019/01/20", time.Date(2019, 1, 20, 0, 0, 0, 0, time.UTC), false},
+		{"2019-1-20", time.Date(2019, 1, 20, 0, 0, 0, 0, time.UTC), true},
+		{"2019.01.20", time.Date(2019, 1, 20, 0, 0, 0, 0, time.UTC), false},
+		{"2019/01/20T13:49:59", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), false},
+		{"2019-01-20T13:49:59", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), false},
+		{"2019.01.20T13:49:59", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), false},
+		{"2019.01.20T13:49", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), true},
+		{"2019.01.20T13", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), true},
+		{"2019.01", time.Date(2019, 1, 20, 13, 49, 59, 0, time.UTC), true},
 	}
 
 	for _, test := range tests {
