@@ -40,9 +40,12 @@ var commitLongDesc = "Stores the current contents of the staged tables in a new 
 	"before using the commit command (Note: even modified files must be \"added\");" +
 	"\n" +
 	"The log message can be added with the parameter -m <msg>.  If the -m parameter is not provided an editor will be " +
-	"opened where you can review the commit and provide a log message.\n"
+	"opened where you can review the commit and provide a log message.\n" +
+	"\n" +
+	"The commit timestamp can be modified using the --date parameter.  Dates can be specified in the formats YYYY-MM-DD " +
+	"YYYY-MM-DDTHH:MM:SS, or YYYY-MM-DDTHH:MM:SSZ07:00 (where 07:00 is the time zone offset)."
 var commitSynopsis = []string{
-	"[-m <msg>]",
+	"[options]",
 }
 
 func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -55,7 +58,7 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
-	ap.SupportsString(dateParam, "", "date", "Override the author date used in the commit.")
+	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -83,6 +86,7 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	return handleCommitErr(err, usage)
 }
 
+// we are more permissive than what is documented.
 var supportedLayouts = []string{
 	"2006/01/02",
 	"2006/01/02T15:04:05",
