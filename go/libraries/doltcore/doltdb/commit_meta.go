@@ -28,6 +28,7 @@ const (
 	commitMetaEmailKey     = "email"
 	commitMetaDescKey      = "desc"
 	commitMetaTimestampKey = "timestamp"
+	commitMetaUserTSKey    = "user_timestamp"
 	commitMetaVersionKey   = "metaversion"
 
 	metaVersion = "1.0"
@@ -38,18 +39,25 @@ var CommitLoc = time.Local
 
 // CommitMeta contains all the metadata that is associated with a commit within a data repo.
 type CommitMeta struct {
-	Name        string
-	Email       string
-	Timestamp   uint64
-	Description string
+	Name          string
+	Email         string
+	Timestamp     uint64
+	Description   string
+	UserTimestamp int64
 }
 
-var milliToNano = uint64(time.Millisecond / time.Nanosecond)
-var secToMilli = uint64(time.Second / time.Millisecond)
+var uMilliToNano = uint64(time.Millisecond / time.Nanosecond)
+var milliToNano = int64(time.Millisecond / time.Nanosecond)
+var secToMilli = int64(time.Second / time.Millisecond)
 
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
 // timestamp
 func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
+	return NewCommitMetaWithUserTS(name, email, desc, CommitNowFunc())
+}
+
+// NewCommitMetaWithUserTS creates a user metadata
+func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*CommitMeta, error) {
 	n := strings.TrimSpace(name)
 	e := strings.TrimSpace(email)
 	d := strings.TrimSpace(desc)
@@ -59,9 +67,11 @@ func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
 	}
 
 	ns := uint64(CommitNowFunc().UnixNano())
-	ms := ns / milliToNano
+	ms := ns / uMilliToNano
 
-	return &CommitMeta{n, e, ms, d}, nil
+	userMS := userTS.UnixNano() / milliToNano
+
+	return &CommitMeta{n, e, ms, d, userMS}, nil
 }
 
 func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
@@ -99,11 +109,20 @@ func commitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 		return nil, err
 	}
 
+	userTS, ok, err := st.MaybeGet(commitMetaUserTSKey)
+
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		userTS = types.Int(int64(uint64(ts.(types.Uint))))
+	}
+
 	return &CommitMeta{
 		string(n.(types.String)),
 		string(e.(types.String)),
 		uint64(ts.(types.Uint)),
 		string(d.(types.String)),
+		int64(userTS.(types.Int)),
 	}, nil
 }
 
@@ -114,6 +133,7 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 		commitMetaDescKey:      types.String(cm.Description),
 		commitMetaTimestampKey: types.Uint(cm.Timestamp),
 		commitMetaVersionKey:   types.String(metaVersion),
+		commitMetaUserTSKey:    types.Int(cm.UserTimestamp),
 	}
 
 	return types.NewStruct(nbf, "metadata", metadata)
@@ -121,9 +141,9 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 
 // Time returns the time at which the commit occurred
 func (cm *CommitMeta) Time() time.Time {
-	seconds := cm.Timestamp / secToMilli
-	nanos := (cm.Timestamp % secToMilli) * milliToNano
-	return time.Unix(int64(seconds), int64(nanos))
+	seconds := cm.UserTimestamp / secToMilli
+	nanos := (cm.UserTimestamp % secToMilli) * milliToNano
+	return time.Unix(seconds, nanos)
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format

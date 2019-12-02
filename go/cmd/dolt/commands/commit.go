@@ -17,8 +17,10 @@ package commands
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/fatih/color"
 
@@ -46,12 +48,14 @@ var commitSynopsis = []string{
 func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	const (
 		allowEmptyFlag   = "allow-empty"
+		dateParam        = "date"
 		commitMessageArg = "message"
 	)
 
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
+	ap.SupportsString(dateParam, "", "date", "Override the author date used in the commit.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -60,13 +64,49 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 		msg = getCommitMessageFromEditor(ctx, dEnv)
 	}
 
-	err := actions.CommitStaged(ctx, dEnv, msg, apr.Contains(allowEmptyFlag))
+	t := time.Now()
+	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+		var err error
+		t, err = parseDate(commitTimeStr)
+
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
+		}
+	}
+
+	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
 	if err == nil {
 		// if the commit was successful, print it out using the log command
 		return Log(ctx, "log", []string{"-n=1"}, dEnv)
 	}
 
 	return handleCommitErr(err, usage)
+}
+
+var supportedLayouts = []string{
+	"2006/01/02",
+	"2006/01/02T15:04:05",
+	"2006/01/02T15:04:05Z07:00",
+
+	"2006.01.02",
+	"2006.01.02T15:04:05",
+	"2006.01.02T15:04:05Z07:00",
+
+	"2006-01-02",
+	"2006-01-02T15:04:05",
+	"2006-01-02T15:04:05Z07:00",
+}
+
+func parseDate(dateStr string) (time.Time, error) {
+	for _, layout := range supportedLayouts {
+		t, err := time.Parse(layout, dateStr)
+
+		if err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
 
 func handleCommitErr(err error, usage cli.UsagePrinter) int {

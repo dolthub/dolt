@@ -55,12 +55,12 @@ type blameInfo struct {
 	Description string
 
 	// Timestamp is the timestamp of the commit which last modified the row
-	Timestamp uint64
+	Timestamp int64
 }
 
 // TimestampTime returns a time.Time object representing the blameInfo timestamp
 func (bi *blameInfo) TimestampTime() time.Time {
-	return time.Unix(int64(bi.Timestamp/1000), 0)
+	return time.Unix(bi.Timestamp/1000, 0)
 }
 
 // TimestampString returns a string representing the blameInfo timestamp
@@ -465,7 +465,7 @@ func (bg *blameGraph) AssignBlame(rowPK types.Value, nbf *types.NomsBinFormat, c
 		CommitHash:  commitHash.String(),
 		Author:      meta.Name,
 		Description: meta.Description,
-		Timestamp:   meta.Timestamp,
+		Timestamp:   meta.UserTimestamp,
 	}
 
 	return nil
