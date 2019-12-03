@@ -135,7 +135,11 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return err
 	}
 
-	value := dRow.NomsMapValue(te.t.sch)
+	// If we've already inserted this key as part of this insert operation, that's an error. Inserting a row that already
+	// exists in the table will be handled in Close().
+	if _, ok := te.addedKeys[hash]; ok {
+		return errors.New("duplicate primary key given")
+	}
 	te.addedKeys[hash] = key
 
 	if te.ed == nil {
@@ -145,7 +149,7 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		}
 	}
 
-	te.ed = te.ed.Set(key, value)
+	te.ed = te.ed.Set(key, dRow.NomsMapValue(te.t.sch))
 	return nil
 }
 

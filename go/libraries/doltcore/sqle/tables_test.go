@@ -62,33 +62,35 @@ func TestTableEditor(t *testing.T) {
 				require.NoError(t, ed.Insert(ctx, r(troyMclure, PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
-			expectedRows: []row.Row{
+			expectedRows: CompressRows(PeopleTestSchema,
 				edna, krusty, smithers, ralph, martin, skinner, fatTony, troyMclure,
-			},
+			),
 		},
 	}
 
 	for _, test := range testCases {
-		dEnv := dtestutils.CreateTestEnv()
-		CreateTestDatabase(dEnv, t)
+		t.Run(test.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			CreateTestDatabase(dEnv, t)
 
-		ctx := sql.NewEmptyContext()
-		root, _ := dEnv.WorkingRoot(context.Background())
-		db := NewDatabase("dolt", root, dEnv)
-		peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
-		require.NoError(t, err)
+			ctx := sql.NewEmptyContext()
+			root, _ := dEnv.WorkingRoot(context.Background())
+			db := NewDatabase("dolt", root, dEnv)
+			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
+			require.NoError(t, err)
 
-		dt := peopleTable.(sql.UpdatableTable)
-		ed := dt.Updater(ctx).(*tableEditor)
+			dt := peopleTable.(sql.UpdatableTable)
+			ed := dt.Updater(ctx).(*tableEditor)
 
-		test.setup(ctx, t, ed)
-		require.NoError(t, ed.Close(ctx))
+			test.setup(ctx, t, ed)
+			require.NoError(t, ed.Close(ctx))
 
-		root, _ = dEnv.WorkingRoot(context.Background())
-		actualRows, _, err := executeSelect(context.Background(), dEnv, CompressSchema(PeopleTestSchema), root, test.selectQuery)
-		require.NoError(t, err)
+			root = db.Root()
+			actualRows, _, err := executeSelect(context.Background(), dEnv, CompressSchema(PeopleTestSchema), root, test.selectQuery)
+			require.NoError(t, err)
 
-		assert.Equal(t, test.expectedRows, actualRows)
+			assert.Equal(t, test.expectedRows, actualRows)
+		})
 	}
 }
 
