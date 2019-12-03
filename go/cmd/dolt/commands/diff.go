@@ -488,21 +488,14 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 		}
 	}
 
-	if len(oldPks) > 0 && len(newPks) == 0 {
-		oldPKStr := strings.Join(oldPks, ", ")
-		cli.Print(sql.FmtColPrimaryKey(4, oldPKStr))
-	} else if len(oldPks) == 0 && len(newPks) > 0 {
-		newPKStr := strings.Join(newPks, ", ")
-		cli.Print(sql.FmtColPrimaryKey(4, newPKStr))
+	oldPKStr := strings.Join(oldPks, ", ")
+	newPKStr := strings.Join(newPks, ", ")
+
+	if oldPKStr != newPKStr {
+		cli.Print("< " + color.YellowString(sql.FmtColPrimaryKey(2, oldPKStr)))
+		cli.Print("> " + color.YellowString(sql.FmtColPrimaryKey(2, newPKStr)))
 	} else {
-		oldPKStr := strings.Join(oldPks, ", ")
-		newPKStr := strings.Join(newPks, ", ")
-		if oldPKStr != newPKStr {
-			cli.Print("< " + color.YellowString(sql.FmtColPrimaryKey(2, oldPKStr)))
-			cli.Print("> " + color.YellowString(sql.FmtColPrimaryKey(2, newPKStr)))
-		} else {
-			cli.Print(sql.FmtColPrimaryKey(4, newPKStr))
-		}
+		cli.Print(sql.FmtColPrimaryKey(4, oldPKStr))
 	}
 
 	cli.Println("  );")
