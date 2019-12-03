@@ -482,10 +482,6 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 // In this instance that are not in the other instance are considered added, and docs in the other instance and not
 // this instance are considered removed.
 func (root *RootValue) DocDiff(ctx context.Context, newerLicenseBytes, newerReadmeBytes []byte) (added, modified, removed []string, err error) {
-	added = []string{}
-	modified = []string{}
-	removed = []string{}
-
 	docTable, found, err := root.GetTable(ctx, docTableName)
 
 	if err != nil {
@@ -505,25 +501,24 @@ func (root *RootValue) DocDiff(ctx context.Context, newerLicenseBytes, newerRead
 		readmeVal, _, err = rowMap.MaybeGet(ctx, types.String(readmePk))
 	}
 
-	if licenseVal == nil && newerLicenseBytes != nil {
-		added = append(added, licensePk)
-	} else if licenseVal != nil {
-		if newerLicenseBytes == nil {
-			removed = append(removed, licensePk)
-		} else if string(newerLicenseBytes) != licenseVal.HumanReadableString() {
-			modified = append(modified, licensePk)
-		}
-	}
-
-	if readmeVal == nil && newerReadmeBytes != nil {
-		added = append(added, readmePk)
-	} else if readmeVal != nil {
-		if newerReadmeBytes == nil {
-			removed = append(removed, readmePk)
-		} else if string(newerReadmeBytes) != readmeVal.HumanReadableString() {
-			modified = append(modified, readmePk)
-		}
-	}
+	added = []string{}
+	modified = []string{}
+	removed = []string{}
+	added, modified, removed = appendDocDiffs(added, modified, removed, licenseVal, newerLicenseBytes, licensePk)
+	added, modified, removed = appendDocDiffs(added, modified, removed, readmeVal, newerReadmeBytes, readmePk)
 
 	return added, modified, removed, nil
+}
+
+func appendDocDiffs(added, removed, modified []string, olderVal types.Value, newerVal []byte, docPk string) (add, mod, rem []string) {
+	if olderVal == nil && newerVal != nil {
+		added = append(added, docPk)
+	} else if olderVal != nil {
+		if newerVal == nil {
+			removed = append(removed, docPk)
+		} else if string(newerVal) != olderVal.HumanReadableString() {
+			modified = append(modified, docPk)
+		}
+	}
+	return added, modified, removed
 }
