@@ -121,8 +121,8 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	return stagedDiffs, notStagedDiffs, nil
 }
 
-func NewDocDiffs(ctx context.Context, newerLicenseBytes, newReadmeBytes []byte, older *doltdb.RootValue) (*DocDiffs, error) {
-	added, modified, removed, err := older.DocDiff(ctx, newerLicenseBytes, newReadmeBytes)
+func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, docDetails []*doltdb.DocDetails) (*DocDiffs, error) {
+	added, modified, removed, err := older.DocDiff(ctx, docDetails)
 
 	if err != nil {
 		return nil, err
@@ -175,7 +175,11 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
 		return nil, err
 	}
 
-	notStagedDocDiffs, err := NewDocDiffs(ctx, licenseText, readmeText, workingRoot)
+	docDetails := make([]*doltdb.DocDetails, 2)
+	docDetails[0] = &doltdb.DocDetails{licenseText, doltdb.LicensePk, nil}
+	docDetails[1] = &doltdb.DocDetails{readmeText, doltdb.ReadmePk, nil}
+
+	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, docDetails)
 
 	if err != nil {
 		return nil, err

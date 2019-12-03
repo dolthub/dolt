@@ -26,14 +26,20 @@ const (
 
 	tablesKey    = "tables"
 	docTableName = "dolt_docs"
-	licensePk    = "LICENSE.md"
-	readmePk     = "README.md"
+	LicensePk    = "LICENSE.md"
+	ReadmePk     = "README.md"
 )
 
 // RootValue defines the structure used inside all Liquidata noms dbs
 type RootValue struct {
 	vrw     types.ValueReadWriter
 	valueSt types.Struct
+}
+
+type DocDetails struct {
+	NewerText []byte
+	DocPk     string
+	Value     types.Value
 }
 
 func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
@@ -481,7 +487,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 // DocDiff returns the slices of the dolt docs on the filesystem that are added, modified, and removed when compared with a root value.  Docs
 // In this instance that are not in the other instance are considered added, and docs in the other instance and not
 // this instance are considered removed.
-func (root *RootValue) DocDiff(ctx context.Context, newerLicenseBytes, newerReadmeBytes []byte) (added, modified, removed []string, err error) {
+func (root *RootValue) DocDiff(ctx context.Context, docDetails []*DocDetails) (added, modified, removed []string, err error) {
 	docTable, found, err := root.GetTable(ctx, docTableName)
 
 	if err != nil {
@@ -489,23 +495,28 @@ func (root *RootValue) DocDiff(ctx context.Context, newerLicenseBytes, newerRead
 	}
 
 	var rowMap types.Map
-	var licenseVal types.Value
-	var readmeVal types.Value
 	if found {
 		rowMap, err = docTable.GetRowData(ctx)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 
-		licenseVal, _, err = rowMap.MaybeGet(ctx, types.String(licensePk))
-		readmeVal, _, err = rowMap.MaybeGet(ctx, types.String(readmePk))
+		for i, details := range docDetails {
+			docValue, _, err := rowMap.MaybeGet(ctx, types.String(details.DocPk))
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			docDetails[i] = &DocDetails{details.NewerText, details.DocPk, docValue}
+		}
 	}
 
 	added = []string{}
 	modified = []string{}
 	removed = []string{}
-	added, modified, removed = appendDocDiffs(added, modified, removed, licenseVal, newerLicenseBytes, licensePk)
-	added, modified, removed = appendDocDiffs(added, modified, removed, readmeVal, newerReadmeBytes, readmePk)
+
+	for _, doc := range docDetails {
+		added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.NewerText, doc.DocPk)
+	}
 
 	return added, modified, removed, nil
 }
