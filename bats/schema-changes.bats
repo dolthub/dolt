@@ -100,8 +100,8 @@ teardown() {
     dolt table create -f -s=`batshelper 1pk5col-ints-diff-pk.schema` test
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    skip "Schema diff output does not handle changing primary keys"
-    [[ "$output" =~ "PRIMARY KEY" ]] || false
+    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
+    [[ "$output" =~ ">    PRIMARY KEY (\`c1\`)" ]] || false
 }
 
 @test "add another primary key. view the schema diff" {
@@ -111,8 +111,8 @@ teardown() {
     dolt table create -f -s=`batshelper 1pk5col-ints-add-pk.schema` test
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    skip "Schema diff output does not handle adding primary keys. Additionally, rows that should not be in the diff show up."
-    [[ "$output" =~ "PRIMARY KEY" ]] || false
+    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
+    [[ "$output" =~ ">    PRIMARY KEY (\`c1\`, \`c5\`)" ]] || false
 }
 
 @test "adding and dropping column should produce no diff" {
@@ -122,7 +122,38 @@ teardown() {
     dolt schema add-column test c0 int
     dolt schema drop-column test c0
     run dolt diff
-    skip "This produces a diff when it should not"
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+}
+
+@test "schema diff should show primary keys in output" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add test
+    dolt commit -m "committed table so we can see diffs"
+    dolt table create -f -s=`batshelper 1pk5col-ints-change-col-name.schema` test
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "PRIMARY KEY" ]] || false
+}
+
+@test "add another new primary key column. view the schema diff" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add test
+    dolt commit -m "committed table so we can see diffs"
+    dolt table create -f -s=`batshelper 1pk5col-ints-add-col-pk.schema` test
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
+    [[ "$output" =~ ">    PRIMARY KEY (\`pk\`, \`c6\`)" ]] || false
+}
+
+@test "remove a primary key column. view the schema diff" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt add test
+    dolt commit -m "committed table so we can see diffs"
+    dolt table create -f -s=`batshelper 1pk5col-ints-rm-pk-col.schema` test
+    run dolt diff --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
+    [[ "$output" =~ ">    PRIMARY KEY (\`c3\`)" ]] || false
 }
