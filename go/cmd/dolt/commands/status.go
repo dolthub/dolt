@@ -23,6 +23,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -46,18 +47,21 @@ func Status(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	stagedTblDiffs, notStagedTblDiffs, err := actions.GetTableDiffs(ctx, dEnv)
 
 	if err != nil {
-		panic(err) // fix
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
 	}
 	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 
 	if err != nil {
-		panic(err) // fix
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
 	}
 
 	notStagedDocDiffs, err := actions.GetDocDiffs(ctx, dEnv)
 
 	if err != nil {
-		panic(err)
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
 	}
 
 	printStatus(dEnv, stagedTblDiffs, notStagedTblDiffs, workingTblsInConflict, notStagedDocDiffs)
@@ -228,5 +232,18 @@ func printStatus(dEnv *env.DoltEnv, stagedTbls, notStagedTbls *actions.TableDiff
 
 	if dEnv.RepoState.Merge == nil && n == 0 {
 		cli.Println("nothing to commit, working tree clean")
+	}
+}
+
+func toStatusVErr(err error) errhand.VerboseError {
+	switch {
+	case actions.IsRootValUnreachable(err):
+		rt := actions.GetUnreachableRootType(err)
+		bdr := errhand.BuildDError("Unable to read %s.", rt.String())
+		bdr.AddCause(actions.GetUnreachableRootCause(err))
+		return bdr.Build()
+
+	default:
+		return errhand.BuildDError("Unknown error").AddCause(err).Build()
 	}
 }
