@@ -60,8 +60,8 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 
 		initialFiles[getRepoStateFile()] = []byte(repoStateData)
 
-		initialFiles[getReadmeFile()] = []byte(initialReadme)
-		initialFiles[getLicenseFile()] = []byte(initialLicense)
+		initialFiles[getFile(ReadmeFile)] = []byte(initialReadme)
+		initialFiles[getFile(LicenseFile)] = []byte(initialLicense)
 
 		if hasLocalConfig {
 			initialFiles[getLocalConfigPath()] = []byte(`{"user.name":"bheni"}`)
@@ -177,12 +177,12 @@ func TestInitRepo(t *testing.T) {
 		t.Error("Failed to get staged root value.")
 	}
 
-	readmePath := getReadmeFile()
+	readmePath := getFile(ReadmeFile)
 	if readmePath != "README.md" {
 		t.Error("Readme file path should exist.")
 	}
 
-	licensePath := getLicenseFile()
+	licensePath := getFile(LicenseFile)
 	if licensePath != "LICENSE.md" {
 		t.Error("License file path should exist.")
 	}

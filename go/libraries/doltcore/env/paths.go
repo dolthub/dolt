@@ -31,8 +31,8 @@ const (
 
 	repoStateFile = "repo_state.json"
 
-	readmeFile  = "../README.md"
-	licenseFile = "../LICENSE.md"
+	ReadmeFile  = "../README.md"
+	LicenseFile = "../LICENSE.md"
 )
 
 // HomeDirProvider is a function that returns the users home directory.  This is where global dolt state is stored for
@@ -88,10 +88,6 @@ func getHomeDir(hdp HomeDirProvider) (string, error) {
 	return homeDir, nil
 }
 
-func getReadmeFile() string {
-	return filepath.Join(dbfactory.DoltDir, readmeFile)
-}
-
-func getLicenseFile() string {
-	return filepath.Join(dbfactory.DoltDir, licenseFile)
+func getFile(file string) string {
+	return filepath.Join(dbfactory.DoltDir, file)
 }

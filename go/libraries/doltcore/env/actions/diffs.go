@@ -161,16 +161,12 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
 		return nil, RootValueUnreadable{WorkingRoot, err}
 	}
 
-	licenseText, err := dEnv.GetLocalLicenseText()
+	licenseText, err := dEnv.GetLocalFileText(env.LicenseFile)
 
 	if err != nil {
 		return nil, err
 	}
-	readmeText, err := dEnv.GetLocalReadmeText()
-	if err != nil {
-		return nil, err
-	}
-
+	readmeText, err := dEnv.GetLocalFileText(env.ReadmeFile)
 	if err != nil {
 		return nil, err
 	}

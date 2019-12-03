@@ -62,7 +62,7 @@ type DoltEnv struct {
 	RepoState *RepoState
 	RSLoadErr error
 
-	Docs       *Docs
+	Docs        *Docs
 	DocsLoadErr error
 
 	DoltDB      *doltdb.DoltDB
@@ -162,46 +162,24 @@ func (dEnv *DoltEnv) HasLocalConfig() bool {
 	return ok
 }
 
-// GetLicenseFile returns the path to the LICENSE.md file if it exists
-func (dEnv *DoltEnv) GetLicenseFile() string {
-	if !dEnv.hasLicenseFile() {
+// GetDoc returns the path to the provided file, if it exists
+func (dEnv *DoltEnv) GetDoc(file string) string {
+	if !dEnv.hasFile(file) {
 		return ""
 	}
-	return getLicenseFile()
+	return getFile(file)
 }
 
-func (dEnv *DoltEnv) hasLicenseFile() bool {
-	exists, isDir := dEnv.FS.Exists(getLicenseFile())
+func (dEnv *DoltEnv) hasFile(file string) bool {
+	exists, isDir := dEnv.FS.Exists(getFile(file))
 	return exists && !isDir
 }
 
-// GetReadmeFile returns the path to the README.md file if it exists
-func (dEnv *DoltEnv) GetReadmeFile() string {
-	if !dEnv.hasReadmeFile() {
-		return ""
-	}
-	return getReadmeFile()
-}
-
-func (dEnv *DoltEnv) hasReadmeFile() bool {
-	exists, isDir := dEnv.FS.Exists(getReadmeFile())
-	return exists && !isDir
-}
-
-// GetLocalLicenseText returns a byte slice of the LICENSE.md file contents if it exists
-func (dEnv *DoltEnv) GetLocalLicenseText() ([]byte, error) {
-	licensePath := dEnv.GetLicenseFile()
-	if licensePath != "" {
-		return dEnv.FS.ReadFile(licensePath)
-	}
-	return nil, nil
-}
-
-// GetLocalReadmeText returns a byte slice of the README.md file contents if it exists
-func (dEnv *DoltEnv) GetLocalReadmeText() ([]byte, error) {
-	readmePath := dEnv.GetReadmeFile()
-	if readmePath != "" {
-		return dEnv.FS.ReadFile(readmePath)
+// GetLocalFileText returns a byte slice representing the contents of the provided file, if it exists
+func (dEnv *DoltEnv) GetLocalFileText(file string) ([]byte, error) {
+	path := dEnv.GetDoc(file)
+	if path != "" {
+		return dEnv.FS.ReadFile(path)
 	}
 	return nil, nil
 }

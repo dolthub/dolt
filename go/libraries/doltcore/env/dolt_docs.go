@@ -28,7 +28,7 @@ type Docs struct {
 }
 
 func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
-	readmePath := getReadmeFile()
+	readmePath := getFile(ReadmeFile)
 	var readmeData []byte
 	if readmePath != "" {
 		data, err := fs.ReadFile(readmePath)
@@ -38,7 +38,7 @@ func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 		readmeData = data
 	}
 
-	licensePath := getLicenseFile()
+	licensePath := getFile(LicenseFile)
 	var licenseData []byte
 	if licensePath != "" {
 		data, err := fs.ReadFile(licensePath)
@@ -73,8 +73,8 @@ func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 }
 
 func (dcs *Docs) Save() error {
-	readmePath := getReadmeFile()
-	licensePath := getLicenseFile()
+	readmePath := getFile(ReadmeFile)
+	licensePath := getFile(LicenseFile)
 
 	err := dcs.fs.WriteFile(readmePath, []byte(dcs.key["readme"]))
 	if err != nil {
