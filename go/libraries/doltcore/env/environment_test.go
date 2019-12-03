@@ -95,7 +95,7 @@ func TestNonRepoDir(t *testing.T) {
 		t.Error("File doesn't exist.  There should be an error if the directory doesn't exist.")
 	}
 
-	if dEnv.DcsLoadErr == nil {
+	if dEnv.DocsLoadErr == nil {
 		t.Error("Files don't exist. There should be an error if the directory doesn't exist.")
 	}
 }
@@ -115,7 +115,7 @@ func TestRepoDir(t *testing.T) {
 		t.Error("Repostate should be valid for an initialized directory")
 	}
 
-	if dEnv.DcsLoadErr != nil {
+	if dEnv.DocsLoadErr != nil {
 		t.Error("Docs should be valid for an initialized directory")
 	}
 
@@ -141,7 +141,7 @@ func TestRepoDirNoLocal(t *testing.T) {
 		t.Error("File doesn't exist.  There should be an error if the directory doesn't exist.")
 	}
 
-	if dEnv.DcsLoadErr != nil {
+	if dEnv.DocsLoadErr != nil {
 		t.Error("Files don't exist.  There should be an error if the directory doesn't exist.")
 	}
 

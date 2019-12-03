@@ -63,7 +63,7 @@ type DoltEnv struct {
 	RSLoadErr error
 
 	Docs       *Docs
-	DcsLoadErr error
+	DocsLoadErr error
 
 	DoltDB      *doltdb.DoltDB
 	DBLoadError error

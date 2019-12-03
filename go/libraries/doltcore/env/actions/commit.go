@@ -61,14 +61,14 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 		return err
 	}
 
-	notStagedDcs, err := GetDocDiffs(ctx, dEnv)
+	notStagedDocs, err := GetDocDiffs(ctx, dEnv)
 
 	if err != nil {
 		return err
 	}
 
 	if len(stagedTbls.Tables) == 0 && dEnv.RepoState.Merge == nil && !allowEmpty {
-		return NothingStaged{notStagedTbls, notStagedDcs}
+		return NothingStaged{notStagedTbls, notStagedDocs}
 	}
 
 	name, email, err := getNameAndEmail(dEnv.Config)

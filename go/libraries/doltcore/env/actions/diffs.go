@@ -128,26 +128,26 @@ func NewDocDiffs(ctx context.Context, newerLicenseBytes, newReadmeBytes []byte, 
 		return nil, err
 	}
 
-	var dcs []string
-	dcs = append(dcs, added...)
-	dcs = append(dcs, modified...)
-	dcs = append(dcs, removed...)
-	sort.Strings(dcs)
+	var docs []string
+	docs = append(docs, added...)
+	docs = append(docs, modified...)
+	docs = append(docs, removed...)
+	sort.Strings(docs)
 
-	dcsToType := make(map[string]DocDiffType)
+	docsToType := make(map[string]DocDiffType)
 	for _, nt := range added {
-		dcsToType[nt] = AddedDoc
+		docsToType[nt] = AddedDoc
 	}
 
 	for _, nt := range modified {
-		dcsToType[nt] = ModifiedDoc
+		docsToType[nt] = ModifiedDoc
 	}
 
 	for _, nt := range removed {
-		dcsToType[nt] = RemovedDoc
+		docsToType[nt] = RemovedDoc
 	}
 
-	return &DocDiffs{len(added), len(modified), len(removed), dcsToType, dcs}, err
+	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, err
 }
 
 func (nd *DocDiffs) Len() int {
@@ -175,11 +175,11 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
 		return nil, err
 	}
 
-	notStagedDcDiffs, err := NewDocDiffs(ctx, licenseText, readmeText, workingRoot)
+	notStagedDocDiffs, err := NewDocDiffs(ctx, licenseText, readmeText, workingRoot)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return notStagedDcDiffs, nil
+	return notStagedDocDiffs, nil
 }
