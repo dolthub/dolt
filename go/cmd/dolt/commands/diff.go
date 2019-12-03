@@ -430,19 +430,19 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 		switch dff.DiffType {
 		case diff.SchDiffNone:
 			if dff.New.IsPartOfPK {
-				newPks = append(newPks, formatColName(dff.New.Name))
-				oldPks = append(oldPks, formatColName(dff.Old.Name))
+				newPks = append(newPks, sql.QuoteIdentifier(dff.New.Name))
+				oldPks = append(oldPks, sql.QuoteIdentifier(dff.Old.Name))
 			}
 			cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
 		case diff.SchDiffColAdded:
 			if dff.New.IsPartOfPK {
-				newPks = append(newPks, formatColName(dff.New.Name))
+				newPks = append(newPks, sql.QuoteIdentifier(dff.New.Name))
 			}
 			cli.Println(color.GreenString("+ " + sql.FmtCol(2, 0, 0, *dff.New)))
 		case diff.SchDiffColRemoved:
 			// removed from sch2
 			if dff.Old.IsPartOfPK {
-				oldPks = append(oldPks, formatColName(dff.Old.Name))
+				oldPks = append(oldPks, sql.QuoteIdentifier(dff.Old.Name))
 			}
 			cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
 		case diff.SchDiffColModified:
@@ -476,9 +476,9 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 
 			if pk0 != pk1 {
 				if pk0 && !pk1 {
-					oldPks = append(oldPks, formatColName(n0))
+					oldPks = append(oldPks, sql.QuoteIdentifier(n0))
 				} else {
-					newPks = append(newPks, formatColName(n1))
+					newPks = append(newPks, sql.QuoteIdentifier(n1))
 				}
 				cli.Println(sql.FmtCol(4, 0, 0, *dff.New))
 			} else {
@@ -523,10 +523,6 @@ func sqlSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Schema
 			cli.Println("ALTER TABLE", tableName, "RENAME COLUMN", oldColName, "TO", newColName, ";")
 		}
 	}
-}
-
-func formatColName(name string) string {
-	return "`" + name + "`"
 }
 
 func dumbDownSchema(in schema.Schema) (schema.Schema, error) {

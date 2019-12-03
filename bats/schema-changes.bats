@@ -100,7 +100,6 @@ teardown() {
     dolt table create -f -s=`batshelper 1pk5col-ints-diff-pk.schema` test
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "PRIMARY KEY" ]] || false
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
     [[ "$output" =~ ">    PRIMARY KEY (\`c1\`)" ]] || false
 }
@@ -112,7 +111,6 @@ teardown() {
     dolt table create -f -s=`batshelper 1pk5col-ints-add-pk.schema` test
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "PRIMARY KEY" ]] || false
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
     [[ "$output" =~ ">    PRIMARY KEY (\`c1\`, \`c5\`)" ]] || false
 }
@@ -133,7 +131,6 @@ teardown() {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt table create -f -s=`batshelper 1pk5col-ints-change-col-name.schema` test
-    echo dolt diff --schema
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "PRIMARY KEY" ]] || false
@@ -146,7 +143,6 @@ teardown() {
     dolt table create -f -s=`batshelper 1pk5col-ints-add-col-pk.schema` test
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "PRIMARY KEY" ]] || false
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
     [[ "$output" =~ ">    PRIMARY KEY (\`pk\`, \`c6\`)" ]] || false
 }
@@ -158,7 +154,6 @@ teardown() {
     dolt table create -f -s=`batshelper 1pk5col-ints-rm-pk-col.schema` test
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "PRIMARY KEY" ]] || false
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
     [[ "$output" =~ ">    PRIMARY KEY (\`c3\`)" ]] || false
 }
