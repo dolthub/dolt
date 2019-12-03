@@ -27,10 +27,10 @@ teardown() {
     run ls
     [ "${lines[0]}" = "LICENSE.md" ]
     [ "${lines[1]}" = "README.md" ]
+    # L&R must be removed (or added and committed, which is not yet implemented) for `nothing to commit` message to display
     run rm "LICENSE.md"
     run rm "README.md"
     run dolt status
-    echo "output = $output"
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "On branch master" ]
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
@@ -76,6 +76,7 @@ teardown() {
 }
 
 @test "dolt commit with nothing added" {
+    # L&R must be removed (or added and committed, which is not yet implemented) in order to test `no changes added to commit` message
     rm "LICENSE.md"
     rm "README.md"
     run dolt commit -m "commit"

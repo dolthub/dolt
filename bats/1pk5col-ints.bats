@@ -453,6 +453,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "generate a merge conflict and try to roll back using dolt merge --abort" {
+    # L&R must be removed (or added and committed, which is not yet implemented) in order to test merge
     rm "LICENSE.md" 
     rm "README.md"
     dolt add test
@@ -647,6 +648,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "rm a staged but uncommitted table" {
+    # L&R must be removed (or added and committed, which is not yet implemented) for `nothing to commit` message
     rm "LICENSE.md"
     rm "README.md"
     run dolt add test

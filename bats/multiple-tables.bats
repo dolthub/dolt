@@ -28,6 +28,7 @@ teardown() {
 }
 
 @test "modify both tables, commit only one" {
+    # L&R must be removed (or added and committed, which is not yet implemented) for `nothing to commit` message to display
     rm "LICENSE.md"
     rm "README.md"
     dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
@@ -53,6 +54,7 @@ teardown() {
 }
 
 @test "dolt add --all and dolt add . adds all changes" {
+    # L&R must be removed (or added and committed, which is not yet implemented) for `Untracked files` message to be missing after dolt add .
     rm "LICENSE.md"
     rm "README.md"
     dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
@@ -76,6 +78,7 @@ teardown() {
 }
 
 @test "dolt reset . resets all tables" {
+    # L&R must be removed (or added, which is not yet implemented) in order to test reset
     rm "LICENSE.md"
     rm "README.md"
     dolt add --all
@@ -91,6 +94,7 @@ teardown() {
 }
 
 @test "dolt reset --hard" {
+    # L&R must be removed (or added, which is not yet implemented) in order to test hard reset
     rm "LICENSE.md"
     rm "README.md"
     dolt add --all
