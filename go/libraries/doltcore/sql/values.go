@@ -16,8 +16,9 @@ package sql
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"strconv"
+
+	"github.com/google/uuid"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"

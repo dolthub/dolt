@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"

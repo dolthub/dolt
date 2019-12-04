@@ -16,10 +16,11 @@ package sql
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
