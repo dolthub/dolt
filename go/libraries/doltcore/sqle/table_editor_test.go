@@ -51,6 +51,8 @@ func TestTableEditor(t *testing.T) {
 	troyMclure := NewPeopleRow(17, "Troy", "McClure", false, 58, 7.0)
 
 	var expectedErr error
+	// Some of these are pretty exotic use cases, but since we support all these operations it's nice to know they work
+	// in tandem.
 	testCases := []tableEditorTest {
 		{
 			name: "all inserts",
@@ -106,6 +108,28 @@ func TestTableEditor(t *testing.T) {
 			expectedRows: CompressRows(PeopleTestSchema,
 				MutateRow(edna, AgeTag, 1),
 				krusty,
+			),
+		},
+		{
+			name: "inserts updates and deletes",
+			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
+				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, AgeTag, 1), PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(smithers, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(ralph, PeopleTestSchema)))
+				require.NoError(t, ed.Update(ctx, r(smithers, PeopleTestSchema), r(MutateRow(smithers, AgeTag, 1), PeopleTestSchema)))
+				require.NoError(t, ed.Delete(ctx, r(smithers, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(skinner, PeopleTestSchema)))
+				require.NoError(t, ed.Delete(ctx, r(ralph, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(ralph, PeopleTestSchema)))
+			},
+			selectQuery: "select * from people where id >= 10",
+			expectedRows: CompressRows(PeopleTestSchema,
+				MutateRow(edna, AgeTag, 1),
+				krusty,
+				ralph,
+				skinner,
 			),
 		},
 		{
