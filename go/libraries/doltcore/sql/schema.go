@@ -16,68 +16,9 @@ package sql
 
 import (
 	"fmt"
-	"strings"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	dtypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 )
-
-// SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
-// create this table
-func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
-	sb := &strings.Builder{}
-	fmt.Fprintf(sb, "CREATE TABLE %s (\n", QuoteIdentifier(tableName))
-
-	firstLine := true
-	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
-		if firstLine {
-			firstLine = false
-		} else {
-			sb.WriteString(",\n")
-		}
-
-		s := FmtCol(2, 0, 0, col)
-		sb.WriteString(s)
-
-		return false
-	})
-
-	firstPK := true
-	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if firstPK {
-			sb.WriteString(",\n  PRIMARY KEY (")
-			firstPK = false
-		} else {
-			sb.WriteRune(',')
-		}
-		sb.WriteString(QuoteIdentifier(col.Name))
-		return false, nil
-	})
-
-	// TODO: fix panics
-	if err != nil {
-		panic(err)
-	}
-
-	sb.WriteString(")\n);")
-	return sb.String()
-}
-
-func TableDropStmt(tableName string) string {
-	var b strings.Builder
-	b.WriteString("DROP TABLE ")
-	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(";")
-	return b.String()
-}
-
-func TableDropIfExistsStmt(tableName string) string {
-	var b strings.Builder
-	b.WriteString("DROP TABLE IF EXISTS ")
-	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(";")
-	return b.String()
-}
 
 // FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
@@ -107,11 +48,6 @@ func FmtColWithNameAndType(indent, nameWidth, typeWidth int, colName, typeStr st
 	}
 
 	return colStr + fmt.Sprintf(" COMMENT 'tag:%d'", col.Tag)
-}
-
-// Quotes the identifier given with backticks.
-func QuoteIdentifier(s string) string {
-	return "`" + s + "`"
 }
 
 // FmtColPrimaryKey creates a string representing a primary key constraint within a sql create table statement with a

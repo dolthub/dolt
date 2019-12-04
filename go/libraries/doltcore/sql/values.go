@@ -16,11 +16,8 @@ package sql
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
-	"strconv"
-	"strings"
-
 	"github.com/google/uuid"
+	"strconv"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -144,42 +141,6 @@ func LiteralValueGetter(value types.Value) *RowValGetter {
 		getFn: func(r row.Row) types.Value {
 			return value
 		},
-	}
-}
-
-func ValueAsSqlString(value types.Value) (string, error) {
-	if types.IsNull(value) {
-		return "NULL", nil
-	}
-
-	switch value.Kind() {
-	case types.BoolKind:
-		if value.(types.Bool) {
-			return "TRUE", nil
-		} else {
-			return "FALSE", nil
-		}
-	case types.UUIDKind:
-		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
-		if err != nil {
-			return "", err
-		}
-		str, _ := convFn(value)
-		return doubleQuot + string(str.(types.String)) + doubleQuot, nil
-	case types.StringKind:
-		s := string(value.(types.String))
-		s = strings.ReplaceAll(s, doubleQuot, "\\\"")
-		return doubleQuot + s + doubleQuot, nil
-	default:
-		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
-		if err != nil {
-			return "", err
-		}
-		str, err := convFn(value)
-		if err != nil {
-			return "", err
-		}
-		return string(str.(types.String)), nil
 	}
 }
 

@@ -18,10 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/types"
 	"io"
-	"strings"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -222,64 +219,6 @@ func ExecuteUpdate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	return &result, nil
-}
-
-func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema) (string, error) {
-	var b strings.Builder
-	b.WriteString("UPDATE ")
-	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(" ")
-
-	b.WriteString("SET ")
-	seenOne := false
-	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		col := tableSch.GetAllCols().TagToCol[tag]
-		if !col.IsPartOfPK {
-			if seenOne {
-				b.WriteRune(',')
-			}
-			sqlString, err := ValueAsSqlString(val)
-			if err != nil {
-				return true, err
-			}
-			b.WriteString(QuoteIdentifier(col.Name))
-			b.WriteRune('=')
-			b.WriteString(sqlString)
-			seenOne = true
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(" WHERE (")
-	seenOne = false
-	_, err = r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
-		col := tableSch.GetAllCols().TagToCol[tag]
-		if col.IsPartOfPK {
-			if seenOne {
-				b.WriteString(" AND ")
-			}
-			sqlString, err := ValueAsSqlString(val)
-			if err != nil {
-				return true, err
-			}
-			b.WriteString(QuoteIdentifier(col.Name))
-			b.WriteRune('=')
-			b.WriteString(sqlString)
-			seenOne = true
-		}
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(");")
-	return b.String(), nil
 }
 
 func errUpdate(errorFmt string, args ...interface{}) (*UpdateResult, error) {
