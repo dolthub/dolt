@@ -471,6 +471,8 @@ type stats struct {
 var batchEditStats stats
 var displayStrLen int
 
+const maxBatchSize = 50000
+
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
 func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	sqlStatement, err := sqlparser.Parse(query)
@@ -488,6 +490,13 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		err = mergeInsertResultIntoStats(rowIter, &batchEditStats)
 		if err != nil {
 			return fmt.Errorf("Error inserting rows: %v", err.Error())
+		}
+
+		if batchEditStats.numRowsInserted % maxBatchSize == 0 {
+			err := se.db.Flush(ctx)
+			if err != nil {
+				return err
+			}
 		}
 
 		displayStr := fmt.Sprintf("Rows inserted: %d", batchEditStats.numRowsInserted)
