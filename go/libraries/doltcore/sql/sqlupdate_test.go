@@ -16,9 +16,9 @@ package sql
 
 import (
 	"context"
-	"github.com/google/go-cmp/cmp"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -492,7 +492,7 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 			return fmt.Errorf("Error inserting rows: %v", err.Error())
 		}
 
-		if batchEditStats.numRowsInserted % maxBatchSize == 0 {
+		if batchEditStats.numRowsInserted%maxBatchSize == 0 {
 			err := se.db.Flush(ctx)
 			if err != nil {
 				return err
