@@ -16,6 +16,7 @@ package sql
 
 import (
 	"context"
+	"github.com/google/go-cmp/cmp"
 	"testing"
 
 	"github.com/google/uuid"
@@ -371,4 +372,33 @@ func TestExecuteUpdate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func rowsEqual(expected, actual row.Row) (bool, string) {
+	er, ar := make(map[uint64]types.Value), make(map[uint64]types.Value)
+	_, err := expected.IterCols(func(t uint64, v types.Value) (bool, error) {
+		er[t] = v
+		return false, nil
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = actual.IterCols(func(t uint64, v types.Value) (bool, error) {
+		ar[t] = v
+		return false, nil
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	opts := cmp.Options{cmp.AllowUnexported(), dtestutils.FloatComparer}
+	eq := cmp.Equal(er, ar, opts)
+	var diff string
+	if !eq {
+		diff = cmp.Diff(er, ar, opts)
+	}
+	return eq, diff
 }

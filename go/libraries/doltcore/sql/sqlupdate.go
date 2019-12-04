@@ -29,6 +29,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
 )
 
+var ErrMissingPrimaryKeys = errors.New("One or more primary key columns missing from insert statement")
+var ConstraintFailedFmt = "Constraint failed for column '%v': %v"
+
 type UpdateResult struct {
 	Root             *doltdb.RootValue
 	NumRowsUpdated   int

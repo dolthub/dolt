@@ -34,7 +34,9 @@ import (
 // Executes all the SQL non-select statements given in the string against the root value given and returns the updated
 // root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	batcher := dsql.NewSqlBatcher(dEnv.DoltDB, root)
+	engine := sqle.NewDefault()
+	db := dsqle.NewBatchedDatabase("dolt", root, dEnv)
+	engine.AddDatabase(db)
 
 	for _, query := range strings.Split(statements, ";\n") {
 		if len(strings.Trim(query, " ")) == 0 {
@@ -53,9 +55,13 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		case *sqlparser.Select, *sqlparser.OtherRead:
 			return nil, errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
-			_, execErr = dsql.ExecuteBatchInsert(context.Background(), root, s, batcher)
+			var rowIter sql.RowIter
+			_, rowIter, execErr = engine.Query(sql.NewEmptyContext(), query)
+			if execErr == nil {
+				execErr = drainIter(rowIter)
+			}
 		case *sqlparser.DDL:
-			if root, err = batcher.Commit(context.Background()); err != nil {
+			if err = db.Flush(context.Background()); err != nil {
 				return nil, err
 			}
 			_, execErr = sqlparser.ParseStrictDDL(query)
@@ -63,9 +69,7 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 				return nil, fmt.Errorf("Error parsing DDL: %v.", execErr.Error())
 			}
 			root, execErr = sqlDDL(dEnv, root, s, query)
-			if err := batcher.UpdateRoot(root); err != nil {
-				return nil, err
-			}
+			db.SetRoot(root)
 		default:
 			return nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 		}
@@ -75,13 +79,11 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		}
 	}
 
-	if newRoot, err := batcher.Commit(context.Background()); newRoot != nil {
-		root = newRoot
-	} else if err != nil {
+	if err := db.Flush(context.Background()); err == nil {
+		return db.Root(), nil
+	} else {
 		return nil, err
 	}
-
-	return root, nil
 }
 
 func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
@@ -135,4 +137,16 @@ func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
 	}
 
 	return rows, nil
+}
+
+func drainIter(iter sql.RowIter) error {
+	var returnedErr error
+	for {
+		_, err := iter.Next()
+		if err == io.EOF {
+			return returnedErr
+		} else if returnedErr != nil {
+			returnedErr = err
+		}
+	}
 }
