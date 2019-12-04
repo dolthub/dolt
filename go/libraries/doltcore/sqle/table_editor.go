@@ -27,10 +27,11 @@ import (
 // tableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
 type tableEditor struct {
-	t           *DoltTable
-	ed          *types.MapEditor
-	addedKeys   map[hash.Hash]types.Value
-	removedKeys map[hash.Hash]types.Value
+	t            *DoltTable
+	ed           *types.MapEditor
+	insertedKeys map[hash.Hash]types.Value
+	addedKeys    map[hash.Hash]types.Value
+	removedKeys  map[hash.Hash]types.Value
 }
 
 var _ sql.RowReplacer = (*tableEditor)(nil)
@@ -41,6 +42,7 @@ var _ sql.RowDeleter = (*tableEditor)(nil)
 func newTableEditor(t *DoltTable) *tableEditor {
 	return &tableEditor{
 		t:           t,
+		insertedKeys: make(map[hash.Hash]types.Value),
 		addedKeys:   make(map[hash.Hash]types.Value),
 		removedKeys: make(map[hash.Hash]types.Value),
 	}
@@ -67,6 +69,7 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if _, ok := te.addedKeys[hash]; ok {
 		return errors.New("duplicate primary key given")
 	}
+	te.insertedKeys[hash] = key
 	te.addedKeys[hash] = key
 
 	if te.ed == nil {
@@ -128,7 +131,7 @@ func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 		return err
 	}
 
-	// If the PK is changed then we have to delete the old row first
+	// If the PK is changed then we need to delete the old value and insert the new one
 	dOldKey := dOldRow.NomsMapKey(te.t.sch)
 	dOldKeyVal, err := dOldKey.Value(ctx)
 	if err != nil {
@@ -150,12 +153,11 @@ func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 			return err
 		}
 
-		// if _, ok := te.addedKeys[newHash]; ok {
-		// 	return errors.New("Cannot update key before flushing current batch")
-		// }
-		// if _, ok := te.addedKeys[oldHash]; ok {
-		// 	return errors.New("Cannot update key before flushing current batch")
-		// }
+		// If the old value of the primary key we just updated was previously inserted, then we need to remove it now.
+		if _, ok := te.insertedKeys[oldHash]; ok {
+			delete(te.insertedKeys, oldHash)
+			te.ed.Remove(dOldKeyVal)
+		}
 
 		te.addedKeys[newHash] = dNewKeyVal
 		te.removedKeys[oldHash] = dOldKeyVal

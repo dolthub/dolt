@@ -137,7 +137,7 @@ func TestTableEditor(t *testing.T) {
 			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
 				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
 				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
-				expectedErr = ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, IdTag, 30), PeopleTestSchema))
+				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, IdTag, 30), PeopleTestSchema)))
 			},
 			selectQuery: "select * from people where id >= 10",
 			expectedRows: CompressRows(PeopleTestSchema,
