@@ -37,21 +37,21 @@ const (
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	name              string
-	root              *doltdb.RootValue
-	dEnv              *env.DoltEnv
-	batchMode         batchMode
-	outstandingTables map[string]*DoltTable
+	name      string
+	root      *doltdb.RootValue
+	dEnv      *env.DoltEnv
+	batchMode batchMode
+	tables    map[string]*DoltTable
 }
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Database {
 	return &Database{
-		name:              name,
-		root:              root,
-		dEnv:              dEnv,
-		batchMode:         single,
-		outstandingTables: make(map[string]*DoltTable),
+		name:      name,
+		root:      root,
+		dEnv:      dEnv,
+		batchMode: single,
+		tables:    make(map[string]*DoltTable),
 	}
 }
 
@@ -59,11 +59,11 @@ func NewDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Databa
 // commit any outstanding edits.
 func NewBatchedDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Database {
 	return &Database{
-		name:              name,
-		root:              root,
-		dEnv:              dEnv,
-		batchMode:         batched,
-		outstandingTables: make(map[string]*DoltTable),
+		name:      name,
+		root:      root,
+		dEnv:      dEnv,
+		batchMode: batched,
+		tables:    make(map[string]*DoltTable),
 	}
 }
 
@@ -101,6 +101,10 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return nil, false, nil
 	}
 
+	if db.tables[exactName] != nil {
+		return db.tables[exactName], true, nil
+	}
+
 	tbl, ok, err := db.root.GetTable(ctx, exactName)
 
 	if err != nil {
@@ -115,12 +119,8 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return nil, false, err
 	}
 
-	table := &DoltTable{name: tblName, table: tbl, sch: sch, db: db}
-	if db.batchMode == batched {
-		db.outstandingTables[tblName] = table
-	}
-
-	return table, true, nil
+	db.tables[exactName] = &DoltTable{name: exactName, table: tbl, sch: sch, db: db}
+	return db.tables[exactName], true, nil
 }
 
 func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
@@ -205,7 +205,7 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 
 // Flushes the current batch of outstanding changes and returns any errors.
 func (db *Database) Flush(ctx context.Context) error {
-	for _, table := range db.outstandingTables {
+	for _, table := range db.tables {
 		if err := table.flushBatchedEdits(ctx); err != nil {
 			return err
 		}
