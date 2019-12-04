@@ -118,33 +118,26 @@ func (t *DoltTable) newMapEditor(ctx context.Context) (*types.MapEditor, error) 
 	return typesMap.Edit(), nil
 }
 
-func (tu *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := SqlRowToDoltRow(tu.t.table.Format(), oldRow, tu.t.sch)
+func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	dOldRow, err := SqlRowToDoltRow(te.t.table.Format(), oldRow, te.t.sch)
 	if err != nil {
 		return err
 	}
-	dNewRow, err := SqlRowToDoltRow(tu.t.table.Format(), newRow, tu.t.sch)
+	dNewRow, err := SqlRowToDoltRow(te.t.table.Format(), newRow, te.t.sch)
 	if err != nil {
 		return err
 	}
 
 	// If the PK is changed then we have to delete the old row first
-	dOldKey := dOldRow.NomsMapKey(tu.t.sch)
+	dOldKey := dOldRow.NomsMapKey(te.t.sch)
 	dOldKeyVal, err := dOldKey.Value(ctx)
 	if err != nil {
 		return err
 	}
-	dNewKey := dNewRow.NomsMapKey(tu.t.sch)
+	dNewKey := dNewRow.NomsMapKey(te.t.sch)
 	dNewKeyVal, err := dNewKey.Value(ctx)
 	if err != nil {
 		return err
-	}
-
-	if tu.ed == nil {
-		tu.ed, err = tu.t.newMapEditor(ctx)
-		if err != nil {
-			return err
-		}
 	}
 
 	if !dOldKeyVal.Equals(dNewKeyVal) {
@@ -157,19 +150,33 @@ func (tu *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 			return err
 		}
 
-		tu.addedKeys[newHash] = dNewKeyVal
-		tu.removedKeys[oldHash] = dOldKey
+		if _, ok := te.addedKeys[newHash]; ok {
+			return errors.New("Cannot update key before flushing current batch")
+		}
+		if _, ok := te.addedKeys[oldHash]; ok {
+			return errors.New("Cannot update key before flushing current batch")
+		}
+
+		te.addedKeys[newHash] = dNewKeyVal
+		te.removedKeys[oldHash] = dOldKey
 	}
 
-	tu.ed.Set(dNewKey, dNewRow.NomsMapValue(tu.t.sch))
+	if te.ed == nil {
+		te.ed, err = te.t.newMapEditor(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	te.ed.Set(dNewKeyVal, dNewRow.NomsMapValue(te.t.sch))
 	return nil
 }
 
-func (tu *tableEditor) Close(ctx *sql.Context) error {
+func (te *tableEditor) Close(ctx *sql.Context) error {
 	// For all added keys, check for and report a collision
-	for hash, addedKey := range tu.addedKeys {
-		if _, ok := tu.removedKeys[hash]; !ok {
-			_, rowExists, err := tu.t.table.GetRow(ctx, addedKey.(types.Tuple), tu.t.sch)
+	for hash, addedKey := range te.addedKeys {
+		if _, ok := te.removedKeys[hash]; !ok {
+			_, rowExists, err := te.t.table.GetRow(ctx, addedKey.(types.Tuple), te.t.sch)
 			if err != nil {
 				return errhand.BuildDError("failed to read table").AddCause(err).Build()
 			}
@@ -179,14 +186,14 @@ func (tu *tableEditor) Close(ctx *sql.Context) error {
 		}
 	}
 	// For all removed keys, remove the map entries that weren't added elsewhere by other updates
-	for hash, removedKey := range tu.removedKeys {
-		if _, ok := tu.addedKeys[hash]; !ok {
-			tu.ed.Remove(removedKey)
+	for hash, removedKey := range te.removedKeys {
+		if _, ok := te.addedKeys[hash]; !ok {
+			te.ed.Remove(removedKey)
 		}
 	}
 
-	if tu.ed != nil {
-		return tu.t.updateTable(ctx, tu.ed)
+	if te.ed != nil {
+		return te.t.updateTable(ctx, te.ed)
 	}
 	return nil
 }

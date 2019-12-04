@@ -36,6 +36,8 @@ type tableEditorTest struct {
 	selectQuery string
 	// The rows this query should return, nil if an error is expected
 	expectedRows []row.Row
+	// Expected error string, if any
+	expectedErr string
 }
 
 func TestTableEditor(t *testing.T) {
@@ -48,6 +50,7 @@ func TestTableEditor(t *testing.T) {
 	fatTony := NewPeopleRow(16, "Fat", "Tony", false, 53, 5.0)
 	troyMclure := NewPeopleRow(17, "Troy", "McClure", false, 58, 7.0)
 
+	var expectedErr error
 	testCases := []tableEditorTest {
 		{
 			name: "all inserts",
@@ -66,10 +69,61 @@ func TestTableEditor(t *testing.T) {
 				edna, krusty, smithers, ralph, martin, skinner, fatTony, troyMclure,
 			),
 		},
+		{
+			name: "inserts and deletes",
+			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
+				require.NoError(t, ed.Delete(ctx, r(edna, PeopleTestSchema)))
+			},
+			selectQuery: "select * from people where id >= 10",
+			expectedRows: CompressRows(PeopleTestSchema,
+				krusty,
+			),
+		},
+		{
+			name: "inserts and deletes 2",
+			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
+				require.NoError(t, ed.Delete(ctx, r(edna, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(fatTony, PeopleTestSchema)))
+				require.NoError(t, ed.Delete(ctx, r(Homer, PeopleTestSchema)))
+			},
+			selectQuery: "select * from people where id >= 10 or id = 0",
+			expectedRows: CompressRows(PeopleTestSchema,
+				krusty, fatTony,
+			),
+		},
+		{
+			name: "inserts and updates",
+			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
+				require.NoError(t, ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, AgeTag, 1), PeopleTestSchema)))
+			},
+			selectQuery: "select * from people where id >= 10",
+			expectedRows: CompressRows(PeopleTestSchema,
+				MutateRow(edna, AgeTag, 1),
+				krusty,
+			),
+		},
+		{
+			name: "inserts and updates to primary key",
+			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
+				require.NoError(t, ed.Insert(ctx, r(edna, PeopleTestSchema)))
+				require.NoError(t, ed.Insert(ctx, r(krusty, PeopleTestSchema)))
+				expectedErr = ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, IdTag, 30), PeopleTestSchema))
+			},
+			selectQuery: "select * from people where id >= 10",
+			expectedErr: "Cannot update key before flushing current batch",
+		},
 	}
 
 	for _, test := range testCases {
 		t.Run(test.name, func(t *testing.T) {
+			expectedErr = nil
+
 			dEnv := dtestutils.CreateTestEnv()
 			CreateTestDatabase(dEnv, t)
 
@@ -83,12 +137,17 @@ func TestTableEditor(t *testing.T) {
 			ed := dt.Updater(ctx).(*tableEditor)
 
 			test.setup(ctx, t, ed)
-			require.NoError(t, ed.Close(ctx))
+			if len(test.expectedErr) > 0 {
+				require.Error(t, expectedErr)
+				assert.Contains(t, expectedErr.Error(), test.expectedErr)
+				return
+			} else {
+				require.NoError(t, ed.Close(ctx))
+			}
 
 			root = db.Root()
 			actualRows, _, err := executeSelect(context.Background(), dEnv, CompressSchema(PeopleTestSchema), root, test.selectQuery)
 			require.NoError(t, err)
-
 			assert.Equal(t, test.expectedRows, actualRows)
 		})
 	}
