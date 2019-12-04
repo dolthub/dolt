@@ -26,6 +26,9 @@ import (
 
 // tableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
+// Right now a table editor allows you to combine inserts, updates, and deletes in any order, and makes reasonable
+// attempts to produce correct results when doing so. But this probably (definitely) doesn't work in every case, and
+// higher-level clients should carefully flush the editor when necessary (i.e. before an update after many inserts).
 type tableEditor struct {
 	t            *DoltTable
 	ed           *types.MapEditor
