@@ -40,6 +40,10 @@ const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +
 	");"
 const expectedDropSql = "DROP TABLE `table_name`;"
 const expectedDropIfExistsSql = "DROP TABLE IF EXISTS `table_name`;"
+const expectedAddColSql = "ALTER TABLE `table_name` ADD `c0` BIGINT NOT NULL COMMENT 'tag:9';"
+const expectedDropColSql = "ALTER TABLE `table_name` DROP `first`;"
+const expectedRenameColSql = "ALTER TABLE `table_name` RENAME COLUMN `id` TO `pk`;"
+const expectedRenameTableSql = "RENAME TABLE `table_name` TO `new_table_name`;"
 
 type test struct {
 	name           string
@@ -50,21 +54,46 @@ type test struct {
 
 func TestSchemaAsCreateStmt(t *testing.T) {
 	tSchema := sqltestutil.PeopleTestSchema
-	str := SchemaAsCreateStmt("table_name", tSchema)
+	stmt := SchemaAsCreateStmt("table_name", tSchema)
 
-	assert.Equal(t, expectedCreateSQL, str)
+	assert.Equal(t, expectedCreateSQL, stmt)
 }
 
 func TestTableDropStmt(t *testing.T) {
-	str := TableDropStmt("table_name")
+	stmt := DropTableStmt("table_name")
 
-	assert.Equal(t, expectedDropSql, str)
+	assert.Equal(t, expectedDropSql, stmt)
 }
 
 func TestTableDropIfExistsStmt(t *testing.T) {
-	str := TableDropIfExistsStmt("table_name")
+	stmt := DropTableIfExistsStmt("table_name")
 
-	assert.Equal(t, expectedDropIfExistsSql, str)
+	assert.Equal(t, expectedDropIfExistsSql, stmt)
+}
+
+func TestAlterTableAddColStmt(t *testing.T) {
+	newColDef := "`c0` BIGINT NOT NULL COMMENT 'tag:9'"
+	stmt := AlterTableAddColStmt("table_name", newColDef)
+
+	assert.Equal(t, expectedAddColSql, stmt)
+}
+
+func TestAlterTableDropColStmt(t *testing.T) {
+	stmt := AlterTableDropColStmt("table_name", "first")
+
+	assert.Equal(t, expectedDropColSql, stmt)
+}
+
+func TestAlterTableRenameColStmt(t *testing.T) {
+	stmt := AlterTableRenameColStmt("table_name", "id", "pk")
+
+	assert.Equal(t, expectedRenameColSql, stmt)
+}
+
+func TestRenameTableStmt(t *testing.T) {
+	stmt := RenameTableStmt("table_name", "new_table_name")
+
+	assert.Equal(t, expectedRenameTableSql, stmt)
 }
 
 func TestRowAsInsertStmt(t *testing.T) {

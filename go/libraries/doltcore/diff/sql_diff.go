@@ -122,34 +122,32 @@ func (sds *SQLDiffSink) Close() error {
 }
 
 func PrintSqlTableDiffs(ctx context.Context, r1, r2 *doltdb.RootValue, wr io.WriteCloser) error {
-	adds, _, drops, err := r1.TableDiff(ctx, r2)
+	creates, _, drops, err := r1.TableDiff(ctx, r2)
 
 	if err != nil {
 		return err
 	}
 
-	adds, drops, renames, err := findRenames(ctx, r1, r2, adds, drops)
+	creates, drops, renames, err := findRenames(ctx, r1, r2, creates, drops)
 
 	if err != nil {
 		return err
 	}
 
-	// rename tables
 	for k, v := range renames {
-		if err = iohelp.WriteLine(wr, "RENAME TABLE "+sql.QuoteIdentifier(k)+" TO "+sql.QuoteIdentifier(v)); err != nil {
+		if err = iohelp.WriteLine(wr, sql.RenameTableStmt(k, v)); err != nil {
 			return err
 		}
 	}
 
-	// drop tables
 	for _, tblName := range drops {
-		if err = iohelp.WriteLine(wr, "DROP TABLE "+sql.QuoteIdentifier(tblName)+";"); err != nil {
+		if err = iohelp.WriteLine(wr, sql.DropTableStmt(tblName)); err != nil {
 			return err
 		}
 	}
 
-	// add tables
-	for _, tblName := range adds {
+	// create tables and insert rows
+	for _, tblName := range creates {
 		if tbl, ok, err := r1.GetTable(ctx, tblName); err != nil {
 			return errors.New("error: unable to write SQL diff output for new table")
 		} else if !ok {

@@ -24,6 +24,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
+// Quotes the identifier given with backticks.
+func QuoteIdentifier(s string) string {
+	return "`" + s + "`"
+}
+
 // SchemaAsCreateStmt takes a Schema and returns a string representing a SQL create table command that could be used to
 // create this table
 func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
@@ -65,7 +70,7 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 	return sb.String()
 }
 
-func TableDropStmt(tableName string) string {
+func DropTableStmt(tableName string) string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE ")
 	b.WriteString(QuoteIdentifier(tableName))
@@ -73,11 +78,54 @@ func TableDropStmt(tableName string) string {
 	return b.String()
 }
 
-func TableDropIfExistsStmt(tableName string) string {
+func DropTableIfExistsStmt(tableName string) string {
 	var b strings.Builder
 	b.WriteString("DROP TABLE IF EXISTS ")
 	b.WriteString(QuoteIdentifier(tableName))
 	b.WriteString(";")
+	return b.String()
+}
+
+func AlterTableAddColStmt(tableName string, newColDef string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ADD ")
+	b.WriteString(newColDef)
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableDropColStmt(tableName string, oldColName string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" DROP ")
+	b.WriteString(QuoteIdentifier(oldColName))
+	b.WriteRune(';')
+	return b.String()
+}
+
+func AlterTableRenameColStmt(tableName string, oldColName string, newColName string) string {
+	var b strings.Builder
+	b.WriteString("ALTER TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" RENAME COLUMN ")
+	b.WriteString(QuoteIdentifier(oldColName))
+	b.WriteString(" TO ")
+	b.WriteString(QuoteIdentifier(newColName))
+	b.WriteRune(';')
+	return b.String()
+}
+
+func RenameTableStmt(fromName string, toName string) string {
+	var b strings.Builder
+	b.WriteString("RENAME TABLE ")
+	b.WriteString(QuoteIdentifier(fromName))
+	b.WriteString(" TO ")
+	b.WriteString(QuoteIdentifier(toName))
+	b.WriteString(";")
+
 	return b.String()
 }
 
@@ -217,11 +265,6 @@ func RowAsUpdateStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 
 	b.WriteString(");")
 	return b.String(), nil
-}
-
-// Quotes the identifier given with backticks.
-func QuoteIdentifier(s string) string {
-	return "`" + s + "`"
 }
 
 func valueAsSqlString(value types.Value) (string, error) {

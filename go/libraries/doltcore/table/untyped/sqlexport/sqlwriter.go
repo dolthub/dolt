@@ -79,7 +79,7 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 func (w *SqlExportWriter) maybeWriteDropCreate() error {
 	if !w.writtenFirstRow {
 		var b strings.Builder
-		b.WriteString(sql.TableDropIfExistsStmt(w.tableName))
+		b.WriteString(sql.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
 		b.WriteString(sql.SchemaAsCreateStmt(w.tableName, w.sch))
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {

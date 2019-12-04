@@ -124,7 +124,7 @@ func TestSqlTableDiffRename(t *testing.T) {
 	assert.Equal(t, []string{}, removed)
 	assert.Equal(t, []string{}, added)
 
-	expectedOutput := "RENAME TABLE `renameTable` TO `newTableName`\n"
+	expectedOutput := "RENAME TABLE `renameTable` TO `newTableName`;\n"
 	var stringWr StringBuilderCloser
 	_ = PrintSqlTableDiffs(ctx, newRoot, oldRoot, &stringWr)
 	assert.Equal(t, expectedOutput, stringWr.String())
