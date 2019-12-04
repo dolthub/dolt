@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -166,6 +165,53 @@ func ExecuteInsert(
 		NumRowsUpdated:   insertResult.NumRowsUpdated,
 		NumErrorsIgnored: insertResult.NumErrorsIgnored,
 	}, nil
+}
+
+func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (string, error) {
+	var b strings.Builder
+	b.WriteString("INSERT INTO ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ")
+
+	b.WriteString("(")
+	seenOne := false
+	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		b.WriteString(QuoteIdentifier(col.Name))
+		seenOne = true
+		return false, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(")")
+
+	b.WriteString(" VALUES (")
+	seenOne = false
+	_, err = r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		sqlString, err := ValueAsSqlString(val)
+		if err != nil {
+			return true, err
+		}
+		b.WriteString(sqlString)
+		seenOne = true
+		return false, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(");")
+
+	return b.String(), nil
 }
 
 // Returns a primary key summary of the row given

@@ -63,6 +63,22 @@ func SchemaAsCreateStmt(tableName string, sch schema.Schema) string {
 	return sb.String()
 }
 
+func TableDropStmt(tableName string) string {
+	var b strings.Builder
+	b.WriteString("DROP TABLE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(";")
+	return b.String()
+}
+
+func TableDropIfExistsStmt(tableName string) string {
+	var b strings.Builder
+	b.WriteString("DROP TABLE IF EXISTS ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(";")
+	return b.String()
+}
+
 // FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {

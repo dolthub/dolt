@@ -18,7 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"io"
+	"strings"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -138,6 +141,39 @@ func ExecuteDelete(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValu
 	}
 
 	return &result, nil
+}
+
+func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (string, error) {
+	var b strings.Builder
+	b.WriteString("DELETE FROM ")
+	b.WriteString(QuoteIdentifier(tableName))
+
+	b.WriteString(" WHERE (")
+	seenOne := false
+	_, err := r.IterSchema(tableSch, func(tag uint64, val types.Value) (stop bool, err error) {
+		col := tableSch.GetAllCols().TagToCol[tag]
+		if col.IsPartOfPK {
+			if seenOne {
+				b.WriteString(" AND ")
+			}
+			sqlString, err := ValueAsSqlString(val)
+			if err != nil {
+				return true, err
+			}
+			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteRune('=')
+			b.WriteString(sqlString)
+			seenOne = true
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(");")
+	return b.String(), nil
 }
 
 func errDelete(errorFmt string, args ...interface{}) (*DeleteResult, error) {
