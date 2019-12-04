@@ -110,7 +110,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	if err != nil {
 		return nil, false, err
 	} else if !ok {
-		panic("Name '" + exactName + "'had already been verified... This is a bug")
+		panic("Name '" + exactName + "' had already been verified... This is a bug")
 	}
 
 	sch, err := tbl.GetSchema(ctx)
