@@ -190,7 +190,7 @@ func CheckoutWouldOverwriteTables(err error) []string {
 
 type NothingStaged struct {
 	NotStagedTbls *TableDiffs
-	NotStagedDocs  *DocDiffs
+	NotStagedDocs *DocDiffs
 }
 
 func (ns NothingStaged) Error() string {

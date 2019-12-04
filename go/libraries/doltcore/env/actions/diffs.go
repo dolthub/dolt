@@ -171,9 +171,10 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
 		return nil, err
 	}
 
-	docDetails := make([]*doltdb.DocDetails, 2)
-	docDetails[0] = &doltdb.DocDetails{licenseText, doltdb.LicensePk, nil}
-	docDetails[1] = &doltdb.DocDetails{readmeText, doltdb.ReadmePk, nil}
+	docDetails := []*doltdb.DocDetails{
+		&doltdb.DocDetails{NewerText: licenseText, DocPk: doltdb.LicensePk, Value: nil},
+		&doltdb.DocDetails{NewerText: readmeText, DocPk: doltdb.ReadmePk, Value: nil},
+	}
 
 	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, docDetails)
 
