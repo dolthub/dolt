@@ -29,15 +29,22 @@ import (
 
 var _ sql.Database = (*Database)(nil)
 
+type batchMode bool
+const (
+	batched batchMode = true
+	single batchMode = false
+)
+
 // Database implements sql.Database for a dolt DB.
 type Database struct {
 	sql.Database
 	name string
 	root *doltdb.RootValue
 	dEnv *env.DoltEnv
+	batchMode batchMode
 }
 
-// NewDatabase returns a new dolt databae to use in queries.
+// NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Database {
 	return &Database{
 		name: name,

@@ -140,7 +140,10 @@ func TestTableEditor(t *testing.T) {
 				expectedErr = ed.Update(ctx, r(edna, PeopleTestSchema), r(MutateRow(edna, IdTag, 30), PeopleTestSchema))
 			},
 			selectQuery: "select * from people where id >= 10",
-			expectedErr: "Cannot update key before flushing current batch",
+			expectedRows: CompressRows(PeopleTestSchema,
+				krusty,
+				MutateRow(edna, IdTag, 30),
+			),
 		},
 	}
 

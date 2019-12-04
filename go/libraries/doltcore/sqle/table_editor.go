@@ -29,8 +29,8 @@ import (
 type tableEditor struct {
 	t           *DoltTable
 	ed          *types.MapEditor
-	addedKeys   map[hash.Hash]types.LesserValuable
-	removedKeys map[hash.Hash]types.LesserValuable
+	addedKeys   map[hash.Hash]types.Value
+	removedKeys map[hash.Hash]types.Value
 }
 
 var _ sql.RowReplacer = (*tableEditor)(nil)
@@ -41,8 +41,8 @@ var _ sql.RowDeleter = (*tableEditor)(nil)
 func newTableEditor(t *DoltTable) *tableEditor {
 	return &tableEditor{
 		t:           t,
-		addedKeys:   make(map[hash.Hash]types.LesserValuable),
-		removedKeys: make(map[hash.Hash]types.LesserValuable),
+		addedKeys:   make(map[hash.Hash]types.Value),
+		removedKeys: make(map[hash.Hash]types.Value),
 	}
 }
 
@@ -150,15 +150,15 @@ func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 			return err
 		}
 
-		if _, ok := te.addedKeys[newHash]; ok {
-			return errors.New("Cannot update key before flushing current batch")
-		}
-		if _, ok := te.addedKeys[oldHash]; ok {
-			return errors.New("Cannot update key before flushing current batch")
-		}
+		// if _, ok := te.addedKeys[newHash]; ok {
+		// 	return errors.New("Cannot update key before flushing current batch")
+		// }
+		// if _, ok := te.addedKeys[oldHash]; ok {
+		// 	return errors.New("Cannot update key before flushing current batch")
+		// }
 
 		te.addedKeys[newHash] = dNewKeyVal
-		te.removedKeys[oldHash] = dOldKey
+		te.removedKeys[oldHash] = dOldKeyVal
 	}
 
 	if te.ed == nil {
@@ -172,7 +172,16 @@ func (te *tableEditor) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 	return nil
 }
 
+// Close implements Closer
 func (te *tableEditor) Close(ctx *sql.Context) error {
+	// If we're running in batched mode, don't flush the edits until explicitly told to do so by the parent table.
+	if te.t.db.batchMode == batched {
+		return nil
+	}
+	return te.flush(ctx)
+}
+
+func (te *tableEditor) flush(ctx context.Context) error {
 	// For all added keys, check for and report a collision
 	for hash, addedKey := range te.addedKeys {
 		if _, ok := te.removedKeys[hash]; !ok {
