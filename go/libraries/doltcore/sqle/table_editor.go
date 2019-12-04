@@ -18,10 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
+	"github.com/src-d/go-mysql-server/sql"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/src-d/go-mysql-server/sql"
 )
 
 // tableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
@@ -44,10 +46,10 @@ var _ sql.RowDeleter = (*tableEditor)(nil)
 
 func newTableEditor(t *DoltTable) *tableEditor {
 	return &tableEditor{
-		t:           t,
+		t:            t,
 		insertedKeys: make(map[hash.Hash]types.Value),
-		addedKeys:   make(map[hash.Hash]types.Value),
-		removedKeys: make(map[hash.Hash]types.Value),
+		addedKeys:    make(map[hash.Hash]types.Value),
+		removedKeys:  make(map[hash.Hash]types.Value),
 	}
 }
 

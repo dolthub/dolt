@@ -30,9 +30,10 @@ import (
 var _ sql.Database = (*Database)(nil)
 
 type batchMode bool
+
 const (
 	batched batchMode = true
-	single batchMode = false
+	single  batchMode = false
 )
 
 // Database implements sql.Database for a dolt DB.

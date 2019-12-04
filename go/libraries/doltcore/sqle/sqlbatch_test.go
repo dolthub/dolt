@@ -17,15 +17,16 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"io"
+	"math/rand"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"io"
-	"math/rand"
-	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"

@@ -16,14 +16,15 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"testing"
+
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 )
 
@@ -53,7 +54,7 @@ func TestTableEditor(t *testing.T) {
 	var expectedErr error
 	// Some of these are pretty exotic use cases, but since we support all these operations it's nice to know they work
 	// in tandem.
-	testCases := []tableEditorTest {
+	testCases := []tableEditorTest{
 		{
 			name: "all inserts",
 			setup: func(ctx *sql.Context, t *testing.T, ed *tableEditor) {
