@@ -207,10 +207,11 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 
 // Flushes the current batch of outstanding changes and returns any errors.
 func (db *Database) Flush(ctx context.Context) error {
-	for _, table := range db.tables {
+	for name, table := range db.tables {
 		if err := table.flushBatchedEdits(ctx); err != nil {
 			return err
 		}
+		delete(db.tables, name)
 	}
 	return nil
 }
