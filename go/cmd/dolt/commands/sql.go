@@ -106,14 +106,14 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	se, err := newSqlEngine(dEnv, root)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	}
-	origRoot := se.db.Root()
+	origRoot := root
 
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
+		se, err := newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv))
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 		if err := processQuery(ctx, query, se); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		} else if se.db.Root() != origRoot {
@@ -125,8 +125,13 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 
 	// Run in either batch mode for piped input, or shell mode for interactive
 	fi, err := os.Stdin.Stat()
+	var se *sqlEngine
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
+		se, err = newSqlEngine(dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv))
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 		err = runBatchMode(ctx, se)
 		if err != nil {
 			return 1
@@ -134,7 +139,11 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
-		err := runShell(ctx, se)
+		se, err = newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv))
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		err = runShell(ctx, se)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
 		}
@@ -174,8 +183,6 @@ func runBatchMode(ctx context.Context, se *sqlEngine) error {
 	scanner.Buffer(buf, maxCapacity)
 	scanner.Split(scanStatements)
 
-	batcher := dsql.NewSqlBatcher(se.dEnv.DoltDB, se.db.Root())
-
 	var query string
 	for scanner.Scan() {
 		query += scanner.Text()
@@ -184,21 +191,24 @@ func runBatchMode(ctx context.Context, se *sqlEngine) error {
 		}
 		if !batchInsertEarlySemicolon(query) {
 			query += ";"
+			// TODO: We should fix this problem by properly implementing a state machine for scanStatements
 			continue
 		}
-		if err := processBatchQuery(ctx, query, se, batcher); err != nil {
+		if err := processBatchQuery(ctx, query, se); err != nil {
 			_, _ = fmt.Fprintf(cli.CliErr, "Error processing query '%s': %s\n", query, err.Error())
 			return err
 		}
 		query = ""
 	}
 
+	updateBatchInsertOutput()
+
 	if err := scanner.Err(); err != nil {
 		cli.Println(err.Error())
 	}
 
-	if newRoot, _ := batcher.Commit(ctx); newRoot != nil {
-		se.db.SetRoot(newRoot)
+	if err := se.db.Flush(ctx); err != nil {
+		return err
 	}
 
 	return nil
@@ -420,7 +430,10 @@ func prepend(s string, ss []string) []string {
 // Processes a single query. The Root of the sqlEngine will be updated if necessary.
 func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	sqlStatement, err := sqlparser.Parse(query)
-	if err != nil {
+	if err == sqlparser.ErrEmpty {
+		// silently skip empty statements
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
@@ -454,33 +467,86 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 }
 
+type stats struct {
+	numRowsInserted  int
+	numRowsUpdated   int
+	numErrorsIgnored int
+}
+
+var batchEditStats stats
+var displayStrLen int
+
+const maxBatchSize = 50000
+const updateInterval = 500
+
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
-func processBatchQuery(ctx context.Context, query string, se *sqlEngine, batcher *dsql.SqlBatcher) error {
+func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	sqlStatement, err := sqlparser.Parse(query)
-	if err != nil {
+	if err == sqlparser.ErrEmpty {
+		// silently skip empty statements
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
-	switch s := sqlStatement.(type) {
+	switch sqlStatement.(type) {
 	case *sqlparser.Insert:
-		return se.insertBatch(ctx, s, batcher)
+		_, rowIter, err := se.query(ctx, query)
+		if err != nil {
+			return fmt.Errorf("Error inserting rows: %v", err.Error())
+		}
+
+		err = mergeInsertResultIntoStats(rowIter, &batchEditStats)
+		if err != nil {
+			return fmt.Errorf("Error inserting rows: %v", err.Error())
+		}
+
+		if batchEditStats.numRowsInserted%maxBatchSize == 0 {
+			err := se.db.Flush(ctx)
+			if err != nil {
+				return err
+			}
+		}
+
+		if batchEditStats.numRowsInserted%updateInterval == 0 {
+			updateBatchInsertOutput()
+		}
+
+		return nil
 	default:
 		// For any other kind of statement, we need to commit whatever batch edit we've accumulated so far before executing
 		// the query
-		newRoot, err := batcher.Commit(ctx)
+		err := se.db.Flush(ctx)
 		if err != nil {
 			return err
 		}
-		se.db.SetRoot(newRoot)
+
 		err = processQuery(ctx, query, se)
 		if err != nil {
 			return err
 		}
-		if err := batcher.UpdateRoot(se.db.Root()); err != nil {
-			return err
-		}
 
 		return nil
+	}
+}
+
+func updateBatchInsertOutput() {
+	displayStr := fmt.Sprintf("Rows inserted: %d", batchEditStats.numRowsInserted)
+	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+}
+
+// Updates the batch insert stats with the results of an insert operation.
+func mergeInsertResultIntoStats(rowIter sql.RowIter, s *stats) error {
+	for {
+		row, err := rowIter.Next()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return err
+		} else {
+			updated := row[0].(int64)
+			s.numRowsInserted += int(updated)
+		}
 	}
 }
 
@@ -491,8 +557,7 @@ type sqlEngine struct {
 }
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(dEnv *env.DoltEnv, root *doltdb.RootValue) (*sqlEngine, error) {
-	db := dsqle.NewDatabase("dolt", root, dEnv)
+func newSqlEngine(dEnv *env.DoltEnv, db *dsqle.Database) (*sqlEngine, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 
@@ -661,41 +726,6 @@ func runPrintingPipeline(ctx context.Context, nbf *types.NomsBinFormat, p *pipel
 	}
 
 	return nil
-}
-
-type stats struct {
-	numRowsInserted  int
-	numRowsUpdated   int
-	numErrorsIgnored int
-}
-
-var batchEditStats stats
-var displayStrLen int
-
-// Executes a SQL insert statement in batch mode. If the root value changes, sqlEngine's root will be updated.
-// No output is written to the console in batch mode.
-func (se *sqlEngine) insertBatch(ctx context.Context, stmt *sqlparser.Insert, batcher *dsql.SqlBatcher) error {
-	result, err := dsql.ExecuteBatchInsert(ctx, se.db.Root(), stmt, batcher)
-	if err != nil {
-		return fmt.Errorf("Error inserting rows: %v", err.Error())
-	}
-	mergeResultIntoStats(result, &batchEditStats)
-
-	displayStr := fmt.Sprintf("Rows inserted: %d, Updated: %d, Errors: %d",
-		batchEditStats.numRowsInserted, batchEditStats.numRowsUpdated, batchEditStats.numErrorsIgnored)
-	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
-
-	if result.Root != nil {
-		se.db.SetRoot(result.Root)
-	}
-
-	return nil
-}
-
-func mergeResultIntoStats(result *dsql.InsertResult, stats *stats) {
-	stats.numRowsInserted += result.NumRowsInserted
-	stats.numRowsUpdated += result.NumRowsUpdated
-	stats.numErrorsIgnored += result.NumErrorsIgnored
 }
 
 // Checks if the query is a naked delete and then deletes all rows if so. Returns true if it did so, false otherwise.

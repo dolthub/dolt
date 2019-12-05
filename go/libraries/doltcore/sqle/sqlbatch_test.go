@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sql
+package sqle
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	sqle "github.com/src-d/go-mysql-server"
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -63,17 +66,14 @@ func TestSqlBatchInserts(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	batcher := NewSqlBatcher(dEnv.DoltDB, root)
+	engine := sqle.NewDefault()
+	db := NewBatchedDatabase("dolt", root, dEnv)
+	engine.AddDatabase(db)
+
 	for _, stmt := range insertStatements {
-		statement, err := sqlparser.Parse(stmt)
+		_, rowIter, err := engine.Query(sql.NewEmptyContext(), stmt)
 		require.NoError(t, err)
-		insertStmt, ok := statement.(*sqlparser.Insert)
-		require.True(t, ok)
-		result, err := ExecuteBatchInsert(context.Background(), root, insertStmt, batcher)
-		require.NoError(t, err)
-		assert.True(t, result.NumRowsInserted > 0)
-		assert.Equal(t, 0, result.NumRowsUpdated)
-		assert.Equal(t, 0, result.NumErrorsIgnored)
+		require.NoError(t, drainIter(rowIter))
 	}
 
 	// Before committing the batch, the database should be unchanged from its original state
@@ -89,7 +89,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	assert.ElementsMatch(t, AllAppsRows, allAppearanceRows)
 
 	// Now commit the batch and check for new rows
-	root, err = batcher.Commit(ctx)
+	err = db.Flush(ctx)
 	require.NoError(t, err)
 
 	var expectedPeople, expectedEpisodes, expectedAppearances []row.Row
@@ -124,6 +124,7 @@ func TestSqlBatchInserts(t *testing.T) {
 		newAppsRow(11, 9),
 	)
 
+	root = db.Root()
 	allPeopleRows, err = GetAllRows(root, PeopleTableName)
 	require.NoError(t, err)
 	allEpsRows, err = GetAllRows(root, EpisodesTableName)
@@ -136,15 +137,27 @@ func TestSqlBatchInserts(t *testing.T) {
 	assertRowSetsEqual(t, expectedAppearances, allAppearanceRows)
 }
 
+func drainIter(iter sql.RowIter) error {
+	var returnedErr error
+	for {
+		_, err := iter.Next()
+		if err == io.EOF {
+			return returnedErr
+		} else if err != nil {
+			returnedErr = err
+		}
+	}
+}
+
 func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
+	t.Skip("Skipped until insert ignore statements supported in go-mysql-server")
+
 	insertStatements := []string{
 		`replace into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
 		`insert ignore into people values
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, '00000000-0000-0000-0000-000000000008', 677)`,
 	}
-	numRowsUpdated := []int{1, 0}
-	numErrorsIgnored := []int{0, 1}
 
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
@@ -152,18 +165,14 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	batcher := NewSqlBatcher(dEnv.DoltDB, root)
-	for i := range insertStatements {
-		stmt := insertStatements[i]
-		statement, err := sqlparser.Parse(stmt)
+	engine := sqle.NewDefault()
+	db := NewBatchedDatabase("dolt", root, dEnv)
+	engine.AddDatabase(db)
+
+	for _, stmt := range insertStatements {
+		_, rowIter, err := engine.Query(sql.NewEmptyContext(), stmt)
 		require.NoError(t, err)
-		insertStmt, ok := statement.(*sqlparser.Insert)
-		require.True(t, ok)
-		result, err := ExecuteBatchInsert(context.Background(), root, insertStmt, batcher)
-		require.NoError(t, err)
-		assert.Equal(t, 0, result.NumRowsInserted)
-		assert.Equal(t, numRowsUpdated[i], result.NumRowsUpdated)
-		assert.Equal(t, numErrorsIgnored[i], result.NumErrorsIgnored)
+		drainIter(rowIter)
 	}
 
 	// Before committing the batch, the database should be unchanged from its original state
@@ -172,7 +181,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	assert.ElementsMatch(t, AllPeopleRows, allPeopleRows)
 
 	// Now commit the batch and check for new rows
-	root, err = batcher.Commit(ctx)
+	err = db.Flush(ctx)
 	require.NoError(t, err)
 
 	var expectedPeople []row.Row
@@ -188,29 +197,29 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 }
 
 func TestSqlBatchInsertErrors(t *testing.T) {
-	insertStatements := []string{
-		`insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
-					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
-		`insert into people values
-					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`,
-	}
-
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
 	CreateTestDatabase(dEnv, t)
 	root, _ := dEnv.WorkingRoot(ctx)
 
-	batcher := NewSqlBatcher(dEnv.DoltDB, root)
-	for i := range insertStatements {
-		stmt := insertStatements[i]
-		statement, err := sqlparser.Parse(stmt)
-		require.NoError(t, err)
-		insertStmt, ok := statement.(*sqlparser.Insert)
-		require.True(t, ok)
-		_, err = ExecuteBatchInsert(context.Background(), root, insertStmt, batcher)
-		require.Error(t, err)
-	}
+	engine := sqle.NewDefault()
+	db := NewBatchedDatabase("dolt", root, dEnv)
+	engine.AddDatabase(db)
+
+	_, rowIter, err := engine.Query(sql.NewEmptyContext(), `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`)
+	// This won't generate an error until we commit the batch (duplicate key)
+	assert.NoError(t, err)
+	assert.NoError(t, drainIter(rowIter))
+
+	// This generates an error at insert time because of the bad type for the uuid column
+	_, _, err = engine.Query(sql.NewEmptyContext(), `insert into people values
+					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`)
+	assert.Error(t, err)
+
+	// Error from the first statement appears here
+	assert.Error(t, db.Flush(ctx))
 }
 
 func assertRowSetsEqual(t *testing.T, expected, actual []row.Row) {
@@ -242,6 +251,35 @@ func containsRow(rs []row.Row, r row.Row) bool {
 		}
 	}
 	return false
+}
+
+func rowsEqual(expected, actual row.Row) (bool, string) {
+	er, ar := make(map[uint64]types.Value), make(map[uint64]types.Value)
+	_, err := expected.IterCols(func(t uint64, v types.Value) (bool, error) {
+		er[t] = v
+		return false, nil
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = actual.IterCols(func(t uint64, v types.Value) (bool, error) {
+		ar[t] = v
+		return false, nil
+	})
+
+	if err != nil {
+		panic(err)
+	}
+
+	opts := cmp.Options{cmp.AllowUnexported(), dtestutils.FloatComparer}
+	eq := cmp.Equal(er, ar, opts)
+	var diff string
+	if !eq {
+		diff = cmp.Diff(er, ar, opts)
+	}
+	return eq, diff
 }
 
 func newPeopleRow(id int, first, last string) row.Row {
