@@ -202,7 +202,7 @@ func runBatchMode(ctx context.Context, se *sqlEngine) error {
 	}
 
 	updateBatchInsertOutput()
-	
+
 	if err := scanner.Err(); err != nil {
 		cli.Println(err.Error())
 	}
@@ -430,7 +430,10 @@ func prepend(s string, ss []string) []string {
 // Processes a single query. The Root of the sqlEngine will be updated if necessary.
 func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	sqlStatement, err := sqlparser.Parse(query)
-	if err != nil {
+	if err == sqlparser.ErrEmpty {
+		// silently skip empty statements
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
@@ -479,7 +482,10 @@ const updateInterval = 500
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
 func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	sqlStatement, err := sqlparser.Parse(query)
-	if err != nil {
+	if err == sqlparser.ErrEmpty {
+		// silently skip empty statements
+		return nil
+	} else if err != nil {
 		return fmt.Errorf("Error parsing SQL: %v.", err.Error())
 	}
 
