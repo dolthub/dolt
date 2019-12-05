@@ -85,7 +85,7 @@ teardown() {
     [[ ! "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk1,pk2,c1,c2,c3,c4,c5) values (0,1,7,7,7,7,7)"
     [ "$status" -eq 1 ]
-    [ "$output" = "duplicate primary key given" ] || false
+    [[ "$output" =~ "duplicate primary key" ]] || false
     run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
     [ "$output" = "column name 'pk2' is non-nullable but attempted to set default value of null" ] || false

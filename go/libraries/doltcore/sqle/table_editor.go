@@ -16,7 +16,6 @@ package sqle
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -25,6 +24,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
+
+var ErrDuplicatePrimaryKeyFmt = "duplicate primary key given: (%v)"
 
 // tableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
@@ -72,7 +73,7 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	// If we've already inserted this key as part of this insert operation, that's an error. Inserting a row that already
 	// exists in the table will be handled in Close().
 	if _, ok := te.addedKeys[hash]; ok {
-		return errors.New("duplicate primary key given")
+		return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, types.EncodedValue(ctx, key))
 	}
 	te.insertedKeys[hash] = key
 	te.addedKeys[hash] = key
@@ -197,7 +198,7 @@ func (te *tableEditor) flush(ctx context.Context) error {
 				return errhand.BuildDError("failed to read table").AddCause(err).Build()
 			}
 			if rowExists {
-				return fmt.Errorf("primary key collision: (%v)", addedKey)
+				return fmt.Errorf("duplicate primary key given: (%v)", types.EncodedValue(ctx, addedKey))
 			}
 		}
 	}
