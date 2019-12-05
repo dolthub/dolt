@@ -143,7 +143,7 @@ func drainIter(iter sql.RowIter) error {
 		_, err := iter.Next()
 		if err == io.EOF {
 			return returnedErr
-		} else if returnedErr != nil {
+		} else if err != nil {
 			returnedErr = err
 		}
 	}
@@ -213,6 +213,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, drainIter(rowIter))
 
+	// This generates an error at insert time because of the bad type for the uuid column
 	_, _, err = engine.Query(sql.NewEmptyContext(), `insert into people values
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`)
 	assert.Error(t, err)

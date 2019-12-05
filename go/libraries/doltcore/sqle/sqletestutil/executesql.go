@@ -145,7 +145,7 @@ func drainIter(iter sql.RowIter) error {
 		_, err := iter.Next()
 		if err == io.EOF {
 			return returnedErr
-		} else if returnedErr != nil {
+		} else if err != nil {
 			returnedErr = err
 		}
 	}

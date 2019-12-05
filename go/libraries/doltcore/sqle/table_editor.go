@@ -73,7 +73,11 @@ func (te *tableEditor) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	// If we've already inserted this key as part of this insert operation, that's an error. Inserting a row that already
 	// exists in the table will be handled in Close().
 	if _, ok := te.addedKeys[hash]; ok {
-		return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, types.EncodedValue(ctx, key))
+		value, err := types.EncodedValue(ctx, key)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, value)
 	}
 	te.insertedKeys[hash] = key
 	te.addedKeys[hash] = key
@@ -198,7 +202,11 @@ func (te *tableEditor) flush(ctx context.Context) error {
 				return errhand.BuildDError("failed to read table").AddCause(err).Build()
 			}
 			if rowExists {
-				return fmt.Errorf("duplicate primary key given: (%v)", types.EncodedValue(ctx, addedKey))
+				value, err := types.EncodedValue(ctx, addedKey)
+				if err != nil {
+					return err
+				}
+				return fmt.Errorf(ErrDuplicatePrimaryKeyFmt, value)
 			}
 		}
 	}

@@ -102,8 +102,8 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return nil, false, nil
 	}
 
-	if db.tables[exactName] != nil {
-		return db.tables[exactName], true, nil
+	if table, ok := db.tables[exactName]; ok {
+		return table, true, nil
 	}
 
 	tbl, ok, err := db.root.GetTable(ctx, exactName)
@@ -120,8 +120,9 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return nil, false, err
 	}
 
-	db.tables[exactName] = &DoltTable{name: exactName, table: tbl, sch: sch, db: db}
-	return db.tables[exactName], true, nil
+	table := &DoltTable{name: exactName, table: tbl, sch: sch, db: db}
+	db.tables[exactName] = table
+	return table, true, nil
 }
 
 func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
