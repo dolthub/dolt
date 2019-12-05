@@ -101,25 +101,6 @@ func TestSqlShow(t *testing.T) {
 	}
 }
 
-func TestBadInput(t *testing.T) {
-	tests := []struct {
-		name        string
-		args        []string
-		expectedRes int
-	}{
-		{"no query", []string{"-q", ""}, 1},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			dEnv := createEnvWithSeedData(t)
-
-			commandStr := "dolt sql"
-			result := Sql(context.TODO(), commandStr, test.args, dEnv)
-			assert.Equal(t, test.expectedRes, result)
-		})
-	}
-}
-
 // Tests of the create table SQL command, mostly a smoke test for errors in the command line handler. Most tests of
 // create table SQL command are in the sql package.
 func TestCreateTable(t *testing.T) {
