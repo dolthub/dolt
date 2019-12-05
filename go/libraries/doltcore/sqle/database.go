@@ -157,6 +157,8 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
+	delete(db.tables, tableName)
+
 	db.SetRoot(newRoot)
 
 	return nil
