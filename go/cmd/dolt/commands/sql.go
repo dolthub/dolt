@@ -201,6 +201,8 @@ func runBatchMode(ctx context.Context, se *sqlEngine) error {
 		query = ""
 	}
 
+	updateBatchInsertOutput()
+	
 	if err := scanner.Err(); err != nil {
 		cli.Println(err.Error())
 	}
@@ -472,6 +474,7 @@ var batchEditStats stats
 var displayStrLen int
 
 const maxBatchSize = 50000
+const updateInterval = 500
 
 // Processes a single query in batch mode. The Root of the sqlEngine may or may not be changed.
 func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
@@ -499,8 +502,9 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 			}
 		}
 
-		displayStr := fmt.Sprintf("Rows inserted: %d", batchEditStats.numRowsInserted)
-		displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
+		if batchEditStats.numRowsInserted%updateInterval == 0 {
+			updateBatchInsertOutput()
+		}
 
 		return nil
 	default:
@@ -518,6 +522,11 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 
 		return nil
 	}
+}
+
+func updateBatchInsertOutput() {
+	displayStr := fmt.Sprintf("Rows inserted: %d", batchEditStats.numRowsInserted)
+	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
 // Updates the batch insert stats with the results of an insert operation.

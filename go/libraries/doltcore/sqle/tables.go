@@ -30,11 +30,12 @@ import (
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	name  string
-	table *doltdb.Table
-	sch   schema.Schema
-	db    *Database
-	ed    *tableEditor
+	name   string
+	table  *doltdb.Table
+	sch    schema.Schema
+	sqlSch sql.Schema
+	db     *Database
+	ed     *tableEditor
 }
 
 var _ sql.Table = (*DoltTable)(nil)
@@ -78,20 +79,21 @@ func (t *DoltTable) String() string {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	// TODO: fix panics
-	sch, err := t.table.GetSchema(context.TODO())
+	return t.sqlSchema()
+}
 
+func (t *DoltTable) sqlSchema() sql.Schema {
+	if t.sqlSch != nil {
+		return t.sqlSch
+	}
+
+	// TODO: fix panics
+	sqlSch, err := doltSchemaToSqlSchema(t.name, t.sch)
 	if err != nil {
 		panic(err)
 	}
 
-	// TODO: fix panics
-	sqlSch, err := doltSchemaToSqlSchema(t.name, sch)
-
-	if err != nil {
-		panic(err)
-	}
-
+	t.sqlSch = sqlSch
 	return sqlSch
 }
 
