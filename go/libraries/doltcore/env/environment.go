@@ -174,6 +174,10 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, and creates a noms
 // database with dolt structure.
 func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error { // should remove name and email args
+	return dEnv.InitRepoWithTime(ctx, nbf, name, email, doltdb.CommitNowFunc())
+}
+
+func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -183,7 +187,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, nam
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.initDBAndState(ctx, nbf, name, email)
+		err = dEnv.initDBAndStateWithTime(ctx, nbf, name, email, t)
 	}
 
 	if err != nil {
@@ -239,6 +243,10 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 }
 
 func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error {
+	return dEnv.initDBAndStateWithTime(ctx, nbf, name, email, doltdb.CommitNowFunc())
+}
+
+func (dEnv *DoltEnv) initDBAndStateWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
 
@@ -246,7 +254,7 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinForma
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepo(ctx, name, email)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, name, email, t)
 
 	if err != nil {
 		return doltdb.ErrNomsIO

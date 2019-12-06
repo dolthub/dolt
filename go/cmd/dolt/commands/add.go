@@ -24,7 +24,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-const allParam = "all"
+const (
+	allParam = "all"
+)
 
 var addShortDesc = `Add table contents to the list of staged tables`
 var addLongDesc = `This command updates the list of tables using the current content found in the working root, to prepare the content staged for the next commit. It adds the current content of existing tables as a whole or remove tables that do not exist in the working root anymore.
