@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"io"
 	"math/rand"
 	"testing"
 
@@ -135,18 +134,6 @@ func TestSqlBatchInserts(t *testing.T) {
 	assertRowSetsEqual(t, expectedPeople, allPeopleRows)
 	assertRowSetsEqual(t, expectedEpisodes, allEpsRows)
 	assertRowSetsEqual(t, expectedAppearances, allAppearanceRows)
-}
-
-func drainIter(iter sql.RowIter) error {
-	var returnedErr error
-	for {
-		_, err := iter.Next()
-		if err == io.EOF {
-			return returnedErr
-		} else if err != nil {
-			returnedErr = err
-		}
-	}
 }
 
 func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
