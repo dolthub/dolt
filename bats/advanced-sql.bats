@@ -268,8 +268,10 @@ teardown() {
 
 @test "sql alter table without parentheses" {
     run dolt sql -q "alter table one_pk add c6 int"
-    skip "alter table requires parentheses. above is valid sql."
     [ $status -eq 0 ]
+    run dolt sql -q "describe one_pk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "c6" ]] || false
 }
 
 @test "sql alter table to change column type not supported" {
