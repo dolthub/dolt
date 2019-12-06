@@ -77,6 +77,7 @@ func TestExecuteCreate(t *testing.T) {
 		{
 			name:           "Test in use table name with if not exists",
 			query:          "create table if not exists people (id int primary key, age int)",
+			expectedTable: "people",
 			expectedSchema: PeopleTestSchema,
 		},
 		{

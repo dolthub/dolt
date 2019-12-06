@@ -438,9 +438,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	}
 
 	switch s := sqlStatement.(type) {
-	case *sqlparser.Show:
-		return se.show(ctx, s)
-	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Insert, *sqlparser.Update:
+	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Show:
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
 			err = prettyPrintResults(ctx, se.db.Root().VRW().Format(), sqlSch, rowIter)
