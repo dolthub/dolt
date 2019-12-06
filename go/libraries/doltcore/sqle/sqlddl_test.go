@@ -25,7 +25,7 @@ import (
 	"testing"
 )
 
-func TestExecuteCreate(t *testing.T) {
+func TestCreateTable(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
@@ -187,7 +187,7 @@ func TestExecuteCreate(t *testing.T) {
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 5, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("age", 10, types.UintKind, false)),
+				schema.NewColumn("age", 10, types.IntKind, false)),
 		},
 		{
 			name:  "Test faulty tag comments",
@@ -198,18 +198,18 @@ func TestExecuteCreate(t *testing.T) {
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
 		// Real world examples for regression testing
-		// TODO: need type conversion for defaults to work here (uint to int)
-		// 		{
-		// 			name:  "Test ip2nation",
-		// 			query: `CREATE TABLE ip2nation (
-		//   ip int(11) unsigned NOT NULL default 0,
-		//   country char(2) NOT NULL default '',
-		//   PRIMARY KEY (ip)
-		// );`,
-		// 			expectedSchema: dtestutils.CreateSchema(
-		// 				schema.NewColumn("ip", 0, types.UintKind, true, schema.NotNullConstraint{}),
-		// 				schema.NewColumn("country", 1, types.StringKind, false, schema.NotNullConstraint{})),
-		// 		},
+		{
+			name: "Test ip2nation",
+			query: `CREATE TABLE ip2nation (
+		  ip int(11) unsigned NOT NULL default 0,
+		  country char(2) NOT NULL default '',
+		  PRIMARY KEY (ip)
+		);`,
+			expectedTable: "ip2nation",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("ip", 0, types.UintKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("country", 1, types.StringKind, false, schema.NotNullConstraint{})),
+		},
 		{
 			name: "Test ip2nationCountries",
 			expectedTable: "ip2nationCountries",
