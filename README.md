@@ -179,7 +179,7 @@ $ head -n3 data.csv
 state,population
 Delaware,59096
 Maryland,319728
-$ dolt import table -pk=state state_populations data.csv
+$ dolt table import -pk=state state_populations data.csv
 ```
 
 Note if you do not have a file extension, i.e. your file is called `data`, Dolt will think you are trying to import from another table and thus not behave in the way you expect.
