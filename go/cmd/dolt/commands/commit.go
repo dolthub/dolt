@@ -32,6 +32,12 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
 )
 
+const (
+	allowEmptyFlag   = "allow-empty"
+	dateParam        = "date"
+	commitMessageArg = "message"
+)
+
 var commitShortDesc = `Record changes to the repository`
 var commitLongDesc = "Stores the current contents of the staged tables in a new commit along with a log message from the " +
 	"user describing the changes.\n" +
@@ -49,11 +55,6 @@ var commitSynopsis = []string{
 }
 
 func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	const (
-		allowEmptyFlag   = "allow-empty"
-		dateParam        = "date"
-		commitMessageArg = "message"
-	)
 
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
