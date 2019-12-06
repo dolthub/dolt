@@ -296,7 +296,7 @@ IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-coun
 
 dolt also supports directory, aws, and gcs based remotes:
 
-- file - you can use a directory as a remote that can be pushed to, cloned, and purlled from just like any other remote by providing a file uri for the directory
+- file - you can use a directory as a remote that can be pushed to, cloned, and pulled from just like any other remote by providing a file uri for the directory
 
   dolt remote add <remote> file:///Users/xyz/abs/path/
 
