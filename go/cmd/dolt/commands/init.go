@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"time"
 
 	"github.com/fatih/color"
 
@@ -45,6 +46,7 @@ func Init(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", "The name used in commits to this repo. If not provided will be taken from \""+env.UserNameKey+"\" in the global config.")
 	ap.SupportsString(emailParamName, "", "email", "The email address used. If not provided will be taken from \""+env.UserEmailKey+"\" in the global config.")
+	ap.SupportsString(dateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -74,7 +76,17 @@ func Init(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 		return 1
 	}
 
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email)
+	t := time.Now()
+	if commitTimeStr, ok := apr.GetValue(dateParam); ok {
+		var err error
+		t, err = parseDate(commitTimeStr)
+
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: invalid date").AddCause(err).Build(), usage)
+		}
+	}
+
+	err := dEnv.InitRepoWithTime(context.Background(), types.Format_Default, name, email, t)
 
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to initialize directory as a data repo. %s", err.Error()))

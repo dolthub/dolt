@@ -87,58 +87,49 @@ func generateCSVResults(wc io.Writer, results []result, cols []*SeedColumn, tabl
 		log.Fatal(err)
 	}
 
-	var prevRow []string
 	for i, result := range results {
-		row := getResultsRow(prevRow, result, cols, format)
+		row := getResultsRow(result, cols)
 
 		_, err := wc.Write([]byte(formatRow(row, cols, i, len(results)-1, tableName, format)))
 		if err != nil {
 			log.Fatal(err)
 		}
-		prevRow = row[:]
 	}
 }
 
-func getResultsRow(prevRow []string, res result, cols []*SeedColumn, format string) []string {
+func getResultsRow(res result, cols []*SeedColumn) []string {
 	row := make([]string, len(cols))
 
-	// set id
-	if len(cols) > 0 && prevRow != nil {
-		row[0] = genNomsTypeValueIncrement(prevRow, 0, cols[0], format)
-	} else {
-		row[0] = "1"
-	}
 	// set name
-	row[1] = res.name
+	row[0] = res.name
 	// set format
-	row[2] = res.format
+	row[1] = res.format
 	// set rows
-	row[3] = fmt.Sprintf("%d", res.rows)
+	row[2] = fmt.Sprintf("%d", res.rows)
 	// set cols
-	row[4] = fmt.Sprintf("%d", res.columns)
+	row[3] = fmt.Sprintf("%d", res.columns)
 	// set iterations
-	row[5] = fmt.Sprintf("%d", res.br.N)
+	row[4] = fmt.Sprintf("%d", res.br.N)
 	// set time
-	row[6] = res.br.T.String()
+	row[5] = res.br.T.String()
 	// set bytes
-	row[7] = fmt.Sprintf("%v", res.br.Bytes)
+	row[6] = fmt.Sprintf("%v", res.br.Bytes)
 	// set mem_allocs
-	row[8] = fmt.Sprintf("%v", res.br.MemAllocs)
+	row[7] = fmt.Sprintf("%v", res.br.MemAllocs)
 	// set mem_bytes
-	row[9] = fmt.Sprintf("%v", res.br.MemBytes)
+	row[8] = fmt.Sprintf("%v", res.br.MemBytes)
 	// set alloced_bytes_per_op
-	row[10] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
+	row[9] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
 	//set allocs_per_op
-	row[11] = fmt.Sprintf("%v", res.br.AllocsPerOp())
+	row[10] = fmt.Sprintf("%v", res.br.AllocsPerOp())
 	// set datetime
 	t := time.Now()
-	row[12] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
+	row[11] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
 func genResultsCols() []*SeedColumn {
 	return []*SeedColumn{
-		NewSeedColumn("id", true, types.IntKind, increment),
 		NewSeedColumn("name", false, types.StringKind, supplied),
 		NewSeedColumn("format", false, types.StringKind, supplied),
 		NewSeedColumn("rows", false, types.StringKind, supplied),

@@ -137,7 +137,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$output" = "invalid column name c6" ]
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "duplicate primary key given" ] || false
+    [[ "$output" =~ "duplicate primary key" ]] || false
 }
 
 @test "dolt sql insert same column twice" {

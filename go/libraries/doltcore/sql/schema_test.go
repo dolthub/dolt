@@ -16,32 +16,12 @@ package sql
 
 import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
 
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-const expectedSQL = "CREATE TABLE `table_name` (\n" +
-	"  `id` BIGINT NOT NULL COMMENT 'tag:0',\n" +
-	"  `first` LONGTEXT NOT NULL COMMENT 'tag:1',\n" +
-	"  `last` LONGTEXT NOT NULL COMMENT 'tag:2',\n" +
-	"  `is_married` BOOLEAN COMMENT 'tag:3',\n" +
-	"  `age` BIGINT COMMENT 'tag:4',\n" +
-	"  `rating` DOUBLE COMMENT 'tag:6',\n" +
-	"  `uuid` LONGTEXT COMMENT 'tag:7',\n" +
-	"  `num_episodes` BIGINT UNSIGNED COMMENT 'tag:8',\n" +
-	"  PRIMARY KEY (`id`)\n" +
-	");"
-
-func TestSchemaAsCreateStmt(t *testing.T) {
-	tSchema := sqltestutil.PeopleTestSchema
-	str := SchemaAsCreateStmt("table_name", tSchema)
-
-	assert.Equal(t, expectedSQL, str)
-}
 
 func TestFmtCol(t *testing.T) {
 	tests := []struct {

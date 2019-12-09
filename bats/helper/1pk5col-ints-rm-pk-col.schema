@@ -1,0 +1,39 @@
+{
+  "columns": [
+    {
+      "tag": 1,
+      "name": "c1",
+      "kind": "int",
+      "is_part_of_pk": false,
+      "col_constraints": []
+    },
+    {
+      "tag": 2,
+      "name": "c2",
+      "kind": "int",
+      "is_part_of_pk": false,
+      "col_constraints": []
+    },
+    {
+      "tag": 3,
+      "name": "c3",
+      "kind": "int",
+      "is_part_of_pk": true,
+      "col_constraints": []
+    },
+    {
+      "tag": 4,
+      "name": "c4",
+      "kind": "int",
+      "is_part_of_pk": false,
+      "col_constraints": []
+    },
+    {
+      "tag": 5,
+      "name": "c5",
+      "kind": "int",
+      "is_part_of_pk": false,
+      "col_constraints": []
+    }
+  ]
+}
