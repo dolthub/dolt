@@ -14,7 +14,7 @@ teardown() {
 create view four as select 2+2 as res from dual;
 select * from four'
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
+    [ "${#lines[@]}" -eq 6 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
@@ -32,7 +32,7 @@ create view four as select 2+2 as res from dual;
 create view now as select now() from dual;
 select * from four, now'
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
+    [ "${#lines[@]}" -eq 6 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
@@ -66,7 +66,7 @@ insert into my_users values (1), (2), (3);
 create view my_users_view as select id from my_users order by id asc;
 select * from my_users_view'
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 7 ]
+    [ "${#lines[@]}" -eq 8 ]
     [[ "${lines[1]}" =~ ' id ' ]] || false
     [[ "${lines[3]}" =~ ' 1 ' ]] || false
     [[ "${lines[4]}" =~ ' 2 ' ]] || false
@@ -81,7 +81,7 @@ create view my_users_view as select id from my_users order by id asc;
 insert into my_users values (4), (5), (6);
 select * from my_users_view'
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 10 ]
+    [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[1]}" =~ ' id ' ]] || false
     [[ "${lines[3]}" =~ ' 1 ' ]] || false
     [[ "${lines[4]}" =~ ' 2 ' ]] || false
