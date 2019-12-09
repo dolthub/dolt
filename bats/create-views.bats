@@ -51,7 +51,7 @@ SQL
 @test "can create view referencing table" {
     run dolt sql <<SQL
 create table my_users (id int primary key);
-create view will_be_broken as select id from my_users;
+create view will_work as select id from my_users;
 SQL
     [ "$status" -eq 0 ]
 }
