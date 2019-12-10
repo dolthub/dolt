@@ -654,6 +654,8 @@ func (dEnv *DoltEnv) TempTableFilesDir() string {
 	return filepath.Join(dEnv.GetDoltDir(), tempTablesDir)
 }
 
+// PutDocsToWorking adds, updates or removes dolt_docs table on the working root. The table will be added or updated
+// When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
 func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.DocDetails) error {
 	root, err := dEnv.WorkingRoot(ctx)
 

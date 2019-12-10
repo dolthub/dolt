@@ -61,7 +61,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 		return err
 	}
 
-	notStagedDocs, err := GetDocDiffs(ctx, dEnv)
+	_, notStagedDocs, err := GetDocDiffs(ctx, dEnv, false)
 
 	if err != nil {
 		return err

@@ -136,10 +136,10 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 		workingTblsInConflict = []string{}
 	}
 
-	notStagedDocDiffs, _ := actions.GetDocDiffs(ctx, dEnv)
+	stagedDocDiffs, notStagedDocDiffs, _ := actions.GetDocDiffs(ctx, dEnv, false)
 
 	buf := bytes.NewBuffer([]byte{})
-	n := printStagedDiffs(buf, stagedTblDiffs, true)
+	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
 	n = printDiffsNotStaged(buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
 
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +

@@ -121,13 +121,29 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	return stagedDiffs, notStagedDiffs, nil
 }
 
-func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, docDetails []*doltdb.DocDetails) (*DocDiffs, error) {
-	added, modified, removed, err := older.DocDiff(ctx, docDetails)
-
-	if err != nil {
-		return nil, err
+func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []*doltdb.DocDetails) (*DocDiffs, error) {
+	var added []string
+	var modified []string
+	var removed []string
+	if older != nil {
+		if newer == nil {
+			a, m, r, err := older.DocDiff(ctx, nil, docDetails)
+			if err != nil {
+				return nil, err
+			}
+			added = a
+			modified = m
+			removed = r
+		} else {
+			a, m, r, err := older.DocDiff(ctx, newer, docDetails)
+			if err != nil {
+				return nil, err
+			}
+			added = a
+			modified = m
+			removed = r
+		}
 	}
-
 	var docs []string
 	docs = append(docs, added...)
 	docs = append(docs, modified...)
@@ -147,40 +163,62 @@ func NewDocDiffs(ctx context.Context, older *doltdb.RootValue, docDetails []*dol
 		docsToType[nt] = RemovedDoc
 	}
 
-	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, err
+	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, nil
 }
 
 func (nd *DocDiffs) Len() int {
 	return len(nd.Docs)
 }
 
-func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-
-	if err != nil {
-		return nil, RootValueUnreadable{WorkingRoot, err}
-	}
-
+func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool) (*DocDiffs, *DocDiffs, error) {
 	licenseText, err := dEnv.GetLocalFileText(env.LicenseFile)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+
 	readmeText, err := dEnv.GetLocalFileText(env.ReadmeFile)
+
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	docDetails := []*doltdb.DocDetails{
-		&doltdb.DocDetails{NewerText: licenseText, DocPk: doltdb.LicensePk, Value: nil},
-		&doltdb.DocDetails{NewerText: readmeText, DocPk: doltdb.ReadmePk, Value: nil},
+		&doltdb.DocDetails{NewerText: &licenseText, DocPk: doltdb.LicensePk},
+		&doltdb.DocDetails{NewerText: &readmeText, DocPk: doltdb.ReadmePk},
 	}
 
-	notStagedDocDiffs, err := NewDocDiffs(ctx, workingRoot, docDetails)
+	if stage {
+		err := dEnv.PutDocsToWorking(ctx, docDetails)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
+	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return notStagedDocDiffs, nil
+	notStagedDocDiffs, err := NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	stagedRoot, err := dEnv.StagedRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	stagedDocDiffs, err := NewDocDiffs(ctx, dEnv, headRoot, stagedRoot, docDetails)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return stagedDocDiffs, notStagedDocDiffs, nil
 }
