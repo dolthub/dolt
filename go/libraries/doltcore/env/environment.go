@@ -654,6 +654,43 @@ func (dEnv *DoltEnv) TempTableFilesDir() string {
 	return filepath.Join(dEnv.GetDoltDir(), tempTablesDir)
 }
 
+func getAllDocDetailsMissingNewerText() []*doltdb.DocDetails {
+	return []*doltdb.DocDetails{
+		&doltdb.DocDetails{DocPk: doltdb.LicensePk, DocFile: LicenseFile},
+		&doltdb.DocDetails{DocPk: doltdb.ReadmePk, DocFile: ReadmeFile},
+	}
+}
+
+func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []*doltdb.DocDetails, err error) {
+	docDetails := getAllDocDetailsMissingNewerText()
+	for i, doc := range docDetails {
+		newerText, err := dEnv.GetLocalFileText(doc.DocFile)
+		if err != nil {
+			return nil, err
+		}
+		docDetails[i].NewerText = &newerText
+	}
+	return docDetails, nil
+}
+
+func (dEnv *DoltEnv) GetOneDocDetail(name string) (doc *doltdb.DocDetails, err error) {
+	docDetails := getAllDocDetailsMissingNewerText()
+	if err != nil {
+		return nil, err
+	}
+	for i, doc := range docDetails {
+		if doc.DocPk == name {
+			newerText, err := dEnv.GetLocalFileText(doc.DocFile)
+			if err != nil {
+				return nil, err
+			}
+			docDetails[i].NewerText = &newerText
+			return docDetails[i], nil
+		}
+	}
+	return nil, err
+}
+
 // PutDocsToWorking adds, updates or removes dolt_docs table on the working root. The table will be added or updated
 // When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
 func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.DocDetails) error {
