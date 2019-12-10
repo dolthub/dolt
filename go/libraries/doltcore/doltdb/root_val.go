@@ -49,7 +49,9 @@ type DocDetails struct {
 	NewerText *[]byte
 	DocPk     string
 	Value     types.Value
+	DocFile   string
 }
+
 
 func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
 	values := make([]types.Value, 2*len(tables))
@@ -526,7 +528,7 @@ func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails
 
 				if ok {
 					docValue, _ := docRow.GetColVal(DocTextTag)
-					docDetails[i] = &DocDetails{details.NewerText, details.DocPk, docValue}
+					docDetails[i].Value = docValue
 				}
 			}
 		}

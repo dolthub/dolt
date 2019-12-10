@@ -170,26 +170,20 @@ func (nd *DocDiffs) Len() int {
 	return len(nd.Docs)
 }
 
-func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool) (*DocDiffs, *DocDiffs, error) {
-	licenseText, err := dEnv.GetLocalFileText(env.LicenseFile)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	readmeText, err := dEnv.GetLocalFileText(env.ReadmeFile)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	docDetails := []*doltdb.DocDetails{
-		&doltdb.DocDetails{NewerText: &licenseText, DocPk: doltdb.LicensePk},
-		&doltdb.DocDetails{NewerText: &readmeText, DocPk: doltdb.ReadmePk},
+// GetDocDiffs retrieves staged and unstaged DocDiffs. If the `stage` param is true,
+// The docs will be added to the working root before getting diffs. If docDetails are nil, we return diffs of all docs.
+// If docDetails are provided, we only retrieve the diffs of the provided docs.
+func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool, docDetails *[]*doltdb.DocDetails) (*DocDiffs, *DocDiffs, error) {
+	if docDetails == nil {
+		docs, err := dEnv.GetAllValidDocDetails()
+		if err != nil {
+			return nil, nil, err
+		}
+		docDetails = &docs
 	}
 
 	if stage {
-		err := dEnv.PutDocsToWorking(ctx, docDetails)
+		err := dEnv.PutDocsToWorking(ctx, *docDetails)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -200,7 +194,7 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool) (*DocDiffs,
 		return nil, nil, err
 	}
 
-	notStagedDocDiffs, err := NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+	notStagedDocDiffs, err := NewDocDiffs(ctx, dEnv, workingRoot, nil, *docDetails)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -215,7 +209,7 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool) (*DocDiffs,
 		return nil, nil, err
 	}
 
-	stagedDocDiffs, err := NewDocDiffs(ctx, dEnv, headRoot, stagedRoot, docDetails)
+	stagedDocDiffs, err := NewDocDiffs(ctx, dEnv, headRoot, stagedRoot, *docDetails)
 	if err != nil {
 		return nil, nil, err
 	}
