@@ -11,12 +11,12 @@ teardown() {
 
 @test "dolt status and ls to view docs on dolt init" {
     run ls
-    [ "${lines[0]}" = "LICENSE.md" ]
-    [ "${lines[1]}" = "README.md" ]
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]]
-    [[ "$output" =~ "Untracked files" ]]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     run cat LICENSE.md
@@ -36,17 +36,17 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]]
-    [[ "$output" =~ "Changes to be committed:" ]]
-    [[ "${lines[3]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
-    [[ "${lines[4]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     run dolt commit -m "adding license and readme"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "adding license and readme" ]] || false
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]]
-    [[ "$output" =~ "nothing to commit, working tree clean" ]]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "dolt add . and dolt commit dolt docs with another table" {
@@ -57,26 +57,26 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]]
-    [[ "$output" =~ "Changes to be committed:" ]]
-    [[ "${lines[3]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
-    [[ "${lines[4]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     run dolt table create -s `batshelper 1pk5col-ints.schema` test
     [ "$status" -eq 0 ]
     run dolt add test
     [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "${lines[3]}" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
-    [[ "${lines[4]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
-    [[ "${lines[5]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     run dolt commit -m "adding license and readme, and test table"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "adding license and readme, and test table" ]] || false
     run dolt status
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch master" ]]
-    [[ "$output" =~ "nothing to commit, working tree clean" ]]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 # @test "dolt add LICENSE.md stages license" {
