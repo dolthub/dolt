@@ -72,8 +72,8 @@ func toAddVErr(err error) errhand.VerboseError {
 
 	case actions.IsTblNotExist(err):
 		tbls := actions.GetTablesForError(err)
-		bdr := errhand.BuildDError("Some of the specified tables were not found")
-		bdr.AddDetails("Unknown tables: %v", tbls)
+		bdr := errhand.BuildDError("Some of the specified tables or docs were not found")
+		bdr.AddDetails("Unknown tables or docs: %v", tbls)
 
 		return bdr.Build()
 

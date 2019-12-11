@@ -79,14 +79,47 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]]
 }
 
-# @test "dolt add LICENSE.md stages license" {
+@test "dolt add LICENSE.md stages license" {
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]]
+    [[ "$output" =~ "Untracked files" ]]
+    [[ "${lines[3]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "${lines[4]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add LICENSE.md
+    [ "$status" -eq 0 ] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "On branch master" ]] || false
+    [[ "${lines[1]}" =~ "Changes to be committed:" ]] || false
+    [[ "${lines[3]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [ "${lines[4]}" = "Untracked files:" ]
+    [[ "${lines[6]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "license commit"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "license commit" ]] || false
+}
 
-# }
-
-# @test "dolt add README.md stages readme" {
-    
-# }
-
+@test "dolt add README.md stages readme" {
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "${lines[3]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "${lines[4]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add README.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "${lines[1]}" =~ "Changes to be committed:" ]] || false
+    [[ "${lines[3]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    [ "${lines[4]}" = "Untracked files:" ]
+    [[ "${lines[6]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt commit -m "readme commit"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "readme commit" ]] || false
+}
 # @test "dolt add doesn't add files that are not LICENSE.md or README.md" {
     
 # }
@@ -114,5 +147,3 @@ teardown() {
 # @test "dolt diff shows diffs between working root and file system docs" {
 
 # }
-
-

@@ -47,15 +47,13 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowCon
 func getTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docsDetails []*doltdb.DocDetails, err error) {
 	var docDetails []*doltdb.DocDetails
 	for i, tbl := range tbls {
-		if i < len(tbls) {
-			docDetail, err := dEnv.GetOneDocDetail(tbl)
-			if err != nil {
-				return nil, nil, err
-			}
-			if docDetail != nil {
-				docDetails = append(docDetails, docDetail)
-				tbls[i] = doltdb.DocTableName
-			}
+		docDetail, err := dEnv.GetOneDocDetail(tbl)
+		if err != nil {
+			return nil, nil, err
+		}
+		if docDetail != nil {
+			docDetails = append(docDetails, docDetail)
+			tbls[i] = doltdb.DocTableName
 		}
 	}
 	return tbls, docDetails, nil
