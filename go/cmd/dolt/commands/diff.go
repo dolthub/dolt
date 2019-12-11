@@ -93,8 +93,8 @@ In order to filter which diffs are displayed <b>--where key=value</b> can be use
 `
 
 var diffSynopsis = []string{
-	"[options] [options] [<commit>] [<tables>...]",
-	"[options] [options] <commit> <commit> [<tables>...]",
+	"[options] [<commit>] [<tables>...]",
+	"[options] <commit> <commit> [<tables>...]",
 }
 
 type diffArgs struct {

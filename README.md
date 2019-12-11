@@ -179,7 +179,7 @@ $ head -n3 data.csv
 state,population
 Delaware,59096
 Maryland,319728
-$ dolt import table -pk=state state_populations data.csv
+$ dolt table import -pk=state state_populations data.csv
 ```
 
 Note if you do not have a file extension, i.e. your file is called `data`, Dolt will think you are trying to import from another table and thus not behave in the way you expect.
@@ -296,7 +296,7 @@ IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-coun
 
 dolt also supports directory, aws, and gcs based remotes:
 
-- file - you can use a directory as a remote that can be pushed to, cloned, and purlled from just like any other remote by providing a file uri for the directory
+- file - you can use a directory as a remote that can be pushed to, cloned, and pulled from just like any other remote by providing a file uri for the directory
 
   dolt remote add <remote> file:///Users/xyz/abs/path/
 
