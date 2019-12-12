@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -25,7 +26,7 @@ import (
 // CommitItr is an interface for iterating over a set of unique commits
 type CommitItr interface {
 	// Next returns the hash of the next commit, and a pointer to that commit.  Implementations of Next must handle
-	// making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, nil
+	// making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
 	Next(ctx context.Context) (hash.Hash, *Commit, error)
 }
 
@@ -68,7 +69,7 @@ func CommitItrForAllBranches(ctx context.Context, ddb *DoltDB) (CommitItr, error
 	return cmItr, nil
 }
 
-// CommitItrForRoots will return a
+// CommitItrForRoots will return a CommitItr which will iterate over all descendant commits of the provided rootCommits.
 func CommitItrForRoots(ddb *DoltDB, rootCommits ...*Commit) CommitItr {
 	return &commitItr{
 		ddb:         ddb,
@@ -79,11 +80,11 @@ func CommitItrForRoots(ddb *DoltDB, rootCommits ...*Commit) CommitItr {
 }
 
 // Next returns the hash of the next commit, and a pointer to that commit.  It handles making sure the list of commits
-// returned are unique.  When complete Next will return hash.Hash{}, nil, nil
+// returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
 func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 	for cmItr.curr == nil {
 		if cmItr.currentRoot >= len(cmItr.rootCommits) {
-			return hash.Hash{}, nil, nil
+			return hash.Hash{}, nil, io.EOF
 		}
 
 		cm := cmItr.rootCommits[cmItr.currentRoot]
