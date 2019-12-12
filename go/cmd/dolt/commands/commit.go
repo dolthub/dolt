@@ -136,7 +136,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 		workingTblsInConflict = []string{}
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, _ := actions.GetDocDiffs(ctx, dEnv, false, nil)
+	stagedDocDiffs, notStagedDocDiffs, _ := actions.GetDocDiffs(ctx, dEnv)
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)

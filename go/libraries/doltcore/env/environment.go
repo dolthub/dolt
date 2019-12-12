@@ -688,8 +688,9 @@ func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc *doltdb.DocDetails, er
 	return nil, err
 }
 
-// PutDocsToWorking adds, updates or removes dolt_docs table on the working root. The table will be added or updated
+// PutDocsToWorking adds, updates or removes the `dolt_docs` table on the working root. The table will be added or updated
 // When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
+// If no docDetails are provided, we put all valid docs to the working root.
 func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.DocDetails) error {
 	root, err := dEnv.WorkingRoot(ctx)
 
@@ -703,6 +704,14 @@ func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.
 		return err
 	}
 
+	if docDetails == nil {
+		docs, err := dEnv.GetAllValidDocDetails()
+		if err != nil {
+			return err
+		}
+		docDetails = docs
+	}
+
 	if found {
 		return updateExistingDocs(ctx, dEnv, root, docTbl, docDetails)
 	}
@@ -710,7 +719,9 @@ func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.
 	return createDocsTable(ctx, dEnv, docDetails)
 }
 
-func (dEnv *DoltEnv) RemoveDocsFromWorking(ctx context.Context) error {
+// ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
+// If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
+func (dEnv *DoltEnv) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
 	wrkRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return err
