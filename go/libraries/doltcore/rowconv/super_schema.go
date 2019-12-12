@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
@@ -230,12 +231,11 @@ func (ssg *SuperSchemaGen) AddHistoryOfCommits(ctx context.Context, tblName stri
 		_, cm, err := cmItr.Next(ctx)
 
 		if err != nil {
-			return err
-		}
+			if err == io.EOF {
+				return nil
+			}
 
-		if cm == nil {
-			// done
-			return nil
+			return err
 		}
 
 		root, err := cm.GetRootValue()
