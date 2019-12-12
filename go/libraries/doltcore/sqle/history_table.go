@@ -139,10 +139,6 @@ func (cp commitPartitioner) Next() (sql.Partition, error) {
 		return nil, err
 	}
 
-	if cm == nil {
-		return nil, io.EOF
-	}
-
 	return &commitPartition{h, cm}, nil
 }
 
