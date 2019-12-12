@@ -258,7 +258,7 @@ teardown() {
 }
 
 @test "sql alter table to rename a column" {
-    skip "describe is being re-implemented
+    skip "describe is being re-implemented"
     dolt sql -q "alter table one_pk add (c6 int)"
     run dolt sql -q "alter table one_pk rename column c6 to c7"
     [ $status -eq 0 ]
@@ -269,7 +269,7 @@ teardown() {
 }
 
 @test "sql alter table without parentheses" {
-    skip "describe is being re-implemented
+    skip "describe is being re-implemented"
     run dolt sql -q "alter table one_pk add c6 int"
     [ $status -eq 0 ]
     run dolt sql -q "describe one_pk"
