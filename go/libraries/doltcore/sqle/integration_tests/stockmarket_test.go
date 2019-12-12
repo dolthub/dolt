@@ -16,7 +16,6 @@ package integration_tests
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"os"
 	"testing"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
 // These tests are slow, working on making them faster. Right now they're skipped unless this env var is set.

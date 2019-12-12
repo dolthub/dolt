@@ -16,13 +16,15 @@ package sqle
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestCreateTable(t *testing.T) {
@@ -34,25 +36,25 @@ func TestCreateTable(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:  "Test create single column schema",
-			query: "create table testTable (id int primary key)",
+			name:          "Test create single column schema",
+			query:         "create table testTable (id int primary key)",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{})),
 		},
 		{
-			name:  "Test create two column schema",
-			query: "create table testTable (id int primary key, age int)",
+			name:          "Test create two column schema",
+			query:         "create table testTable (id int primary key, age int)",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 1, types.IntKind, false)),
 		},
 		{
-			name:        "Test syntax error",
-			query:       "create table testTable id int, age int",
+			name:          "Test syntax error",
+			query:         "create table testTable id int, age int",
 			expectedTable: "testTable",
-			expectedErr: "syntax error",
+			expectedErr:   "syntax error",
 		},
 		{
 			name:        "Test no primary keys",
@@ -77,12 +79,12 @@ func TestCreateTable(t *testing.T) {
 		{
 			name:           "Test in use table name with if not exists",
 			query:          "create table if not exists people (id int primary key, age int)",
-			expectedTable: "people",
+			expectedTable:  "people",
 			expectedSchema: PeopleTestSchema,
 		},
 		{
-			name:  "Test types",
-			query: "create table testTable (id int primary key, age int, first varchar, is_married boolean)",
+			name:          "Test types",
+			query:         "create table testTable (id int primary key, age int, first varchar, is_married boolean)",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
@@ -91,7 +93,7 @@ func TestCreateTable(t *testing.T) {
 				schema.NewColumn("is_married", 3, types.UintKind, false)),
 		},
 		{
-			name: "Test all supported types",
+			name:          "Test all supported types",
 			expectedTable: "testTable",
 			query: `create table testTable (
 							c0 int primary key comment 'tag:0', 
@@ -152,8 +154,8 @@ func TestCreateTable(t *testing.T) {
 			),
 		},
 		{
-			name:  "Test primary keys",
-			query: "create table testTable (id int, age int, first varchar(80), is_married bool, primary key (id, age))",
+			name:          "Test primary keys",
+			query:         "create table testTable (id int, age int, first varchar(80), is_married bool, primary key (id, age))",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
@@ -162,8 +164,8 @@ func TestCreateTable(t *testing.T) {
 				schema.NewColumn("is_married", 3, types.UintKind, false)),
 		},
 		{
-			name:  "Test not null constraints",
-			query: "create table testTable (id int, age int, first varchar(80) not null, is_married bool, primary key (id, age))",
+			name:          "Test not null constraints",
+			query:         "create table testTable (id int, age int, first varchar(80) not null, is_married bool, primary key (id, age))",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
@@ -172,8 +174,8 @@ func TestCreateTable(t *testing.T) {
 				schema.NewColumn("is_married", 3, types.UintKind, false)),
 		},
 		{
-			name:  "Test quoted columns",
-			query: "create table testTable (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))",
+			name:          "Test quoted columns",
+			query:         "create table testTable (`id` int, `age` int, `timestamp` varchar(80), `is married` bool, primary key (`id`, `age`))",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
@@ -182,16 +184,16 @@ func TestCreateTable(t *testing.T) {
 				schema.NewColumn("is married", 3, types.UintKind, false)),
 		},
 		{
-			name:  "Test tag comments",
-			query: "create table testTable (id int primary key comment 'tag:5', age int comment 'tag:10')",
+			name:          "Test tag comments",
+			query:         "create table testTable (id int primary key comment 'tag:5', age int comment 'tag:10')",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 5, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("age", 10, types.IntKind, false)),
 		},
 		{
-			name:  "Test faulty tag comments",
-			query: "create table testTable (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
+			name:          "Test faulty tag comments",
+			query:         "create table testTable (id int primary key comment 'tag:a', age int comment 'this is my personal area')",
 			expectedTable: "testTable",
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", 0, types.IntKind, true, schema.NotNullConstraint{}),
@@ -211,7 +213,7 @@ func TestCreateTable(t *testing.T) {
 				schema.NewColumn("country", 1, types.StringKind, false, schema.NotNullConstraint{})),
 		},
 		{
-			name: "Test ip2nationCountries",
+			name:          "Test ip2nationCountries",
 			expectedTable: "ip2nationCountries",
 			query: `CREATE TABLE ip2nationCountries (
   code varchar(4) NOT NULL default '',
