@@ -22,6 +22,31 @@ import (
 	"strings"
 )
 
+// doltSchemaToSqlSchemaWithOverrides returns the sql.Schema corresponding to the dolt schema given with certain columns
+// being specified explicitly
+func doltSchemaToSqlSchemaWithOverrides(tableName string, sch schema.Schema, overrides []*sql.Column) (sql.Schema, error) {
+	sqlSch, err := doltSchemaToSqlSchema(tableName, sch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	allCols := make(map[string]int)
+	for i, col := range sqlSch {
+		allCols[col.Name] = i
+	}
+
+	for _, override := range overrides {
+		if idx, ok := allCols[override.Name]; ok {
+			sqlSch[idx] = override
+		} else {
+			sqlSch = append(sqlSch, override)
+		}
+	}
+
+	return sqlSch, nil
+}
+
 // doltSchemaToSqlSchema returns the sql.Schema corresponding to the dolt schema given.
 func doltSchemaToSqlSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 	cols := make([]*sql.Column, sch.GetAllCols().Size())

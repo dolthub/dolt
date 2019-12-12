@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
@@ -15,24 +14,40 @@ import (
 )
 
 const (
+	// DoltHistoryTablePrefix is the name prefix for each history table
 	DoltHistoryTablePrefix = "dolt_history_"
-	CommitHashCol          = "commit_hash"
-	CommitterCol           = "committer"
-	CommitDateCol          = "commit_date"
+
+	// CommitHashCol is the name of the column containing the commit hash in the result set
+	CommitHashCol = "commit_hash"
+
+	// CommitterCol is the name of the column containing the committer in the result set
+	CommitterCol = "committer"
+
+	// CommitDateCol is the name of the column containing the commit date in the result set
+	CommitDateCol = "commit_date"
 )
 
+// HistoryTable is a system table that show the history of rows over time
 type HistoryTable struct {
-	name       string
-	dEnv       *env.DoltEnv
-	ss         rowconv.SuperSchema
-	sqlSch     sql.Schema
-	filters    []sql.Expression
-	fromCommit *doltdb.Commit
+	name    string
+	dEnv    *env.DoltEnv
+	ss      rowconv.SuperSchema
+	sqlSch  sql.Schema
+	filters []sql.Expression
+	cmItr   doltdb.CommitItr
 }
 
+// NewHistoryTable creates a history table
 func NewHistoryTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*HistoryTable, error) {
 	ssg := rowconv.NewSuperSchemaGen()
-	err := ssg.AddHistoryOfTable(ctx, name, dEnv.DoltDB)
+
+	cmItr, err := doltdb.CommitItrForAllBranches(ctx, dEnv.DoltDB)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = ssg.AddHistoryOfCommits(ctx, name, dEnv.DoltDB, cmItr)
 
 	if err != nil {
 		return nil, err
@@ -41,7 +56,7 @@ func NewHistoryTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*Hist
 	ss, err := ssg.GenerateSuperSchema(
 		rowconv.NameKindPair{Name: CommitHashCol, Kind: types.StringKind},
 		rowconv.NameKindPair{Name: CommitterCol, Kind: types.StringKind},
-		rowconv.NameKindPair{Name: CommitDateCol, Kind: types.StringKind})
+		rowconv.NameKindPair{Name: CommitDateCol, Kind: types.TimestampKind})
 
 	if err != nil {
 		return nil, err
@@ -49,106 +64,92 @@ func NewHistoryTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*Hist
 
 	sch := ss.GetSchema()
 
-	sqlSch, err := doltSchemaToSqlSchema(DoltHistoryTablePrefix+name, sch)
+	err = cmItr.Reset(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	cs, err := doltdb.NewCommitSpec("HEAD", dEnv.RepoState.Head.Ref.GetPath())
-
-	if err != nil {
-		return nil, err
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
+	tableName := DoltHistoryTablePrefix + name
+	sqlSch, err := doltSchemaToSqlSchema(tableName, sch)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &HistoryTable{
-		name:       name,
-		dEnv:       dEnv,
-		ss:         ss,
-		sqlSch:     sqlSch,
-		fromCommit: cm,
+		name:   name,
+		dEnv:   dEnv,
+		ss:     ss,
+		sqlSch: sqlSch,
+		cmItr:  cmItr,
 	}, nil
 }
 
+// Name returns the name of the history table
 func (ht *HistoryTable) Name() string {
 	return DoltHistoryTablePrefix + ht.name
 }
 
+// String returns the name of the history table
 func (ht *HistoryTable) String() string {
 	return DoltHistoryTablePrefix + ht.name
 }
 
+// Schema returns the schema for the history table, which will be the super set of the schemas from the history
 func (ht *HistoryTable) Schema() sql.Schema {
 	return ht.sqlSch
 }
 
+// Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
 func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	commits, err := actions.TimeSortedCommits(ctx, ht.dEnv.DoltDB, ht.fromCommit, -1)
+	return &commitPartitioner{ht.cmItr}, nil
+}
+
+// PartitionRows takes a partition and returns a row iterator for that partition
+func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	cp := part.(*commitPartition)
+
+	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.ss)
+}
+
+// commitPartition is a single commit
+type commitPartition struct {
+	h  hash.Hash
+	cm *doltdb.Commit
+}
+
+// Key returns the hash of the commit for this partition which is used as the partition key
+func (cp *commitPartition) Key() []byte {
+	return cp.h[:]
+}
+
+// commitPartitioner creates partitions from a CommitItr
+type commitPartitioner struct {
+	cmItr doltdb.CommitItr
+}
+
+// Next returns the next partition and nil, io.EOF when complete
+func (cp commitPartitioner) Next() (sql.Partition, error) {
+	h, cm, err := cp.cmItr.Next(context.TODO())
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &diffHistTablePartItr{commits: commits, currIdx: 0}, nil
-}
-
-func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return newTableAtCommitItr(ctx, ht.dEnv, hash.New(part.Key()), ht.name, ht.ss)
-}
-
-func (ht *HistoryTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	return nil
-}
-
-func (ht *HistoryTable) WithFilters(filters []sql.Expression) sql.Table {
-	return ht
-}
-
-func (ht *HistoryTable) Filters() []sql.Expression {
-	return ht.filters
-}
-
-type diffHistTablePartItr struct {
-	commits []*doltdb.Commit
-	currIdx int
-}
-
-func (itr *diffHistTablePartItr) Next() (sql.Partition, error) {
-	if itr.currIdx >= len(itr.commits) {
+	if cm == nil {
 		return nil, io.EOF
 	}
 
-	cm := itr.commits[itr.currIdx]
-	itr.currIdx++
-
-	h, err := cm.HashOf()
-
-	if err != nil {
-		return nil, err
-	}
-
-	return diffHistPart{h}, nil
+	return &commitPartition{h, cm}, nil
 }
 
-func (itr *diffHistTablePartItr) Close() error {
+// Close closes the partitioner
+func (cp commitPartitioner) Close() error {
 	return nil
 }
 
-type diffHistPart struct {
-	commitHash hash.Hash
-}
-
-func (dhPart diffHistPart) Key() []byte {
-	return dhPart.commitHash[:]
-}
-
-type tableAtCommitItr struct {
+type rowItrForTableAtCommit struct {
 	rd             *noms.NomsMapReader
 	sch            schema.Schema
 	toSuperSchConv *rowconv.RowConverter
@@ -156,19 +157,7 @@ type tableAtCommitItr struct {
 	empty          bool
 }
 
-func newTableAtCommitItr(ctx context.Context, dEnv *env.DoltEnv, h hash.Hash, tblName string, ss rowconv.SuperSchema) (*tableAtCommitItr, error) {
-	cs, err := doltdb.NewCommitSpec(h.String(), "")
-
-	if err != nil {
-		return nil, err
-	}
-
-	cm, err := dEnv.DoltDB.Resolve(ctx, cs)
-
-	if err != nil {
-		return nil, err
-	}
-
+func newRowItrForTableAtCommit(ctx context.Context, h hash.Hash, cm *doltdb.Commit, tblName string, ss rowconv.SuperSchema) (*rowItrForTableAtCommit, error) {
 	root, err := cm.GetRootValue()
 
 	if err != nil {
@@ -182,7 +171,7 @@ func newTableAtCommitItr(ctx context.Context, dEnv *env.DoltEnv, h hash.Hash, tb
 	}
 
 	if !ok {
-		return &tableAtCommitItr{empty: true}, nil
+		return &rowItrForTableAtCommit{empty: true}, nil
 	}
 
 	m, err := tbl.GetRowData(ctx)
@@ -223,22 +212,22 @@ func newTableAtCommitItr(ctx context.Context, dEnv *env.DoltEnv, h hash.Hash, tb
 		return nil, err
 	}
 
-	return &tableAtCommitItr{
+	return &rowItrForTableAtCommit{
 		rd:             rd,
 		sch:            ss.GetSchema(),
 		toSuperSchConv: toSuperSchConv,
 		extraVals: map[uint64]types.Value{
 			hashCol.Tag:      types.String(h.String()),
-			dateCol.Tag:      types.String(meta.FormatTS()),
+			dateCol.Tag:      types.Timestamp(meta.Time()),
 			committerCol.Tag: types.String(meta.Name),
 		},
 		empty: false,
 	}, nil
 }
 
-// Next retrieves the next row. It will return io.EOF if it's the last row.
-// After retrieving the last row, Close will be automatically closed.
-func (tblItr *tableAtCommitItr) Next() (sql.Row, error) {
+// Next retrieves the next row. It will return io.EOF if it's the last row. After retrieving the last row, Close
+// will be automatically closed.
+func (tblItr *rowItrForTableAtCommit) Next() (sql.Row, error) {
 	if tblItr.empty {
 		return nil, io.EOF
 	}
@@ -267,7 +256,7 @@ func (tblItr *tableAtCommitItr) Next() (sql.Row, error) {
 }
 
 // Close the iterator.
-func (tblItr *tableAtCommitItr) Close() error {
+func (tblItr *rowItrForTableAtCommit) Close() error {
 	if tblItr.rd != nil {
 		return tblItr.rd.Close(context.TODO())
 	}

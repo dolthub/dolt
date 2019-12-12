@@ -12,6 +12,9 @@ type CommitItr interface {
 	// Next returns the hash of the next commit, and a pointer to that commit.  Implementations of Next must handle
 	// making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, nil
 	Next(ctx context.Context) (hash.Hash, *Commit, error)
+
+	// Reset the commit iterator back to the start
+	Reset(ctx context.Context) error
 }
 
 type commitItr struct {
@@ -61,6 +64,15 @@ func CommitItrForRoots(ddb *DoltDB, rootCommits ...*Commit) CommitItr {
 		added:       make(map[hash.Hash]bool, 4096),
 		unprocessed: make([]hash.Hash, 0, 4096),
 	}
+}
+
+func (cmItr *commitItr) Reset(ctx context.Context) error {
+	cmItr.curr = nil
+	cmItr.currentRoot = 0
+	cmItr.added = make(map[hash.Hash]bool, 4096)
+	cmItr.unprocessed = cmItr.unprocessed[:0]
+
+	return nil
 }
 
 // Next returns the hash of the next commit, and a pointer to that commit.  It handles making sure the list of commits
