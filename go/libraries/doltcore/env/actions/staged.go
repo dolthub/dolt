@@ -41,7 +41,12 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowCon
 		return err
 	}
 
-	return stageTables(ctx, dEnv, tables, staged, working, allowConflicts)
+	err = stageTables(ctx, dEnv, tables, staged, working, allowConflicts)
+	if err != nil {
+		dEnv.RemoveDocsFromWorking(ctx)
+		return err
+	}
+	return nil
 }
 
 func getTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docsDetails []*doltdb.DocDetails, err error) {
