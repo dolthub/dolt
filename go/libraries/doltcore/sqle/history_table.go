@@ -2,6 +2,10 @@ package sqle
 
 import (
 	"context"
+	"io"
+
+	"github.com/src-d/go-mysql-server/sql"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
@@ -9,8 +13,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/src-d/go-mysql-server/sql"
-	"io"
 )
 
 const (
