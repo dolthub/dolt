@@ -687,12 +687,12 @@ func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.
 				return err
 			}
 
-			if exists && *doc.NewerText == nil {
+			if exists && doc.NewerText == nil {
 				me = me.Remove(docRow.NomsMapKey(sch))
-			} else if *doc.NewerText != nil {
+			} else if doc.NewerText != nil {
 				docTaggedVals := row.TaggedValues{
 					doltdb.DocNameTag: types.String(doc.DocPk),
-					doltdb.DocTextTag: types.String(*doc.NewerText),
+					doltdb.DocTextTag: types.String(doc.NewerText),
 				}
 				docRow, err = row.New(types.Format_7_18, sch, docTaggedVals)
 				if err != nil {
@@ -731,11 +731,11 @@ func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.
 
 	createTable := false
 	for _, doc := range docDetails {
-		if *doc.NewerText != nil {
+		if doc.NewerText != nil {
 			createTable = true
 			docTaggedVals := row.TaggedValues{
 				doltdb.DocNameTag: types.String(doc.DocPk),
-				doltdb.DocTextTag: types.String(*doc.NewerText),
+				doltdb.DocTextTag: types.String(doc.NewerText),
 			}
 
 			docRow, err := row.New(types.Format_7_18, sch, docTaggedVals)

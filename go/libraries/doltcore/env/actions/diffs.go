@@ -127,7 +127,7 @@ func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue
 	var removed []string
 	if older != nil {
 		if newer == nil {
-			a, m, r, err := older.DocDiff(ctx, nil, docDetails)
+			a, m, r, err := older.DocDiff(ctx, nil, &docDetails)
 			if err != nil {
 				return nil, err
 			}
@@ -135,7 +135,7 @@ func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue
 			modified = m
 			removed = r
 		} else {
-			a, m, r, err := older.DocDiff(ctx, newer, docDetails)
+			a, m, r, err := older.DocDiff(ctx, newer, &docDetails)
 			if err != nil {
 				return nil, err
 			}
@@ -184,8 +184,8 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool) (*DocDiffs,
 	}
 
 	docDetails := []*doltdb.DocDetails{
-		&doltdb.DocDetails{NewerText: &licenseText, DocPk: doltdb.LicensePk},
-		&doltdb.DocDetails{NewerText: &readmeText, DocPk: doltdb.ReadmePk},
+		&doltdb.DocDetails{NewerText: licenseText, DocPk: doltdb.LicensePk},
+		&doltdb.DocDetails{NewerText: readmeText, DocPk: doltdb.ReadmePk},
 	}
 
 	if stage {
@@ -215,7 +215,7 @@ func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool) (*DocDiffs,
 		return nil, nil, err
 	}
 
-	stagedDocDiffs, err := NewDocDiffs(ctx, dEnv, headRoot, stagedRoot, docDetails)
+	stagedDocDiffs, err := NewDocDiffs(ctx, dEnv, headRoot, stagedRoot, nil)
 	if err != nil {
 		return nil, nil, err
 	}
