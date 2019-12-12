@@ -46,7 +46,7 @@ type RootValue struct {
 }
 
 type DocDetails struct {
-	NewerText *[]byte
+	NewerText []byte
 	DocPk     string
 	Value     types.Value
 	DocFile   string
@@ -496,11 +496,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 
 // DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
 // is not provided, then we compare the docs on the root value to the docDetails provided.
-func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails []*DocDetails) (added, modified, removed []string, err error) {
-	added = []string{}
-	modified = []string{}
-	removed = []string{}
-
+func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails *[]*DocDetails) (added, modified, removed []string, err error) {
 	oldTbl, oldTblFound, err := root.GetTable(ctx, DocTableName)
 	if err != nil {
 		return nil, nil, nil, err
@@ -515,27 +511,12 @@ func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails
 	}
 
 	if other == nil {
-		if oldTblFound {
-			for i, details := range docDetails {
-				pkTaggedVal := row.TaggedValues{
-					DocNameTag: types.String(details.DocPk),
-				}
-
-				docRow, ok, err := oldTbl.GetRowByPKVals(ctx, pkTaggedVal, oldSch)
-				if err != nil {
-					return nil, nil, nil, err
-				}
-
-				if ok {
-					docValue, _ := docRow.GetColVal(DocTextTag)
-					docDetails[i].Value = docValue
-				}
-			}
+		detailsWithValues, err := addValuesToDocDetails(ctx, oldTbl, &oldSch, *docDetails)
+		if err != nil {
+			return nil, nil, nil, err
 		}
-		for _, doc := range docDetails {
-			added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.NewerText, doc.DocPk)
-		}
-		return added, modified, removed, err
+		a, m, r := getDocDiffsFromDocDetails(ctx, detailsWithValues)
+		return a, m, r, nil
 	}
 
 	newTbl, newTblFound, err := other.GetTable(ctx, DocTableName)
@@ -552,96 +533,143 @@ func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails
 		newSch = sch
 	}
 
+	docDetailsBtwnRoots, err := getDocDetailsBtwnRoots(ctx, newTbl, newSch, newTblFound, oldTbl, oldSch, oldTblFound)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	a, m, r := getDocDiffsFromDocDetails(ctx, docDetailsBtwnRoots)
+	return a, m, r, nil
+}
+
+func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Schema, newTblFound bool, oldTbl *Table, oldSch schema.Schema, oldTblFound bool) ([]*DocDetails, error) {
+	var docDetailsBtwnRoots []*DocDetails
 	if newTblFound {
 		newRows, err := newTbl.GetRowData(ctx)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		err = newRows.IterAll(ctx, func(key, val types.Value) error {
-			newRow, newRowFound, err := newTbl.GetRow(ctx, key.(types.Tuple), newSch)
+			docDetail := DocDetails{}
+			newRow, err := row.FromNoms(newSch, key.(types.Tuple), val.(types.Tuple))
 			newColVal, _ := newRow.GetColVal(DocNameTag)
 			if err != nil {
 				return err
 			}
-
-			var oldRow row.Row
-			oldRowFound := false
-			if oldTblFound {
-				row, ok, err := oldTbl.GetRow(ctx, key.(types.Tuple), oldSch)
-				if err != nil {
-					return err
-				}
-				if ok {
-					oldRowFound = true
-					oldRow = row
-				}
+			newColText, _ := newRow.GetColVal(DocTextTag)
+			if err != nil {
+				return err
 			}
-
+			colText, err := strconv.Unquote(newColText.HumanReadableString())
+			if err != nil {
+				return err
+			}
+			colBytes := []byte(colText)
 			docName, err := strconv.Unquote(newColVal.HumanReadableString())
 			if err != nil {
 				return err
 			}
-
-			if !oldTblFound || (newRowFound && !oldRowFound) {
-				added = append(added, docName)
-			} else if oldRowFound {
-				newTxtVal, _ := newRow.GetColVal(DocTextTag)
-				oldTxtVal, _ := oldRow.GetColVal(DocTextTag)
-				if !oldTxtVal.Equals(newTxtVal) {
-					modified = append(modified, docName)
-				}
+			docDetail.DocPk = docName
+			docDetail.NewerText = colBytes
+			docDetailWithVal, err := addValueToDocDetail(ctx, oldTbl, &oldSch, &docDetail)
+			if err != nil {
+				return err
 			}
+			docDetailsBtwnRoots = append(docDetailsBtwnRoots, docDetailWithVal)
 			return nil
 		})
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 	}
 
 	if oldTblFound {
 		oldRows, err := oldTbl.GetRowData(ctx)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 
 		err = oldRows.IterAll(ctx, func(key, val types.Value) error {
-			oldRow, oldRowFound, err := oldTbl.GetRow(ctx, key.(types.Tuple), oldSch)
+			oldRow, err := row.FromNoms(oldSch, key.(types.Tuple), val.(types.Tuple))
 			if err != nil {
 				return err
 			}
-			newRowFound := false
-			if newTblFound {
-				_, ok, err := newTbl.GetRow(ctx, key.(types.Tuple), newSch)
-				if err != nil {
-					return err
-				}
-				newRowFound = ok
+			oldColVal, _ := oldRow.GetColVal(DocNameTag)
+			if err != nil {
+				return err
 			}
-			if oldRowFound && !newRowFound {
-				oldValue, _ := oldRow.GetColVal(DocNameTag)
-				if err != nil {
-					return err
-				}
-				docName, err := strconv.Unquote(oldValue.HumanReadableString())
-				if err != nil {
-					return err
-				}
-				removed = append(removed, docName)
+
+			docName, err := strconv.Unquote(oldColVal.HumanReadableString())
+			if err != nil {
+				return err
+			}
+			docDetail := DocDetails{DocPk: docName}
+			docDetailWithVal, err := addValueToDocDetail(ctx, newTbl, &newSch, &docDetail)
+			if err != nil {
+				return err
+			}
+			if docDetailWithVal.Value == nil {
+				docDetailWithVal.Value = types.NullValue
+				docDetailsBtwnRoots = append(docDetailsBtwnRoots, docDetailWithVal)
 			}
 			return nil
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	return added, modified, removed, err
+	return docDetailsBtwnRoots, nil
 }
 
-func appendDocDiffs(added, modified, removed []string, olderVal types.Value, newerVal *[]byte, docPk string) (add, mod, rem []string) {
-	if olderVal == nil && *newerVal != nil {
+func getDocDiffsFromDocDetails(ctx context.Context, docDetails []*DocDetails) (added, modified, removed []string) {
+	added = []string{}
+	modified = []string{}
+	removed = []string{}
+	for _, doc := range docDetails {
+		added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.NewerText, doc.DocPk)
+	}
+	return added, modified, removed
+}
+
+func addValuesToDocDetails(ctx context.Context, tbl *Table, sch *schema.Schema, docDetails []*DocDetails) ([]*DocDetails, error) {
+	if tbl != nil && sch != nil {
+		for i, details := range docDetails {
+			newDetails, err := addValueToDocDetail(ctx, tbl, sch, details)
+			if err != nil {
+				return nil, err
+			}
+			docDetails[i] = newDetails
+		}
+	}
+	return docDetails, nil
+}
+
+func addValueToDocDetail(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail *DocDetails) (*DocDetails, error) {
+	if tbl != nil && sch != nil {
+		pkTaggedVal := row.TaggedValues{
+			DocNameTag: types.String(docDetail.DocPk),
+		}
+
+		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
+		if err != nil {
+			return nil, err
+		}
+
+		if ok {
+			docValue, _ := docRow.GetColVal(DocTextTag)
+			docDetail.Value = docValue
+		}
+	}
+	return docDetail, nil
+}
+
+func appendDocDiffs(added, modified, removed []string, olderVal types.Value, newerVal []byte, docPk string) (add, mod, rem []string) {
+	if olderVal == nil && newerVal != nil {
 		added = append(added, docPk)
 	} else if olderVal != nil {
-		if *newerVal == nil {
+		if newerVal == nil {
 			removed = append(removed, docPk)
-		} else if olderVal.HumanReadableString() != strconv.Quote(string(*newerVal)) {
+		} else if olderVal.HumanReadableString() != strconv.Quote(string(newerVal)) {
 			modified = append(modified, docPk)
 		}
 	}
