@@ -34,12 +34,12 @@ func TestExecuteShow(t *testing.T) {
 
 	peopleSchemaRows := Rs(
 		NewResultSetRow(types.String("id"), types.String("BIGINT"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("first"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("last"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("first"), types.String("TEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("last"), types.String("TEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("is_married"), types.String("BOOLEAN"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("age"), types.String("BIGINT"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("rating"), types.String("DOUBLE"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("uuid"), types.String("LONGTEXT"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("uuid"), types.String("TEXT"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("num_episodes"), types.String("BIGINT UNSIGNED"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 	)
 

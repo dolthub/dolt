@@ -36,7 +36,7 @@ func TestFmtCol(t *testing.T) {
 			0,
 			0,
 			0,
-			"`first` LONGTEXT COMMENT 'tag:0'",
+			"`first` TEXT COMMENT 'tag:0'",
 		},
 		{
 			schema.NewColumn("last", 123, types.IntKind, true),
