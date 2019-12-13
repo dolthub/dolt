@@ -58,7 +58,7 @@ func Status(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 		return 1
 	}
 
-	stagedDocDiffs, notStagedDocDiffs, err := actions.GetDocDiffs(ctx, dEnv, false)
+	stagedDocDiffs, notStagedDocDiffs, err := actions.GetDocDiffs(ctx, dEnv)
 
 	if err != nil {
 		cli.PrintErrln(toStatusVErr((err)))
@@ -178,7 +178,7 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 			iohelp.WriteLine(wr, workingHeaderHelp)
 		}
 
-		lines := make([]string, 0, notStagedTbls.Len())
+		lines := make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 

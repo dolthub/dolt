@@ -49,6 +49,7 @@ type DocDetails struct {
 	NewerText []byte
 	DocPk     string
 	Value     types.Value
+	DocFile   string
 }
 
 func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
@@ -551,13 +552,7 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Sc
 			docDetail := DocDetails{}
 			newRow, err := row.FromNoms(newSch, key.(types.Tuple), val.(types.Tuple))
 			newColVal, _ := newRow.GetColVal(DocNameTag)
-			if err != nil {
-				return err
-			}
 			newColText, _ := newRow.GetColVal(DocTextTag)
-			if err != nil {
-				return err
-			}
 			colText, err := strconv.Unquote(newColText.HumanReadableString())
 			if err != nil {
 				return err
@@ -593,10 +588,6 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Sc
 				return err
 			}
 			oldColVal, _ := oldRow.GetColVal(DocNameTag)
-			if err != nil {
-				return err
-			}
-
 			docName, err := strconv.Unquote(oldColVal.HumanReadableString())
 			if err != nil {
 				return err

@@ -76,6 +76,13 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 }
 
+// AllValidDocDetails is a list of all valid docs with static fields DocPk and DocFile. All other DocDetail fields
+// are dynamic and must be added, modified or removed as needed.
+var AllValidDocDetails = []*doltdb.DocDetails{
+	&doltdb.DocDetails{DocPk: doltdb.LicensePk, DocFile: LicenseFile},
+	&doltdb.DocDetails{DocPk: doltdb.ReadmePk, DocFile: ReadmeFile},
+}
+
 // Load loads the DoltEnv for the current directory of the cli
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
@@ -654,8 +661,36 @@ func (dEnv *DoltEnv) TempTableFilesDir() string {
 	return filepath.Join(dEnv.GetDoltDir(), tempTablesDir)
 }
 
-// PutDocsToWorking adds, updates or removes dolt_docs table on the working root. The table will be added or updated
+func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []*doltdb.DocDetails, err error) {
+	docs = []*doltdb.DocDetails{}
+	for _, doc := range AllValidDocDetails {
+		newerText, err := dEnv.GetLocalFileText(doc.DocFile)
+		if err != nil {
+			return nil, err
+		}
+		doc.NewerText = newerText
+		docs = append(docs, doc)
+	}
+	return docs, nil
+}
+
+func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc *doltdb.DocDetails, err error) {
+	for _, doc := range AllValidDocDetails {
+		if doc.DocPk == docName {
+			newerText, err := dEnv.GetLocalFileText(doc.DocFile)
+			if err != nil {
+				return nil, err
+			}
+			doc.NewerText = newerText
+			return doc, nil
+		}
+	}
+	return nil, err
+}
+
+// PutDocsToWorking adds, updates or removes the `dolt_docs` table on the working root. The table will be added or updated
 // When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
+// If no docDetails are provided, we put all valid docs to the working root.
 func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.DocDetails) error {
 	root, err := dEnv.WorkingRoot(ctx)
 
@@ -669,11 +704,60 @@ func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.
 		return err
 	}
 
+	if docDetails == nil {
+		docs, err := dEnv.GetAllValidDocDetails()
+		if err != nil {
+			return err
+		}
+		docDetails = docs
+	}
+
 	if found {
 		return updateExistingDocs(ctx, dEnv, root, docTbl, docDetails)
 	}
 
 	return createDocsTable(ctx, dEnv, docDetails)
+}
+
+// ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
+// If the `dolt_docs` table does not exist on the staged root, it will be removed from the working root.
+func (dEnv *DoltEnv) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
+	wrkRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	stgRoot, err := dEnv.StagedRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	stgDocTbl, stgDocsFound, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return err
+	}
+
+	_, wrkDocsFound, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return err
+	}
+
+	if wrkDocsFound && !stgDocsFound {
+		newWrkRoot, err := wrkRoot.RemoveTables(ctx, doltdb.DocTableName)
+		if err != nil {
+			return err
+		}
+		return dEnv.UpdateWorkingRoot(ctx, newWrkRoot)
+	}
+
+	if stgDocsFound {
+		newWrkRoot, err := wrkRoot.PutTable(ctx, doltdb.DocTableName, stgDocTbl)
+		if err != nil {
+			return err
+		}
+		return dEnv.UpdateWorkingRoot(ctx, newWrkRoot)
+	}
+	return nil
 }
 
 func updateExistingDocs(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docTbl *doltdb.Table, docDetails []*doltdb.DocDetails) error {

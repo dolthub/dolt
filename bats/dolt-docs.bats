@@ -9,7 +9,7 @@ teardown() {
     teardown_common
 }
 
-@test "dolt status and ls to view docs on dolt init" {
+@test "dolt status and ls to view valid docs on dolt init" {
     run ls
     [[ "$output" =~ "LICENSE.md" ]] || false
     [[ "$output" =~ "README.md" ]] || false
@@ -23,6 +23,14 @@ teardown() {
     [ "$output" = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file." ]
     run cat README.md
     [ "$output" = "This is a repository level README. Either edit it, add it, and commit it, or remove the file." ]
+    touch INVALID.md
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    [[ ! "$output" =~ "INVALID.md" ]] || false
 }
 
 @test "dolt add . and dolt commit dolt docs" {
@@ -79,17 +87,81 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-# @test "dolt add LICENSE.md stages license" {
+@test "dolt add LICENSE.md stages license" {
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]]
+    [[ "$output" =~ "Untracked files" ]]
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add LICENSE.md
+    [ "$status" -eq 0 ] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "license commit"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "license commit" ]] || false
+}
 
-# }
+@test "dolt add README.md stages readme" {
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add README.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt commit -m "readme commit"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "readme commit" ]] || false
+}
 
-# @test "dolt add README.md stages readme" {
-    
-# }
-
-# @test "dolt add doesn't add files that are not LICENSE.md or README.md" {
-    
-# }
+@test "dolt add doesn't add files that are not LICENSE.md or README.md" {
+    touch invalid
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add README.md invalid
+    [ "$status" -eq 1 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add LICENSE.md invalid
+    [ "$status" -eq 1 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add invalid README.md LICENSE.md
+    [ "$status" -eq 1 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+}
 
 # @test "dolt reset should remove docs from staging area" {
     
@@ -114,5 +186,3 @@ teardown() {
 # @test "dolt diff shows diffs between working root and file system docs" {
 
 # }
-
-

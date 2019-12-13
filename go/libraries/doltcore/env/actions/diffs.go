@@ -170,29 +170,11 @@ func (nd *DocDiffs) Len() int {
 	return len(nd.Docs)
 }
 
-func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv, stage bool) (*DocDiffs, *DocDiffs, error) {
-	licenseText, err := dEnv.GetLocalFileText(env.LicenseFile)
-
+// GetDocDiffs retrieves staged and unstaged DocDiffs.
+func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, error) {
+	docDetails, err := dEnv.GetAllValidDocDetails()
 	if err != nil {
 		return nil, nil, err
-	}
-
-	readmeText, err := dEnv.GetLocalFileText(env.ReadmeFile)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	docDetails := []*doltdb.DocDetails{
-		&doltdb.DocDetails{NewerText: licenseText, DocPk: doltdb.LicensePk},
-		&doltdb.DocDetails{NewerText: readmeText, DocPk: doltdb.ReadmePk},
-	}
-
-	if stage {
-		err := dEnv.PutDocsToWorking(ctx, docDetails)
-		if err != nil {
-			return nil, nil, err
-		}
 	}
 
 	workingRoot, err := dEnv.WorkingRoot(ctx)

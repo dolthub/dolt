@@ -26,18 +26,49 @@ import (
 var ErrTablesInConflict = errors.New("table is in conflict")
 
 func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowConflicts bool) error {
+	tables, docDetails, err := getTblsAndDocDetails(dEnv, tbls)
+	if err != nil {
+		return err
+	}
+
+	if len(docDetails) > 0 {
+		err = dEnv.PutDocsToWorking(ctx, docDetails)
+		if err != nil {
+			return err
+		}
+	}
+
 	staged, working, err := getStagedAndWorking(ctx, dEnv)
 
 	if err != nil {
 		return err
 	}
 
-	return stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
+	err = stageTables(ctx, dEnv, tables, staged, working, allowConflicts)
+	if err != nil {
+		dEnv.ResetWorkingDocsToStagedDocs(ctx)
+		return err
+	}
+	return nil
+}
 
+func getTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docsDetails []*doltdb.DocDetails, err error) {
+	var docDetails []*doltdb.DocDetails
+	for i, tbl := range tbls {
+		docDetail, err := dEnv.GetOneDocDetail(tbl)
+		if err != nil {
+			return nil, nil, err
+		}
+		if docDetail != nil {
+			docDetails = append(docDetails, docDetail)
+			tbls[i] = doltdb.DocTableName
+		}
+	}
+	return tbls, docDetails, nil
 }
 
 func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool) error {
-	_, _, err := GetDocDiffs(ctx, dEnv, true)
+	err := dEnv.PutDocsToWorking(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -54,7 +85,12 @@ func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool)
 		return err
 	}
 
-	return stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
+	err = stageTables(ctx, dEnv, tbls, staged, working, allowConflicts)
+	if err != nil {
+		dEnv.ResetWorkingDocsToStagedDocs(ctx)
+		return err
+	}
+	return nil
 }
 
 func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *doltdb.RootValue, working *doltdb.RootValue, allowConflicts bool) error {
