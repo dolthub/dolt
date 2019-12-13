@@ -27,7 +27,7 @@ teardown() {
     run ls
     [ "${lines[0]}" = "LICENSE.md" ]
     [ "${lines[1]}" = "README.md" ]
-    # L&R must be removed (or added and committed, which is not yet implemented) for `nothing to commit` message to display
+    # L&R must be removed (or added and committed) for `nothing to commit` message to display
     run rm "LICENSE.md"
     run rm "README.md"
     run dolt status
@@ -76,7 +76,7 @@ teardown() {
 }
 
 @test "dolt commit with nothing added" {
-    # L&R must be removed (or added and committed, which is not yet implemented) in order to test `no changes added to commit` message
+    # L&R must be removed (or added and committed) in order to test `no changes added to commit` message
     rm "LICENSE.md"
     rm "README.md"
     run dolt commit -m "commit"

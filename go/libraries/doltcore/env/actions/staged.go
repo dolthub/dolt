@@ -37,6 +37,11 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowCon
 }
 
 func StageAllTables(ctx context.Context, dEnv *env.DoltEnv, allowConflicts bool) error {
+	_, _, err := GetDocDiffs(ctx, dEnv, true)
+	if err != nil {
+		return err
+	}
+
 	staged, working, err := getStagedAndWorking(ctx, dEnv)
 
 	if err != nil {
