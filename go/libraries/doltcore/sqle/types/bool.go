@@ -51,10 +51,30 @@ func (boolType) GetSqlToValue() SqlToValue {
 		switch e := val.(type) {
 		case bool:
 			return dtypes.Bool(e), nil
-		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		case int:
 			return dtypes.Bool(e != 0), nil
-		case float32, float64:
-			return dtypes.Bool(int(math.Round(e.(float64))) != 0), nil
+		case int8:
+			return dtypes.Bool(e != 0), nil
+		case int16:
+			return dtypes.Bool(e != 0), nil
+		case int32:
+			return dtypes.Bool(e != 0), nil
+		case int64:
+			return dtypes.Bool(e != 0), nil
+		case uint:
+			return dtypes.Bool(e != 0), nil
+		case uint8:
+			return dtypes.Bool(e != 0), nil
+		case uint16:
+			return dtypes.Bool(e != 0), nil
+		case uint32:
+			return dtypes.Bool(e != 0), nil
+		case uint64:
+			return dtypes.Bool(e != 0), nil
+		case float32:
+			return dtypes.Bool(int(math.Round(float64(e))) != 0), nil
+		case float64:
+			return dtypes.Bool(int(math.Round(e)) != 0), nil
 		case string:
 			return dtypes.Bool(false), nil
 		default:
