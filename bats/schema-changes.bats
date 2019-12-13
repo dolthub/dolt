@@ -12,7 +12,7 @@ teardown() {
 @test "changing column types should not produce a data diff error" {
     dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
     run dolt schema show
-    [[ "$output" =~ "LONGTEXT" ]] || false
+    [[ "$output" =~ "TEXT" ]] || false
     dolt add test
     dolt commit -m "Added test table"
     dolt table import -c -f -pk=pk -s=`batshelper 1pk5col-ints.schema` test `batshelper 1pk5col-ints.csv`
@@ -20,7 +20,7 @@ teardown() {
     skip "This produces a failed to merge schemas error message right now"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "BIGINT" ]] || false
-    [[ ! "$output" =~ "LONGTEXT" ]] || false
+    [[ ! "$output" =~ "TEXT" ]] || false
     [[ ! "$ouput" =~ "Failed to merge schemas" ]] || false
 }
 
