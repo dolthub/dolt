@@ -76,18 +76,11 @@ type DoltEnv struct {
 	hdp    HomeDirProvider
 }
 
-// AllValidDocDetails is a list of all valid docs with static fields DocPk and DocFile. All other DocDetail fields
-// are dynamic and must be added, modified or removed as needed.
-var AllValidDocDetails = []*doltdb.DocDetails{
-	&doltdb.DocDetails{DocPk: doltdb.LicensePk, DocFile: LicenseFile},
-	&doltdb.DocDetails{DocPk: doltdb.ReadmePk, DocFile: ReadmeFile},
-}
-
 // Load loads the DoltEnv for the current directory of the cli
 func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr string) *DoltEnv {
 	config, cfgErr := loadDoltCliConfig(hdp, fs)
 	repoState, rsErr := LoadRepoState(fs)
-	docs, dcsErr := LoadDocs(fs)
+	docs, docsErr := LoadDocs(fs)
 	ddb, dbLoadErr := doltdb.LoadDoltDB(ctx, types.Format_Default, urlStr)
 
 	dEnv := &DoltEnv{
@@ -96,7 +89,7 @@ func Load(ctx context.Context, hdp HomeDirProvider, fs filesys.Filesys, urlStr s
 		repoState,
 		rsErr,
 		docs,
-		dcsErr,
+		docsErr,
 		ddb,
 		dbLoadErr,
 		fs,
@@ -177,11 +170,11 @@ func (dEnv *DoltEnv) GetDoc(file string) string {
 	if !dEnv.hasFile(file) {
 		return ""
 	}
-	return getFile(file)
+	return getDocFile(file)
 }
 
 func (dEnv *DoltEnv) hasFile(file string) bool {
-	exists, isDir := dEnv.FS.Exists(getFile(file))
+	exists, isDir := dEnv.FS.Exists(getDocFile(file))
 	return exists && !isDir
 }
 
@@ -312,7 +305,11 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinForma
 		return ErrStateUpdate
 	}
 
-	dEnv.Docs, err = CreateDocs(dEnv.FS)
+	docs, err := CreateDocs(dEnv.FS)
+	if err != nil {
+		return err
+	}
+	dEnv.Docs = docs
 
 	if err != nil {
 		return ErrDocsUpdate
@@ -663,8 +660,8 @@ func (dEnv *DoltEnv) TempTableFilesDir() string {
 
 func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []*doltdb.DocDetails, err error) {
 	docs = []*doltdb.DocDetails{}
-	for _, doc := range AllValidDocDetails {
-		newerText, err := dEnv.GetLocalFileText(doc.DocFile)
+	for _, doc := range *AllValidDocDetails {
+		newerText, err := dEnv.GetLocalFileText(doc.File)
 		if err != nil {
 			return nil, err
 		}
@@ -675,9 +672,9 @@ func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []*doltdb.DocDetails, err err
 }
 
 func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc *doltdb.DocDetails, err error) {
-	for _, doc := range AllValidDocDetails {
+	for _, doc := range *AllValidDocDetails {
 		if doc.DocPk == docName {
-			newerText, err := dEnv.GetLocalFileText(doc.DocFile)
+			newerText, err := dEnv.GetLocalFileText(doc.File)
 			if err != nil {
 				return nil, err
 			}
@@ -855,4 +852,48 @@ func createDocsTable(ctx context.Context, dEnv *DoltEnv, docDetails []*doltdb.Do
 	}
 
 	return nil
+}
+
+func (dEnv *DoltEnv) UpdateFSDocsToHeadDocs(ctx context.Context, headRoot *doltdb.RootValue, headDocTblFound bool, headDocTbl *doltdb.Table) error {
+	var sch schema.Schema
+	if headDocTblFound {
+		docSch, err := headDocTbl.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+		sch = docSch
+	}
+
+	Docs := *AllValidDocDetails
+	for key, val := range Docs {
+		doc, err := AddTextValueToDoc(ctx, headDocTbl, &sch, val)
+		if err != nil {
+			return err
+		}
+		Docs[key] = doc
+	}
+	return Docs.Save(dEnv.FS)
+}
+
+func AddTextValueToDoc(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc *doltdb.DocDetails) (*doltdb.DocDetails, error) {
+	if tbl != nil && sch != nil {
+		pkTaggedVal := row.TaggedValues{
+			doltdb.DocNameTag: types.String(doc.DocPk),
+		}
+
+		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
+		if err != nil {
+			return nil, err
+		}
+
+		if ok {
+			docValue, _ := docRow.GetColVal(doltdb.DocTextTag)
+			doc.NewerText = []byte(docValue.(types.String))
+		} else {
+			doc.NewerText = nil
+		}
+	} else {
+		doc.NewerText = nil
+	}
+	return doc, nil
 }

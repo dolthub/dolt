@@ -107,11 +107,28 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	newWkRoot := headRoot
 	for tblName, tbl := range untrackedTables {
-		newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
-
+		if tblName != doltdb.DocTableName {
+			newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
+		}
 		if err != nil {
 			return errhand.BuildDError("error: failed to write table back to database").Build()
 		}
+	}
+
+	localDocs, err := env.LoadDocs(dEnv.FS)
+	if err != nil {
+		return errhand.BuildDError("error: failed to read dolt docs from fs").AddCause(err).Build()
+	}
+
+	headDocTbl, headDocTblFound, err := headRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return errhand.BuildDError("error: failed to read dolt docs from head").AddCause(err).Build()
+	}
+
+	err = dEnv.UpdateFSDocsToHeadDocs(ctx, headRoot, headDocTblFound, headDocTbl)
+	if err != nil {
+		localDocs.Save(dEnv.FS)
+		return errhand.BuildDError("error: failed to update dolt docs from head").AddCause(err).Build()
 	}
 
 	// TODO: update working and staged in one repo_state write.

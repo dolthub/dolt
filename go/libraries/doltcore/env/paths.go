@@ -88,6 +88,6 @@ func getHomeDir(hdp HomeDirProvider) (string, error) {
 	return homeDir, nil
 }
 
-func getFile(file string) string {
-	return filepath.Join(dbfactory.DoltDir, file)
+func getDocFile(filename string) string {
+	return filepath.Join(dbfactory.DoltDir, filename)
 }
