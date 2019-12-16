@@ -144,3 +144,64 @@ teardown() {
     [[ "$output" =~ "--- a/employees @" ]] || false
     [[ "$output" =~ "+++ b/employees @" ]] || false
 }
+
+@test "diff with where clause" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt add test
+    dolt commit -m "table created"
+    dolt table put-row test pk:2 c1:22 c2:0 c3:0 c4:0 c5:0
+    dolt table put-row test pk:3 c1:33 c2:0 c3:0 c4:0 c5:0
+    run dolt diff --where "pk=2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "22" ]] || false
+    ! [[ "$output" =~ "33" ]] || false
+
+    dolt add test
+    dolt commit -m "added two rows"
+
+    dolt checkout -b test1
+    dolt table put-row test pk:4 c1:44 c2:0 c3:0 c4:0 c5:0
+    dolt add .
+    dolt commit -m "committed to branch test1"
+
+    dolt checkout master
+    dolt checkout -b test2
+    dolt table put-row test pk:5 c1:55 c2:0 c3:0 c4:0 c5:0
+    dolt add .
+    dolt commit -m "committed to branch test2"
+
+    dolt checkout master
+    run dolt diff test1 test2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "44" ]] || false
+    [[ "$output" =~ "55" ]] || false
+
+    run dolt diff test1 test2 --where "pk=4"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "44" ]] || false
+    ! [[ "$output" =~ "55" ]] || false
+}
+
+@test "diff with where clause errors" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt add test
+    dolt commit -m "table created"
+    dolt table put-row test pk:2 c1:22 c2:0 c3:0 c4:0 c5:0
+    dolt table put-row test pk:3 c1:33 c2:0 c3:0 c4:0 c5:0
+    
+    run dolt diff --where "poop=0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "failed to parse where clause" ]] || false
+    
+    dolt add test
+    dolt commit -m "added two rows"
+    
+    run dolt diff --where "poop=0"
+    skip "Bad where clause noy found because the argument parsing logic is only triggered on existance of a diff"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "failed to parse where clause" ]] || false
+}
