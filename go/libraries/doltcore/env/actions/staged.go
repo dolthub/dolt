@@ -121,7 +121,7 @@ func stageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, staged *
 			dEnv.RepoState.Staged = sh.String()
 			dEnv.RepoState.Working = wh.String()
 
-			if err = dEnv.RepoState.Save(); err != nil {
+			if err = dEnv.RepoState.Save(dEnv.FS); err != nil {
 				return env.ErrStateUpdate
 			}
 

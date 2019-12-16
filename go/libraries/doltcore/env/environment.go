@@ -299,7 +299,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 	}
 
 	dEnv.RepoState.Working = h.String()
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return ErrStateUpdate
@@ -334,7 +334,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 	}
 
 	dEnv.RepoState.Staged = h.String()
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return hash.Hash{}, ErrStateUpdate

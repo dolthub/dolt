@@ -103,7 +103,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 	_, err = dEnv.DoltDB.CommitWithParents(ctx, h, dEnv.RepoState.Head.Ref, mergeCmSpec, meta)
 
 	if err == nil {
-		dEnv.RepoState.ClearMerge()
+		dEnv.RepoState.ClearMerge(dEnv.FS)
 	}
 
 	return err
