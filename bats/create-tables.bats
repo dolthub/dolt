@@ -341,14 +341,14 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    echo "output = $output"
-    [ "${#lines[@]}" -eq 10 ]
+    [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
     [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
     [ "${lines[6]}" = '| d  | row four  |           |' ]
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
+    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
 }
 
 @test "create a table with null values from csv import with schema file" {
@@ -360,12 +360,12 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    echo "output = $output"
-    [ "${#lines[@]}" -eq 10 ]
+    [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
     [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
     [ "${lines[6]}" = "| d  | row four  | <NULL>    |" ]
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
+    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
 }
