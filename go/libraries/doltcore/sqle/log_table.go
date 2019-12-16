@@ -33,8 +33,8 @@ var _ sql.Table = (*LogTable)(nil)
 
 // LogTable is a sql.Table implementation that implements a system table which shows the dolt commit log
 type LogTable struct {
-	ddb  *doltdb.DoltDB
-	rs   *env.RepoState
+	ddb *doltdb.DoltDB
+	rs  *env.RepoState
 }
 
 // NewLogTable creates a LogTable

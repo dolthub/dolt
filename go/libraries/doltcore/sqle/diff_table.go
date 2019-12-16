@@ -39,7 +39,7 @@ var _ sql.FilteredTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name          string
-	ddb 		  *doltdb.DoltDB
+	ddb           *doltdb.DoltDB
 	rs            *env.RepoState
 	ss            rowconv.SuperSchema
 	joiner        *rowconv.Joiner
@@ -89,7 +89,7 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.
 		return nil, err
 	}
 
-	return &DiffTable{name, ddb,rs, ss, j, root2, root1, "current", "HEAD", nil}, nil
+	return &DiffTable{name, ddb, rs, ss, j, root2, root1, "current", "HEAD", nil}, nil
 }
 
 func (dt *DiffTable) Name() string {
