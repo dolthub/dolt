@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
@@ -223,116 +224,72 @@ func (ssg *SuperSchemaGen) GenerateSuperSchema(additionalCols ...NameKindPair) (
 	return SuperSchema{sch: sch, namedCols: namedCols}, nil
 }
 
-// AddHistoryOfTableAtCommit will traverse a commit graph adding all versions of a tables schema to the schemas being
-// supersetted.
-func (ssg *SuperSchemaGen) AddHistoryOfTableAtCommit(ctx context.Context, tblName string, ddb *doltdb.DoltDB, cm *doltdb.Commit) error {
-	addedSchemas := make(map[hash.Hash]struct{})
-	processedCommits := make(map[hash.Hash]struct{})
-	return ssg.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
-}
+func (ssg *SuperSchemaGen) AddHistoryOfCommits(ctx context.Context, tblName string, ddb *doltdb.DoltDB, cmItr doltdb.CommitItr) error {
+	addedSchemas := make(map[hash.Hash]bool)
 
-func (ssg *SuperSchemaGen) addHistoryOfTableAtCommit(ctx context.Context, tblName string, addedSchemas, processedCommits map[hash.Hash]struct{}, ddb *doltdb.DoltDB, cm *doltdb.Commit) error {
-	cmHash, err := cm.HashOf()
+	for {
+		_, cm, err := cmItr.Next(ctx)
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
 
-	if _, ok := processedCommits[cmHash]; ok {
-		return nil
-	}
+			return err
+		}
 
-	processedCommits[cmHash] = struct{}{}
-
-	root, err := cm.GetRootValue()
-
-	if err != nil {
-		return err
-	}
-
-	tbl, ok, err := root.GetTable(ctx, tblName)
-
-	if err != nil {
-		return err
-	}
-
-	if ok {
-		schRef, err := tbl.GetSchemaRef()
+		root, err := cm.GetRootValue()
 
 		if err != nil {
 			return err
 		}
 
-		h := schRef.TargetHash()
+		tbl, ok, err := root.GetTable(ctx, tblName)
 
-		if _, ok = addedSchemas[h]; !ok {
-			sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		if ok {
+			schRef, err := tbl.GetSchemaRef()
 
 			if err != nil {
 				return err
 			}
 
-			err = ssg.AddSchema(sch)
+			h := schRef.TargetHash()
 
-			if err != nil {
-				return err
+			if !addedSchemas[h] {
+				addedSchemas[h] = true
+				sch, err := tbl.GetSchema(ctx)
+
+				if err != nil {
+					return err
+				}
+
+				err = ssg.AddSchema(sch)
+
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
-
-	numParents, err := cm.NumParents()
-
-	if err != nil {
-		return err
-	}
-
-	for i := 0; i < numParents; i++ {
-		cm, err := ddb.ResolveParent(ctx, cm, i)
-
-		if err != nil {
-			return err
-		}
-
-		err = ssg.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // AddHistoryOfTable will traverse all commit graphs which have local branches associated with them and add all
 // passed versions of a table's schema to the schemas being supersetted
 func (ssg *SuperSchemaGen) AddHistoryOfTable(ctx context.Context, tblName string, ddb *doltdb.DoltDB) error {
-	refs, err := ddb.GetRefs(ctx)
+	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 
 	if err != nil {
 		return err
 	}
 
-	addedSchemas := make(map[hash.Hash]struct{})
-	processedCommits := make(map[hash.Hash]struct{})
+	err = ssg.AddHistoryOfCommits(ctx, tblName, ddb, cmItr)
 
-	for _, ref := range refs {
-		cs, err := doltdb.NewCommitSpec("HEAD", ref.String())
-
-		if err != nil {
-			return err
-		}
-
-		cm, err := ddb.Resolve(ctx, cs)
-
-		if err != nil {
-			return err
-		}
-
-		err = ssg.addHistoryOfTableAtCommit(ctx, tblName, addedSchemas, processedCommits, ddb, cm)
-
-		if err != nil {
-			return err
-		}
+	if err != nil {
+		return err
 	}
 
 	return nil

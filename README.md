@@ -285,12 +285,14 @@ Once that is succeeded others can clone the repository (assuming you've given th
 
 ## Interesting Datasets to Clone
 
-Just like Git you can run `dolt clone Liquidata/open-images` to get a clone from DoltHub of the Google Open Images repository locally.
+Just like Git, run `dolt clone Liquidata/word-net` to get a clone from DoltHub of the WordNet repository locally once you have run ```dolt login``` to log in to [DoltHub](https://www.dolthub.com).
 
-Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
-Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
-Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays  
-IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-country
+- WordNet: https://www.dolthub.com/repositories/Liquidata/word-net
+- ImageNet: https://www.dolthub.com/repositories/Liquidata/image-net
+- Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
+- Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
+- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays  
+- IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-country
 
 ## Other remotes
 
