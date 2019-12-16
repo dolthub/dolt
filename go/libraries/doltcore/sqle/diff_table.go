@@ -49,8 +49,7 @@ type DiffTable struct {
 	filters       []sql.Expression
 }
 
-func NewDiffTable(name string, dEnv *env.DoltEnv) (*DiffTable, error) {
-	ctx := context.TODO()
+func NewDiffTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*DiffTable, error) {
 	ssg := rowconv.NewSuperSchemaGen()
 	err := ssg.AddHistoryOfTable(ctx, name, dEnv.DoltDB)
 
