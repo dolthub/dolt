@@ -75,6 +75,10 @@ func appendToken(tokens []*string, line string, start, pos int, escapedQuotes bo
 
 	for isWhitespace(line[start]) {
 		start++
+
+		if pos == start {
+			return append(tokens, nil)
+		}
 	}
 
 	for pos-1 >= 0 && pos-1 < len(line) {
