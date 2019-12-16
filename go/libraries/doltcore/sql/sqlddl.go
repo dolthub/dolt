@@ -55,36 +55,9 @@ func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 	switch ddl.Action {
 	case sqlparser.AlterStr:
 		return executeAlter(ctx, db, root, ddl, query)
-	case sqlparser.RenameStr:
-		return executeRename(ctx, db, root, ddl, query)
 	default:
 		return nil, errFmt("Unsupported alter statement: '%v'", query)
 	}
-}
-
-// executeRename renames a set of tables and returns the new root value.
-func executeRename(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
-	if len(ddl.FromTables) != len(ddl.ToTables) {
-		panic("Expected from tables and to tables of equal length")
-	}
-
-	for i := range ddl.FromTables {
-		fromTable := ddl.FromTables[i]
-		toTable := ddl.ToTables[i]
-		if err := validateTable(ctx, root, fromTable.Name.String()); err != nil {
-			return nil, err
-		}
-
-		var err error
-		if root, err = alterschema.RenameTable(ctx, db, root, fromTable.Name.String(), toTable.Name.String()); err != nil {
-			if err == doltdb.ErrTableExists {
-				return nil, errFmt("A table with the name '%v' already exists", toTable.Name.String())
-			}
-			return nil, err
-		}
-	}
-
-	return root, nil
 }
 
 // validateTable returns an error if the given table name is invalid or if the table doesn't exist

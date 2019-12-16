@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -28,6 +29,7 @@ import (
 )
 
 var _ sql.Database = (*Database)(nil)
+var _ sql.TableRenamer = (*Database)(nil)
 
 type batchMode bool
 
@@ -217,6 +219,19 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 	}
 
 	db.SetRoot(newRoot)
+
+	return nil
+}
+
+// RenameTable implements sql.TableRenamer
+func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	root, err := alterschema.RenameTable(ctx, db.Root(), oldName, newName)
+	if err != nil {
+		return err
+	}
+
+	delete(db.tables, oldName)
+	db.SetRoot(root)
 
 	return nil
 }

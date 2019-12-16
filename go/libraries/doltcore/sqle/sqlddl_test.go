@@ -678,12 +678,12 @@ func TestRenameTable(t *testing.T) {
 		{
 			name:        "table not found",
 			query:       "rename table notFound to newNowFound",
-			expectedErr: "Unknown table: 'notFound'",
+			expectedErr: "table not found: notFound",
 		},
 		{
 			name:        "table name in use",
 			query:       "rename table people to appearances",
-			expectedErr: "A table with the name 'appearances' already exists",
+			expectedErr: "table already exists",
 		},
 	}
 

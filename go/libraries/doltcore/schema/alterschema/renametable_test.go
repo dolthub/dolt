@@ -70,7 +70,7 @@ func TestRenameTable(t *testing.T) {
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			updatedRoot, err := RenameTable(ctx, dEnv.DoltDB, root, tt.tableName, tt.newTableName)
+			updatedRoot, err := RenameTable(ctx, root, tt.tableName, tt.newTableName)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
