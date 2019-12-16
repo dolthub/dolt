@@ -655,7 +655,7 @@ func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitte
 	where, err := ParseWhere(joiner.GetSchema(), dArgs.where)
 
 	if err != nil {
-		return nil, errhand.BuildDError("error: failed to parse where cause").AddCause(err).SetPrintUsage().Build()
+		return nil, errhand.BuildDError("error: failed to parse where clause").AddCause(err).SetPrintUsage().Build()
 	}
 
 	transforms := pipeline.NewTransformCollection()
