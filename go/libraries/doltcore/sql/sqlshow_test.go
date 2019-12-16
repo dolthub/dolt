@@ -34,8 +34,8 @@ func TestExecuteShow(t *testing.T) {
 
 	peopleSchemaRows := Rs(
 		NewResultSetRow(types.String("id"), types.String("BIGINT"), types.String("NO"), types.String("PRI"), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("first"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
-		NewResultSetRow(types.String("last"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("first_name"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
+		NewResultSetRow(types.String("last_name"), types.String("LONGTEXT"), types.String("NO"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("is_married"), types.String("BOOLEAN"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("age"), types.String("BIGINT"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
 		NewResultSetRow(types.String("rating"), types.String("DOUBLE"), types.String("YES"), types.String(""), types.String("NULL"), types.String("")),
@@ -74,9 +74,6 @@ func TestExecuteShow(t *testing.T) {
 				NewResultSetRow(types.String("episodes")),
 				NewResultSetRow(types.String("people")),
 				NewResultSetRow(types.String("dolt_log")),
-				//NewResultSetRow(types.String("dolt_diff_appearances")),
-				//NewResultSetRow(types.String("dolt_diff_episodes")),
-				//NewResultSetRow(types.String("dolt_diff_people")),
 			),
 			expectedSchema: showTablesSchema(),
 		},

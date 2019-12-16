@@ -35,12 +35,12 @@ import (
 
 func TestSqlBatchInserts(t *testing.T) {
 	insertStatements := []string{
-		`insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+		`insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(7, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
 		`insert into people values
 					(8, "Milhouse", "VanHouten", false, 1, 5.1, '00000000-0000-0000-0000-000000000008', 677)`,
-		`insert into people (id, first, last) values (9, "Clancey", "Wiggum")`,
-		`insert into people (id, first, last) values
+		`insert into people (id, first_name, last_name) values (9, "Clancey", "Wiggum")`,
+		`insert into people (id, first_name, last_name) values
 					(10, "Montgomery", "Burns"), (11, "Ned", "Flanders")`,
 		`insert into episodes (id, name) values (5, "Bart the General"), (6, "Moaning Lisa")`,
 		`insert into episodes (id, name) values (7, "The Call of the Simpsons"), (8, "The Telltale Head")`,
@@ -140,7 +140,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	t.Skip("Skipped until insert ignore statements supported in go-mysql-server")
 
 	insertStatements := []string{
-		`replace into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+		`replace into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`,
 		`insert ignore into people values
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, '00000000-0000-0000-0000-000000000008', 677)`,
@@ -194,7 +194,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
-	_, rowIter, err := engine.Query(sql.NewEmptyContext(), `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values
+	_, rowIter, err := engine.Query(sql.NewEmptyContext(), `insert into people (id, first_name, last_name, is_married, age, rating, uuid, num_episodes) values
 					(0, "Maggie", "Simpson", false, 1, 5.1, '00000000-0000-0000-0000-000000000007', 677)`)
 	// This won't generate an error until we commit the batch (duplicate key)
 	assert.NoError(t, err)
@@ -205,7 +205,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`)
 	assert.Error(t, err)
 
-	// Error from the first statement appears here
+	// Error from the first_name statement appears here
 	assert.Error(t, db.Flush(ctx))
 }
 
@@ -269,11 +269,11 @@ func rowsEqual(expected, actual row.Row) (bool, string) {
 	return eq, diff
 }
 
-func newPeopleRow(id int, first, last string) row.Row {
+func newPeopleRow(id int, firstName, lastName string) row.Row {
 	vals := row.TaggedValues{
-		IdTag:    types.Int(id),
-		FirstTag: types.String(first),
-		LastTag:  types.String(last),
+		IdTag:        types.Int(id),
+		FirstNameTag: types.String(firstName),
+		LastNameTag:  types.String(lastName),
 	}
 
 	r, err := row.New(types.Format_7_18, PeopleTestSchema, vals)
