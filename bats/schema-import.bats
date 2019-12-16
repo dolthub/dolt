@@ -99,10 +99,9 @@ teardown() {
 }
 
 @test "schema import missing values in CSV rows" {
-    run dolt schema import -c --pks=pk1,pk2 test `batshelper empty-strings-null-values.csv`
-    skip "A space in a blank column panics right now."
+    run dolt schema import -c --pks=pk test `batshelper empty-strings-null-values.csv`
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 7 ]
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` TEXT" ]] || false
     [[ "$output" =~ "\`headerOne\` TEXT" ]] || false
