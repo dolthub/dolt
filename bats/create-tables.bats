@@ -334,7 +334,6 @@ teardown() {
 
 @test "create a table with null values from csv import" {
     run dolt table import -c test `batshelper empty-strings-null-values.csv`
-    skip "Added a row with a space in between the commas that makes this panic"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -342,7 +341,7 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 10 ]
+    [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
     [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
@@ -354,7 +353,6 @@ teardown() {
 
 @test "create a table with null values from csv import with schema file" {
     run dolt table import -c -s `batshelper empty-strings-null-values.schema` test `batshelper empty-strings-null-values.csv`
-    skip "Added a row with a space in between the commas that makes this panic"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
@@ -362,7 +360,7 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
     run dolt table select test
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 10 ]
+    [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
     [ "${lines[4]}" = '| b  |           | 2         |' ]
     [ "${lines[5]}" = "| c  | <NULL>    | 3         |" ]
