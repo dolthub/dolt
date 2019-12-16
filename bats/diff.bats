@@ -182,6 +182,26 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
+
+    run dolt diff test1 test2 --where "to_pk=4"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "44" ]] || false
+    ! [[ "$output" =~ "55" ]] || false
+
+    run dolt diff test1 test2 --where "to_pk=5"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "44" ]] || false
+    ! [[ "$output" =~ "55" ]] || false
+
+    run dolt diff test1 test2 --where "from_pk=5"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "55" ]] || false
+    ! [[ "$output" =~ "44" ]] || false
+
+    run dolt diff test1 test2 --where "from_pk=4"
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "44" ]] || false
+    ! [[ "$output" =~ "55" ]] || false
 }
 
 @test "diff with where clause errors" {
