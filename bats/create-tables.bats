@@ -349,7 +349,7 @@ teardown() {
     [ "${lines[6]}" = '| d  | row four  |           |' ]
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
-    [ "${lines[9]}" = "| g  | <NUL>     | <NULL>    |" ]
+    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
 }
 
 @test "create a table with null values from csv import with schema file" {
@@ -369,5 +369,5 @@ teardown() {
     [ "${lines[6]}" = "| d  | row four  | <NULL>    |" ]
     [ "${lines[7]}" = "| e  | row five  | <NULL>    |" ]
     [ "${lines[8]}" = "| f  | row six   | 6         |" ]
-    [ "${lines[9]}" = "| g  | <NUL>     | <NULL>    |" ]
+    [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
 }
