@@ -201,7 +201,7 @@ teardown() {
     dolt commit -m "added two rows"
     
     run dolt diff --where "poop=0"
-    skip "Bad where clause noy found because the argument parsing logic is only triggered on existance of a diff"
+    skip "Bad where clause not found because the argument parsing logic is only triggered on existance of a diff"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "failed to parse where clause" ]] || false
 }
