@@ -274,6 +274,6 @@ func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 }
 
 func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
-	panic("implement me")
+	panic("unimplemented")
 }
 

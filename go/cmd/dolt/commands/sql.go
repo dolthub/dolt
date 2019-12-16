@@ -768,21 +768,12 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 // the sqlEngine if necessary.
 func (se *sqlEngine) ddl(ctx context.Context, ddl *sqlparser.DDL, query string) error {
 	switch ddl.Action {
-	case sqlparser.CreateStr, sqlparser.DropStr:
+	case sqlparser.CreateStr, sqlparser.DropStr, sqlparser.AlterStr, sqlparser.RenameStr:
 		_, ri, err := se.query(ctx, query)
 		if err == nil {
 			ri.Close()
 		}
 		return err
-	case sqlparser.AlterStr, sqlparser.RenameStr:
-		newRoot, err := dsql.ExecuteAlter(ctx, se.ddb, se.sdb.Root(), ddl, query)
-		if err != nil {
-			return fmt.Errorf("Error altering table: %v", err)
-		}
-		se.sdb.SetRoot(newRoot)
-		return nil
-	case sqlparser.TruncateStr:
-		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	default:
 		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
