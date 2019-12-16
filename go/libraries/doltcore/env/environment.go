@@ -285,10 +285,7 @@ func (dEnv *DoltEnv) initDBAndStateWithTime(ctx context.Context, nbf *types.Noms
 }
 
 func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	hashStr := dEnv.RepoState.Working
-	h := hash.Parse(hashStr)
-
-	return dEnv.DoltDB.ReadRootValue(ctx, h)
+	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.WorkingHash())
 }
 
 func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
@@ -320,10 +317,7 @@ func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 }
 
 func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	hashStr := dEnv.RepoState.Staged
-	h := hash.Parse(hashStr)
-
-	return dEnv.DoltDB.ReadRootValue(ctx, h)
+	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.StagedHash())
 }
 
 func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {

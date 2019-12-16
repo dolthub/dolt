@@ -124,7 +124,7 @@ func roundTrip(t *testing.T, originalValue string, sqlType sql.Type, conn *dbr.C
 
 // runQuery runs the given query and returns a new root value
 func runQuery(root *doltdb.RootValue, dEnv *env.DoltEnv, query string) (*doltdb.RootValue, error) {
-	db := sqle.NewDatabase("dolt", root, dEnv)
+	db := sqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine := sqlServer.NewDefault()
 	engine.AddDatabase(db)
 	_ = engine.Init()

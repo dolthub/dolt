@@ -110,7 +110,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
-		se, err := newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv))
+		se, err := newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -128,7 +128,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	var se *sqlEngine
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
-		se, err = newSqlEngine(dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv))
+		se, err = newSqlEngine(dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -139,7 +139,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
-		se, err = newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv))
+		se, err = newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}

@@ -134,3 +134,11 @@ func (rs *RepoState) AddRemote(r Remote) {
 
 	rs.Remotes[r.Name] = r
 }
+
+func (rs *RepoState) WorkingHash() hash.Hash {
+	return hash.Parse(rs.Working)
+}
+
+func (rs *RepoState) StagedHash() hash.Hash {
+	return hash.Parse(rs.Staged)
+}

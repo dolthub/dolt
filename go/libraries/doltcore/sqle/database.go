@@ -40,17 +40,19 @@ const (
 type Database struct {
 	name      string
 	root      *doltdb.RootValue
-	dEnv      *env.DoltEnv
+	ddb       *doltdb.DoltDB
+	rs        *env.RepoState
 	batchMode batchMode
 	tables    map[string]*DoltTable
 }
 
 // NewDatabase returns a new dolt database to use in queries.
-func NewDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Database {
+func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
 	return &Database{
 		name:      name,
 		root:      root,
-		dEnv:      dEnv,
+		ddb:       ddb,
+		rs:        rs,
 		batchMode: single,
 		tables:    make(map[string]*DoltTable),
 	}
@@ -58,11 +60,12 @@ func NewDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Databa
 
 // NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
 // commit any outstanding edits.
-func NewBatchedDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Database {
+func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
 	return &Database{
 		name:      name,
 		root:      root,
-		dEnv:      dEnv,
+		ddb:       ddb,
+		rs:        rs,
 		batchMode: batched,
 		tables:    make(map[string]*DoltTable),
 	}
@@ -77,7 +80,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	lwrName := strings.ToLower(tblName)
 	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
 		tblName = tblName[len(DoltDiffTablePrefix):]
-		dt, err := NewDiffTable(tblName, db.dEnv)
+		dt, err := NewDiffTable(tblName, db.ddb, db.rs)
 
 		if err != nil {
 			return nil, false, err
@@ -87,7 +90,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	}
 
 	if lwrName == LogTableName {
-		return NewLogTable(db.dEnv), true, nil
+		return NewLogTable(db.ddb, db.rs), true, nil
 	}
 
 	tableNames, err := db.root.GetTableNames(ctx)

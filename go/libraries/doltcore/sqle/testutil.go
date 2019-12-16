@@ -34,7 +34,7 @@ import (
 // root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
 	engine := sqle.NewDefault()
-	db := NewBatchedDatabase("dolt", root, dEnv)
+	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
 	for _, query := range strings.Split(statements, ";\n") {
@@ -113,7 +113,7 @@ func sqlDDL(db *Database, engine *sqle.Engine, dEnv *env.DoltEnv, query string) 
 // Executes the select statement given and returns the resulting rows, or an error if one is encountered.
 // This uses the index functionality, which is not ready for prime time. Use with caution.
 func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
-	db := NewDatabase("dolt", root, nil)
+	db := NewDatabase("dolt", root, nil, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 	engine.Catalog.RegisterIndexDriver(NewDoltIndexDriver(db))
