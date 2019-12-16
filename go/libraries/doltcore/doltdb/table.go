@@ -84,6 +84,11 @@ func (t *Table) Format() *types.NomsBinFormat {
 	return t.vrw.Format()
 }
 
+// ValueReadWriter returns the ValueReadWriter for this table.
+func (t *Table) ValueReadWriter() types.ValueReadWriter {
+	return t.vrw
+}
+
 func (t *Table) SetConflicts(ctx context.Context, schemas Conflict, conflictData types.Map) (*Table, error) {
 	conflictsRef, err := writeValAndGetRef(ctx, t.vrw, conflictData)
 

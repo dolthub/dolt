@@ -37,7 +37,7 @@ const (
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
@@ -53,13 +53,13 @@ func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table,
 		return nil, err
 	}
 
-	return updateTableWithNewSchema(ctx, db, tbl, tag, newSchema, defaultVal)
+	return updateTableWithNewSchema(ctx, tbl, tag, newSchema, defaultVal)
 }
 
 // updateTableWithNewSchema updates the existing table with a new schema and new values for the new column as necessary,
 // and returns the new table.
-func updateTableWithNewSchema(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal types.Value) (*doltdb.Table, error) {
-	vrw := db.ValueReadWriter()
+func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal types.Value) (*doltdb.Table, error) {
+	vrw := tbl.ValueReadWriter()
 	newSchemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSchema)
 	if err != nil {
 		return nil, err

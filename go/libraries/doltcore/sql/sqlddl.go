@@ -84,7 +84,7 @@ func executeAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 
 	switch ddl.ColumnAction {
 	case sqlparser.AddStr:
-		return addColumn(ctx, db, root, tableName, ddl.TableSpec)
+		return addColumn(ctx, root, tableName, ddl.TableSpec)
 	case sqlparser.DropStr:
 		return dropColumn(ctx, db, root, tableName, ddl.Column)
 	case sqlparser.RenameStr:
@@ -135,7 +135,7 @@ func dropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, 
 }
 
 // addColumn adds the column given to the table named. Returns the new root value and new schema, or an error if one occurs.
-func addColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, error) {
+func addColumn(ctx context.Context, root *doltdb.RootValue, tableName string, spec *sqlparser.TableSpec) (*doltdb.RootValue, error) {
 	table, _, err := root.GetTable(ctx, tableName)
 
 	if err != nil {
@@ -164,7 +164,7 @@ func addColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, t
 		nullable = alterschema.Null
 	}
 
-	updatedTable, err := alterschema.AddColumnToTable(ctx, db, table, col.Tag, col.Name, col.Kind, nullable, defaultVal)
+	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, defaultVal)
 	if err != nil {
 		return nil, err
 	}

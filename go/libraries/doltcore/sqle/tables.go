@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	"io"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -43,6 +44,7 @@ var _ sql.UpdatableTable = (*DoltTable)(nil)
 var _ sql.DeletableTable = (*DoltTable)(nil)
 var _ sql.InsertableTable = (*DoltTable)(nil)
 var _ sql.ReplaceableTable = (*DoltTable)(nil)
+var _ sql.AlterableTable = (*DoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -202,3 +204,58 @@ func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor)
 	t.db.root = newRoot
 	return nil
 }
+
+func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
+	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	if err != nil {
+		return err
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	tag := extractTag(column)
+	if tag == schema.InvalidTag {
+		tag = schema.AutoGenerateTag(sch)
+	}
+
+	col, err := SqlColToDoltCol(tag, column)
+	if err != nil {
+		return err
+	}
+
+	if col.IsPartOfPK {
+		return errors.New("adding primary keys is not supported")
+	}
+
+	nullable := alterschema.NotNull
+	if col.IsNullable() {
+		nullable = alterschema.Null
+	}
+
+	// TODO: column order
+	// TODO: default value
+	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, nil)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	t.db.SetRoot(newRoot)
+	return nil
+}
+
+func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
+	panic("implement me")
+}
+
+func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
+	panic("implement me")
+}
+
