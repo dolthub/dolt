@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -28,6 +29,9 @@ type CommitItr interface {
 	// Next returns the hash of the next commit, and a pointer to that commit.  Implementations of Next must handle
 	// making sure the list of commits returned are unique.  When complete Next will return hash.Hash{}, nil, io.EOF
 	Next(ctx context.Context) (hash.Hash, *Commit, error)
+
+	// Reset the commit iterator back to the start
+	Reset(ctx context.Context) error
 }
 
 type commitItr struct {
@@ -77,6 +81,15 @@ func CommitItrForRoots(ddb *DoltDB, rootCommits ...*Commit) CommitItr {
 		added:       make(map[hash.Hash]bool, 4096),
 		unprocessed: make([]hash.Hash, 0, 4096),
 	}
+}
+
+func (cmItr *commitItr) Reset(ctx context.Context) error {
+	cmItr.curr = nil
+	cmItr.currentRoot = 0
+	cmItr.added = make(map[hash.Hash]bool, 4096)
+	cmItr.unprocessed = cmItr.unprocessed[:0]
+
+	return nil
 }
 
 // Next returns the hash of the next commit, and a pointer to that commit.  It handles making sure the list of commits
@@ -148,4 +161,116 @@ func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (
 
 	cmSt := val.(types.Struct)
 	return NewCommit(vrw, cmSt), nil
+}
+
+type CommitIndexingCommitItr struct {
+	ddb         *DoltDB
+	itr         CommitItr
+	commits     []hash.Hash
+	authors     []string
+	commitTimes []time.Time
+}
+
+func NewCommitIndexingCommitItr(ddb *DoltDB, itr CommitItr) *CommitIndexingCommitItr {
+	return &CommitIndexingCommitItr{
+		ddb:         ddb,
+		itr:         itr,
+		commits:     make([]hash.Hash, 0, 4096),
+		authors:     make([]string, 0, 4096),
+		commitTimes: make([]time.Time, 0, 4096),
+	}
+}
+
+func (cmItr *CommitIndexingCommitItr) Reset(ctx context.Context) error {
+	cmItr.commits = make([]hash.Hash, 0, 4096)
+	cmItr.authors = make([]string, 0, 4096)
+	cmItr.commitTimes = make([]time.Time, 0, 4096)
+
+	return cmItr.itr.Reset(ctx)
+}
+
+func (cmItr *CommitIndexingCommitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
+	h, cm, err := cmItr.itr.Next(ctx)
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	meta, err := cm.GetCommitMeta()
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	commitTS := meta.Time()
+	author := meta.Name
+
+	cmItr.commits = append(cmItr.commits, h)
+	cmItr.commitTimes = append(cmItr.commitTimes, commitTS)
+	cmItr.authors = append(cmItr.authors, author)
+
+	return h, cm, nil
+}
+
+type TimeRange struct {
+	Min time.Time
+	Max time.Time
+}
+
+func (tr *TimeRange) Contains(t time.Time) bool {
+	return t.After(tr.Min) && t.Before(tr.Max)
+}
+
+func (cmItr *CommitIndexingCommitItr) Unfiltered() *CommitHashItr {
+	return &CommitHashItr{cmItr.ddb.ValueReadWriter(), cmItr.commits, 0}
+}
+
+type CommitCheck func(hash.Hash, string, time.Time) bool
+
+func (cmItr *CommitIndexingCommitItr) Filter(check CommitCheck) *CommitHashItr {
+	hashes := make([]hash.Hash, 0, len(cmItr.commits))
+	for i, h := range cmItr.commits {
+		author := cmItr.authors[i]
+		ts := cmItr.commitTimes[i]
+
+		passes := true
+		if !check(h, author, ts) {
+			passes = false
+			break
+		}
+
+		if passes {
+			hashes = append(hashes, h)
+		}
+	}
+
+	return &CommitHashItr{cmItr.ddb.ValueReadWriter(), hashes, 0}
+}
+
+type CommitHashItr struct {
+	vrw    types.ValueReadWriter
+	hashes []hash.Hash
+	n      int
+}
+
+func (chItr *CommitHashItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
+	if chItr.n >= len(chItr.hashes) {
+		return hash.Hash{}, nil, io.EOF
+	}
+
+	h := chItr.hashes[chItr.n]
+
+	cm, err := hashToCommit(ctx, chItr.vrw, h)
+
+	if err != nil {
+		return hash.Hash{}, nil, err
+	}
+
+	chItr.n++
+	return h, cm, nil
+}
+
+func (chItr *CommitHashItr) Reset(ctx context.Context) error {
+	chItr.n = 0
+	return nil
 }
