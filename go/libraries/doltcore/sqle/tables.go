@@ -205,6 +205,7 @@ func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor)
 	return nil
 }
 
+// AddColumn implements sql.AlterableTable
 func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {
@@ -251,8 +252,25 @@ func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.C
 	return nil
 }
 
+// DropColumn implements sql.AlterableTable
 func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
-	panic("implement me")
+	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	if err != nil {
+		return err
+	}
+
+	updatedTable, err := alterschema.DropColumn(ctx, table, columnName)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	t.db.SetRoot(newRoot)
+	return nil
 }
 
 func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {

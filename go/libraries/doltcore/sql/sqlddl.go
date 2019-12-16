@@ -86,7 +86,7 @@ func executeAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 	case sqlparser.AddStr:
 		return addColumn(ctx, root, tableName, ddl.TableSpec)
 	case sqlparser.DropStr:
-		return dropColumn(ctx, db, root, tableName, ddl.Column)
+		return dropColumn(ctx, root, tableName, ddl.Column)
 	case sqlparser.RenameStr:
 		return renameColumn(ctx, db, root, tableName, ddl.Column, ddl.ToColumn)
 	default:
@@ -116,14 +116,14 @@ func renameColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue
 }
 
 // dropColumn drops the column named from the table named. Returns the new root value and new schema, or an error if one occurs.
-func dropColumn(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, tableName string, col sqlparser.ColIdent) (*doltdb.RootValue, error) {
+func dropColumn(ctx context.Context, root *doltdb.RootValue, tableName string, col sqlparser.ColIdent) (*doltdb.RootValue, error) {
 	table, _, err := root.GetTable(ctx, tableName)
 
 	if err != nil {
 		return nil, err
 	}
 
-	updatedTable, err := alterschema.DropColumn(ctx, db, table, col.String())
+	updatedTable, err := alterschema.DropColumn(ctx, table, col.String())
 	if err != nil {
 		if err == schema.ErrColNotFound {
 			return nil, errFmt(UnknownColumnErrFmt, col.String())

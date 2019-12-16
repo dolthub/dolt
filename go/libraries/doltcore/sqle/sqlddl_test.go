@@ -471,12 +471,12 @@ func TestDropColumn(t *testing.T) {
 		{
 			name:        "table not found",
 			query:       "alter table notFound drop column id",
-			expectedErr: "Unknown table: 'notFound'",
+			expectedErr: "table not found: notFound",
 		},
 		{
 			name:        "column not found",
 			query:       "alter table people drop column notFound",
-			expectedErr: "Unknown column: 'notFound'",
+			expectedErr: "table people does not have column notFound",
 		},
 	}
 
