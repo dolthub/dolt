@@ -579,16 +579,6 @@ func (se *sqlEngine) query(ctx context.Context, query string) (sql.Schema, sql.R
 	return se.engine.Query(sqlCtx, query)
 }
 
-// Executes a SQL show statement and prints the result to the CLI.
-func (se *sqlEngine) show(ctx context.Context, show *sqlparser.Show) error {
-	root := se.sdb.Root()
-	p, sch, err := dsql.BuildShowPipeline(ctx, root, show)
-	if err != nil {
-		return err
-	}
-	return runPrintingPipeline(ctx, root.VRW().Format(), p, sch)
-}
-
 // Pretty prints the output of the new SQL engine
 func prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	var chanErr error

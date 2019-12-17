@@ -238,7 +238,7 @@ func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.C
 
 	// TODO: column order
 	// TODO: default value
-	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, nil)
+	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, nil, nil)
 	if err != nil {
 		return err
 	}

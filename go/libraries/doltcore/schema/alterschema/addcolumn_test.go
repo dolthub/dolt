@@ -242,7 +242,7 @@ func TestAddColumnToTable(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			updatedTable, err := AddColumnToTable(ctx, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal)
+			updatedTable, err := AddColumnToTable(ctx, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal, nil)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

@@ -21,11 +21,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const UnknownTableErrFmt = "Unknown table: '%v'"
-const AmbiguousTableErrFmt = "Ambiguous table: '%v'"
-const UnknownColumnErrFmt = "Unknown column: '%v'"
-const AmbiguousColumnErrFmt = "Ambiguous column: '%v'"
-
 // Turns a node to a string
 func nodeToString(node sqlparser.SQLNode) string {
 	buffer := sqlparser.NewTrackedBuffer(nil)
