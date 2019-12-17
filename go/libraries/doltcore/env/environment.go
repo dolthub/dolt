@@ -689,31 +689,89 @@ func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc *doltdb.DocDetails, er
 // When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
 // If no docDetails are provided, we put all valid docs to the working root.
 func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.DocDetails) error {
-	root, err := dEnv.WorkingRoot(ctx)
+	wrkRoot, err := dEnv.WorkingRoot(ctx)
 
 	if err != nil {
 		return err
 	}
 
-	docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
+	docTbl, found, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
 
 	if err != nil {
 		return err
 	}
 
-	if docDetails == nil {
-		docs, err := dEnv.GetAllValidDocDetails()
-		if err != nil {
-			return err
-		}
-		docDetails = docs
+	docDetails, err = getDocDetails(dEnv, docDetails)
+	if err != nil {
+		return err
 	}
 
 	if found {
-		return updateExistingDocs(ctx, dEnv, root, docTbl, docDetails)
+		newRoot, err := updateDocsOnRoot(ctx, dEnv, wrkRoot, docTbl, docDetails)
+		if err != nil {
+			return err
+		}
+		return dEnv.UpdateWorkingRoot(ctx, newRoot)
 	}
 
-	return createDocsTable(ctx, dEnv, docDetails)
+	newRoot, err := createDocsTableOnRoot(ctx, dEnv, wrkRoot, docDetails)
+	if err != nil {
+		return nil
+	}
+	return dEnv.UpdateWorkingRoot(ctx, newRoot)
+}
+
+// PutDocsToStaged adds, updates or removes the `dolt_docs` table on the staged root. The table will be added or updated
+// When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
+// If no docDetails are provided, we put all valid docs to the staged root.
+func (dEnv *DoltEnv) PutDocsToStaged(ctx context.Context, docDetails []*doltdb.DocDetails) (*doltdb.RootValue, error) {
+	stgRoot, err := dEnv.StagedRoot(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	docTbl, found, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
+
+	if err != nil {
+		return nil, err
+	}
+
+	docDetails, err = getDocDetails(dEnv, docDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	var newRoot *doltdb.RootValue
+
+	if found {
+		newRoot, err = updateDocsOnRoot(ctx, dEnv, stgRoot, docTbl, docDetails)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		newRoot, err = createDocsTableOnRoot(ctx, dEnv, stgRoot, docDetails)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, newRoot)
+	if err != nil {
+		return nil, err
+	}
+	return dEnv.StagedRoot(ctx)
+}
+
+func getDocDetails(dEnv *DoltEnv, docDetails []*doltdb.DocDetails) ([]*doltdb.DocDetails, error) {
+	if docDetails == nil {
+		docs, err := dEnv.GetAllValidDocDetails()
+		if err != nil {
+			return nil, err
+		}
+		return docs, nil
+	}
+	return docDetails, nil
 }
 
 // ResetWorkingDocsToStagedDocs resets the `dolt_docs` table on the working root to match the staged root.
@@ -757,22 +815,22 @@ func (dEnv *DoltEnv) ResetWorkingDocsToStagedDocs(ctx context.Context) error {
 	return nil
 }
 
-func updateExistingDocs(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docTbl *doltdb.Table, docDetails []*doltdb.DocDetails) error {
+func updateDocsOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docTbl *doltdb.Table, docDetails []*doltdb.DocDetails) (*doltdb.RootValue, error) {
 	m, err := docTbl.GetRowData(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	sch, err := docTbl.GetSchema(context.Background())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	me := m.Edit()
 	for _, doc := range docDetails {
 		docRow, exists, err := docTbl.GetRowByPKVals(context.Background(), row.TaggedValues{doltdb.DocNameTag: types.String(doc.DocPk)}, sch)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		if exists && doc.NewerText == nil {
@@ -784,32 +842,23 @@ func updateExistingDocs(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootVal
 			}
 			docRow, err = row.New(types.Format_7_18, sch, docTaggedVals)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			me = me.Set(docRow.NomsMapKey(sch), docRow.NomsMapValue(sch))
 		}
 	}
 	updatedMap, err := me.Map(ctx)
-	var newRoot *doltdb.RootValue
 	if updatedMap.Len() == 0 {
-		newRoot, err = root.RemoveTables(ctx, doltdb.DocTableName)
-		if err != nil {
-			return err
-		}
-	} else {
-		docTbl, err = docTbl.UpdateRows(ctx, updatedMap)
-		if err != nil {
-			return err
-		}
-		newRoot, err = root.PutTable(ctx, doltdb.DocTableName, docTbl)
-		if err != nil {
-			return err
-		}
+		return root.RemoveTables(ctx, doltdb.DocTableName)
 	}
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
+	docTbl, err = docTbl.UpdateRows(ctx, updatedMap)
+	if err != nil {
+		return nil, err
+	}
+	return root.PutTable(ctx, doltdb.DocTableName, docTbl)
 }
 
-func createDocsTable(ctx context.Context, dEnv *DoltEnv, docDetails []*doltdb.DocDetails) error {
+func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docDetails []*doltdb.DocDetails) (*doltdb.RootValue, error) {
 	typedColColl, _ := schema.NewColCollection(
 		schema.NewColumn(doltdb.DocPkColumnName, doltdb.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn(doltdb.DocTextColumnName, doltdb.DocTextTag, types.StringKind, false),
@@ -828,11 +877,11 @@ func createDocsTable(ctx context.Context, dEnv *DoltEnv, docDetails []*doltdb.Do
 
 			docRow, err := row.New(types.Format_7_18, sch, docTaggedVals)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			err = imt.AppendRow(docRow)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
@@ -843,39 +892,71 @@ func createDocsTable(ctx context.Context, dEnv *DoltEnv, docDetails []*doltdb.Do
 
 		_, _, err := table.PipeRows(context.Background(), rd, wr, false)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		rd.Close(context.Background())
 		wr.Close(context.Background())
 
-		return dEnv.PutTableToWorking(ctx, *wr.GetMap(), wr.GetSchema(), doltdb.DocTableName)
+		vrw := root.VRW()
+		schVal, err := encoding.MarshalAsNomsValue(ctx, vrw, wr.GetSchema())
+
+		if err != nil {
+			return nil, ErrMarshallingSchema
+		}
+
+		newDocsTbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, *wr.GetMap())
+		if err != nil {
+			return nil, err
+		}
+
+		return root.PutTable(ctx, doltdb.DocTableName, newDocsTbl)
 	}
 
-	return nil
+	return root, nil
 }
 
-func (dEnv *DoltEnv) UpdateFSDocsToHeadDocs(ctx context.Context, headRoot *doltdb.RootValue, headDocTblFound bool, headDocTbl *doltdb.Table) error {
+//UpdateFSDocsToRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
+// If docs == nil, all valid docs will be retrieved and written.
+func (dEnv *DoltEnv) UpdateFSDocsToRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) error {
+	docs, err := dEnv.GetDocsFromRootDocs(ctx, root, docs)
+	if err != nil {
+		return nil
+	}
+	return docs.Save(dEnv.FS)
+}
+
+// GetDocsFromRootDocs returns Docs with the NewerText value(s) from the provided root. If docs are provided,
+// only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated NewerText.
+func (dEnv *DoltEnv) GetDocsFromRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
+	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return nil, err
+	}
+
 	var sch schema.Schema
-	if headDocTblFound {
-		docSch, err := headDocTbl.GetSchema(ctx)
+	if docTblFound {
+		docSch, err := docTbl.GetSchema(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		sch = docSch
 	}
 
-	Docs := *AllValidDocDetails
-	for key, val := range Docs {
-		doc, err := AddTextValueToDoc(ctx, headDocTbl, &sch, val)
-		if err != nil {
-			return err
-		}
-		Docs[key] = doc
+	if docs == nil {
+		docs = *AllValidDocDetails
 	}
-	return Docs.Save(dEnv.FS)
+
+	for i, doc := range docs {
+		doc, err := addNewerTextToDoc(ctx, docTbl, &sch, doc)
+		if err != nil {
+			return nil, err
+		}
+		docs[i] = doc
+	}
+	return docs, nil
 }
 
-func AddTextValueToDoc(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc *doltdb.DocDetails) (*doltdb.DocDetails, error) {
+func addNewerTextToDoc(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc *doltdb.DocDetails) (*doltdb.DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
 			doltdb.DocNameTag: types.String(doc.DocPk),

@@ -22,13 +22,13 @@ import (
 var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file."
 var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file."
 
-type Docs map[string]*doltdb.DocDetails
+type Docs []*doltdb.DocDetails
 
 // AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
 // are dynamic and must be added, modified or removed as needed.
 var AllValidDocDetails = &Docs{
-	doltdb.ReadmePk:  &doltdb.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
-	doltdb.LicensePk: &doltdb.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
+	&doltdb.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
+	&doltdb.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
 }
 
 func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
@@ -49,8 +49,8 @@ func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 
 func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 	docs := *AllValidDocDetails
-	for key, value := range docs {
-		value.NewerText = getInitialDocText(key)
+	for _, doc := range docs {
+		doc.NewerText = getInitialDocText(doc.DocPk)
 	}
 	err := docs.Save(fs)
 	if err != nil {
@@ -60,13 +60,13 @@ func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 }
 
 func (docs *Docs) Save(fs filesys.ReadWriteFS) error {
-	for key, value := range *docs {
-		if !isValidDoc(key) {
+	for _, doc := range *docs {
+		if !isValidDoc(doc.DocPk) {
 			continue
 		}
-		filePath := getDocFile(value.File)
-		if value.NewerText != nil {
-			err := fs.WriteFile(filePath, value.NewerText)
+		filePath := getDocFile(doc.File)
+		if doc.NewerText != nil {
+			err := fs.WriteFile(filePath, doc.NewerText)
 			if err != nil {
 				return err
 			}
@@ -87,8 +87,8 @@ func getInitialDocText(docName string) []byte {
 }
 
 func isValidDoc(docName string) bool {
-	for key := range *AllValidDocDetails {
-		if key == docName {
+	for _, doc := range *AllValidDocDetails {
+		if doc.DocPk == docName {
 			return true
 		}
 	}
