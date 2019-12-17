@@ -441,7 +441,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Show:
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
-			err = prettyPrintResults(ctx, se.sdb.Root().VRW().Format(), sqlSch, rowIter)
+			err = prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 		}
 		return err
 	case *sqlparser.Delete:
@@ -451,7 +451,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 		}
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
-			err = prettyPrintResults(ctx, se.sdb.Root().VRW().Format(), sqlSch, rowIter)
+			err = prettyPrintResults(ctx, se.ddb.Format(), sqlSch, rowIter)
 		}
 		return err
 	case *sqlparser.DDL:
