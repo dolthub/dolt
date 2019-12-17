@@ -121,7 +121,7 @@ Initialize the directory, and load some data:
 ```
 $ dolt init
 Successfully initialized dolt data repository.
-$ dolt sql -q "create table state_populations ( state varchar, population int, primary key (state) )"
+$ dolt sql -q "create table state_populations ( state varchar(14), population int, primary key (state) )"
 $ dolt sql -q "show tables"
 +-------------------+
 | tables            |
