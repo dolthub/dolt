@@ -21,7 +21,6 @@ import (
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
@@ -46,7 +45,7 @@ const (
 // HistoryTable is a system table that show the history of rows over time
 type HistoryTable struct {
 	name    string
-	dEnv    *env.DoltEnv
+	ddb     *doltdb.DoltDB
 	ss      rowconv.SuperSchema
 	sqlSch  sql.Schema
 	filters []sql.Expression
@@ -54,16 +53,16 @@ type HistoryTable struct {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*HistoryTable, error) {
+func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB) (*HistoryTable, error) {
 	ssg := rowconv.NewSuperSchemaGen()
 
-	cmItr, err := doltdb.CommitItrForAllBranches(ctx, dEnv.DoltDB)
+	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 
 	if err != nil {
 		return nil, err
 	}
 
-	err = ssg.AddHistoryOfCommits(ctx, name, dEnv.DoltDB, cmItr)
+	err = ssg.AddHistoryOfCommits(ctx, name, ddb, cmItr)
 
 	if err != nil {
 		return nil, err
@@ -95,7 +94,7 @@ func NewHistoryTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*Hist
 
 	return &HistoryTable{
 		name:   name,
-		dEnv:   dEnv,
+		ddb:    ddb,
 		ss:     ss,
 		sqlSch: sqlSch,
 		cmItr:  cmItr,

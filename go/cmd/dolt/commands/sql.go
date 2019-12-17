@@ -110,14 +110,14 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
-		se, err := newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv))
+		se, err := newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
 		if err := processQuery(ctx, query, se); err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		} else if se.db.Root() != origRoot {
-			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.db.Root()), usage)
+		} else if se.sdb.Root() != origRoot {
+			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
 		} else {
 			return 0
 		}
@@ -128,7 +128,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	var se *sqlEngine
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
-		se, err = newSqlEngine(dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv))
+		se, err = newSqlEngine(dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -139,19 +139,19 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
-		se, err = newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv))
+		se, err = newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-		err = runShell(ctx, se)
+		err = runShell(ctx, se, nil)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
 		}
 	}
 
 	// If the SQL session wrote a new root value, update the working set with it
-	if se.db.Root() != origRoot {
-		return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.db.Root()), usage)
+	if se.sdb.Root() != origRoot {
+		return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
 	}
 
 	return 0
@@ -207,7 +207,7 @@ func runBatchMode(ctx context.Context, se *sqlEngine) error {
 		cli.Println(err.Error())
 	}
 
-	if err := se.db.Flush(ctx); err != nil {
+	if err := se.sdb.Flush(ctx); err != nil {
 		return err
 	}
 
@@ -246,11 +246,11 @@ func batchInsertEarlySemicolon(query string) bool {
 
 // runShell starts a SQL shell. Returns when the user exits the shell. The Root of the sqlEngine may
 // be updated by any queries which were processed.
-func runShell(ctx context.Context, se *sqlEngine) error {
+func runShell(ctx context.Context, se *sqlEngine, dEnv *env.DoltEnv) error {
 	_ = iohelp.WriteLine(cli.CliOut, welcomeMsg)
 
 	// start the doltsql shell
-	historyFile := filepath.Join(se.dEnv.GetDoltDir(), ".sqlhistory")
+	historyFile := filepath.Join(dEnv.GetDoltDir(), ".sqlhistory")
 	rlConf := readline.Config{
 		Prompt:                 "doltsql> ",
 		Stdout:                 cli.CliOut,
@@ -271,7 +271,7 @@ func runShell(ctx context.Context, se *sqlEngine) error {
 	shell := ishell.NewUninterpreted(&shellConf)
 	shell.SetMultiPrompt("      -> ")
 	// TODO: update completer on create / drop / alter statements
-	completer, err := newCompleter(ctx, se.dEnv)
+	completer, err := newCompleter(ctx, dEnv)
 	if err != nil {
 		return err
 	}
@@ -441,7 +441,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Insert, *sqlparser.Update, *sqlparser.Show:
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
-			err = prettyPrintResults(ctx, se.db.Root().VRW().Format(), sqlSch, rowIter)
+			err = prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 		}
 		return err
 	case *sqlparser.Delete:
@@ -451,7 +451,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 		}
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
-			err = prettyPrintResults(ctx, se.db.Root().VRW().Format(), sqlSch, rowIter)
+			err = prettyPrintResults(ctx, se.ddb.Format(), sqlSch, rowIter)
 		}
 		return err
 	case *sqlparser.DDL:
@@ -500,7 +500,7 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 		}
 
 		if batchEditStats.numRowsInserted%maxBatchSize == 0 {
-			err := se.db.Flush(ctx)
+			err := se.sdb.Flush(ctx)
 			if err != nil {
 				return err
 			}
@@ -514,7 +514,7 @@ func processBatchQuery(ctx context.Context, query string, se *sqlEngine) error {
 	default:
 		// For any other kind of statement, we need to commit whatever batch edit we've accumulated so far before executing
 		// the query
-		err := se.db.Flush(ctx)
+		err := se.sdb.Flush(ctx)
 		if err != nil {
 			return err
 		}
@@ -549,8 +549,8 @@ func mergeInsertResultIntoStats(rowIter sql.RowIter, s *stats) error {
 }
 
 type sqlEngine struct {
-	db     *dsqle.Database
-	dEnv   *env.DoltEnv
+	sdb    *dsqle.Database
+	ddb    *doltdb.DoltDB
 	engine *sqle.Engine
 }
 
@@ -568,7 +568,7 @@ func newSqlEngine(dEnv *env.DoltEnv, db *dsqle.Database) (*sqlEngine, error) {
 		}
 	}
 
-	return &sqlEngine{db, dEnv, engine}, nil
+	return &sqlEngine{db, dEnv.DoltDB, engine}, nil
 }
 
 // Execute a SQL statement and return values for printing.
@@ -579,7 +579,7 @@ func (se *sqlEngine) query(ctx context.Context, query string) (sql.Schema, sql.R
 
 // Executes a SQL show statement and prints the result to the CLI.
 func (se *sqlEngine) show(ctx context.Context, show *sqlparser.Show) error {
-	root := se.db.Root()
+	root := se.sdb.Root()
 	p, sch, err := dsql.BuildShowPipeline(ctx, root, show)
 	if err != nil {
 		return err
@@ -731,7 +731,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
 		if ate, ok := s.TableExprs[0].(*sqlparser.AliasedTableExpr); ok {
 			if ste, ok := ate.Expr.(sqlparser.TableName); ok {
-				root := se.db.Root()
+				root := se.sdb.Root()
 				tName := ste.Name.String()
 				table, ok, err := root.GetTable(ctx, tName)
 				if err == nil && ok {
@@ -753,7 +753,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 						return false
 					}
 					_ = prettyPrintResults(ctx, root.VRW().Format(), sql.Schema{{Name: "updated", Type: sql.Uint64}}, printRowIter)
-					se.db.SetRoot(newRoot)
+					se.sdb.SetRoot(newRoot)
 					return true
 				}
 			}
@@ -773,11 +773,11 @@ func (se *sqlEngine) ddl(ctx context.Context, ddl *sqlparser.DDL, query string) 
 		}
 		return err
 	case sqlparser.AlterStr, sqlparser.RenameStr:
-		newRoot, err := dsql.ExecuteAlter(ctx, se.dEnv.DoltDB, se.db.Root(), ddl, query)
+		newRoot, err := dsql.ExecuteAlter(ctx, se.ddb, se.sdb.Root(), ddl, query)
 		if err != nil {
 			return fmt.Errorf("Error altering table: %v", err)
 		}
-		se.db.SetRoot(newRoot)
+		se.sdb.SetRoot(newRoot)
 		return nil
 	case sqlparser.TruncateStr:
 		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)

@@ -478,6 +478,10 @@ func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 	return ddb.db
 }
 
+func (ddb *DoltDB) Format() *types.NomsBinFormat {
+	return ddb.db.Format()
+}
+
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {
 	valRef, err := types.NewRef(val, vrw.Format())
 

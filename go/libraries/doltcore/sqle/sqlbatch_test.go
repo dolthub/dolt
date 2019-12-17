@@ -66,7 +66,7 @@ func TestSqlBatchInserts(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	engine := sqle.NewDefault()
-	db := NewBatchedDatabase("dolt", root, dEnv)
+	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
 	for _, stmt := range insertStatements {
@@ -153,7 +153,7 @@ func TestSqlBatchInsertIgnoreReplace(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	engine := sqle.NewDefault()
-	db := NewBatchedDatabase("dolt", root, dEnv)
+	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
 	for _, stmt := range insertStatements {
@@ -191,7 +191,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 	root, _ := dEnv.WorkingRoot(ctx)
 
 	engine := sqle.NewDefault()
-	db := NewBatchedDatabase("dolt", root, dEnv)
+	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 	engine.AddDatabase(db)
 
 	_, rowIter, err := engine.Query(sql.NewEmptyContext(), `insert into people (id, first, last, is_married, age, rating, uuid, num_episodes) values

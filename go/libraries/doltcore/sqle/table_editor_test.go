@@ -157,7 +157,7 @@ func TestTableEditor(t *testing.T) {
 
 			ctx := sql.NewEmptyContext()
 			root, _ := dEnv.WorkingRoot(context.Background())
-			db := NewDatabase("dolt", root, dEnv)
+			db := NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
 			peopleTable, _, err := db.GetTableInsensitive(ctx, "people")
 			require.NoError(t, err)
 

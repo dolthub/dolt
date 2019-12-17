@@ -307,7 +307,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef(branch)}
 	dEnv.RepoState.Staged = h.String()
 	dEnv.RepoState.Working = h.String()
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()

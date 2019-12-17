@@ -128,7 +128,7 @@ func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError 
 	err := actions.CheckoutAllTables(ctx, doltEnv)
 
 	if err == nil {
-		err = doltEnv.RepoState.ClearMerge()
+		err = doltEnv.RepoState.ClearMerge(doltEnv.FS)
 
 		if err == nil {
 			return nil
@@ -203,7 +203,7 @@ func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) 
 
 	dEnv.RepoState.Working = h.String()
 	dEnv.RepoState.Staged = h.String()
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return errhand.BuildDError("unable to execute repo state update.").
@@ -239,7 +239,7 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("error: failed to hash commit").AddCause(err).Build()
 	}
 
-	err = dEnv.RepoState.StartMerge(dref, h2.String())
+	err = dEnv.RepoState.StartMerge(dref, h2.String(), dEnv.FS)
 
 	if err != nil {
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()

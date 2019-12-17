@@ -39,7 +39,8 @@ var _ sql.FilteredTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name          string
-	dEnv          *env.DoltEnv
+	ddb           *doltdb.DoltDB
+	rs            *env.RepoState
 	ss            rowconv.SuperSchema
 	joiner        *rowconv.Joiner
 	fromRoot      *doltdb.RootValue
@@ -49,9 +50,9 @@ type DiffTable struct {
 	filters       []sql.Expression
 }
 
-func NewDiffTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*DiffTable, error) {
+func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.RepoState) (*DiffTable, error) {
 	ssg := rowconv.NewSuperSchemaGen()
-	err := ssg.AddHistoryOfTable(ctx, name, dEnv.DoltDB)
+	err := ssg.AddHistoryOfTable(ctx, name, ddb)
 
 	if err != nil {
 		return nil, err
@@ -76,19 +77,19 @@ func NewDiffTable(ctx context.Context, name string, dEnv *env.DoltEnv) (*DiffTab
 		return nil, err
 	}
 
-	root1, err := dEnv.WorkingRoot(ctx)
+	root1, err := ddb.ReadRootValue(ctx, rs.WorkingHash())
 
 	if err != nil {
 		return nil, err
 	}
 
-	root2, err := dEnv.StagedRoot(ctx)
+	root2, err := ddb.ReadRootValue(ctx, rs.StagedHash())
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &DiffTable{name, dEnv, ss, j, root2, root1, "current", "HEAD", nil}, nil
+	return &DiffTable{name, ddb, rs, ss, j, root2, root1, "current", "HEAD", nil}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -150,13 +151,13 @@ func tableData(ctx *sql.Context, root *doltdb.RootValue, tblName string, ddb *do
 }
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	fromData, fromSch, err := tableData(ctx, dt.fromRoot, dt.name, dt.dEnv.DoltDB)
+	fromData, fromSch, err := tableData(ctx, dt.fromRoot, dt.name, dt.ddb)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toData, toSch, err := tableData(ctx, dt.toRoot, dt.name, dt.dEnv.DoltDB)
+	toData, toSch, err := tableData(ctx, dt.toRoot, dt.name, dt.ddb)
 
 	if err != nil {
 		return nil, err
@@ -299,13 +300,13 @@ func (dt *DiffTable) WithFilters(filters []sql.Expression) sql.Table {
 
 		value = strings.Trim(value, " \t\n\r\"")
 
-		cs, err := doltdb.NewCommitSpec(value, dt.dEnv.RepoState.Head.Ref.String())
+		cs, err := doltdb.NewCommitSpec(value, dt.rs.Head.Ref.String())
 
 		if err != nil {
 			panic(err)
 		}
 
-		cm, err := dt.dEnv.DoltDB.Resolve(ctx, cs)
+		cm, err := dt.ddb.Resolve(ctx, cs)
 
 		if err != nil {
 			panic(err)
