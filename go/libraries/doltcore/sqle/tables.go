@@ -299,14 +299,8 @@ func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sq
 		return err
 	}
 
-	nullable := alterschema.NotNull
-	if existingCol.IsNullable() {
-		nullable = alterschema.Null
-	}
-
-	// TODO: clean up this mess, use the existing column instead of passing all these parameters
 	// TODO: column order
-	updatedTable, err := alterschema.ModifyColumn(ctx, table, columnName, col.Name, col.Tag, col.Kind, nullable, nil, nil)
+	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -319,4 +313,3 @@ func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sq
 	t.db.SetRoot(newRoot)
 	return nil
 }
-
