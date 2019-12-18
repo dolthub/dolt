@@ -697,29 +697,11 @@ func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.
 		return err
 	}
 
-	docTbl, found, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
-
+	newRoot, err := dEnv.PutDocsAndGetNewRoot(ctx, wrkRoot, docDetails)
 	if err != nil {
 		return err
 	}
 
-	docDetails, err = getDocDetails(dEnv, docDetails)
-	if err != nil {
-		return err
-	}
-
-	if found {
-		newRoot, err := updateDocsOnRoot(ctx, dEnv, wrkRoot, docTbl, docDetails)
-		if err != nil {
-			return err
-		}
-		return dEnv.UpdateWorkingRoot(ctx, newRoot)
-	}
-
-	newRoot, err := createDocsTableOnRoot(ctx, dEnv, wrkRoot, docDetails)
-	if err != nil {
-		return nil
-	}
 	return dEnv.UpdateWorkingRoot(ctx, newRoot)
 }
 
@@ -733,7 +715,27 @@ func (dEnv *DoltEnv) PutDocsToStaged(ctx context.Context, docDetails []*doltdb.D
 		return nil, err
 	}
 
-	docTbl, found, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
+	docDetails, err = getDocDetails(dEnv, docDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	newRoot, err := dEnv.PutDocsAndGetNewRoot(ctx, stgRoot, docDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = dEnv.UpdateStagedRoot(ctx, newRoot)
+	if err != nil {
+		return nil, err
+	}
+	return dEnv.StagedRoot(ctx)
+}
+
+// PutDocsAndGetNewRoot adds the provided docDetails to the provided root, and returns the updated root. 
+// If docDetails == nil, all valid docs from the filesystem will be used.
+func (dEnv *DoltEnv) PutDocsAndGetNewRoot(ctx context.Context, root *doltdb.RootValue, docDetails []*doltdb.DocDetails) (*doltdb.RootValue, error) {
+	docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
 
 	if err != nil {
 		return nil, err
@@ -744,25 +746,11 @@ func (dEnv *DoltEnv) PutDocsToStaged(ctx context.Context, docDetails []*doltdb.D
 		return nil, err
 	}
 
-	var newRoot *doltdb.RootValue
-
 	if found {
-		newRoot, err = updateDocsOnRoot(ctx, dEnv, stgRoot, docTbl, docDetails)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		newRoot, err = createDocsTableOnRoot(ctx, dEnv, stgRoot, docDetails)
-		if err != nil {
-			return nil, err
-		}
+		return updateDocsOnRoot(ctx, dEnv, root, docTbl, docDetails)
 	}
 
-	_, err = dEnv.UpdateStagedRoot(ctx, newRoot)
-	if err != nil {
-		return nil, err
-	}
-	return dEnv.StagedRoot(ctx)
+	return createDocsTableOnRoot(ctx, dEnv, root, docDetails)
 }
 
 func getDocDetails(dEnv *DoltEnv, docDetails []*doltdb.DocDetails) ([]*doltdb.DocDetails, error) {
