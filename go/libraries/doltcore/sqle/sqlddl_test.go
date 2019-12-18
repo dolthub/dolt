@@ -348,6 +348,45 @@ func TestAddColumn(t *testing.T) {
 		expectedErr    string
 	}{
 		{
+			name:  "alter add column",
+			query: "alter table people add (newColumn varchar(80) comment 'tag:100')",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schema.NewColumn("newColumn", 100, types.StringKind, false)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, nil),
+		},
+		{
+			name:  "alter add column first",
+			query: "alter table people add newColumn varchar(80) comment 'tag:100' first",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("newColumn", 100, types.StringKind, false),
+				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", AgeTag, types.IntKind, false),
+				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, nil),
+		},
+		{
+			name:  "alter add column middle",
+			query: "alter table people add newColumn varchar(80) comment 'tag:100' after last_name",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("newColumn", 100, types.StringKind, false),
+				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", AgeTag, types.IntKind, false),
+				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, nil),
+		},
+		{
 			name:  "alter add column not null",
 			query: "alter table people add (newColumn varchar(80) not null default 'default' comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,

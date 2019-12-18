@@ -238,7 +238,7 @@ func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.C
 
 	// TODO: column order
 	// TODO: default value
-	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, nil, nil)
+	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, nil, orderToOrder(order))
 	if err != nil {
 		return err
 	}
@@ -250,6 +250,16 @@ func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.C
 
 	t.db.SetRoot(newRoot)
 	return nil
+}
+
+func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
+	if order == nil {
+		return nil
+	}
+	return &alterschema.ColumnOrder{
+		First: order.First,
+		After: order.AfterColumn,
+	}
 }
 
 // DropColumn implements sql.AlterableTable
