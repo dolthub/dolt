@@ -184,11 +184,16 @@ func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *do
 
 	if i < 2 {
 		roots[1] = roots[0]
-		roots[0], verr = GetWorkingWithVErr(dEnv)
-
+		wrkRoot, verr := GetWorkingWithVErr(dEnv)
 		if verr == nil && i == 0 {
 			roots[1], verr = GetStagedWithVErr(dEnv)
 		}
+		wrkRootWithDocs, err := dEnv.PutDocsAndGetNewRoot(ctx, wrkRoot, nil)
+		if err != nil {
+			return nil, nil, nil, errhand.BuildDError("error: failed to get docs").AddCause(err).Build()
+		}
+
+		roots[0] = wrkRootWithDocs
 
 		if verr != nil {
 			return nil, nil, args, verr

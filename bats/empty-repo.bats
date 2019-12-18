@@ -70,6 +70,9 @@ teardown() {
 }
 
 @test "dolt diff in new repository" {
+    # Remove the docs until we have the correct output for doc diffs.
+    rm LICENSE.md
+    rm README.md
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
