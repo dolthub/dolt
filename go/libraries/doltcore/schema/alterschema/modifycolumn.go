@@ -73,7 +73,7 @@ func updateTable(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema
 
 
 // createNewSchema Creates a new schema with a column as specified by the params.
-func replaceColumnInSchema(sch schema.Schema, oldColName string, col schema.Column, order *ColumnOrder) (schema.Schema, error) {
+func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
 	if order == nil {
 		prevColumn := ""
@@ -93,22 +93,19 @@ func replaceColumnInSchema(sch schema.Schema, oldColName string, col schema.Colu
 
 	var newCols []schema.Column
 	if order != nil && order.First {
-		newCols = append(newCols, col)
+		newCols = append(newCols, newCol)
 	}
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.Name == oldColName {
-			return false, nil
-		}
-
-		newCols = append(newCols, col)
-		if order != nil && order.After == col.Name {
+		if col.Name != oldColName {
 			newCols = append(newCols, col)
 		}
+
+		if order.After == col.Name {
+			newCols = append(newCols, newCol)
+		}
+
 		return false, nil
 	})
-	if order == nil {
-		newCols = append(newCols, col)
-	}
 
 	collection, err := schema.NewColCollection(newCols...)
 	if err != nil {
