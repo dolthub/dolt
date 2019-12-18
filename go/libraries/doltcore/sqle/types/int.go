@@ -49,6 +49,12 @@ func (intType) GetValueToSql() ValueToSql {
 func (intType) GetSqlToValue() SqlToValue {
 	return func(val interface{}) (dtypes.Value, error) {
 		switch e := val.(type) {
+		case bool:
+			if e {
+				return dtypes.Int(1), nil
+			} else {
+				return dtypes.Int(0), nil
+			}
 		case int:
 			return dtypes.Int(e), nil
 		case int8:
