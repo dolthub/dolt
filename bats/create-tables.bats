@@ -266,14 +266,14 @@ teardown() {
 
    
 @test "create a table using sql with a string" {
-    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 TEXT, PRIMARY KEY (pk))"
+    run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 LONGTEXT, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
     run dolt schema show test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
-    [[ "$output" =~ "\`c1\` TEXT COMMENT 'tag:1'" ]] || false
+    [[ "$output" =~ "\`c1\` LONGTEXT COMMENT 'tag:1'" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 

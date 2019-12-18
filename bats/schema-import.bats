@@ -53,10 +53,10 @@ teardown() {
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` BIGINT" ]] || false
     [[ "$output" =~ "\`int\` BIGINT" ]] || false
-    [[ "$output" =~ "\`string\` TEXT" ]] || false
+    [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`boolean\` BOOLEAN" ]] || false
     [[ "$output" =~ "\`uint\` BIGINT" ]] || false
-    [[ "$output" =~ "\`uuid\` TEXT" ]] || false
+    [[ "$output" =~ "\`uuid\` LONGTEXT" ]] || false
 }
 
 @test "schema import with an empty csv" {
@@ -75,10 +75,10 @@ teardown() {
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` BIGINT" ]] || false
     [[ "$output" =~ "\`int\` BIGINT" ]] || false
-    [[ "$output" =~ "\`string\` TEXT" ]] || false
+    [[ "$output" =~ "\`string\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`boolean\` BOOLEAN" ]] || false
     [[ "$output" =~ "\`uint\` BIGINT" ]] || false
-    [[ "$output" =~ "\`uuid\` TEXT" ]] || false
+    [[ "$output" =~ "\`uuid\` LONGTEXT" ]] || false
 }
 
 @test "schema import with multiple primary keys" {
@@ -103,8 +103,8 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 7 ]
     [[ "${lines[0]}" =~ "test" ]] || false
-    [[ "$output" =~ "\`pk\` TEXT" ]] || false
-    [[ "$output" =~ "\`headerOne\` TEXT" ]] || false
+    [[ "$output" =~ "\`pk\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`headerOne\` LONGTEXT" ]] || false
     [[ "$output" =~ "\`headerTwo\` BIGINT" ]] || false
 }
 
@@ -123,7 +123,7 @@ teardown() {
     [[ "$output" =~ "\`c3\` BIGINT" ]] || false
     [[ "$output" =~ "\`c4\` BIGINT" ]] || false
     [[ "$output" =~ "\`c5\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c6\` TEXT" ]] || false
+    [[ "$output" =~ "\`c6\` LONGTEXT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
@@ -135,11 +135,11 @@ teardown() {
     [ "${#lines[@]}" -eq 11 ]
     [[ "${lines[0]}" =~ "test" ]] || false
     [[ "$output" =~ "\`pk\` BIGINT" ]] || false
-    [[ "$output" =~ "\`c1\` TEXT" ]] || false
-    [[ "$output" =~ "\`c2\` TEXT" ]] || false
-    [[ "$output" =~ "\`c3\` TEXT" ]] || false
-    [[ "$output" =~ "\`c4\` TEXT" ]] || false
-    [[ "$output" =~ "\`c5\` TEXT" ]] || false
-    [[ "$output" =~ "\`c6\` TEXT" ]] || false
+    [[ "$output" =~ "\`c1\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`c2\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`c3\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`c4\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`c5\` LONGTEXT" ]] || false
+    [[ "$output" =~ "\`c6\` LONGTEXT" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
