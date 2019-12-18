@@ -582,17 +582,17 @@ func TestRenameColumn(t *testing.T) {
 		{
 			name:        "table not found",
 			query:       "alter table notFound rename column id to newId",
-			expectedErr: "Unknown table: 'notFound'",
+			expectedErr: "table not found: notFound",
 		},
 		{
 			name:        "column not found",
 			query:       "alter table people rename column notFound to newNotFound",
-			expectedErr: "Unknown column: 'notFound'",
+			expectedErr: "table people does not have column notFound",
 		},
 		{
 			name:        "column name collision",
 			query:       "alter table people rename column id to age",
-			expectedErr: "A column with the name 'age' already exists",
+			expectedErr: "A column with the name age already exists",
 		},
 	}
 
