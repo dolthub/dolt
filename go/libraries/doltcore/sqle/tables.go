@@ -274,6 +274,44 @@ func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 }
 
 func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
-	panic("unimplemented")
+	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	if err != nil {
+		return err
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	tag := extractTag(column)
+	if tag == schema.InvalidTag {
+		tag = schema.AutoGenerateTag(sch)
+	}
+
+	col, err := SqlColToDoltCol(tag, column)
+	if err != nil {
+		return err
+	}
+
+	nullable := alterschema.NotNull
+	if col.IsNullable() {
+		nullable = alterschema.Null
+	}
+
+	// TODO: clean up this mess, use the existing column instead of passing all these parameters
+	// TODO: column order
+	updatedTable, err := alterschema.ModifyColumn(ctx, table, columnName, col.Name, col.Tag, col.Kind, nullable, nil, nil)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	t.db.SetRoot(newRoot)
+	return nil
 }
 
