@@ -148,7 +148,7 @@ func removeRemote(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	}
 
 	delete(dEnv.RepoState.Remotes, old)
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return errhand.BuildDError("error: unable to save changes.").AddCause(err).Build()
@@ -249,7 +249,7 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 
 	r := env.NewRemote(remoteName, remoteUrl, params)
 	dEnv.RepoState.AddRemote(r)
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()

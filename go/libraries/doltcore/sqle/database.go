@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
 
@@ -26,20 +27,47 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+var _ sql.Database = (*Database)(nil)
+
+type batchMode bool
+
+const (
+	batched batchMode = true
+	single  batchMode = false
+)
+
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	sql.Database
-	name string
-	root *doltdb.RootValue
-	dEnv *env.DoltEnv
+	name      string
+	root      *doltdb.RootValue
+	ddb       *doltdb.DoltDB
+	rs        *env.RepoState
+	batchMode batchMode
+	tables    map[string]*DoltTable
 }
 
-// NewDatabase returns a new dolt databae to use in queries.
-func NewDatabase(name string, root *doltdb.RootValue, dEnv *env.DoltEnv) *Database {
+// NewDatabase returns a new dolt database to use in queries.
+func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
 	return &Database{
-		name: name,
-		root: root,
-		dEnv: dEnv,
+		name:      name,
+		root:      root,
+		ddb:       ddb,
+		rs:        rs,
+		batchMode: single,
+		tables:    make(map[string]*DoltTable),
+	}
+}
+
+// NewBatchedDatabase returns a new dolt database executing in batch insert mode. Integrators must call Flush() to
+// commit any outstanding edits.
+func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
+	return &Database{
+		name:      name,
+		root:      root,
+		ddb:       ddb,
+		rs:        rs,
+		batchMode: batched,
+		tables:    make(map[string]*DoltTable),
 	}
 }
 
@@ -48,47 +76,83 @@ func (db *Database) Name() string {
 	return db.name
 }
 
-// Tables returns the tables in this database, currently exactly the same tables as in the current working root.
-func (db *Database) Tables() map[string]sql.Table {
-	ctx := context.Background()
+func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sql.Table, bool, error) {
+	lwrName := strings.ToLower(tblName)
+	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
+		tblName = tblName[len(DoltDiffTablePrefix):]
+		dt, err := NewDiffTable(ctx, tblName, db.ddb, db.rs)
 
-	tables := make(map[string]sql.Table)
+		if err != nil {
+			return nil, false, err
+		}
+
+		return dt, true, nil
+	}
+
+	if strings.HasPrefix(lwrName, DoltHistoryTablePrefix) {
+		tblName = tblName[len(DoltHistoryTablePrefix):]
+		dh, err := NewHistoryTable(ctx, tblName, db.ddb)
+
+		if err != nil {
+			return nil, false, err
+		}
+
+		return dh, true, nil
+	}
+
+	if lwrName == LogTableName {
+		return NewLogTable(db.ddb, db.rs), true, nil
+	}
+
 	tableNames, err := db.root.GetTableNames(ctx)
 
-	// TODO: fix panics
 	if err != nil {
-		panic(err)
+		return nil, false, err
 	}
 
-	for _, name := range tableNames {
-		table, ok, err := db.root.GetTable(ctx, name)
+	exactName, ok := sql.GetTableNameInsensitive(tblName, tableNames)
 
-		// TODO: fix panics
-		if err != nil {
-			panic(err)
-		}
-
-		if !ok {
-			panic("Error loading table " + name)
-		}
-
-		sch, err := table.GetSchema(ctx)
-		// TODO: fix panics
-		if err != nil {
-			panic(err)
-		}
-
-		tables[name] = &DoltTable{name: name, table: table, sch: sch, db: db}
+	if !ok {
+		return nil, false, nil
 	}
 
-	tables[LogTableName] = NewLogTable(db.dEnv)
+	if table, ok := db.tables[exactName]; ok {
+		return table, true, nil
+	}
 
-	return tables
+	tbl, ok, err := db.root.GetTable(ctx, exactName)
+
+	if err != nil {
+		return nil, false, err
+	} else if !ok {
+		panic("Name '" + exactName + "' had already been verified... This is a bug")
+	}
+
+	sch, err := tbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, false, err
+	}
+
+	table := &DoltTable{name: exactName, table: tbl, sch: sch, db: db}
+	db.tables[exactName] = table
+	return table, true, nil
+}
+
+func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
+	return db.root.GetTableNames(ctx)
 }
 
 // Root returns the root value for the database.
 func (db *Database) Root() *doltdb.RootValue {
 	return db.root
+}
+
+// Set a new root value for the database. Can be used if the dolt working
+// set value changes outside of the basic SQL execution engine.
+func (db *Database) SetRoot(newRoot *doltdb.RootValue) {
+	// TODO: races
+	db.root = newRoot
 }
 
 // DropTable drops the table with the name given
@@ -107,8 +171,9 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	// TODO: races
-	db.root = newRoot
+	delete(db.tables, tableName)
+
+	db.SetRoot(newRoot)
 
 	return nil
 }
@@ -151,8 +216,18 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return err
 	}
 
-	// TODO: races
-	db.root = newRoot
+	db.SetRoot(newRoot)
 
+	return nil
+}
+
+// Flushes the current batch of outstanding changes and returns any errors.
+func (db *Database) Flush(ctx context.Context) error {
+	for name, table := range db.tables {
+		if err := table.flushBatchedEdits(ctx); err != nil {
+			return err
+		}
+		delete(db.tables, name)
+	}
 	return nil
 }

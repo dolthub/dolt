@@ -448,6 +448,17 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 			}()
 			if !ae.IsSet() {
 				var err error
+				for _, existing := range ts.upstream {
+					h, err := existing.hash()
+					if err != nil {
+						ae.SetIfError(err)
+						return
+					}
+					if spec.name == h {
+						merged.upstream[idx] = existing
+						return
+					}
+				}
 				merged.upstream[idx], err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
 				ae.SetIfError(err)
 			}

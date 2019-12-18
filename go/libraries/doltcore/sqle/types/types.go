@@ -18,6 +18,8 @@ import (
 	"fmt"
 
 	"github.com/src-d/go-mysql-server/sql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/query"
 
 	dtypes "github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -41,7 +43,7 @@ type SqlType interface {
 }
 
 var SqlTypeInitializers = []SqlType{
-	boolType{},
+	//boolType{},
 	datetimeType{},
 	floatType{},
 	intType{},
@@ -50,45 +52,16 @@ var SqlTypeInitializers = []SqlType{
 	uuidType{},
 }
 
-var sqlTypeString = map[sql.Type]string{
-	sql.Blob:      "LONGBLOB",
-	sql.Boolean:   "BOOLEAN",
-	sql.Date:      "DATE",
-	sql.Datetime:  "DATETIME",
-	sql.Float32:   "FLOAT",
-	sql.Float64:   "DOUBLE",
-	sql.Int8:      "TINYINT",
-	sql.Int16:     "SMALLINT",
-	sql.Int24:     "MEDIUMINT",
-	sql.Int32:     "INT",
-	sql.Int64:     "BIGINT",
-	sql.JSON:      "JSON",
-	sql.Text:      "LONGTEXT",
-	sql.Timestamp: "TIMESTAMP",
-	sql.Uint8:     "TINYINT UNSIGNED",
-	sql.Uint16:    "SMALLINT UNSIGNED",
-	sql.Uint24:    "MEDIUMINT UNSIGNED",
-	sql.Uint32:    "INT UNSIGNED",
-	sql.Uint64:    "BIGINT UNSIGNED",
-}
-
 func init() {
 	for _, sqlTypeInit := range SqlTypeInitializers {
 		kind := sqlTypeInit.NomsKind()
 		nomsKindToSqlType[kind] = sqlTypeInit.SqlType()
 		nomsValToSqlValFunc[kind] = sqlTypeInit.GetValueToSql()
 		nomsKindToValFunc[kind] = sqlTypeInit.GetSqlToValue()
-		if sqlStr, ok := sqlTypeString[sqlTypeInit.SqlType()]; ok {
-			nomsKindToSqlTypeStr[kind] = sqlStr
-		} else {
-			panic(fmt.Errorf("SQL type %v does not have a mapped string", sqlTypeInit.SqlType()))
-		}
+		nomsKindToSqlTypeStr[kind] = sqlTypeInit.SqlType().String()
 		for _, st := range sqlTypeInit.SqlTypes() {
 			if _, ok := sqlTypeToNomsKind[st]; ok {
 				panic(fmt.Errorf("SQL type %v already has a representation", st))
-			}
-			if _, ok := sqlTypeString[st]; !ok {
-				panic(fmt.Errorf("SQL type %v does not have a mapped string", st))
 			}
 			sqlTypeToNomsKind[st] = kind
 		}
@@ -96,16 +69,47 @@ func init() {
 }
 
 var (
-	nomsKindToSqlType    = make(map[dtypes.NomsKind]sql.Type)
-	nomsKindToSqlTypeStr = make(map[dtypes.NomsKind]string)
-	nomsKindToValFunc    = make(map[dtypes.NomsKind]SqlToValue)
-	nomsValToSqlValFunc  = make(map[dtypes.NomsKind]ValueToSql)
-	sqlTypeToNomsKind    = make(map[sql.Type]dtypes.NomsKind)
+	nomsKindToSqlType      = map[dtypes.NomsKind]sql.Type{dtypes.BoolKind: sql.Int8}
+	nomsKindToSqlTypeStr   = make(map[dtypes.NomsKind]string)
+	nomsKindToValFunc      = make(map[dtypes.NomsKind]SqlToValue)
+	nomsValToSqlValFunc    = make(map[dtypes.NomsKind]ValueToSql)
+	sqlTypeToNomsKind      = make(map[sql.Type]dtypes.NomsKind)
+	baseSqlTypesToNomsKind = map[query.Type]dtypes.NomsKind{
+		sqltypes.Binary:    dtypes.StringKind,
+		sqltypes.Bit:       dtypes.UintKind,
+		sqltypes.Blob:      dtypes.StringKind,
+		sqltypes.Char:      dtypes.StringKind,
+		sqltypes.Date:      dtypes.TimestampKind,
+		sqltypes.Datetime:  dtypes.TimestampKind,
+		sqltypes.Decimal:   dtypes.FloatKind,
+		sqltypes.Float32:   dtypes.FloatKind,
+		sqltypes.Float64:   dtypes.FloatKind,
+		sqltypes.Int16:     dtypes.IntKind,
+		sqltypes.Int24:     dtypes.IntKind,
+		sqltypes.Int32:     dtypes.IntKind,
+		sqltypes.Int64:     dtypes.IntKind,
+		sqltypes.Int8:      dtypes.IntKind,
+		sqltypes.Null:      dtypes.NullKind,
+		sqltypes.Text:      dtypes.StringKind,
+		sqltypes.Time:      dtypes.InlineBlobKind,
+		sqltypes.Timestamp: dtypes.TimestampKind,
+		sqltypes.Uint16:    dtypes.UintKind,
+		sqltypes.Uint24:    dtypes.UintKind,
+		sqltypes.Uint32:    dtypes.UintKind,
+		sqltypes.Uint64:    dtypes.UintKind,
+		sqltypes.Uint8:     dtypes.UintKind,
+		sqltypes.VarBinary: dtypes.StringKind,
+		sqltypes.VarChar:   dtypes.StringKind,
+		sqltypes.Year:      dtypes.IntKind,
+	}
 )
 
 func NomsKindToSqlType(nomsKind dtypes.NomsKind) (sql.Type, error) {
 	if st, ok := nomsKindToSqlType[nomsKind]; ok {
 		return st, nil
+	}
+	if nomsKind == dtypes.BoolKind {
+		return sql.Boolean, nil
 	}
 	return nil, fmt.Errorf("no corresponding SQL type found for %v", nomsKind)
 }
@@ -113,6 +117,9 @@ func NomsKindToSqlType(nomsKind dtypes.NomsKind) (sql.Type, error) {
 func NomsKindToSqlTypeString(nomsKind dtypes.NomsKind) (string, error) {
 	if str, ok := nomsKindToSqlTypeStr[nomsKind]; ok {
 		return str, nil
+	}
+	if nomsKind == dtypes.BoolKind {
+		return "BOOLEAN", nil
 	}
 	return "", fmt.Errorf("no corresponding SQL type found for %v", nomsKind)
 }
@@ -124,6 +131,9 @@ func NomsValToSqlVal(val dtypes.Value) (interface{}, error) {
 	if valueToSQL, ok := nomsValToSqlValFunc[val.Kind()]; ok {
 		return valueToSQL(val)
 	}
+	if boolVal, ok := val.(dtypes.Bool); ok {
+		return bool(boolVal), nil
+	}
 	return nil, fmt.Errorf("Value of %v is unsupported in SQL", val.Kind())
 }
 
@@ -131,14 +141,14 @@ func SqlTypeToNomsKind(t sql.Type) (dtypes.NomsKind, error) {
 	if kind, ok := sqlTypeToNomsKind[t]; ok {
 		return kind, nil
 	}
+	if kind, ok := baseSqlTypesToNomsKind[t.Type()]; ok {
+		return kind, nil
+	}
 	return dtypes.UnknownKind, fmt.Errorf("unknown SQL type %v", t)
 }
 
 func SqlTypeToString(t sql.Type) (string, error) {
-	if str, ok := sqlTypeString[t]; ok {
-		return str, nil
-	}
-	return "", fmt.Errorf("no SQL string for SQL type %v", t.String())
+	return t.String(), nil
 }
 
 func SqlValToNomsVal(val interface{}, kind dtypes.NomsKind) (dtypes.Value, error) {
@@ -147,6 +157,9 @@ func SqlValToNomsVal(val interface{}, kind dtypes.NomsKind) (dtypes.Value, error
 	}
 	if varToVal, ok := nomsKindToValFunc[kind]; ok {
 		return varToVal(val)
+	}
+	if kind == dtypes.BoolKind {
+		return boolType{}.GetSqlToValue()(val)
 	}
 	return nil, fmt.Errorf("Value of %v is unsupported in SQL", kind)
 }

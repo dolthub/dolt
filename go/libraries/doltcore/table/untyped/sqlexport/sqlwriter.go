@@ -20,16 +20,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
-	"github.com/liquidata-inc/dolt/go/store/types"
 )
-
-const doubleQuot = "\""
 
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
@@ -55,6 +51,11 @@ func OpenSQLExportWriter(path string, tableName string, fs filesys.WritableFS, s
 	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr}, nil
 }
 
+func NewSQLDiffWriter(wr io.WriteCloser, tableName string, sch schema.Schema) (*SqlExportWriter, error) {
+	// set writtenFirstRow = true to prevent table drop statement from being written
+	return &SqlExportWriter{tableName: tableName, sch: sch, wr: wr, writtenFirstRow: true}, nil
+}
+
 // Returns the schema of this TableWriter.
 func (w *SqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
@@ -66,7 +67,7 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return err
 	}
 
-	stmt, err := w.insertStatementForRow(r)
+	stmt, err := sql.RowAsInsertStmt(r, w.tableName, w.sch)
 
 	if err != nil {
 		return err
@@ -77,7 +78,11 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 
 func (w *SqlExportWriter) maybeWriteDropCreate() error {
 	if !w.writtenFirstRow {
-		if err := iohelp.WriteLine(w.wr, w.dropCreateStatement()); err != nil {
+		var b strings.Builder
+		b.WriteString(sql.DropTableIfExistsStmt(w.tableName))
+		b.WriteRune('\n')
+		b.WriteString(sql.SchemaAsCreateStmt(w.tableName, w.sch))
+		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}
 		w.writtenFirstRow = true
@@ -98,95 +103,32 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 	return nil
 }
 
-func (w *SqlExportWriter) insertStatementForRow(r row.Row) (string, error) {
-	var b strings.Builder
-	b.WriteString("INSERT INTO ")
-	b.WriteString(sql.QuoteIdentifier(w.tableName))
-	b.WriteString(" ")
-
-	b.WriteString("(")
-	var seenOne bool
-	err := w.sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		b.WriteString(sql.QuoteIdentifier(col.Name))
-		seenOne = true
-		return false, nil
-	})
+func (w *SqlExportWriter) WriteInsertRow(ctx context.Context, r row.Row) error {
+	stmt, err := sql.RowAsInsertStmt(r, w.tableName, w.sch)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	b.WriteString(")")
+	return iohelp.WriteLine(w.wr, stmt)
+}
 
-	b.WriteString(" VALUES (")
-	seenOne = false
-	_, err = r.IterSchema(w.sch, func(tag uint64, val types.Value) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		sqlString, err := w.sqlString(val)
-		if err != nil {
-			return true, err
-		}
-		b.WriteString(sqlString)
-		seenOne = true
-		return false, nil
-	})
+func (w *SqlExportWriter) WriteDeleteRow(ctx context.Context, r row.Row) error {
+	stmt, err := sql.RowAsDeleteStmt(r, w.tableName, w.sch)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	b.WriteString(");")
-
-	return b.String(), nil
+	return iohelp.WriteLine(w.wr, stmt)
 }
 
-func (w *SqlExportWriter) dropCreateStatement() string {
-	var b strings.Builder
-	b.WriteString("DROP TABLE IF EXISTS ")
-	b.WriteString(sql.QuoteIdentifier(w.tableName))
-	b.WriteString(";\n")
-	b.WriteString(sql.SchemaAsCreateStmt(w.tableName, w.sch))
+func (w *SqlExportWriter) WriteUpdateRow(ctx context.Context, r row.Row) error {
+	stmt, err := sql.RowAsUpdateStmt(r, w.tableName, w.sch)
 
-	return b.String()
-}
-
-func (w *SqlExportWriter) sqlString(value types.Value) (string, error) {
-	if types.IsNull(value) {
-		return "NULL", nil
+	if err != nil {
+		return err
 	}
 
-	switch value.Kind() {
-	case types.BoolKind:
-		if value.(types.Bool) {
-			return "TRUE", nil
-		} else {
-			return "FALSE", nil
-		}
-	case types.UUIDKind:
-		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
-		if err != nil {
-			return "", err
-		}
-		str, _ := convFn(value)
-		return doubleQuot + string(str.(types.String)) + doubleQuot, nil
-	case types.StringKind:
-		s := string(value.(types.String))
-		s = strings.ReplaceAll(s, doubleQuot, "\\\"")
-		return doubleQuot + s + doubleQuot, nil
-	default:
-		convFn, err := doltcore.GetConvFunc(value.Kind(), types.StringKind)
-		if err != nil {
-			return "", err
-		}
-		str, err := convFn(value)
-		if err != nil {
-			return "", err
-		}
-		return string(str.(types.String)), nil
-	}
+	return iohelp.WriteLine(w.wr, stmt)
 }

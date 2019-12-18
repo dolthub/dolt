@@ -1,0 +1,1 @@
+DELETE FROM test WHERE pk1=1 AND pk2=0 ;

@@ -42,7 +42,7 @@ func MoveBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch str
 
 	if ref.Equals(dEnv.RepoState.Head.Ref, oldRef) {
 		dEnv.RepoState.Head = ref.MarshalableRef{Ref: newRef}
-		err = dEnv.RepoState.Save()
+		err = dEnv.RepoState.Save(dEnv.FS)
 
 		if err != nil {
 			return err
@@ -243,7 +243,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 	dEnv.RepoState.Working = wrkHash.String()
 	dEnv.RepoState.Staged = stgHash.String()
 
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	return err
 }

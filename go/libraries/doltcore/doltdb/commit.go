@@ -38,6 +38,10 @@ type Commit struct {
 	commitSt types.Struct
 }
 
+func NewCommit(vrw types.ValueReadWriter, commitSt types.Struct) *Commit {
+	return &Commit{vrw, commitSt}
+}
+
 // HashOf returns the hash of the commit
 func (c *Commit) HashOf() (hash.Hash, error) {
 	return c.commitSt.Hash(c.vrw.Format())

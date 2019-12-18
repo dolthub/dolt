@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqletestutil
+package sqle
 
 import (
 	"context"
@@ -28,13 +28,14 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
-	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
 // Executes all the SQL non-select statements given in the string against the root value given and returns the updated
 // root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	batcher := dsql.NewSqlBatcher(dEnv.DoltDB, root)
+	engine := sqle.NewDefault()
+	db := NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState)
+	engine.AddDatabase(db)
 
 	for _, query := range strings.Split(statements, ";\n") {
 		if len(strings.Trim(query, " ")) == 0 {
@@ -47,25 +48,22 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		}
 
 		var execErr error
-		switch s := sqlStatement.(type) {
+		switch sqlStatement.(type) {
 		case *sqlparser.Show:
 			return nil, errors.New("Show statements aren't handled")
 		case *sqlparser.Select, *sqlparser.OtherRead:
 			return nil, errors.New("Select statements aren't handled")
 		case *sqlparser.Insert:
-			_, execErr = dsql.ExecuteBatchInsert(context.Background(), root, s, batcher)
+			var rowIter sql.RowIter
+			_, rowIter, execErr = engine.Query(sql.NewEmptyContext(), query)
+			if execErr == nil {
+				execErr = drainIter(rowIter)
+			}
 		case *sqlparser.DDL:
-			if root, err = batcher.Commit(context.Background()); err != nil {
+			if err = db.Flush(context.Background()); err != nil {
 				return nil, err
 			}
-			_, execErr = sqlparser.ParseStrictDDL(query)
-			if execErr != nil {
-				return nil, fmt.Errorf("Error parsing DDL: %v.", execErr.Error())
-			}
-			root, execErr = sqlDDL(dEnv, root, s, query)
-			if err := batcher.UpdateRoot(root); err != nil {
-				return nil, err
-			}
+			execErr = sqlDDL(db, engine, dEnv, query)
 		default:
 			return nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 		}
@@ -75,44 +73,50 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		}
 	}
 
-	if newRoot, err := batcher.Commit(context.Background()); newRoot != nil {
-		root = newRoot
-	} else if err != nil {
+	if err := db.Flush(context.Background()); err == nil {
+		return db.Root(), nil
+	} else {
 		return nil, err
 	}
-
-	return root, nil
 }
 
-func sqlDDL(dEnv *env.DoltEnv, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
-	var (
-		newRoot *doltdb.RootValue
-		err     error
-	)
-	switch ddl.Action {
-	case sqlparser.CreateStr:
-		newRoot, _, err = dsql.ExecuteCreate(context.Background(), dEnv.DoltDB, root, ddl, query)
-	case sqlparser.AlterStr, sqlparser.RenameStr:
-		newRoot, err = dsql.ExecuteAlter(context.Background(), dEnv.DoltDB, root, ddl, query)
-	case sqlparser.DropStr:
-		newRoot, err = dsql.ExecuteDrop(context.Background(), dEnv.DoltDB, root, ddl, query)
-	default:
-		return nil, fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
+// Runs the DDL statement given and sets the new root value in the provided db object.
+func sqlDDL(db *Database, engine *sqle.Engine, dEnv *env.DoltEnv, query string) error {
+	stmt, err := sqlparser.ParseStrictDDL(query)
+	if err != nil {
+		return fmt.Errorf("Error parsing DDL: %v.", err.Error())
 	}
 
-	if err != nil {
-		return nil, err
+	ddl := stmt.(*sqlparser.DDL)
+	ctx := sql.NewEmptyContext()
+	switch ddl.Action {
+	case sqlparser.CreateStr, sqlparser.DropStr:
+		_, ri, err := engine.Query(ctx, query)
+		if err == nil {
+			ri.Close()
+		}
+		return err
+	case sqlparser.AlterStr, sqlparser.RenameStr:
+		newRoot, err := dsql.ExecuteAlter(ctx, dEnv.DoltDB, db.Root(), ddl, query)
+		if err != nil {
+			return fmt.Errorf("Error altering table: %v", err)
+		}
+		db.SetRoot(newRoot)
+		return nil
+	case sqlparser.TruncateStr:
+		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
+	default:
+		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
-	return newRoot, nil
 }
 
 // Executes the select statement given and returns the resulting rows, or an error if one is encountered.
 // This uses the index functionality, which is not ready for prime time. Use with caution.
 func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
-	db := dsqle.NewDatabase("dolt", root, nil)
+	db := NewDatabase("dolt", root, nil, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
+	engine.Catalog.RegisterIndexDriver(NewDoltIndexDriver(db))
 	_ = engine.Init()
 
 	ctx := sql.NewEmptyContext()
@@ -135,4 +139,16 @@ func ExecuteSelect(root *doltdb.RootValue, query string) ([]sql.Row, error) {
 	}
 
 	return rows, nil
+}
+
+func drainIter(iter sql.RowIter) error {
+	var returnedErr error
+	for {
+		_, err := iter.Next()
+		if err == io.EOF {
+			return returnedErr
+		} else if err != nil {
+			returnedErr = err
+		}
+	}
 }

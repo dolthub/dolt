@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
@@ -97,6 +98,10 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {
+	return ddb.WriteEmptyRepoWithCommitTime(ctx, name, email, CommitNowFunc())
+}
+
+func (ddb *DoltDB) WriteEmptyRepoWithCommitTime(ctx context.Context, name, email string, t time.Time) error {
 	// precondition checks
 	name = strings.TrimSpace(name)
 	email = strings.TrimSpace(email)
@@ -127,7 +132,7 @@ func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error
 		return err
 	}
 
-	cm, _ := NewCommitMeta(name, email, "Initialize data repository")
+	cm, _ := NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
 
 	parentSet, err := types.NewSet(ctx, ddb.db)
 
@@ -471,6 +476,10 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 // ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
 func (ddb *DoltDB) ValueReadWriter() types.ValueReadWriter {
 	return ddb.db
+}
+
+func (ddb *DoltDB) Format() *types.NomsBinFormat {
+	return ddb.db.Format()
 }
 
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {

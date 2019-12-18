@@ -19,7 +19,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
 
@@ -29,15 +28,21 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-var _ sql.Table = (*DoltTable)(nil)
-
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	name  string
-	table *doltdb.Table
-	sch   schema.Schema
-	db    *Database
+	name   string
+	table  *doltdb.Table
+	sch    schema.Schema
+	sqlSch sql.Schema
+	db     *Database
+	ed     *tableEditor
 }
+
+var _ sql.Table = (*DoltTable)(nil)
+var _ sql.UpdatableTable = (*DoltTable)(nil)
+var _ sql.DeletableTable = (*DoltTable)(nil)
+var _ sql.InsertableTable = (*DoltTable)(nil)
+var _ sql.ReplaceableTable = (*DoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -74,20 +79,21 @@ func (t *DoltTable) String() string {
 
 // Schema returns the schema for this table.
 func (t *DoltTable) Schema() sql.Schema {
-	// TODO: fix panics
-	sch, err := t.table.GetSchema(context.TODO())
+	return t.sqlSchema()
+}
 
+func (t *DoltTable) sqlSchema() sql.Schema {
+	if t.sqlSch != nil {
+		return t.sqlSch
+	}
+
+	// TODO: fix panics
+	sqlSch, err := doltSchemaToSqlSchema(t.name, t.sch)
 	if err != nil {
 		panic(err)
 	}
 
-	// TODO: fix panics
-	sqlSch, err := doltSchemaToSqlSchema(t.name, sch)
-
-	if err != nil {
-		panic(err)
-	}
-
+	t.sqlSch = sqlSch
 	return sqlSch
 }
 
@@ -102,91 +108,44 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 	return newRowIterator(t, ctx)
 }
 
-// Insert adds the given row to the table and updates the database root.
-func (t *DoltTable) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := SqlRowToDoltRow(t.table.Format(), sqlRow, t.sch)
-	if err != nil {
-		return err
-	}
-
-	key, err := dRow.NomsMapKey(t.sch).Value(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
-	}
-	_, rowExists, err := t.table.GetRow(ctx, key.(types.Tuple), t.sch)
-	if err != nil {
-		return errhand.BuildDError("failed to read table").AddCause(err).Build()
-	}
-	if rowExists {
-		return errors.New("duplicate primary key given")
-	}
-
-	return t.updateTable(ctx, dRow.NomsMapKey(t.sch), dRow.NomsMapValue(t.sch), nil)
+// Inserter implements sql.InsertableTable
+func (t *DoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
+	return t.getTableEditor()
 }
 
-// Delete removes the given row to the table and updates the database root.
-func (t *DoltTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	dRow, err := SqlRowToDoltRow(t.table.Format(), sqlRow, t.sch)
-	if err != nil {
-		return err
+func (t *DoltTable) getTableEditor() *tableEditor {
+	if t.db.batchMode == batched {
+		if t.ed != nil {
+			return t.ed
+		}
+		t.ed = newTableEditor(t)
+		return t.ed
 	}
-
-	nomsMapKey := dRow.NomsMapKey(t.sch)
-	nmkValue, err := nomsMapKey.Value(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row key").AddCause(err).Build()
-	}
-	_, rowExists, err := t.table.GetRow(ctx, nmkValue.(types.Tuple), t.sch)
-	if err != nil {
-		return errhand.BuildDError("failed to read table").AddCause(err).Build()
-	}
-	if !rowExists {
-		return sql.ErrDeleteRowNotFound
-	}
-
-	return t.updateTable(ctx, nil, nil, nomsMapKey)
+	return newTableEditor(t)
 }
 
-func (t *DoltTable) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := SqlRowToDoltRow(t.table.Format(), oldRow, t.sch)
-	if err != nil {
+func (t *DoltTable) flushBatchedEdits(ctx context.Context) error {
+	if t.ed != nil {
+		err := t.ed.flush(ctx)
+		t.ed = nil
 		return err
 	}
-	dNewRow, err := SqlRowToDoltRow(t.table.Format(), newRow, t.sch)
-	if err != nil {
-		return err
-	}
+	return nil
+}
 
-	// If the PK is changed then we have to delete the old row first
-	// This is assuming that the new PK is not taken
-	dOldKey := dOldRow.NomsMapKey(t.sch)
-	dOldKeyVal, err := dOldKey.Value(ctx)
-	if err != nil {
-		return err
-	}
-	dNewKey := dNewRow.NomsMapKey(t.sch)
-	dNewKeyVal, err := dNewKey.Value(ctx)
-	if err != nil {
-		return err
-	}
+// Deleter implements sql.DeletableTable
+func (t *DoltTable) Deleter(*sql.Context) sql.RowDeleter {
+	return t.getTableEditor()
+}
 
-	var keyToDelete types.LesserValuable
-	if !dOldKeyVal.Equals(dNewKeyVal) {
-		_, rowExists, err := t.table.GetRow(ctx, dNewKeyVal.(types.Tuple), t.sch)
-		if err != nil {
-			return errhand.BuildDError("failed to read table").AddCause(err).Build()
-		}
-		if rowExists {
-			newRowAsStrings := make([]string, len(newRow))
-			for i, val := range newRow {
-				newRowAsStrings[i] = fmt.Sprintf("%v", val)
-			}
-			return fmt.Errorf("primary key collision: (%v)", strings.Join(newRowAsStrings, ", "))
-		}
-		keyToDelete = dOldKey
-	}
+// Replacer implements sql.ReplaceableTable
+func (t *DoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+	return t.getTableEditor()
+}
 
-	return t.updateTable(ctx, dNewRow.NomsMapKey(t.sch), dNewRow.NomsMapValue(t.sch), keyToDelete)
+// Updater implements sql.UpdatableTable
+func (t *DoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
+	return t.getTableEditor()
 }
 
 // doltTablePartitionIter, an object that knows how to return the single partition exactly once.
@@ -223,23 +182,7 @@ func (p doltTablePartition) Key() []byte {
 	return []byte(partitionName)
 }
 
-// key & value are for the row to insert/update
-// keyToDelete is to delete a row before insertion (such as updating a primary key)
-func (t *DoltTable) updateTable(ctx *sql.Context, key types.LesserValuable, value types.Valuable, keyToDelete types.LesserValuable) error {
-	typesMap, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return errhand.BuildDError("failed to get row data.").AddCause(err).Build()
-	}
-
-	mapEditor := typesMap.Edit()
-	if keyToDelete != nil {
-		mapEditor = mapEditor.Remove(keyToDelete)
-	}
-
-	if key != nil && value != nil {
-		mapEditor = mapEditor.Set(key, value)
-	}
-
+func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor) error {
 	updated, err := mapEditor.Map(ctx)
 	if err != nil {
 		return errhand.BuildDError("failed to modify table").AddCause(err).Build()

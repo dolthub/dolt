@@ -26,7 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -43,119 +42,6 @@ const (
 
 var ErrNoPrimaryKeyColumns = errors.New("at least one primary key column must be specified")
 var tagCommentPrefix = "tag:"
-
-// ExecuteDrop executes the given drop statement and returns the new root value of the database.
-func ExecuteDrop(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {
-	if ddl.Action != sqlparser.DropStr {
-		panic("expected drop statement")
-	}
-
-	// Unlike other SQL statements, DDL statements can have an error but still return a statement from Parse().
-	// Callers should call ParseStrictDDL themselves if they want to verify a DDL statement parses correctly.
-	if _, err := sqlparser.ParseStrictDDL(query); err != nil {
-		return nil, err
-	}
-
-	if len(ddl.FromTables) == 0 {
-		panic("FromTables empty")
-	}
-
-	tablesToDrop := make([]string, len(ddl.FromTables))
-	for i, tableName := range ddl.FromTables {
-		tablesToDrop[i] = tableName.Name.String()
-	}
-
-	var filtered []string
-	for _, tableName := range tablesToDrop {
-		if has, err := root.HasTable(ctx, tableName); err != nil {
-			return nil, err
-		} else if !has {
-			if ddl.IfExists {
-				continue
-			} else {
-				return nil, errFmt(UnknownTableErrFmt, tableName)
-			}
-		} else {
-			filtered = append(filtered, tableName)
-		}
-	}
-
-	var err error
-	if root, err = root.RemoveTables(ctx, filtered...); err != nil {
-		return nil, err
-	}
-
-	return root, nil
-}
-
-// ExecuteCreate executes the given create statement and returns the new root value of the database and its
-// accompanying schema.
-func ExecuteCreate(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, schema.Schema, error) {
-	if ddl.Action != sqlparser.CreateStr {
-		panic("expected create statement")
-	}
-
-	// Unlike other SQL statements, DDL statements can have an error but still return a statement from Parse().
-	// Callers should call ParseStrictDDL themselves if they want to verify a DDL statement parses correctly.
-	_, err := sqlparser.ParseStrictDDL(query)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tableName := ddl.Table.Name.String()
-	if !doltdb.IsValidTableName(tableName) {
-		return nil, nil, errFmt("Invalid table name: '%v'", tableName)
-	}
-
-	if has, err := root.HasTable(ctx, tableName); err != nil {
-		return nil, nil, err
-	} else if has {
-		if ddl.IfNotExists {
-			table, _, err := root.GetTable(ctx, tableName)
-
-			if err != nil {
-				return nil, nil, err
-			}
-
-			sch, err := table.GetSchema(ctx)
-
-			if err != nil {
-				return nil, nil, err
-			}
-
-			return root, sch, nil
-		}
-		return nil, nil, errFmt("Table '%v' already exists", tableName)
-	}
-
-	spec := ddl.TableSpec
-
-	sch, err := getSchema(spec)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), sch)
-	m, err := types.NewMap(ctx, root.VRW())
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, m)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	root, err = root.PutTable(ctx, tableName, tbl)
-
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return root, sch, nil
-}
 
 // ExecuteAlter executes the given alter table statement and returns the new root value of the database.
 func ExecuteAlter(ctx context.Context, db *doltdb.DoltDB, root *doltdb.RootValue, ddl *sqlparser.DDL, query string) (*doltdb.RootValue, error) {

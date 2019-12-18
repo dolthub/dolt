@@ -41,8 +41,6 @@ type RepoState struct {
 	Merge    *MergeState             `json:"merge"`
 	Remotes  map[string]Remote       `json:"remotes"`
 	Branches map[string]BranchConfig `json:"branches"`
-
-	fs filesys.ReadWriteFS
 }
 
 func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
@@ -60,17 +58,15 @@ func LoadRepoState(fs filesys.ReadWriteFS) (*RepoState, error) {
 		return nil, err
 	}
 
-	repoState.fs = fs
-
 	return &repoState, nil
 }
 
 func CloneRepoState(fs filesys.ReadWriteFS, r Remote) (*RepoState, error) {
 	h := hash.Hash{}
 	hashStr := h.String()
-	rs := &RepoState{ref.MarshalableRef{Ref: ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{Ref: ref.NewBranchRef("master")}, hashStr, hashStr, nil, map[string]Remote{r.Name: r}, nil}
 
-	err := rs.Save()
+	err := rs.Save(fs)
 
 	if err != nil {
 		return nil, err
@@ -87,9 +83,9 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 		return nil, err
 	}
 
-	rs := &RepoState{ref.MarshalableRef{Ref: headRef}, hashStr, hashStr, nil, nil, nil, fs}
+	rs := &RepoState{ref.MarshalableRef{Ref: headRef}, hashStr, hashStr, nil, nil, nil}
 
-	err = rs.Save()
+	err = rs.Save(fs)
 
 	if err != nil {
 		return nil, err
@@ -98,7 +94,7 @@ func CreateRepoState(fs filesys.ReadWriteFS, br string, rootHash hash.Hash) (*Re
 	return rs, nil
 }
 
-func (rs *RepoState) Save() error {
+func (rs *RepoState) Save(fs filesys.ReadWriteFS) error {
 	data, err := json.MarshalIndent(rs, "", "  ")
 
 	if err != nil {
@@ -107,7 +103,7 @@ func (rs *RepoState) Save() error {
 
 	path := getRepoStateFile()
 
-	return rs.fs.WriteFile(path, data)
+	return fs.WriteFile(path, data)
 }
 
 func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
@@ -116,19 +112,19 @@ func (rs *RepoState) CWBHeadSpec() *doltdb.CommitSpec {
 	return spec
 }
 
-func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string) error {
+func (rs *RepoState) StartMerge(dref ref.DoltRef, commit string, fs filesys.Filesys) error {
 	rs.Merge = &MergeState{ref.MarshalableRef{Ref: dref}, commit, rs.Working}
-	return rs.Save()
+	return rs.Save(fs)
 }
 
-func (rs *RepoState) AbortMerge() error {
+func (rs *RepoState) AbortMerge(fs filesys.Filesys) error {
 	rs.Working = rs.Merge.PreMergeWorking
-	return rs.ClearMerge()
+	return rs.ClearMerge(fs)
 }
 
-func (rs *RepoState) ClearMerge() error {
+func (rs *RepoState) ClearMerge(fs filesys.Filesys) error {
 	rs.Merge = nil
-	return rs.Save()
+	return rs.Save(fs)
 }
 
 func (rs *RepoState) AddRemote(r Remote) {
@@ -137,4 +133,12 @@ func (rs *RepoState) AddRemote(r Remote) {
 	}
 
 	rs.Remotes[r.Name] = r
+}
+
+func (rs *RepoState) WorkingHash() hash.Hash {
+	return hash.Parse(rs.Working)
+}
+
+func (rs *RepoState) StagedHash() hash.Hash {
+	return hash.Parse(rs.Staged)
 }

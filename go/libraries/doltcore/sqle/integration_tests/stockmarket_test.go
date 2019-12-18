@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/sqletestutil"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
 
 // These tests are slow, working on making them faster. Right now they're skipped unless this env var is set.
@@ -20127,7 +20127,7 @@ func TestCreateTables(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqletestutil.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20145,10 +20145,10 @@ func TestInserts(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqletestutil.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqletestutil.ExecuteSql(dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
@@ -20174,13 +20174,13 @@ func TestJoin(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqletestutil.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	root, err = sqletestutil.ExecuteSql(dEnv, root, insertRows)
+	root, err = sqle.ExecuteSql(dEnv, root, insertRows)
 	require.NoError(t, err)
 
-	rows, err := sqletestutil.ExecuteSelect(root,
+	rows, err := sqle.ExecuteSelect(root,
 		`select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
 						from daily_summary d join symbols t on d.Symbol = t.Symbol`)
 	// TODO: fix me
@@ -20188,7 +20188,7 @@ func TestJoin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 5210, len(rows))
 
-	expectedJoinRows, err := sqletestutil.ExecuteSelect(root,
+	expectedJoinRows, err := sqle.ExecuteSelect(root,
 		`select * from join_result order by symbol, country, date`)
 	require.NoError(t, err)
 	assertResultRowsEqual(t, expectedJoinRows, rows)
@@ -20225,9 +20225,9 @@ func TestExplain(t *testing.T) {
 
 	root, _ := dEnv.WorkingRoot(ctx)
 	var err error
-	root, err = sqletestutil.ExecuteSql(dEnv, root, createTables)
+	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	_, err = sqletestutil.ExecuteSelect(root, "explain format = tree select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
+	_, err = sqle.ExecuteSelect(root, "explain format = tree select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
 }

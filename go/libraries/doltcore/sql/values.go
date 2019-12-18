@@ -27,6 +27,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
+const doubleQuot = "\""
+
 // binaryNomsOperation knows how to combine two noms values into a single one, e.g. addition
 type binaryNomsOperation func(left, right types.Value) types.Value
 

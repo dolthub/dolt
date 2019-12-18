@@ -29,7 +29,7 @@ func (stringType) NomsKind() dtypes.NomsKind {
 }
 
 func (stringType) SqlType() sql.Type {
-	return sql.Text
+	return sql.Text.Promote()
 }
 
 func (stringType) SqlTypes() []sql.Type {

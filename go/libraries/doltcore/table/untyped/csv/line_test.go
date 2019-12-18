@@ -48,6 +48,8 @@ func TestCSVSplitLine(t *testing.T) {
 		escapeQuotes   bool
 		expectErr      bool
 	}{
+		{", ,\t,\r,\n, \r\n\t", ",", []*string{nil, nil, nil, nil, nil, nil}, true, false},
+		{"\"\",\" \",\"\t\",\"\r\",\"\n\",\" \r\n\t\"", ",", toPointer([]string{"", " ", "\t", "\r", "\n", " \r\n\t"}), true, false},
 		{`"", one, ""`, ",", toPointer([]string{``, `one`, ``}), true, false},
 		{`"", "", ""`, ",", toPointer([]string{``, ``, ``}), true, false},
 		{`"", one, ""`, ",", toPointer([]string{`""`, `one`, `""`}), false, false},

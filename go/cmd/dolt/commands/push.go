@@ -192,7 +192,7 @@ func Push(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 					Remote: remoteName,
 				}
 
-				err := dEnv.RepoState.Save()
+				err := dEnv.RepoState.Save(dEnv.FS)
 
 				if err != nil {
 					verr = errhand.BuildDError("error: failed to save repo state").AddCause(err).Build()

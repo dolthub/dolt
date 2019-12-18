@@ -30,7 +30,7 @@ func (uuidType) NomsKind() dtypes.NomsKind {
 }
 
 func (uuidType) SqlType() sql.Type {
-	return sql.Text
+	return sql.Text.Promote()
 }
 
 func (uuidType) SqlTypes() []sql.Type {

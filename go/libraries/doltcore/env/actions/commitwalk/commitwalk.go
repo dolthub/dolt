@@ -74,7 +74,7 @@ func (q *q) AddPendingIfUnseen(ctx context.Context, id hash.Hash) error {
 			if err != nil {
 				return err
 			}
-			if pendingMeta.Timestamp > commitMeta.Timestamp {
+			if pendingMeta.UserTimestamp > commitMeta.UserTimestamp {
 				break
 			}
 		}

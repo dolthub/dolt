@@ -121,7 +121,7 @@ Initialize the directory, and load some data:
 ```
 $ dolt init
 Successfully initialized dolt data repository.
-$ dolt sql -q "create table state_populations ( state varchar, population int, primary key (state) )"
+$ dolt sql -q "create table state_populations ( state varchar(14), population int, primary key (state) )"
 $ dolt sql -q "show tables"
 +-------------------+
 | tables            |
@@ -179,7 +179,7 @@ $ head -n3 data.csv
 state,population
 Delaware,59096
 Maryland,319728
-$ dolt import table -pk=state state_populations data.csv
+$ dolt table import -pk=state state_populations data.csv
 ```
 
 Note if you do not have a file extension, i.e. your file is called `data`, Dolt will think you are trying to import from another table and thus not behave in the way you expect.
@@ -285,18 +285,20 @@ Once that is succeeded others can clone the repository (assuming you've given th
 
 ## Interesting Datasets to Clone
 
-Just like Git you can run `dolt clone Liquidata/open-images` to get a clone from DoltHub of the Google Open Images repository locally.
+Just like Git, run `dolt clone Liquidata/word-net` to get a clone from DoltHub of the WordNet repository locally once you have run ```dolt login``` to log in to [DoltHub](https://www.dolthub.com).
 
-Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
-Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
-Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays  
-IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-country
+- WordNet: https://www.dolthub.com/repositories/Liquidata/word-net
+- ImageNet: https://www.dolthub.com/repositories/Liquidata/image-net
+- Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
+- Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
+- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays  
+- IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-country
 
 ## Other remotes
 
 dolt also supports directory, aws, and gcs based remotes:
 
-- file - you can use a directory as a remote that can be pushed to, cloned, and purlled from just like any other remote by providing a file uri for the directory
+- file - you can use a directory as a remote that can be pushed to, cloned, and pulled from just like any other remote by providing a file uri for the directory
 
   dolt remote add <remote> file:///Users/xyz/abs/path/
 

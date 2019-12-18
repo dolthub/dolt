@@ -263,12 +263,21 @@ var BasicUpdateTests = []UpdateTest{
 	{
 		Name:        "update multiple rows pk increment order by asc",
 		UpdateQuery: `update people set id = id + 1 order by id asc`,
-		ExpectedErr: "cannot update primary key column",
+		SelectQuery: `select * from people order by id`,
+		ExpectedRows: CompressRows(PeopleTestSchema,
+			MutateRow(Homer, IdTag, homerId+1),
+			MutateRow(Marge, IdTag, margeId+1),
+			MutateRow(Bart, IdTag, bartId+1),
+			MutateRow(Lisa, IdTag, lisaId+1),
+			MutateRow(Moe, IdTag, moeId+1),
+			MutateRow(Barney, IdTag, barneyId+1),
+		),
+		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:        "update primary key col",
 		UpdateQuery: `update people set id = 0 where first = "Marge"`,
-		ExpectedErr: "Cannot update primary key column 'id'",
+		ExpectedErr: "duplicate primary key",
 	},
 	{
 		Name:        "null constraint failure",

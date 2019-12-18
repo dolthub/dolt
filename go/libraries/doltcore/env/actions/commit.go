@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"sort"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -50,7 +51,7 @@ func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 	return name, email, nil
 }
 
-func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty bool) error {
+func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.Time, allowEmpty bool) error {
 	stagedTbls, notStagedTbls, err := GetTableDiffs(ctx, dEnv)
 
 	if msg == "" {
@@ -100,7 +101,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 		return err
 	}
 
-	meta, noCommitMsgErr := doltdb.NewCommitMeta(name, email, msg)
+	meta, noCommitMsgErr := doltdb.NewCommitMetaWithUserTS(name, email, msg, date)
 	if noCommitMsgErr != nil {
 		return ErrEmptyCommitMessage
 	}
@@ -108,7 +109,7 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, allowEmpty
 	_, err = dEnv.DoltDB.CommitWithParents(ctx, h, dEnv.RepoState.Head.Ref, mergeCmSpec, meta)
 
 	if err == nil {
-		dEnv.RepoState.ClearMerge()
+		dEnv.RepoState.ClearMerge(dEnv.FS)
 	}
 
 	return err
@@ -150,7 +151,7 @@ func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.C
 			return false
 		}
 
-		return metaI.Timestamp > metaJ.Timestamp
+		return metaI.UserTimestamp > metaJ.UserTimestamp
 	})
 
 	if sortErr != nil {

@@ -206,6 +206,10 @@ func (dEnv *DoltEnv) bestEffortDeleteAll(dir string) {
 // InitRepo takes an empty directory and initializes it with a .dolt directory containing repo state, uncommitted license and readme, and creates a noms
 // database with dolt structure.
 func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error { // should remove name and email args
+	return dEnv.InitRepoWithTime(ctx, nbf, name, email, doltdb.CommitNowFunc())
+}
+
+func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error { // should remove name and email args
 	doltDir, err := dEnv.createDirectories(".")
 
 	if err != nil {
@@ -215,7 +219,7 @@ func (dEnv *DoltEnv) InitRepo(ctx context.Context, nbf *types.NomsBinFormat, nam
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.initDBAndState(ctx, nbf, name, email)
+		err = dEnv.initDBAndStateWithTime(ctx, nbf, name, email, t)
 	}
 
 	if err != nil {
@@ -271,6 +275,10 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 }
 
 func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error {
+	return dEnv.initDBAndStateWithTime(ctx, nbf, name, email, doltdb.CommitNowFunc())
+}
+
+func (dEnv *DoltEnv) initDBAndStateWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
 
@@ -278,7 +286,7 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinForma
 		return err
 	}
 
-	err = dEnv.DoltDB.WriteEmptyRepo(ctx, name, email)
+	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, name, email, t)
 
 	if err != nil {
 		return doltdb.ErrNomsIO
@@ -319,10 +327,7 @@ func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinForma
 }
 
 func (dEnv *DoltEnv) WorkingRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	hashStr := dEnv.RepoState.Working
-	h := hash.Parse(hashStr)
-
-	return dEnv.DoltDB.ReadRootValue(ctx, h)
+	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.WorkingHash())
 }
 
 func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.RootValue) error {
@@ -333,7 +338,7 @@ func (dEnv *DoltEnv) UpdateWorkingRoot(ctx context.Context, newRoot *doltdb.Root
 	}
 
 	dEnv.RepoState.Working = h.String()
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return ErrStateUpdate
@@ -354,10 +359,7 @@ func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 }
 
 func (dEnv *DoltEnv) StagedRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	hashStr := dEnv.RepoState.Staged
-	h := hash.Parse(hashStr)
-
-	return dEnv.DoltDB.ReadRootValue(ctx, h)
+	return dEnv.DoltDB.ReadRootValue(ctx, dEnv.RepoState.StagedHash())
 }
 
 func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootValue) (hash.Hash, error) {
@@ -368,7 +370,7 @@ func (dEnv *DoltEnv) UpdateStagedRoot(ctx context.Context, newRoot *doltdb.RootV
 	}
 
 	dEnv.RepoState.Staged = h.String()
-	err = dEnv.RepoState.Save()
+	err = dEnv.RepoState.Save(dEnv.FS)
 
 	if err != nil {
 		return hash.Hash{}, ErrStateUpdate

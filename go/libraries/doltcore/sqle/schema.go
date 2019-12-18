@@ -15,6 +15,9 @@
 package sqle
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/src-d/go-mysql-server/sql"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -63,8 +66,17 @@ func SqlSchemaToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 // For result set schemas, see SqlSchemaToDoltResultSchema.
 func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 	var cols []schema.Column
+
+	var tag uint64
 	for i, col := range sqlSchema {
-		convertedCol, err := SqlColToDoltCol(uint64(i), col)
+		commentTag := extractTag(col)
+		if commentTag != schema.InvalidTag {
+			tag = commentTag
+		} else {
+			tag = uint64(i)
+		}
+
+		convertedCol, err := SqlColToDoltCol(tag, col)
 		if err != nil {
 			return nil, err
 		}
@@ -109,5 +121,27 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	if err != nil {
 		return schema.Column{}, err
 	}
+
 	return schema.NewColumn(col.Name, tag, kind, col.PrimaryKey, constraints...), nil
+}
+
+const tagCommentPrefix = "tag:"
+
+// Extracts the optional comment tag from a column type defn, or InvalidTag if it can't be extracted
+func extractTag(col *sql.Column) uint64 {
+	if len(col.Comment) == 0 {
+		return schema.InvalidTag
+	}
+
+	i := strings.Index(col.Comment, tagCommentPrefix)
+	if i >= 0 {
+		startIdx := i + len(tagCommentPrefix)
+		tag, err := strconv.ParseUint(col.Comment[startIdx:], 10, 64)
+		if err != nil {
+			return schema.InvalidTag
+		}
+		return tag
+	}
+
+	return schema.InvalidTag
 }

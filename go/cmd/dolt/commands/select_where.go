@@ -44,12 +44,30 @@ func ParseWhere(sch schema.Schema, whereClause string) (FilterFn, error) {
 
 		col, ok := sch.GetAllCols().GetByName(key)
 
+		var cols []schema.Column
 		if !ok {
-			return nil, errors.New("where clause is invalid. '" + key + "' is not a known column.")
+			toCol, toOk := sch.GetAllCols().GetByName("to_" + key)
+			fromCol, fromOk := sch.GetAllCols().GetByName("from_" + key)
+
+			if !(toOk && fromOk) {
+				return nil, errors.New("where clause is invalid. '" + key + "' is not a known column.")
+			}
+
+			if fromCol.Kind != toCol.Kind {
+				panic("to col and from col are different types.")
+			}
+
+			cols = []schema.Column{toCol, fromCol}
+		} else {
+			cols = []schema.Column{col}
 		}
 
-		tag := col.Tag
-		convFunc, err := doltcore.GetConvFunc(types.StringKind, col.Kind)
+		var tags []uint64
+		for _, curr := range cols {
+			tags = append(tags, curr.Tag)
+		}
+
+		convFunc, err := doltcore.GetConvFunc(types.StringKind, cols[0].Kind)
 		if err != nil {
 			return nil, err
 		}
@@ -60,13 +78,19 @@ func ParseWhere(sch schema.Schema, whereClause string) (FilterFn, error) {
 		}
 
 		return func(r row.Row) bool {
-			rowVal, ok := r.GetColVal(tag)
+			for _, tag := range tags {
+				rowVal, ok := r.GetColVal(tag)
 
-			if !ok {
-				return false
+				if !ok {
+					continue
+				}
+
+				if val.Equals(rowVal) {
+					return true
+				}
 			}
 
-			return val.Equals(rowVal)
+			return false
 		}, nil
 	}
 }
