@@ -163,13 +163,274 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
-# @test "dolt reset should remove docs from staging area" {
-    
-# }
+@test "dolt reset --hard should move doc files to untracked files when there are no doc values on the head commit" {
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt reset --hard 
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run ls
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt reset --hard
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+}
 
-# @test "dolt reset --hard should set doc values to head commit doc values" {
-    
-# }
+ @test "dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
+    echo license-text > LICENSE.md
+    echo readme-text > README.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "first docs commit"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first docs commit" ]]
+    echo 'updated readme' > README.md
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
+    run cat README.md
+    [ "$output" = "updated readme" ]
+    run dolt reset --hard
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    run cat README.md
+    [ "$output" = "readme-text" ]
+    echo newLicenseText > LICENSE.md
+    run dolt table create -s `batshelper 1pk5col-ints.schema` test
+    [ "$status" -eq 0 ]
+    run dolt add test LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*LICENSE.md) ]] || false
+    run dolt reset --hard
+    [ "$status" -eq 0 ]
+    run dolt status
+    echo "otuput = $output"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch master" ]] || false
+    [[ "$output" =~ "Untracked files" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    run cat LICENSE.md
+    [ "$output" = "license-text" ]
+ }
+
+@test "dolt reset . should remove docs from staging area" {
+    echo ~license~ > LICENSE.md
+    echo ~readme~ > README.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt reset .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "initial doc commit"
+    [ "$status" -eq 0 ]
+    echo ~new-text~ > README.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
+    run dolt reset .
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
+    run cat README.md
+    [[ "$output" =~ "~new-text~" ]] 
+}
+
+@test "dolt reset --soft should remove docs from staging area" {
+    echo ~license~ > LICENSE.md
+    echo ~readme~ > README.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt reset --soft
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "initial doc commit"
+    [ "$status" -eq 0 ]
+    echo ~new-text~ > README.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
+    run dolt reset --soft
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
+    run cat README.md
+    [[ "$output" =~ "~new-text~" ]] 
+}
+
+@test "dolt reset should remove docs from staging area" {
+    echo ~license~ > LICENSE.md
+    echo ~readme~ > README.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt reset
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "initial doc commit"
+    [ "$status" -eq 0 ]
+    echo ~new-text~ > README.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
+    run dolt reset
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
+    run cat README.md
+    [[ "$output" =~ "~new-text~" ]] 
+}
+
+@test "dolt reset <doc> should remove doc from staging area" {
+    run dolt add LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt reset LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt reset LICENSE.md invalid
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid Table(s)" ]] || false
+    [[ "$output" =~ "invalid" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt reset README.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt commit -m "initial license commit"
+    [ "$status" -eq 0 ]
+    echo new > LICENSE.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt reset README.md LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+}
+
+@test "dolt reset <table> <doc> resets tables and docs from staging area" {
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt table create -s `batshelper 1pk5col-ints.schema` test
+    [ "$status" -eq 0 ]
+    run dolt add test
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt reset test LICENSE.md README.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [[ ! "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+}
 
 #  @test "dolt ls should not show dolt_docs table" {
 

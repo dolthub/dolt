@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,8 +61,8 @@ func createTestEnv(isInitialized bool, hasLocalConfig bool) *DoltEnv {
 
 		initialFiles[getRepoStateFile()] = []byte(repoStateData)
 
-		initialFiles[getFile(ReadmeFile)] = []byte(initialReadme)
-		initialFiles[getFile(LicenseFile)] = []byte(initialLicense)
+		initialFiles[getDocFile(ReadmeFile)] = []byte(initialReadme)
+		initialFiles[getDocFile(LicenseFile)] = []byte(initialLicense)
 
 		if hasLocalConfig {
 			initialFiles[getLocalConfigPath()] = []byte(`{"user.name":"bheni"}`)
@@ -95,8 +96,8 @@ func TestNonRepoDir(t *testing.T) {
 		t.Error("File doesn't exist.  There should be an error if the directory doesn't exist.")
 	}
 
-	if dEnv.DocsLoadErr == nil {
-		t.Error("Files don't exist. There should be an error if the directory doesn't exist.")
+	if dEnv.DocsLoadErr != nil {
+		t.Error("There shouldn't be an error if the directory doesn't exist.")
 	}
 }
 
@@ -177,14 +178,11 @@ func TestInitRepo(t *testing.T) {
 		t.Error("Failed to get staged root value.")
 	}
 
-	readmePath := getFile(ReadmeFile)
-	if readmePath != "README.md" {
-		t.Error("Readme file path should exist.")
-	}
-
-	licensePath := getFile(LicenseFile)
-	if licensePath != "LICENSE.md" {
-		t.Error("License file path should exist.")
+	for _, doc := range *AllValidDocDetails {
+		docPath := getDocFile(doc.File)
+		if len(docPath) > 0 && !strings.Contains(doc.File, docPath) {
+			t.Error("Doc file path should exist: ", doc.File)
+		}
 	}
 }
 

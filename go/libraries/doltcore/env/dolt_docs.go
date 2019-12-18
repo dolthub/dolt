@@ -15,74 +15,82 @@
 package env
 
 import (
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file."
 var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file."
 
-type Docs struct {
-	key map[string]string
+type Docs []*doltdb.DocDetails
 
-	fs filesys.ReadWriteFS
+// AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
+// are dynamic and must be added, modified or removed as needed.
+var AllValidDocDetails = &Docs{
+	&doltdb.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
+	&doltdb.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
 }
 
 func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
-	readmePath := getFile(ReadmeFile)
-	var readmeData []byte
-	if readmePath != "" {
-		data, err := fs.ReadFile(readmePath)
-		if err != nil {
-			return nil, err
+	docsWithCurrentText := *AllValidDocDetails
+	for _, val := range docsWithCurrentText {
+		path := getDocFile(val.File)
+		exists, isDir := fs.Exists(path)
+		if exists && !isDir {
+			data, err := fs.ReadFile(path)
+			if err != nil {
+				return nil, err
+			}
+			val.NewerText = data
 		}
-		readmeData = data
 	}
-
-	licensePath := getFile(LicenseFile)
-	var licenseData []byte
-	if licensePath != "" {
-		data, err := fs.ReadFile(licensePath)
-		if err != nil {
-			return nil, err
-		}
-		licenseData = data
-	}
-
-	var docs Docs
-	docsMap := map[string]string{
-		"readme":  string(readmeData),
-		"license": string(licenseData),
-	}
-	docs.key = docsMap
-	docs.fs = fs
-
-	return &docs, nil
+	return &docsWithCurrentText, nil
 }
 
 func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
-	docsMap := map[string]string{
-		"readme":  initialReadme,
-		"license": initialLicense,
+	docs := *AllValidDocDetails
+	for _, doc := range docs {
+		doc.NewerText = getInitialDocText(doc.DocPk)
 	}
-	dcs := &Docs{docsMap, fs}
-	err := dcs.Save()
+	err := docs.Save(fs)
 	if err != nil {
 		return nil, err
 	}
-	return dcs, nil
+	return &docs, nil
 }
 
-func (dcs *Docs) Save() error {
-	readmePath := getFile(ReadmeFile)
-	licensePath := getFile(LicenseFile)
-
-	err := dcs.fs.WriteFile(readmePath, []byte(dcs.key["readme"]))
-	if err != nil {
-		return err
-	}
-	err = dcs.fs.WriteFile(licensePath, []byte(dcs.key["license"]))
-	if err != nil {
-		return err
+func (docs *Docs) Save(fs filesys.ReadWriteFS) error {
+	for _, doc := range *docs {
+		if !isValidDoc(doc.DocPk) {
+			continue
+		}
+		filePath := getDocFile(doc.File)
+		if doc.NewerText != nil {
+			err := fs.WriteFile(filePath, doc.NewerText)
+			if err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+func getInitialDocText(docName string) []byte {
+	switch docName {
+	case doltdb.ReadmePk:
+		return []byte(initialReadme)
+	case doltdb.LicensePk:
+		return []byte(initialLicense)
+	default:
+		return nil
+	}
+}
+
+func isValidDoc(docName string) bool {
+	for _, doc := range *AllValidDocDetails {
+		if doc.DocPk == docName {
+			return true
+		}
+	}
+	return false
 }

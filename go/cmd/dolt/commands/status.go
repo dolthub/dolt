@@ -75,16 +75,22 @@ var tblDiffTypeToLabel = map[actions.TableDiffType]string{
 	actions.AddedTable:    "new table:",
 }
 
+var tblDiffTypeToShortLabel = map[actions.TableDiffType]string{
+	actions.ModifiedTable: "M",
+	actions.RemovedTable:  "D",
+	actions.AddedTable:    "N",
+}
+
 var docDiffTypeToLabel = map[actions.DocDiffType]string{
 	actions.ModifiedDoc: "modified:",
 	actions.RemovedDoc:  "deleted:",
 	actions.AddedDoc:    "new doc:",
 }
 
-var tblDiffTypeToShortLabel = map[actions.TableDiffType]string{
-	actions.ModifiedTable: "M",
-	actions.RemovedTable:  "D",
-	actions.AddedTable:    "N",
+var docDiffTypeToShortLabel = map[actions.DocDiffType]string{
+	actions.ModifiedDoc: "M",
+	actions.RemovedDoc:  "D",
+	actions.AddedDoc:    "N",
 }
 
 const (

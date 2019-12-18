@@ -49,7 +49,7 @@ type DocDetails struct {
 	NewerText []byte
 	DocPk     string
 	Value     types.Value
-	DocFile   string
+	File      string
 }
 
 func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {

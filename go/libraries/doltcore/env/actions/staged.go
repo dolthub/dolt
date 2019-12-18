@@ -26,7 +26,7 @@ import (
 var ErrTablesInConflict = errors.New("table is in conflict")
 
 func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowConflicts bool) error {
-	tables, docDetails, err := getTblsAndDocDetails(dEnv, tbls)
+	tables, docDetails, err := GetTblsAndDocDetails(dEnv, tbls)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,9 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowCon
 	return nil
 }
 
-func getTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docsDetails []*doltdb.DocDetails, err error) {
+// GetTblsAndDocDetails takes a slice of strings where valid doc names are replaced with doc table name. Doc names are
+// appended to a docDetails slice. We return a tuple of tables, docDetails and error.
+func GetTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docsDetails []*doltdb.DocDetails, err error) {
 	var docDetails []*doltdb.DocDetails
 	for i, tbl := range tbls {
 		docDetail, err := dEnv.GetOneDocDetail(tbl)
