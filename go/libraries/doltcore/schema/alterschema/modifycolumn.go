@@ -16,6 +16,7 @@ package alterschema
 
 import (
 	"context"
+	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
@@ -41,11 +42,11 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	if err := validateNewColumn(ctx, tbl, tag, newColName, colKind, nullable, defaultVal); err != nil {
+	if err := validateModifyColumn(ctx, tbl, tag, newColName, colKind, nullable, defaultVal); err != nil {
 		return nil, err
 	}
 
-	newCol := createColumn(nullable, newColName, tag, colKind)
+	newCol := createColumnForModification(nullable, newColName, tag, colKind)
 	newSchema, err := replaceColumnInSchema(sch, colName, newCol, order)
 	if err != nil {
 		return nil, err
@@ -53,6 +54,47 @@ func ModifyColumn(
 
 	return updateTable(ctx, tbl, newSchema)
 }
+
+func createColumnForModification(nullable Nullable, newColName string, tag uint64, colKind types.NomsKind) schema.Column {
+	var col schema.Column
+	if nullable {
+		col = schema.NewColumn(newColName, tag, colKind, false)
+	} else {
+		col = schema.NewColumn(newColName, tag, colKind, false, schema.NotNullConstraint{})
+	}
+	return col
+}
+
+// validateNewColumn returns an error if the column as specified cannot be added to the schema given.
+func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) error {
+	sch, err := tbl.GetSchema(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	cols := sch.GetAllCols()
+	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
+		if currColTag == tag {
+			return false, nil
+		} else if currCol.Name == newColName {
+			return true, fmt.Errorf("A column with the name %s already exists.", newColName)
+		}
+
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if !types.IsNull(defaultVal) && defaultVal.Kind() != colKind {
+		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[colKind])
+	}
+
+	return nil
+}
+
 
 // updateTable updates the existing table with the new schema. No data is changed.
 // TODO: type change, default values
@@ -79,6 +121,9 @@ func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.C
 		prevColumn := ""
 		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			if col.Name == oldColName {
+				if prevColumn == "" {
+					order = &ColumnOrder{First: true}
+				}
 				return true, nil
 			} else {
 				prevColumn = col.Name
@@ -86,13 +131,17 @@ func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.C
 			return false, nil
 		})
 
-		if prevColumn != "" {
-			order = &ColumnOrder{After: prevColumn}
+		if order == nil {
+			if prevColumn == "" {
+				order = &ColumnOrder{After: prevColumn}
+			} else {
+				return nil, fmt.Errorf("Couldn't find column %s", oldColName)
+			}
 		}
 	}
 
 	var newCols []schema.Column
-	if order != nil && order.First {
+	if order.First {
 		newCols = append(newCols, newCol)
 	}
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {

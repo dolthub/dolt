@@ -284,9 +284,14 @@ func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sq
 		return err
 	}
 
+	existingCol, ok := sch.GetAllCols().GetByName(columnName)
+	if !ok {
+		panic(fmt.Sprintf("Column %s not found. This is a bug.", columnName))
+	}
+
 	tag := extractTag(column)
 	if tag == schema.InvalidTag {
-		tag = schema.AutoGenerateTag(sch)
+		tag = existingCol.Tag
 	}
 
 	col, err := SqlColToDoltCol(tag, column)
@@ -295,7 +300,7 @@ func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sq
 	}
 
 	nullable := alterschema.NotNull
-	if col.IsNullable() {
+	if existingCol.IsNullable() {
 		nullable = alterschema.Null
 	}
 
