@@ -143,6 +143,9 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
+		if len(args) > 0 {
+			return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build(), usage)
+		}
 		err = runShell(ctx, se, nil)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
