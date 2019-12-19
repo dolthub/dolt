@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"testing"
 )
 
 //var UUIDS = []uuid.UUID{
@@ -42,7 +42,6 @@ var tableName = "people"
 
 // Smoke test: Console opens and exits
 func TestSqlConsole(t *testing.T) {
-	const timeOut  = 5
 	t.Run("SQL console opens and exits", func(t *testing.T) {
 		dEnv := createEnvWithSeedData(t)
 		args := []string{}
