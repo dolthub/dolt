@@ -413,6 +413,16 @@ func TestAddColumn(t *testing.T) {
 			expectedErr: "Type mismatch",
 		},
 		{
+			name:        "alter add column column not found",
+			query:       "alter table people add column newColumn float comment 'tag:100' after notFound",
+			expectedErr: "table people does not have column notFound",
+		},
+		{
+			name:        "alter add column table not found",
+			query:       "alter table notFound add column newColumn float comment 'tag:100'",
+			expectedErr: "table not found: notFound",
+		},
+		{
 			name:        "alter add column with tag conflict",
 			query:       "alter table people add (newColumn float default 1.0 comment 'tag:1')",
 			expectedErr: "A column with the tag 1 already exists",
@@ -481,6 +491,121 @@ func TestAddColumn(t *testing.T) {
 		})
 	}
 }
+
+func TestModifyAndChangeColumn(t *testing.T) {
+	tests := []struct {
+		name           string
+		query          string
+		expectedSchema schema.Schema
+		expectedRows   []row.Row
+		expectedErr    string
+	}{
+		{
+			name:  "alter modify column reorder middle",
+			query: "alter table people modify column first_name varchar(80) not null after last_name",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", AgeTag, types.IntKind, false),
+				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: AllPeopleRows,
+		},
+		{
+			name:  "alter modify column reorder first",
+			query: "alter table people modify column first_name varchar(80) not null first",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", AgeTag, types.IntKind, false),
+				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: AllPeopleRows,
+		},
+		{
+			name:  "alter modify column drop null constraint",
+			query: "alter table people modify column first_name varchar(80) null",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first_name", FirstNameTag, types.StringKind, false),
+				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", AgeTag, types.IntKind, false),
+				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: AllPeopleRows,
+		},
+		{
+			name:        "alter modify column not null with type mismatch in default",
+			query:       "alter table people modify rating float default 'not a number' comment 'tag:100'",
+			expectedErr: "Type mismatch",
+		},
+		{
+			name:        "alter modify column with tag conflict",
+			query:       "alter table people modify rating float default 1.0 comment 'tag:1')",
+			expectedErr: "A column with the tag 1 already exists",
+		},
+		{
+			name:        "alter modify column not null without default",
+			query:       "alter table people modify first_name varchar(80) not null comment 'tag:100'",
+			expectedErr: "a default value must be provided",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dEnv := dtestutils.CreateTestEnv()
+			CreateTestDatabase(dEnv, t)
+			ctx := context.Background()
+			root, _ := dEnv.WorkingRoot(ctx)
+
+			updatedRoot, err := ExecuteSql(dEnv, root, tt.query)
+
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedErr)
+				return
+			}
+
+			assert.NotNil(t, updatedRoot)
+			table, _, err := updatedRoot.GetTable(ctx, PeopleTableName)
+			assert.NoError(t, err)
+			sch, err := table.GetSchema(ctx)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedSchema, sch)
+
+			updatedTable, ok, err := updatedRoot.GetTable(ctx, "people")
+			assert.NoError(t, err)
+			require.True(t, ok)
+
+			rowData, err := updatedTable.GetRowData(ctx)
+			assert.NoError(t, err)
+			var foundRows []row.Row
+			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+				r, err := row.FromNoms(tt.expectedSchema, key.(types.Tuple), value.(types.Tuple))
+				assert.NoError(t, err)
+				foundRows = append(foundRows, r)
+				return false, nil
+			})
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedRows, foundRows)
+		})
+	}
+}
+
 
 func TestDropColumn(t *testing.T) {
 	tests := []struct {
@@ -679,6 +804,7 @@ func TestRenameColumn(t *testing.T) {
 		})
 	}
 }
+
 
 func TestRenameTable(t *testing.T) {
 	tests := []struct {

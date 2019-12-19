@@ -310,7 +310,7 @@ func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sq
 	}
 
 	// TODO: column order
-	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, nil, nil)
+	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, nil, orderToOrder(order))
 	if err != nil {
 		return err
 	}
