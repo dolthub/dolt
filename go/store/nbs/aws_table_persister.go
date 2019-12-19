@@ -309,7 +309,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, err
 	}
 
-	verbose.Log("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
+	verbose.Log(ctx, "Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
 	if s3p.tc != nil {
 		go func() {
