@@ -59,7 +59,7 @@ func (r *Resolver) verbose(ctx context.Context, orig string, replacement string)
 		if orig == "" {
 			orig = `""`
 		}
-		verbose.Log(ctx, "\tresolving %s -> %s\n", orig, replacement)
+		verbose.Logger(ctx).Sugar().Debugf("\tresolving %s -> %s", orig, replacement)
 	}
 	return replacement
 }

@@ -48,6 +48,7 @@ require (
 	github.com/src-d/go-mysql-server v0.4.1-0.20190821121850-0e0249cf7bc0
 	github.com/stretchr/testify v1.4.0
 	github.com/tealeg/xlsx v1.0.4-0.20190601071628-e2d23f3c43dc
+	go.uber.org/zap v1.13.0
 	golang.org/x/crypto v0.0.0-20190829043050-9756ffdc2472
 	golang.org/x/net v0.0.0-20191119073136-fc4aabc6c914
 	golang.org/x/sys v0.0.0-20190926180325-855e68c8590b
