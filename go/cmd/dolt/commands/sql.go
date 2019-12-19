@@ -121,6 +121,8 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 		} else {
 			return 0
 		}
+	} else if len(args) > 0 {
+		return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build(), usage)
 	}
 
 	// Run in either batch mode for piped input, or shell mode for interactive
@@ -142,9 +144,6 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 		se, err = newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-		}
-		if len(args) > 0 {
-			return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build(), usage)
 		}
 		err = runShell(ctx, se, nil)
 		if err != nil {
