@@ -16,12 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
-	"io/ioutil"
-	"os"
-	"strings"
-	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +26,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/liquidata-inc/dolt/go/store/types"
+	"testing"
 )
 
 //var UUIDS = []uuid.UUID{
@@ -47,26 +42,12 @@ var tableName = "people"
 
 // Smoke test: Console opens and exits
 func TestSqlConsole(t *testing.T) {
-	const timeOut  = 100
+	const timeOut  = 5
 	t.Run("SQL console opens and exits", func(t *testing.T) {
 		dEnv := createEnvWithSeedData(t)
 		args := []string{}
 		commandStr := "dolt sql"
 
-		go func() {
-			tee := io.TeeReader(os.Stdout, os.Stdout)
-			var accum strings.Builder
-			for i := 0; i < timeOut; i++ {
-				bytes, _ := ioutil.ReadAll(tee)
-				accum.WriteString(string(bytes))
-				if strings.Contains(accum.String(), "# Welcome to the DoltSQL shell") {
-					_, _ = os.Stdin.WriteString("exit")
-					return
-				}
-				time.Sleep(1 * time.Second)
-			}
-			return
-		}()
 		result := Sql(context.TODO(), commandStr, args, dEnv)
 		assert.Equal(t, 0, result)
 	})
