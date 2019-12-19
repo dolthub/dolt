@@ -206,8 +206,7 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    # use bash -c so I can | the output to grep
-    run bash -c "dolt schema show"
+    run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
@@ -223,7 +222,7 @@ teardown() {
     run dolt sql -q "CREATE TABLE test (pk1 BIGINT, pk2 BIGINT, c1 BIGINT, c2 BIGINT, c3 BIGINT, c4 BIGINT, c5 BIGINT, PRIMARY KEY (pk1), PRIMARY KEY (pk2))"
     [ "$status" -eq 0 ]
     [ -z "$output" ]
-    run bash -c "dolt schema show"
+    run dolt schema show
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test\`" ]] || false
     [[ "$output" =~ "\`pk1\` BIGINT NOT NULL COMMENT 'tag:0'" ]] || false
