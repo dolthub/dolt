@@ -1,0 +1,35 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "async_sorted_edits.go",
+        "kvp_coll_builder.go",
+        "kvp_coll_itr.go",
+        "kvp_collection.go",
+        "sorted_edit_itr.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/store/types/edits",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/store/atomicerr:go_default_library",
+        "//go/store/types:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "async_sorted_edits_test.go",
+        "kvp_coll_builder_test.go",
+        "kvp_coll_itr_test.go",
+        "kvp_collection_test.go",
+        "kvp_itr_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/store/d:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

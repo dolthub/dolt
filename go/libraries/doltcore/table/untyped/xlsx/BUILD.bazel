@@ -1,0 +1,35 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "file_info.go",
+        "marshaling.go",
+        "reader.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/xlsx",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/doltcore:go_default_library",
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/table/untyped:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_tealeg_xlsx//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["marshaling_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":go_default_library"],
+    deps = [
+        "//go/libraries/doltcore:go_default_library",
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/table/untyped:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

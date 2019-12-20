@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "datetime_test.go",
+        "types_test.go",
+    ],
+    deps = [
+        "//go/cmd/dolt/commands/sqlserver:go_default_library",
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/dtestutils:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/sqle:go_default_library",
+        "//go/libraries/doltcore/sqle/types:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_go_sql_driver_mysql//:go_default_library",
+        "@com_github_gocraft_dbr//:go_default_library",
+        "@com_github_src_d_go_mysql_server//:go_default_library",
+        "@com_github_src_d_go_mysql_server//sql:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
+)

@@ -1,0 +1,46 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "auto_fwt_transform.go",
+        "fwt_transform.go",
+        "fwtsch.go",
+        "reader.go",
+        "stringwidth.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/table:go_default_library",
+        "//go/libraries/doltcore/table/pipeline:go_default_library",
+        "//go/libraries/doltcore/table/untyped:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/libraries/utils/iohelp:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_mattn_go_runewidth//:go_default_library",
+        "@com_github_rivo_uniseg//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "auto_fwt_transform_test.go",
+        "fwtsch_test.go",
+        "reader_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/table:go_default_library",
+        "//go/libraries/doltcore/table/pipeline:go_default_library",
+        "//go/libraries/doltcore/table/untyped:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

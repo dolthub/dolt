@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["manifest_clobber.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/store/nbs/test",
+    visibility = ["//visibility:private"],
+    deps = ["@com_github_juju_fslock//:go_default_library"],
+)
+
+go_binary(
+    # keep
+    name = "manifest_clobber",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)

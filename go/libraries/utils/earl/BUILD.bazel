@@ -1,0 +1,15 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["url.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/utils/earl",
+    visibility = ["//visibility:public"],
+    deps = ["//go/libraries/utils/osutil:go_default_library"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["url_test.go"],
+    embed = [":go_default_library"],
+)

@@ -1,0 +1,49 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "chunk_cache.go",
+        "chunk_store.go",
+        "concurrency.go",
+        "error.go",
+        "map_chunk_cache.go",
+        "noop_chunk_cache.go",
+        "retry.go",
+        "retrying_cssclient.go",
+        "utils.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/remotestorage",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/gen/proto/dolt/services/remotesapi/v1alpha1:go_default_library",
+        "//go/libraries/events:go_default_library",
+        "//go/libraries/utils/iohelp:go_default_library",
+        "//go/store/atomicerr:go_default_library",
+        "//go/store/chunks:go_default_library",
+        "//go/store/hash:go_default_library",
+        "//go/store/nbs:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_cenkalti_backoff//:go_default_library",
+        "@com_github_liquidata_inc_dolt_go_gen_proto_dolt_services_eventsapi//v1alpha1:go_default_library",
+        "@org_golang_google_grpc//:go_default_library",
+        "@org_golang_google_grpc//codes:go_default_library",
+        "@org_golang_google_grpc//status:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "concurrency_test.go",
+        "map_chunk_cache_test.go",
+        "utils_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/store/chunks:go_default_library",
+        "//go/store/hash:go_default_library",
+        "//go/store/nbs:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

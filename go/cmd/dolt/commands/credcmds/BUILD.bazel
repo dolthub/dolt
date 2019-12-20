@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "creds.go",
+        "ls.go",
+        "new.go",
+        "rm.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cmd/dolt/cli:go_default_library",
+        "//go/cmd/dolt/commands:go_default_library",
+        "//go/libraries/doltcore/creds:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/env/actions:go_default_library",
+        "//go/libraries/utils/argparser:go_default_library",
+        "@com_github_fatih_color//:go_default_library",
+        "@com_github_liquidata_inc_dolt_go_gen_proto_dolt_services_eventsapi//v1alpha1:go_default_library",
+    ],
+)

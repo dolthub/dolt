@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "doc.go",
+        "schema.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/table/typed",
+    visibility = ["//visibility:public"],
+    deps = ["//go/libraries/doltcore/schema:go_default_library"],
+)

@@ -58,7 +58,7 @@ func TestDecodeXLSXRows(t *testing.T) {
 }
 
 func TestGetRows(t *testing.T) {
-	path := "test_files/employees.xlsx"
+	path := "testdata/employees.xlsx"
 	stateCols, _ := getXlsxRows(path, "states")
 	employeeCols, _ := getXlsxRows(path, "employees")
 

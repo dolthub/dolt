@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "history.go",
+        "rows.go",
+        "schema.go.go",
+        "test_env.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/ref:go_default_library",
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/schema/encoding:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
+)

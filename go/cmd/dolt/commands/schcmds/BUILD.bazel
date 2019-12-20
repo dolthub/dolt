@@ -1,0 +1,37 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "add_column.go",
+        "drop_column.go",
+        "export.go",
+        "import.go",
+        "rename_column.go",
+        "schema.go",
+        "show.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cmd/dolt/cli:go_default_library",
+        "//go/cmd/dolt/commands:go_default_library",
+        "//go/cmd/dolt/commands/tblcmds:go_default_library",
+        "//go/cmd/dolt/errhand:go_default_library",
+        "//go/libraries/doltcore:go_default_library",
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/env/actions:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/schema/alterschema:go_default_library",
+        "//go/libraries/doltcore/schema/encoding:go_default_library",
+        "//go/libraries/doltcore/sql:go_default_library",
+        "//go/libraries/doltcore/table:go_default_library",
+        "//go/libraries/doltcore/table/untyped/csv:go_default_library",
+        "//go/libraries/utils/argparser:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_fatih_color//:go_default_library",
+        "@com_github_liquidata_inc_dolt_go_gen_proto_dolt_services_eventsapi//v1alpha1:go_default_library",
+    ],
+)

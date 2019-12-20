@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "data.go",
+        "deletequeries.go",
+        "insertqueries.go",
+        "replacequeries.go",
+        "schema.go",
+        "selectqueries.go",
+        "updatequeries.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/dtestutils:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/envtestutils:go_default_library",
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/table/untyped:go_default_library",
+        "//go/libraries/doltcore/table/untyped/resultset:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_google_uuid//:go_default_library",
+    ],
+)

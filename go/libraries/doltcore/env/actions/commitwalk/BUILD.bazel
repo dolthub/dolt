@@ -1,0 +1,28 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["commitwalk.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/store/hash:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["commitwalk_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/ref:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/store/hash:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
+)

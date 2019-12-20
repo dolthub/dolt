@@ -1,0 +1,10 @@
+load("@bazel_gazelle//:def.bzl", "gazelle")
+
+# gazelle:prefix github.com/liquidata-inc/dolt
+# gazelle:exclude proto
+# gazelle:exclude bats
+# gazelle:exclude samples
+# gazelle:exclude benchmark
+# gazelle:exclude go/gen/proto/dolt/services/eventsapi
+# gazelle:proto disable_global
+gazelle(name = "gazelle")

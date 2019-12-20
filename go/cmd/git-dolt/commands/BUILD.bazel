@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "doc.go",
+        "fetch.go",
+        "install.go",
+        "link.go",
+        "update.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/cmd/git-dolt/commands",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cmd/git-dolt/config:go_default_library",
+        "//go/cmd/git-dolt/doltops:go_default_library",
+        "//go/cmd/git-dolt/env:go_default_library",
+        "//go/cmd/git-dolt/utils:go_default_library",
+    ],
+)

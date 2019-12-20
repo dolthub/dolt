@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["reader.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/store/util/progressreader",
+    visibility = ["//visibility:public"],
+    deps = ["//go/store/util/status:go_default_library"],
+)

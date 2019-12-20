@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/logictest/main",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//go/libraries/doltcore/sqle/logictest/dolt:go_default_library",
+        "@com_github_liquidata_inc_sqllogictest_go//logictest:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "main",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)

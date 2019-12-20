@@ -31,6 +31,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/bazelbuild/rules_go/go/tools/bazel"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/liquidata-inc/dolt/go/store/constants"
@@ -216,12 +217,17 @@ func clobberManifest(dir, contents string) error {
 }
 
 func runClobber(dir, contents string) ([]byte, error) {
-	_, filename, _, _ := runtime.Caller(1)
-	clobber := filepath.Join(filepath.Dir(filename), "test/manifest_clobber.go")
 	mkPath := func(f string) string {
 		return filepath.Join(dir, f)
 	}
-
+	path, found := bazel.FindBinary("test", "manifest_clobber")
+	if found {
+		c := exec.Command(path, mkPath(lockFileName), mkPath(manifestFileName), contents)
+		return c.CombinedOutput()
+	}
+	_, filename, _, _ := runtime.Caller(1)
+	clobber := filepath.Join(filepath.Dir(filename), "test/manifest_clobber.go")
 	c := exec.Command("go", "run", clobber, mkPath(lockFileName), mkPath(manifestFileName), contents)
 	return c.CombinedOutput()
+
 }

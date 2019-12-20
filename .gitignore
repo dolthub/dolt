@@ -1,6 +1,6 @@
 **/.idea/
 .vscode
-
+bazel-*
 
 go.sum
 go.mod

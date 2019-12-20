@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "decode.go",
+        "encode.go",
+        "encode_type.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/store/marshal",
+    visibility = ["//visibility:public"],
+    deps = ["//go/store/types:go_default_library"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "decode_test.go",
+        "encode_test.go",
+        "encode_type_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/store/chunks:go_default_library",
+        "//go/store/d:go_default_library",
+        "//go/store/nomdl:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

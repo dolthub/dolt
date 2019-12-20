@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "doc.go",
+        "errors.go",
+        "option.go",
+        "parser.go",
+        "results.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/utils/argparser",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/utils/set:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["args_test.go"],
+    embed = [":go_default_library"],
+)

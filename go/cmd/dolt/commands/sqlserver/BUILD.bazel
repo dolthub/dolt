@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "server.go",
+        "serverconfig.go",
+        "servercontroller.go",
+        "sqlserver.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cmd/dolt/cli:go_default_library",
+        "//go/cmd/dolt/commands:go_default_library",
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/sqle:go_default_library",
+        "//go/libraries/utils/argparser:go_default_library",
+        "@com_github_sirupsen_logrus//:go_default_library",
+        "@com_github_src_d_go_mysql_server//:go_default_library",
+        "@com_github_src_d_go_mysql_server//auth:go_default_library",
+        "@com_github_src_d_go_mysql_server//server:go_default_library",
+        "@com_github_src_d_go_mysql_server//sql:go_default_library",
+        "@io_vitess_vitess//go/mysql:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["server_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/cmd/dolt/commands:go_default_library",
+        "//go/libraries/doltcore/dtestutils:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/table:go_default_library",
+        "//go/libraries/doltcore/table/typed/noms:go_default_library",
+        "@com_github_go_sql_driver_mysql//:go_default_library",
+        "@com_github_gocraft_dbr//:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@org_golang_x_net//context:go_default_library",
+    ],
+)

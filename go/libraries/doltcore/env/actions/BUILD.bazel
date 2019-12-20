@@ -1,0 +1,55 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "branch.go",
+        "commit.go",
+        "creds.go",
+        "diffs.go",
+        "doc.go",
+        "errors.go",
+        "infer_schema.go",
+        "merge.go",
+        "remotes.go",
+        "resolve.go",
+        "staged.go",
+        "table.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cmd/dolt/cli:go_default_library",
+        "//go/cmd/dolt/errhand:go_default_library",
+        "//go/libraries/doltcore/creds:go_default_library",
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/merge:go_default_library",
+        "//go/libraries/doltcore/ref:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/table:go_default_library",
+        "//go/libraries/doltcore/table/pipeline:go_default_library",
+        "//go/libraries/utils/config:go_default_library",
+        "//go/libraries/utils/set:go_default_library",
+        "//go/store/datas:go_default_library",
+        "//go/store/hash:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_google_uuid//:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["infer_schema_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/table/untyped:go_default_library",
+        "//go/libraries/doltcore/table/untyped/csv:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
+)

@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/store/nbs/benchmarks/chunker",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//go/store/d:go_default_library",
+        "//go/store/nbs/benchmarks/gen:go_default_library",
+        "@com_github_dustin_go_humanize//:go_default_library",
+        "@com_github_juju_gnuflag//:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "chunker",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)

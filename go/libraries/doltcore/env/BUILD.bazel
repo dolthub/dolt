@@ -1,0 +1,51 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "config.go",
+        "doc.go",
+        "environment.go",
+        "paths.go",
+        "remotes.go",
+        "repo_state.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/libraries/doltcore/env",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cmd/dolt/errhand:go_default_library",
+        "//go/libraries/doltcore/creds:go_default_library",
+        "//go/libraries/doltcore/dbfactory:go_default_library",
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/ref:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/doltcore/schema/encoding:go_default_library",
+        "//go/libraries/utils/config:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/libraries/utils/set:go_default_library",
+        "//go/store/hash:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+        "@org_golang_google_grpc//:go_default_library",
+        "@org_golang_google_grpc//credentials:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "config_test.go",
+        "environment_test.go",
+        "paths_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/libraries/doltcore/dbfactory:go_default_library",
+        "//go/libraries/doltcore/doltdb:go_default_library",
+        "//go/libraries/doltcore/ref:go_default_library",
+        "//go/libraries/utils/filesys:go_default_library",
+        "//go/store/hash:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+    ],
+)

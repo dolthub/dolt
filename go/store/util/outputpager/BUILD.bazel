@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["page_output.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/store/util/outputpager",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/store/d:go_default_library",
+        "@com_github_juju_gnuflag//:go_default_library",
+        "@com_github_mattn_go_isatty//:go_default_library",
+    ],
+)

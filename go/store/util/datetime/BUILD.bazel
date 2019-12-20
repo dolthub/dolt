@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["date_time.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/store/util/datetime",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/store/marshal:go_default_library",
+        "//go/store/types:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["date_time_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/store/chunks:go_default_library",
+        "//go/store/d:go_default_library",
+        "//go/store/marshal:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

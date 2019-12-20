@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "arg_helpers.go",
+        "command.go",
+        "doc.go",
+        "help.go",
+        "stdio.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/cmd/dolt/cli",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/doltcore:go_default_library",
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/mvdata:go_default_library",
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/libraries/events:go_default_library",
+        "//go/libraries/utils/argparser:go_default_library",
+        "//go/libraries/utils/funcitr:go_default_library",
+        "//go/libraries/utils/iohelp:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_fatih_color//:go_default_library",
+        "@com_github_google_uuid//:go_default_library",
+        "@com_github_liquidata_inc_dolt_go_gen_proto_dolt_services_eventsapi//v1alpha1:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "arg_helpers_test.go",
+        "command_test.go",
+        "help_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/libraries/doltcore/env:go_default_library",
+        "//go/libraries/doltcore/row:go_default_library",
+        "//go/libraries/doltcore/schema:go_default_library",
+        "//go/store/types:go_default_library",
+    ],
+)

@@ -1,0 +1,34 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["suite.go"],
+    importpath = "github.com/liquidata-inc/dolt/go/store/perf/suite",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/libraries/utils/osutil:go_default_library",
+        "//go/store/chunks:go_default_library",
+        "//go/store/datas:go_default_library",
+        "//go/store/marshal:go_default_library",
+        "//go/store/spec:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_google_uuid//:go_default_library",
+        "@com_github_shirou_gopsutil//cpu:go_default_library",
+        "@com_github_shirou_gopsutil//disk:go_default_library",
+        "@com_github_shirou_gopsutil//host:go_default_library",
+        "@com_github_shirou_gopsutil//mem:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//suite:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["suite_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/store/spec:go_default_library",
+        "//go/store/types:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

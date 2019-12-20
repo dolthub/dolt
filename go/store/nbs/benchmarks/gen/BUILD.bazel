@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "gen.go",
+        "rolling_value_hasher.go",
+    ],
+    importpath = "github.com/liquidata-inc/dolt/go/store/nbs/benchmarks/gen",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/store/d:go_default_library",
+        "//go/store/hash:go_default_library",
+        "@com_github_dustin_go_humanize//:go_default_library",
+        "@com_github_kch42_buzhash//:go_default_library",
+    ],
+)
