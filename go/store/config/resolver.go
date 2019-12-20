@@ -54,12 +54,12 @@ func NewResolver() *Resolver {
 }
 
 // Print replacement if one occurred
-func (r *Resolver) verbose(orig string, replacement string) string {
+func (r *Resolver) verbose(ctx context.Context, orig string, replacement string) string {
 	if orig != replacement {
 		if orig == "" {
 			orig = `""`
 		}
-		verbose.Log("\tresolving %s -> %s\n", orig, replacement)
+		verbose.Logger(ctx).Sugar().Debugf("\tresolving %s -> %s", orig, replacement)
 	}
 	return replacement
 }
@@ -132,7 +132,7 @@ func (r *Resolver) ResolvePathSpec(str string) string {
 //   - resolve "" to the default db spec
 func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database, error) {
 	dbc := r.DbConfigForDbSpec(str)
-	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForDatabaseOpts(r.verbose(ctx, str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (r *Resolver) GetDatabase(ctx context.Context, str string) (datas.Database,
 // Resolve string to a chunkstore. Like ResolveDatabase, but returns the underlying ChunkStore
 func (r *Resolver) GetChunkStore(ctx context.Context, str string) (chunks.ChunkStore, error) {
 	dbc := r.DbConfigForDbSpec(str)
-	sp, err := spec.ForDatabaseOpts(r.verbose(str, dbc.Url), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForDatabaseOpts(r.verbose(ctx, str, dbc.Url), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (r *Resolver) GetChunkStore(ctx context.Context, str string) (chunks.ChunkS
 //  - if the db prefix is an alias, replace it
 func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, datas.Dataset, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForDatasetOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForDatasetOpts(r.verbose(ctx, str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, datas.Dataset{}, err
 	}
@@ -166,7 +166,7 @@ func (r *Resolver) GetDataset(ctx context.Context, str string) (datas.Database, 
 //  - if the db spec is an alias, replace it
 func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, types.Value, error) {
 	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
-	sp, err := spec.ForPathOpts(r.verbose(str, specStr), specOptsForConfig(r.config, dbc))
+	sp, err := spec.ForPathOpts(r.verbose(ctx, str, specStr), specOptsForConfig(r.config, dbc))
 	if err != nil {
 		return nil, nil, err
 	}
