@@ -1,0 +1,6 @@
+go_binary(
+    # keep
+    name = "manifest_clobber",
+    embed = [":go_default_library"],
+    visibility = ["//visibility:public"],
+)

@@ -7,4 +7,5 @@ load("@bazel_gazelle//:def.bzl", "gazelle")
 # gazelle:exclude benchmark
 # gazelle:exclude go/gen/proto/dolt/services/eventsapi
 # gazelle:proto disable_global
+# gazelle:resolve go go github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1 @com_github_liquidata_inc_dolt_go_gen_proto_dolt_services_eventsapi//v1alpha1:go_default_library
 gazelle(name = "gazelle")
