@@ -574,8 +574,7 @@ func splitOnMaxSize(dataLen, maxPartSize uint64) []int64 {
 
 func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, srcStart, srcEnd int64, key, uploadID string, partNum int64) (etag string, err error) {
 	res, err := s3p.s3.UploadPartCopyWithContext(ctx, &s3.UploadPartCopyInput{
-		// TODO: Use url.PathEscape() once we're on go 1.8
-		CopySource:      aws.String(url.QueryEscape(s3p.bucket + "/" + src)),
+		CopySource:      aws.String(url.PathEscape(s3p.bucket + "/" + s3p.key(src))),
 		CopySourceRange: aws.String(s3RangeHeader(srcStart, srcEnd)),
 		Bucket:          aws.String(s3p.bucket),
 		Key:             aws.String(s3p.key(key)),
