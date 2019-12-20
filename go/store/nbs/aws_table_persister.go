@@ -43,8 +43,11 @@ const (
 	maxS3PartSize = 64 * 1 << 20 // 64MiB
 	maxS3Parts    = 10000
 
-	maxDynamoChunks   = 64
-	maxDynamoItemSize = 400 * (1 << 10) // 400k
+	// Disable persisting tables in DynamoDB.  This is currently unused by
+	// Dolthub and keeping it requires provisioning DynamoDB throughout for
+	// the noop reads.
+	maxDynamoChunks   = 0
+	maxDynamoItemSize = 0
 
 	defaultS3PartSize = minS3PartSize // smallest allowed by S3 allows for most throughput
 )
