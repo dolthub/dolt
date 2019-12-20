@@ -40,6 +40,19 @@ import (
 
 var tableName = "people"
 
+// Smoke test: Console opens and exits
+func TestSqlConsole(t *testing.T) {
+	t.Run("SQL console opens and exits", func(t *testing.T) {
+		dEnv := createEnvWithSeedData(t)
+		args := []string{}
+		commandStr := "dolt sql"
+
+		result := Sql(context.TODO(), commandStr, args, dEnv)
+		assert.Equal(t, 0, result)
+	})
+
+}
+
 // Smoke tests, values are printed to console
 func TestSqlSelect(t *testing.T) {
 	tests := []struct {

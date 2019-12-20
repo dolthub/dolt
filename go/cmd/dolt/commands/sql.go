@@ -143,7 +143,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-		err = runShell(ctx, se, nil)
+		err = runShell(ctx, se, dEnv)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("unable to start shell").AddCause(err).Build(), usage)
 		}
