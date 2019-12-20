@@ -5,3 +5,5 @@ bazel-*
 go.sum
 go.mod
 .DS_Store
+
+BUILD.bazel
