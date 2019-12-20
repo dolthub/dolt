@@ -62,7 +62,8 @@ func init() {
 	})
 	encoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
 	core := zapcore.NewCore(encoder, zapcore.Lock(os.Stderr), enabler)
+	l := zap.New(core)
 	Logger = func(ctx context.Context) *zap.Logger {
-		return zap.New(core)
+		return l
 	}
 }
