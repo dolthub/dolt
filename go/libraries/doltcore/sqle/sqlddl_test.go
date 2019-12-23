@@ -405,12 +405,12 @@ func TestAddColumn(t *testing.T) {
 			query: "alter table people add (newColumn float not null default -1.1 comment 'tag:100')",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schema.NewColumn("newColumn", 100, types.FloatKind, false, schema.NotNullConstraint{})),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, types.Float(-1.1)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 100, types.Float(float32(-1.1))),
 		},
 		{
 			name:        "alter add column not null with type mismatch in default",
-			query:       "alter table people add (newColumn float default 'not a number' comment 'tag:100')",
-			expectedErr: "Type mismatch",
+			query:       "alter table people add (newColumn float not null default 'not a number' comment 'tag:100')",
+			expectedErr: "incompatible type",
 		},
 		{
 			name:        "alter add column column not found",
@@ -430,7 +430,7 @@ func TestAddColumn(t *testing.T) {
 		{
 			name:        "alter add column not null without default",
 			query:       "alter table people add (newColumn varchar(80) not null comment 'tag:100')",
-			expectedErr: "a default value must be provided",
+			expectedErr: "must have a non-null default value",
 		},
 		{
 			name:  "alter add column nullable",
@@ -546,6 +546,21 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			expectedRows: AllPeopleRows,
 		},
 		{
+			name:  "alter modify column change tag",
+			query: "alter table people modify column first_name varchar(80) not null comment 'tag:100'",
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("first_name", 100, types.StringKind, false),
+				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+				schema.NewColumn("age", AgeTag, types.IntKind, false),
+				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
+				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
+			),
+			expectedRows: AllPeopleRows, // TODO: drop and add new column
+		},
+		{
 			name:  "alter change column rename and reorder",
 			query: "alter table people change first_name christian_name varchar(80) not null after last_name",
 			expectedSchema: dtestutils.CreateSchema(
@@ -593,7 +608,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		{
 			name:        "alter modify column not null with type mismatch in default",
 			query:       "alter table people modify rating float default 'not a number' comment 'tag:100'",
-			expectedErr: "Type mismatch",
+			expectedErr: "incompatible type for default value",
 		},
 		{
 			name:        "alter modify column with tag conflict",
