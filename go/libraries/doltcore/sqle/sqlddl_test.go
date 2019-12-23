@@ -546,21 +546,6 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			expectedRows: AllPeopleRows,
 		},
 		{
-			name:  "alter modify column change tag",
-			query: "alter table people modify column first_name varchar(80) not null comment 'tag:100'",
-			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-				schema.NewColumn("first_name", 100, types.StringKind, false),
-				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
-				schema.NewColumn("age", AgeTag, types.IntKind, false),
-				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-				schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
-				schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
-			),
-			expectedRows: AllPeopleRows, // TODO: drop and add new column
-		},
-		{
 			name:  "alter change column rename and reorder",
 			query: "alter table people change first_name christian_name varchar(80) not null after last_name",
 			expectedSchema: dtestutils.CreateSchema(
@@ -606,18 +591,25 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			expectedRows: AllPeopleRows,
 		},
 		{
+			name:  "alter modify column change tag",
+			query: "alter table people modify column first_name varchar(80) not null comment 'tag:100'",
+			expectedErr: "A column with the name first_name already exists",
+		},
+		{
 			name:        "alter modify column not null with type mismatch in default",
-			query:       "alter table people modify rating float default 'not a number' comment 'tag:100'",
+			query:       "alter table people modify rating float default 'not a number'",
 			expectedErr: "incompatible type for default value",
 		},
 		{
 			name:        "alter modify column with tag conflict",
-			query:       "alter table people modify rating float default 1.0 comment 'tag:1')",
-			expectedErr: "A column with the tag 1 already exists",
+			query:       "alter table people modify rating float default 1.0 comment 'tag:1'",
+			expectedErr: "A column with the name rating already exists",
 		},
+		// TODO: error out if nulls exist. this mirrors the MySQL behavior.
+		// TODO: type changes
 		{
 			name:        "alter modify column not null without default",
-			query:       "alter table people modify first_name varchar(80) not null comment 'tag:100'",
+			query:       "alter table people modify first_name varchar(80) not null",
 			expectedErr: "a default value must be provided",
 		},
 	}
