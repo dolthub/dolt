@@ -605,12 +605,11 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			query:       "alter table people modify rating float default 1.0 comment 'tag:1'",
 			expectedErr: "A column with the name rating already exists",
 		},
-		// TODO: error out if nulls exist. this mirrors the MySQL behavior.
 		// TODO: type changes
 		{
-			name:        "alter modify column not null without default",
-			query:       "alter table people modify first_name varchar(80) not null",
-			expectedErr: "a default value must be provided",
+			name:        "alter modify column not null, existing null values",
+			query:       "alter table people modify num_episodes varchar(80) not null",
+			expectedErr: "cannot change column to NOT NULL",
 		},
 	}
 

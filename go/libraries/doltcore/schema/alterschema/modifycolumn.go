@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -53,7 +54,7 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	return updateTable(ctx, tbl, newSchema)
+	return updateTableWithModifiedColumn(ctx, tbl, newSchema, newCol)
 }
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
@@ -88,8 +89,8 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, col schema.Col
 
 
 // updateTable updates the existing table with the new schema. No data is changed.
-// TODO: type change, default values
-func updateTable(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema) (*doltdb.Table, error) {
+// TODO: type changes
+func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema, modifiedCol schema.Column) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
 	newSchemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSchema)
 	if err != nil {
@@ -99,6 +100,26 @@ func updateTable(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	// Iterate over the rows in the table, checking for nils (illegal if the column is declared not null)
+	if !modifiedCol.IsNullable() {
+		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+			row, err := row.FromNoms(newSchema, key.(types.Tuple), value.(types.Tuple))
+			if err != nil {
+				return false, err
+			}
+			val, ok := row.GetColVal(modifiedCol.Tag)
+			if (!ok || val == nil) && !modifiedCol.IsNullable() {
+				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
+			}
+
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
