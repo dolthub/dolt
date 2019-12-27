@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -34,7 +35,7 @@ func ModifyColumn(
 	newCol schema.Column,
 	defaultVal types.Value,
 	order *ColumnOrder,
-)(*doltdb.Table, error) {
+) (*doltdb.Table, error) {
 
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -59,7 +60,7 @@ func ModifyColumn(
 }
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
-func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol schema.Column, modifiedCol schema.Column,defaultVal types.Value) error {
+func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol schema.Column, modifiedCol schema.Column, defaultVal types.Value) error {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return err
@@ -90,7 +91,6 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 
 	return nil
 }
-
 
 // updateTable updates the existing table with the new schema. No data is changed.
 // TODO: type changes
@@ -128,7 +128,6 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSc
 
 	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
 }
-
 
 // createNewSchema Creates a new schema with a column as specified by the params.
 func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
@@ -179,4 +178,3 @@ func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.C
 
 	return schema.SchemaFromCols(collection), nil
 }
-

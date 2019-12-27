@@ -39,22 +39,22 @@ func TestModifyColumn(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:       "column rename",
+			name:           "column rename",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
-				),
+			),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
-			name:       "remove null constraint",
+			name:           "remove null constraint",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true),
+			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true),
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -65,10 +65,10 @@ func TestModifyColumn(t *testing.T) {
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
-			name:       "reorder first",
+			name:           "reorder first",
 			existingColumn: schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-			order: &ColumnOrder{ First: true, },
+			newColumn:      schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+			order:          &ColumnOrder{First: true},
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -79,10 +79,10 @@ func TestModifyColumn(t *testing.T) {
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
-			name:       "reorder middle",
+			name:           "reorder middle",
 			existingColumn: schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-			order: &ColumnOrder{ After: "is_married" },
+			newColumn:      schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+			order:          &ColumnOrder{After: "is_married"},
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -93,29 +93,29 @@ func TestModifyColumn(t *testing.T) {
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
-			name:        "tag collision",
+			name:           "tag collision",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("newId", dtestutils.NameTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			expectedErr: "two different columns with the same tag",
+			newColumn:      schema.NewColumn("newId", dtestutils.NameTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			expectedErr:    "two different columns with the same tag",
 		},
 		{
-			name:        "name collision",
+			name:           "name collision",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("name", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			expectedErr: "A column with the name name already exists",
+			newColumn:      schema.NewColumn("name", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			expectedErr:    "A column with the name name already exists",
 		},
 		{
-			name:        "wrong type for default value",
+			name:           "wrong type for default value",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			defaultVal: types.String("not a string"),
-			expectedErr: "Type of default value (String) doesn't match type of column (UUID)",
+			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			defaultVal:     types.String("not a string"),
+			expectedErr:    "Type of default value (String) doesn't match type of column (UUID)",
 		},
 		{
-			name:        "type change",
+			name:           "type change",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn: schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
-			expectedErr: "unsupported feature: column types cannot be changed",
+			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+			expectedErr:    "unsupported feature: column types cannot be changed",
 		},
 	}
 

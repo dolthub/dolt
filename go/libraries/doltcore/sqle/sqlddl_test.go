@@ -16,14 +16,13 @@ package sqle
 
 import (
 	"context"
-
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
@@ -591,8 +590,8 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			expectedRows: AllPeopleRows,
 		},
 		{
-			name:  "alter modify column change tag",
-			query: "alter table people modify column first_name varchar(80) not null comment 'tag:100'",
+			name:        "alter modify column change tag",
+			query:       "alter table people modify column first_name varchar(80) not null comment 'tag:100'",
 			expectedErr: "A column with the name first_name already exists",
 		},
 		{
@@ -660,7 +659,6 @@ func TestModifyAndChangeColumn(t *testing.T) {
 		})
 	}
 }
-
 
 func TestDropColumn(t *testing.T) {
 	tests := []struct {
@@ -860,7 +858,6 @@ func TestRenameColumn(t *testing.T) {
 	}
 }
 
-
 func TestRenameTable(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -953,4 +950,3 @@ func TestRenameTable(t *testing.T) {
 		})
 	}
 }
-
