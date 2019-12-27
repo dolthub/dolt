@@ -33,13 +33,18 @@ const (
 	Null    Nullable = true
 )
 
+// Clone of sql.ColumnOrder to avoid a dependency on sql here
+type ColumnOrder struct {
+	First bool
+	After string
+}
+
 // Adds a new column to the schema given and returns the new table value. Non-null column additions rewrite the entire
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, defaultVal types.Value, order *ColumnOrder) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -48,18 +53,18 @@ func AddColumnToTable(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table,
 		return nil, err
 	}
 
-	newSchema, err := createNewSchema(sch, tag, newColName, colKind, nullable)
+	newSchema, err := addColumnToSchema(sch, tag, newColName, colKind, nullable, order)
 	if err != nil {
 		return nil, err
 	}
 
-	return updateTableWithNewSchema(ctx, db, tbl, tag, newSchema, defaultVal)
+	return updateTableWithNewSchema(ctx, tbl, tag, newSchema, defaultVal)
 }
 
 // updateTableWithNewSchema updates the existing table with a new schema and new values for the new column as necessary,
 // and returns the new table.
-func updateTableWithNewSchema(ctx context.Context, db *doltdb.DoltDB, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal types.Value) (*doltdb.Table, error) {
-	vrw := db.ValueReadWriter()
+func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64, newSchema schema.Schema, defaultVal types.Value) (*doltdb.Table, error) {
+	vrw := tbl.ValueReadWriter()
 	newSchemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSchema)
 	if err != nil {
 		return nil, err
@@ -105,21 +110,41 @@ func updateTableWithNewSchema(ctx context.Context, db *doltdb.DoltDB, tbl *doltd
 	return doltdb.NewTable(ctx, vrw, newSchemaVal, m)
 }
 
-// createNewSchema Creates a new schema with a column as specified by the params.
-func createNewSchema(sch schema.Schema, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable) (schema.Schema, error) {
+// addColumnToSchema creates a new schema with a column as specified by the params.
+func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, order *ColumnOrder) (schema.Schema, error) {
+	newCol := createColumn(nullable, newColName, tag, colKind)
+
+	var newCols []schema.Column
+	if order != nil && order.First {
+		newCols = append(newCols, newCol)
+	}
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		newCols = append(newCols, col)
+		if order != nil && order.After == col.Name {
+			newCols = append(newCols, newCol)
+		}
+		return false, nil
+	})
+	if order == nil {
+		newCols = append(newCols, newCol)
+	}
+
+	collection, err := schema.NewColCollection(newCols...)
+	if err != nil {
+		return nil, err
+	}
+
+	return schema.SchemaFromCols(collection), nil
+}
+
+func createColumn(nullable Nullable, newColName string, tag uint64, colKind types.NomsKind) schema.Column {
 	var col schema.Column
 	if nullable {
 		col = schema.NewColumn(newColName, tag, colKind, false)
 	} else {
 		col = schema.NewColumn(newColName, tag, colKind, false, schema.NotNullConstraint{})
 	}
-
-	updatedCols, err := sch.GetAllCols().Append(col)
-	if err != nil {
-		return nil, err
-	}
-
-	return schema.SchemaFromCols(updatedCols), nil
+	return col
 }
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
@@ -146,14 +171,14 @@ func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newCo
 		return err
 	}
 
-	rd, err := tbl.GetRowData(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	if !nullable && defaultVal == nil && rd.Len() > 0 {
-		return errors.New("When adding a column that may not be null to a table with existing rows, a default value must be provided.")
+	if !nullable && defaultVal == nil {
+		rd, err := tbl.GetRowData(ctx)
+		if err != nil {
+			return err
+		}
+		if rd.Len() > 0 {
+			return errors.New("When adding a column that may not be null to a table with existing rows, a default value must be provided.")
+		}
 	}
 
 	if !types.IsNull(defaultVal) && defaultVal.Kind() != colKind {

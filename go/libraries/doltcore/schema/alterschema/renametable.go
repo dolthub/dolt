@@ -21,7 +21,7 @@ import (
 )
 
 // RenameTable renames a table with in a RootValue and returns the updated root.
-func RenameTable(ctx context.Context, doltDb *doltdb.DoltDB, root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
+func RenameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
 	if newName == oldName {
 		return root, nil
 	} else if root == nil {

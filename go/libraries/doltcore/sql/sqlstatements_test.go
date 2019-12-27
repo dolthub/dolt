@@ -29,8 +29,8 @@ import (
 
 const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +
 	"  `id` BIGINT NOT NULL COMMENT 'tag:0',\n" +
-	"  `first` LONGTEXT NOT NULL COMMENT 'tag:1',\n" +
-	"  `last` LONGTEXT NOT NULL COMMENT 'tag:2',\n" +
+	"  `first_name` LONGTEXT NOT NULL COMMENT 'tag:1',\n" +
+	"  `last_name` LONGTEXT NOT NULL COMMENT 'tag:2',\n" +
 	"  `is_married` BOOLEAN COMMENT 'tag:3',\n" +
 	"  `age` BIGINT COMMENT 'tag:4',\n" +
 	"  `rating` DOUBLE COMMENT 'tag:6',\n" +
@@ -41,7 +41,7 @@ const expectedCreateSQL = "CREATE TABLE `table_name` (\n" +
 const expectedDropSql = "DROP TABLE `table_name`;"
 const expectedDropIfExistsSql = "DROP TABLE IF EXISTS `table_name`;"
 const expectedAddColSql = "ALTER TABLE `table_name` ADD `c0` BIGINT NOT NULL COMMENT 'tag:9';"
-const expectedDropColSql = "ALTER TABLE `table_name` DROP `first`;"
+const expectedDropColSql = "ALTER TABLE `table_name` DROP `first_name`;"
 const expectedRenameColSql = "ALTER TABLE `table_name` RENAME COLUMN `id` TO `pk`;"
 const expectedRenameTableSql = "RENAME TABLE `table_name` TO `new_table_name`;"
 
@@ -79,7 +79,7 @@ func TestAlterTableAddColStmt(t *testing.T) {
 }
 
 func TestAlterTableDropColStmt(t *testing.T) {
-	stmt := AlterTableDropColStmt("table_name", "first")
+	stmt := AlterTableDropColStmt("table_name", "first_name")
 
 	assert.Equal(t, expectedDropColSql, stmt)
 }

@@ -126,8 +126,8 @@ func TestCreateTable(t *testing.T) {
 		{"create table (id int ", 1},        // bad syntax
 		{"create table people (id int primary key)", 0},
 		{"create table people (id int primary key, age int)", 0},
-		{"create table people (id int primary key, age int, first varchar(80), is_married bit)", 0},
-		{"create table people (`id` int, `age` int, `first` varchar(80), `last` varchar(80), `title` varchar(80), `is_married` bit, primary key (`id`, `age`))", 0},
+		{"create table people (id int primary key, age int, first_name varchar(80), is_married bit)", 0},
+		{"create table people (`id` int, `age` int, `first_name` varchar(80), `last_name` varchar(80), `title` varchar(80), `is_married` bit, primary key (`id`, `age`))", 0},
 	}
 
 	for _, test := range tests {
@@ -192,10 +192,10 @@ func TestAlterTable(t *testing.T) {
 		query       string
 		expectedRes int
 	}{
-		{"alter table", 1},                                  // bad syntax
-		{"alter table people rename", 1},                    // bad syntax
-		{"alter table dne rename column id to newId", 1},    // unknown column
-		{"alter table people rename column id to newId", 0}, // no primary key
+		{"alter table", 1},                               // bad syntax
+		{"alter table people rename", 1},                 // bad syntax
+		{"alter table dne rename column id to newId", 1}, // unknown column
+		{"alter table people rename column name to appelation", 0},
 		{"alter table people rename to newPeople", 0},
 		{"rename table people to newPeople", 0},
 		{"alter table people add column (newCol int not null default 10)", 0},

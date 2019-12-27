@@ -25,6 +25,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
+	sqlTypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -43,6 +45,7 @@ var _ sql.UpdatableTable = (*DoltTable)(nil)
 var _ sql.DeletableTable = (*DoltTable)(nil)
 var _ sql.InsertableTable = (*DoltTable)(nil)
 var _ sql.ReplaceableTable = (*DoltTable)(nil)
+var _ sql.AlterableTable = (*DoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -200,5 +203,138 @@ func (t *DoltTable) updateTable(ctx context.Context, mapEditor *types.MapEditor)
 
 	t.table = newTable
 	t.db.root = newRoot
+	return nil
+}
+
+// AddColumn implements sql.AlterableTable
+func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
+	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	if err != nil {
+		return err
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	tag := extractTag(column)
+	if tag == schema.InvalidTag {
+		tag = schema.AutoGenerateTag(sch)
+	}
+
+	col, err := SqlColToDoltCol(tag, column)
+	if err != nil {
+		return err
+	}
+
+	if col.IsPartOfPK {
+		return errors.New("adding primary keys is not supported")
+	}
+
+	nullable := alterschema.NotNull
+	if col.IsNullable() {
+		nullable = alterschema.Null
+	}
+
+	var defVal types.Value
+	if column.Default != nil {
+		defVal, err = sqlTypes.SqlValToNomsVal(column.Default, col.Kind)
+		if err != nil {
+			return err
+		}
+	}
+
+	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, defVal, orderToOrder(order))
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	t.db.SetRoot(newRoot)
+	return nil
+}
+
+func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
+	if order == nil {
+		return nil
+	}
+	return &alterschema.ColumnOrder{
+		First: order.First,
+		After: order.AfterColumn,
+	}
+}
+
+// DropColumn implements sql.AlterableTable
+func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
+	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	if err != nil {
+		return err
+	}
+
+	updatedTable, err := alterschema.DropColumn(ctx, table, columnName)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	t.db.SetRoot(newRoot)
+	return nil
+}
+
+// ModifyColumn implements sql.AlterableTable
+func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
+	table, _, err := t.db.Root().GetTable(ctx, t.name)
+	if err != nil {
+		return err
+	}
+
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	existingCol, ok := sch.GetAllCols().GetByName(columnName)
+	if !ok {
+		panic(fmt.Sprintf("Column %s not found. This is a bug.", columnName))
+	}
+
+	tag := extractTag(column)
+	if tag == schema.InvalidTag {
+		tag = existingCol.Tag
+	}
+
+	col, err := SqlColToDoltCol(tag, column)
+	if err != nil {
+		return err
+	}
+
+	var defVal types.Value
+	if column.Default != nil {
+		defVal, err = sqlTypes.SqlValToNomsVal(column.Default, col.Kind)
+		if err != nil {
+			return err
+		}
+	}
+
+	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, defVal, orderToOrder(order))
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := t.db.Root().PutTable(ctx, t.name, updatedTable)
+	if err != nil {
+		return err
+	}
+
+	t.db.SetRoot(newRoot)
 	return nil
 }

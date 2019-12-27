@@ -24,8 +24,8 @@ import (
 )
 
 // DropColumn drops a column from a table. No existing rows are modified, but a new schema entry is written.
-func DropColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, colName string) (*doltdb.Table, error) {
-	if tbl == nil || doltDB == nil {
+func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb.Table, error) {
+	if tbl == nil {
 		panic("invalid parameters")
 	}
 
@@ -62,7 +62,7 @@ func DropColumn(ctx context.Context, doltDB *doltdb.DoltDB, tbl *doltdb.Table, c
 
 	newSch := schema.SchemaFromCols(colColl)
 
-	vrw := doltDB.ValueReadWriter()
+	vrw := tbl.ValueReadWriter()
 	schemaVal, err := encoding.MarshalAsNomsValue(ctx, vrw, newSch)
 
 	if err != nil {

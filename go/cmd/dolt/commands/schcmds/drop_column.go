@@ -68,7 +68,7 @@ func removeColumn(ctx context.Context, apr *argparser.ArgParseResults, root *dol
 
 	colName := apr.Arg(1)
 
-	newTbl, err := alterschema.DropColumn(ctx, dEnv.DoltDB, tbl, colName)
+	newTbl, err := alterschema.DropColumn(ctx, tbl, colName)
 
 	if err != nil {
 		return errToVerboseErr(colName, "", err)

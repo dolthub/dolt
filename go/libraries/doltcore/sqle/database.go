@@ -23,11 +23,13 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var _ sql.Database = (*Database)(nil)
+var _ sql.TableRenamer = (*Database)(nil)
 
 type batchMode bool
 
@@ -217,6 +219,19 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 	}
 
 	db.SetRoot(newRoot)
+
+	return nil
+}
+
+// RenameTable implements sql.TableRenamer
+func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	root, err := alterschema.RenameTable(ctx, db.Root(), oldName, newName)
+	if err != nil {
+		return err
+	}
+
+	delete(db.tables, oldName)
+	db.SetRoot(root)
 
 	return nil
 }
