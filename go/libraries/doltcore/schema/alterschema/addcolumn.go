@@ -110,7 +110,7 @@ func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64
 	return doltdb.NewTable(ctx, vrw, newSchemaVal, m)
 }
 
-// createNewSchema Creates a new schema with a column as specified by the params.
+// addColumnToSchema creates a new schema with a column as specified by the params.
 func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, colKind types.NomsKind, nullable Nullable, order *ColumnOrder) (schema.Schema, error) {
 	newCol := createColumn(nullable, newColName, tag, colKind)
 

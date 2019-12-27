@@ -290,6 +290,7 @@ func (t *DoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 	return nil
 }
 
+// ModifyColumn implements sql.AlterableTable
 func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	table, _, err := t.db.Root().GetTable(ctx, t.name)
 	if err != nil {

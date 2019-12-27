@@ -205,7 +205,7 @@ func TestSqlBatchInsertErrors(t *testing.T) {
 					(2, "Milhouse", "VanHouten", false, 1, 5.1, true, 677)`)
 	assert.Error(t, err)
 
-	// Error from the first_name statement appears here
+	// Error from the first statement appears here
 	assert.Error(t, db.Flush(ctx))
 }
 

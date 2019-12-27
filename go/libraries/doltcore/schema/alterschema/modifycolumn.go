@@ -59,7 +59,7 @@ func ModifyColumn(
 	return updateTableWithModifiedColumn(ctx, tbl, newSchema, newCol)
 }
 
-// validateNewColumn returns an error if the column as specified cannot be added to the schema given.
+// validateModifyColumn returns an error if the column as specified cannot be added to the schema given.
 func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol schema.Column, modifiedCol schema.Column, defaultVal types.Value) error {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -92,7 +92,7 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 	return nil
 }
 
-// updateTable updates the existing table with the new schema. No data is changed.
+// updateTableWithModifiedColumn updates the existing table with the new schema. No data is changed.
 // TODO: type changes
 func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSchema schema.Schema, modifiedCol schema.Column) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
@@ -129,7 +129,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, newSc
 	return doltdb.NewTable(ctx, vrw, newSchemaVal, rowData)
 }
 
-// createNewSchema Creates a new schema with a column as specified by the params.
+// replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
 func replaceColumnInSchema(sch schema.Schema, oldColName string, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
 	if order == nil {

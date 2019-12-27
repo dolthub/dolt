@@ -41,6 +41,7 @@ func TestAddColumnToTable(t *testing.T) {
 		colKind        types.NomsKind
 		nullable       Nullable
 		defaultVal     types.Value
+		order          *ColumnOrder
 		expectedSchema schema.Schema
 		expectedRows   []row.Row
 		expectedErr    string
@@ -195,6 +196,42 @@ func TestAddColumnToTable(t *testing.T) {
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
 		},
 		{
+			name:       "first order",
+			tag:        dtestutils.NextTag,
+			newColName: "newCol",
+			colKind:    types.IntKind,
+			nullable:   Null,
+			defaultVal: types.Int(42),
+			order:      &ColumnOrder{First: true},
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false),
+				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+			),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
+		},
+		{
+			name:       "middle order",
+			tag:        dtestutils.NextTag,
+			newColName: "newCol",
+			colKind:    types.IntKind,
+			nullable:   Null,
+			defaultVal: types.Int(42),
+			order:      &ColumnOrder{After: "age"},
+			expectedSchema: dtestutils.CreateSchema(
+				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
+			),
+			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.Int(42)),
+		},
+		{
 			name:        "tag collision",
 			tag:         dtestutils.AgeTag,
 			newColName:  "newCol",
@@ -242,7 +279,7 @@ func TestAddColumnToTable(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			updatedTable, err := AddColumnToTable(ctx, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal, nil)
+			updatedTable, err := AddColumnToTable(ctx, tbl, tt.tag, tt.newColName, tt.colKind, tt.nullable, tt.defaultVal, tt.order)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
