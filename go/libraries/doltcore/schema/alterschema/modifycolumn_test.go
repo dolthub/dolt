@@ -111,6 +111,12 @@ func TestModifyColumn(t *testing.T) {
 			defaultVal: types.String("not a string"),
 			expectedErr: "Type of default value (String) doesn't match type of column (UUID)",
 		},
+		{
+			name:        "type change",
+			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			newColumn: schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+			expectedErr: "unsupported feature: column types cannot be changed",
+		},
 	}
 
 	for _, tt := range tests {
