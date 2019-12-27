@@ -605,10 +605,14 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			query:       "alter table people modify rating float default 1.0 comment 'tag:1'",
 			expectedErr: "A column with the name rating already exists",
 		},
-		// TODO: type changes
+		{
+			name:        "alter modify column with type change",
+			query:       "alter table people modify rating varchar(10)",
+			expectedErr: "column types cannot be changed",
+		},
 		{
 			name:        "alter modify column not null, existing null values",
-			query:       "alter table people modify num_episodes varchar(80) not null",
+			query:       "alter table people modify num_episodes int unsigned not null",
 			expectedErr: "cannot change column to NOT NULL",
 		},
 	}

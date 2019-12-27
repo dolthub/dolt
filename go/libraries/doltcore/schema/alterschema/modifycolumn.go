@@ -16,6 +16,7 @@ package alterschema
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -40,7 +41,7 @@ func ModifyColumn(
 		return nil, err
 	}
 
-	if err := validateModifyColumn(ctx, tbl, newCol, defaultVal); err != nil {
+	if err := validateModifyColumn(ctx, tbl, existingCol, newCol, defaultVal); err != nil {
 		return nil, err
 	}
 
@@ -58,19 +59,22 @@ func ModifyColumn(
 }
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
-func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, col schema.Column, defaultVal types.Value) error {
+func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol schema.Column, modifiedCol schema.Column,defaultVal types.Value) error {
 	sch, err := tbl.GetSchema(ctx)
-
 	if err != nil {
 		return err
 	}
 
+	if existingCol.Kind != modifiedCol.Kind {
+		return errors.New("unsupported feature: column types cannot be changed")
+	}
+
 	cols := sch.GetAllCols()
 	err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
-		if currColTag == col.Tag {
+		if currColTag == modifiedCol.Tag {
 			return false, nil
-		} else if currCol.Name == col.Name {
-			return true, fmt.Errorf("A column with the name %s already exists.", col.Name)
+		} else if currCol.Name == modifiedCol.Name {
+			return true, fmt.Errorf("A column with the name %s already exists.", modifiedCol.Name)
 		}
 
 		return false, nil
@@ -80,8 +84,8 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, col schema.Col
 		return err
 	}
 
-	if !types.IsNull(defaultVal) && defaultVal.Kind() != col.Kind {
-		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[col.Kind])
+	if !types.IsNull(defaultVal) && defaultVal.Kind() != modifiedCol.Kind {
+		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[modifiedCol.Kind])
 	}
 
 	return nil
