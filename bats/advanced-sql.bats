@@ -278,7 +278,7 @@ teardown() {
 }
 
 @test "sql alter table to change column type not supported" {
-    run dolt sql -q "alter table one_pk modify column c5 varchar"
+    run dolt sql -q "alter table one_pk modify column c5 varchar(80)"
     [ $status -eq 1 ]
     [[ "$output" =~ "unsupported feature: column types cannot be changed" ]] || false
 }
