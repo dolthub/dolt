@@ -25,13 +25,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 
 	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
+	"github.com/liquidata-inc/dolt/go/store/util/verbose"
 )
 
 const (
@@ -128,7 +128,7 @@ func (dts *ddbTableStore) readTable(ctx context.Context, name addr) (data []byte
 	}
 	data, err = try(&input)
 	if _, isNotFound := err.(tableNotInDynamoErr); isNotFound {
-		log.Printf("Eventually consistent read for %s failed; trying fully-consistent", name)
+		verbose.Logger(ctx).Sugar().Debugf("Eventually consistent read for %s failed; trying fully-consistent", name)
 		input.ConsistentRead = aws.Bool(true)
 		return try(&input)
 	}

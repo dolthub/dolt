@@ -25,6 +25,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 )
 
+const doubleQuot = `"`
+
 // Quotes the identifier given with backticks.
 func QuoteIdentifier(s string) string {
 	return "`" + s + "`"

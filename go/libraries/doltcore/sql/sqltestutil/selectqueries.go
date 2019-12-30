@@ -189,25 +189,25 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:           "select *, order by string",
-		Query:          "select * from people order by first",
+		Query:          "select * from people order by first_name",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Barney, Bart, Homer, Lisa, Marge, Moe),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, order by string,string",
-		Query:          "select * from people order by last desc, first asc",
+		Query:          "select * from people order by last_name desc, first_name asc",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Moe, Bart, Homer, Lisa, Marge, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, order by with limit",
-		Query:          "select * from people order by first limit 2",
+		Query:          "select * from people order by first_name limit 2",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Barney, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, order by string,string with limit",
-		Query:          "select * from people order by last desc, first asc limit 2",
+		Query:          "select * from people order by last_name desc, first_name asc limit 2",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Moe, Bart),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
@@ -255,19 +255,19 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:           "select *, where > string",
-		Query:          "select * from people where last > 'Simpson'",
+		Query:          "select * from people where last_name > 'Simpson'",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Moe),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, where < string",
-		Query:          "select * from people where last < 'Simpson'",
+		Query:          "select * from people where last_name < 'Simpson'",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, where = string",
-		Query:          "select * from people where last = 'Simpson'",
+		Query:          "select * from people where last_name = 'Simpson'",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge, Bart, Lisa),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
@@ -345,7 +345,7 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:           "select *, in clause string",
-		Query:          "select * from people where first in ('Homer', 'Marge')",
+		Query:          "select * from people where first_name in ('Homer', 'Marge')",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Homer, Marge),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
@@ -363,7 +363,7 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:            "select *, in clause, mixed types",
-		Query:           "select * from people where first in ('Homer', 40)",
+		Query:           "select * from people where first_name in ('Homer', 40)",
 		ExpectedErr:     "Type mismatch: mixed types in list literal '('Homer', 40)'",
 		SkipOnSqlEngine: true,
 	},
@@ -375,19 +375,19 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:           "select *, not in clause",
-		Query:          "select * from people where first not in ('Homer', 'Marge')",
+		Query:          "select * from people where first_name not in ('Homer', 'Marge')",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Bart, Lisa, Moe, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select *, in clause single element",
-		Query:          "select * from people where first in ('Homer')",
+		Query:          "select * from people where first_name in ('Homer')",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Homer),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:            "select *, in clause single type mismatch",
-		Query:           "select * from people where first in (1.0)",
+		Query:           "select * from people where first_name in (1.0)",
 		ExpectedErr:     "Type mismatch:",
 		SkipOnSqlEngine: true,
 	},
@@ -441,20 +441,20 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:           "and expression in select",
-		Query:          "select is_married and age >= 40 from people where last = 'Simpson' order by id limit 2",
+		Query:          "select is_married and age >= 40 from people where last_name = 'Simpson' order by id limit 2",
 		ExpectedRows:   Rs(NewResultSetRow(types.Bool(true)), NewResultSetRow(types.Bool(false))),
 		ExpectedSchema: NewResultSetSchema("is_married and age >= 40", types.BoolKind),
 	},
 	{
 		Name:  "or expression in select",
-		Query: "select first, age <= 10 or age >= 40 as not_marge from people where last = 'Simpson' order by id desc",
+		Query: "select first_name, age <= 10 or age >= 40 as not_marge from people where last_name = 'Simpson' order by id desc",
 		ExpectedRows: Rs(
 			NewResultSetRow(types.String("Lisa"), types.Bool(true)),
 			NewResultSetRow(types.String("Bart"), types.Bool(true)),
 			NewResultSetRow(types.String("Marge"), types.Bool(false)),
 			NewResultSetRow(types.String("Homer"), types.Bool(true)),
 		),
-		ExpectedSchema: NewResultSetSchema("first", types.StringKind, "not_marge", types.BoolKind),
+		ExpectedSchema: NewResultSetSchema("first_name", types.StringKind, "not_marge", types.BoolKind),
 	},
 	{
 		Name:           "unary expression in select",
@@ -477,7 +477,7 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:            "select *, -column, string type",
-		Query:           "select * from people where -first = 'Homer'",
+		Query:           "select * from people where -first_name = 'Homer'",
 		ExpectedErr:     "Unsupported type for unary - operation: varchar",
 		SkipOnSqlEngine: true,
 	},
@@ -520,74 +520,74 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:            "select *, binary + in where type mismatch",
-		Query:           "select * from people where first + 1 = 41",
-		ExpectedErr:     "Type mismatch evaluating expression 'first + 1'",
+		Query:           "select * from people where first_name + 1 = 41",
+		ExpectedErr:     "Type mismatch evaluating expression 'first_name + 1'",
 		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, binary - in where type mismatch",
-		Query:           "select * from people where first - 1 = 39",
-		ExpectedErr:     "Type mismatch evaluating expression 'first - 1'",
+		Query:           "select * from people where first_name - 1 = 39",
+		ExpectedErr:     "Type mismatch evaluating expression 'first_name - 1'",
 		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, binary / in where type mismatch",
-		Query:           "select * from people where first / 2 = 20",
-		ExpectedErr:     "Type mismatch evaluating expression 'first / 2'",
+		Query:           "select * from people where first_name / 2 = 20",
+		ExpectedErr:     "Type mismatch evaluating expression 'first_name / 2'",
 		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, binary * in where type mismatch",
-		Query:           "select * from people where first * 2 = 80",
-		ExpectedErr:     "Type mismatch evaluating expression 'first * 2'",
+		Query:           "select * from people where first_name * 2 = 80",
+		ExpectedErr:     "Type mismatch evaluating expression 'first_name * 2'",
 		SkipOnSqlEngine: true,
 	},
 	{
 		Name:            "select *, binary % in where type mismatch",
-		Query:           "select * from people where first % 4 = 0",
-		ExpectedErr:     "Type mismatch evaluating expression 'first % 4'",
+		Query:           "select * from people where first_name % 4 = 0",
+		ExpectedErr:     "Type mismatch evaluating expression 'first_name % 4'",
 		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select * with where, order by",
-		Query:          "select * from people where `uuid` is not null and first <> 'Marge' order by last desc, age",
+		Query:          "select * from people where `uuid` is not null and first_name <> 'Marge' order by last_name desc, age",
 		ExpectedRows:   CompressRows(PeopleTestSchema, Moe, Lisa, Bart, Barney),
 		ExpectedSchema: CompressSchema(PeopleTestSchema),
 	},
 	{
 		Name:           "select subset of cols",
-		Query:          "select first, last from people where age >= 40",
-		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first", "last"), Homer, Moe, Barney),
-		ExpectedSchema: CompressSchema(PeopleTestSchema, "first", "last"),
+		Query:          "select first_name, last_name from people where age >= 40",
+		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer, Moe, Barney),
+		ExpectedSchema: CompressSchema(PeopleTestSchema, "first_name", "last_name"),
 	},
 	{
 		Name:           "column aliases",
-		Query:          "select first as f, last as l from people where age >= 40",
-		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first", "last"), Homer, Moe, Barney),
+		Query:          "select first_name as f, last_name as l from people where age >= 40",
+		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer, Moe, Barney),
 		ExpectedSchema: NewResultSetSchema("f", types.StringKind, "l", types.StringKind),
 	},
 	{
 		Name:           "duplicate column aliases",
-		Query:          "select first as f, last as f from people where age >= 40",
-		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first", "last"), Homer, Moe, Barney),
+		Query:          "select first_name as f, last_name as f from people where age >= 40",
+		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer, Moe, Barney),
 		ExpectedSchema: NewResultSetSchema("f", types.StringKind, "f", types.StringKind),
 	},
 	{
 		Name:  "column selected more than once",
-		Query: "select first, first from people where age >= 40 order by id",
+		Query: "select first_name, first_name from people where age >= 40 order by id",
 		ExpectedRows: Rs(
 			NewResultSetRow(types.String("Homer"), types.String("Homer")),
 			NewResultSetRow(types.String("Moe"), types.String("Moe")),
 			NewResultSetRow(types.String("Barney"), types.String("Barney")),
 		),
-		ExpectedSchema: NewResultSetSchema("first", types.StringKind, "first", types.StringKind),
+		ExpectedSchema: NewResultSetSchema("first_name", types.StringKind, "first_name", types.StringKind),
 	},
 
 	// TODO: fix this. To make this work we need to track selected tables along with their aliases. It's not an error to
 	//  select the same table multiple times, as long as each occurrence has a unique name
 	// {
 	// 	name:        "duplicate table selection",
-	// 	query:       "select first as f, last as f from people, people where age >= 40",
+	// 	query:       "select first_name as f, last_name as f from people, people where age >= 40",
 	// 	expectedErr: "Non-unique table name / alias: 'people'",
 	// },
 	{
@@ -598,48 +598,48 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:            "column aliases in where clause",
-		Query:           `select first as f, last as l from people where f = "Homer"`,
+		Query:           `select first_name as f, last_name as l from people where f = "Homer"`,
 		ExpectedErr:     "Unknown column: 'f'",
 		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "select subset of columns with order by",
-		Query:          "select first from people order by age, first",
-		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first"), Lisa, Bart, Marge, Barney, Homer, Moe),
-		ExpectedSchema: CompressSchema(PeopleTestSchema, "first"),
+		Query:          "select first_name from people order by age, first_name",
+		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first_name"), Lisa, Bart, Marge, Barney, Homer, Moe),
+		ExpectedSchema: CompressSchema(PeopleTestSchema, "first_name"),
 	},
 	{
 		Name:           "column aliases with order by",
-		Query:          "select first as f from people order by age, f",
-		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first"), Lisa, Bart, Marge, Barney, Homer, Moe),
+		Query:          "select first_name as f from people order by age, f",
+		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first_name"), Lisa, Bart, Marge, Barney, Homer, Moe),
 		ExpectedSchema: NewResultSetSchema("f", types.StringKind),
 	},
 	{
 		Name:            "ambiguous column in order by",
-		Query:           "select first as f, last as f from people order by f",
+		Query:           "select first_name as f, last_name as f from people order by f",
 		ExpectedErr:     "Ambiguous column: 'f'",
 		SkipOnSqlEngine: true,
 	},
 	{
 		Name:           "table aliases",
-		Query:          "select p.first as f, people.last as l from people p where p.first = 'Homer'",
-		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first", "last"), Homer),
+		Query:          "select p.first_name as f, people.last_name as l from people p where p.first_name = 'Homer'",
+		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer),
 		ExpectedSchema: NewResultSetSchema("f", types.StringKind, "l", types.StringKind),
 	},
 	{
 		Name:           "table aliases without column aliases",
-		Query:          "select p.first, people.last from people p where p.first = 'Homer'",
-		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first", "last"), Homer),
-		ExpectedSchema: NewResultSetSchema("first", types.StringKind, "last", types.StringKind),
+		Query:          "select p.first_name, people.last_name from people p where p.first_name = 'Homer'",
+		ExpectedRows:   CompressRows(resultset.SubsetSchema(PeopleTestSchema, "first_name", "last_name"), Homer),
+		ExpectedSchema: NewResultSetSchema("first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:        "table aliases with bad alias",
-		Query:       "select m.first as f, p.last as l from people p where p.f = 'Homer'",
+		Query:       "select m.first_name as f, p.last_name as l from people p where p.f = 'Homer'",
 		ExpectedErr: "Unknown table: 'm'",
 	},
 	{
 		Name: "column aliases, all columns",
-		Query: `select id as i, first as f, last as l, is_married as m, age as a,
+		Query: `select id as i, first_name as f, last_name as l, is_married as m, age as a,
 					rating as r, uuid as u, num_episodes as n from people
 					where age >= 40`,
 		ExpectedRows: CompressRows(PeopleTestSchema, Homer, Moe, Barney),
@@ -694,7 +694,7 @@ var BasicSelectTests = []SelectTest{
 	},
 	{
 		Name:        "unsupported comparison",
-		Query:       "select * from people where function(first)",
+		Query:       "select * from people where function(first_name)",
 		ExpectedErr: "not supported",
 	},
 	{
@@ -1053,7 +1053,7 @@ var JoinTests = []SelectTest{
 	},
 	{
 		Name:  "Natural join with where clause, select subset of columns",
-		Query: `select e.id, p.id, e.name, p.first, p.last from people p, episodes e where e.id = p.id`,
+		Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p, episodes e where e.id = p.id`,
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
@@ -1061,11 +1061,11 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-			"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
+			"name", types.StringKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:  "Natural join with where clause and column aliases",
-		Query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
+		Query: "select e.id as eid, p.id as pid, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p, episodes e where e.id = p.id",
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
@@ -1073,11 +1073,11 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
-			"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
+			"ename", types.StringKind, "pfirst_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:  "Natural join with where clause and quoted column alias",
-		Query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first as pfirst, p.last last from people p, episodes e where e.id = p.id",
+		Query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p, episodes e where e.id = p.id",
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
@@ -1085,7 +1085,7 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("eid", types.IntKind, "p.id", types.IntKind,
-			"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
+			"ename", types.StringKind, "pfirst_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:  "Natural join with join clause",
@@ -1117,7 +1117,7 @@ var JoinTests = []SelectTest{
 	},
 	{
 		Name:  "Natural join with join clause, select subset of columns",
-		Query: `select e.id, p.id, e.name, p.first, p.last from people p join episodes e on e.id = p.id`,
+		Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p join episodes e on e.id = p.id`,
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
@@ -1125,22 +1125,22 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-			"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
+			"name", types.StringKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:  "Natural join with join clause, select subset of columns, join columns not selected",
-		Query: `select e.name, p.first, p.last from people p join episodes e on e.id = p.id`,
+		Query: `select e.name, p.first_name, p.last_name from people p join episodes e on e.id = p.id`,
 		ExpectedRows: Rs(
 			NewResultSetRow(types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
 			NewResultSetRow(types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
 			NewResultSetRow(types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
-		ExpectedSchema: NewResultSetSchema("name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
+		ExpectedSchema: NewResultSetSchema("name", types.StringKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name: "Natural join with join clause, select subset of columns, order by clause",
-		Query: `select e.id, p.id, e.name, p.first, p.last from people p 
+		Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p 
 							join episodes e on e.id = p.id
 							order by e.name`,
 		ExpectedRows: Rs(
@@ -1150,11 +1150,11 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-			"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
+			"name", types.StringKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name: "Natural join with join clause, select subset of columns, order by clause on non-selected column",
-		Query: `select e.id, p.id, e.name, p.first, p.last from people p 
+		Query: `select e.id, p.id, e.name, p.first_name, p.last_name from people p 
 							join episodes e on e.id = p.id
 							order by age`,
 		ExpectedRows: Rs(
@@ -1164,11 +1164,11 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "id", types.IntKind,
-			"name", types.StringKind, "first", types.StringKind, "last", types.StringKind),
+			"name", types.StringKind, "first_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:  "Natural join with join clause and column aliases",
-		Query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p join episodes e on e.id = p.id",
+		Query: "select e.id as eid, p.id as pid, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p join episodes e on e.id = p.id",
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
@@ -1176,11 +1176,11 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
-			"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
+			"ename", types.StringKind, "pfirst_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:  "Natural join with join clause and column aliases, order by",
-		Query: "select e.id as eid, p.id as pid, e.name as ename, p.first as pfirst, p.last last from people p join episodes e on e.id = p.id order by ename",
+		Query: "select e.id as eid, p.id as pid, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p join episodes e on e.id = p.id order by ename",
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
 			NewResultSetRow(types.Int(3), types.Int(3), types.String("Homer's Odyssey"), types.String("Lisa"), types.String("Simpson")),
@@ -1188,11 +1188,11 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
-			"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
+			"ename", types.StringKind, "pfirst_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name:  "Natural join with join clause and quoted column alias",
-		Query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first as pfirst, p.last last from people p join episodes e on e.id = p.id",
+		Query: "select e.id as eid, p.id as `p.id`, e.name as ename, p.first_name as pfirst_name, p.last_name last_name from people p join episodes e on e.id = p.id",
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(1), types.Int(1), types.String("Simpsons Roasting On an Open Fire"), types.String("Marge"), types.String("Simpson")),
 			NewResultSetRow(types.Int(2), types.Int(2), types.String("Bart the Genius"), types.String("Bart"), types.String("Simpson")),
@@ -1200,11 +1200,11 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(4), types.Int(4), types.String("There's No Disgrace Like Home"), types.String("Moe"), types.String("Szyslak")),
 		),
 		ExpectedSchema: NewResultSetSchema("eid", types.IntKind, "p.id", types.IntKind,
-			"ename", types.StringKind, "pfirst", types.StringKind, "last", types.StringKind),
+			"ename", types.StringKind, "pfirst_name", types.StringKind, "last_name", types.StringKind),
 	},
 	{
 		Name: "Join from table with two key columns to table with one key column",
-		Query: `select a.episode_id as eid, p.id as pid, p.first
+		Query: `select a.episode_id as eid, p.id as pid, p.first_name
 						from appearances a join people p on a.character_id = p.id order by eid, pid`,
 		ExpectedRows: Rs(
 			NewResultSetRow(types.Int(1), types.Int(0), types.String("Homer")),
@@ -1219,7 +1219,7 @@ var JoinTests = []SelectTest{
 			NewResultSetRow(types.Int(3), types.Int(5), types.String("Barney")),
 		),
 		ExpectedSchema: NewResultSetSchema("eid", types.IntKind, "pid", types.IntKind,
-			"first", types.StringKind),
+			"first_name", types.StringKind),
 	},
 }
 

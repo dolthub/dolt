@@ -155,6 +155,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 
 	t.Run("PersistToDynamo", func(t *testing.T) {
 		t.Run("Success", func(t *testing.T) {
+			t.SkipNow()
 			assert := assert.New(t)
 
 			ddb := makeFakeDDB(t)
@@ -172,6 +173,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		})
 
 		t.Run("CacheOnOpen", func(t *testing.T) {
+			t.SkipNow()
 			assert := assert.New(t)
 
 			tc := sizecache.New(maxDynamoItemSize)
@@ -198,6 +200,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		})
 
 		t.Run("FailTooManyChunks", func(t *testing.T) {
+			t.SkipNow()
 			assert := assert.New(t)
 
 			ddb := makeFakeDDB(t)
@@ -217,6 +220,7 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 		})
 
 		t.Run("FailItemTooBig", func(t *testing.T) {
+			t.SkipNow()
 			assert := assert.New(t)
 
 			ddb := makeFakeDDB(t)

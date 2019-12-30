@@ -125,10 +125,9 @@ func runMerge(ctx context.Context, args []string) int {
 	_, err = db.SetHead(ctx, outDS, ref)
 	d.PanicIfError(err)
 
-	if !verbose.Quiet() {
-		status.Printf("Done")
-		status.Done()
-	}
+	status.Printf("Done")
+	status.Done()
+
 	return 0
 }
 
@@ -220,10 +219,8 @@ func newMergeProgressChan() chan struct{} {
 	go func() {
 		count := 0
 		for range pc {
-			if !verbose.Quiet() {
-				count++
-				status.Printf("Applied %d changes...", count)
-			}
+			count++
+			status.Printf("Applied %d changes...", count)
 		}
 	}()
 	return pc

@@ -24,3 +24,9 @@ teardown() {
     [ $status -eq 1 ]
     [[ ! "$output" =~ "666" ]] || false
 }
+
+@test "inline query with missing -q flag should error" {
+    run dolt sql "SELECT * FROM test;"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "Invalid Argument:" ]] || false
+}

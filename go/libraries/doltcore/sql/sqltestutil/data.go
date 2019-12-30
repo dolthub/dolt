@@ -37,8 +37,8 @@ import (
 
 const (
 	IdTag = iota
-	FirstTag
-	LastTag
+	FirstNameTag
+	LastNameTag
 	IsMarriedTag
 	AgeTag
 	emptyTag
@@ -85,8 +85,8 @@ var AppearancesTableName = "appearances"
 func createPeopleTestSchema() schema.Schema {
 	colColl, _ := schema.NewColCollection(
 		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn("first", FirstTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("last", LastTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
 		schema.NewColumn("age", AgeTag, types.IntKind, false),
 		//		schema.NewColumn("empty", emptyTag, types.IntKind, false),
@@ -119,8 +119,8 @@ func createAppearancesTestSchema() schema.Schema {
 func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float64) row.Row {
 	vals := row.TaggedValues{
 		IdTag:        types.Int(id),
-		FirstTag:     types.String(first),
-		LastTag:      types.String(last),
+		FirstNameTag: types.String(first),
+		LastNameTag:  types.String(last),
 		IsMarriedTag: types.Bool(isMarried),
 		AgeTag:       types.Int(age),
 		RatingTag:    types.Float(rating),
@@ -172,8 +172,8 @@ func newAppsRow(charId, epId int, comment string) row.Row {
 func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float64, uid uuid.UUID, numEpisodes uint64) row.Row {
 	vals := row.TaggedValues{
 		IdTag:          types.Int(id),
-		FirstTag:       types.String(first),
-		LastTag:        types.String(last),
+		FirstNameTag:   types.String(first),
+		LastNameTag:    types.String(last),
 		IsMarriedTag:   types.Bool(isMarried),
 		AgeTag:         types.Int(age),
 		RatingTag:      types.Float(rating),
@@ -347,22 +347,22 @@ func CreateEmptyTestDatabase(dEnv *env.DoltEnv, t *testing.T) {
 }
 
 var idColTag0TypeUUID = schema.NewColumn("id", 0, types.IntKind, true)
-var firstColTag1TypeStr = schema.NewColumn("first", 1, types.StringKind, false)
-var lastColTag2TypeStr = schema.NewColumn("last", 2, types.StringKind, false)
+var firstColTag1TypeStr = schema.NewColumn("first_name", 1, types.StringKind, false)
+var lastColTag2TypeStr = schema.NewColumn("last_name", 2, types.StringKind, false)
 var addrColTag3TypeStr = schema.NewColumn("addr", 3, types.StringKind, false)
 var ageColTag3TypeInt = schema.NewColumn("age", 3, types.IntKind, false)
 var ageColTag4TypeUint = schema.NewColumn("age", 4, types.UintKind, false)
 
 var diffSchema = envtestutils.MustSchema(
 	schema.NewColumn("to_id", 0, types.IntKind, false),
-	schema.NewColumn("to_first", 1, types.StringKind, false),
+	schema.NewColumn("to_first_name", 1, types.StringKind, false),
 	schema.NewColumn("to_last", 2, types.StringKind, false),
 	schema.NewColumn("to_age_Int_3", 3, types.IntKind, false),
 	schema.NewColumn("to_age_Uint_4", 4, types.UintKind, false),
 	schema.NewColumn("to_addr", 5, types.StringKind, false),
 	schema.NewColumn("to_commit", 6, types.StringKind, false),
 	schema.NewColumn("from_id", 7, types.IntKind, false),
-	schema.NewColumn("from_first", 8, types.StringKind, false),
+	schema.NewColumn("from_first_name", 8, types.StringKind, false),
 	schema.NewColumn("from_last", 9, types.StringKind, false),
 	schema.NewColumn("from_age_Int_3", 10, types.IntKind, false),
 	schema.NewColumn("from_age_Uint_4", 11, types.UintKind, false),

@@ -43,8 +43,11 @@ const (
 	maxS3PartSize = 64 * 1 << 20 // 64MiB
 	maxS3Parts    = 10000
 
-	maxDynamoChunks   = 64
-	maxDynamoItemSize = 400 * (1 << 10) // 400k
+	// Disable persisting tables in DynamoDB.  This is currently unused by
+	// Dolthub and keeping it requires provisioning DynamoDB throughout for
+	// the noop reads.
+	maxDynamoChunks   = 0
+	maxDynamoItemSize = 0
 
 	defaultS3PartSize = minS3PartSize // smallest allowed by S3 allows for most throughput
 )
@@ -309,7 +312,7 @@ func (s3p awsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		return nil, err
 	}
 
-	verbose.Log("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
+	verbose.Logger(ctx).Sugar().Debugf("Compacted table of %d Kb in %s", plan.totalCompressedData/1024, time.Since(t1))
 
 	if s3p.tc != nil {
 		go func() {
@@ -571,8 +574,7 @@ func splitOnMaxSize(dataLen, maxPartSize uint64) []int64 {
 
 func (s3p awsTablePersister) uploadPartCopy(ctx context.Context, src string, srcStart, srcEnd int64, key, uploadID string, partNum int64) (etag string, err error) {
 	res, err := s3p.s3.UploadPartCopyWithContext(ctx, &s3.UploadPartCopyInput{
-		// TODO: Use url.PathEscape() once we're on go 1.8
-		CopySource:      aws.String(url.QueryEscape(s3p.bucket + "/" + src)),
+		CopySource:      aws.String(url.PathEscape(s3p.bucket + "/" + s3p.key(src))),
 		CopySourceRange: aws.String(s3RangeHeader(srcStart, srcEnd)),
 		Bucket:          aws.String(s3p.bucket),
 		Key:             aws.String(s3p.key(key)),

@@ -117,7 +117,7 @@ func TestSqlTableDiffRename(t *testing.T) {
 	ctx, sch, dEnv := setupSchema()
 	dtestutils.CreateTestTable(t, dEnv, "renameTable", sch, []row.Row{}...)
 	oldRoot, _ := dEnv.WorkingRoot(ctx)
-	newRoot, _ := alterschema.RenameTable(ctx, dEnv.DoltDB, oldRoot, "renameTable", "newTableName")
+	newRoot, _ := alterschema.RenameTable(ctx, oldRoot, "renameTable", "newTableName")
 	a, _, rm, _ := newRoot.TableDiff(ctx, oldRoot)
 	added, removed, renames, _ := findRenames(ctx, newRoot, oldRoot, a, rm)
 	assert.Equal(t, map[string]string{"renameTable": "newTableName"}, renames)
@@ -136,7 +136,7 @@ func TestSqlTableDiffRenameChangedTable(t *testing.T) {
 
 	dtestutils.CreateTestTable(t, dEnv, "renameTable", sch, []row.Row{}...)
 	oldRoot, _ := dEnv.WorkingRoot(ctx)
-	newRoot, _ := alterschema.RenameTable(ctx, dEnv.DoltDB, oldRoot, "renameTable", "newTableName")
+	newRoot, _ := alterschema.RenameTable(ctx, oldRoot, "renameTable", "newTableName")
 	r := dtestutils.NewTypedRow(id, "Big Billy", 77, false, strPointer("Doctor"))
 	newRoot, _ = dtestutils.AddRowToRoot(dEnv, ctx, newRoot, "newTableName", r)
 	a, _, rm, _ := newRoot.TableDiff(ctx, oldRoot)
