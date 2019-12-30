@@ -70,7 +70,7 @@ func TestDropColumn(t *testing.T) {
 
 			require.NoError(t, err)
 
-			updatedTable, err := DropColumn(ctx, dEnv.DoltDB, tbl, tt.colName)
+			updatedTable, err := DropColumn(ctx, tbl, tt.colName)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

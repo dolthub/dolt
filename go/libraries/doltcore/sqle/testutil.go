@@ -27,7 +27,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 )
 
 // Executes all the SQL non-select statements given in the string against the root value given and returns the updated
@@ -53,17 +52,15 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			return nil, errors.New("Show statements aren't handled")
 		case *sqlparser.Select, *sqlparser.OtherRead:
 			return nil, errors.New("Select statements aren't handled")
-		case *sqlparser.Insert:
+		case *sqlparser.Insert, *sqlparser.DDL:
 			var rowIter sql.RowIter
 			_, rowIter, execErr = engine.Query(sql.NewEmptyContext(), query)
 			if execErr == nil {
 				execErr = drainIter(rowIter)
 			}
-		case *sqlparser.DDL:
 			if err = db.Flush(context.Background()); err != nil {
 				return nil, err
 			}
-			execErr = sqlDDL(db, engine, dEnv, query)
 		default:
 			return nil, fmt.Errorf("Unsupported SQL statement: '%v'.", query)
 		}
@@ -77,36 +74,6 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 		return db.Root(), nil
 	} else {
 		return nil, err
-	}
-}
-
-// Runs the DDL statement given and sets the new root value in the provided db object.
-func sqlDDL(db *Database, engine *sqle.Engine, dEnv *env.DoltEnv, query string) error {
-	stmt, err := sqlparser.ParseStrictDDL(query)
-	if err != nil {
-		return fmt.Errorf("Error parsing DDL: %v.", err.Error())
-	}
-
-	ddl := stmt.(*sqlparser.DDL)
-	ctx := sql.NewEmptyContext()
-	switch ddl.Action {
-	case sqlparser.CreateStr, sqlparser.DropStr:
-		_, ri, err := engine.Query(ctx, query)
-		if err == nil {
-			ri.Close()
-		}
-		return err
-	case sqlparser.AlterStr, sqlparser.RenameStr:
-		newRoot, err := dsql.ExecuteAlter(ctx, dEnv.DoltDB, db.Root(), ddl, query)
-		if err != nil {
-			return fmt.Errorf("Error altering table: %v", err)
-		}
-		db.SetRoot(newRoot)
-		return nil
-	case sqlparser.TruncateStr:
-		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
-	default:
-		return fmt.Errorf("Unhandled DDL action %v in query %v", ddl.Action, query)
 	}
 }
 

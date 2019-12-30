@@ -22,9 +22,12 @@
 package verbose
 
 import (
-	"log"
+	"context"
+	"os"
 
 	flag "github.com/juju/gnuflag"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 var (
@@ -36,35 +39,31 @@ var (
 func RegisterVerboseFlags(flags *flag.FlagSet) {
 	flags.BoolVar(&verbose, "verbose", false, "show more")
 	flags.BoolVar(&verbose, "v", false, "")
-	flags.BoolVar(&quiet, "quiet", false, "show less")
-	flags.BoolVar(&quiet, "q", false, "")
-}
-
-// Verbose returns True if the verbose flag was set
-func Verbose() bool {
-	return verbose
 }
 
 func SetVerbose(v bool) {
 	verbose = v
 }
 
-// Quiet returns True if the verbose flag was set
-func Quiet() bool {
-	return quiet
-}
+// A function which will be called for logging throughout the doltcore/store
+// layer. Defaults to logging to STDERR at Debug level if --verbose is set and
+// Warn level if --verbose is not set.
+//
+// May be called with `nil` context in non-context-aware functions.
+var Logger func(ctx context.Context) *zap.Logger
 
-func SetQuiet(q bool) {
-	quiet = q
-}
-
-// Log calls Printf(format, args...) iff Verbose() returns true.
-func Log(format string, args ...interface{}) {
-	if Verbose() {
-		if len(args) > 0 {
-			log.Printf(format+"\n", args...)
+func init() {
+	enabler := zap.LevelEnablerFunc(func(l zapcore.Level) bool {
+		if verbose {
+			return zapcore.DebugLevel.Enabled(l)
 		} else {
-			log.Println(format)
+			return zapcore.WarnLevel.Enabled(l)
 		}
+	})
+	encoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+	core := zapcore.NewCore(encoder, zapcore.Lock(os.Stderr), enabler)
+	l := zap.New(core)
+	Logger = func(ctx context.Context) *zap.Logger {
+		return l
 	}
 }

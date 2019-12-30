@@ -93,7 +93,6 @@ func main() {
 	memProfileVal := noms.Flag("memprofile", "write memory profile to file").String()
 	blockProfileVal := noms.Flag("blockprofile", "write block profile to file").String()
 	verboseVal := noms.Flag("verbose", "show more").Short('v').Bool()
-	quietVal := noms.Flag("quiet", "show less").Short('q').Bool()
 
 	// set up docs for non-kingpin commands
 	addNomsDocs(noms)
@@ -111,7 +110,6 @@ func main() {
 	// apply global flags
 	profile.ApplyProfileFlags(cpuProfileVal, memProfileVal, blockProfileVal)
 	verbose.SetVerbose(*verboseVal)
-	verbose.SetQuiet(*quietVal)
 
 	if handler := handlers[strings.Split(input, " ")[0]]; handler != nil {
 		handler(input)
