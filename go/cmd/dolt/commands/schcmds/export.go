@@ -43,6 +43,10 @@ func Export(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schExportShortDesc, schExportLongDesc, schExportSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {
