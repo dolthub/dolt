@@ -70,12 +70,11 @@ teardown() {
 }
 
 @test "dolt diff in new repository" {
-    # Remove the docs until we have the correct output for doc diffs.
-    rm LICENSE.md
-    rm README.md
     run dolt diff
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
 }
 
 @test "dolt commit with nothing added" {

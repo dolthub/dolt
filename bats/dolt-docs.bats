@@ -432,6 +432,39 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
+@test "dolt diff shows diffs between working root and file system docs" {
+    echo "testing readme" > README.md
+    echo "testing license" > LICENSE.md
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt commit -m "docs"
+    [ "$status" -eq 0 ]
+    echo "a new readme" > README.md
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~  "--- a/README.md" ]] || false
+    [[ "$output" =~  "+++ b/README.md" ]] || false
+    [[ "$output" =~  "- testing readme" ]] || false
+    [[ "$output" =~  "+ a new readme" ]] || false
+    [[ ! "$output" =~  "LICENSE.md" ]] || false
+    rm LICENSE.md
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~  "--- a/LICENSE.md" ]] || false
+    [[ "$output" =~  "+++ b/LICENSE.md" ]] || false
+    [[ "$output" =~ "- testing license" ]] || false
+}
+
 #  @test "dolt ls should not show dolt_docs table" {
 
 #  }
@@ -441,9 +474,5 @@ teardown() {
 # }
 
 # @test "dolt sql does not allow queries or edits to dolt_docs" {
-
-# }
-
-# @test "dolt diff shows diffs between working root and file system docs" {
 
 # }

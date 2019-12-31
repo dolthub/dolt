@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	textdiff "github.com/andreyvit/diff"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
@@ -308,10 +309,10 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 		}
 
 		if dArgs.diffOutput == TabularDiffOutput {
-			printTableDiffSummary(tblName, tbl1, tbl2)
+			printTableDiffSummary(ctx, dEnv, tblName, tbl1, tbl2)
 		}
 
-		if tbl1 == nil || tbl2 == nil {
+		if tbl1 == nil || tbl2 == nil || tblName == doltdb.DocTableName {
 			continue
 		}
 
@@ -773,31 +774,134 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 
 var emptyHash = hash.Hash{}
 
-func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
+func getDocTblPKs(ctx context.Context, tblName string, docTbl *doltdb.Table) ([]string, error) {
+	if tblName != doltdb.DocTableName || docTbl == nil {
+		return []string{}, nil
+	}
+
+	sch, err := docTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rowMap, err := docTbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	pks := []string{}
+
+	err = rowMap.IterAll(ctx, func(key, val types.Value) error {
+		row, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
+		if err != nil {
+			return err
+		}
+		colVal, _ := row.GetColVal(doltdb.DocNameTag)
+		colText, _ := strconv.Unquote(colVal.HumanReadableString())
+		pks = append(pks, colText)
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return pks, nil
+}
+
+func printModifiedDocs(ctx context.Context, tbl1, tbl2 *doltdb.Table) {
+	bold := color.New(color.Bold)
+	docDetails := env.AllValidDocDetails
+
+	for _, doc := range *docDetails {
+		sch1, _ := tbl1.GetSchema(ctx)
+		updated, _ := env.AddNewerTextToDoc(ctx, tbl1, &sch1, doc)
+		sch2, _ := tbl2.GetSchema(ctx)
+		updatedWithVal, _ := doltdb.AddValueToDoc(ctx, tbl2, &sch2, updated)
+
+		if updatedWithVal.Value != nil {
+			newer := string(doc.NewerText)
+			older, _ := strconv.Unquote(doc.Value.HumanReadableString())
+			lines := textdiff.LineDiffAsLines(older, newer)
+
+			if len(lines) > 0 && newer != older {
+				_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", doc.DocPk)
+				_, _ = bold.Printf("--- a/%s\n", doc.DocPk)
+				_, _ = bold.Printf("+++ b/%s\n", doc.DocPk)
+				for _, line := range lines {
+					if string(line[0]) == string("+") {
+						cli.Println(color.GreenString("+ " + line[1:]))
+					} else if string(line[0]) == ("-") {
+						cli.Println(color.RedString("- " + line[1:]))
+					} else {
+						cli.Println(" " + line)
+					}
+				}
+			}
+		}
+	}
+}
+
+func printDeletedDocs(ctx context.Context, tblName string, tbl2 *doltdb.Table) {
+	bold := color.New(color.Bold)
+	docPKs, _ := getDocTblPKs(ctx, tblName, tbl2)
+	for _, pk := range docPKs {
+		_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
+		_, _ = bold.Println("deleted doc")
+	}
+}
+
+func printAddedDocs(ctx context.Context, tblName string, tbl1 *doltdb.Table) {
+	bold := color.New(color.Bold)
+	docPKs, _ := getDocTblPKs(ctx, tblName, tbl1)
+	for _, pk := range docPKs {
+		_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
+		_, _ = bold.Println("added doc")
+	}
+}
+
+func printDocDiffs(ctx context.Context, tblName string, tbl1, tbl2 *doltdb.Table) {
+	if tblName != doltdb.DocTableName {
+		return
+	}
+	if tbl1 == nil && tbl2 != nil {
+		printDeletedDocs(ctx, tblName, tbl2)
+	} else if tbl1 != nil && tbl2 == nil {
+		printAddedDocs(ctx, tblName, tbl1)
+	} else {
+		printModifiedDocs(ctx, tbl1, tbl2)
+	}
+}
+
+func printTableDiffSummary(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1, tbl2 *doltdb.Table) {
 	bold := color.New(color.Bold)
 
-	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
-
-	if tbl1 == nil {
-		_, _ = bold.Println("deleted table")
-	} else if tbl2 == nil {
-		_, _ = bold.Println("added table")
+	if tblName == doltdb.DocTableName {
+		printDocDiffs(ctx, tblName, tbl1, tbl2)
 	} else {
-		h1, err := tbl1.HashOf()
+		_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
 
-		if err != nil {
-			panic(err)
+		if tbl1 == nil {
+			_, _ = bold.Println("deleted table")
+		} else if tbl2 == nil {
+			_, _ = bold.Println("added table")
+		} else {
+			h1, err := tbl1.HashOf()
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
+
+			h2, err := tbl2.HashOf()
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 		}
-
-		_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
-
-		h2, err := tbl2.HashOf()
-
-		if err != nil {
-			panic(err)
-		}
-
-		_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 	}
 }
 
