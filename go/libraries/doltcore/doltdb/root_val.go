@@ -613,7 +613,7 @@ func getDoc(ctx context.Context, newRow row.Row, oldTbl *Table, oldSch schema.Sc
 	if err != nil {
 		return nil, err
 	}
-	updated, err = AddValueToDoc(ctx, oldTbl, &oldSch, &updated)
+	updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, &updated)
 	if err != nil {
 		return nil, err
 	}
@@ -623,7 +623,7 @@ func getDoc(ctx context.Context, newRow row.Row, oldTbl *Table, oldSch schema.Sc
 func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDetails []*DocDetails) ([]*DocDetails, error) {
 	if tbl != nil && sch != nil {
 		for i, details := range docDetails {
-			newDetails, err := AddValueToDoc(ctx, tbl, sch, details)
+			newDetails, err := AddValueToDocFromTbl(ctx, tbl, sch, details)
 			if err != nil {
 				return nil, err
 			}
@@ -633,7 +633,8 @@ func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDet
 	return docDetails, nil
 }
 
-func AddValueToDoc(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail *DocDetails) (DocDetails, error) {
+// AddValueToDocFromTbl updates the Value field of a docDetail using the provided table and schema.
+func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail *DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
 			DocNameTag: types.String(docDetail.DocPk),
@@ -650,6 +651,29 @@ func AddValueToDoc(ctx context.Context, tbl *Table, sch *schema.Schema, docDetai
 		}
 	}
 	return *docDetail, nil
+}
+
+// AddNewerTextToDocFromTbl updates the NewerText field of a docDetail using the provided table and schema.
+func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc *DocDetails) (*DocDetails, error) {
+	if tbl != nil && sch != nil {
+		pkTaggedVal := row.TaggedValues{
+			DocNameTag: types.String(doc.DocPk),
+		}
+
+		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			docValue, _ := docRow.GetColVal(DocTextTag)
+			doc.NewerText = []byte(docValue.(types.String))
+		} else {
+			doc.NewerText = nil
+		}
+	} else {
+		doc.NewerText = nil
+	}
+	return doc, nil
 }
 
 func addNewerTextToDocFromRow(ctx context.Context, row row.Row, doc *DocDetails) (DocDetails, error) {

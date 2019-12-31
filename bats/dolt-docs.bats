@@ -460,9 +460,8 @@ teardown() {
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
-    [[ "$output" =~  "--- a/LICENSE.md" ]] || false
-    [[ "$output" =~  "+++ b/LICENSE.md" ]] || false
     [[ "$output" =~ "- testing license" ]] || false
+    [[ "$output" =~ "deleted doc" ]] || false
 }
 
 #  @test "dolt ls should not show dolt_docs table" {

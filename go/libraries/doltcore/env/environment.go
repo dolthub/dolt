@@ -937,33 +937,11 @@ func (dEnv *DoltEnv) GetDocsWithNewerTextFromRoot(ctx context.Context, root *dol
 	}
 
 	for i, doc := range docs {
-		doc, err := AddNewerTextToDoc(ctx, docTbl, &sch, doc)
+		doc, err := doltdb.AddNewerTextToDocFromTbl(ctx, docTbl, &sch, doc)
 		if err != nil {
 			return nil, err
 		}
 		docs[i] = doc
 	}
 	return docs, nil
-}
-
-func AddNewerTextToDoc(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc *doltdb.DocDetails) (*doltdb.DocDetails, error) {
-	if tbl != nil && sch != nil {
-		pkTaggedVal := row.TaggedValues{
-			doltdb.DocNameTag: types.String(doc.DocPk),
-		}
-
-		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
-			docValue, _ := docRow.GetColVal(doltdb.DocTextTag)
-			doc.NewerText = []byte(docValue.(types.String))
-		} else {
-			doc.NewerText = nil
-		}
-	} else {
-		doc.NewerText = nil
-	}
-	return doc, nil
 }
