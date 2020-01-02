@@ -440,9 +440,45 @@ teardown() {
 
 # }
 
-# @test "dolt sql does not allow queries or edits to dolt_docs" {
+# TO DO: Expose dolt_docs for read commands
+@test "dolt sql does not expose dolt_docs" {
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "initial doc commits"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
 
-# }
+    run dolt sql -q "INSERT INTO dolt_docs VALUES (new_doc, new_text)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "DELETE FROM dolt_docs WHERE pk=REAMDE.md"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "UPDATE dolt_docs SET pk=NotValid WHERE pk=README.md"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "SELECT * FROM dolt_docs"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "CREATE TABLE dolt_docs (doc_name TEXT, doc_text LONGTEXT, PRIMARY KEY(doc_name))"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid table name: 'dolt_docs'" ]] || false
+}
 
 # @test "dolt diff shows diffs between working root and file system docs" {
 

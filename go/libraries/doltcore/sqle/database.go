@@ -106,7 +106,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return NewLogTable(db.ddb, db.rs), true, nil
 	}
 
-	tableNames, err := db.root.GetTableNames(ctx)
+	tableNames, err := db.GetTableNames(ctx)
 
 	if err != nil {
 		return nil, false, err
@@ -142,7 +142,17 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 }
 
 func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
-	return db.root.GetTableNames(ctx)
+	tblNames, err := db.root.GetTableNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i, tbl := range tblNames {
+		if tbl == doltdb.DocTableName {
+			tblNames = append(tblNames[:i], tblNames[i+1:]...)
+			break
+		}
+	}
+	return tblNames, nil
 }
 
 // Root returns the root value for the database.
@@ -183,7 +193,7 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 // CreateTable creates a table with the name and schema given.
 func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
 
-	if !doltdb.IsValidTableName(tableName) {
+	if !doltdb.IsValidTableName(tableName) || tableName == doltdb.DocTableName {
 		return fmt.Errorf("Invalid table name: '%v'", tableName)
 	}
 
