@@ -671,6 +671,16 @@ var BasicSelectTests = []SelectTest{
 		ExpectedErr: `Unknown table: 'dne'`,
 	},
 	{
+		Name:        "unknown diff table",
+		Query:       "select * from dolt_diff_dne",
+		ExpectedErr: `Unknown table: 'dolt_diff_dne'`,
+	},
+	{
+		Name:        "unknown history table",
+		Query:       "select * from dolt_history_dne",
+		ExpectedErr: `Unknown table: 'dolt_history_dne'`,
+	},
+	{
 		Name:        "unknown table in join",
 		Query:       "select * from people join dne",
 		ExpectedErr: `Unknown table: 'dne'`,
