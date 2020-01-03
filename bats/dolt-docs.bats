@@ -464,6 +464,57 @@ teardown() {
     [[ "$output" =~ "deleted doc" ]] || false
 }
 
+@test "dolt diff <doc> shows diff of one <doc> between working root and file system docs" {
+    echo "testing readme" > README.md
+    echo "testing license" > LICENSE.md
+    run dolt diff README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    run dolt diff LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "docs"
+    [ "$status" -eq 0 ]
+    echo "a new readme" > README.md
+    echo "a new license" > LICENSE.md
+    run dolt diff README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~  "--- a/README.md" ]] || false
+    [[ "$output" =~  "+++ b/README.md" ]] || false
+    [[ "$output" =~  "- testing readme" ]] || false
+    [[ "$output" =~  "+ a new readme" ]] || false
+    [[ ! "$output" =~  "LICENSE.md" ]] || false
+    run dolt diff LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~  "--- a/LICENSE.md" ]] || false
+    [[ "$output" =~  "+++ b/LICENSE.md" ]] || false
+    [[ "$output" =~  "- testing license" ]] || false
+    [[ "$output" =~  "+ a new license" ]] || false
+    [[ ! "$output" =~  "README.md" ]] || false
+    rm README.md
+    rm LICENSE.md
+    run dolt diff LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "- testing license" ]] || false
+    [[ "$output" =~ "deleted doc" ]] || false
+    [[ ! "$output" =~ "README" ]] || false
+    run dolt diff README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "- testing readme" ]] || false
+    [[ "$output" =~ "deleted doc" ]] || false
+    [[ ! "$output" =~ "LICENSE" ]] || false
+}
+
 #  @test "dolt ls should not show dolt_docs table" {
 
 #  }
