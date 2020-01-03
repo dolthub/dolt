@@ -741,9 +741,11 @@ func (dEnv *DoltEnv) PutDocsAndGetNewRoot(ctx context.Context, root *doltdb.Root
 		return nil, err
 	}
 
-	docDetails, err = getDocDetails(dEnv, docDetails)
-	if err != nil {
-		return nil, err
+	if docDetails == nil {
+		docDetails, err = getDocDetails(dEnv, docDetails)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if found {
