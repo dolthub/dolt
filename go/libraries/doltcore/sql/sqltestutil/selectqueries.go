@@ -16,6 +16,7 @@ package sqltestutil
 
 import (
 	"testing"
+	"time"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/resultset"
 
@@ -63,7 +64,7 @@ var logSchColColl, _ = schema.NewColCollection(
 	schema.NewColumn("commit_hash", 0, types.StringKind, true),
 	schema.NewColumn("committer", 1, types.StringKind, false),
 	schema.NewColumn("email", 2, types.StringKind, false),
-	schema.NewColumn("date", 3, types.StringKind, false),
+	schema.NewColumn("date", 3, types.TimestampKind, false),
 	schema.NewColumn("message", 4, types.StringKind, false),
 )
 var LogSchema schema.Schema = schema.SchemaFromCols(logSchColColl)
@@ -720,7 +721,7 @@ var BasicSelectTests = []SelectTest{
 			0: types.String("73aupasq0va8lic1t5703nacn6n6kb8g"),
 			1: types.String("billy bob"),
 			2: types.String("bigbillieb@fake.horse"),
-			3: types.String("Thu Jan 01 00:00:00 +0000 1970"),
+			3: types.Timestamp(time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)),
 			4: types.String("Initialize data repository"),
 		}))},
 		ExpectedSchema: LogSchema,

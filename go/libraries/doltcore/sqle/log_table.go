@@ -60,7 +60,7 @@ func (dt *LogTable) Schema() sql.Schema {
 		{Name: "commit_hash", Type: sql.Text, Source: LogTableName, PrimaryKey: true},
 		{Name: "committer", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
 		{Name: "email", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
-		{Name: "date", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
+		{Name: "date", Type: sql.Datetime, Source: LogTableName, PrimaryKey: false},
 		{Name: "message", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
 	}
 }
@@ -128,7 +128,7 @@ func (itr *LogItr) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.FormatTS(), meta.Description), nil
+	return sql.NewRow(h.String(), meta.Name, meta.Email, meta.Time(), meta.Description), nil
 }
 
 // Close closes the iterator.
