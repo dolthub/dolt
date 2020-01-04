@@ -553,11 +553,20 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Sc
 			if err != nil {
 				return err
 			}
-			doc, err := getDoc(ctx, newRow, oldTbl, oldSch)
+			doc := DocDetails{}
+			updated, err := addDocPKToDocFromRow(newRow, &doc)
 			if err != nil {
 				return err
 			}
-			docDetailsBtwnRoots = append(docDetailsBtwnRoots, doc)
+			updated, err = addNewerTextToDocFromRow(ctx, newRow, &updated)
+			if err != nil {
+				return err
+			}
+			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, &updated)
+			if err != nil {
+				return err
+			}
+			docDetailsBtwnRoots = append(docDetailsBtwnRoots, &updated)
 			return nil
 		})
 		if err != nil {
@@ -570,19 +579,28 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Sc
 		if err != nil {
 			return nil, err
 		}
-
 		err = oldRows.IterAll(ctx, func(key, val types.Value) error {
 			oldRow, err := row.FromNoms(oldSch, key.(types.Tuple), val.(types.Tuple))
 			if err != nil {
 				return err
 			}
-			doc, err := getDoc(ctx, oldRow, newTbl, newSch)
+			doc := DocDetails{}
+			updated, err := addDocPKToDocFromRow(oldRow, &doc)
 			if err != nil {
 				return err
 			}
+			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, &updated)
+			if err != nil {
+				return err
+			}
+			docWithNewer, err := AddNewerTextToDocFromTbl(ctx, newTbl, &newSch, &updated)
+			if err != nil {
+				return err
+			}
+			updated = *docWithNewer
 
-			if doc.Value == nil {
-				docDetailsBtwnRoots = append(docDetailsBtwnRoots, doc)
+			if updated.Value != nil && updated.NewerText == nil {
+				docDetailsBtwnRoots = append(docDetailsBtwnRoots, &updated)
 			}
 			return nil
 		})
@@ -601,23 +619,6 @@ func GetDocDiffsFromDocDetails(ctx context.Context, docDetails []*DocDetails) (a
 		added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.NewerText, doc.DocPk)
 	}
 	return added, modified, removed
-}
-
-func getDoc(ctx context.Context, newRow row.Row, oldTbl *Table, oldSch schema.Schema) (*DocDetails, error) {
-	doc := DocDetails{}
-	updated, err := addDocPKToDocFromRow(newRow, &doc)
-	if err != nil {
-		return nil, err
-	}
-	updated, err = addNewerTextToDocFromRow(ctx, newRow, &updated)
-	if err != nil {
-		return nil, err
-	}
-	updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, &updated)
-	if err != nil {
-		return nil, err
-	}
-	return &updated, nil
 }
 
 func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDetails []*DocDetails) ([]*DocDetails, error) {

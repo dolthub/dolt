@@ -55,6 +55,22 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    rm LICENSE.md
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*deleted:[[:space:]]*LICENSE.md) ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*deleted:[[:space:]]*LICENSE.md) ]] || false
+    run dolt commit -m "delete license"
+    [ "$status" -eq 0 ]
+    run ls
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+
 }
 
 @test "dolt add . and dolt commit dolt docs with another table" {
