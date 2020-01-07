@@ -79,6 +79,10 @@ func NewHistoryTable(ctx context.Context, name string, ddb *doltdb.DoltDB) (*His
 
 	sch := ss.GetSchema()
 
+	if sch.GetAllCols().Size() <= 3 {
+		return nil, sql.ErrTableNotFound.New(DoltHistoryTablePrefix + name)
+	}
+
 	err = cmItr.Reset(ctx)
 
 	if err != nil {
