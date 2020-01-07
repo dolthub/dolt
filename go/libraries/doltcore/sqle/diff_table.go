@@ -66,6 +66,10 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.
 
 	sch := ss.GetSchema()
 
+	if sch.GetAllCols().Size() <= 1 {
+		return nil, sql.ErrTableNotFound.New(DoltDiffTablePrefix + name)
+	}
+
 	j, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{{Name: diff.To, Sch: sch}, {Name: diff.From, Sch: sch}},
 		map[string]rowconv.ColNamingFunc{
