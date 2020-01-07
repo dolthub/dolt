@@ -432,6 +432,83 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
+ @test "dolt checkout <doc> should save the staged docs to the filesystem if the doc has already been added" {
+    echo "this is my license" > LICENSE.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    run dolt checkout LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    run cat LICENSE.md
+    [[ "$output" =~ "this is my license" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+
+    echo "testing-modified-doc" > LICENSE.md
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    run dolt checkout LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ ! "$output" =~ "Changes not staged for commit:" ]] || false
+    run cat LICENSE.md
+    [[ "$output" =~ "this is my license" ]] || false
+ }
+
+ @test "dolt checkout <doc> should save the head docs to the filesystem when the doc exists on the head, and has not been staged" {
+    echo "this is my license" > LICENSE.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "committing license"
+    [ "$status" -eq 0 ]
+    echo "this is new" > LICENSE.md
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*LICENSE.md) ]] || false
+    run dolt checkout LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    run cat LICENSE.md
+    [[ "$output" =~  "this is my license" ]] || false
+ }
+
+ @test "dolt checkout <doc> should delete the doc from filesystem if it doesn't exist on staged or head roots" {
+    run ls
+    [[ "$output" =~ "README.md" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Untracked files:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt checkout README.md
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "README.md" ]] || false
+    run ls 
+    [[ ! "$output" =~ "README.md" ]] || false
+ }
+
 #  @test "dolt ls should not show dolt_docs table" {
 
 #  }
