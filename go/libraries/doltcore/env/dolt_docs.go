@@ -15,6 +15,8 @@
 package env
 
 import (
+	"os"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -61,7 +63,7 @@ func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 
 func (docs *Docs) Save(fs filesys.ReadWriteFS) error {
 	for _, doc := range *docs {
-		if !isValidDoc(doc.DocPk) {
+		if !IsValidDoc(doc.DocPk) {
 			continue
 		}
 		filePath := getDocFile(doc.File)
@@ -69,6 +71,19 @@ func (docs *Docs) Save(fs filesys.ReadWriteFS) error {
 			err := fs.WriteFile(filePath, doc.NewerText)
 			if err != nil {
 				return err
+			}
+		}
+	}
+	return nil
+}
+
+func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
+	for _, doc := range *AllValidDocDetails {
+		if doc.DocPk == docName {
+			path := getDocFile(doc.File)
+			exists, isDir := fs.Exists(path)
+			if exists && !isDir {
+				return os.Remove(path)
 			}
 		}
 	}
@@ -86,7 +101,7 @@ func getInitialDocText(docName string) []byte {
 	}
 }
 
-func isValidDoc(docName string) bool {
+func IsValidDoc(docName string) bool {
 	for _, doc := range *AllValidDocDetails {
 		if doc.DocPk == docName {
 			return true

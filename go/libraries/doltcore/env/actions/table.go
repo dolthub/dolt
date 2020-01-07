@@ -54,7 +54,30 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 	currRoot := roots[WorkingRoot]
 	staged := roots[StagedRoot]
 	head := roots[HeadRoot]
+	tbls, docs, err := GetTblsAndDocDetails(dEnv, tbls)
+	if err != nil {
+		return err
+	}
+
+	if len(docs) > 0 {
+		_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
+		if ok {
+			currRoot, staged, err = checkoutDocsFromRoot(ctx, dEnv, staged, docs)
+			if err != nil {
+				return err
+			}
+		} else {
+			currRoot, staged, err = checkoutDocsFromRoot(ctx, dEnv, head, docs)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	for _, tblName := range tbls {
+		if tblName == doltdb.DocTableName {
+			continue
+		}
 		tbl, ok, err := staged.GetTable(ctx, tblName)
 
 		if err != nil {
@@ -90,5 +113,51 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 		}
 	}
 
+	_, err = dEnv.UpdateStagedRoot(ctx, staged)
+	if err != nil {
+		return err
+	}
 	return dEnv.UpdateWorkingRoot(ctx, currRoot)
+}
+
+func checkoutDocsFromRoot(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, docs env.Docs) (workingRoot, stagedRoot *doltdb.RootValue, err error) {
+	working, staged, err := getUpdatedWorkingAndStagedWithDocs(ctx, root, dEnv, docs)
+	if err != nil {
+		return nil, nil, err
+	}
+	err = dEnv.UpdateFSDocsToRootDocs(ctx, root, docs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return working, staged, nil
+}
+
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, docDetails env.Docs) (currRoot, stgRoot *doltdb.RootValue, err error) {
+	docs, err := dEnv.GetDocsFromRootDocs(ctx, root, docDetails)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	working, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	staged, err := dEnv.StagedRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	working, err = dEnv.GetUpdatedRootWithDocs(ctx, working, docs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	staged, err = dEnv.GetUpdatedRootWithDocs(ctx, staged, docs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return working, staged, nil
 }

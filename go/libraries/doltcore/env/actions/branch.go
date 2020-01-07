@@ -358,6 +358,9 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 }
 
 func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
+	if env.IsValidDoc(str) {
+		str = doltdb.DocTableName
+	}
 	rootsWithTbl, err := RootsWithTable(ctx, dEnv, str)
 
 	if err != nil {

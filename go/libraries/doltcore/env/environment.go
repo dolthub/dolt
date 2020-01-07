@@ -687,78 +687,52 @@ func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc *doltdb.DocDetails, er
 	return nil, err
 }
 
-// PutDocsToWorking adds, updates or removes the `dolt_docs` table on the working root. The table will be added or updated
+// GetUpdatedRootWithDocs adds, updates or removes the `dolt_docs` table on the provided root. The table will be added or updated
 // When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
 // If no docDetails are provided, we put all valid docs to the working root.
-func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.DocDetails) error {
-	wrkRoot, err := dEnv.WorkingRoot(ctx)
+func (dEnv *DoltEnv) GetUpdatedRootWithDocs(ctx context.Context, root *doltdb.RootValue, docDetails []*doltdb.DocDetails) (*doltdb.RootValue, error) {
+	docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
 
 	if err != nil {
-		return err
-	}
-
-	docTbl, found, err := wrkRoot.GetTable(ctx, doltdb.DocTableName)
-
-	if err != nil {
-		return err
+		return nil, err
 	}
 
 	docDetails, err = getDocDetails(dEnv, docDetails)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if found {
-		newRoot, err := updateDocsOnRoot(ctx, dEnv, wrkRoot, docTbl, docDetails)
-		if err != nil {
-			return err
-		}
-		return dEnv.UpdateWorkingRoot(ctx, newRoot)
+		return updateDocsOnRoot(ctx, dEnv, root, docTbl, docDetails)
 	}
-
-	newRoot, err := createDocsTableOnRoot(ctx, dEnv, wrkRoot, docDetails)
-	if err != nil {
-		return nil
-	}
-	return dEnv.UpdateWorkingRoot(ctx, newRoot)
+	return createDocsTableOnRoot(ctx, dEnv, root, docDetails)
 }
 
-// PutDocsToStaged adds, updates or removes the `dolt_docs` table on the staged root. The table will be added or updated
-// When at least one doc.NewerText != nil. If the `dolt_docs` table exists and every doc.NewerText == nil, the table will be removed.
-// If no docDetails are provided, we put all valid docs to the staged root.
+// PutDocsToWorking adds, updates or removes the `dolt_docs` table on the working root using the provided docDetails.
+func (dEnv *DoltEnv) PutDocsToWorking(ctx context.Context, docDetails []*doltdb.DocDetails) error {
+	wrkRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+	rootWithDocs, err := dEnv.GetUpdatedRootWithDocs(ctx, wrkRoot, docDetails)
+	if err != nil {
+		return err
+	}
+	return dEnv.UpdateWorkingRoot(ctx, rootWithDocs)
+}
+
+// PutDocsToStaged adds, updates or removes the `dolt_docs` table on the staged root using the provided docDetails.
 func (dEnv *DoltEnv) PutDocsToStaged(ctx context.Context, docDetails []*doltdb.DocDetails) (*doltdb.RootValue, error) {
 	stgRoot, err := dEnv.StagedRoot(ctx)
 
 	if err != nil {
 		return nil, err
 	}
-
-	docTbl, found, err := stgRoot.GetTable(ctx, doltdb.DocTableName)
-
+	rootWithDocs, err := dEnv.GetUpdatedRootWithDocs(ctx, stgRoot, docDetails)
 	if err != nil {
 		return nil, err
 	}
-
-	docDetails, err = getDocDetails(dEnv, docDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	var newRoot *doltdb.RootValue
-
-	if found {
-		newRoot, err = updateDocsOnRoot(ctx, dEnv, stgRoot, docTbl, docDetails)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		newRoot, err = createDocsTableOnRoot(ctx, dEnv, stgRoot, docDetails)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	_, err = dEnv.UpdateStagedRoot(ctx, newRoot)
+	_, err = dEnv.UpdateStagedRoot(ctx, rootWithDocs)
 	if err != nil {
 		return nil, err
 	}

@@ -94,7 +94,14 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 				}
 
 				if !found {
-					verr = errhand.BuildDError("error: could not find %s", name).Build()
+					if env.IsValidDoc(name) {
+						err = env.DeleteDoc(dEnv.FS, name)
+						if err != nil {
+							verr = errhand.BuildDError("error: could not find %s", name).Build()
+						}
+					} else {
+						verr = errhand.BuildDError("error: could not find %s", name).Build()
+					}
 				}
 			}
 		}
