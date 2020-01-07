@@ -18,9 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+	"io"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -244,7 +243,7 @@ func (ssg *SuperSchemaGen) AddHistoryOfCommits(ctx context.Context, tblName stri
 			return err
 		}
 
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
 
 		if err != nil {
 			return err
