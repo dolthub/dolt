@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/marshal"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -34,6 +35,8 @@ type encodedColumn struct {
 	Kind string `noms:"kind" json:"kind"`
 
 	IsPartOfPK bool `noms:"is_part_of_pk" json:"is_part_of_pk"`
+
+	TypeInfo encodedTypeInfo `noms:"typeinfo" json:"typeinfo"`
 
 	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
 }
@@ -56,7 +59,7 @@ func decodeAllColConstraint(encConstraints []encodedConstraint) []schema.ColCons
 	constraints := make([]schema.ColConstraint, len(encConstraints))
 
 	for i, nc := range encConstraints {
-		c := schema.ColConstraintFromTypeAndParams(nc.Type, nc.Params)
+		c := nc.decodeColConstraint()
 		constraints[i] = c
 	}
 
@@ -69,12 +72,17 @@ func encodeColumn(col schema.Column) encodedColumn {
 		col.Name,
 		col.KindString(),
 		col.IsPartOfPK,
+		encodeTypeInfo(col.TypeInfo),
 		encodeAllColConstraints(col.Constraints)}
 }
 
-func (nfd encodedColumn) decodeColumn() schema.Column {
+func (nfd encodedColumn) decodeColumn() (schema.Column, error) {
+	typeInfo, err := nfd.TypeInfo.decodeTypeInfo()
+	if err != nil {
+		return schema.Column{}, err
+	}
 	colConstraints := decodeAllColConstraint(nfd.Constraints)
-	return schema.NewColumn(nfd.Name, nfd.Tag, schema.LwrStrToKind[nfd.Kind], nfd.IsPartOfPK, colConstraints...)
+	return schema.NewColumnWithTypeInfo(nfd.Name, nfd.Tag, schema.LwrStrToKind[nfd.Kind], nfd.IsPartOfPK, typeInfo, colConstraints...)
 }
 
 type encodedConstraint struct {
@@ -88,6 +96,20 @@ func encodeColConstraint(constraint schema.ColConstraint) encodedConstraint {
 
 func (encCnst encodedConstraint) decodeColConstraint() schema.ColConstraint {
 	return schema.ColConstraintFromTypeAndParams(encCnst.Type, encCnst.Params)
+}
+
+type encodedTypeInfo struct {
+	Type   string            `noms:"typeinfo_type" json:"typeinfo_type"`
+	Params map[string]string `noms:"typeinfo_params" json:"typeinfo_params"`
+}
+
+func encodeTypeInfo(ti typeinfo.TypeInfo) encodedTypeInfo {
+	return encodedTypeInfo{ti.GetTypeIdentifier().String(), ti.GetTypeParams()}
+}
+
+func (enc encodedTypeInfo) decodeTypeInfo() (typeinfo.TypeInfo, error) {
+	id := typeinfo.ParseIdentifier(enc.Type)
+	return typeinfo.TypeInfoFromIdentifierParams(id, enc.Params)
 }
 
 type schemaData struct {
@@ -117,8 +139,12 @@ func (sd schemaData) decodeSchema() (schema.Schema, error) {
 	numCols := len(sd.Columns)
 	cols := make([]schema.Column, numCols)
 
+	var err error
 	for i, col := range sd.Columns {
-		cols[i] = col.decodeColumn()
+		cols[i], err = col.decodeColumn()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	colColl, err := schema.NewColCollection(cols...)

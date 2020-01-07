@@ -18,17 +18,16 @@ import (
 	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	dtypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 )
 
 // FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
-	sqlTypeStr, err := dtypes.NomsKindToSqlTypeString(col.Kind)
+	sqlType, err := col.TypeInfo.ToSqlType()
 	if err != nil {
 		panic(err) // We can default or panic, as this would mean the type has no SQL interface
 	}
-	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, sqlTypeStr, col)
+	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, sqlType.String(), col)
 }
 
 // FmtColWithNameAndType creates a string representing a column within a sql create table statement with a given indent

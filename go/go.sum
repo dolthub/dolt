@@ -311,6 +311,8 @@ github.com/liquidata-inc/mmap-go v1.0.3 h1:2LndAeAtup9rpvUmu4wZSYCsjCQ0Zpc+NqE+6
 github.com/liquidata-inc/mmap-go v1.0.3/go.mod h1:w0doE7jfkuDEZyxb/zD3VWnRaQBYx1uDTS816kH8HoY=
 github.com/liquidata-inc/sqllogictest/go v0.0.0-20191127195537-419365e253e7 h1:ous7ZBxpcwRsEFutY7lBcAD5B7JYvOXS99AfzRIBzBw=
 github.com/liquidata-inc/sqllogictest/go v0.0.0-20191127195537-419365e253e7/go.mod h1:kKRVtyuomkqz15YFRpS0OT8kpsU8y/F3jyiZtvALdKU=
+github.com/liquidata-inc/vitess v0.0.0-20191226224012-cba15f8e48c2 h1:msWm/dBM9FGUYwvJutyZqxHL9gBr9p2q2GQbnRv9bEw=
+github.com/liquidata-inc/vitess v0.0.0-20191226224012-cba15f8e48c2/go.mod h1:vn/QvIl/1+N6+qjheejcLt8jmX2kQSQwFinzZuoY1VY=
 github.com/liquidata-inc/vitess v0.0.0-20200102230944-f3410911d61f h1:fqsJy7h3D3esm9tYSzU7LV6h2tfifdYTanPuDL5LJ1A=
 github.com/liquidata-inc/vitess v0.0.0-20200102230944-f3410911d61f/go.mod h1:vn/QvIl/1+N6+qjheejcLt8jmX2kQSQwFinzZuoY1VY=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=

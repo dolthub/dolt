@@ -109,7 +109,8 @@ func addField(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.
 		nullable = alterschema.NotNull
 	}
 
-	newTable, err := alterschema.AddColumnToTable(ctx, tbl, tag, newFieldName, newFieldKind, nullable, defaultVal, nil)
+	//TODO: parse TypeInfo from the command line
+	newTable, err := alterschema.AddColumnToTable(ctx, tbl, tag, newFieldName, newFieldKind, nil, nullable, defaultVal, nil)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

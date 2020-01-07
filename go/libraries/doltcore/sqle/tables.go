@@ -26,7 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
-	sqlTypes "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle/types"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -239,13 +238,13 @@ func (t *DoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.C
 
 	var defVal types.Value
 	if column.Default != nil {
-		defVal, err = sqlTypes.SqlValToNomsVal(column.Default, col.Kind)
+		defVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
 		if err != nil {
 			return err
 		}
 	}
 
-	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, nullable, defVal, orderToOrder(order))
+	updatedTable, err := alterschema.AddColumnToTable(ctx, table, col.Tag, col.Name, col.Kind, col.TypeInfo, nullable, defVal, orderToOrder(order))
 	if err != nil {
 		return err
 	}
@@ -319,7 +318,7 @@ func (t *DoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sq
 
 	var defVal types.Value
 	if column.Default != nil {
-		defVal, err = sqlTypes.SqlValToNomsVal(column.Default, col.Kind)
+		defVal, err = col.TypeInfo.ConvertValueToNomsValue(column.Default)
 		if err != nil {
 			return err
 		}
