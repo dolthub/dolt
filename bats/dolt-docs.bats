@@ -196,7 +196,7 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
- @test "dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
+@test "dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
     echo license-text > LICENSE.md
     echo readme-text > README.md
     run dolt add .
@@ -447,3 +447,57 @@ teardown() {
 # @test "dolt diff shows diffs between working root and file system docs" {
 
 # }
+
+@test "dolt branch/merge with conflicts for docs" {
+    dolt add .
+    dolt commit -m "Committing initial docs"
+    dolt branch test-a
+    dolt branch test-b
+    dolt checkout test-a
+    echo test-a branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-a branch"
+    dolt checkout test-b
+    run cat README.md
+    skip "This does not change the contents of README.md to what is stored on test-b right now. Keeps what is on test-a"
+    [[ $output =~ "This is a repository level README" ]] || false
+    [[ !$output =~ "test-a branch" ]] || false
+    echo test-b branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-a branch"
+    dolt checkout master
+    run dolt merge test-a
+    [ "$status" -eq 0 ]
+    [[ $output =~ "Fast-forward" ]] || false
+    run dolt merge test-b
+    [ "$status" -eq 1 ]
+    [[ $output =~ "CONFLICT" ]] || false
+    run dolt conflicts cat dolt_docs
+    [ "$status" -eq 0 ]
+    [[ $output =~ "test-a branch" ]] || false
+    [[ $output =~ "test-b branch" ]] || false
+    dolt conflicts resolve dolt_docs --ours
+    run cat README.md
+    [[ $output =~ "test-b branch" ]] || false
+    [[ !$output =~ "test-a branch" ]] || false
+    dolt add .
+    dolt commit -m "Resolved docs conflict with --ours"
+    # Again but resolve theirs
+    dolt branch test-a-again
+    dolt branch test-b-again
+    dolt checkout test-a-again
+    echo test-a-again branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-a-again branch"
+    dolt checkout test-b-again
+    echo test-b-again branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-b-again branch"
+    dolt merge test-a-again
+    run dolt merge test-b-again
+    [ "$status" -eq 1 ]
+    dolt conflicts resolve dolt_docs --theirs
+    run	cat README.md
+    [[ $output =~ "test-a-again branch" ]] || false
+    [[ !$output =~ "test-b-again branch" ]] || false
+}
