@@ -23,7 +23,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gocraft/dbr"
+	"github.com/gocraft/dbr/v2"
 	sqlServer "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
