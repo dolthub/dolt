@@ -224,9 +224,7 @@ func createRow(nbf *types.NomsBinFormat, sch schema.Schema, prArgs *putRowArgs) 
 	}
 
 	if col, err := row.GetInvalidCol(typedRow, sch); err != nil {
-		bdr := errhand.BuildDError("%v", err.Error())
-		bdr.AddDetails("The value for the column %s is not valid", col.Name)
-		return nil, bdr.Build()
+		return nil, errhand.VerboseErrorFromError(err)
 	} else if col != nil {
 		bdr := errhand.BuildDError("Missing required fields.")
 		bdr.AddDetails("The value for the column %s is not valid", col.Name)
