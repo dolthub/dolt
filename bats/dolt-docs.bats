@@ -497,7 +497,7 @@ teardown() {
     run dolt merge test-b-again
     [ "$status" -eq 1 ]
     dolt conflicts resolve dolt_docs --theirs
-    run	cat README.md
+    run cat README.md
     [[ $output =~ "test-a-again branch" ]] || false
     [[ !$output =~ "test-b-again branch" ]] || false
 }
