@@ -223,7 +223,11 @@ func createRow(nbf *types.NomsBinFormat, sch schema.Schema, prArgs *putRowArgs) 
 		return nil, errhand.BuildDError("inserted row does not match schema").AddCause(err).Build()
 	}
 
-	if col, _ := row.GetInvalidCol(typedRow, sch); col != nil {
+	if col, err := row.GetInvalidCol(typedRow, sch); err != nil {
+		bdr := errhand.BuildDError("%v", err.Error())
+		bdr.AddDetails("The value for the column %s is not valid", col.Name)
+		return nil, bdr.Build()
+	} else if col != nil {
 		bdr := errhand.BuildDError("Missing required fields.")
 		bdr.AddDetails("The value for the column %s is not valid", col.Name)
 		return nil, bdr.Build()
