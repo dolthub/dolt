@@ -128,7 +128,7 @@ func (dt *DiffTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
 }
 
 func tableData(ctx *sql.Context, root *doltdb.RootValue, tblName string, ddb *doltdb.DoltDB) (types.Map, schema.Schema, error) {
-	tbl, ok, err := root.GetTable(ctx, tblName)
+	tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
 
 	if err != nil {
 		return types.EmptyMap, nil, err
