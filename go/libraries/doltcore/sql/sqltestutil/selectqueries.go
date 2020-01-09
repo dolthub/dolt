@@ -752,8 +752,8 @@ var SelectDiffTests = []SelectTest{
 		ExpectedSchema: diffSchema,
 	},
 	{
-		Name:  "select * from diff system table with from and to commit",
-		Query: "select * from dolt_diff_test_table where from_commit = 'add-age' and to_commit = 'master'",
+		Name:  "select * from diff system table with from and to commit and test insensitive name",
+		Query: "select * from dolt_diff_TeSt_TaBlE where from_commit = 'add-age' and to_commit = 'master'",
 		ExpectedRows: []row.Row{
 			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(0), 8: types.String("Aaron"), 9: types.String("Son"), 10: types.Int(35), 0: types.Int(0), 1: types.String("Aaron"), 2: types.String("Son"), 5: types.String("123 Fake St"), 4: types.Uint(35), 13: types.String("add-age"), 6: types.String("master")})),
 			mustRow(row.New(types.Format_7_18, diffSchema, row.TaggedValues{7: types.Int(1), 8: types.String("Brian"), 9: types.String("Hendriks"), 10: types.Int(38), 0: types.Int(1), 1: types.String("Brian"), 2: types.String("Hendriks"), 5: types.String("456 Bull Ln"), 4: types.Uint(38), 13: types.String("add-age"), 6: types.String("master")})),
