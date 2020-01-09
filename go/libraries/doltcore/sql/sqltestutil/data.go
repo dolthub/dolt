@@ -368,6 +368,7 @@ var diffSchema = envtestutils.MustSchema(
 	schema.NewColumn("from_age_Uint_4", 11, types.UintKind, false),
 	schema.NewColumn("from_addr", 12, types.StringKind, false),
 	schema.NewColumn("from_commit", 13, types.StringKind, false),
+	schema.NewColumn("diff_type", 14, types.StringKind, false),
 )
 
 const tblName = "test_table"
