@@ -40,6 +40,9 @@ teardown() {
     echo testing123 > LICENSE.md
     run cat LICENSE.md
     [ "$output" = "testing123" ]
+    run dolt add dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt add .
     [ "$status" -eq 0 ]
     run dolt status
@@ -378,6 +381,9 @@ teardown() {
     run dolt status
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt reset dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt reset LICENSE.md
     [ "$status" -eq 0 ]
     run dolt status
@@ -531,13 +537,100 @@ teardown() {
     [[ ! "$output" =~ "LICENSE" ]] || false
 }
 
-#  @test "dolt ls should not show dolt_docs table" {
+@test "dolt table * does not allow operations on dolt_docs" {
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "First commit of docs"
+    [ "$status" -eq 0 ]
+    run dolt table cp dolt_docs another_table
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table create -s=`batshelper 1pk5col-ints.schema` dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table export dolt_docs test.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table import dolt_docs -c `batshelper 1pk5col-ints.csv`
+    echo "output = $output"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table mv dolt_docs new
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table put-row dolt_docs doc_name:new doc_text:new
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table rm dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table rm-row dolt_docs LICENSE.md
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table select dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+}
 
-#  }
+@test "dolt schema * does not allow operations on dolt_docs" {
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "First commit of docs"
+    [ "$status" -eq 0 ]
+    run dolt schema add-column dolt_docs type string
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema drop-column dolt_docs doc_text string
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema export dolt_docs export.schema
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema export dolt_docs export.schema
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema import -c --pks=pk dolt_docs `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema rename-column dolt_docs doc_text something_else
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema show dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+}
 
-# @test "dolt table * does not allow operations on dolt_docs" {
+ @test "dolt ls should not show dolt_docs table" {
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    run dolt commit -m "First commit of docs"
+    [ "$status" -eq 0 ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+ }
 
-# }
 
 # TO DO: Expose dolt_docs for read commands
 @test "dolt sql does not expose dolt_docs" {

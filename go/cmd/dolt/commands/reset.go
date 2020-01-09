@@ -60,6 +60,10 @@ func Reset(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return HandleDocTableVErrAndExitCode()
+	}
+
 	workingRoot, stagedRoot, headRoot, verr := getAllRoots(ctx, dEnv)
 
 	if verr == nil {

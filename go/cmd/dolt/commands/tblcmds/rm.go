@@ -43,6 +43,10 @@ func Rm(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	working, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {

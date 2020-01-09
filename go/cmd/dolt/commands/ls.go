@@ -63,7 +63,13 @@ func Ls(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv
 }
 
 func printTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
-	tblNames, err := root.GetTableNames(ctx)
+	tblNms, err := root.GetTableNames(ctx)
+	tblNames := []string{}
+	for _, name := range tblNms {
+		if name != doltdb.DocTableName {
+			tblNames = append(tblNames, name)
+		}
+	}
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
