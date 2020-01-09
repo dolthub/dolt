@@ -40,6 +40,9 @@ teardown() {
     echo testing123 > LICENSE.md
     run cat LICENSE.md
     [ "$output" = "testing123" ]
+    run dolt add dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt add .
     [ "$status" -eq 0 ]
     run dolt status
@@ -55,6 +58,22 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    rm LICENSE.md
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ ([[:space:]]*deleted:[[:space:]]*LICENSE.md) ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*deleted:[[:space:]]*LICENSE.md) ]] || false
+    run dolt commit -m "delete license"
+    [ "$status" -eq 0 ]
+    run ls
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+
 }
 
 @test "dolt add . and dolt commit dolt docs with another table" {
@@ -362,6 +381,9 @@ teardown() {
     run dolt status
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    run dolt reset dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt reset LICENSE.md
     [ "$status" -eq 0 ]
     run dolt status
@@ -509,21 +531,223 @@ teardown() {
     [[ ! "$output" =~ "README.md" ]] || false
  }
 
-#  @test "dolt ls should not show dolt_docs table" {
+@test "dolt diff shows diffs between working root and file system docs" {
+    echo "testing readme" > README.md
+    echo "testing license" > LICENSE.md
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt commit -m "docs"
+    [ "$status" -eq 0 ]
+    echo "a new readme" > README.md
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~  "--- a/README.md" ]] || false
+    [[ "$output" =~  "+++ b/README.md" ]] || false
+    [[ "$output" =~  "- testing readme" ]] || false
+    [[ "$output" =~  "+ a new readme" ]] || false
+    [[ ! "$output" =~  "LICENSE.md" ]] || false
+    rm LICENSE.md
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "- testing license" ]] || false
+    [[ "$output" =~ "deleted doc" ]] || false
+}
 
-#  }
+@test "dolt diff <doc> shows diff of one <doc> between working root and file system docs" {
+    echo "testing readme" > README.md
+    echo "testing license" > LICENSE.md
+    run dolt diff README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    run dolt diff LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt commit -m "docs"
+    [ "$status" -eq 0 ]
+    echo "a new readme" > README.md
+    echo "a new license" > LICENSE.md
+    run dolt diff README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~  "--- a/README.md" ]] || false
+    [[ "$output" =~  "+++ b/README.md" ]] || false
+    [[ "$output" =~  "- testing readme" ]] || false
+    [[ "$output" =~  "+ a new readme" ]] || false
+    [[ ! "$output" =~  "LICENSE.md" ]] || false
+    run dolt diff LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~  "--- a/LICENSE.md" ]] || false
+    [[ "$output" =~  "+++ b/LICENSE.md" ]] || false
+    [[ "$output" =~  "- testing license" ]] || false
+    [[ "$output" =~  "+ a new license" ]] || false
+    [[ ! "$output" =~  "README.md" ]] || false
+    rm README.md
+    rm LICENSE.md
+    run dolt diff LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "- testing license" ]] || false
+    [[ "$output" =~ "deleted doc" ]] || false
+    [[ ! "$output" =~ "README" ]] || false
+    run dolt diff README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "- testing readme" ]] || false
+    [[ "$output" =~ "deleted doc" ]] || false
+    [[ ! "$output" =~ "LICENSE" ]] || false
+}
 
-# @test "dolt table * does not allow operations on dolt_docs" {
+@test "dolt table * does not allow operations on dolt_docs" {
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "First commit of docs"
+    [ "$status" -eq 0 ]
+    run dolt table cp dolt_docs another_table
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table create -s=`batshelper 1pk5col-ints.schema` dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table export dolt_docs test.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table import dolt_docs -c `batshelper 1pk5col-ints.csv`
+    echo "output = $output"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table mv dolt_docs new
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table put-row dolt_docs doc_name:new doc_text:new
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table rm dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table rm-row dolt_docs LICENSE.md
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt table select dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+}
 
-# }
+@test "dolt schema * does not allow operations on dolt_docs" {
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "First commit of docs"
+    [ "$status" -eq 0 ]
+    run dolt schema add-column dolt_docs type string
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema drop-column dolt_docs doc_text string
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema export dolt_docs export.schema
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema export dolt_docs export.schema
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema import -c --pks=pk dolt_docs `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema rename-column dolt_docs doc_text something_else
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema show dolt_docs
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+}
 
-# @test "dolt sql does not allow queries or edits to dolt_docs" {
+ @test "dolt ls should not show dolt_docs table" {
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    run dolt commit -m "First commit of docs"
+    [ "$status" -eq 0 ]
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+ }
 
-# }
 
-# @test "dolt diff shows diffs between working root and file system docs" {
+# TO DO: Expose dolt_docs for read commands
+@test "dolt sql does not expose dolt_docs" {
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "initial doc commits"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
 
-# }
+    run dolt sql -q "INSERT INTO dolt_docs VALUES (new_doc, new_text)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "DELETE FROM dolt_docs WHERE pk=REAMDE.md"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "UPDATE dolt_docs SET pk=NotValid WHERE pk=README.md"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "SELECT * FROM dolt_docs"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "CREATE TABLE dolt_docs (doc_name TEXT, doc_text LONGTEXT, PRIMARY KEY(doc_name))"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid table name: 'dolt_docs'" ]] || false
+}
 
 @test "dolt branch/merge with conflicts for docs" {
     dolt add .

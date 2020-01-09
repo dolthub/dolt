@@ -134,7 +134,7 @@ func checkoutDocsFromRoot(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.R
 }
 
 func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, docDetails env.Docs) (currRoot, stgRoot *doltdb.RootValue, err error) {
-	docs, err := dEnv.GetDocsFromRootDocs(ctx, root, docDetails)
+	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docDetails)
 	if err != nil {
 		return nil, nil, err
 	}

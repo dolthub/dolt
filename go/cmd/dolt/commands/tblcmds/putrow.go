@@ -23,6 +23,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
@@ -107,6 +108,10 @@ func PutRow(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 
 	if prArgs == nil {
 		return 1
+	}
+
+	if prArgs.TableName == doltdb.DocTableName {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Table '%s' is not a valid table name", doltdb.DocTableName).Build(), nil)
 	}
 
 	root, err := dEnv.WorkingRoot(ctx)
@@ -223,7 +228,9 @@ func createRow(nbf *types.NomsBinFormat, sch schema.Schema, prArgs *putRowArgs) 
 		return nil, errhand.BuildDError("inserted row does not match schema").AddCause(err).Build()
 	}
 
-	if col, _ := row.GetInvalidCol(typedRow, sch); col != nil {
+	if col, err := row.GetInvalidCol(typedRow, sch); err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
+	} else if col != nil {
 		bdr := errhand.BuildDError("Missing required fields.")
 		bdr.AddDetails("The value for the column %s is not valid", col.Name)
 		return nil, bdr.Build()

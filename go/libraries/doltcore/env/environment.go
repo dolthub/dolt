@@ -459,7 +459,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
+func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 	kid, err := dEnv.Config.GetString(UserCreds)
 
 	if err == nil && kid != "" {
@@ -470,16 +470,22 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 			panic(err)
 		}
 
-		dCreds, err := creds.JWKCredsReadFromFile(dEnv.FS, filepath.Join(dir, kid+".jwk"))
-
-		if err != nil {
-			return nil, ErrInvalidCredsFile
-		}
-
-		return dCreds, nil
+		c, err := creds.JWKCredsReadFromFile(dEnv.FS, filepath.Join(dir, kid+".jwk"))
+		return c, c.IsPrivKeyValid() && c.IsPubKeyValid(), err
 	}
 
-	return nil, nil
+	return creds.EmptyCreds, false, nil
+}
+
+func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
+	dCreds, valid, err := dEnv.UserRPCCreds()
+	if err != nil {
+		return nil, ErrInvalidCredsFile
+	}
+	if !valid {
+		return nil, nil
+	}
+	return dCreds, nil
 }
 
 func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, insecure bool, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
@@ -736,7 +742,8 @@ func (dEnv *DoltEnv) PutDocsToStaged(ctx context.Context, docDetails []*doltdb.D
 	if err != nil {
 		return nil, err
 	}
-	return dEnv.StagedRoot(ctx)
+
+	return createDocsTableOnRoot(ctx, dEnv, rootWithDocs, docDetails)
 }
 
 func getDocDetails(dEnv *DoltEnv, docDetails []*doltdb.DocDetails) ([]*doltdb.DocDetails, error) {
@@ -894,16 +901,16 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 //UpdateFSDocsToRootDocs updates the provided docs from the root value, and then saves them to the filesystem.
 // If docs == nil, all valid docs will be retrieved and written.
 func (dEnv *DoltEnv) UpdateFSDocsToRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) error {
-	docs, err := dEnv.GetDocsFromRootDocs(ctx, root, docs)
+	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docs)
 	if err != nil {
 		return nil
 	}
 	return docs.Save(dEnv.FS)
 }
 
-// GetDocsFromRootDocs returns Docs with the NewerText value(s) from the provided root. If docs are provided,
+// GetDocsWithNewerTextFromRoot returns Docs with the NewerText value(s) from the provided root. If docs are provided,
 // only those docs will be retrieved and returned. Otherwise, all valid doc details are returned with the updated NewerText.
-func (dEnv *DoltEnv) GetDocsFromRootDocs(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
+func (dEnv *DoltEnv) GetDocsWithNewerTextFromRoot(ctx context.Context, root *doltdb.RootValue, docs Docs) (Docs, error) {
 	docTbl, docTblFound, err := root.GetTable(ctx, doltdb.DocTableName)
 	if err != nil {
 		return nil, err
@@ -923,34 +930,11 @@ func (dEnv *DoltEnv) GetDocsFromRootDocs(ctx context.Context, root *doltdb.RootV
 	}
 
 	for i, doc := range docs {
-		doc, err := addNewerTextToDoc(ctx, docTbl, &sch, doc)
+		doc, err := doltdb.AddNewerTextToDocFromTbl(ctx, docTbl, &sch, doc)
 		if err != nil {
 			return nil, err
 		}
 		docs[i] = doc
 	}
 	return docs, nil
-}
-
-func addNewerTextToDoc(ctx context.Context, tbl *doltdb.Table, sch *schema.Schema, doc *doltdb.DocDetails) (*doltdb.DocDetails, error) {
-	if tbl != nil && sch != nil {
-		pkTaggedVal := row.TaggedValues{
-			doltdb.DocNameTag: types.String(doc.DocPk),
-		}
-
-		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
-		if err != nil {
-			return nil, err
-		}
-
-		if ok {
-			docValue, _ := docRow.GetColVal(doltdb.DocTextTag)
-			doc.NewerText = []byte(docValue.(types.String))
-		} else {
-			doc.NewerText = nil
-		}
-	} else {
-		doc.NewerText = nil
-	}
-	return doc, nil
 }

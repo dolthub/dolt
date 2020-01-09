@@ -52,6 +52,15 @@ func (res *ArgParseResults) Contains(name string) bool {
 	return ok
 }
 
+func (res *ArgParseResults) ContainsArg(name string) bool {
+	for _, val := range res.args {
+		if val == name {
+			return true
+		}
+	}
+	return false
+}
+
 func (res *ArgParseResults) ContainsAll(names ...string) bool {
 	for _, name := range names {
 		if _, ok := res.options[name]; !ok {

@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
@@ -58,6 +59,10 @@ func Reset(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return HandleDocTableVErrAndExitCode()
+	}
 
 	workingRoot, stagedRoot, headRoot, verr := getAllRoots(ctx, dEnv)
 
@@ -201,7 +206,7 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 }
 
 func resetDocs(ctx context.Context, dEnv *env.DoltEnv, headRoot *doltdb.RootValue, docDetails env.Docs) (newStgRoot *doltdb.RootValue, err error) {
-	docs, err := dEnv.GetDocsFromRootDocs(ctx, headRoot, docDetails)
+	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +244,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 
-			if tdt != actions.AddedTable && tblName != doltdb.DocTableName {
+			if tdt != actions.AddedTable && !sqle.HasDoltPrefix(tblName) {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[tdt], tblName))
 			}
 		}

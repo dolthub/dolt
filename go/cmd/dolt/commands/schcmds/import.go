@@ -129,6 +129,10 @@ func Import(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	verr := importSchema(ctx, dEnv, apr)
 
 	return commands.HandleVErrAndExitCode(verr, usage)

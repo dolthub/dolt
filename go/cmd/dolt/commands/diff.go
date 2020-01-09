@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	textdiff "github.com/andreyvit/diff"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
@@ -138,7 +139,11 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 		diffParts = Summary
 	}
 
-	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return HandleDocTableVErrAndExitCode()
+	}
+
+	r1, r2, tables, docs, verr := getRoots(ctx, apr.Args(), dEnv)
 
 	// default value of 0 used to signal no limit.
 	limit, _ := apr.GetInt(limitParam)
@@ -146,7 +151,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	if verr == nil {
 		whereClause := apr.GetValueOrDefault(whereParam, "")
 
-		verr = diffRoots(ctx, r1, r2, tables, dEnv, &diffArgs{diffParts, diffOutput, limit, whereClause})
+		verr = diffRoots(ctx, r1, r2, tables, docs, dEnv, &diffArgs{diffParts, diffOutput, limit, whereClause})
 	}
 
 	if verr != nil {
@@ -158,7 +163,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 }
 
 // this doesnt work correctly.  Need to be able to distinguish commits from tables
-func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, tables []string, verr errhand.VerboseError) {
+func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, tables []string, docs []*doltdb.DocDetails, verr errhand.VerboseError) {
 	roots := make([]*doltdb.RootValue, 2)
 
 	i := 0
@@ -176,48 +181,59 @@ func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *do
 		roots[i], err = cm.GetRootValue()
 
 		if err != nil {
-			return nil, nil, nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
+			return nil, nil, nil, nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
 		}
 
 		i++
 	}
 
+	args, docDetails, err := actions.GetTblsAndDocDetails(dEnv, args)
+	if err != nil {
+		return nil, nil, nil, nil, errhand.BuildDError("error: failed to read args").AddCause(err).Build()
+	}
+
 	if i < 2 {
 		roots[1] = roots[0]
-		roots[0], verr = GetWorkingWithVErr(dEnv)
-
+		wrkRoot, verr := GetWorkingWithVErr(dEnv)
 		if verr == nil && i == 0 {
 			roots[1], verr = GetStagedWithVErr(dEnv)
 		}
+		wrkRootWithDocs, err := dEnv.GetUpdatedRootWithDocs(ctx, wrkRoot, docDetails)
+		if err != nil {
+			return nil, nil, nil, nil, errhand.BuildDError("error: failed to get docs").AddCause(err).Build()
+		}
+
+		roots[0] = wrkRootWithDocs
 
 		if verr != nil {
-			return nil, nil, args, verr
+			return nil, nil, args, nil, verr
 		}
 	}
 
 	for ; i < len(args); i++ {
 		tbl := args[i]
+
 		has0, err := roots[0].HasTable(ctx, tbl)
 
 		if err != nil {
-			return nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
+			return nil, nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
 		}
 
 		has1, err := roots[1].HasTable(ctx, tbl)
 
 		if err != nil {
-			return nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
+			return nil, nil, nil, nil, errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
 		}
 
 		if !(has0 || has1) {
 			verr := errhand.BuildDError("error: Unknown table: '%s'", tbl).Build()
-			return nil, nil, nil, verr
+			return nil, nil, nil, nil, verr
 		}
 
 		tables = append(tables, tbl)
 	}
 
-	return roots[0], roots[1], tables, nil
+	return roots[0], roots[1], tables, docDetails, nil
 }
 
 func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEnv) (string, *doltdb.RootValue, errhand.VerboseError) {
@@ -249,7 +265,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 	return h.String(), r, nil
 }
 
-func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
+func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, docDetails []*doltdb.DocDetails, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
 		tblNames, err = actions.AllTables(ctx, r1, r2)
@@ -303,10 +319,10 @@ func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string,
 		}
 
 		if dArgs.diffOutput == TabularDiffOutput {
-			printTableDiffSummary(tblName, tbl1, tbl2)
+			printTableDiffSummary(ctx, dEnv, tblName, tbl1, tbl2, docDetails)
 		}
 
-		if tbl1 == nil || tbl2 == nil {
+		if tbl1 == nil || tbl2 == nil || tblName == doltdb.DocTableName {
 			continue
 		}
 
@@ -768,31 +784,101 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 
 var emptyHash = hash.Hash{}
 
-func printTableDiffSummary(tblName string, tbl1, tbl2 *doltdb.Table) {
+func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1, tbl2 *doltdb.Table, docDetails []*doltdb.DocDetails) {
 	bold := color.New(color.Bold)
 
-	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
+	if docDetails == nil {
+		docDetails, _ = dEnv.GetAllValidDocDetails()
+	}
 
-	if tbl1 == nil {
-		_, _ = bold.Println("deleted table")
-	} else if tbl2 == nil {
-		_, _ = bold.Println("added table")
+	for _, doc := range docDetails {
+		if tbl1 != nil {
+			sch1, _ := tbl1.GetSchema(ctx)
+			doc, _ = doltdb.AddNewerTextToDocFromTbl(ctx, tbl1, &sch1, doc)
+
+		}
+		if tbl2 != nil {
+			sch2, _ := tbl2.GetSchema(ctx)
+			updated, _ := doltdb.AddValueToDocFromTbl(ctx, tbl2, &sch2, doc)
+			doc = &updated
+		}
+
+		if doc.Value != nil {
+			newer := string(doc.NewerText)
+			older, _ := strconv.Unquote(doc.Value.HumanReadableString())
+			lines := textdiff.LineDiffAsLines(older, newer)
+			if doc.NewerText == nil {
+				printDeletedDoc(bold, doc.DocPk, lines)
+			} else if len(lines) > 0 && newer != older {
+				printModifiedDoc(bold, doc.DocPk, lines)
+			}
+		} else {
+			printAddedDoc(bold, doc.DocPk)
+		}
+	}
+}
+
+func printDiffLines(bold *color.Color, lines []string) {
+	for _, line := range lines {
+		if string(line[0]) == string("+") {
+			cli.Println(color.GreenString("+ " + line[1:]))
+		} else if string(line[0]) == ("-") {
+			cli.Println(color.RedString("- " + line[1:]))
+		} else {
+			cli.Println(" " + line)
+		}
+	}
+}
+
+func printModifiedDoc(bold *color.Color, pk string, lines []string) {
+	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
+	_, _ = bold.Printf("--- a/%s\n", pk)
+	_, _ = bold.Printf("+++ b/%s\n", pk)
+
+	printDiffLines(bold, lines)
+}
+
+func printAddedDoc(bold *color.Color, pk string) {
+	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
+	_, _ = bold.Println("added doc")
+}
+
+func printDeletedDoc(bold *color.Color, pk string, lines []string) {
+	_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", pk)
+	_, _ = bold.Println("deleted doc")
+
+	printDiffLines(bold, lines)
+}
+
+func printTableDiffSummary(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1, tbl2 *doltdb.Table, docDetails []*doltdb.DocDetails) {
+	bold := color.New(color.Bold)
+
+	if tblName == doltdb.DocTableName {
+		printDocDiffs(ctx, dEnv, tblName, tbl1, tbl2, docDetails)
 	} else {
-		h1, err := tbl1.HashOf()
+		_, _ = bold.Printf("diff --dolt a/%[1]s b/%[1]s\n", tblName)
 
-		if err != nil {
-			panic(err)
+		if tbl1 == nil {
+			_, _ = bold.Println("deleted table")
+		} else if tbl2 == nil {
+			_, _ = bold.Println("added table")
+		} else {
+			h1, err := tbl1.HashOf()
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
+
+			h2, err := tbl2.HashOf()
+
+			if err != nil {
+				panic(err)
+			}
+
+			_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 		}
-
-		_, _ = bold.Printf("--- a/%s @ %s\n", tblName, h1.String())
-
-		h2, err := tbl2.HashOf()
-
-		if err != nil {
-			panic(err)
-		}
-
-		_, _ = bold.Printf("+++ b/%s @ %s\n", tblName, h2.String())
 	}
 }
 

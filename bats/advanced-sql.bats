@@ -239,6 +239,12 @@ teardown() {
     [[ "$output" =~ "c5" ]] || false
 }
 
+@test "sql decribe bad table name" {
+    run dolt sql -q "describe poop"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "table not found: poop" ]] || false
+}
+
 @test "sql alter table to add and delete a column" {
     run dolt sql -q "alter table one_pk add (c6 int)"
     [ $status -eq 0 ]
