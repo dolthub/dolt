@@ -76,6 +76,10 @@ func Select(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {

@@ -40,6 +40,10 @@ func RenameColumn(ctx context.Context, commandStr string, args []string, dEnv *e
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schRenameColShortDesc, schRenameColLongDesc, schRenameColSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {

@@ -138,6 +138,10 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 		diffParts = Summary
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return HandleDocTableVErrAndExitCode()
+	}
+
 	r1, r2, tables, verr := getRoots(ctx, apr.Args(), dEnv)
 
 	// default value of 0 used to signal no limit.

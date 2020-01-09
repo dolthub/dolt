@@ -49,6 +49,9 @@ func Show(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
 	verr := printSchemas(ctx, apr, dEnv)
 
 	return commands.HandleVErrAndExitCode(verr, usage)
