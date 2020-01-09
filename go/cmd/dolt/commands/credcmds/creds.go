@@ -20,7 +20,13 @@ import (
 )
 
 var Commands = cli.GenSubCommandHandler([]*cli.Command{
-	{Name: "new", Desc: "", Func: New, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_NEW},
-	{Name: "rm", Desc: "", Func: Rm, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_RM},
-	{Name: "ls", Desc: "", Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_LS},
+	{Name: "new", Desc: newShortDesc, Func: New, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_NEW},
+	{Name: "rm", Desc: rmShortDesc, Func: Rm, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_RM},
+	{Name: "ls", Desc: lsShortDesc, Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_LS},
+	// TODO(aaron): Command to select a credential by public key and update global/repo config
+	// to use it for authentication.
+	//{Name: "use", Desc: useShortDesc, Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_USE},
+	// TODO(aaron): Command to call WhoAmI endpoint for dEnv with selected credentials and output
+	// result.
+	//{Name: "test", Desc: testShortDesc, Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_TEST},
 })
