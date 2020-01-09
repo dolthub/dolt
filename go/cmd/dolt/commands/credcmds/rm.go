@@ -26,9 +26,9 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-var rmShortDesc = ""
-var rmLongDesc = ""
-var rmSynopsis = []string{}
+var rmShortDesc = "Remove a stored public/private keypair."
+var rmLongDesc = `Removes an existing keypair from dolt's credential storage.`
+var rmSynopsis = []string{"<public_key_as_appears_in_ls>"}
 
 func Rm(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
