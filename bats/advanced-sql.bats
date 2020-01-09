@@ -77,11 +77,16 @@ teardown() {
     [[ "$output" =~ "10" ]] || false
 }
 
-@test "sql table name in the from clause and the join statement" {
-    run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk join one_pk on pk=pk1"
-    skip "Though weird we think this is valid but it panics right now. At least make it not panic."
+@test "select two tables and join to one" {
+    run dolt sql -q "select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
     [ $status -eq 0 ]
-    [ "${#lines[@]}" -eq 8 ]
+    [ "${#lines[@]}" -eq 20 ]
+}
+
+@test "non unique table alias" {
+    run dolt sql -q "select pk from one_pk,one_pk"
+    skip "This should be an error. MySQL gives: Not unique table/alias: 'one_pk'"
+    [ $status -eq 1 ]
 }
 
 @test "sql is null and is not null statements" {
@@ -142,8 +147,7 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "0" ]] || false
     [[ ! "$output" =~ "10" ]] || false
-    run dolt sql -q "select * from one_pk join two_pk order by pk1,pk2,pk limit 1"
-    skip "A join should work without an ON clause, but the new engine does not support it yet"
+    dolt sql -q "select * from one_pk join two_pk order by pk1,pk2,pk limit 1"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "0" ]] || false
@@ -152,7 +156,7 @@ teardown() {
     [ $status -eq 1 ]
     run dolt sql -q "select * from one_pk order by bad limit 1"
     [ $status -eq 1 ]
-    [ "$output" = "Unknown column: 'bad'" ]
+    [[ "$output" =~ "column \"bad\" could not be found" ]] || false
     run dolt sql -q "select * from one_pk order pk by limit"
     [ $status -eq 1 ]
 }
@@ -223,15 +227,11 @@ teardown() {
     [ $status -eq 0 ]
     echo ${#lines[@]}
     [ "${#lines[@]}" -eq 6 ]
-    # [ "${#lines[@]}" -eq 9 ]
     [[ "$output" =~ "one_pk" ]] || false
     [[ "$output" =~ "two_pk" ]] || false
-    # [[ "$output" =~ "dolt_diff_one_pk" ]] || false
-    # [[ "$output" =~ "dolt_diff_two_pk" ]] || false
 }
 
 @test "sql describe" {
-    skip "describe is being re-implemented"
     run dolt sql -q "describe one_pk"
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 10 ]
@@ -240,7 +240,6 @@ teardown() {
 }
 
 @test "sql alter table to add and delete a column" {
-    skip "describe is being re-implemented"
     run dolt sql -q "alter table one_pk add (c6 int)"
     [ $status -eq 0 ]
     run dolt sql -q "describe one_pk"
@@ -258,7 +257,6 @@ teardown() {
 }
 
 @test "sql alter table to rename a column" {
-    skip "describe is being re-implemented"
     dolt sql -q "alter table one_pk add (c6 int)"
     run dolt sql -q "alter table one_pk rename column c6 to c7"
     [ $status -eq 0 ]
@@ -269,7 +267,6 @@ teardown() {
 }
 
 @test "sql alter table without parentheses" {
-    skip "describe is being re-implemented"
     run dolt sql -q "alter table one_pk add c6 int"
     [ $status -eq 0 ]
     run dolt sql -q "describe one_pk"

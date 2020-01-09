@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
@@ -243,7 +244,7 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 
-			if tdt != actions.AddedTable && tblName != doltdb.DocTableName {
+			if tdt != actions.AddedTable && !sqle.HasDoltPrefix(tblName) {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[tdt], tblName))
 			}
 		}

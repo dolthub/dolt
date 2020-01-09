@@ -199,7 +199,7 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
- @test "dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
+@test "dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
     echo license-text > LICENSE.md
     echo readme-text > README.md
     run dolt add .
@@ -533,10 +533,100 @@ teardown() {
  }
 
 
-# @test "dolt sql does not allow queries or edits to dolt_docs" {
+# TO DO: Expose dolt_docs for read commands
+@test "dolt sql does not expose dolt_docs" {
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    run dolt add .
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run dolt commit -m "initial doc commits"
+    [ "$status" -eq 0 ]
+    
+    run dolt sql -q "show tables"
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "dolt_docs" ]] || false
 
-# }
+    run dolt sql -q "INSERT INTO dolt_docs VALUES (new_doc, new_text)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "DELETE FROM dolt_docs WHERE pk=REAMDE.md"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "UPDATE dolt_docs SET pk=NotValid WHERE pk=README.md"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "SELECT * FROM dolt_docs"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: dolt_docs" ]] || false
+
+    run dolt sql -q "CREATE TABLE dolt_docs (doc_name TEXT, doc_text LONGTEXT, PRIMARY KEY(doc_name))"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid table name: 'dolt_docs'" ]] || false
+}
 
 # @test "dolt diff shows diffs between working root and file system docs" {
 
 # }
+
+@test "dolt branch/merge with conflicts for docs" {
+    dolt add .
+    dolt commit -m "Committing initial docs"
+    dolt branch test-a
+    dolt branch test-b
+    dolt checkout test-a
+    echo test-a branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-a branch"
+    dolt checkout test-b
+    run cat README.md
+    skip "This does not change the contents of README.md to what is stored on test-b right now. Keeps what is on test-a"
+    [[ $output =~ "This is a repository level README" ]] || false
+    [[ !$output =~ "test-a branch" ]] || false
+    echo test-b branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-a branch"
+    dolt checkout master
+    run dolt merge test-a
+    [ "$status" -eq 0 ]
+    [[ $output =~ "Fast-forward" ]] || false
+    run dolt merge test-b
+    [ "$status" -eq 1 ]
+    [[ $output =~ "CONFLICT" ]] || false
+    run dolt conflicts cat dolt_docs
+    [ "$status" -eq 0 ]
+    [[ $output =~ "test-a branch" ]] || false
+    [[ $output =~ "test-b branch" ]] || false
+    dolt conflicts resolve dolt_docs --ours
+    run cat README.md
+    [[ $output =~ "test-b branch" ]] || false
+    [[ !$output =~ "test-a branch" ]] || false
+    dolt add .
+    dolt commit -m "Resolved docs conflict with --ours"
+    # Again but resolve theirs
+    dolt branch test-a-again
+    dolt branch test-b-again
+    dolt checkout test-a-again
+    echo test-a-again branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-a-again branch"
+    dolt checkout test-b-again
+    echo test-b-again branch > README.md
+    dolt add .
+    dolt commit -m "Changed README.md on test-b-again branch"
+    dolt merge test-a-again
+    run dolt merge test-b-again
+    [ "$status" -eq 1 ]
+    dolt conflicts resolve dolt_docs --theirs
+    run cat README.md
+    [[ $output =~ "test-a-again branch" ]] || false
+    [[ !$output =~ "test-b-again branch" ]] || false
+}
