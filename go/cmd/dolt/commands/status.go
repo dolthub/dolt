@@ -24,9 +24,9 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
@@ -131,7 +131,7 @@ func printStagedDiffs(wr io.Writer, stagedTbls *actions.TableDiffs, stagedDocs *
 
 		lines := make([]string, 0, stagedTbls.Len()+stagedDocs.Len())
 		for _, tblName := range stagedTbls.Tables {
-			if tblName != doltdb.DocTableName {
+			if !sqle.HasDoltPrefix(tblName) {
 				tdt := stagedTbls.TableToType[tblName]
 				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}
@@ -164,7 +164,7 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 
 		lines := make([]string, 0, notStagedTbls.Len())
 		for _, tblName := range workingTblsInConflict {
-			if tblName != doltdb.DocTableName {
+			if !sqle.HasDoltPrefix(tblName) {
 				lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
 			}
 		}
@@ -188,7 +188,7 @@ func printDiffsNotStaged(wr io.Writer, notStagedTbls *actions.TableDiffs, notSta
 		for _, tblName := range notStagedTbls.Tables {
 			tdt := notStagedTbls.TableToType[tblName]
 
-			if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) && tblName != doltdb.DocTableName {
+			if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) && !sqle.HasDoltPrefix(tblName) {
 				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
 			}
 		}

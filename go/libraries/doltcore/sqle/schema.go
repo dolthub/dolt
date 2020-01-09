@@ -15,6 +15,7 @@
 package sqle
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -103,11 +104,13 @@ func doltColToSqlCol(tableName string, col schema.Column) (*sql.Column, error) {
 		return nil, err
 	}
 	return &sql.Column{
-		Name:     col.Name,
-		Type:     colType,
-		Default:  nil,
-		Nullable: col.IsNullable(),
-		Source:   tableName,
+		Name:       col.Name,
+		Type:       colType,
+		Default:    nil,
+		Nullable:   col.IsNullable(),
+		Source:     tableName,
+		PrimaryKey: col.IsPartOfPK,
+		Comment:    fmt.Sprintf("tag:%d", col.Tag),
 	}, nil
 }
 
