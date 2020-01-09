@@ -61,7 +61,7 @@ func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 
 func (docs *Docs) Save(fs filesys.ReadWriteFS) error {
 	for _, doc := range *docs {
-		if !isValidDoc(doc.DocPk) {
+		if !IsValidDoc(doc.DocPk) {
 			continue
 		}
 		filePath := getDocFile(doc.File)
@@ -86,7 +86,7 @@ func getInitialDocText(docName string) []byte {
 	}
 }
 
-func isValidDoc(docName string) bool {
+func IsValidDoc(docName string) bool {
 	for _, doc := range *AllValidDocDetails {
 		if doc.DocPk == docName {
 			return true

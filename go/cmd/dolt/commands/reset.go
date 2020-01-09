@@ -206,7 +206,7 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 }
 
 func resetDocs(ctx context.Context, dEnv *env.DoltEnv, headRoot *doltdb.RootValue, docDetails env.Docs) (newStgRoot *doltdb.RootValue, err error) {
-	docs, err := dEnv.GetDocsFromRootDocs(ctx, headRoot, docDetails)
+	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
 	if err != nil {
 		return nil, err
 	}

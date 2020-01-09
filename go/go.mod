@@ -6,7 +6,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.3.3 // indirect
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
-	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883 // indirect
+	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/attic-labs/kingpin v2.2.7-0.20180312050558-442efcfac769+incompatible
 	github.com/aws/aws-sdk-go v1.21.2

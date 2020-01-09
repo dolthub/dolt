@@ -239,6 +239,7 @@ github.com/lib/pq v1.2.0/go.mod h1:5WUZQaWbwv1U+lTReE5YruASi9Al49XbQIvNi/34Woo=
 github.com/liquidata-inc/dolt v0.9.9 h1:VAZMEizf6ofHPMwS91dSuq1zyX5tQWiJ8bAM/08UR1A=
 github.com/liquidata-inc/dolt v0.11.0 h1:UVOgzozHC16J15E5VxEbuyZM5SCnbhtXLCmAVMRVwkw=
 github.com/liquidata-inc/dolt v0.12.0 h1:slbwHiF44dgfHYUuw9lZjrmiG/ZekIsWttuv7MKIUEA=
+github.com/liquidata-inc/dolt v0.12.0 h1:slbwHiF44dgfHYUuw9lZjrmiG/ZekIsWttuv7MKIUEA=
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191003230430-3a1a09c79ada h1:2D7VUQT4JHEB1N3xUG/MqULhDfWWg65LmPDBjXWBZcs=
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191003230430-3a1a09c79ada/go.mod h1:DdWE0ku/mNfuLsRJIrHeHpDtB7am+6oopxEsQKmVkx8=
 github.com/liquidata-inc/go-mysql-server v0.4.1-0.20191017183442-4b9329eafa5b h1:fdht6iaUhHYJEfSUY1m1KAghyi6zfyfv+12gaSsaQ+o=
