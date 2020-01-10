@@ -33,6 +33,11 @@ const (
 	DoltDiffTablePrefix = "dolt_diff_"
 	toCommit            = "to_commit"
 	fromCommit          = "from_commit"
+
+	diffTypeColName  = "diff_type"
+	diffTypeAdded    = "added"
+	diffTypeModified = "modified"
+	diffTypeRemoved  = "removed"
 )
 
 var _ sql.FilteredTable = (*DiffTable)(nil)
@@ -103,9 +108,9 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.
 	}
 
 	sqlSch = append(sqlSch, &sql.Column{
-		Name:     "diff_type",
+		Name:     diffTypeColName,
 		Type:     sql.Text,
-		Default:  "modified",
+		Default:  diffTypeModified,
 		Nullable: false,
 		Source:   diffTblName,
 	})
@@ -259,11 +264,11 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 	}
 
 	if hasTo && hasFrom {
-		sqlRow = append(sqlRow, "modified")
+		sqlRow = append(sqlRow, diffTypeModified)
 	} else if hasTo && !hasFrom {
-		sqlRow = append(sqlRow, "added")
+		sqlRow = append(sqlRow, diffTypeAdded)
 	} else {
-		sqlRow = append(sqlRow, "removed")
+		sqlRow = append(sqlRow, diffTypeRemoved)
 	}
 
 	return sqlRow, nil
