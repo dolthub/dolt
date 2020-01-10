@@ -531,6 +531,50 @@ teardown() {
     [[ ! "$output" =~ "README.md" ]] || false
  }
 
+  @test "dolt checkout <doc> <table> should checkout both doc and table" {
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test1
+    run dolt status
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "test1" ]] || false
+    run dolt checkout LICENSE.md test1
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+    run ls 
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+
+    echo This is my readme > README.md
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
+    run dolt status
+    [[ "$output" =~ "README.md" ]] || false
+    [[ "$output" =~ "test2" ]] || false
+    dolt add .
+    dolt table put-row test2 pk:100
+    [ "$status" -eq 0 ]
+    echo New text in readme > README.md
+    run dolt checkout test2 README.md
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run cat README.md
+    [[ "$output" =~ "This is my readme" ]] || false
+    dolt table select test2
+    [[ ! "$output" =~ "100" ]] || false
+ }
+
+ @test "dolt checkout <doc> <invalid_arg> should return an error and leave doc unchanged" {
+     echo original license text > LICENSE.md
+     dolt add .
+     dolt commit -m "initial doc commit"
+     echo updated license > LICENSE.md
+     run dolt checkout LICENSE.md invalid
+     [ "$status" -eq 1 ]
+     [[ "$output" =~ "table not found" ]] || false
+     run cat LICENSE.md
+     [[ "$output" =~ "updated license" ]] || false
+ }
+
 @test "dolt diff shows diffs between working root and file system docs" {
     echo "testing readme" > README.md
     echo "testing license" > LICENSE.md
