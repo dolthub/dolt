@@ -17,13 +17,13 @@ package dolt
 import (
 	"context"
 	"fmt"
-	"github.com/shopspring/decimal"
 	"io"
 	"math/rand"
 	"strconv"
 	"strings"
 
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
+	"github.com/shopspring/decimal"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/proto/query"
