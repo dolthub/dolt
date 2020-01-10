@@ -59,7 +59,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/rivo/uniseg v0.1.0
 	github.com/shirou/gopsutil v2.19.12+incompatible
-	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114 // indirect
+	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114
 	github.com/sirupsen/logrus v1.4.2
 	github.com/skratchdot/open-golang v0.0.0-20190402232053-79abb63cd66e
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
