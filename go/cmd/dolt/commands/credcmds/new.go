@@ -24,8 +24,11 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
-var newShortDesc = ""
-var newLongDesc = ""
+var newShortDesc = "Create a new public/private keypair for authenticating with doltremoteapi."
+var newLongDesc = `Creates a new keypair for authenticating with doltremoteapi.
+
+Prints the public portion of the keypair, which can entered into the credentials
+settings page of dolthub.`
 var newSynopsis = []string{}
 
 func New(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {

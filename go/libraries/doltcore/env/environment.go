@@ -417,7 +417,7 @@ func (dEnv *DoltEnv) CredsDir() (string, error) {
 	return getCredsDir(dEnv.hdp)
 }
 
-func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
+func (dEnv *DoltEnv) UserRPCCreds() (creds.DoltCreds, bool, error) {
 	kid, err := dEnv.Config.GetString(UserCreds)
 
 	if err == nil && kid != "" {
@@ -428,16 +428,22 @@ func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
 			panic(err)
 		}
 
-		dCreds, err := creds.JWKCredsReadFromFile(dEnv.FS, filepath.Join(dir, kid+".jwk"))
-
-		if err != nil {
-			return nil, ErrInvalidCredsFile
-		}
-
-		return dCreds, nil
+		c, err := creds.JWKCredsReadFromFile(dEnv.FS, filepath.Join(dir, kid+".jwk"))
+		return c, c.IsPrivKeyValid() && c.IsPubKeyValid(), err
 	}
 
-	return nil, nil
+	return creds.EmptyCreds, false, nil
+}
+
+func (dEnv *DoltEnv) getRPCCreds() (credentials.PerRPCCredentials, error) {
+	dCreds, valid, err := dEnv.UserRPCCreds()
+	if err != nil {
+		return nil, ErrInvalidCredsFile
+	}
+	if !valid {
+		return nil, nil
+	}
+	return dCreds, nil
 }
 
 func (dEnv *DoltEnv) GrpcConnWithCreds(hostAndPort string, insecure bool, rpcCreds credentials.PerRPCCredentials) (*grpc.ClientConn, error) {
