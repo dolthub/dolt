@@ -111,9 +111,10 @@ func NewBufferedMapIterator(ctx context.Context, m Map) (ForwardMapIterator, err
 
 // todo: calculate buffer size to be a number of bytes
 const bufferSize = 100 * 1000
+
 type bufferedMapIterator struct {
 	entryStream <-chan mapEntry
-	errChan 	<-chan error
+	errChan     <-chan error
 }
 
 func (bmi *bufferedMapIterator) Next(ctx context.Context) (k, v Value, err error) {
