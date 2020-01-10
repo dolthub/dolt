@@ -23,10 +23,14 @@ package types
 
 import "context"
 
+type ForwardMapIterator interface {
+	Next(ctx context.Context) (k, v Value, err error)
+}
+
 // MapIterator is the interface used by iterators over Noms Maps.
 type MapIterator interface {
-	Next(ctx context.Context) (k, v Value, err error)
-	//Prev(ctx context.Context) (k, v Value, err error)
+	ForwardMapIterator
+	Prev(ctx context.Context) (k, v Value, err error)
 }
 
 // mapIterator can efficiently iterate through a Noms Map.
@@ -84,7 +88,7 @@ func (mi *mapIterator) Prev(ctx context.Context) (k, v Value, err error) {
 	return mi.currentKey, mi.currentValue, nil
 }
 
-func NewBufferedMapIterator(ctx context.Context, m Map) (MapIterator, error) {
+func NewBufferedMapIterator(ctx context.Context, m Map) (ForwardMapIterator, error) {
 	mapEntryChan := make(chan mapEntry, bufferSize)
 	errChan := make(chan error)
 

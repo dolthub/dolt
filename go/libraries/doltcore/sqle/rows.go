@@ -32,7 +32,7 @@ type doltTableRowIter struct {
 	table    *DoltTable
 	rowData  types.Map
 	ctx      *sql.Context
-	nomsIter types.MapIterator
+	nomsIter types.ForwardMapIterator
 }
 
 // Returns a new row iterator for the table given
