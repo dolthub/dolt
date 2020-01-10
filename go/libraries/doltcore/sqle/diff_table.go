@@ -33,6 +33,11 @@ const (
 	DoltDiffTablePrefix = "dolt_diff_"
 	toCommit            = "to_commit"
 	fromCommit          = "from_commit"
+
+	diffTypeColName  = "diff_type"
+	diffTypeAdded    = "added"
+	diffTypeModified = "modified"
+	diffTypeRemoved  = "removed"
 )
 
 var _ sql.FilteredTable = (*DiffTable)(nil)
@@ -43,6 +48,7 @@ type DiffTable struct {
 	rs            *env.RepoState
 	ss            rowconv.SuperSchema
 	joiner        *rowconv.Joiner
+	sqlSch        sql.Schema
 	fromRoot      *doltdb.RootValue
 	toRoot        *doltdb.RootValue
 	fromCommitVal string
@@ -51,6 +57,7 @@ type DiffTable struct {
 }
 
 func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.RepoState) (*DiffTable, error) {
+	diffTblName := DoltDiffTablePrefix + name
 	ssg := rowconv.NewSuperSchemaGen()
 	err := ssg.AddHistoryOfTable(ctx, name, ddb)
 
@@ -67,7 +74,7 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.
 	sch := ss.GetSchema()
 
 	if sch.GetAllCols().Size() <= 1 {
-		return nil, sql.ErrTableNotFound.New(DoltDiffTablePrefix + name)
+		return nil, sql.ErrTableNotFound.New(diffTblName)
 	}
 
 	j, err := rowconv.NewJoiner(
@@ -93,7 +100,22 @@ func NewDiffTable(ctx context.Context, name string, ddb *doltdb.DoltDB, rs *env.
 		return nil, err
 	}
 
-	return &DiffTable{name, ddb, rs, ss, j, root2, root1, "current", "HEAD", nil}, nil
+	sqlSch, err := doltSchemaToSqlSchema(diffTblName, j.GetSchema())
+
+	// TODO: fix panics
+	if err != nil {
+		panic(err)
+	}
+
+	sqlSch = append(sqlSch, &sql.Column{
+		Name:     diffTypeColName,
+		Type:     sql.Text,
+		Default:  diffTypeModified,
+		Nullable: false,
+		Source:   diffTblName,
+	})
+
+	return &DiffTable{name, ddb, rs, ss, j, sqlSch, root2, root1, "current", "HEAD", nil}, nil
 }
 
 func (dt *DiffTable) Name() string {
@@ -105,14 +127,7 @@ func (dt *DiffTable) String() string {
 }
 
 func (dt *DiffTable) Schema() sql.Schema {
-	sqlSch, err := doltSchemaToSqlSchema(dt.Name(), dt.joiner.GetSchema())
-
-	// TODO: fix panics
-	if err != nil {
-		panic(err)
-	}
-
-	return sqlSch
+	return dt.sqlSch
 }
 
 func toNamer(name string) string {
@@ -200,6 +215,7 @@ var _ sql.RowIter = (*diffRowItr)(nil)
 type diffRowItr struct {
 	ad      *diff.AsyncDiffer
 	diffSrc *diff.RowDiffSource
+	joiner  *rowconv.Joiner
 	sch     schema.Schema
 	to      string
 	from    string
@@ -214,7 +230,7 @@ func newDiffRowItr(ctx context.Context, joiner *rowconv.Joiner, rowDataFrom, row
 	src := diff.NewRowDiffSource(ad, joiner)
 	src.AddInputRowConversion(convFrom, convTo)
 
-	return &diffRowItr{ad, src, joiner.GetSchema(), to, from, fromTag, toTag}
+	return &diffRowItr{ad, src, joiner, joiner.GetSchema(), to, from, fromTag, toTag}
 }
 
 // Next returns the next row
@@ -224,6 +240,10 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	toAndFromRows, err := itr.joiner.Split(r)
+	_, hasTo := toAndFromRows[diff.To]
+	_, hasFrom := toAndFromRows[diff.From]
 
 	r, err = r.SetColVal(itr.toTag, types.String(itr.to), itr.sch)
 
@@ -237,7 +257,21 @@ func (itr *diffRowItr) Next() (sql.Row, error) {
 		return nil, err
 	}
 
-	return doltRowToSqlRow(r, itr.sch)
+	sqlRow, err := doltRowToSqlRow(r, itr.sch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if hasTo && hasFrom {
+		sqlRow = append(sqlRow, diffTypeModified)
+	} else if hasTo && !hasFrom {
+		sqlRow = append(sqlRow, diffTypeAdded)
+	} else {
+		sqlRow = append(sqlRow, diffTypeRemoved)
+	}
+
+	return sqlRow, nil
 }
 
 // Close closes the iterator
