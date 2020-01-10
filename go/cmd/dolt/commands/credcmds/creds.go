@@ -26,7 +26,5 @@ var Commands = cli.GenSubCommandHandler([]*cli.Command{
 	// TODO(aaron): Command to select a credential by public key and update global/repo config
 	// to use it for authentication.
 	//{Name: "use", Desc: useShortDesc, Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_USE},
-	// TODO(aaron): Command to call WhoAmI endpoint for dEnv with selected credentials and output
-	// result.
-	//{Name: "test", Desc: testShortDesc, Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_TEST},
+	{Name: "check", Desc: checkShortDesc, Func: Check, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_CHECK},
 })
