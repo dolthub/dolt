@@ -26,7 +26,7 @@ import "context"
 // MapIterator is the interface used by iterators over Noms Maps.
 type MapIterator interface {
 	Next(ctx context.Context) (k, v Value, err error)
-	Prev(ctx context.Context) (k, v Value, err error)
+	//Prev(ctx context.Context) (k, v Value, err error)
 }
 
 // mapIterator can efficiently iterate through a Noms Map.
@@ -82,4 +82,41 @@ func (mi *mapIterator) Prev(ctx context.Context) (k, v Value, err error) {
 	}
 
 	return mi.currentKey, mi.currentValue, nil
+}
+
+func NewBufferedMapIterator(ctx context.Context, m Map) (MapIterator, error) {
+	mapEntryChan := make(chan mapEntry, bufferSize)
+	errChan := make(chan error)
+
+	// process the map and populate the buffer
+	go func() {
+		defer close(mapEntryChan)
+		//defer close(errChan)
+
+		err := m.IterAll(ctx, func(key, value Value) error {
+			mapEntryChan <- mapEntry{key, value}
+			return nil
+		})
+		if err != nil {
+			errChan <- err
+		}
+	}()
+
+	return &bufferedMapIterator{mapEntryChan, errChan}, nil
+}
+
+// todo: calculate buffer size to be a number of bytes
+const bufferSize = 100 * 1000
+type bufferedMapIterator struct {
+	entryStream <-chan mapEntry
+	errChan 	<-chan error
+}
+
+func (bmi *bufferedMapIterator) Next(ctx context.Context) (k, v Value, err error) {
+	select {
+	case e := <-bmi.errChan:
+		return nil, nil, e
+	case me := <-bmi.entryStream:
+		return me.key, me.value, nil
+	}
 }
