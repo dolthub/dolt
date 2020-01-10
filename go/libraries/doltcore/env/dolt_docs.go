@@ -24,18 +24,18 @@ import (
 var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file."
 var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file."
 
-type Docs []*doltdb.DocDetails
+type Docs []doltdb.DocDetails
 
 // AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
 // are dynamic and must be added, modified or removed as needed.
 var AllValidDocDetails = &Docs{
-	&doltdb.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
-	&doltdb.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
+	doltdb.DocDetails{DocPk: doltdb.ReadmePk, File: ReadmeFile},
+	doltdb.DocDetails{DocPk: doltdb.LicensePk, File: LicenseFile},
 }
 
-func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
+func LoadDocs(fs filesys.ReadWriteFS) (Docs, error) {
 	docsWithCurrentText := *AllValidDocDetails
-	for _, val := range docsWithCurrentText {
+	for i, val := range docsWithCurrentText {
 		path := getDocFile(val.File)
 		exists, isDir := fs.Exists(path)
 		if exists && !isDir {
@@ -44,31 +44,38 @@ func LoadDocs(fs filesys.ReadWriteFS) (*Docs, error) {
 				return nil, err
 			}
 			val.NewerText = data
+			docsWithCurrentText[i] = val
 		}
 	}
-	return &docsWithCurrentText, nil
+	return docsWithCurrentText, nil
 }
 
-func CreateDocs(fs filesys.ReadWriteFS) (*Docs, error) {
+func CreateDocs(fs filesys.ReadWriteFS) (Docs, error) {
 	docs := *AllValidDocDetails
-	for _, doc := range docs {
+	for i, doc := range docs {
 		doc.NewerText = getInitialDocText(doc.DocPk)
+		docs[i] = doc
 	}
 	err := docs.Save(fs)
 	if err != nil {
 		return nil, err
 	}
-	return &docs, nil
+	return docs, nil
 }
 
-func (docs *Docs) Save(fs filesys.ReadWriteFS) error {
-	for _, doc := range *docs {
+func (docs Docs) Save(fs filesys.ReadWriteFS) error {
+	for _, doc := range docs {
 		if !IsValidDoc(doc.DocPk) {
 			continue
 		}
 		filePath := getDocFile(doc.File)
 		if doc.NewerText != nil {
 			err := fs.WriteFile(filePath, doc.NewerText)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := DeleteDoc(fs, doc.DocPk)
 			if err != nil {
 				return err
 			}
@@ -108,4 +115,9 @@ func IsValidDoc(docName string) bool {
 		}
 	}
 	return false
+}
+
+func hasDocFile(fs filesys.ReadWriteFS, file string) bool {
+	exists, isDir := fs.Exists(getDocFile(file))
+	return exists && !isDir
 }

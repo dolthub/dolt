@@ -120,16 +120,7 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		}
 	}
 
-	localDocs, err := env.LoadDocs(dEnv.FS)
-	if err != nil {
-		return errhand.BuildDError("error: failed to read dolt docs from fs").AddCause(err).Build()
-	}
-
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, headRoot, nil)
-	if err != nil {
-		localDocs.Save(dEnv.FS)
-		return errhand.BuildDError("error: failed to update dolt docs from head").AddCause(err).Build()
-	}
+	localDocs := dEnv.Docs
 
 	// TODO: update working and staged in one repo_state write.
 	err = dEnv.UpdateWorkingRoot(ctx, newWkRoot)
@@ -144,7 +135,62 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		return errhand.BuildDError("error: failed to update the staged tables.").AddCause(err).Build()
 	}
 
+	err = saveTrackedDocs(ctx, dEnv, newWkRoot, headRoot, localDocs)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
+	}
+	
 	return nil
+}
+
+func saveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, headRoot *doltdb.RootValue, localDocs env.Docs) error {
+	docDiffs, err := actions.NewDocDiffs(ctx, dEnv, workRoot, nil, localDocs)
+	if err != nil {
+		return err
+	}
+
+	docs := removeUntrackedDocs(localDocs, docDiffs)
+
+	err = dEnv.UpdateFSDocsToRootDocs(ctx, headRoot, docs)
+	if err != nil {
+		localDocs.Save(dEnv.FS)
+		return err
+	}
+
+	return nil
+}
+
+func docIsUntracked(doc string, untracked []string) bool {
+	for _, val := range untracked {
+		if doc == val {
+			return true
+		}
+	}
+	return false
+}
+
+func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *actions.DocDiffs) []doltdb.DocDetails {
+	result := []doltdb.DocDetails{}
+	untracked := getUntrackedDocs(docs, docDiffs)
+
+	for _, doc := range docs {
+		if !docIsUntracked(doc.DocPk, untracked) {
+			result = append(result, doc)
+		}
+	}
+	return result
+}
+
+func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *actions.DocDiffs) []string {
+	untracked := []string{}
+	for _, docName := range docDiffs.Docs {
+		dt := docDiffs.DocToType[docName]
+		if dt == actions.AddedDoc {
+			untracked = append(untracked, docName)
+		}
+	}
+
+	return untracked
 }
 
 func removeDocsTbl(tbls []string) []string {

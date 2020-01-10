@@ -178,7 +178,7 @@ func TestInitRepo(t *testing.T) {
 		t.Error("Failed to get staged root value.")
 	}
 
-	for _, doc := range *AllValidDocDetails {
+	for _, doc := range AllValidDocDetails {
 		docPath := getDocFile(doc.File)
 		if len(docPath) > 0 && !strings.Contains(doc.File, docPath) {
 			t.Error("Doc file path should exist: ", doc.File)

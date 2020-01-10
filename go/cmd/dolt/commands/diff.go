@@ -163,7 +163,7 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 }
 
 // this doesnt work correctly.  Need to be able to distinguish commits from tables
-func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, tables []string, docs []*doltdb.DocDetails, verr errhand.VerboseError) {
+func getRoots(ctx context.Context, args []string, dEnv *env.DoltEnv) (r1, r2 *doltdb.RootValue, tables []string, docs []doltdb.DocDetails, verr errhand.VerboseError) {
 	roots := make([]*doltdb.RootValue, 2)
 
 	i := 0
@@ -265,7 +265,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 	return h.String(), r, nil
 }
 
-func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, docDetails []*doltdb.DocDetails, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
+func diffRoots(ctx context.Context, r1, r2 *doltdb.RootValue, tblNames []string, docDetails []doltdb.DocDetails, dEnv *env.DoltEnv, dArgs *diffArgs) errhand.VerboseError {
 	var err error
 	if len(tblNames) == 0 {
 		tblNames, err = actions.AllTables(ctx, r1, r2)
@@ -784,7 +784,7 @@ func createSplitter(newSch schema.Schema, oldSch schema.Schema, joiner *rowconv.
 
 var emptyHash = hash.Hash{}
 
-func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1, tbl2 *doltdb.Table, docDetails []*doltdb.DocDetails) {
+func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1, tbl2 *doltdb.Table, docDetails []doltdb.DocDetails) {
 	bold := color.New(color.Bold)
 
 	if docDetails == nil {
@@ -799,8 +799,7 @@ func printDocDiffs(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1,
 		}
 		if tbl2 != nil {
 			sch2, _ := tbl2.GetSchema(ctx)
-			updated, _ := doltdb.AddValueToDocFromTbl(ctx, tbl2, &sch2, doc)
-			doc = &updated
+			doc, _ = doltdb.AddValueToDocFromTbl(ctx, tbl2, &sch2, doc)
 		}
 
 		if doc.Value != nil {
@@ -850,7 +849,7 @@ func printDeletedDoc(bold *color.Color, pk string, lines []string) {
 	printDiffLines(bold, lines)
 }
 
-func printTableDiffSummary(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1, tbl2 *doltdb.Table, docDetails []*doltdb.DocDetails) {
+func printTableDiffSummary(ctx context.Context, dEnv *env.DoltEnv, tblName string, tbl1, tbl2 *doltdb.Table, docDetails []doltdb.DocDetails) {
 	bold := color.New(color.Bold)
 
 	if tblName == doltdb.DocTableName {

@@ -121,13 +121,13 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	return stagedDiffs, notStagedDiffs, nil
 }
 
-func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []*doltdb.DocDetails) (*DocDiffs, error) {
+func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
 	var added []string
 	var modified []string
 	var removed []string
 	if older != nil {
 		if newer == nil {
-			a, m, r, err := older.DocDiff(ctx, nil, &docDetails)
+			a, m, r, err := older.DocDiff(ctx, nil, docDetails)
 			if err != nil {
 				return nil, err
 			}
@@ -135,7 +135,7 @@ func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue
 			modified = m
 			removed = r
 		} else {
-			a, m, r, err := older.DocDiff(ctx, newer, &docDetails)
+			a, m, r, err := older.DocDiff(ctx, newer, docDetails)
 			if err != nil {
 				return nil, err
 			}

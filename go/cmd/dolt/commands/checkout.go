@@ -59,6 +59,7 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 	} else {
 		var verr errhand.VerboseError
 		newBranch, nbOk := apr.GetValue(coBranchArg)
+		localDocs := dEnv.Docs
 
 		if nbOk {
 			startPt := "head"
@@ -107,6 +108,7 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 		}
 
 		if verr != nil {
+			localDocs.Save(dEnv.FS)
 			cli.PrintErrln(verr.Verbose())
 			return 1
 		}
