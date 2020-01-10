@@ -203,8 +203,7 @@ func toSqlString(val interface{}) string {
 		return fmt.Sprintf("%.3f", v)
 	case decimal.Decimal:
 		// exactly 3 decimal points for floats
-		f, _ := v.Float64()
-		return fmt.Sprintf("%.3f", f)
+		return v.StringFixed(3)
 	case int:
 		return strconv.Itoa(v)
 	case uint:
