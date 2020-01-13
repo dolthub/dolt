@@ -175,7 +175,7 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 	}
 
 	numRemovedOrModified := notStagedTbls.NumRemoved + notStagedTbls.NumModified + notStagedDocs.NumRemoved + notStagedDocs.NumModified
-	docsInCnf, _ := docTableIsInConflict(ctx, dEnv)
+	docsInCnf, _ := docCnfsOnWorkingRoot(ctx, dEnv)
 
 	if numRemovedOrModified-inCnfSet.Size() > 0 {
 		if linesPrinted > 0 {
@@ -289,11 +289,11 @@ func toStatusVErr(err error) errhand.VerboseError {
 	}
 }
 
-func docTableIsInConflict(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
+func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return false, err
 	}
 
-	return docTableIsInConflictOnRoot(ctx, dEnv, workingRoot)
+	return docTableInCnfOnRoot(ctx, dEnv, workingRoot)
 }

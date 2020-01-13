@@ -47,7 +47,7 @@ func Add(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	apr := cli.ParseArgs(ap, args, helpPr)
 
 	if apr.ContainsArg(doltdb.DocTableName) {
-		hasConflicts, _ := docTableIsInConflict(ctx, dEnv)
+		hasConflicts, _ := docCnfsOnWorkingRoot(ctx, dEnv)
 		if !hasConflicts {
 			return HandleDocTableVErrAndExitCode()
 		}

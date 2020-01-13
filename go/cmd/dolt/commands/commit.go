@@ -81,7 +81,7 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 
 	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
 	if err == nil {
-		err = saveDocsFromHead(ctx, dEnv, localDocs)
+		err = saveDocsOnCommit(ctx, dEnv, localDocs)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.BuildDError("error: could not update docs on the filesystem").AddCause(err).Build(), usage)
 		}
@@ -217,7 +217,7 @@ func parseCommitMessage(cm string) string {
 	return strings.Join(filtered, "\n")
 }
 
-func saveDocsFromHead(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
+func saveDocsOnCommit(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return err

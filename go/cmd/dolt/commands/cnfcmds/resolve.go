@@ -80,7 +80,7 @@ func Resolve(ctx context.Context, commandStr string, args []string, dEnv *env.Do
 	localDocs := dEnv.Docs
 
 	if verr == nil {
-		err := actions.SaveDocsFromWorking(ctx, dEnv, localDocs)
+		err := actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
 		if err != nil {
 			verr = errhand.BuildDError("error: could not get working root to update docs on the filesystem").AddCause(err).Build()
 		}

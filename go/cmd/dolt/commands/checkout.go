@@ -89,23 +89,17 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 					verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 				}
 
-				found := false
 				for _, rf := range refs {
 					if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
 						verr = checkoutNewBranch(ctx, dEnv, name, rf.String())
-						found = true
 						break
 					}
 				}
 
-				if !found {
-					if env.IsValidDoc(name) {
-						err = env.DeleteDoc(dEnv.FS, name)
-						if err != nil {
-							verr = errhand.BuildDError("error: could not find %s", name).Build()
-						}
-					} else {
-						verr = errhand.BuildDError("error: could not find %s", name).Build()
+				if verr == nil {
+					err = saveDocsFromHead(ctx, dEnv, localDocs)
+					if err != nil {
+						verr = errhand.BuildDError("error: could not update docs on the filesystem").AddCause(err).Build()
 					}
 				}
 			}
@@ -119,6 +113,21 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 	}
 
 	return 0
+}
+
+func saveDocsFromHead(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateFSDocsToRootDocs(ctx, headRoot, nil)
+	if err != nil {
+		localDocs.Save(dEnv.FS)
+		return err
+	}
+
+	return nil
 }
 
 func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {

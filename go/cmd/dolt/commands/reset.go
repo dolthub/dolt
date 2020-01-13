@@ -135,7 +135,7 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		return errhand.BuildDError("error: failed to update the staged tables.").AddCause(err).Build()
 	}
 
-	err = actions.SaveDocsFromWorking(ctx, dEnv, localDocs)
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
 	if err != nil {
 		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
 	}
