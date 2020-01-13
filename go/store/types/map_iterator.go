@@ -89,39 +89,42 @@ func (mi *mapIterator) Prev(ctx context.Context) (k, v Value, err error) {
 }
 
 func NewBufferedMapIterator(ctx context.Context, m Map) (ForwardMapIterator, error) {
-	mapEntryChan := make(chan mapEntry, bufferSize)
-	errChan := make(chan error)
+	bufSeqCur, err := newBufferedSequenceCursor(ctx, m.asSequence(), 64 * 64 * 64)
 
-	// process the map and populate the buffer
-	go func() {
-		defer close(mapEntryChan)
-		//defer close(errChan)
+	if err != nil {
+		return nil, err
+	}
 
-		err := m.IterAll(ctx, func(key, value Value) error {
-			mapEntryChan <- mapEntry{key, value}
-			return nil
-		})
-		if err != nil {
-			errChan <- err
-		}
-	}()
-
-	return &bufferedMapIterator{mapEntryChan, errChan}, nil
+	return &bufferedMapIterator{bufSeqCur,nil, nil}, nil
 }
 
 // todo: calculate buffer size to be a number of bytes
 const bufferSize = 100 * 1000
 
 type bufferedMapIterator struct {
-	entryStream <-chan mapEntry
-	errChan     <-chan error
+	bufSeqCur 	 *bufSeqCursorImpl
+	currentKey   Value
+	currentValue Value
 }
 
 func (bmi *bufferedMapIterator) Next(ctx context.Context) (k, v Value, err error) {
-	select {
-	case e := <-bmi.errChan:
-		return nil, nil, e
-	case me := <-bmi.entryStream:
-		return me.key, me.value, nil
+	if bmi.bufSeqCur.valid() {
+		item, err := bmi.bufSeqCur.current()
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		entry := item.(mapEntry)
+		bmi.currentKey, bmi.currentValue = entry.key, entry.value
+		_, err = bmi.bufSeqCur.advance(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		bmi.currentKey, bmi.currentValue = nil, nil
 	}
+
+	return bmi.currentKey, bmi.currentValue, nil
 }

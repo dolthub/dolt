@@ -227,7 +227,7 @@ func (l List) IterAll(ctx context.Context, f func(v Value, index uint64) error) 
 }
 
 func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) error) error {
-	concurrency := 12
+	concurrency := 6
 	vcChan := make(chan chan Value, concurrency)
 
 	// Target reading data in |targetBatchBytes| per thread. We don't know how
