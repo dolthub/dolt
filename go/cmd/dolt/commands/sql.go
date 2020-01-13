@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019-2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
-		se, err := newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
+		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -130,7 +130,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	var se *sqlEngine
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
-		se, err = newSqlEngine(dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
+		se, err = newSqlEngine(ctx, dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -141,7 +141,7 @@ func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
-		se, err = newSqlEngine(dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
+		se, err = newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -557,7 +557,7 @@ type sqlEngine struct {
 }
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(dEnv *env.DoltEnv, db *dsqle.Database) (*sqlEngine, error) {
+func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, db *dsqle.Database) (*sqlEngine, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 
@@ -568,6 +568,11 @@ func newSqlEngine(dEnv *env.DoltEnv, db *dsqle.Database) (*sqlEngine, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	err := dsqle.RegisterSchemaFragments(sql.NewContext(ctx), engine.Catalog, db)
+	if err != nil {
+		return nil, err
 	}
 
 	return &sqlEngine{db, dEnv.DoltDB, engine}, nil

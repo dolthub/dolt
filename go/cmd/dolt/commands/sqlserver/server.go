@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019-2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,7 +76,14 @@ func Serve(ctx context.Context, serverConfig *ServerConfig, rootValue *doltdb.Ro
 
 	userAuth := auth.NewAudit(auth.NewNativeSingle(serverConfig.User, serverConfig.Password, permissions), auth.NewAuditLog(logrus.StandardLogger()))
 	sqlEngine := sqle.NewDefault()
-	sqlEngine.AddDatabase(dsqle.NewDatabase("dolt", rootValue, nil, nil))
+	db := dsqle.NewDatabase("dolt", rootValue, nil, nil)
+	sqlEngine.AddDatabase(db)
+
+	startError = dsqle.RegisterSchemaFragments(sql.NewContext(ctx), sqlEngine.Catalog, db)
+	if startError != nil {
+		cli.PrintErr(startError)
+		return
+	}
 
 	hostPort := net.JoinHostPort(serverConfig.Host, strconv.Itoa(serverConfig.Port))
 	timeout := time.Second * time.Duration(serverConfig.Timeout)
