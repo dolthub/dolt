@@ -252,7 +252,7 @@ func iterAll(ctx context.Context, col Collection, f func(v Value, index uint64) 
 			}
 			idx += blockLength
 
-			vc := make(chan Value, blockLength)
+			vc := make(chan Value)
 			vcChan <- vc
 
 			go func() {
