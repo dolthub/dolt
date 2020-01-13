@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ package types
 import (
 	"context"
 	"errors"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -145,7 +144,6 @@ func bufferSubTreeChunks(ctx context.Context, subTree sequence, sink chan sequen
 	vrw := subTree.valueReadWriter()
 	hs := refHashes(subTree)
 	refStack, err := vrw.ReadManyValues(ctx, hs)
-	refStack, _ = pruneMissingValues(refStack, hs)
 	if err != nil {
 		ec <- err
 	}
@@ -172,7 +170,6 @@ func bufferSubTreeChunks(ctx context.Context, subTree sequence, sink chan sequen
 				if err != nil {
 					ec <- err
 				}
-				newValues, _ = pruneMissingValues(newValues, newHashes)
 				refStack = append(newValues, refStack...)
 			}
 		}
@@ -180,28 +177,12 @@ func bufferSubTreeChunks(ctx context.Context, subTree sequence, sink chan sequen
 }
 
 func refHashes(s sequence) hash.HashSlice {
-	hs := make(hash.HashSlice, s.Len())
-	i := 0
+	hs := hash.NewHashSet()
 	_ = s.WalkRefs(s.format(), func(ref Ref) error {
-		hs[i] = ref.TargetHash()
-		i++
+		hs.Insert(ref.TargetHash())
 		return nil
 	})
-	return hs
-}
-
-func pruneMissingValues(vs ValueSlice, hs hash.HashSlice) (ValueSlice, hash.HashSlice) {
-	d.PanicIfFalse(hs.Len() == len(vs))
-	var pruned ValueSlice
-	var missing hash.HashSlice
-	for i, val := range vs {
-		if val != nil {
-			pruned = append(pruned, val)
-		} else {
-			missing = append(missing, hs[i])
-		}
-	}
-	return pruned, missing
+	return hs.HashSlice()
 }
 
 // leafBuffer + sum(readerBuffers) ~= requestedBufSize

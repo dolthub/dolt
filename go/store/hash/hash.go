@@ -159,3 +159,13 @@ func (hs HashSet) Has(hash Hash) (has bool) {
 func (hs HashSet) Remove(hash Hash) {
 	delete(hs, hash)
 }
+
+func (hs HashSet) HashSlice() HashSlice {
+	slice := make(HashSlice, len(hs))
+	i := 0
+	for h, _ := range hs {
+		slice[i] = h
+		i ++
+	}
+	return slice
+}
