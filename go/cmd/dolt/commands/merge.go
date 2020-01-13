@@ -79,6 +79,8 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 			return 1
 		}
 
+		localDocs := dEnv.Docs
+
 		branchName := apr.Arg(0)
 		dref, err := dEnv.FindRef(ctx, branchName)
 
@@ -117,11 +119,17 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 
 			if verr == nil {
 				verr = mergeBranch(ctx, dEnv, dref)
+				if verr == nil {
+					err = actions.SaveDocsFromWorking(ctx, dEnv, localDocs)
+					if err != nil {
+						verr = errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+					}
+				}
 			}
 		}
 	}
 
-	return handleCommitErr(verr, usage)
+	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
@@ -245,6 +253,22 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 	}
 
+	// This code isn't working, but is an attempt to remove automatically resolved doc conflicts from
+	// the working root.
+	// workingRoot, err := dEnv.WorkingRoot(ctx)
+	// if err != nil {
+	// 	return errhand.BuildDError("error: failed to get ").AddCause(err).Build()
+	// }
+
+	// docCnfsOnWorkingRoot, _ := docTableIsInConflictOnRoot(ctx, dEnv, workingRoot)
+
+	// if docCnfsOnWorkingRoot {
+	// 	mergedRoot, err = getRootWithDocs(ctx, dEnv, mergedRoot, cm1)
+	// 	if err != nil {
+	// 		return errhand.BuildDError("error: failed to get merged root with docs").AddCause(err).Build()
+	// 	}
+	// }
+
 	verr := UpdateWorkingWithVErr(dEnv, mergedRoot)
 
 	if verr == nil {
@@ -256,6 +280,41 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 	}
 
 	return verr
+}
+
+// func getRootWithDocs(ctx context.Context, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, cm1 *doltdb.Commit) (*doltdb.RootValue, error) {
+// 	workingRoot, err := dEnv.WorkingRoot(ctx)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	docCnfsOnWorkingRoot, _ := docTableIsInConflictOnRoot(ctx, dEnv, workingRoot)
+
+// 	if docCnfsOnWorkingRoot {
+// 		cm1root, err := cm1.GetRootValue()
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		docsTbl, _, err := cm1root.GetTable(ctx, doltdb.DocTableName)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		return mergedRoot.PutTable(ctx, doltdb.DocTableName, docsTbl)
+// 	}
+
+// 	return mergedRoot, nil
+// }
+
+func docTableIsInConflictOnRoot(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (bool, error) {
+	docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+
+	return docTbl.HasConflicts()
 }
 
 func printSuccessStats(tblToStats map[string]*merge.MergeStats) bool {

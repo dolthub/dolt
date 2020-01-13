@@ -62,6 +62,7 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+	localDocs := dEnv.Docs
 
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
@@ -80,11 +81,15 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 
 	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
 	if err == nil {
+		err = saveDocsFromHead(ctx, dEnv, localDocs)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.BuildDError("error: could not update docs on the filesystem").AddCause(err).Build(), usage)
+		}
 		// if the commit was successful, print it out using the log command
 		return Log(ctx, "log", []string{"-n=1"}, dEnv)
 	}
 
-	return handleCommitErr(err, usage)
+	return handleCommitErr(ctx, dEnv, err, usage)
 }
 
 // we are more permissive than what is documented.
@@ -114,7 +119,7 @@ func parseDate(dateStr string) (time.Time, error) {
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
 
-func handleCommitErr(err error, usage cli.UsagePrinter) int {
+func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
 	if err == nil {
 		return 0
 	}
@@ -141,7 +146,7 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 	if actions.IsNothingStaged(err) {
 		notStagedTbls := actions.NothingStagedTblDiffs(err)
 		notStagedDocs := actions.NothingStagedDocsDiffs(err)
-		n := printDiffsNotStaged(cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
+		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -185,7 +190,7 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 
 	buf := bytes.NewBuffer([]byte{})
 	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
-	n = printDiffsNotStaged(buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
+	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
 
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"
@@ -210,4 +215,18 @@ func parseCommitMessage(cm string) string {
 		filtered = append(filtered, line)
 	}
 	return strings.Join(filtered, "\n")
+}
+
+func saveDocsFromHead(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	return actions.SaveTrackedDocs(ctx, dEnv, workingRoot, headRoot, localDocs)
 }

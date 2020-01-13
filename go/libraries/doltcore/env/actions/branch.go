@@ -244,8 +244,73 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 	dEnv.RepoState.Staged = stgHash.String()
 
 	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return err
+	}
 
-	return err
+	localDocs := dEnv.Docs
+	return SaveDocsFromWorking(ctx, dEnv, localDocs)
+}
+
+// SaveDocsFromWorking saves dcos from the working root to the filesystem, and doesn't modify untracked docs.
+func SaveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, localDocs)
+}
+
+// SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
+func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
+	docDiffs, err := NewDocDiffs(ctx, dEnv, workRoot, nil, localDocs)
+	if err != nil {
+		return err
+	}
+
+	docs := removeUntrackedDocs(localDocs, docDiffs)
+
+	err = dEnv.UpdateFSDocsToRootDocs(ctx, targetRoot, docs)
+	if err != nil {
+		localDocs.Save(dEnv.FS)
+		return err
+	}
+
+	return nil
+}
+
+func docIsUntracked(doc string, untracked []string) bool {
+	for _, val := range untracked {
+		if doc == val {
+			return true
+		}
+	}
+	return false
+}
+
+func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *DocDiffs) []doltdb.DocDetails {
+	result := []doltdb.DocDetails{}
+	untracked := getUntrackedDocs(docs, docDiffs)
+
+	for _, doc := range docs {
+		if !docIsUntracked(doc.DocPk, untracked) {
+			result = append(result, doc)
+		}
+	}
+	return result
+}
+
+func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *DocDiffs) []string {
+	untracked := []string{}
+	for _, docName := range docDiffs.Docs {
+		dt := docDiffs.DocToType[docName]
+		if dt == AddedDoc {
+			untracked = append(untracked, docName)
+		}
+	}
+
+	return untracked
 }
 
 var emptyHash = hash.Hash{}

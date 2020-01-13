@@ -804,9 +804,8 @@ teardown() {
     dolt commit -m "Changed README.md on test-a branch"
     dolt checkout test-b
     run cat README.md
-    skip "This does not change the contents of README.md to what is stored on test-b right now. Keeps what is on test-a"
     [[ $output =~ "This is a repository level README" ]] || false
-    [[ !$output =~ "test-a branch" ]] || false
+    [[ ! $output =~ "test-a branch" ]] || false
     echo test-b branch > README.md
     dolt add .
     dolt commit -m "Changed README.md on test-a branch"
@@ -814,18 +813,24 @@ teardown() {
     run dolt merge test-a
     [ "$status" -eq 0 ]
     [[ $output =~ "Fast-forward" ]] || false
+    run cat README.md
+    [[ "$output" =~ "test-a branch" ]] || false
     run dolt merge test-b
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ $output =~ "CONFLICT" ]] || false
+    run cat README.md
+    [[ "$output" =~ "test-a branch" ]] || false
     run dolt conflicts cat dolt_docs
     [ "$status" -eq 0 ]
     [[ $output =~ "test-a branch" ]] || false
     [[ $output =~ "test-b branch" ]] || false
     dolt conflicts resolve dolt_docs --ours
     run cat README.md
-    [[ $output =~ "test-b branch" ]] || false
-    [[ !$output =~ "test-a branch" ]] || false
-    dolt add .
+    [[ ! $output =~ "test-b branch" ]] || false
+    [[ $output =~ "test-a branch" ]] || false
+    # TODO: Improve conflict resolution workflow for docs 
+    #  Only allow dolt_docs when dolt_docs is in conflict
+    dolt add dolt_docs
     dolt commit -m "Resolved docs conflict with --ours"
     # Again but resolve theirs
     dolt branch test-a-again
@@ -838,11 +843,30 @@ teardown() {
     echo test-b-again branch > README.md
     dolt add .
     dolt commit -m "Changed README.md on test-b-again branch"
+    dolt checkout master
     dolt merge test-a-again
     run dolt merge test-b-again
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     dolt conflicts resolve dolt_docs --theirs
     run cat README.md
-    [[ $output =~ "test-a-again branch" ]] || false
-    [[ !$output =~ "test-b-again branch" ]] || false
+    [[ ! $output =~ "test-a-again branch" ]] || false
+    [[ $output =~ "test-b-again branch" ]] || false
+    dolt add .
+    dolt commit -m "merge test-b-again with fixed conflicts"
+    
+    dolt checkout test-b-again
+    echo test-b-one-more-time > README.md
+    dolt add .
+    dolt commit -m "test-b-one-more-time"
+    dolt checkout master
+    dolt merge test-b-again
+    [ "$status" -eq 0 ]
+    run cat README.md
+    [[ "$output" =~ "one-more-time" ]] || false
+    # skip "This isn't working"
+    run dolt status
+    [[ "$output" =~ "All conflicts fixed" ]] || false
+    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    # "Test-b-one-more-time is being added to working root when it shouldn't be"
+    [[ "$output" =~ "README.md" ]] || false
 }

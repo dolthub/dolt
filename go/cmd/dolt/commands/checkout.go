@@ -56,6 +56,10 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 	if (apr.Contains(coBranchArg) && apr.NArg() > 1) || (!apr.Contains(coBranchArg) && apr.NArg() == 0) {
 		usagePrt()
 		return 1
+	} else if apr.ContainsArg(doltdb.DocTableName) {
+		verr := errhand.BuildDError("error: cannot checkout dolt_docs").Build()
+		cli.PrintErrln(verr.Verbose())
+		return 1
 	} else {
 		var verr errhand.VerboseError
 		newBranch, nbOk := apr.GetValue(coBranchArg)
