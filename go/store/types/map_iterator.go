@@ -98,9 +98,6 @@ func NewBufferedMapIterator(ctx context.Context, m Map) (ForwardMapIterator, err
 	return &bufferedMapIterator{bufSeqCur, nil, nil}, nil
 }
 
-// todo: calculate buffer size to be a number of bytes
-const bufferSize = 100 * 1000
-
 type bufferedMapIterator struct {
 	bufSeqCur    *bufSeqCurImpl
 	currentKey   Value
