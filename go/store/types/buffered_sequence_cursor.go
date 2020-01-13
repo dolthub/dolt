@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+
 	"github.com/liquidata-inc/dolt/go/store/d"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
@@ -36,7 +37,7 @@ type bufferedSequenceCursor interface {
 // bufferedSequenceCursor explores a tree of sequence items.
 type bufSeqCursorImpl struct {
 	//parent *bufSeqCursorImpl
-	seqStream  <-chan sequence
+	seqStream <-chan sequence
 	//seq        sequence
 	curLeafSeq sequence
 	curLeafIdx uint64
@@ -75,9 +76,9 @@ func (bc *bufSeqCursorImpl) advance(ctx context.Context) (bool, error) {
 	if bc.curLeafIdx == bc.curLeafSeq.Len() {
 		// grab the next chunk's leaf sequence
 		select {
-		case err := <- bc.errChan:
+		case err := <-bc.errChan:
 			return false, err
-		case bc.curLeafSeq = <- bc.seqStream:
+		case bc.curLeafSeq = <-bc.seqStream:
 			bc.curLeafIdx = 0
 		}
 	}
@@ -108,7 +109,7 @@ func walkSequenceTree(ctx context.Context, leafBuffer chan sequence, sourceSeq s
 	const concurrency = 6
 	const readAtTreeLevel = 2
 	lifo := ValueSlice{v}
-	cc :=  make(chan chan sequence, concurrency)
+	cc := make(chan chan sequence, concurrency)
 	go func() {
 		defer close(cc)
 		// depth first search the tree

@@ -89,20 +89,20 @@ func (mi *mapIterator) Prev(ctx context.Context) (k, v Value, err error) {
 }
 
 func NewBufferedMapIterator(ctx context.Context, m Map) (ForwardMapIterator, error) {
-	bufSeqCur, err := newBufferedSequenceCursor(ctx, m.asSequence(), 64 * 64 * 64)
+	bufSeqCur, err := newBufferedSequenceCursor(ctx, m.asSequence(), 64*64*64)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &bufferedMapIterator{bufSeqCur,nil, nil}, nil
+	return &bufferedMapIterator{bufSeqCur, nil, nil}, nil
 }
 
 // todo: calculate buffer size to be a number of bytes
 const bufferSize = 100 * 1000
 
 type bufferedMapIterator struct {
-	bufSeqCur 	 *bufSeqCursorImpl
+	bufSeqCur    *bufSeqCursorImpl
 	currentKey   Value
 	currentValue Value
 }
