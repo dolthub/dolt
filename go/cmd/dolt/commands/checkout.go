@@ -89,14 +89,20 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 					verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 				}
 
+				found := false
 				for _, rf := range refs {
 					if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
 						verr = checkoutNewBranch(ctx, dEnv, name, rf.String())
+						found = true
 						break
 					}
 				}
 
-				if verr == nil {
+				if !found && !env.IsValidDoc(name) {
+					verr = errhand.BuildDError("error: could not find %s", name).Build()
+				}
+
+				if verr == nil || !found {
 					err = saveDocsFromHead(ctx, dEnv, localDocs)
 					if err != nil {
 						verr = errhand.BuildDError("error: could not update docs on the filesystem").AddCause(err).Build()
