@@ -108,3 +108,50 @@ select * from will_be_broken;
 SQL
     [ "$status" -eq 1 ]
 }
+
+@test "creating view creates creates dolt_schemas table" {
+    run dolt sql -q 'create view testing as select 2+2 from dual'
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "${lines[3]}" =~ 'new table:' ]] || false
+    [[ "${lines[3]}" =~ ' dolt_schemas' ]] || false
+}
+
+@test "created view is queryable from next session" {
+    run dolt sql -q 'create view testing as select 2+2 from dual'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'select * from testing'
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "${lines[1]}" =~ '2 + 2' ]] || false
+    [[ "${lines[3]}" =~ ' 4 ' ]] || false
+}
+
+@test "created view is droppable from next session" {
+    run dolt sql -q 'create view testing as select 2+2 from dual'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'drop view testing'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'select * from testing'
+    [ "$status" -eq 1 ]
+}
+
+@test "database with broken view can be used" {
+    run dolt sql -q 'create table users (id longtext primary key)'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'create view all_users as select * from users'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'select * from all_users'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'drop table users'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'select 2+2 from dual'
+    [ "$status" -eq 0 ]
+    run dolt sql -q 'select * from all_users'
+    [ "$status" -eq 1 ]
+    [[ "${lines[0]}" =~ "table not found: users" ]] || false
+    run dolt sql -q 'drop view all_users'
+    [ "$status" -eq 0 ]
+}
