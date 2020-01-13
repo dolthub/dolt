@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -42,7 +43,21 @@ var schAddColSynopsis = []string{
 	"[--default <default_value>] [--not-null] [--tag <tag-number>] <table> <name> <type>",
 }
 
-func AddColumn(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type AddColumnCmd struct{}
+
+func (cmd AddColumnCmd) Name() string {
+	return "add-column"
+}
+
+func (cmd AddColumnCmd) Description() string {
+	return "Adds a column to specified table's schema."
+}
+
+func (cmd AddColumnCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+func (cmd AddColumnCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table where the new column should be added."
 	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")

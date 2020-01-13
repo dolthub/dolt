@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"io/ioutil"
 	"os"
 
@@ -42,7 +43,21 @@ var tblCreateSynopsis = []string{
 	"[-f] -s <schema_file> <table>...",
 }
 
-func Create(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CreateCmd struct{}
+
+func (cmd CreateCmd) Name() string {
+	return "create"
+}
+
+func (cmd CreateCmd) Description() string {
+	return "Creates or overwrite an existing table with an empty table."
+}
+
+func (cmd CreateCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_CREATE
+}
+
+func (cmd CreateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	//ap.ArgListHelp["field_descriptor"] = fieldDescriptorHelp
 	ap.ArgListHelp["table"] = "name of the table being created."

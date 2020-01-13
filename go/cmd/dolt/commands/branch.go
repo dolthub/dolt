@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"sort"
 	"strings"
 
@@ -69,7 +70,21 @@ const (
 	allFlag         = "all"
 )
 
-func Branch(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type BranchCmd struct{}
+
+func (cmd BranchCmd) Name() string {
+	return "branch"
+}
+
+func (cmd BranchCmd) Description() string {
+	return "Create, list, edit, delete branches."
+}
+
+func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_BRANCH
+}
+
+func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["start-point"] = "A commit that a new branch should point at."
 	ap.SupportsFlag(listFlag, "", "List branches")

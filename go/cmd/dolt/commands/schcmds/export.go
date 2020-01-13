@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -32,7 +33,21 @@ var schExportSynopsis = []string{
 	"<table> <file>",
 }
 
-func Export(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ExportCmd struct{}
+
+func (cmd ExportCmd) Name() string {
+	return "export"
+}
+
+func (cmd ExportCmd) Description() string {
+	return "Exports a table's schema."
+}
+
+func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table whose schema is being exported."
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."

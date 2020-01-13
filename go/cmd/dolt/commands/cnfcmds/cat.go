@@ -16,6 +16,7 @@ package cnfcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -40,7 +41,21 @@ var catSynopsis = []string{
 	"[<commit>] <table>...",
 }
 
-func Cat(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CatCmd struct{}
+
+func (cmd CatCmd) Name() string {
+	return "cat"
+}
+
+func (cmd CatCmd) Description() string {
+	return "Writes out the table conflicts."
+}
+
+func (cmd CatCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CONF_CAT
+}
+
+func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "List of tables to be printed. '.' can be used to print conflicts for all tables."
 	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)

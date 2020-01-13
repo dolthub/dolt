@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"io"
 	"os"
 	"path/filepath"
@@ -93,7 +94,21 @@ const (
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
 
-func Sql(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type SqlCmd struct{}
+
+func (cmd SqlCmd) Name() string {
+	return "sql"
+}
+
+func (cmd SqlCmd) Description() string {
+	return "Run a SQL query against tables in repository."
+}
+
+func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SQL
+}
+
+func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)

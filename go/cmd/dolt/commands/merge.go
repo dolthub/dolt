@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"sort"
 	"strconv"
 
@@ -59,7 +60,21 @@ var abortDetails = "Abort the current conflict resolution process, and try to re
 	"unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before " +
 	"running git merge."
 
-func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type MergeCmd struct{}
+
+func (cmd MergeCmd) Name() string {
+	return "merge"
+}
+
+func (cmd MergeCmd) Description() string {
+	return "Merge a branch."
+}
+
+func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_MERGE
+}
+
+func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(abortParam, "", abortDetails)
 	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeShortDest, mergeLongDesc, mergeSynopsis, ap)

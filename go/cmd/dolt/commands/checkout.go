@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 
@@ -46,7 +47,21 @@ var coSynopsis = []string{
 	`-b <new-branch> [<start-point>]`,
 }
 
-func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CheckoutCmd struct{}
+
+func (cmd CheckoutCmd) Name() string {
+	return "checkout"
+}
+
+func (cmd CheckoutCmd) Description() string {
+	return "Checkout a branch or overwrite a table from HEAD."
+}
+
+func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CHECKOUT
+}
+
+func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	const coBranchArg = "b"
 	ap := argparser.NewArgParser()
 	ap.SupportsString(coBranchArg, "", "branch", "Create a new branch named <new_branch> and start it at <start_point>.")

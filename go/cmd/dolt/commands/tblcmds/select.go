@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/fatih/color"
 
@@ -65,7 +66,21 @@ type SelectArgs struct {
 	hideConflicts bool
 }
 
-func Select(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type SelectCmd struct{}
+
+func (cmd SelectCmd) Name() string {
+	return "select"
+}
+
+func (cmd SelectCmd) Description() string {
+	return "Print a selection of a table."
+}
+
+func (cmd SelectCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_SELECT
+}
+
+func (cmd SelectCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := newArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, selShortDesc, selLongDesc, selSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)

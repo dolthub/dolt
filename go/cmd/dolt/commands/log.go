@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"strings"
 
 	"github.com/fatih/color"
@@ -78,7 +79,21 @@ func printDesc(cm *doltdb.CommitMeta) {
 	cli.Println(formattedDesc)
 }
 
-func Log(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type LogCmd struct{}
+
+func (cmd LogCmd) Name() string {
+	return "log"
+}
+
+func (cmd LogCmd) Description() string {
+	return "Show commit logs."
+}
+
+func (cmd LogCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_LOG
+}
+
+func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
 }
 

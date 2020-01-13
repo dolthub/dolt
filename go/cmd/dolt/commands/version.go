@@ -21,11 +21,21 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
-// Version displays the version of the running dolt client
-func Version(version string) cli.CommandFunc {
-	return func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-		cli.Println("dolt version", version)
+type VersionCmd struct {
+	VersionStr string
+}
 
-		return 0
-	}
+func (cmd VersionCmd) Name() string {
+	return "version"
+}
+
+func (cmd VersionCmd) Description() string {
+	return "Displays the current Dolt cli version."
+}
+
+// Version displays the version of the running dolt client
+func (cmd VersionCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	cli.Println("dolt version", cmd.VersionStr)
+
+	return 0
 }

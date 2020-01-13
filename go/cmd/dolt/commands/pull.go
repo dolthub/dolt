@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -34,7 +35,21 @@ var pullSynopsis = []string{
 	"<remote>",
 }
 
-func Pull(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type PullCmd struct{}
+
+func (cmd PullCmd) Name() string {
+	return "pull"
+}
+
+func (cmd PullCmd) Description() string {
+	return "Fetch from a dolt remote data repository and merge."
+}
+
+func (cmd PullCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_PULL
+}
+
+func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)

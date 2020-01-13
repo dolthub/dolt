@@ -17,6 +17,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"os"
 	"os/exec"
 	"strconv"
@@ -26,12 +31,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -43,34 +42,34 @@ const (
 	Version = "0.12.0"
 )
 
-var doltCommand = cli.GenSubCommandHandler([]*cli.Command{
-	{Name: "init", Desc: "Create an empty Dolt data repository.", Func: commands.Init, ReqRepo: false, EventType: eventsapi.ClientEventType_INIT},
-	{Name: "status", Desc: "Show the working tree status.", Func: commands.Status, ReqRepo: true, EventType: eventsapi.ClientEventType_STATUS},
-	{Name: "add", Desc: "Add table changes to the list of staged table changes.", Func: commands.Add, ReqRepo: true, EventType: eventsapi.ClientEventType_ADD},
-	{Name: "reset", Desc: "Remove table changes from the list of staged table changes.", Func: commands.Reset, ReqRepo: true, EventType: eventsapi.ClientEventType_RESET},
-	{Name: "commit", Desc: "Record changes to the repository.", Func: commands.Commit, ReqRepo: true, EventType: eventsapi.ClientEventType_COMMIT},
-	{Name: "sql", Desc: "Run a SQL query against tables in repository.", Func: commands.Sql, ReqRepo: true, EventType: eventsapi.ClientEventType_SQL},
-	{Name: "sql-server", Desc: "Starts a MySQL-compatible server.", Func: sqlserver.SqlServer, ReqRepo: true, EventType: eventsapi.ClientEventType_SQL_SERVER},
-	{Name: "log", Desc: "Show commit logs.", Func: commands.Log, ReqRepo: true, EventType: eventsapi.ClientEventType_LOG},
-	{Name: "diff", Desc: "Diff a table.", Func: commands.Diff, ReqRepo: true, EventType: eventsapi.ClientEventType_DIFF},
-	{Name: "blame", Desc: "Show what revision and author last modified each row of a table.", Func: commands.Blame, ReqRepo: true, EventType: eventsapi.ClientEventType_BLAME},
-	{Name: "merge", Desc: "Merge a branch.", Func: commands.Merge, ReqRepo: true, EventType: eventsapi.ClientEventType_MERGE},
-	{Name: "branch", Desc: "Create, list, edit, delete branches.", Func: commands.Branch, ReqRepo: true, EventType: eventsapi.ClientEventType_BRANCH},
-	{Name: "checkout", Desc: "Checkout a branch or overwrite a table from HEAD.", Func: commands.Checkout, ReqRepo: true, EventType: eventsapi.ClientEventType_CHECKOUT},
-	{Name: "remote", Desc: "Manage set of tracked repositories.", Func: commands.Remote, ReqRepo: true, EventType: eventsapi.ClientEventType_REMOTE},
-	{Name: "push", Desc: "Push to a dolt remote.", Func: commands.Push, ReqRepo: true, EventType: eventsapi.ClientEventType_PUSH},
-	{Name: "pull", Desc: "Fetch from a dolt remote data repository and merge.", Func: commands.Pull, ReqRepo: true, EventType: eventsapi.ClientEventType_PULL},
-	{Name: "fetch", Desc: "Update the database from a remote data repository.", Func: commands.Fetch, ReqRepo: true, EventType: eventsapi.ClientEventType_FETCH},
-	{Name: "clone", Desc: "Clone from a remote data repository.", Func: commands.Clone, ReqRepo: false, EventType: eventsapi.ClientEventType_CLONE},
-	{Name: "creds", Desc: "Commands for managing credentials.", Func: credcmds.Commands, ReqRepo: false},
-	{Name: "login", Desc: "Login to a dolt remote host.", Func: commands.Login, ReqRepo: false, EventType: eventsapi.ClientEventType_LOGIN},
-	{Name: "version", Desc: "Displays the current Dolt cli version.", Func: commands.Version(Version), ReqRepo: false, EventType: eventsapi.ClientEventType_VERSION},
-	{Name: "config", Desc: "Dolt configuration.", Func: commands.Config, ReqRepo: false},
-	{Name: "ls", Desc: "List tables in the working set.", Func: commands.Ls, ReqRepo: true, EventType: eventsapi.ClientEventType_LS},
-	{Name: "schema", Desc: "Commands for showing, and modifying table schemas.", Func: schcmds.Commands, ReqRepo: true, EventType: eventsapi.ClientEventType_SCHEMA},
-	{Name: "table", Desc: "Commands for creating, reading, updating, and deleting tables.", Func: tblcmds.Commands, ReqRepo: false},
-	{Name: "conflicts", Desc: "Commands for viewing and resolving merge conflicts.", Func: cnfcmds.Commands, ReqRepo: false},
-	{Name: commands.SendMetricsCommand, Desc: "Send events logs to server.", Func: commands.SendMetrics, ReqRepo: false, HideFromHelp: true},
+var doltCommand = cli.NewHandlerCommand("", "", []cli.Command{
+	commands.InitCmd{},
+	commands.StatusCmd{},
+	commands.AddCmd{},
+	commands.ResetCmd{},
+	commands.CommitCmd{},
+	commands.SqlCmd{},
+	sqlserver.SqlServerCmd{},
+	commands.LogCmd{},
+	commands.DiffCmd{},
+	commands.BlameCmd{},
+	commands.MergeCmd{},
+	commands.BranchCmd{},
+	commands.CheckoutCmd{},
+	commands.RemoteCmd{},
+	commands.PushCmd{},
+	commands.PullCmd{},
+	commands.FetchCmd{},
+	commands.CloneCmd{},
+	credcmds.Commands,
+	commands.LoginCmd{},
+	commands.VersionCmd{},
+	commands.ConfigCmd{},
+	commands.LsCmd{},
+	schcmds.Commands,
+	tblcmds.Commands,
+	cnfcmds.Commands,
+	commands.SendMetricsCmd{},
 })
 
 const chdirFlag = "--chdir"
@@ -173,7 +172,7 @@ func runMain() int {
 		return 1
 	}
 
-	return doltCommand(context.Background(), "dolt", args, dEnv)
+	return doltCommand.Exec(context.Background(), "dolt", args, dEnv)
 }
 
 // processEventsDir runs the dolt send-metrics command in a new process

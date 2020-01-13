@@ -59,7 +59,7 @@ func TestPutRow(t *testing.T) {
 		dEnv := createEnvWithSeedData(t)
 
 		commandStr := "dolt table put-row"
-		result := PutRow(context.TODO(), commandStr, test.args, dEnv)
+		result := PutRowCmd{}.Exec(context.TODO(), commandStr, test.args, dEnv)
 
 		if result != test.expectedRes {
 			commandLine := commandStr + " " + strings.Join(test.args, " ")

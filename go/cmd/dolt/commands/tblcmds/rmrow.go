@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/fatih/color"
 
@@ -61,7 +62,21 @@ func parseRmRowArgs(commandStr string, args []string) *rmRowArgs {
 	return &rmRowArgs{tableName, pks}
 }
 
-func RmRow(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type RmRowCmd struct{}
+
+func (cmd RmRowCmd) Name() string {
+	return "rm-row"
+}
+
+func (cmd RmRowCmd) Description() string {
+	return "Remove a row from a table."
+}
+
+func (cmd RmRowCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_RM_ROW
+}
+
+func (cmd RmRowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	rmArgs := parseRmRowArgs(commandStr, args)
 
 	if rmArgs == nil {

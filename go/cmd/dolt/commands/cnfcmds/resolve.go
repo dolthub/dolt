@@ -16,6 +16,7 @@ package cnfcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -61,7 +62,21 @@ func init() {
 	}
 }
 
-func Resolve(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ResolveCmd struct{}
+
+func (cmd ResolveCmd) Name() string {
+	return "resolve"
+}
+
+func (cmd ResolveCmd) Description() string {
+	return "Removes rows from list of conflicts"
+}
+
+func (cmd ResolveCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CONF_RESOLVE
+}
+
+func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."
 	ap.ArgListHelp["key"] = "key(s) of rows within a table whose conflicts have been resolved"

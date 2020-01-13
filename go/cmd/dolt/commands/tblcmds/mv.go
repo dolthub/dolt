@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -38,7 +39,21 @@ var tblMvSynopsis = []string{
 	"[-f] <oldtable> <newtable>",
 }
 
-func Mv(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type MvCmd struct{}
+
+func (cmd MvCmd) Name() string {
+	return "mv"
+}
+
+func (cmd MvCmd) Description() string {
+	return "Moves a table"
+}
+
+func (cmd MvCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_MV
+}
+
+func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["oldtable"] = "The table being moved."
 	ap.ArgListHelp["newtable"] = "The new name of the table"

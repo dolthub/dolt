@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"strings"
 	"time"
 
@@ -71,7 +72,21 @@ func (bi *blameInfo) TimestampString() string {
 // A blame graph is a map of primary key hashes to blameInfo structs
 type blameGraph map[hash.Hash]blameInfo
 
-// Blame implements the `dolt blame` command. Blame annotates each row in the given table with information
+type BlameCmd struct{}
+
+func (cmd BlameCmd) Name() string {
+	return "blame"
+}
+
+func (cmd BlameCmd) Description() string {
+	return "Show what revision and author last modified each row of a table."
+}
+
+func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_BLAME
+}
+
+// Exec implements the `dolt blame` command. Blame annotates each row in the given table with information
 // from the revision which last modified the row, optionally starting from a given revision.
 //
 // Blame is computed as follows:
@@ -86,7 +101,7 @@ type blameGraph map[hash.Hash]blameInfo
 // changed between the commits. If so, mark it with `new` as the blame origin and continue to the next node without blame.
 //
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
-func Blame(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)

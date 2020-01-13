@@ -54,7 +54,17 @@ var commitSynopsis = []string{
 	"[options]",
 }
 
-func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CommitCmd struct{}
+
+func (cmd CommitCmd) Name() string {
+	return "commit"
+}
+
+func (cmd CommitCmd) Description() string {
+	return "Record changes to the repository."
+}
+
+func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
@@ -81,7 +91,7 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
 	if err == nil {
 		// if the commit was successful, print it out using the log command
-		return Log(ctx, "log", []string{"-n=1"}, dEnv)
+		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
 	}
 
 	return handleCommitErr(err, usage)

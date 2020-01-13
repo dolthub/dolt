@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -44,7 +45,21 @@ var sqlServerSynopsis = []string{
 	"[-H <host>] [-P <port>] [-u <user>] [-p <password>] [-t <timeout>] [-l <loglevel>] [-r]",
 }
 
-func SqlServer(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type SqlServerCmd struct{}
+
+func (cmd SqlServerCmd) Name() string {
+	return "sql-server"
+}
+
+func (cmd SqlServerCmd) Description() string {
+	return "Starts a MySQL-compatible server."
+}
+
+func (cmd SqlServerCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SQL_SERVER
+}
+
+func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return SqlServerImpl(ctx, commandStr, args, dEnv, nil)
 }
 

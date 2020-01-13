@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -33,7 +34,21 @@ var schRenameColSynopsis = []string{
 	"<table> <old> <new>",
 }
 
-func RenameColumn(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type RenameColumnCmd struct{}
+
+func (cmd RenameColumnCmd) Name() string {
+	return "rename-column"
+}
+
+func (cmd RenameColumnCmd) Description() string {
+	return "Renames a column of the specified table."
+}
+
+func (cmd RenameColumnCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+func (cmd RenameColumnCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table being modified."
 

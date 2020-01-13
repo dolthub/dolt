@@ -50,8 +50,18 @@ var cfgSynopsis = []string{
 	"[--global|--local] --unset <name>...",
 }
 
-// Config is used by the config command to allow users to view / edit their global and repository local configurations.
-func Config(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ConfigCmd struct{}
+
+func (cmd ConfigCmd) Name() string {
+	return "config"
+}
+
+func (cmd ConfigCmd) Description() string {
+	return "Dolt configuration."
+}
+
+// Exec is used by the config command to allow users to view / edit their global and repository local configurations.
+func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")

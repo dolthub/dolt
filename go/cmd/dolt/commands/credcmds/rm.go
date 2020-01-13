@@ -16,6 +16,7 @@ package credcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/fatih/color"
 
@@ -30,7 +31,25 @@ var rmShortDesc = "Remove a stored public/private keypair."
 var rmLongDesc = `Removes an existing keypair from dolt's credential storage.`
 var rmSynopsis = []string{"<public_key_as_appears_in_ls>"}
 
-func Rm(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type RmCmd struct{}
+
+func (cmd RmCmd) Name() string {
+	return "rm"
+}
+
+func (cmd RmCmd) Description() string {
+	return rmShortDesc
+}
+
+func (cmd RmCmd) RequiresRepo() bool {
+	return false
+}
+
+func (cmd RmCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CREDS_RM
+}
+
+func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)

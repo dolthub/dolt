@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"os"
 	"path"
 	"path/filepath"
@@ -83,7 +84,21 @@ const (
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var credTypes = []string{dbfactory.RoleCS.String(), dbfactory.EnvCS.String(), dbfactory.FileCS.String()}
 
-func Remote(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type RemoteCmd struct{}
+
+func (cmd RemoteCmd) Name() string {
+	return "remote"
+}
+
+func (cmd RemoteCmd) Description() string {
+	return "Manage set of tracked repositories."
+}
+
+func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_REMOTE
+}
+
+func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["region"] = "cloud provider region associated with this remote."
 	ap.ArgListHelp["creds-type"] = "credential type.  Valid options are role, env, and file.  See the help section for additional details."

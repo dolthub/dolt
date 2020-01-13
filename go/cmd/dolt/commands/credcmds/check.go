@@ -17,6 +17,7 @@ package credcmds
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -31,7 +32,25 @@ var checkShortDesc = "Check authenticating with a credential keypair against a d
 var checkLongDesc = `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`
 var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds <eak95022q3vskvumn2fcrpibdnheq1dtr8t...>]"}
 
-func Check(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CheckCmd struct{}
+
+func (cmd CheckCmd) Name() string {
+	return "check"
+}
+
+func (cmd CheckCmd) Description() string {
+	return checkShortDesc
+}
+
+func (cmd CheckCmd) RequiresRepo() bool {
+	return false
+}
+
+func (cmd CheckCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CREDS_CHECK
+}
+
+func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString("endpoint", "", "", "API endpoint, otherwise taken from config.")
 	ap.SupportsString("creds", "", "", "Public Key ID or Public Key for credentials, otherwise taken from config.")

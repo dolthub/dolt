@@ -16,6 +16,7 @@ package credcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"strings"
 
 	"github.com/fatih/color"
@@ -36,7 +37,25 @@ var lsSynopsis = []string{"[-v | --verbose]"}
 
 var lsVerbose = false
 
-func Ls(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type LsCmd struct{}
+
+func (cmd LsCmd) Name() string {
+	return "ls"
+}
+
+func (cmd LsCmd) Description() string {
+	return lsShortDesc
+}
+
+func (cmd LsCmd) RequiresRepo() bool {
+	return false
+}
+
+func (cmd LsCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CREDS_LS
+}
+
+func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag("verbose", "v", "Verbose output, including key id.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)

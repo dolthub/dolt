@@ -37,8 +37,18 @@ const (
 	sendMetricsShortDec = "Send metrics to the events server or print them to stdout"
 )
 
-// SendMetrics is the commandFunc used that flushes the events to the grpc service
-func SendMetrics(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type SendMetricsCmd struct{}
+
+func (cmd SendMetricsCmd) Name() string {
+	return SendMetricsCommand
+}
+
+func (cmd SendMetricsCmd) Description() string {
+	return "Send events logs to server."
+}
+
+// Exec is the implementation of the command that flushes the events to the grpc service
+func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")
 

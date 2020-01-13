@@ -27,36 +27,53 @@ const (
 	appName = "app"
 )
 
-type trackedCommandFunc struct {
-	called bool
-	cmdStr string
-	args   []string
+type trackedCommand struct {
+	name        string
+	description string
+	called      bool
+	cmdStr      string
+	args        []string
 }
 
-func (tf *trackedCommandFunc) wasCalled() bool {
+func NewTrackedFunc(name, desc string) *trackedCommand {
+	return &trackedCommand{name, desc, false, "", nil}
+}
+
+func (tf *trackedCommand) wasCalled() bool {
 	return tf.called
 }
 
-func (tf *trackedCommandFunc) commandFunc(ctx context.Context, cmdStr string, args []string, dEnv *env.DoltEnv) int {
+func (tf *trackedCommand) Name() string {
+	return tf.name
+}
+
+func (tf *trackedCommand) Description() string {
+	return tf.description
+}
+
+func (tf *trackedCommand) RequiresRepo() bool {
+	return false
+}
+
+func (tf *trackedCommand) Exec(ctx context.Context, cmdStr string, args []string, dEnv *env.DoltEnv) int {
 	tf.called = true
 	tf.cmdStr = cmdStr
 	tf.args = args
 	return 0
 }
 
-func (tf *trackedCommandFunc) equalsState(called bool, cmdStr string, args []string) bool {
+func (tf *trackedCommand) equalsState(called bool, cmdStr string, args []string) bool {
 	return called == tf.called && cmdStr == tf.cmdStr && reflect.DeepEqual(args, tf.args)
 }
 
 func TestCommands(t *testing.T) {
-	child1 := &trackedCommandFunc{}
-	grandChild1 := &trackedCommandFunc{}
-	commands := &Command{Name: appName, Desc: "test application", Func: GenSubCommandHandler([]*Command{
-		{Name: "child1", Desc: "first child command", Func: child1.commandFunc},
-		{Name: "child2", Desc: "second child command", Func: GenSubCommandHandler([]*Command{
-			{Name: "grandchild1", Desc: "child2's first child", Func: grandChild1.commandFunc},
-		})},
-	})}
+	grandChild1 := NewTrackedFunc("grandchild1", "child2's first child")
+	child2 := NewHandlerCommand("child2", "second child command", []Command{grandChild1})
+	child1 := NewTrackedFunc("child1", "first child command")
+	commands := NewHandlerCommand(appName, "test application", []Command{
+		child1,
+		child2,
+	})
 
 	res := runCommand(commands, "app")
 
@@ -96,12 +113,12 @@ func TestCommands(t *testing.T) {
 	}
 }
 
-func runCommand(root *Command, commandLine string) int {
+func runCommand(root Command, commandLine string) int {
 	tokens := strings.Split(commandLine, " ")
 
 	if tokens[0] != appName {
-		panic("Invalid test commandh line")
+		panic("Invalid test command line")
 	}
 
-	return root.Func(context.Background(), appName, tokens[1:], nil)
+	return root.Exec(context.Background(), appName, tokens[1:], nil)
 }

@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -32,7 +33,21 @@ var schDropColSynopsis = []string{
 	"<table> <column>",
 }
 
-func DropColumn(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type DropColumnCmd struct{}
+
+func (cmd DropColumnCmd) Name() string {
+	return "dropColumn"
+}
+
+func (cmd DropColumnCmd) Description() string {
+	return "Removes a column of the specified table."
+}
+
+func (cmd DropColumnCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+func (cmd DropColumnCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
 

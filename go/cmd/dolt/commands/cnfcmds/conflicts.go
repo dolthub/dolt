@@ -16,10 +16,9 @@ package cnfcmds
 
 import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 )
 
-var Commands = cli.GenSubCommandHandler([]*cli.Command{
-	{Name: "cat", Desc: "Writes out the table conflicts.", Func: Cat, ReqRepo: true, EventType: eventsapi.ClientEventType_CONF_CAT},
-	{Name: "resolve", Desc: "Removes rows from list of conflicts", Func: Resolve, ReqRepo: true, EventType: eventsapi.ClientEventType_CONF_RESOLVE},
+var Commands = cli.NewHandlerCommand("conflicts", "Send events logs to server.", []cli.Command{
+	CatCmd{},
+	ResolveCmd{},
 })

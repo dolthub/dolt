@@ -52,7 +52,17 @@ var resetSynopsis = []string{
 	"[--hard | --soft]",
 }
 
-func Reset(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ResetCmd struct{}
+
+func (cmd ResetCmd) Name() string {
+	return "reset"
+}
+
+func (cmd ResetCmd) Description() string {
+	return "Remove table changes from the list of staged table changes."
+}
+
+func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since <commit> are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")

@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"os"
 
 	"github.com/fatih/color"
@@ -119,7 +120,21 @@ func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 	}
 }
 
-func Export(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ExportCmd struct{}
+
+func (cmd ExportCmd) Name() string {
+	return "export"
+}
+
+func (cmd ExportCmd) Description() string {
+	return "Export a table to a file."
+}
+
+func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_EXPORT
+}
+
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	force, mvOpts := parseExportArgs(commandStr, args)
 
 	if mvOpts == nil {

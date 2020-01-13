@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"strings"
 
 	"github.com/fatih/color"
@@ -102,7 +103,21 @@ func parseKVPs(args []string) ([]string, map[string]string, errhand.VerboseError
 	return fieldNames, kvps, nil
 }
 
-func PutRow(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type PutRowCmd struct{}
+
+func (cmd PutRowCmd) Name() string {
+	return "put-row"
+}
+
+func (cmd PutRowCmd) Description() string {
+	return "Add a row to a table."
+}
+
+func (cmd PutRowCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_PUT_ROW
+}
+
+func (cmd PutRowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	prArgs := parsePutRowArgs(commandStr, args)
 
 	if prArgs == nil {

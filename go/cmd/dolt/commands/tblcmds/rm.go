@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -32,7 +33,21 @@ var tblRmSynopsis = []string{
 	"<table>...",
 }
 
-func Rm(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type RmCmd struct{}
+
+func (cmd RmCmd) Name() string {
+	return "rm"
+}
+
+func (cmd RmCmd) Description() string {
+	return "Deletes a table"
+}
+
+func (cmd RmCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_RM
+}
+
+func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "The table to remove"
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)

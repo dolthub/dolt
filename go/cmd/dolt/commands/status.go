@@ -38,7 +38,17 @@ before running <b>dolt commit</b>.`
 
 var statusSynopsis = []string{""}
 
-func Status(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type StatusCmd struct{}
+
+func (cmd StatusCmd) Name() string {
+	return "status"
+}
+
+func (cmd StatusCmd) Description() string {
+	return "Show the working tree status."
+}
+
+func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
 	cli.ParseArgs(ap, args, help)

@@ -38,7 +38,17 @@ var addSynopsis = []string{
 	`[<table>...]`,
 }
 
-func Add(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type AddCmd struct{}
+
+func (cmd AddCmd) Name() string {
+	return "add"
+}
+
+func (cmd AddCmd) Description() string {
+	return "Add table changes to the list of staged table changes."
+}
+
+func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."
 	ap.SupportsFlag(allParam, "a", "Stages any and all changes (adds, deletes, and modifications).")

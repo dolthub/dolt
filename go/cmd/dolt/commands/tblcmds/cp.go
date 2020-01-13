@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -39,7 +40,21 @@ var tblCpSynopsis = []string{
 	"[-f] [<commit>] <oldtable> <newtable>",
 }
 
-func Cp(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CpCmd struct{}
+
+func (cmd CpCmd) Name() string {
+	return "cp"
+}
+
+func (cmd CpCmd) Description() string {
+	return "Copies a table"
+}
+
+func (cmd CpCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_CP
+}
+
+func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["commit"] = "The state at which point the table whill be copied."
 	ap.ArgListHelp["oldtable"] = "The table being copied."

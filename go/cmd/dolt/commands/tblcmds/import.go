@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"os"
 
 	"github.com/fatih/color"
@@ -213,7 +214,21 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	return mvOp, tableLoc, srcLoc, srcOpts
 }
 
-func Import(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ImportCmd struct{}
+
+func (cmd ImportCmd) Name() string {
+	return "import"
+}
+
+func (cmd ImportCmd) Description() string {
+	return "Creates, overwrites, replaces, or updates a table from the data in a file."
+}
+
+func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_IMPORT
+}
+
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	force, mvOpts := parseCreateArgs(commandStr, args)
 
 	if mvOpts == nil {

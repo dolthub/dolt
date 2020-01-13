@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"reflect"
 	"sort"
 	"strconv"
@@ -104,7 +105,21 @@ type diffArgs struct {
 	where      string
 }
 
-func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type DiffCmd struct{}
+
+func (cmd DiffCmd) Name() string {
+	return "diff"
+}
+
+func (cmd DiffCmd) Description() string {
+	return "Diff a table."
+}
+
+func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_DIFF
+}
+
+func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")

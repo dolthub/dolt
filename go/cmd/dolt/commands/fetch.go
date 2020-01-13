@@ -42,7 +42,21 @@ var fetchSynopsis = []string{
 	"[<remote>] [<refspec> ...]",
 }
 
-func Fetch(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type FetchCmd struct{}
+
+func (cmd FetchCmd) Name() string {
+	return "fetch"
+}
+
+func (cmd FetchCmd) Description() string {
+	return "Update the database from a remote data repository."
+}
+
+func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_FETCH
+}
+
+func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)

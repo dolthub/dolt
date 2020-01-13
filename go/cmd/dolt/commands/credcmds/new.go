@@ -16,6 +16,7 @@ package credcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -31,7 +32,25 @@ Prints the public portion of the keypair, which can entered into the credentials
 settings page of dolthub.`
 var newSynopsis = []string{}
 
-func New(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type NewCmd struct{}
+
+func (cmd NewCmd) Name() string {
+	return "new"
+}
+
+func (cmd NewCmd) Description() string {
+	return newShortDesc
+}
+
+func (cmd NewCmd) RequiresRepo() bool {
+	return false
+}
+
+func (cmd NewCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CREDS_NEW
+}
+
+func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, newShortDesc, newLongDesc, newSynopsis, ap)
 	cli.ParseArgs(ap, args, help)

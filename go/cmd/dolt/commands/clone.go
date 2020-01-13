@@ -59,7 +59,21 @@ var cloneSynopsis = []string{
 	"[-remote <remote>] [-branch <branch>]  [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <remote-url> <new-dir>",
 }
 
-func Clone(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CloneCmd struct{}
+
+func (cmd CloneCmd) Name() string {
+	return "clone"
+}
+
+func (cmd CloneCmd) Description() string {
+	return "Clone from a remote data repository."
+}
+
+func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CLONE
+}
+
+func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
 	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")

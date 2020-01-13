@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"time"
 
 	"github.com/skratchdot/open-golang/open"
@@ -40,7 +41,21 @@ var loginSynopsis = []string{
 	"[<creds>]",
 }
 
-func Login(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type LoginCmd struct{}
+
+func (cmd LoginCmd) Name() string {
+	return "login"
+}
+
+func (cmd LoginCmd) Description() string {
+	return "Login to a dolt remote host."
+}
+
+func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_LOGIN
+}
+
+func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["creds"] = "A specific credential to use for login."
 	help, usage := cli.HelpAndUsagePrinters(commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)

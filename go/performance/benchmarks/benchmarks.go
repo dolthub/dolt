@@ -133,7 +133,7 @@ func doltExport(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColumn, 
 	os.Stdin = oldStdin
 
 	args = []string{"-f", "testTable", pathToImportFile}
-	runBenchmark(b, tblcmds.Export, "dolt table export", args, dEnv)
+	runBenchmark(b, tblcmds.ExportCmd{}.Exec, "dolt table export", args, dEnv)
 }
 
 func doltSQLSelect(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColumn, workingDir, format string) {
@@ -154,7 +154,7 @@ func doltSQLSelect(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColum
 	os.Stdin = oldStdin
 
 	args = []string{"-q", fmt.Sprintf("select count(*) from %s", testTable)}
-	runBenchmark(b, commands.Sql, "dolt sql", args, dEnv)
+	runBenchmark(b, commands.SqlCmd{}.Exec, "dolt sql", args, dEnv)
 }
 
 func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
@@ -176,12 +176,12 @@ func getBenchmarkingTools(fs filesys.Filesys, rows int, cols []*SeedColumn, work
 		dEnv = setupDEnvImport(fs, sch, workingDir, testTable, "", pathToImportFile)
 		args = []string{"-c", "-f", testTable, pathToImportFile}
 		commandStr = "dolt table import"
-		commandFunc = tblcmds.Import
+		commandFunc = tblcmds.ImportCmd{}.Exec
 	case sqlExt:
 		dEnv = setupDEnvImport(fs, sch, workingDir, testTable, "", pathToImportFile)
 		args = []string{}
 		commandStr = "dolt sql"
-		commandFunc = commands.Sql
+		commandFunc = commands.SqlCmd{}.Exec
 
 		stdin := getStdinForSQLBenchmark(fs, pathToImportFile)
 		os.Stdin = stdin
@@ -190,7 +190,7 @@ func getBenchmarkingTools(fs filesys.Filesys, rows int, cols []*SeedColumn, work
 		dEnv = setupDEnvImport(fs, sch, workingDir, testTable, pathToSchemaFile, pathToImportFile)
 		args = []string{"-c", "-f", "-s", pathToSchemaFile, testTable, pathToImportFile}
 		commandStr = "dolt table import"
-		commandFunc = tblcmds.Import
+		commandFunc = tblcmds.ImportCmd{}.Exec
 	default:
 		log.Fatalf("cannot import file, unsupported file format %s \n", format)
 	}

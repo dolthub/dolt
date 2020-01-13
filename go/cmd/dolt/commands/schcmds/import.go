@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -105,8 +106,22 @@ type importArgs struct {
 	inferArgs *actions.InferenceArgs
 }
 
-// Import is a schema command that will take a file and infer it's schema, and then create a table matching that schema.
-func Import(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ImportCmd struct{}
+
+func (cmd ImportCmd) Name() string {
+	return "import"
+}
+
+func (cmd ImportCmd) Description() string {
+	return "Creates a new table with an inferred schema."
+}
+
+func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+// Exec implements the import schema command that will take a file and infer it's schema, and then create a table matching that schema.
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "Name of the table to be created."
 	ap.ArgListHelp["file"] = "The file being used to infer the schema."

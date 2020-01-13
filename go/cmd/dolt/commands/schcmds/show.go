@@ -16,6 +16,7 @@ package schcmds
 
 import (
 	"context"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 
 	"github.com/fatih/color"
 
@@ -42,7 +43,21 @@ var tblSchemaSynopsis = []string{
 
 var bold = color.New(color.Bold)
 
-func Show(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ShowCmd struct{}
+
+func (cmd ShowCmd) Name() string {
+	return "show"
+}
+
+func (cmd ShowCmd) Description() string {
+	return "Shows the schema of one or more tables."
+}
+
+func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
 	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
