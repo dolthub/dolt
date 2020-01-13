@@ -102,7 +102,7 @@ func NewBufferedMapIterator(ctx context.Context, m Map) (ForwardMapIterator, err
 const bufferSize = 100 * 1000
 
 type bufferedMapIterator struct {
-	bufSeqCur    *bufSeqCursorImpl
+	bufSeqCur    *bufSeqCurImpl
 	currentKey   Value
 	currentValue Value
 }

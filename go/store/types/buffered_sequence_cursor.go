@@ -29,25 +29,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
-type bufferedSequenceCursor interface {
-	advance(ctx context.Context)
-	getItem(ctx context.Context) sequenceItem
-}
 
-// bufferedSequenceCursor explores a tree of sequence items.
-type bufSeqCursorImpl struct {
-	//parent *bufSeqCursorImpl
+type bufSeqCurImpl struct {
 	seqStream <-chan sequence
-	//seq        sequence
 	curLeafSeq sequence
 	curLeafIdx uint64
-	cummIdx    uint64
 	errChan    chan error
 }
 
-// newbufferedSequenceCursor creates a cursor on seq positioned at idx.
-// If idx < 0, count backward from the end of seq.
-func newBufferedSequenceCursor(ctx context.Context, sourceSeq sequence, bufSize int32) (*bufSeqCursorImpl, error) {
+func newBufferedSequenceCursor(ctx context.Context, sourceSeq sequence, bufSize int32) (*bufSeqCurImpl, error) {
 	d.PanicIfTrue(sourceSeq == nil)
 	errChan := make(chan error)
 
@@ -58,11 +48,11 @@ func newBufferedSequenceCursor(ctx context.Context, sourceSeq sequence, bufSize 
 	case err := <-errChan:
 		return nil, err
 	case firstLeaf := <-leafBuffer:
-		return &bufSeqCursorImpl{leafBuffer, firstLeaf, 0, 0, errChan}, nil
+		return &bufSeqCurImpl{leafBuffer, firstLeaf, 0, errChan}, nil
 	}
 }
 
-func (bc *bufSeqCursorImpl) current() (sequenceItem, error) {
+func (bc *bufSeqCurImpl) current() (sequenceItem, error) {
 	if !bc.valid() {
 		// sequence_cursor panics here, but that's clown town
 		return nil, errors.New("sequence is exhausted")
@@ -70,8 +60,7 @@ func (bc *bufSeqCursorImpl) current() (sequenceItem, error) {
 	return bc.curLeafSeq.getItem(int(bc.curLeafIdx))
 }
 
-func (bc *bufSeqCursorImpl) advance(ctx context.Context) (bool, error) {
-	bc.cummIdx++
+func (bc *bufSeqCurImpl) advance(ctx context.Context) (bool, error) {
 	bc.curLeafIdx++
 	if bc.curLeafIdx == bc.curLeafSeq.Len() {
 		// grab the next chunk's leaf sequence
@@ -86,7 +75,7 @@ func (bc *bufSeqCursorImpl) advance(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-func (bc *bufSeqCursorImpl) valid() bool {
+func (bc *bufSeqCurImpl) valid() bool {
 	return bc.curLeafSeq != nil && bc.curLeafIdx < bc.curLeafSeq.Len()
 }
 
