@@ -29,19 +29,21 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+const concurrency = 6
+const readAtTreeLevel = 2
 
 type bufSeqCurImpl struct {
-	seqStream <-chan sequence
+	seqStream  <-chan sequence
 	curLeafSeq sequence
 	curLeafIdx uint64
 	errChan    chan error
 }
 
-func newBufferedSequenceCursor(ctx context.Context, sourceSeq sequence, bufSize int32) (*bufSeqCurImpl, error) {
+func newBufferedSequenceCursor(ctx context.Context, sourceSeq sequence, requestedBufSize int32) (*bufSeqCurImpl, error) {
 	d.PanicIfTrue(sourceSeq == nil)
 	errChan := make(chan error)
 
-	leafBuffer := make(chan sequence, bufSize)
+	leafBuffer := make(chan sequence, bufSize(requestedBufSize))
 	go walkSequenceTree(ctx, leafBuffer, sourceSeq, errChan)
 
 	select {
@@ -95,8 +97,6 @@ func walkSequenceTree(ctx context.Context, leafBuffer chan sequence, sourceSeq s
 		return
 	}
 
-	const concurrency = 6
-	const readAtTreeLevel = 2
 	lifo := ValueSlice{v}
 	cc := make(chan chan sequence, concurrency)
 	go func() {
@@ -116,7 +116,7 @@ func walkSequenceTree(ctx context.Context, leafBuffer chan sequence, sourceSeq s
 
 			if subTree.treeLevel() <= readAtTreeLevel {
 				// spawn a reader go routine to buffer this subtree
-				subTreeSink := make(chan sequence, bufSizeForLevel(readAtTreeLevel))
+				subTreeSink := make(chan sequence, subTreeBufSize(readAtTreeLevel))
 				cc <- subTreeSink
 				go bufferSubTreeChunks(ctx, subTree, subTreeSink, ec)
 			} else {
@@ -204,10 +204,20 @@ func pruneMissingValues(vs ValueSlice, hs hash.HashSlice) (ValueSlice, hash.Hash
 	return pruned, missing
 }
 
-// Calculate an approximate upper bound for the
+// leafBuffer + sum(readerBuffers) ~= requestedBufSize
+func bufSize(requestedBufSize int32) int32 {
+	s := requestedBufSize - (concurrency * subTreeBufSize(readAtTreeLevel))
+	// ensure that leafBuffer can drain a readerBuffer
+	if s < subTreeBufSize(readAtTreeLevel) {
+		return subTreeBufSize(readAtTreeLevel)
+	}
+	return s
+}
+
+// calculate an approximate upper bound for the
 // number of chunks in this subtree given that
 // PTree nodes contain 64 children on average.
-func bufSizeForLevel(level int) int32 {
+func subTreeBufSize(level int) int32 {
 	const errMargin = 1.5
 	size := 1
 	for i := 0; i < level; i++ {
