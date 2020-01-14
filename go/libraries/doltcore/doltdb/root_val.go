@@ -678,11 +678,15 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 
 func addNewerTextToDocFromRow(ctx context.Context, row row.Row, doc *DocDetails) (DocDetails, error) {
 	docValue, _ := row.GetColVal(DocTextTag)
-	docValStr, err := strconv.Unquote(docValue.HumanReadableString())
-	if err != nil {
-		return DocDetails{}, err
+	if docValue == nil {
+		doc.NewerText = nil
+	} else {
+		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.NewerText = []byte(docValStr)
 	}
-	doc.NewerText = []byte(docValStr)
 	return *doc, nil
 }
 
