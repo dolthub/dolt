@@ -3,23 +3,39 @@
 set -e
 set -o pipefail
 
-bins="dolt git-dolt git-dolt-smudge"
+script_dir=$(dirname "$0")
+cd $script_dir/../..
 
-plats='windows;386 windows;amd64 linux;386 linux;amd64 darwin;386 darwin;amd64'
-for plat in $plats; do
-  p=(${plat//;/ })
-  goos=${p[0]}
-  goarch=${p[1]}
-  o="out/dolt-$goos-$goarch"
-  mkdir -p "$o/bin"
-  cp Godeps/LICENSES "$o/"
-  for bin in $bins; do
-    echo Building "$o/$bin"
-    obin="$bin"
-    if [ "$goos" = "windows" ]; then
-      obin="$bin.exe"
+BINS="dolt git-dolt git-dolt-smudge"
+OSES="windows linux darwin"
+ARCHS="amd64"
+
+for os in $OSES; do
+  for arch in $ARCHS; do
+    o="out/dolt-$os-$arch"
+    mkdir -p "$o/bin"
+    cp Godeps/LICENSES "$o/"
+    for bin in $BINS; do
+      echo Building "$o/$bin"
+      obin="$bin"
+      if [ "$os" = windows ]; then
+        obin="$bin.exe"
+      fi
+      GOOS="$os" GOARCH="$arch" go build -o "$o/bin/$obin" "./cmd/$bin/"
+    done
+    if [ "$os" = windows ]; then
+      (cd out && zip -r "dolt-$os-$arch" "dolt-$os-$arch")
+    else
+      tar czf "out/dolt-$os-$arch.tar.gz" -C out "dolt-$os-$arch"
     fi
-    GOOS="$goos" GOARCH="$goarch" go build -o "$o/bin/$obin" "./cmd/$bin/"
   done
-  tar czf "out/dolt-$goos-$goarch.tar.gz" -C out "dolt-$goos-$goarch"
 done
+
+render_install_sh() {
+  local parsed=(`grep "Version = " ./cmd/dolt/dolt.go`)
+  local DOLT_VERSION=`eval echo ${parsed[2]}`
+  sed 's|__DOLT_VERSION__|'"$DOLT_VERSION"'|' utils/publishrelease/install.sh
+}
+
+render_install_sh > out/install.sh
+chmod 755 out/install.sh
