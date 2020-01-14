@@ -16,8 +16,7 @@ teardown() {
 }
 
 @test "ls new cred" {
-    run dolt creds new
-    [ "$status" -eq 0 ]
+    dolt creds new
     run dolt creds ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
@@ -25,10 +24,8 @@ teardown() {
 }
 
 @test "ls -v new creds" {
-    run dolt creds new
-    [ "$status" -eq 0 ]
-    run dolt creds new
-    [ "$status" -eq 0 ]
+    dolt creds new
+    dolt creds new
     run dolt creds ls -v
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
@@ -37,14 +34,12 @@ teardown() {
 }
 
 @test "rm removes a cred" {
-    run dolt creds new
-    [ "$status" -eq 0 ]
+    dolt creds new
     run dolt creds ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
     words=( ${lines[0]} )
-    run dolt creds rm ${words[0]}
-    [ "$status" -eq 0 ]
+    dolt creds rm ${words[0]}
     run dolt creds ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
