@@ -26,7 +26,6 @@ import (
 	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
-	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 // sequenceCursor explores a tree of sequence items.
@@ -47,17 +46,6 @@ func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceC
 		d.PanicIfFalse(idx >= 0)
 	}
 
-	if ms, ok := seq.(metaSequence); ok {
-		go func() {
-			hs := []hash.Hash{}
-			ms.WalkRefs(ms.vrw.Format(), func(r Ref) error {
-				hs = append(hs, r.TargetHash())
-				return nil
-			})
-			ms.vrw.ReadManyValues(context.Background(), hs)
-		}()
-	}
-
 	return &sequenceCursor{parent, seq, idx, seqLen}
 }
 
@@ -75,22 +63,22 @@ func (cur *sequenceCursor) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
 
 	var err error
-	cur.seq, err = cur.parent.getChildSequence(ctx)
+
+	if cur.parent.treeLevel() > 3 {
+		cur.seq, err = cur.getChildSequence(ctx)
+	} else {
+		var batch uint64 = 64 * (4 - cur.parent.treeLevel())
+		if (batch + uint64(cur.parent.idx)) >= uint64(cur.parent.seqLen) {
+			batch = uint64(cur.parent.seqLen - cur.parent.idx)
+		}
+		cur.seq, err = cur.parent.seq.getCompositeChildSequence(ctx, uint64(cur.parent.idx), batch)
+	}
 
 	if err != nil {
 		return err
 	}
 
-	if ms, ok := cur.seq.(metaSequence); ok {
-		go func() {
-			hs := []hash.Hash{}
-			ms.WalkRefs(ms.vrw.Format(), func(r Ref) error {
-				hs = append(hs, r.TargetHash())
-				return nil
-			})
-			ms.vrw.ReadManyValues(ctx, hs)
-		}()
-	}
+	cur.parent.idx += int(batch) - 1
 
 	cur.seqLen = cur.seq.seqLen()
 
