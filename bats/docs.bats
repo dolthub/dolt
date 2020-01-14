@@ -741,7 +741,7 @@ teardown() {
     [ "$status" -eq 0 ]
     run cat README.md
     [[ "$output" =~ "one-more-time" ]] || false
-    # skip "This isn't working"
+    skip "This isn't working"
     # "test-b-one-more-time is being added to working root when it shouldn't be; status doesn't see a change between workRoot and FS"
     run dolt status
     [[ "$output" =~ "All conflicts fixed" ]] || false

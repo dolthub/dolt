@@ -20,8 +20,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -157,6 +157,45 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	doc5, err = AddValueToDocFromTbl(context.Background(), tbl, &sch, doc5)
 	assert.NoError(t, err)
 	assert.Equal(t, types.String("text in doc_text"), doc5.Value)
+}
+
+func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
+	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
+	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
+
+	sch := createTestDocsSchema()
+
+	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
+
+	doc1 := DocDetails{}
+	doc1, err = addNewerTextToDocFromRow(context.Background(), emptyRow, &doc1)
+	assert.NoError(t, err)
+	assert.Nil(t, doc1.NewerText)
+	doc1, err = addDocPKToDocFromRow(emptyRow, &doc1)
+	assert.NoError(t, err)
+	assert.Equal(t, "", doc1.DocPk)
+
+	licenseRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{
+		DocNameTag: types.String(LicensePk),
+		DocTextTag: types.String("license!"),
+	})
+
+	doc2 := DocDetails{}
+	doc2, err = addNewerTextToDocFromRow(context.Background(), licenseRow, &doc2)
+	assert.NoError(t, err)
+	assert.Equal(t, "license!", string(doc2.NewerText))
+	doc1, err = addDocPKToDocFromRow(licenseRow, &doc2)
+	assert.NoError(t, err)
+	assert.Equal(t, LicensePk, doc2.DocPk)
+
+	doc3 := DocDetails{DocPk: "invalid", NewerText: []byte("something"), Value: types.String("testing")}
+	doc3, err = addNewerTextToDocFromRow(context.Background(), licenseRow, &doc3)
+	assert.NoError(t, err)
+	assert.Equal(t, "license!", string(doc3.NewerText))
+	doc3, err = addDocPKToDocFromRow(licenseRow, &doc3)
+	assert.NoError(t, err)
+	assert.Equal(t, LicensePk, doc3.DocPk)
+	assert.Equal(t, types.String("testing"), doc3.Value)
 }
 
 func createTestDocsSchema() schema.Schema {

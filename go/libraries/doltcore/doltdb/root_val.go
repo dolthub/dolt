@@ -692,11 +692,15 @@ func addNewerTextToDocFromRow(ctx context.Context, row row.Row, doc *DocDetails)
 
 func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
 	colVal, _ := r.GetColVal(DocNameTag)
-	docName, err := strconv.Unquote(colVal.HumanReadableString())
-	if err != nil {
-		return DocDetails{}, err
+	if colVal == nil {
+		doc.DocPk = ""
+	} else {
+		docName, err := strconv.Unquote(colVal.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.DocPk = docName
 	}
-	doc.DocPk = docName
 
 	return *doc, nil
 }
