@@ -38,8 +38,7 @@ teardown() {
     run dolt add dolt_docs
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
@@ -47,7 +46,8 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     run dolt commit -m "adding license and readme"
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 0 ]	
+    [[ "$output" =~ "adding license and readme" ]] || false
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
@@ -56,39 +56,33 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ deleted:[[:space:]]*LICENSE.md ]] || false
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*deleted:[[:space:]]*LICENSE.md) ]] || false
-    run dolt commit -m "delete license"
-    [ "$status" -eq 0 ]
+    dolt commit -m "delete license"
     run ls
     [[ ! "$output" =~ "LICENSE.md" ]] || false
 }
 
 @test "dolt add . and dolt commit dolt docs with another table" {
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
-    run dolt table create -s `batshelper 1pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
+    dolt table create -s `batshelper 1pk5col-ints.schema` test
     dolt add test
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
-    run dolt commit -m "adding license and readme, and test table"
-    [ "$status" -eq 0 ]
+    dolt commit -m "adding license and readme, and test table"
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
@@ -96,8 +90,7 @@ teardown() {
 }
 
 @test "dolt add LICENSE.md stages license" {
-    run dolt add LICENSE.md
-    [ "$status" -eq 0 ] || false
+    dolt add LICENSE.md
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
@@ -111,8 +104,7 @@ teardown() {
 }
 
 @test "dolt add README.md stages readme" {
-    run dolt add README.md
-    [ "$status" -eq 0 ]
+    dolt add README.md
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
@@ -153,8 +145,7 @@ teardown() {
 }
 
 @test "dolt reset --hard should move doc files to untracked files when there are no doc values on the head commit" {
-    run dolt reset --hard 
-    [ "$status" -eq 0 ]
+    dolt reset --hard 
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files" ]] || false
@@ -164,14 +155,12 @@ teardown() {
     [[ "$output" =~ "LICENSE.md" ]] || false
     [[ "$output" =~ "README.md" ]] || false
     dolt add .
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     dolt reset --hard
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files" ]] || false
@@ -182,15 +171,11 @@ teardown() {
 @test "dolt reset --hard should update doc files on the fs when doc values exist on the head commit" {
     echo license-text > LICENSE.md
     echo readme-text > README.md
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt commit -m "first docs commit"
-    [ "$status" -eq 0 ]
     echo updated readme > README.md
     dolt status
-    [ "$status" -eq 0 ]
     dolt reset --hard
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
@@ -200,13 +185,9 @@ teardown() {
     
     echo newLicenseText > LICENSE.md
     dolt table create -s `batshelper 1pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
     dolt add test LICENSE.md
-    [ "$status" -eq 0 ]
     dolt reset --hard
-    [ "$status" -eq 0 ]
     run dolt status
-    echo "otuput = $output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "On branch master" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
@@ -219,10 +200,8 @@ teardown() {
 @test "dolt reset . should remove docs from staging area" {
     echo ~license~ > LICENSE.md
     echo ~readme~ > README.md
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt reset .
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
@@ -231,12 +210,9 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     
     dolt add .
-    [ "$status" -eq 0 ]
     dolt commit -m "initial doc commit"
-    [ "$status" -eq 0 ]
     echo ~new-text~ > README.md
     dolt add .
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
@@ -253,10 +229,8 @@ teardown() {
 @test "dolt reset --soft should remove docs from staging area" {
     echo ~license~ > LICENSE.md
     echo ~readme~ > README.md
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt reset --soft
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
@@ -266,13 +240,10 @@ teardown() {
     
     
     dolt add .
-    [ "$status" -eq 0 ]
     dolt commit -m "initial doc commit"
-    [ "$status" -eq 0 ]
     echo ~new-text~ > README.md
     dolt add .
-    [ "$status" -eq 0 ]
-    run dolt reset --soft
+    dolt reset --soft
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
@@ -284,10 +255,8 @@ teardown() {
 @test "dolt reset should remove docs from staging area" {
     echo ~license~ > LICENSE.md
     echo ~readme~ > README.md
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt reset
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
@@ -295,15 +264,11 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 
-    run dolt add .
-    [ "$status" -eq 0 ]
-    run dolt commit -m "initial doc commit"
-    [ "$status" -eq 0 ]
+    dolt add .
+    dolt commit -m "initial doc commit"
     echo ~new-text~ > README.md
     dolt add .
-    [ "$status" -eq 0 ]
     dolt reset
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
@@ -313,22 +278,19 @@ teardown() {
 }
 
 @test "dolt reset <doc> should remove doc from staging area" {
-    run dolt add LICENSE.md
-    [ "$status" -eq 0 ]
+    dolt add LICENSE.md
     
     run dolt reset dolt_docs
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     
-    run dolt reset LICENSE.md
-    [ "$status" -eq 0 ]
+    dolt reset LICENSE.md
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     run dolt reset LICENSE.md invalid
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Invalid Table(s)" ]] || false
@@ -339,24 +301,20 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
 
     dolt reset README.md
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     dolt commit -m "initial license commit"
-    [ "$status" -eq 0 ]
 
     echo new > LICENSE.md
     dolt add .
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     dolt reset README.md LICENSE.md
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
@@ -366,19 +324,16 @@ teardown() {
 }
 
 @test "dolt reset <table> <doc> resets tables and docs from staging area" {
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt table create -s `batshelper 1pk5col-ints.schema` test
     dolt add test
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new table:[[:space:]]*test) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
-    run dolt reset test LICENSE.md README.md
-    [ "$status" -eq 0 ]
+    dolt reset test LICENSE.md README.md
     run dolt status
     [[ ! "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "Untracked files:" ]] || false
@@ -389,30 +344,24 @@ teardown() {
 
  @test "dolt checkout <doc> should save the staged docs to the filesystem if the doc has already been added" {
     echo "this is my license" > LICENSE.md
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt checkout LICENSE.md
-    [ "$status" -eq 0 ]
     run cat LICENSE.md
     [[ "$output" =~ "this is my license" ]] || false
     
     
     echo "testing-modified-doc" > LICENSE.md
     dolt checkout LICENSE.md
-    [ "$status" -eq 0 ]
     run cat LICENSE.md
     [[ "$output" =~ "this is my license" ]] || false
  }
 
  @test "dolt checkout <doc> should save the head docs to the filesystem when the doc exists on the head, and has not been staged" {
     echo "this is my license" > LICENSE.md
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt commit -m "committing license"
-    [ "$status" -eq 0 ]
     echo "this is new" > LICENSE.md
     dolt checkout LICENSE.md
-    [ "$status" -eq 0 ]
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
@@ -424,9 +373,7 @@ teardown() {
     run ls
     [[ "$output" =~ "README.md" ]] || false
     [[ "$output" =~ "LICENSE.md" ]] || false
-    run dolt checkout README.md
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    dolt checkout README.md
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "README.md" ]] || false
@@ -435,11 +382,9 @@ teardown() {
  }
 
   @test "dolt checkout <doc> <table> should checkout both doc and table" {
-    run dolt table create -s=`batshelper 1pk5col-ints.schema` test1
-    [ "$status" -eq 0 ]
-    run dolt status
-    run dolt checkout LICENSE.md test1
-    [ "$status" -eq 0 ]
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test1
+    dolt status
+    dolt checkout LICENSE.md test1
     run dolt status
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
@@ -448,16 +393,13 @@ teardown() {
 
     echo This is my readme > README.md
     dolt table create -s=`batshelper 1pk5col-ints.schema` test2
-    [ "$status" -eq 0 ]
     dolt add .
     dolt table put-row test2 pk:100
-    [ "$status" -eq 0 ]
     echo New text in readme > README.md
-    run dolt checkout test2 README.md
-    [ "$status" -eq 0 ]
+    dolt checkout test2 README.md
     run cat README.md
     [[ "$output" =~ "This is my readme" ]] || false
-    dolt table select test2
+    run dolt table select test2
     [[ ! "$output" =~ "100" ]] || false
  }
 
@@ -482,12 +424,10 @@ teardown() {
     [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
     [[ "$output" =~ "added doc" ]] || false
     dolt add .
-    [ "$status" -eq 0 ]
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     dolt commit -m "docs"
-    [ "$status" -eq 0 ]
     echo "a new readme" > README.md
     run dolt diff
     [ "$status" -eq 0 ]
@@ -519,9 +459,7 @@ teardown() {
     [[ "$output" =~ "added doc" ]] || false
     [[ ! "$output" =~ "README.md" ]] || false
     dolt add .
-    [ "$status" -eq 0 ]
     dolt commit -m "docs"
-    [ "$status" -eq 0 ]
     echo "a new readme" > README.md
     echo "a new license" > LICENSE.md
     run dolt diff README.md
@@ -557,10 +495,8 @@ teardown() {
 }
 
 @test "dolt table * does not allow operations on dolt_docs" {
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt commit -m "First commit of docs"
-    [ "$status" -eq 0 ]
     run dolt table cp dolt_docs another_table
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
@@ -571,7 +507,6 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt table import dolt_docs -c `batshelper 1pk5col-ints.csv`
-    echo "output = $output"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt table mv dolt_docs new
@@ -592,10 +527,8 @@ teardown() {
 }
 
 @test "dolt schema * does not allow operations on dolt_docs" {
-    run dolt add .
-    [ "$status" -eq 0 ]
+    dolt add .
     dolt commit -m "First commit of docs"
-    [ "$status" -eq 0 ]
     run dolt schema add-column dolt_docs type string
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
@@ -624,12 +557,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
     dolt add .
-    [ "$status" -eq 0 ]
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
     dolt commit -m "First commit of docs"
-    [ "$status" -eq 0 ]
     run dolt ls
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
@@ -642,9 +573,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
     dolt add .
-    [ "$status" -eq 0 ]
     dolt commit -m "initial doc commits"
-    [ "$status" -eq 0 ]
     
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
@@ -723,8 +652,7 @@ teardown() {
     dolt commit -m "Changed README.md on test-b-again branch"
     dolt checkout master
     dolt merge test-a-again
-    run dolt merge test-b-again
-    [ "$status" -eq 0 ]
+    dolt merge test-b-again
     dolt conflicts resolve dolt_docs --theirs
     run cat README.md
     [[ ! $output =~ "test-a-again branch" ]] || false
