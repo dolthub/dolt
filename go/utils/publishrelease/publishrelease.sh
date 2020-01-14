@@ -8,7 +8,7 @@ cd $script_dir/../..
 
 BINS="dolt git-dolt git-dolt-smudge"
 OSES="windows linux darwin"
-ARCHS="amd64"
+ARCHS="386 amd64"
 
 for os in $OSES; do
   for arch in $ARCHS; do
