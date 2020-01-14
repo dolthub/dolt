@@ -68,11 +68,11 @@ assert_linux_or_macos() {
 }
 
 assert_dependencies() {
-  which curl > /dev/null || fail "E_CURL_MISSING" "Please install curl(1)."
-  which tar > /dev/null || fail "E_TAR_MISSING" "Please install tar(1)."
-  which uname > /dev/null || fail "E_UNAME_MISSING" "Please install uname(1)."
-  which install > /dev/null || fail "E_INSTALL_MISSING" "Please install install(1)."
-  which mktemp > /dev/null || fail "E_MKTEMP_MISSING" "Please install mktemp(1)."
+  type -p curl > /dev/null || fail "E_CURL_MISSING" "Please install curl(1)."
+  type -p tar > /dev/null || fail "E_TAR_MISSING" "Please install tar(1)."
+  type -p uname > /dev/null || fail "E_UNAME_MISSING" "Please install uname(1)."
+  type -p install > /dev/null || fail "E_INSTALL_MISSING" "Please install install(1)."
+  type -p mktemp > /dev/null || fail "E_MKTEMP_MISSING" "Please install mktemp(1)."
 }
 
 assert_uid_zero() {
