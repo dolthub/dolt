@@ -75,6 +75,7 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 
 // Close required by sql.RowIter interface
 func (itr *doltTableRowIter) Close() error {
+	itr.nomsIter.Close()
 	return nil
 }
 

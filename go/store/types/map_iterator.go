@@ -25,6 +25,7 @@ import "context"
 
 type ForwardMapIterator interface {
 	Next(ctx context.Context) (k, v Value, err error)
+	Close()
 }
 
 // MapIterator is the interface used by iterators over Noms Maps.
@@ -88,6 +89,8 @@ func (mi *mapIterator) Prev(ctx context.Context) (k, v Value, err error) {
 	return mi.currentKey, mi.currentValue, nil
 }
 
+func (mi *mapIterator) Close() {}
+
 func NewBufferedMapIterator(ctx context.Context, m Map) (ForwardMapIterator, error) {
 	bufSeqCur, err := newBufferedSequenceCursor(ctx, m.asSequence(), 64*64*64)
 
@@ -124,4 +127,8 @@ func (bmi *bufferedMapIterator) Next(ctx context.Context) (k, v Value, err error
 	}
 
 	return bmi.currentKey, bmi.currentValue, nil
+}
+
+func (bmi *bufferedMapIterator) Close() {
+	bmi.bufSeqCur.close()
 }

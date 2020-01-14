@@ -35,21 +35,23 @@ type bufSeqCurImpl struct {
 	seqStream  <-chan sequence
 	curLeafSeq sequence
 	curLeafIdx uint64
+	doneChan   chan interface{}
 	errChan    chan error
 }
 
 func newBufferedSequenceCursor(ctx context.Context, sourceSeq sequence, requestedBufSize int32) (*bufSeqCurImpl, error) {
 	d.PanicIfTrue(sourceSeq == nil)
 	errChan := make(chan error)
+	doneChan := make(chan interface{})
 
 	leafBuffer := make(chan sequence, bufSize(requestedBufSize))
-	go walkSequenceTree(ctx, leafBuffer, sourceSeq, errChan)
+	go walkSequenceTree(ctx, leafBuffer, sourceSeq, errChan, doneChan)
 
 	select {
 	case err := <-errChan:
 		return nil, err
 	case firstLeaf := <-leafBuffer:
-		return &bufSeqCurImpl{leafBuffer, firstLeaf, 0, errChan}, nil
+		return &bufSeqCurImpl{leafBuffer, firstLeaf, 0, doneChan, errChan}, nil
 	}
 }
 
@@ -80,7 +82,12 @@ func (bc *bufSeqCurImpl) valid() bool {
 	return bc.curLeafSeq != nil && bc.curLeafIdx < bc.curLeafSeq.Len()
 }
 
-func walkSequenceTree(ctx context.Context, leafBuffer chan sequence, sourceSeq sequence, ec chan error) {
+func (bc *bufSeqCurImpl) close() {
+	close(bc.doneChan)
+	bc.curLeafSeq = nil
+}
+
+func walkSequenceTree(ctx context.Context, leafBuffer chan sequence, sourceSeq sequence, ec chan error, done chan interface{}) {
 	defer close(leafBuffer)
 
 	vrw := sourceSeq.valueReadWriter()
@@ -102,29 +109,33 @@ func walkSequenceTree(ctx context.Context, leafBuffer chan sequence, sourceSeq s
 		defer close(cc)
 		// depth first search the tree
 		for len(lifo) > 0 {
-			// pop the stack
-			val := lifo[0]
-			lifo = lifo[1:]
+			select {
+			case <- done:
+				return  // stop spawning readers
+			default:
+				val := lifo[0]
+				lifo = lifo[1:]
 
-			subTree := val.(sequence)
-			if subTree.isLeaf() {
-				// leaf in unbalanced tree
-				leafBuffer <- subTree
-				continue
-			}
-
-			if subTree.treeLevel() <= readAtTreeLevel {
-				// spawn a reader go routine to buffer this subtree
-				subTreeSink := make(chan sequence, subTreeBufSize(readAtTreeLevel))
-				cc <- subTreeSink
-				go bufferSubTreeChunks(ctx, subTree, subTreeSink, ec)
-			} else {
-				// push child refs to LIFO queue
-				valSlice, err := vrw.ReadManyValues(ctx, refHashes(subTree))
-				if err != nil {
-					ec <- err
+				subTree := val.(sequence)
+				if subTree.isLeaf() {
+					// leaf in unbalanced tree
+					leafBuffer <- subTree
+					continue
 				}
-				lifo = append(valSlice, lifo...)
+
+				if subTree.treeLevel() <= readAtTreeLevel {
+					// spawn a reader go routine to buffer this subtree
+					subTreeSink := make(chan sequence, subTreeBufSize(readAtTreeLevel))
+					cc <- subTreeSink
+					go bufferSubTreeChunks(ctx, subTree, subTreeSink, ec, done)
+				} else {
+					// push child refs to LIFO queue
+					valSlice, err := vrw.ReadManyValues(ctx, refHashes(subTree))
+					if err != nil {
+						ec <- err
+					}
+					lifo = append(valSlice, lifo...)
+				}
 			}
 		}
 	}()
@@ -133,12 +144,17 @@ func walkSequenceTree(ctx context.Context, leafBuffer chan sequence, sourceSeq s
 	// until the tree is exhausted
 	for subTreeSink := range cc {
 		for leafSeq := range subTreeSink {
-			leafBuffer <- leafSeq
+			select {
+			case <- done:
+				return
+			default:
+				leafBuffer <- leafSeq
+			}
 		}
 	}
 }
 
-func bufferSubTreeChunks(ctx context.Context, subTree sequence, sink chan sequence, ec chan error) {
+func bufferSubTreeChunks(ctx context.Context, subTree sequence, sink chan sequence, ec chan error, done chan interface{}) {
 	defer close(sink)
 
 	vrw := subTree.valueReadWriter()
@@ -148,29 +164,35 @@ func bufferSubTreeChunks(ctx context.Context, subTree sequence, sink chan sequen
 		ec <- err
 	}
 
-	// alternate fetching subtrees and sending
-	// chunks until the subtree is exhausted
-	for len(refStack) > 0 {
-		for _, v := range refStack {
-			s := v.(sequence)
-			if s.isLeaf() {
-				sink <- s
-				refStack = refStack[1:]
-			}
-		}
 
-		var newHashes hash.HashSlice
-		for _, v := range refStack {
-			s := v.(sequence)
-			if !s.isLeaf() {
-				newHashes = append(newHashes, refHashes(s)...)
-				refStack = refStack[1:]
-			} else {
-				newValues, err := vrw.ReadManyValues(ctx, newHashes)
-				if err != nil {
-					ec <- err
+	for len(refStack) > 0 {
+		select {
+		case <- done:
+			return
+		default:
+			// alternate fetching subtrees and sending
+			// chunks until the subtree is exhausted
+			for _, v := range refStack {
+				s := v.(sequence)
+				if s.isLeaf() {
+					sink <- s
+					refStack = refStack[1:]
 				}
-				refStack = append(newValues, refStack...)
+			}
+
+			var newHashes hash.HashSlice
+			for _, v := range refStack {
+				s := v.(sequence)
+				if !s.isLeaf() {
+					newHashes = append(newHashes, refHashes(s)...)
+					refStack = refStack[1:]
+				} else {
+					newValues, err := vrw.ReadManyValues(ctx, newHashes)
+					if err != nil {
+						ec <- err
+					}
+					refStack = append(newValues, refStack...)
+				}
 			}
 		}
 	}
