@@ -26,6 +26,7 @@ import (
 	"fmt"
 
 	"github.com/liquidata-inc/dolt/go/store/d"
+	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
 // sequenceCursor explores a tree of sequence items.
@@ -44,6 +45,17 @@ func newSequenceCursor(parent *sequenceCursor, seq sequence, idx int) *sequenceC
 	if idx < 0 {
 		idx += seqLen
 		d.PanicIfFalse(idx >= 0)
+	}
+
+	if ms, ok := seq.(metaSequence); ok {
+		go func() {
+			hs := []hash.Hash{}
+			ms.WalkRefs(ms.vrw.Format(), func(r Ref) error {
+				hs = append(hs, r.TargetHash())
+				return nil
+			})
+			ms.vrw.ReadManyValues(context.Background(), hs)
+		}()
 	}
 
 	return &sequenceCursor{parent, seq, idx, seqLen}
@@ -67,6 +79,17 @@ func (cur *sequenceCursor) sync(ctx context.Context) error {
 
 	if err != nil {
 		return err
+	}
+
+	if ms, ok := cur.seq.(metaSequence); ok {
+		go func() {
+			hs := []hash.Hash{}
+			ms.WalkRefs(ms.vrw.Format(), func(r Ref) error {
+				hs = append(hs, r.TargetHash())
+				return nil
+			})
+			ms.vrw.ReadManyValues(ctx, hs)
+		}()
 	}
 
 	cur.seqLen = cur.seq.seqLen()
