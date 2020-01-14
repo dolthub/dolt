@@ -101,6 +101,83 @@ func TestTableDiff(t *testing.T) {
 	}
 }
 
+func TestDocDiff(t *testing.T) {
+	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
+	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
+
+	cs, _ := NewCommitSpec("head", "master")
+	cm, _ := ddb.Resolve(context.Background(), cs)
+
+	root, err := cm.GetRootValue()
+	assert.NoError(t, err)
+
+	docDetails := make([]DocDetails, 2)
+	doc1 := DocDetails{DocPk: LicensePk}
+	doc2 := DocDetails{DocPk: ReadmePk}
+	docDetails[0] = doc1
+	docDetails[1] = doc2
+
+	added, modified, removed, err := root.DocDiff(context.Background(), root, docDetails)
+	assert.NoError(t, err)
+
+	if len(added)+len(modified)+len(removed) != 0 {
+		t.Error("Bad doc diff when comparing two repos")
+	}
+
+	sch := createTestDocsSchema()
+	licRow := getDocRow(t, sch, LicensePk, types.String("license row"))
+	m, _ := createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{licRow})
+	tbl1, err := createTestTable(ddb.ValueReadWriter(), sch, m)
+	assert.NoError(t, err)
+
+	root2, err := root.PutTable(context.Background(), DocTableName, tbl1)
+	assert.NoError(t, err)
+
+	added, modified, removed, err = root.DocDiff(context.Background(), root2, docDetails)
+	assert.NoError(t, err)
+
+	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified)+len(removed) != 0 {
+		t.Error("Bad table diff after adding a single table")
+	}
+
+	readmeRow := getDocRow(t, sch, ReadmePk, types.String("readme row"))
+	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRow})
+	tbl2, err := createTestTable(ddb.ValueReadWriter(), sch, m)
+	assert.NoError(t, err)
+
+	root3, err := root.PutTable(context.Background(), DocTableName, tbl2)
+	assert.NoError(t, err)
+
+	added, modified, removed, err = root2.DocDiff(context.Background(), root3, docDetails)
+	assert.NoError(t, err)
+
+	if len(removed) != 1 || removed[0] != "LICENSE.md" || len(added) != 1 || added[0] != "README.md" || len(modified) != 0 {
+		t.Error("Bad table diff after adding a single table")
+	}
+
+	readmeRowUpdated := getDocRow(t, sch, ReadmePk, types.String("a different readme"))
+	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRowUpdated, licRow})
+	tbl3, err := createTestTable(ddb.ValueReadWriter(), sch, m)
+	assert.NoError(t, err)
+
+	root4, err := root3.PutTable(context.Background(), DocTableName, tbl3)
+	assert.NoError(t, err)
+
+	added, modified, removed, err = root3.DocDiff(context.Background(), root4, nil)
+	assert.NoError(t, err)
+
+	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified) != 1 || modified[0] != "README.md" || len(removed) != 0 {
+		t.Error("Bad table diff after adding a single table")
+	}
+
+	added, modified, removed, err = root4.DocDiff(context.Background(), root, nil)
+	assert.NoError(t, err)
+
+	if len(removed) != 2 || len(modified) != 0 || len(added) != 0 {
+		t.Error("Bad table diff after adding a single table")
+	}
+}
+
 func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
 	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
@@ -208,21 +285,22 @@ func createTestDocsSchema() schema.Schema {
 
 func getDocRows(t *testing.T, sch schema.Schema, rowVal types.Value) []row.Row {
 	rows := make([]row.Row, 2)
-	row1, err := row.New(types.Format_7_18, sch, row.TaggedValues{
-		DocNameTag: types.String(LicensePk),
-		DocTextTag: rowVal,
-	})
+	row1 := getDocRow(t, sch, LicensePk, rowVal)
 	rows[0] = row1
-	assert.NoError(t, err)
-
-	row2, err := row.New(types.Format_7_18, sch, row.TaggedValues{
-		DocNameTag: types.String(ReadmePk),
-		DocTextTag: rowVal,
-	})
+	row2 := getDocRow(t, sch, ReadmePk, rowVal)
 	rows[1] = row2
-	assert.NoError(t, err)
 
 	return rows
+}
+
+func getDocRow(t *testing.T, sch schema.Schema, pk string, rowVal types.Value) row.Row {
+	row, err := row.New(types.Format_7_18, sch, row.TaggedValues{
+		DocNameTag: types.String(pk),
+		DocTextTag: rowVal,
+	})
+	assert.NoError(t, err)
+
+	return row
 }
 
 func createTestRows(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, rows []row.Row) (types.Map, []row.Row) {
