@@ -68,6 +68,11 @@ func Status(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 
 	workingDocsInConflict, err := actions.GetDocsInConflict(ctx, dEnv)
 
+	if err != nil {
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
+	}
+
 	printStatus(ctx, dEnv, stagedTblDiffs, notStagedTblDiffs, workingTblsInConflict, workingDocsInConflict, stagedDocDiffs, notStagedDocDiffs)
 	return 0
 }

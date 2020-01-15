@@ -57,7 +57,7 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 		usagePrt()
 		return 1
 	} else if apr.ContainsArg(doltdb.DocTableName) {
-		verr := errhand.BuildDError("error: cannot checkout dolt_docs").Build()
+		verr := errhand.BuildDError("Use dolt checkout to checkout individual docs.").Build()
 		cli.PrintErrln(verr.Verbose())
 		return 1
 	} else {

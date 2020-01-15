@@ -58,19 +58,18 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 	if err != nil {
 		return err
 	}
-
+	
 	if len(docs) > 0 {
-		_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
-		if ok {
-			currRoot, staged, err = checkoutDocsFromRoot(ctx, dEnv, staged, docs)
-			if err != nil {
-				return err
-			}
-		} else {
-			currRoot, staged, err = checkoutDocsFromRoot(ctx, dEnv, head, docs)
-			if err != nil {
-				return err
-			}
+		root := head
+		if _, ok, err := staged.GetTable(ctx, doltdb.DocTableName); err != nil {
+			return err
+		} else if ok {
+			root = staged
+		}
+	
+		currRoot, staged, err = checkoutDocsFromRoot(ctx, dEnv, root, docs)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -113,10 +112,6 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 		}
 	}
 
-	_, err = dEnv.UpdateStagedRoot(ctx, staged)
-	if err != nil {
-		return err
-	}
 	return dEnv.UpdateWorkingRoot(ctx, currRoot)
 }
 
