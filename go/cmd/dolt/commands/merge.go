@@ -271,18 +271,6 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 	return verr
 }
 
-func docTableInCnfOnRoot(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (bool, error) {
-	docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return false, err
-	}
-	if !found {
-		return false, nil
-	}
-
-	return docTbl.HasConflicts()
-}
-
 func printSuccessStats(tblToStats map[string]*merge.MergeStats) bool {
 	printModifications(tblToStats)
 	printAdditions(tblToStats)

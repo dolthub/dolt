@@ -311,5 +311,13 @@ func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) 
 		return false, err
 	}
 
-	return docTableInCnfOnRoot(ctx, dEnv, workingRoot)
+	docTbl, found, err := workingRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+
+	return docTbl.HasConflicts()
 }
