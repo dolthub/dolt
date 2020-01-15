@@ -114,7 +114,7 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 			return 1
 		}
 
-		err := saveDocsFromWorking(ctx, dEnv)
+		err := actions.SaveDocsFromWorking(ctx, dEnv)
 		if err != nil {
 			verr = errhand.BuildDError("error: could not update docs on the filesystem").Build()
 			cli.PrintErrln(verr.Verbose())
@@ -123,20 +123,6 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 	}
 
 	return 0
-}
-
-func saveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, workingRoot, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
