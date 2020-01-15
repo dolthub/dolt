@@ -21,7 +21,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
-
 // SaveTrackedDocsFromWorking saves docs from the working root to the filesystem, and doesn't modify untracked docs.
 func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
 	workingRoot, err := dEnv.WorkingRoot(ctx)
@@ -50,7 +49,7 @@ func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoo
 	return nil
 }
 
-// SaveDocsFromWorking saves docs from the working root to the filesystem. 
+// SaveDocsFromWorking saves docs from the working root to the filesystem.
 // Untracked docs will be overwritten if there is not corresponding doc value on the root.
 func SaveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
 	workingRoot, err := dEnv.WorkingRoot(ctx)

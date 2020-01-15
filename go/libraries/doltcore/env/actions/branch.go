@@ -362,7 +362,7 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-// GetTblsDocsAndRootsForCheckout returns tables and docDetails from the args provided, 
+// GetTblsDocsAndRootsForCheckout returns tables and docDetails from the args provided,
 // and also returns roots associated with the first argument of the args.
 func GetTblsDocsAndRootsForCheckout(ctx context.Context, dEnv *env.DoltEnv, args []string) (tbls []string, docs []doltdb.DocDetails, roots RootTypeSet, err error) {
 	if env.IsValidDoc(args[0]) {

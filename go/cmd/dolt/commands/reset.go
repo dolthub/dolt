@@ -148,7 +148,7 @@ func removeDocsTbl(tbls []string) []string {
 	for _, tblName := range tbls {
 		if tblName != doltdb.DocTableName {
 			result = append(result, tblName)
-		} 
+		}
 	}
 	return result
 }

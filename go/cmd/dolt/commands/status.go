@@ -230,7 +230,7 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 	return linesPrinted
 }
 
-func getModifiedAndRemovedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs, inCnfSet *set.StrSet) (lines []string ){
+func getModifiedAndRemovedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs, inCnfSet *set.StrSet) (lines []string) {
 	lines = make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
 	for _, tblName := range notStagedTbls.Tables {
 		tdt := notStagedTbls.TableToType[tblName]
@@ -269,7 +269,7 @@ func getAddedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions
 			lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[doct], docName))
 		}
 	}
-	
+
 	return lines
 }
 

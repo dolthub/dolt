@@ -59,7 +59,8 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 
 	if len(docs) > 0 {
 		root := head
-		_, ok, err := staged.GetTable(ctx, doltdb.DocTableName); if err != nil {
+		_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
+		if err != nil {
 			return err
 		} else if ok {
 			root = staged
