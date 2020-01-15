@@ -79,8 +79,6 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 			return 1
 		}
 
-		localDocs := dEnv.Docs
-
 		branchName := apr.Arg(0)
 		dref, err := dEnv.FindRef(ctx, branchName)
 
@@ -119,12 +117,6 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 
 			if verr == nil {
 				verr = mergeBranch(ctx, dEnv, dref)
-				if verr == nil {
-					err = actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
-					if err != nil {
-						verr = errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
-					}
-				}
 			}
 		}
 	}
@@ -179,13 +171,22 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		return executeFFMerge(ctx, dEnv, cm2)
+		err = executeFFMerge(ctx, dEnv, cm2)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(ctx, dEnv, cm1, cm2, dref)
+		err = executeMerge(ctx, dEnv, cm1, cm2, dref)
 	}
+	if err != nil {
+		return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+	}
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+	}
+
+	return nil
 }
 
 func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {
@@ -253,17 +254,6 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		return errhand.BuildDError("Unable to update the repo state").AddCause(err).Build()
 	}
 
-	// This code isn't working, but is an attempt to reset the docs table on the merged root to cm1 doc table
-
-	// docCnfsOnMergedRoot, _ := docTableInCnfOnRoot(ctx, dEnv, mergedRoot)
-
-	// if docCnfsOnMergedRoot {
-	// 	mergedRoot, err = getRootWithDocs(ctx, dEnv, mergedRoot, cm1)
-	// 	if err != nil {
-	// 		return errhand.BuildDError("error: failed to get merged root with docs").AddCause(err).Build()
-	// 	}
-	// }
-
 	verr := UpdateWorkingWithVErr(dEnv, mergedRoot)
 
 	if verr == nil {
@@ -271,34 +261,14 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 
 		if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+		} else {
+			// Fail silently because merge was still successful.
+			// If staged root failed to update, the tables can still be added and committed to conclude merge.
+			UpdateStagedWithVErr(dEnv, mergedRoot)
 		}
 	}
 
 	return verr
-}
-
-// func getRootWithDocs(ctx context.Context, dEnv *env.DoltEnv, mergedRoot *doltdb.RootValue, cm1 *doltdb.Commit) (*doltdb.RootValue, error) {
-// 	cm1root, err := cm1.GetRootValue()
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	docsTbl, _, err := cm1root.GetTable(ctx, doltdb.DocTableName)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return mergedRoot.PutTable(ctx, doltdb.DocTableName, docsTbl)
-// }
-
-func docTableInCnfOnRoot(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue) (bool, error) {
-	docTbl, found, err := root.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return false, err
-	}
-	if !found {
-		return false, nil
-	}
-
-	return docTbl.HasConflicts()
 }
 
 func printSuccessStats(tblToStats map[string]*merge.MergeStats) bool {

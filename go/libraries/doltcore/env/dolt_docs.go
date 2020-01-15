@@ -15,8 +15,6 @@
 package env
 
 import (
-	"os"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
@@ -90,7 +88,7 @@ func DeleteDoc(fs filesys.ReadWriteFS, docName string) error {
 			path := getDocFile(doc.File)
 			exists, isDir := fs.Exists(path)
 			if exists && !isDir {
-				return os.Remove(path)
+				return fs.DeleteFile(path)
 			}
 		}
 	}

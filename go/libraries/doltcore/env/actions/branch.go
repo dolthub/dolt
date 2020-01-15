@@ -248,8 +248,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	localDocs := dEnv.Docs
-	return SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
+	return SaveTrackedDocsFromWorking(ctx, dEnv)
 }
 
 var emptyHash = hash.Hash{}
@@ -350,6 +349,7 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	}
 
 	rootsWithTable := make([]RootType, 0, len(roots))
+
 	for rt, root := range roots {
 		if has, err := root.HasTable(ctx, table); err != nil {
 			return nil, err
@@ -361,24 +361,28 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
-	if env.IsValidDoc(str) {
-		str = doltdb.DocTableName
+// GetTblsDocsAndRootsForCheckout returns tables and docDetails from the args provided,
+// and also returns roots associated with the first argument of the args.
+func GetTblsDocsAndRootsForCheckout(ctx context.Context, dEnv *env.DoltEnv, args []string) (tbls []string, docs []doltdb.DocDetails, roots RootTypeSet, err error) {
+	if env.IsValidDoc(args[0]) {
+		args[0] = doltdb.DocTableName
 	}
-	rootsWithTbl, err := RootsWithTable(ctx, dEnv, str)
-
+	rootsWithTbl, err := RootsWithTable(ctx, dEnv, args[0])
 	if err != nil {
-		return false, nil, err
+		return nil, nil, nil, err
 	}
 
+	tbls, docs, err = GetTblsAndDocDetails(dEnv, args)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return tbls, docs, rootsWithTbl, nil
+}
+
+func IsBranch(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
 	dref := ref.NewBranchRef(str)
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
-
-	if err != nil {
-		return false, nil, err
-	}
-
-	return hasRef, rootsWithTbl, nil
+	return dEnv.DoltDB.HasRef(ctx, dref)
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {
@@ -400,65 +404,4 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 	}
 
 	return nil, nil
-}
-
-// SaveTrackedDocsFromWorking saves docs from the working root to the filesystem, and doesn't modify untracked docs.
-func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, localDocs)
-}
-
-// SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
-func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
-	docDiffs, err := NewDocDiffs(ctx, dEnv, workRoot, nil, localDocs)
-	if err != nil {
-		return err
-	}
-
-	docs := removeUntrackedDocs(localDocs, docDiffs)
-
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, targetRoot, docs)
-	if err != nil {
-		localDocs.Save(dEnv.FS)
-		return err
-	}
-
-	return nil
-}
-
-func docIsUntracked(doc string, untracked []string) bool {
-	for _, val := range untracked {
-		if doc == val {
-			return true
-		}
-	}
-	return false
-}
-
-func removeUntrackedDocs(docs []doltdb.DocDetails, docDiffs *DocDiffs) []doltdb.DocDetails {
-	result := []doltdb.DocDetails{}
-	untracked := getUntrackedDocs(docs, docDiffs)
-
-	for _, doc := range docs {
-		if !docIsUntracked(doc.DocPk, untracked) {
-			result = append(result, doc)
-		}
-	}
-	return result
-}
-
-func getUntrackedDocs(docs []doltdb.DocDetails, docDiffs *DocDiffs) []string {
-	untracked := []string{}
-	for _, docName := range docDiffs.Docs {
-		dt := docDiffs.DocToType[docName]
-		if dt == AddedDoc {
-			untracked = append(untracked, docName)
-		}
-	}
-
-	return untracked
 }

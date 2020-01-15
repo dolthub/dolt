@@ -34,43 +34,41 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return checkoutTables(ctx, dEnv, roots, tbls)
+	docs := *env.AllValidDocDetails
+
+	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 
 }
 
-func CheckoutTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
+func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs []doltdb.DocDetails) error {
 	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
 		return err
 	}
 
-	return checkoutTables(ctx, dEnv, roots, tbls)
+	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 }
 
-func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string) error {
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdb.DocDetails) error {
 	var unknown []string
 
 	currRoot := roots[WorkingRoot]
 	staged := roots[StagedRoot]
 	head := roots[HeadRoot]
-	tbls, docs, err := GetTblsAndDocDetails(dEnv, tbls)
-	if err != nil {
-		return err
-	}
 
 	if len(docs) > 0 {
+		root := head
 		_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
-		if ok {
-			currRoot, staged, err = checkoutDocsFromRoot(ctx, dEnv, staged, docs)
-			if err != nil {
-				return err
-			}
-		} else {
-			currRoot, staged, err = checkoutDocsFromRoot(ctx, dEnv, head, docs)
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return err
+		} else if ok {
+			root = staged
+		}
+
+		currRoot, staged, err = getUpdatedWorkingAndStagedWithDocs(ctx, root, dEnv, currRoot, staged, docs)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -113,51 +111,24 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 		}
 	}
 
-	_, err = dEnv.UpdateStagedRoot(ctx, staged)
-	if err != nil {
-		return err
-	}
 	return dEnv.UpdateWorkingRoot(ctx, currRoot)
 }
 
-func checkoutDocsFromRoot(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, docs env.Docs) (workingRoot, stagedRoot *doltdb.RootValue, err error) {
-	working, staged, err := getUpdatedWorkingAndStagedWithDocs(ctx, root, dEnv, docs)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, root, docs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return working, staged, nil
-}
-
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, docDetails env.Docs) (currRoot, stgRoot *doltdb.RootValue, err error) {
+func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, working *doltdb.RootValue, staged *doltdb.RootValue, docDetails []doltdb.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
 	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docDetails)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	working, err := dEnv.WorkingRoot(ctx)
+	currRoot, err = dEnv.GetUpdatedRootWithDocs(ctx, working, docs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	staged, err := dEnv.StagedRoot(ctx)
+	stgRoot, err = dEnv.GetUpdatedRootWithDocs(ctx, staged, docs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	working, err = dEnv.GetUpdatedRootWithDocs(ctx, working, docs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	staged, err = dEnv.GetUpdatedRootWithDocs(ctx, staged, docs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return working, staged, nil
+	return currRoot, stgRoot, nil
 }

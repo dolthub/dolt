@@ -30,6 +30,9 @@ teardown() {
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+    run dolt status
+    [[ "$output" =~ "All conflicts fixed" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 
 @test "two branches modify different cell same row. merge. no conflict" {
@@ -52,6 +55,9 @@ teardown() {
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ "$output" =~ "1 rows modified" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+    run dolt status
+    [[ "$output" =~ "All conflicts fixed" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
 }
 
 @test "two branches modify same cell. merge. conflict" {
@@ -71,6 +77,9 @@ teardown() {
     run dolt merge change-cell
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
+    run dolt status
+    [[ "$output" =~ "You have unmerged tables." ]] || false
+    [[ "$output" =~ "Unmerged paths:" ]] || false
 }
 
 @test "two branches add a different row. merge. no conflict" {

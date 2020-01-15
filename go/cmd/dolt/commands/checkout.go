@@ -57,13 +57,12 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 		usagePrt()
 		return 1
 	} else if apr.ContainsArg(doltdb.DocTableName) {
-		verr := errhand.BuildDError("error: cannot checkout dolt_docs").Build()
+		verr := errhand.BuildDError("Use dolt checkout to checkout individual docs.").Build()
 		cli.PrintErrln(verr.Verbose())
 		return 1
 	} else {
 		var verr errhand.VerboseError
 		newBranch, nbOk := apr.GetValue(coBranchArg)
-		localDocs := dEnv.Docs
 
 		if nbOk {
 			startPt := "head"
@@ -74,12 +73,18 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 			verr = checkoutNewBranch(ctx, dEnv, newBranch, startPt)
 		} else {
 			name := apr.Arg(0)
-			isBranch, rootsWithTable, err := actions.BranchOrTable(ctx, dEnv, name)
+
+			isBranch, err := actions.IsBranch(ctx, dEnv, name)
+			if err != nil {
+				verr = errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
+			}
+
+			tbls, docs, rootsWithTableOrDocTbl, err := actions.GetTblsDocsAndRootsForCheckout(ctx, dEnv, apr.Args())
 
 			if err != nil {
 				verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
-			} else if !rootsWithTable.IsEmpty() || apr.NArg() > 1 {
-				verr = checkoutTable(ctx, dEnv, apr.Args())
+			} else if !rootsWithTableOrDocTbl.IsEmpty() || apr.NArg() > 1 || env.IsValidDoc(name) {
+				verr = checkoutTablesAndDocs(ctx, dEnv, tbls, docs)
 			} else if isBranch {
 				verr = checkoutBranch(ctx, dEnv, name)
 			} else {
@@ -98,42 +103,26 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 					}
 				}
 
-				if !found && !env.IsValidDoc(name) {
+				if !found {
 					verr = errhand.BuildDError("error: could not find %s", name).Build()
-				}
-
-				if verr == nil || !found {
-					err = saveDocsFromHead(ctx, dEnv, localDocs)
-					if err != nil {
-						verr = errhand.BuildDError("error: could not update docs on the filesystem").AddCause(err).Build()
-					}
 				}
 			}
 		}
 
 		if verr != nil {
-			localDocs.Save(dEnv.FS)
+			cli.PrintErrln(verr.Verbose())
+			return 1
+		}
+
+		err := actions.SaveDocsFromWorking(ctx, dEnv)
+		if err != nil {
+			verr = errhand.BuildDError("error: could not update docs on the filesystem").Build()
 			cli.PrintErrln(verr.Verbose())
 			return 1
 		}
 	}
 
 	return 0
-}
-
-func saveDocsFromHead(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
-	headRoot, err := dEnv.HeadRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, headRoot, nil)
-	if err != nil {
-		localDocs.Save(dEnv.FS)
-		return err
-	}
-
-	return nil
 }
 
 func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
@@ -146,8 +135,8 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch, startP
 	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
-func checkoutTable(ctx context.Context, dEnv *env.DoltEnv, tables []string) errhand.VerboseError {
-	err := actions.CheckoutTables(ctx, dEnv, tables)
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs []doltdb.DocDetails) errhand.VerboseError {
+	err := actions.CheckoutTablesAndDocs(ctx, dEnv, tables, docs)
 
 	if err != nil {
 		if actions.IsRootValUnreachable(err) {
