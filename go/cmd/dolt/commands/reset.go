@@ -143,18 +143,14 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	return nil
 }
 
-// RemoveDocsTbl takes a slice of table names and returns the slice without doltdb.DocTableName, and a bool if it was removed.
-func RemoveDocsTbl(tbls []string) ([]string, bool) {
-	removed := false
+func removeDocsTbl(tbls []string) []string {
 	var result []string
 	for _, tblName := range tbls {
 		if tblName != doltdb.DocTableName {
 			result = append(result, tblName)
-		} else {
-			removed = true
-		}
+		} 
 	}
-	return result, removed
+	return result
 }
 
 func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
@@ -175,7 +171,7 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	}
 
 	if len(docs) > 0 {
-		tables, _ = RemoveDocsTbl(tables)
+		tables = removeDocsTbl(tables)
 	}
 
 	verr := ValidateTablesWithVErr(tables, stagedRoot, headRoot)
