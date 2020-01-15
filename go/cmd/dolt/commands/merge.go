@@ -79,8 +79,6 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 			return 1
 		}
 
-		localDocs := dEnv.Docs
-
 		branchName := apr.Arg(0)
 		dref, err := dEnv.FindRef(ctx, branchName)
 
@@ -119,12 +117,6 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 
 			if verr == nil {
 				verr = mergeBranch(ctx, dEnv, dref)
-			}
-			if verr == nil {
-				err = actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
-				if err != nil {
-					verr = errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
-				}
 			}
 		}
 	}
@@ -179,13 +171,24 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		return executeFFMerge(ctx, dEnv, cm2)
+		verr = executeFFMerge(ctx, dEnv, cm2)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		return executeMerge(ctx, dEnv, cm1, cm2, dref)
+		verr = executeMerge(ctx, dEnv, cm1, cm2, dref)
 	}
+
+	if verr != nil {
+		return verr
+	}
+
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+	}
+
+	return nil
 }
 
 func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {

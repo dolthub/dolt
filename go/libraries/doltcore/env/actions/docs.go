@@ -22,7 +22,8 @@ import (
 )
 
 // SaveTrackedDocsFromWorking saves docs from the working root to the filesystem, and doesn't modify untracked docs.
-func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
+func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
+	localDocs := dEnv.Docs
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return err

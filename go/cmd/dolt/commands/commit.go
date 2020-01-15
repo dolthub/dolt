@@ -62,7 +62,6 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	localDocs := dEnv.Docs
 
 	msg, msgOk := apr.GetValue(commitMessageArg)
 	if !msgOk {
@@ -81,10 +80,6 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 
 	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
 	if err == nil {
-		err = saveDocsOnCommit(ctx, dEnv, localDocs)
-		if err != nil {
-			return HandleVErrAndExitCode(errhand.BuildDError("error: could not update docs on the filesystem").AddCause(err).Build(), usage)
-		}
 		// if the commit was successful, print it out using the log command
 		return Log(ctx, "log", []string{"-n=1"}, dEnv)
 	}
@@ -215,18 +210,4 @@ func parseCommitMessage(cm string) string {
 		filtered = append(filtered, line)
 	}
 	return strings.Join(filtered, "\n")
-}
-
-func saveDocsOnCommit(ctx context.Context, dEnv *env.DoltEnv, localDocs env.Docs) error {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	headRoot, err := dEnv.HeadRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	return actions.SaveTrackedDocs(ctx, dEnv, workingRoot, headRoot, localDocs)
 }
