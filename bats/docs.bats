@@ -775,11 +775,16 @@ teardown() {
     dolt add .
     dolt commit -m "Changed README.md on test-a branch"
     dolt checkout master
+
+    # On successful FF merge, docs match the new working root
     run dolt merge test-a
     [ "$status" -eq 0 ]
     [[ $output =~ "Fast-forward" ]] || false
     run cat README.md
     [[ "$output" =~ "test-a branch" ]] || false
+
+    # A merge with conflicts does not change the working root.
+    # If the conflicts are resolved with --ours, the working root and the docs on the filesystem remain the same.
     run dolt merge test-b
     [ "$status" -eq 0 ]
     [[ $output =~ "CONFLICT" ]] || false
@@ -793,11 +798,11 @@ teardown() {
     run cat README.md
     [[ ! $output =~ "test-b branch" ]] || false
     [[ $output =~ "test-a branch" ]] || false
-    # TODO: Improve conflict resolution workflow for docs 
-    #  Only allow dolt_docs when dolt_docs is in conflict
+    # Only allow `dolt add dolt_docs` when dolt_docs is in conflict
     dolt add dolt_docs
     dolt commit -m "Resolved docs conflict with --ours"
-    # Again but resolve theirs
+
+    # If the conflicts are resolved with --theirs, the working root and the docs on the filesystem are updated.
     dolt branch test-a-again
     dolt branch test-b-again
     dolt checkout test-a-again
@@ -810,8 +815,7 @@ teardown() {
     dolt commit -m "Changed README.md on test-b-again branch"
     dolt checkout master
     dolt merge test-a-again
-    run dolt merge test-b-again
-    [ "$status" -eq 0 ]
+    dolt merge test-b-again
     dolt conflicts resolve dolt_docs --theirs
     run cat README.md
     [[ ! $output =~ "test-a-again branch" ]] || false
@@ -819,19 +823,18 @@ teardown() {
     dolt add .
     dolt commit -m "merge test-b-again with fixed conflicts"
     
+    # A merge with auto-resolved conflicts updates the working root. The docs should match the new working root.
     dolt checkout test-b-again
     echo test-b-one-more-time > README.md
     dolt add .
     dolt commit -m "test-b-one-more-time"
     dolt checkout master
     dolt merge test-b-again
-    [ "$status" -eq 0 ]
     run cat README.md
     [[ "$output" =~ "one-more-time" ]] || false
-    skip "This isn't working"
-    # "test-b-one-more-time is being added to working root when it shouldn't be; status doesn't see a change between workRoot and FS"
     run dolt status
+    echo "output = $output"
     [[ "$output" =~ "All conflicts fixed" ]] || false
-    [[ "$output" =~ "Changes not staged for commit:" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ "README.md" ]] || false
 }
