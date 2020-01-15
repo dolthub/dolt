@@ -77,15 +77,6 @@ func Resolve(ctx context.Context, commandStr string, args []string, dEnv *env.Do
 		verr = manualResolve(ctx, apr, dEnv)
 	}
 
-	localDocs := dEnv.Docs
-
-	if verr == nil {
-		err := actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
-		if err != nil {
-			verr = errhand.BuildDError("error: could not get working root to update docs on the filesystem").AddCause(err).Build()
-		}
-	}
-
 	return commands.HandleVErrAndExitCode(verr, usage)
 }
 
@@ -103,8 +94,7 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 
 	var err error
 	tbls := apr.Args()
-	tblsFiltered, _ := commands.RemoveDocsTbl(tbls)
-	if len(tblsFiltered) == 1 && tblsFiltered[0] == "." {
+	if len(tbls) == 1 && tbls[0] == "." {
 		err = actions.AutoResolveAll(ctx, dEnv, autoResolveFunc)
 	} else {
 		err = actions.AutoResolveTables(ctx, dEnv, autoResolveFunc, tbls)
@@ -119,7 +109,7 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
 
-	return nil
+	return saveDocsOnResolve(ctx, dEnv)
 }
 
 func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
@@ -136,10 +126,6 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	tblName := args[0]
-
-	if tblName == doltdb.DocTableName {
-		return nil
-	}
 
 	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("error: could not read tables").AddCause(err).Build()
@@ -208,5 +194,14 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	valid := len(keysToResolve) - len(invalid) - len(notFound)
 	cli.Println(valid, "rows resolved successfully")
 
+	return saveDocsOnResolve(ctx, dEnv)
+}
+
+func saveDocsOnResolve(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+	localDocs := dEnv.Docs
+	err := actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
+	}
 	return nil
 }
