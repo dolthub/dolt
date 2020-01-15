@@ -462,6 +462,8 @@ teardown() {
     [ "$status" -eq 0 ]
     run cat LICENSE.md
     [[ "$output" =~ "this is my license" ]] || false
+    run cat README.md
+    [[ "$output" =~ "This is a repository level README" ]] || false
     
     
     echo "testing-modified-doc" > LICENSE.md
@@ -469,13 +471,15 @@ teardown() {
     [ "$status" -eq 0 ]
     run cat LICENSE.md
     [[ "$output" =~ "this is my license" ]] || false
+    run cat README.md
+    [[ "$output" =~ "This is a repository level README" ]] || false
  }
 
  @test "dolt checkout <doc> should save the head docs to the filesystem when the doc exists on the head, and has not been staged" {
     echo "this is my license" > LICENSE.md
     run dolt add .
     [ "$status" -eq 0 ]
-    dolt commit -m "committing license"
+    dolt commit -m "committing license and readme"
     [ "$status" -eq 0 ]
     echo "this is new" > LICENSE.md
     dolt checkout LICENSE.md
@@ -485,6 +489,8 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
     run cat LICENSE.md
     [[ "$output" =~  "this is my license" ]] || false
+    run cat README.md
+    [[ "$output" =~  "This is a repository level README" ]] || false
  }
 
  @test "dolt checkout <doc> should delete the doc from filesystem if it doesn't exist on staged or head roots" {
@@ -511,8 +517,13 @@ teardown() {
     run dolt status
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
     run ls 
     [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    run cat README.md
+    [[ "$output" =~ "This is a repository level README" ]] || false
+
 
     echo This is my readme > README.md
     dolt table create -s=`batshelper 1pk5col-ints.schema` test2
@@ -539,6 +550,36 @@ teardown() {
      [[ "$output" =~ "table not found" ]] || false
      run cat LICENSE.md
      [[ "$output" =~ "updated license" ]] || false
+     run cat README.md
+     [[ "$output" =~ "This is a repository level README" ]] || false
+ }
+
+ @test "dolt checkout <branch> should save docs to the file system, leaving any untacked files" {
+     dolt add LICENSE.md
+     dolt commit -m "license commit"
+     dolt checkout -b test-branch
+     run cat README.md
+     [[ "$output" =~ "This is a repository level README" ]] || false
+     run cat LICENSE.md
+     [[ "$output" =~ "This is a repository level LICENSE" ]] || false
+
+     echo new-license > LICENSE.md
+     rm README.md
+     dolt add .
+     dolt commit -m "updated license"
+
+     dolt checkout master
+     run cat LICENSE.md
+     [[ "$output" =~ "This is a repository level LICENSE" ]] || false
+     run ls
+     [[ ! "$output" =~ "README.md" ]] || false
+
+     dolt checkout test-branch
+     run ls
+     [[ "$output" =~ "LICENSE.md" ]] || false
+     [[ ! "$output" =~ "README.md" ]] || false
+     run cat LICENSE.md
+     [[ "$output" =~ "new-license" ]] || false
  }
 
 @test "dolt diff shows diffs between working root and file system docs" {
