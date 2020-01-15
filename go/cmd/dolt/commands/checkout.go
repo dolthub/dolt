@@ -79,7 +79,7 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 				verr = errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
 			}
 
-			tbls, docs, rootsWithTableOrDocTbl, err := actions.GetTblsDocsAndRootsForCheckout(ctx, dEnv, name, apr.Args())
+			tbls, docs, rootsWithTableOrDocTbl, err := actions.GetTblsDocsAndRootsForCheckout(ctx, dEnv, apr.Args())
 
 			if err != nil {
 				verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
