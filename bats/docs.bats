@@ -499,6 +499,7 @@ teardown() {
     [[ ! "$output" =~ "README.md" ]] || false
     run ls 
     [[ ! "$output" =~ "README.md" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
  }
 
   @test "dolt checkout <doc> <table> should checkout both doc and table" {
