@@ -198,8 +198,7 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 }
 
 func saveDocsOnResolve(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
-	localDocs := dEnv.Docs
-	err := actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
+	err := actions.SaveTrackedDocsFromWorking(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
 	}

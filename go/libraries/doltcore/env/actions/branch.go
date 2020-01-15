@@ -248,8 +248,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	localDocs := dEnv.Docs
-	return SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
+	return SaveTrackedDocsFromWorking(ctx, dEnv)
 }
 
 var emptyHash = hash.Hash{}
