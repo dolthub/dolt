@@ -124,7 +124,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 		return "", err
 	}
 
-	return "", SaveDocsFromWorking(ctx, dEnv)
+	return "", SaveDocsFromDocDetails(dEnv, docs)
 }
 
 func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, working *doltdb.RootValue, staged *doltdb.RootValue, docDetails []doltdb.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {

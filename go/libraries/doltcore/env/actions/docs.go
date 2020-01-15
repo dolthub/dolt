@@ -50,20 +50,10 @@ func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoo
 	return nil
 }
 
-// SaveDocsFromWorking saves docs from the working root to the filesystem.
-// Untracked docs will be overwritten if there is not corresponding doc value on the root.
-func SaveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, workingRoot, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
+// SaveDocsFromDocDetails saves the provided docs to the filesystem.
+// An untracked doc will be overwritten if doc.NewerText == nil.
+func SaveDocsFromDocDetails(dEnv *env.DoltEnv, docs env.Docs) error {
+	return docs.Save(dEnv.FS)
 }
 
 func docIsUntracked(doc string, untracked []string) bool {
