@@ -262,10 +262,9 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
 		} else {
-			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
-			if verr != nil {
-				cli.Println("issue updating staged")
-			}
+			// Fail silently because merge was still successful.
+			// If staged root failed to update, the tables can still be added and committed to conclude merge.
+			UpdateStagedWithVErr(dEnv, mergedRoot)
 		}
 	}
 
