@@ -119,11 +119,11 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 
 			if verr == nil {
 				verr = mergeBranch(ctx, dEnv, dref)
-				if verr == nil {
-					err = actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
-					if err != nil {
-						verr = errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
-					}
+			}
+			if verr == nil {
+				err = actions.SaveTrackedDocsFromWorking(ctx, dEnv, localDocs)
+				if err != nil {
+					verr = errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
 				}
 			}
 		}
