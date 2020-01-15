@@ -171,16 +171,18 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		err = executeFFMerge(ctx, dEnv, cm2)
+		verr = executeFFMerge(ctx, dEnv, cm2)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		err = executeMerge(ctx, dEnv, cm1, cm2, dref)
+		verr = executeMerge(ctx, dEnv, cm1, cm2, dref)
 	}
-	if err != nil {
-		return errhand.BuildDError("error: failed to get hash of commit").AddCause(err).Build()
+
+	if verr != nil {
+		return verr
 	}
+
 	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
 	if err != nil {
 		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
