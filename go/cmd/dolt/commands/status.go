@@ -196,24 +196,7 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 				iohelp.WriteLine(wr, workingHeaderHelp)
 			}
 
-			lines := make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
-			for _, tblName := range notStagedTbls.Tables {
-				tdt := notStagedTbls.TableToType[tblName]
-
-				if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) && tblName != doltdb.DocTableName {
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
-				}
-			}
-
-			if notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
-				for _, docName := range notStagedDocs.Docs {
-					dtt := notStagedDocs.DocToType[docName]
-
-					if dtt != actions.AddedDoc {
-						lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[dtt], docName))
-					}
-				}
-			}
+			lines := getModifiedAndRemovedNotStaged(notStagedTbls, notStagedDocs, inCnfSet)
 
 			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 			linesPrinted += len(lines)
@@ -235,22 +218,7 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 				iohelp.WriteLine(wr, untrackedHeaderHelp)
 			}
 
-			lines := make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
-			for _, tblName := range notStagedTbls.Tables {
-				tdt := notStagedTbls.TableToType[tblName]
-
-				if tdt == actions.AddedTable {
-					lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
-				}
-			}
-
-			for _, docName := range notStagedDocs.Docs {
-				doct := notStagedDocs.DocToType[docName]
-
-				if doct == actions.AddedDoc {
-					lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[doct], docName))
-				}
-			}
+			lines := getAddedNotStaged(notStagedTbls, notStagedDocs)
 
 			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
 			linesPrinted += len(lines)
@@ -260,6 +228,49 @@ func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, n
 	}
 
 	return linesPrinted
+}
+
+func getModifiedAndRemovedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs, inCnfSet *set.StrSet) (lines []string ){
+	lines = make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
+	for _, tblName := range notStagedTbls.Tables {
+		tdt := notStagedTbls.TableToType[tblName]
+
+		if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) && tblName != doltdb.DocTableName {
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+		}
+	}
+
+	if notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
+		for _, docName := range notStagedDocs.Docs {
+			dtt := notStagedDocs.DocToType[docName]
+
+			if dtt != actions.AddedDoc {
+				lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[dtt], docName))
+			}
+		}
+	}
+	return lines
+}
+
+func getAddedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs) (lines []string) {
+	lines = make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
+	for _, tblName := range notStagedTbls.Tables {
+		tdt := notStagedTbls.TableToType[tblName]
+
+		if tdt == actions.AddedTable {
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+		}
+	}
+
+	for _, docName := range notStagedDocs.Docs {
+		doct := notStagedDocs.DocToType[docName]
+
+		if doct == actions.AddedDoc {
+			lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[doct], docName))
+		}
+	}
+	
+	return lines
 }
 
 func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls *actions.TableDiffs, workingTblsInConflict []string, workingDocsInConflict *actions.DocDiffs, stagedDocs, notStagedDocs *actions.DocDiffs) {
