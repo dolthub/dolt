@@ -54,15 +54,14 @@ func StageTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string, allowCon
 
 // GetTblsAndDocDetails takes a slice of strings where valid doc names are replaced with doc table name. Doc names are
 // appended to a docDetails slice. We return a tuple of tables, docDetails and error.
-func GetTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docsDetails []doltdb.DocDetails, err error) {
-	var docDetails []doltdb.DocDetails
+func GetTblsAndDocDetails(dEnv *env.DoltEnv, tbls []string) (tables []string, docDetails []doltdb.DocDetails, err error) {
 	for i, tbl := range tbls {
 		docDetail, err := dEnv.GetOneDocDetail(tbl)
 		if err != nil {
 			return nil, nil, err
 		}
-		if docDetail != nil {
-			docDetails = append(docDetails, *docDetail)
+		if docDetail.DocPk != "" {
+			docDetails = append(docDetails, docDetail)
 			tbls[i] = doltdb.DocTableName
 		}
 	}

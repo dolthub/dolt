@@ -125,7 +125,7 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
-	err := actions.CheckoutAllTables(ctx, doltEnv)
+	_, err := actions.CheckoutAllTables(ctx, doltEnv)
 
 	if err == nil {
 		err = doltEnv.RepoState.ClearMerge(doltEnv.FS)
@@ -264,9 +264,10 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
 		} else {
-			// Fail silently because merge was still successful.
-			// If staged root failed to update, the tables can still be added and committed to conclude merge.
-			UpdateStagedWithVErr(dEnv, mergedRoot)
+			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
+			if verr != nil {
+				cli.Println("Unable to stage changes: add and commit to finish merge")
+			}
 		}
 	}
 
