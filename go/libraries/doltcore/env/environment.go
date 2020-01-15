@@ -674,18 +674,18 @@ func (dEnv *DoltEnv) GetAllValidDocDetails() (docs []doltdb.DocDetails, err erro
 	return docs, nil
 }
 
-func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc *doltdb.DocDetails, err error) {
+func (dEnv *DoltEnv) GetOneDocDetail(docName string) (doc doltdb.DocDetails, err error) {
 	for _, doc := range *AllValidDocDetails {
 		if doc.DocPk == docName {
 			newerText, err := dEnv.GetLocalFileText(doc.File)
 			if err != nil {
-				return nil, err
+				return doltdb.DocDetails{}, err
 			}
 			doc.NewerText = newerText
-			return &doc, nil
+			return doc, nil
 		}
 	}
-	return nil, err
+	return doltdb.DocDetails{}, err
 }
 
 // GetUpdatedRootWithDocs adds, updates or removes the `dolt_docs` table on the provided root. The table will be added or updated
