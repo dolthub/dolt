@@ -61,6 +61,10 @@ func (cmd ConfigCmd) Description() string {
 	return "Dolt configuration."
 }
 
+func (cmd ConfigCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd ConfigCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)

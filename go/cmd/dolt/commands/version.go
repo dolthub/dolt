@@ -34,6 +34,10 @@ func (cmd VersionCmd) Description() string {
 	return "Displays the current Dolt cli version."
 }
 
+func (cmd VersionCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd VersionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	return nil
 }

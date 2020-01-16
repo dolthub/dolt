@@ -52,6 +52,10 @@ func (cmd InitCmd) Description() string {
 	return "Create an empty Dolt data repository."
 }
 
+func (cmd InitCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 

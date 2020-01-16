@@ -48,6 +48,10 @@ func (cmd SendMetricsCmd) Description() string {
 	return "Send events logs to server."
 }
 
+func (cmd SendMetricsCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd SendMetricsCmd) Hidden() bool {
 	return true
 }

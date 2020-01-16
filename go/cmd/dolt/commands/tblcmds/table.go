@@ -24,6 +24,7 @@ var Commands = cli.NewSubCommandHandler("table", "Commands for creating, reading
 	CreateCmd{},
 	RmCmd{},
 	MvCmd{},
+	CpCmd{},
 	SelectCmd{},
 	PutRowCmd{},
 	RmRowCmd{},

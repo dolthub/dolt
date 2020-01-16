@@ -52,6 +52,10 @@ func (cmd LoginCmd) Description() string {
 	return "Login to a dolt remote host."
 }
 
+func (cmd LoginCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd LoginCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)

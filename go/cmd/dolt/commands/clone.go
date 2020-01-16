@@ -69,6 +69,10 @@ func (cmd CloneCmd) Description() string {
 	return "Clone from a remote data repository."
 }
 
+func (cmd CloneCmd) RequiresRepo() bool {
+	return false
+}
+
 func (cmd CloneCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
