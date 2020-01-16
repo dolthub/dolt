@@ -74,6 +74,8 @@ enum ClientEventType {
     REMOTEAPI_COMMIT = 43;
     REMOTEAPI_LIST_TABLE_FILES = 44;
     BLAME = 45;
+    CREDS_CHECK = 46;
+    CREDS_USE = 47;
 }
 
 enum MetricID {

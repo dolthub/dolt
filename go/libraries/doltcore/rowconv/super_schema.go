@@ -244,7 +244,7 @@ func (ssg *SuperSchemaGen) AddHistoryOfCommits(ctx context.Context, tblName stri
 			return err
 		}
 
-		tbl, ok, err := root.GetTable(ctx, tblName)
+		tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
 
 		if err != nil {
 			return err
