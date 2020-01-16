@@ -17,11 +17,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"os"
 	"os/exec"
 	"strconv"
@@ -31,6 +26,11 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/cnfcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/credcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/schcmds"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"

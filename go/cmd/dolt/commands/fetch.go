@@ -16,9 +16,6 @@ package commands
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
-	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -29,6 +26,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var fetchShortDesc = "Download objects and refs from another repository"

@@ -16,10 +16,11 @@ package cli
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )

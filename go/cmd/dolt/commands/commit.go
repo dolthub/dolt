@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"os"
 	"strings"
 	"time"
@@ -31,6 +30,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (

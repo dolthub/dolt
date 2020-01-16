@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"time"
 
 	"github.com/fatih/color"
@@ -26,6 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 

@@ -16,16 +16,17 @@ package cli
 
 import (
 	"fmt"
-	"github.com/fatih/color"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 
+	"github.com/fatih/color"
+
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
 var underline = color.New(color.Underline)

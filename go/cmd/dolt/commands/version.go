@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"

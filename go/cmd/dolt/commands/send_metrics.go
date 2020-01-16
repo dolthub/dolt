@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"log"
 	"strconv"
 	"time"
@@ -29,6 +28,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 // SendMetricsCommand is the command used for sending metrics

@@ -16,6 +16,7 @@ package cnfcmds
 
 import (
 	"context"
+
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
