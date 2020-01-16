@@ -15,17 +15,39 @@
 package schema
 
 import (
+	"errors"
 	"math"
 	"strings"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// KindToLwrStr maps a noms kind to the kinds lowercased name
-var KindToLwrStr = make(map[types.NomsKind]string)
+// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
+const ReservedTagMin uint64 = 1 << 63
 
-// LwrStrToKind maps a lowercase string to the noms kind it is referring to
-var LwrStrToKind = make(map[string]types.NomsKind)
+var (
+	// KindToLwrStr maps a noms kind to the kinds lowercased name
+	KindToLwrStr = make(map[types.NomsKind]string)
+
+	// LwrStrToKind maps a lowercase string to the noms kind it is referring to
+	LwrStrToKind = make(map[string]types.NomsKind)
+)
+
+var (
+	// InvalidTag is used as an invalid tag
+	InvalidTag uint64 = math.MaxUint64
+
+	// InvalidCol is a Column instance that is returned when there is nothing to return and can be tested against.
+	InvalidCol = Column{
+		"invalid",
+		InvalidTag,
+		types.NullKind,
+		false,
+		typeinfo.UnknownTypeInfo,
+		nil,
+	}
+)
 
 func init() {
 	for t, s := range types.KindToString {
@@ -33,15 +55,6 @@ func init() {
 		LwrStrToKind[strings.ToLower(s)] = t
 	}
 }
-
-// InvalidTag is used as an invalid tag
-var InvalidTag uint64 = math.MaxUint64
-
-// ReservedTagMin is the start of a range of tags which the user should not be able to use in their schemas.
-const ReservedTagMin uint64 = 1 << 63
-
-// InvalidCol is a Column instance that is returned when there is nothing to return and can be tested against.
-var InvalidCol = NewColumn("invalid", InvalidTag, types.NullKind, false)
 
 // Column is a structure containing information about a column in a row in a table.
 type Column struct {
@@ -57,25 +70,43 @@ type Column struct {
 	// IsPartOfPK says whether this column is part of the primary key
 	IsPartOfPK bool
 
+	// TypeInfo states the type of this column.
+	TypeInfo typeinfo.TypeInfo
+
 	// Constraints are rules that can be checked on each column to say if the columns value is valid
 	Constraints []ColConstraint
 }
 
-// NewColumn creates a Column instance
+// NewColumn creates a Column instance with the default type info for the NomsKind
 func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, constraints ...ColConstraint) Column {
+	typeInfo := typeinfo.DefaultTypeInfo(kind)
+	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
+	if err != nil {
+		panic(err)
+	}
+	return col
+}
+
+// NewColumnWithTypeInfo creates a Column instance with the given type info.
+func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...ColConstraint) (Column, error) {
 	for _, c := range constraints {
 		if c == nil {
-			panic("nil passed as a constraint")
+			return Column{}, errors.New("nil passed as a constraint")
 		}
+	}
+
+	if typeInfo == nil {
+		return Column{}, errors.New("cannot instantiate column with nil type info")
 	}
 
 	return Column{
 		name,
 		tag,
-		kind,
+		typeInfo.NomsKind(),
 		partOfPK,
+		typeInfo,
 		constraints,
-	}
+	}, nil
 }
 
 // IsNullable returns whether the column can be set to a null value.
@@ -94,6 +125,7 @@ func (c Column) Equals(other Column) bool {
 		c.Tag == other.Tag &&
 		c.Kind == other.Kind &&
 		c.IsPartOfPK == other.IsPartOfPK &&
+		c.TypeInfo.Equals(other.TypeInfo) &&
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 
