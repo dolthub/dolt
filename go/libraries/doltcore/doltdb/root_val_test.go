@@ -26,15 +26,16 @@ import (
 )
 
 func TestTableDiff(t *testing.T) {
-	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
-	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
+	ctx := context.Background()
+	ddb, _ := LoadDoltDB(ctx, types.Format_7_18, InMemDoltDB)
+	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := NewCommitSpec("head", "master")
-	cm, _ := ddb.Resolve(context.Background(), cs)
+	cm, _ := ddb.Resolve(ctx, cs)
 
 	root, err := cm.GetRootValue()
 	assert.NoError(t, err)
-	added, modified, removed, err := root.TableDiff(context.Background(), root)
+	added, modified, removed, err := root.TableDiff(ctx, root)
 	assert.NoError(t, err)
 
 	if len(added)+len(modified)+len(removed) != 0 {
@@ -42,23 +43,23 @@ func TestTableDiff(t *testing.T) {
 	}
 
 	sch := createTestSchema()
-	m, err := types.NewMap(context.Background(), ddb.ValueReadWriter())
+	m, err := types.NewMap(ctx, ddb.ValueReadWriter())
 	assert.NoError(t, err)
 
 	tbl1, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
-	root2, err := root.PutTable(context.Background(), "tbl1", tbl1)
+	root2, err := root.PutTable(ctx, "tbl1", tbl1)
 	assert.NoError(t, err)
 
-	added, modified, removed, err = root2.TableDiff(context.Background(), root)
+	added, modified, removed, err = root2.TableDiff(ctx, root)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "tbl1" || len(modified)+len(removed) != 0 {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	added, modified, removed, err = root.TableDiff(context.Background(), root2)
+	added, modified, removed, err = root.TableDiff(ctx, root2)
 	assert.NoError(t, err)
 
 	if len(removed) != 1 || removed[0] != "tbl1" || len(modified)+len(added) != 0 {
@@ -68,33 +69,33 @@ func TestTableDiff(t *testing.T) {
 	rowData, _ := createTestRowData(t, ddb.ValueReadWriter(), sch)
 	tbl1Updated, _ := createTestTable(ddb.ValueReadWriter(), sch, rowData)
 
-	root3, err := root.PutTable(context.Background(), "tbl1", tbl1Updated)
+	root3, err := root.PutTable(ctx, "tbl1", tbl1Updated)
 	assert.NoError(t, err)
 
-	added, modified, removed, err = root3.TableDiff(context.Background(), root2)
-	assert.NoError(t, err)
-
-	if len(modified) != 1 || modified[0] != "tbl1" || len(added)+len(removed) != 0 {
-		t.Error("Bad table diff after adding a single table")
-	}
-
-	added, modified, removed, err = root2.TableDiff(context.Background(), root3)
+	added, modified, removed, err = root3.TableDiff(ctx, root2)
 	assert.NoError(t, err)
 
 	if len(modified) != 1 || modified[0] != "tbl1" || len(added)+len(removed) != 0 {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	root4, err := root3.PutTable(context.Background(), "tbl2", tbl1)
+	added, modified, removed, err = root2.TableDiff(ctx, root3)
 	assert.NoError(t, err)
 
-	added, modified, removed, err = root2.TableDiff(context.Background(), root4)
+	if len(modified) != 1 || modified[0] != "tbl1" || len(added)+len(removed) != 0 {
+		t.Error("Bad table diff after adding a single table")
+	}
+
+	root4, err := root3.PutTable(ctx, "tbl2", tbl1)
+	assert.NoError(t, err)
+
+	added, modified, removed, err = root2.TableDiff(ctx, root4)
 	assert.NoError(t, err)
 	if len(modified) != 1 || modified[0] != "tbl1" || len(removed) != 1 || removed[0] != "tbl2" || +len(added) != 0 {
 		t.Error("Bad table diff after adding a second table")
 	}
 
-	added, modified, removed, err = root4.TableDiff(context.Background(), root2)
+	added, modified, removed, err = root4.TableDiff(ctx, root2)
 	assert.NoError(t, err)
 	if len(modified) != 1 || modified[0] != "tbl1" || len(added) != 1 || added[0] != "tbl2" || +len(removed) != 0 {
 		t.Error("Bad table diff after adding a second table")
@@ -102,11 +103,12 @@ func TestTableDiff(t *testing.T) {
 }
 
 func TestDocDiff(t *testing.T) {
-	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
-	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
+	ctx := context.Background()
+	ddb, _ := LoadDoltDB(ctx, types.Format_7_18, InMemDoltDB)
+	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	cs, _ := NewCommitSpec("head", "master")
-	cm, _ := ddb.Resolve(context.Background(), cs)
+	cm, _ := ddb.Resolve(ctx, cs)
 
 	root, err := cm.GetRootValue()
 	assert.NoError(t, err)
@@ -117,7 +119,7 @@ func TestDocDiff(t *testing.T) {
 	docDetails[0] = doc1
 	docDetails[1] = doc2
 
-	added, modified, removed, err := root.DocDiff(context.Background(), root, docDetails)
+	added, modified, removed, err := root.DocDiff(ctx, root, docDetails)
 	assert.NoError(t, err)
 
 	if len(added)+len(modified)+len(removed) != 0 {
@@ -130,10 +132,10 @@ func TestDocDiff(t *testing.T) {
 	tbl1, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
-	root2, err := root.PutTable(context.Background(), DocTableName, tbl1)
+	root2, err := root.PutTable(ctx, DocTableName, tbl1)
 	assert.NoError(t, err)
 
-	added, modified, removed, err = root.DocDiff(context.Background(), root2, docDetails)
+	added, modified, removed, err = root.DocDiff(ctx, root2, docDetails)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified)+len(removed) != 0 {
@@ -145,10 +147,10 @@ func TestDocDiff(t *testing.T) {
 	tbl2, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
-	root3, err := root.PutTable(context.Background(), DocTableName, tbl2)
+	root3, err := root.PutTable(ctx, DocTableName, tbl2)
 	assert.NoError(t, err)
 
-	added, modified, removed, err = root2.DocDiff(context.Background(), root3, docDetails)
+	added, modified, removed, err = root2.DocDiff(ctx, root3, docDetails)
 	assert.NoError(t, err)
 
 	if len(removed) != 1 || removed[0] != "LICENSE.md" || len(added) != 1 || added[0] != "README.md" || len(modified) != 0 {
@@ -160,17 +162,17 @@ func TestDocDiff(t *testing.T) {
 	tbl3, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
-	root4, err := root3.PutTable(context.Background(), DocTableName, tbl3)
+	root4, err := root3.PutTable(ctx, DocTableName, tbl3)
 	assert.NoError(t, err)
 
-	added, modified, removed, err = root3.DocDiff(context.Background(), root4, nil)
+	added, modified, removed, err = root3.DocDiff(ctx, root4, nil)
 	assert.NoError(t, err)
 
 	if len(added) != 1 || added[0] != "LICENSE.md" || len(modified) != 1 || modified[0] != "README.md" || len(removed) != 0 {
 		t.Error("Bad table diff after adding a single table")
 	}
 
-	added, modified, removed, err = root4.DocDiff(context.Background(), root, nil)
+	added, modified, removed, err = root4.DocDiff(ctx, root, nil)
 	assert.NoError(t, err)
 
 	if len(removed) != 2 || len(modified) != 0 || len(added) != 0 {
@@ -179,14 +181,15 @@ func TestDocDiff(t *testing.T) {
 }
 
 func TestAddNewerTextAndValueFromTable(t *testing.T) {
-	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
-	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
+	ctx := context.Background()
+	ddb, _ := LoadDoltDB(ctx, types.Format_7_18, InMemDoltDB)
+	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	doc1 := DocDetails{DocPk: LicensePk}
-	doc1, err := AddNewerTextToDocFromTbl(context.Background(), nil, nil, doc1)
+	doc1, err := AddNewerTextToDocFromTbl(ctx, nil, nil, doc1)
 	assert.NoError(t, err)
 	assert.Nil(t, doc1.NewerText)
-	doc1, err = AddValueToDocFromTbl(context.Background(), nil, nil, doc1)
+	doc1, err = AddValueToDocFromTbl(ctx, nil, nil, doc1)
 	assert.NoError(t, err)
 	assert.Nil(t, doc1.Value)
 
@@ -199,18 +202,18 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 
 	doc2 := DocDetails{DocPk: LicensePk}
-	doc2, err = AddNewerTextToDocFromTbl(context.Background(), tbl, &sch, doc2)
+	doc2, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc2)
 	assert.NoError(t, err)
 	assert.Nil(t, doc2.NewerText)
-	doc2, err = AddValueToDocFromTbl(context.Background(), tbl, &sch, doc2)
+	doc2, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc2)
 	assert.NoError(t, err)
 	assert.Nil(t, doc2.Value)
 
 	doc3 := DocDetails{DocPk: LicensePk, NewerText: []byte("Something in newer text field")}
-	doc3, err = AddNewerTextToDocFromTbl(context.Background(), tbl, &sch, doc3)
+	doc3, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc3)
 	assert.NoError(t, err)
 	assert.Nil(t, doc3.NewerText)
-	doc3, err = AddValueToDocFromTbl(context.Background(), tbl, &sch, doc3)
+	doc3, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc3)
 	assert.NoError(t, err)
 	assert.Nil(t, doc3.Value)
 
@@ -220,32 +223,33 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 
 	doc4 := DocDetails{DocPk: LicensePk, NewerText: []byte("Something in newer text field")}
-	doc4, err = AddNewerTextToDocFromTbl(context.Background(), tbl, &sch, doc4)
+	doc4, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc4)
 	assert.NoError(t, err)
 	assert.Equal(t, "text in doc_text", string(doc4.NewerText))
-	doc4, err = AddValueToDocFromTbl(context.Background(), tbl, &sch, doc4)
+	doc4, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc4)
 	assert.NoError(t, err)
 	assert.Equal(t, types.String("text in doc_text"), doc4.Value)
 
 	doc5 := DocDetails{DocPk: LicensePk}
-	doc5, err = AddNewerTextToDocFromTbl(context.Background(), tbl, &sch, doc5)
+	doc5, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc5)
 	assert.NoError(t, err)
 	assert.Equal(t, "text in doc_text", string(doc5.NewerText))
-	doc5, err = AddValueToDocFromTbl(context.Background(), tbl, &sch, doc5)
+	doc5, err = AddValueToDocFromTbl(ctx, tbl, &sch, doc5)
 	assert.NoError(t, err)
 	assert.Equal(t, types.String("text in doc_text"), doc5.Value)
 }
 
 func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
-	ddb, _ := LoadDoltDB(context.Background(), types.Format_7_18, InMemDoltDB)
-	ddb.WriteEmptyRepo(context.Background(), "billy bob", "bigbillieb@fake.horse")
+	ctx := context.Background()
+	ddb, _ := LoadDoltDB(ctx, types.Format_7_18, InMemDoltDB)
+	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
 	sch := createTestDocsSchema()
 
 	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
 
 	doc1 := DocDetails{}
-	doc1, err = addNewerTextToDocFromRow(context.Background(), emptyRow, &doc1)
+	doc1, err = addNewerTextToDocFromRow(ctx, emptyRow, &doc1)
 	assert.NoError(t, err)
 	assert.Nil(t, doc1.NewerText)
 	doc1, err = addDocPKToDocFromRow(emptyRow, &doc1)
@@ -258,7 +262,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	})
 
 	doc2 := DocDetails{}
-	doc2, err = addNewerTextToDocFromRow(context.Background(), licenseRow, &doc2)
+	doc2, err = addNewerTextToDocFromRow(ctx, licenseRow, &doc2)
 	assert.NoError(t, err)
 	assert.Equal(t, "license!", string(doc2.NewerText))
 	doc1, err = addDocPKToDocFromRow(licenseRow, &doc2)
@@ -266,7 +270,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	assert.Equal(t, LicensePk, doc2.DocPk)
 
 	doc3 := DocDetails{DocPk: "invalid", NewerText: []byte("something"), Value: types.String("testing")}
-	doc3, err = addNewerTextToDocFromRow(context.Background(), licenseRow, &doc3)
+	doc3, err = addNewerTextToDocFromRow(ctx, licenseRow, &doc3)
 	assert.NoError(t, err)
 	assert.Equal(t, "license!", string(doc3.NewerText))
 	doc3, err = addDocPKToDocFromRow(licenseRow, &doc3)
@@ -304,9 +308,10 @@ func getDocRow(t *testing.T, sch schema.Schema, pk string, rowVal types.Value) r
 }
 
 func createTestRows(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, rows []row.Row) (types.Map, []row.Row) {
+	ctx := context.Background()
 	var err error
 
-	m, err := types.NewMap(context.Background(), vrw)
+	m, err := types.NewMap(ctx, vrw)
 	assert.NoError(t, err)
 	ed := m.Edit()
 
@@ -314,7 +319,7 @@ func createTestRows(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema, 
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))
 	}
 
-	m, err = ed.Map(context.Background())
+	m, err = ed.Map(ctx)
 	assert.NoError(t, err)
 
 	return m, rows
