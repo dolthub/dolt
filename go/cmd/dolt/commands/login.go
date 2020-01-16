@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"time"
 
 	"github.com/skratchdot/open-golang/open"
@@ -51,13 +52,23 @@ func (cmd LoginCmd) Description() string {
 	return "Login to a dolt remote host."
 }
 
+func (cmd LoginCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
+}
+
+func (cmd LoginCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login."})
+	return ap
+}
+
 func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_LOGIN
 }
 
 func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["creds"] = "A specific credential to use for login."
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"os"
 
 	"github.com/fatih/color"
@@ -51,27 +52,30 @@ const (
 )
 
 var SchemaFileHelp = "Schema definition files are json files in the format:" + `
-{
-	"<b>fields</b>": [
-		{"name":"<b>FIELD_NAME</b>", "kind":"<b>KIND</b>", "Required":[true|false]},
-		...
-	],
-	"<b>constraints</b>": [
-		{"constraint_type":"primary_key", "field_indices":[<b>INTEGER_FIELD_INDEX</b>]}
-	]
-}
-	where "fields" is the array of columns in each row of the table
-	"constraints" is a list of table constraints.  (Only primary_key constraint types are supported currently)
-	FIELD_NAME is the name of a column in a row and can be any valid string
-	KIND must be a supported noms kind (bool, string, uuid, uint, int, float)
-	INTEGER_FIELD_INDEX must be the 0 based index of the primary key in the "fields" array
+
+	{
+		"fields": [
+			{"name":"FIELD_NAME", "kind":"KIND", "Required":[true|false]},
+			...
+		],
+		"constraints": [
+			{"constraint_type":"primary_key", "field_indices":[INTEGER_FIELD_INDEX]}
+		]
+	}
+
+where "fields" is the array of columns in each row of the table
+"constraints" is a list of table constraints.  (Only primary_key constraint types are supported currently)
+FIELD_NAME is the name of a column in a row and can be any valid string
+KIND must be a supported noms kind (bool, string, uuid, uint, int, float)
+INTEGER_FIELD_INDEX must be the 0 based index of the primary key in the "fields" array
 `
 
 var MappingFileHelp = "A mapping file is json in the format:" + `
-{
-	"<b>source_field_name</b>":"<b>dest_field_name</b>"
-	...
-}
+
+	{
+		"source_field_name":"dest_field_name"
+		...
+	}
 
 where source_field_name is the name of a field in the file being imported and dest_field_name is the name of a field in the table being imported to.
 `
@@ -224,12 +228,23 @@ func (cmd ImportCmd) Description() string {
 	return "Creates, overwrites, replaces, or updates a table from the data in a file."
 }
 
+func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
+}
+
+func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
+	ap := createArgParser()
+	return ap
+}
+
 func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_IMPORT
 }
 
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	force, mvOpts := parseCreateArgs(commandStr, args)
+	ap := cmd.createArgParser()
+	force, mvOpts := parseCreateArgs(ap, commandStr, args)
 
 	if mvOpts == nil {
 		return 1
@@ -244,9 +259,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return res
 }
 
-func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOptions) {
-	ap := createArgParser()
-
+func parseCreateArgs(ap *argparser.ArgParser, commandStr string, args []string) (bool, *mvdata.MoveOptions) {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	moveOp, tableLoc, fileLoc, srcOpts := validateImportArgs(apr, usage)
@@ -273,8 +286,8 @@ func parseCreateArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 
 func createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp[tableParam] = "The new or existing table being imported to."
-	ap.ArgListHelp[fileParam] = "The file being imported. Supported file types are csv, psv, and nbf."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{tableParam, "The new or existing table being imported to."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{fileParam, "The file being imported. Supported file types are csv, psv, and nbf."})
 	ap.SupportsFlag(createParam, "c", "Create a new table, or overwrite an existing table (with the -f flag) from the imported data.")
 	ap.SupportsFlag(updateParam, "u", "Update an existing table with the imported data.")
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the Force flag will allow the target to be overwritten.")

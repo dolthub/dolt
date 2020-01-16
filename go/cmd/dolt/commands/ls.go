@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"sort"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -43,13 +44,23 @@ func (cmd LsCmd) Description() string {
 	return "List tables in the working set."
 }
 
+func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+}
+
+func (cmd LsCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
+	return ap
+}
+
 func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_LS
 }
 
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

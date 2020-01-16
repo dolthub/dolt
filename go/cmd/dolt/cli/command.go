@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"strings"
 
 	"github.com/fatih/color"
@@ -49,6 +50,7 @@ type Command interface {
 	Name() string
 	Description() string
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
+	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
 }
 
 type RepoNotRequiredCommand interface {
@@ -63,36 +65,40 @@ type HiddenCommand interface {
 	Hidden() bool
 }
 
-type HandlerCommand struct {
+type SubCommandHandler struct {
 	name        string
 	description string
-	subcommands []Command
+	Subcommands []Command
 }
 
-func NewHandlerCommand(name, description string, subcommands []Command) HandlerCommand {
-	return HandlerCommand{name, description, subcommands}
+func NewSubCommandHandler(name, description string, subcommands []Command) SubCommandHandler {
+	return SubCommandHandler{name, description, subcommands}
 }
 
-func (hc HandlerCommand) Name() string {
+func (hc SubCommandHandler) Name() string {
 	return hc.name
 }
 
-func (hc HandlerCommand) Description() string {
+func (hc SubCommandHandler) Description() string {
 	return hc.description
 }
 
-func (hc HandlerCommand) RequiresRepo() bool {
+func (hc SubCommandHandler) RequiresRepo() bool {
 	return false
 }
 
-func (hc HandlerCommand) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (hc SubCommandHandler) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
+	return nil
+}
+
+func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	if len(args) < 1 {
 		hc.printUsage(commandStr)
 		return 1
 	}
 
 	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
-	for _, cmd := range hc.subcommands {
+	for _, cmd := range hc.Subcommands {
 		lwrName := strings.ToLower(cmd.Name())
 
 		if lwrName == subCommandStr {
@@ -141,10 +147,10 @@ func (hc HandlerCommand) Exec(ctx context.Context, commandStr string, args []str
 	return 1
 }
 
-func (hc HandlerCommand) printUsage(commandStr string) {
+func (hc SubCommandHandler) printUsage(commandStr string) {
 	Println("Valid commands for", commandStr, "are")
 
-	for _, cmd := range hc.subcommands {
+	for _, cmd := range hc.Subcommands {
 		if hiddenCmd, ok := cmd.(HiddenCommand); ok {
 			if hiddenCmd.Hidden() {
 				continue

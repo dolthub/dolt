@@ -17,6 +17,7 @@ package schcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/fatih/color"
 
@@ -53,15 +54,24 @@ func (cmd ShowCmd) Description() string {
 	return "Shows the schema of one or more tables."
 }
 
+func (cmd ShowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
+}
+
+func (cmd ShowCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose schema is being displayed."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
+	return ap
+}
+
 func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SCHEMA
 }
 
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
-	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
-
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	verr := printSchemas(ctx, apr, dEnv)

@@ -18,7 +18,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
 
-var Commands = cli.NewHandlerCommand("table", "Commands for creating, reading, updating, and deleting tables.", []cli.Command{
+var Commands = cli.NewSubCommandHandler("table", "Commands for creating, reading, updating, and deleting tables.", []cli.Command{
 	ImportCmd{},
 	ExportCmd{},
 	CreateCmd{},

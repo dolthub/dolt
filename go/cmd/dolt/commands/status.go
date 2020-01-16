@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"io"
 	"strings"
 
@@ -48,8 +49,18 @@ func (cmd StatusCmd) Description() string {
 	return "Show the working tree status."
 }
 
-func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd StatusCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
+}
+
+func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	return ap
+}
+
+func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 

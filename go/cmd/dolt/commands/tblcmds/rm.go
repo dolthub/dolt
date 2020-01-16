@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -47,9 +48,19 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_RM
 }
 
-func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
+}
+
+func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The table to remove"
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table to remove"})
+	return ap
+}
+
+func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

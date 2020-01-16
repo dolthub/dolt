@@ -17,6 +17,7 @@ package schcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"strings"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
@@ -53,17 +54,26 @@ func (cmd AddColumnCmd) Description() string {
 	return "Adds a column to specified table's schema."
 }
 
+func (cmd AddColumnCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, schAddColShortDesc, schAddColLongDesc, schAddColSynopsis, ap)
+}
+
+func (cmd AddColumnCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table where the new column should be added."})
+	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
+	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new column.")
+	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this column will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
+	return ap
+}
+
 func (cmd AddColumnCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SCHEMA
 }
 
 func (cmd AddColumnCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "table where the new column should be added."
-	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
-	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new column.")
-	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this column will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
-
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schAddColShortDesc, schAddColLongDesc, schAddColSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

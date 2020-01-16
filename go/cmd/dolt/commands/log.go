@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"strings"
 
 	"github.com/fatih/color"
@@ -93,13 +94,23 @@ func (cmd LogCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_LOG
 }
 
+func (cmd LogCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := createLogArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
+}
+
+func createLogArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output")
+	return ap
+}
+
 func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
 }
 
 func logWithLoggerFunc(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, loggerFunc commitLoggerFunc) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsInt(numLinesParam, "n", "num_commits", "Limit the number of commits to output")
+	ap := createLogArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

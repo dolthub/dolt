@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
 
@@ -54,6 +55,16 @@ func (cmd FetchCmd) Description() string {
 
 func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_FETCH
+}
+
+func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
+}
+
+func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
 }
 
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {

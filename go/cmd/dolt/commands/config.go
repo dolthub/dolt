@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"strings"
 
 	"github.com/fatih/color"
@@ -60,8 +61,12 @@ func (cmd ConfigCmd) Description() string {
 	return "Dolt configuration."
 }
 
-// Exec is used by the config command to allow users to view / edit their global and repository local configurations.
-func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ConfigCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)
+}
+
+func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
@@ -69,6 +74,12 @@ func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap.SupportsFlag(listOperationStr, "", "List the values of all config parameters.")
 	ap.SupportsFlag(getOperationStr, "", "Get the value of one or more config parameters.")
 	ap.SupportsFlag(unsetOperationStr, "", "Unset the value of one or more config paramaters.")
+	return ap
+}
+
+// Exec is used by the config command to allow users to view / edit their global and repository local configurations.
+func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

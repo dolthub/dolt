@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"sort"
 	"strings"
 
@@ -80,13 +81,14 @@ func (cmd BranchCmd) Description() string {
 	return "Create, list, edit, delete branches."
 }
 
-func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_BRANCH
+func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
 }
 
-func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["start-point"] = "A commit that a new branch should point at."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(listFlag, "", "List branches")
 	ap.SupportsFlag(forceFlag, "f", branchForceFlagDesc)
 	ap.SupportsFlag(copyFlag, "c", "Create a copy of a branch.")
@@ -95,6 +97,15 @@ func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string,
 	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for --delete --force.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
+	return ap
+}
+
+func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_BRANCH
+}
+
+func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

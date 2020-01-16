@@ -17,6 +17,7 @@ package credcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"strings"
 
 	"github.com/fatih/color"
@@ -47,6 +48,11 @@ func (cmd LsCmd) Description() string {
 	return lsShortDesc
 }
 
+func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
+}
+
 func (cmd LsCmd) RequiresRepo() bool {
 	return false
 }
@@ -55,9 +61,14 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_LS
 }
 
-func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag("verbose", "v", "Verbose output, including key id.")
+	return ap
+}
+
+func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

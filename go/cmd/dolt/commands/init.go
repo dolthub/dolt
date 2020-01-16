@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"time"
 
 	"github.com/fatih/color"
@@ -51,12 +52,23 @@ func (cmd InitCmd) Description() string {
 	return "Create an empty Dolt data repository."
 }
 
-// Init is used by the init command
-func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+
+	return cli.CreateMarkdown(fs, path, commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
+}
+
+func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", "The name used in commits to this repo. If not provided will be taken from \""+env.UserNameKey+"\" in the global config.")
 	ap.SupportsString(emailParamName, "", "email", "The email address used. If not provided will be taken from \""+env.UserEmailKey+"\" in the global config.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
+
+	return ap
+}
+
+func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

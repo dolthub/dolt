@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -31,6 +32,10 @@ func (cmd VersionCmd) Name() string {
 
 func (cmd VersionCmd) Description() string {
 	return "Displays the current Dolt cli version."
+}
+
+func (cmd VersionCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	return nil
 }
 
 // Version displays the version of the running dolt client

@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"log"
 	"strconv"
 	"time"
@@ -45,6 +46,14 @@ func (cmd SendMetricsCmd) Name() string {
 
 func (cmd SendMetricsCmd) Description() string {
 	return "Send events logs to server."
+}
+
+func (cmd SendMetricsCmd) Hidden() bool {
+	return true
+}
+
+func (cmd SendMetricsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	return nil
 }
 
 // Exec is the implementation of the command that flushes the events to the grpc service

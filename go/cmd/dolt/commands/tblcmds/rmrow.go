@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/fatih/color"
 
@@ -40,10 +41,7 @@ type rmRowArgs struct {
 	PKs       []string
 }
 
-func parseRmRowArgs(commandStr string, args []string) *rmRowArgs {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The table being edited."
-	ap.ArgListHelp["primary_key"] = "Primary key of the row(s) to delete."
+func parseRmRowArgs(ap *argparser.ArgParser, commandStr string, args []string) *rmRowArgs {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, rmRowShortDesc, rmRowLongDesc, rmRowSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -72,12 +70,25 @@ func (cmd RmRowCmd) Description() string {
 	return "Remove a row from a table."
 }
 
+func (cmd RmRowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, rmRowShortDesc, rmRowLongDesc, rmRowSynopsis, ap)
+}
+
+func (cmd RmRowCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being edited."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"primary_key", "Primary key of the row(s) to delete."})
+	return ap
+}
+
 func (cmd RmRowCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_RM_ROW
 }
 
 func (cmd RmRowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	rmArgs := parseRmRowArgs(commandStr, args)
+	ap := cmd.createArgParser()
+	rmArgs := parseRmRowArgs(ap, commandStr, args)
 
 	if rmArgs == nil {
 		return 1

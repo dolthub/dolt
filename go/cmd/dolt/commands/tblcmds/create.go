@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"io/ioutil"
 	"os"
 
@@ -53,16 +54,26 @@ func (cmd CreateCmd) Description() string {
 	return "Creates or overwrite an existing table with an empty table."
 }
 
+func (cmd CreateCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, tblCreateShortDesc, tblCreateLongDesc, tblCreateSynopsis, ap)
+}
+
+func (cmd CreateCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	//ap.ArgListHelp["field_descriptor"] = fieldDescriptorHelp
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "name of the table being created."})
+	ap.SupportsFlag(forceParam, "f", "Force table creation if a table with this name already exists by overwriting it. ")
+	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema the new table should be created with.")
+	return ap
+}
+
 func (cmd CreateCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_CREATE
 }
 
 func (cmd CreateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	//ap.ArgListHelp["field_descriptor"] = fieldDescriptorHelp
-	ap.ArgListHelp["table"] = "name of the table being created."
-	ap.SupportsFlag(forceParam, "f", "Force table creation if a table with this name already exists by overwriting it. ")
-	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema the new table should be created with.")
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblCreateShortDesc, tblCreateLongDesc, tblCreateSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

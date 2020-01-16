@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"io"
 	"os"
 	"path/filepath"
@@ -104,13 +105,23 @@ func (cmd SqlCmd) Description() string {
 	return "Run a SQL query against tables in repository."
 }
 
+func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
+}
+
+func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
+	return ap
+}
+
 func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SQL
 }
 
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
 
 	apr := cli.ParseArgs(ap, args, help)

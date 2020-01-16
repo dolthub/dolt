@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"sync"
 	"time"
 
@@ -69,13 +70,23 @@ func (cmd PushCmd) Description() string {
 	return "Push to a dolt remote."
 }
 
+func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
+}
+
+func (cmd PushCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less dolt pull and other commands.")
+	return ap
+}
+
 func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_PUSH
 }
 
 func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less dolt pull and other commands.")
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"os"
 	"strings"
 	"time"
@@ -64,12 +65,21 @@ func (cmd CommitCmd) Description() string {
 	return "Record changes to the repository."
 }
 
-func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
+}
 
+func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
+	return ap
+}
+
+func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

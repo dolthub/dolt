@@ -94,20 +94,30 @@ func (cmd RemoteCmd) Description() string {
 	return "Manage set of tracked repositories."
 }
 
-func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_REMOTE
+func (cmd RemoteCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, remoteShortDesc, remoteLongDesc, remoteSynopsis, ap)
 }
 
-func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd RemoteCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["region"] = "cloud provider region associated with this remote."
-	ap.ArgListHelp["creds-type"] = "credential type.  Valid options are role, env, and file.  See the help section for additional details."
-	ap.ArgListHelp["profile"] = "AWS profile to use."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this remote."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
 	ap.SupportsFlag(verboseFlag, "v", "When printing the list of remotes adds additional details.")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	return ap
+}
+
+func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_REMOTE
+}
+
+func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, remoteShortDesc, remoteLongDesc, remoteSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

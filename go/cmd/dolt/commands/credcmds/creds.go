@@ -18,7 +18,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
 
-var Commands = cli.NewHandlerCommand("creds", "Commands for managing credentials.", []cli.Command{
+var Commands = cli.NewSubCommandHandler("creds", "Commands for managing credentials.", []cli.Command{
 	NewCmd{},
 	RmCmd{},
 	LsCmd{},

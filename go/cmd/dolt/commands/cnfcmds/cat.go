@@ -17,6 +17,7 @@ package cnfcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -51,13 +52,24 @@ func (cmd CatCmd) Description() string {
 	return "Writes out the table conflicts."
 }
 
+func (cmd CatCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
+}
+
 func (cmd CatCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CONF_CAT
 }
 
-func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "List of tables to be printed. '.' can be used to print conflicts for all tables."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. '.' can be used to print conflicts for all tables."})
+
+	return ap
+}
+
+func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()

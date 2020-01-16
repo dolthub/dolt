@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -45,12 +46,22 @@ func (cmd PullCmd) Description() string {
 	return "Fetch from a dolt remote data repository and merge."
 }
 
+func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
+}
+
+func (cmd PullCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
 func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_PULL
 }
 
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	branch := dEnv.RepoState.Head.Ref

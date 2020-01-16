@@ -16,12 +16,13 @@ package cli
 
 import (
 	"fmt"
+	"github.com/fatih/color"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
-
-	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
@@ -66,6 +67,63 @@ func PrintHelpText(commandStr, shortDesc, longDesc string, synopsis []string, pa
 	}
 }
 
+func CreateMarkdown(fs filesys.Filesys, path, commandStr, shortDesc, longDesc string, synopsis []string, parser *argparser.ArgParser) error {
+	wr, err := fs.OpenForWrite(path)
+
+	if err != nil {
+		return err
+	}
+
+	defer wr.Close()
+
+	err = iohelp.WriteIfNoErr(wr, []byte("## Command\n\n"), nil)
+	err = iohelp.WriteIfNoErr(wr, []byte(commandStr+" - "+shortDesc+"\n\n"), err)
+
+	if len(synopsis) > 0 {
+		err = iohelp.WriteIfNoErr(wr, []byte("## Synopsis\n\n"), err)
+
+		err = iohelp.WriteIfNoErr(wr, []byte("```sh\n"), err)
+		for _, synopsisLine := range synopsis {
+			err = iohelp.WriteIfNoErr(wr, []byte(commandStr+" "+synopsisLine+"\n"), err)
+		}
+		err = iohelp.WriteIfNoErr(wr, []byte("```\n\n"), err)
+	}
+
+	err = iohelp.WriteIfNoErr(wr, []byte("## Description\n\n"), err)
+	err = iohelp.WriteIfNoErr(wr, []byte(handleAngleBrackets(longDesc)+"\n\n"), err)
+
+	if len(parser.Supported) > 0 || len(parser.ArgListHelp) > 0 {
+		err = iohelp.WriteIfNoErr(wr, []byte("## Options\n\n"), nil)
+
+		for _, kvTuple := range parser.ArgListHelp {
+			k, v := kvTuple[0], kvTuple[1]
+			err = iohelp.WriteIfNoErr(wr, []byte("&lt;"+k+"&gt;\n"+v+"\n\n"), nil)
+		}
+
+		for _, supOpt := range parser.Supported {
+			argHelpFmt := "--%[2]s"
+
+			if supOpt.Abbrev != "" && supOpt.ValDesc != "" {
+				argHelpFmt = "-%[1]s &lt;%[3]s&gt;, --%[2]s=&lt;%[3]s&gt;"
+			} else if supOpt.Abbrev != "" {
+				argHelpFmt = "-%[1]s, --%[2]s"
+			} else if supOpt.ValDesc != "" {
+				argHelpFmt = "--%[2]s=&lt;%[3]s&gt;"
+			}
+
+			argHelp := fmt.Sprintf(argHelpFmt, supOpt.Abbrev, supOpt.Name, supOpt.ValDesc)
+			err = iohelp.WriteIfNoErr(wr, []byte(argHelp+"\n"), err)
+			err = iohelp.WriteIfNoErr(wr, []byte(supOpt.Desc+"\n\n"), err)
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func PrintUsage(commandStr string, synopsis []string, parser *argparser.ArgParser) {
 	_, termWidth := terminalSize()
 
@@ -100,6 +158,52 @@ const (
 )
 
 var bold = color.New(color.Bold)
+
+func handleAngleBrackets(str string) string {
+	var res string
+	var start int
+	var end int
+
+	curr := str
+
+	for {
+		start = strings.Index(curr, "<")
+		end = strings.Index(curr, ">")
+
+		if start == -1 || end == -1 {
+			break
+		}
+
+		if end < start {
+			res += curr[:end] + "&gt;"
+			curr = curr[end+1:]
+			continue
+		}
+
+		word := curr[start+1 : end]
+		if word == "b" || word == `/b` {
+			res += curr[:end+1]
+			curr = curr[end+1:]
+		} else {
+			res += curr[:start]
+			res += "&lt;"
+			res += curr[start+1 : end]
+			res += "&gt;"
+			curr = curr[end+1:]
+		}
+	}
+
+	if start != -1 {
+		res += curr[:start] + "&lt;"
+		curr = curr[start+1:]
+	}
+
+	if len(curr) != 0 {
+		res += curr
+	}
+
+	return res
+}
 
 func embolden(str string) string {
 	res := ""
@@ -166,7 +270,8 @@ func terminalSize() (width, height int) {
 func OptionsUsage(ap *argparser.ArgParser, indent string, lineLen int) string {
 	var lines []string
 
-	for k, v := range ap.ArgListHelp {
+	for _, kvTuple := range ap.ArgListHelp {
+		k, v := kvTuple[0], kvTuple[1]
 		lines = append(lines, "<"+k+">")
 		descLines := toParagraphLines(v, lineLen)
 		descLines = indentLines(descLines, "  ")

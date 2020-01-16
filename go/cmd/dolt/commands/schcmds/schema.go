@@ -18,7 +18,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
 
-var Commands = cli.NewHandlerCommand("schema", "Commands for showing, and modifying table schemas.", []cli.Command{
+var Commands = cli.NewSubCommandHandler("schema", "Commands for showing, and modifying table schemas.", []cli.Command{
 	AddColumnCmd{},
 	DropColumnCmd{},
 	ExportCmd{},

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"strings"
 	"time"
 
@@ -82,6 +83,16 @@ func (cmd BlameCmd) Description() string {
 	return "Show what revision and author last modified each row of a table."
 }
 
+func (cmd BlameCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
+}
+
+func (cmd BlameCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
 func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_BLAME
 }
@@ -102,7 +113,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 //
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
 func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -42,6 +43,11 @@ func (cmd CheckCmd) Description() string {
 	return checkShortDesc
 }
 
+func (cmd CheckCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, checkShortDesc, checkLongDesc, checkSynopsis, ap)
+}
+
 func (cmd CheckCmd) RequiresRepo() bool {
 	return false
 }
@@ -50,10 +56,15 @@ func (cmd CheckCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_CHECK
 }
 
-func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString("endpoint", "", "", "API endpoint, otherwise taken from config.")
 	ap.SupportsString("creds", "", "", "Public Key ID or Public Key for credentials, otherwise taken from config.")
+	return ap
+}
+
+func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

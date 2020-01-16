@@ -42,7 +42,8 @@ const (
 	Version = "0.12.0"
 )
 
-var doltCommand = cli.NewHandlerCommand("", "", []cli.Command{
+var dumpDocsCommand = &commands.DumpDocsCmd{}
+var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Command{
 	commands.InitCmd{},
 	commands.StatusCmd{},
 	commands.AddCmd{},
@@ -70,7 +71,12 @@ var doltCommand = cli.NewHandlerCommand("", "", []cli.Command{
 	tblcmds.Commands,
 	cnfcmds.Commands,
 	commands.SendMetricsCmd{},
+	dumpDocsCommand,
 })
+
+func init() {
+	dumpDocsCommand.DoltCommand = doltCommand
+}
 
 const chdirFlag = "--chdir"
 const profFlag = "--prof"
@@ -179,9 +185,9 @@ func runMain() int {
 func processEventsDir(args []string, dEnv *env.DoltEnv) error {
 	if len(args) > 0 {
 		ignoreCommands := map[string]struct{}{
-			commands.SendMetricsCommand: struct{}{},
-			"init":                      struct{}{},
-			"config":                    struct{}{},
+			commands.SendMetricsCommand: {},
+			"init":                      {},
+			"config":                    {},
 		}
 
 		_, ok := ignoreCommands[args[0]]

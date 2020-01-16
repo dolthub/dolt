@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"strings"
 
 	"github.com/fatih/color"
@@ -49,11 +50,7 @@ type putRowArgs struct {
 	TableName  string
 }
 
-func parsePutRowArgs(commandStr string, args []string) *putRowArgs {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The table being inserted into"
-	ap.ArgListHelp["field_name:field_value"] = "There should be a <field_name>:<field_value> pair for each field " +
-		"that you want set on this row.  If all required fields are not set, then this command will fail."
+func parsePutRowArgs(ap *argparser.ArgParser, commandStr string, args []string) *putRowArgs {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, putRowShortDesc, putRowLongDesc, putRowSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -113,12 +110,28 @@ func (cmd PutRowCmd) Description() string {
 	return "Add a row to a table."
 }
 
+func (cmd PutRowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, putRowShortDesc, putRowLongDesc, putRowSynopsis, ap)
+}
+
+func (cmd PutRowCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being inserted into"})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{
+		"field_name:field_value",
+		"There should be a <field_name>:<field_value> pair for each field that you want set on this row.  If all " +
+			"required fields are not set, then this command will fail."})
+	return ap
+}
+
 func (cmd PutRowCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_PUT_ROW
 }
 
 func (cmd PutRowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	prArgs := parsePutRowArgs(commandStr, args)
+	ap := cmd.createArgParser()
+	prArgs := parsePutRowArgs(ap, commandStr, args)
 
 	if prArgs == nil {
 		return 1

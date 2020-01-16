@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"reflect"
 	"sort"
 	"strconv"
@@ -119,7 +120,12 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_DIFF
 }
 
-func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
+}
+
+func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
@@ -127,6 +133,11 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of INSERT / UPDATE / DELETE statements")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See dolt diff --help for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
+	return ap
+}
+
+func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

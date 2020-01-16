@@ -69,11 +69,12 @@ func (cmd CloneCmd) Description() string {
 	return "Clone from a remote data repository."
 }
 
-func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_CLONE
+func (cmd CloneCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
 }
 
-func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd CloneCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
 	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
@@ -81,6 +82,15 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
+	return ap
+}
+
+func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CLONE
+}
+
+func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

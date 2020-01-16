@@ -17,6 +17,7 @@ package cnfcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -72,16 +73,27 @@ func (cmd ResolveCmd) Description() string {
 	return "Removes rows from list of conflicts"
 }
 
+func (cmd ResolveCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
+}
+
 func (cmd ResolveCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CONF_RESOLVE
 }
 
-func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."
-	ap.ArgListHelp["key"] = "key(s) of rows within a table whose conflicts have been resolved"
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"key", "key(s) of rows within a table whose conflicts have been resolved"})
 	ap.SupportsFlag("ours", "", "For all conflicts, take the version from our branch and resolve the conflict")
 	ap.SupportsFlag("theirs", "", "Fol all conflicts, take the version from our branch and resolve the conflict")
+
+	return ap
+}
+
+func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

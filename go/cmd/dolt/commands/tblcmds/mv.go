@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
@@ -49,15 +50,25 @@ func (cmd MvCmd) Description() string {
 	return "Moves a table"
 }
 
+func (cmd MvCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, tblMvShortDesc, tblMvLongDesc, tblMvSynopsis, ap)
+}
+
+func (cmd MvCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"oldtable", "The table being moved."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"newtable", "The new name of the table"})
+	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	return ap
+}
+
 func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_MV
 }
 
 func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["oldtable"] = "The table being moved."
-	ap.ArgListHelp["newtable"] = "The new name of the table"
-	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblMvShortDesc, tblMvLongDesc, tblMvSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

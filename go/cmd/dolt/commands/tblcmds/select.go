@@ -17,6 +17,7 @@ package tblcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/fatih/color"
 
@@ -74,6 +75,11 @@ func (cmd SelectCmd) Name() string {
 
 func (cmd SelectCmd) Description() string {
 	return "Print a selection of a table."
+}
+
+func (cmd SelectCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := newArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, selShortDesc, selLongDesc, selSynopsis, ap)
 }
 
 func (cmd SelectCmd) EventType() eventsapi.ClientEventType {
@@ -144,8 +150,8 @@ func (cmd SelectCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 func newArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "List of tables to be printed."
-	ap.ArgListHelp["column"] = "List of columns to be printed"
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"column", "List of columns to be printed"})
 	ap.SupportsString(whereParam, "", "column", "")
 	ap.SupportsInt(limitParam, "", "record_count", "")
 	ap.SupportsFlag(hideConflictsFlag, "", "")

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"sort"
 	"strconv"
 
@@ -37,7 +38,7 @@ const (
 	abortParam = "abort"
 )
 
-var mergeShortDest = "Join two or more development histories together"
+var mergeShortDesc = "Join two or more development histories together"
 var mergeLongDesc = "Incorporates changes from the named commits (since the time their histories diverged from the " +
 	"current branch) into the current branch.\n" +
 	"\n" +
@@ -70,14 +71,24 @@ func (cmd MergeCmd) Description() string {
 	return "Merge a branch."
 }
 
+func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)
+}
+
+func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(abortParam, "", abortDetails)
+	return ap
+}
+
 func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_MERGE
 }
 
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(abortParam, "", abortDetails)
-	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeShortDest, mergeLongDesc, mergeSynopsis, ap)
+	ap := cmd.createArgParser()
+	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError

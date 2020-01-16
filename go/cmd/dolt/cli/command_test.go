@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"reflect"
 	"strings"
 	"testing"
@@ -51,6 +52,10 @@ func (tf *trackedCommand) Description() string {
 	return tf.description
 }
 
+func (tf *trackedCommand) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	return nil
+}
+
 func (tf *trackedCommand) RequiresRepo() bool {
 	return false
 }
@@ -68,9 +73,9 @@ func (tf *trackedCommand) equalsState(called bool, cmdStr string, args []string)
 
 func TestCommands(t *testing.T) {
 	grandChild1 := NewTrackedFunc("grandchild1", "child2's first child")
-	child2 := NewHandlerCommand("child2", "second child command", []Command{grandChild1})
+	child2 := NewSubCommandHandler("child2", "second child command", []Command{grandChild1})
 	child1 := NewTrackedFunc("child1", "first child command")
-	commands := NewHandlerCommand(appName, "test application", []Command{
+	commands := NewSubCommandHandler(appName, "test application", []Command{
 		child1,
 		child2,
 	})

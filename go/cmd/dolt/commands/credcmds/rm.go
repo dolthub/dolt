@@ -17,6 +17,7 @@ package credcmds
 import (
 	"context"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 
 	"github.com/fatih/color"
 
@@ -41,6 +42,16 @@ func (cmd RmCmd) Description() string {
 	return rmShortDesc
 }
 
+func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
+}
+
+func (cmd RmCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
 func (cmd RmCmd) RequiresRepo() bool {
 	return false
 }
@@ -50,7 +61,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 }
 
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()
