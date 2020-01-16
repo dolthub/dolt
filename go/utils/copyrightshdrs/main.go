@@ -20,12 +20,13 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
-var ExpectedHeader = []byte(`// Copyright 2019 Liquidata, Inc.
+var ExpectedHeader = regexp.MustCompile(`// Copyright (2019|2020|2019-2020) Liquidata, Inc.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 \(the "License"\);
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -396,7 +397,7 @@ func CheckGo() bool {
 			if hasNomsHeader {
 				passes = bytes.HasPrefix(bs, ExpectedHeaderForFileFromNoms)
 			} else {
-				passes = bytes.HasPrefix(bs, ExpectedHeader)
+				passes = ExpectedHeader.Match(bs)
 			}
 			if !passes {
 				fmt.Printf("ERROR: Wrong copyright header: %v\n", path)
@@ -426,7 +427,7 @@ func CheckProto() bool {
 			if err != nil {
 				panic(err)
 			}
-			passes := bytes.HasPrefix(bs, ExpectedHeader)
+			passes := ExpectedHeader.Match(bs)
 			if !passes {
 				fmt.Printf("ERROR: Wrong copyright header: %v\n", path)
 				failed = true

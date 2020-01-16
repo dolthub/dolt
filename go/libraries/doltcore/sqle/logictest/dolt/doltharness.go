@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/liquidata-inc/sqllogictest/go/logictest"
+	"github.com/shopspring/decimal"
 	sqle "github.com/src-d/go-mysql-server"
 	"github.com/src-d/go-mysql-server/sql"
 	"vitess.io/vitess/go/vt/proto/query"
@@ -57,9 +58,11 @@ func (h *DoltHarness) Init() error {
 	}
 
 	root = resetEnv(root)
-	h.engine = sqlNewEngine(root)
 
-	return nil
+	var err error
+	h.engine, err = sqlNewEngine(root)
+
+	return err
 }
 
 func (h *DoltHarness) ExecuteStatement(statement string) error {
@@ -198,6 +201,9 @@ func toSqlString(val interface{}) string {
 	case float32, float64:
 		// exactly 3 decimal points for floats
 		return fmt.Sprintf("%.3f", v)
+	case decimal.Decimal:
+		// exactly 3 decimal points for floats
+		return v.StringFixed(3)
 	case int:
 		return strconv.Itoa(v)
 	case uint:
@@ -242,7 +248,7 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 			b.WriteString("I")
 		case query.Type_TEXT, query.Type_VARCHAR:
 			b.WriteString("T")
-		case query.Type_FLOAT32, query.Type_FLOAT64:
+		case query.Type_FLOAT32, query.Type_FLOAT64, query.Type_DECIMAL:
 			b.WriteString("R")
 		default:
 			return "", fmt.Errorf("Unhandled type: %v", col.Type)
@@ -263,9 +269,16 @@ func resetEnv(root *doltdb.RootValue) *doltdb.RootValue {
 	return newRoot
 }
 
-func sqlNewEngine(root *doltdb.RootValue) *sqle.Engine {
+func sqlNewEngine(root *doltdb.RootValue) (*sqle.Engine, error) {
 	db := dsql.NewDatabase("dolt", root, nil, nil)
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
-	return engine
+	engine.Catalog.RegisterIndexDriver(dsql.NewDoltIndexDriver(db))
+
+	err := engine.Init()
+	if err != nil {
+		return nil, err
+	}
+
+	return engine, nil
 }

@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"strconv"
+	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -182,6 +183,48 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 	}
 
 	return nil, false, nil
+}
+
+func (root *RootValue) GetTableInsensitive(ctx context.Context, tName string) (*Table, string, bool, error) {
+	tableMap, err := root.getTableMap()
+
+	if err != nil {
+		return nil, "", false, err
+	}
+
+	var foundKey string
+	hasExact, err := tableMap.Has(ctx, types.String(tName))
+
+	if err != nil {
+		return nil, "", false, err
+	}
+
+	if hasExact {
+		foundKey = tName
+	} else {
+		lwrName := strings.ToLower(tName)
+		err = tableMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+			keyStr := string(key.(types.String))
+			if lwrName == strings.ToLower(keyStr) {
+				foundKey = keyStr
+				return true, nil
+			}
+
+			return false, nil
+		})
+
+		if err != nil {
+			return nil, "", false, nil
+		}
+	}
+
+	tbl, ok, err := root.GetTable(ctx, foundKey)
+
+	if err != nil {
+		return nil, "", false, err
+	}
+
+	return tbl, foundKey, ok, nil
 }
 
 // GetTableNames retrieves the lists of all tables for a RootValue
