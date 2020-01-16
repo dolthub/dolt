@@ -73,7 +73,7 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usagePrt)
 	} else if isBranch {
-		return checkoutKnownBranch(ctx, dEnv, name)
+		return checkoutExistingBranch(ctx, dEnv, name)
 	}
 
 	tbls, docs, err := actions.GetTblsAndDocDetails(dEnv, args)
@@ -85,20 +85,20 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 	verr := checkoutTablesAndDocs(ctx, dEnv, tbls, docs)
 
 	if verr != nil && apr.NArg() == 1 {
-		verr = tryCheckoutNewBranch(ctx, dEnv, name)
+		verr = checkoutRemoteBranch(ctx, dEnv, name)
 	}
 
 	return HandleVErrAndExitCode(verr, usagePrt)
 
 }
 
-func tryCheckoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
+func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
 	var verr errhand.VerboseError
 
-	if ref, refExists, err := getRef(ctx, dEnv, name); err != nil {
+	if ref, refExists, err := getRemoteBranchRef(ctx, dEnv, name); err != nil {
 		verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 	} else if refExists {
-		verr = checkoutNewBranchFromStartPt(ctx, dEnv, name, ref)
+		verr = checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
 	} else {
 		verr = errhand.BuildDError("error: could not find %s", name).Build()
 	}
@@ -106,20 +106,20 @@ func tryCheckoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, name string) e
 	return verr
 }
 
-func getRef(ctx context.Context, dEnv *env.DoltEnv, name string) (string, bool, error) {
+func getRemoteBranchRef(ctx context.Context, dEnv *env.DoltEnv, name string) (ref.DoltRef, bool, error) {
 	refs, err := dEnv.DoltDB.GetRefs(ctx)
 
 	if err != nil {
-		return "", false, err
+		return nil, false, err
 	}
 
 	for _, rf := range refs {
 		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
-			return rf.String(), true, nil
+			return rf, true, nil
 		}
 	}
 
-	return "", false, err
+	return nil, false, err
 }
 
 func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBranch, startPt string) errhand.VerboseError {
@@ -181,7 +181,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []stri
 	return nil
 }
 
-func checkoutKnownBranch(ctx context.Context, dEnv *env.DoltEnv, name string) int {
+func checkoutExistingBranch(ctx context.Context, dEnv *env.DoltEnv, name string) int {
 	verr := checkoutBranch(ctx, dEnv, name)
 	if verr != nil {
 		cli.PrintErrln(verr.Verbose())
