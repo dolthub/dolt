@@ -58,11 +58,9 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 		return 1
 	}
 
-	var verr errhand.VerboseError
 	if apr.ContainsArg(doltdb.DocTableName) {
-		verr = errhand.BuildDError("Use dolt checkout to checkout individual docs.").Build()
-		cli.PrintErrln(verr.Verbose())
-		return 1
+		verr := errhand.BuildDError("Use dolt checkout <filename> to check out individual docs.").Build()
+		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
 	if newBranch, newBranchOk := apr.GetValue(coBranchArg); newBranchOk {
@@ -72,32 +70,26 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 	name := apr.Arg(0)
 
 	if isBranch, err := actions.IsBranch(ctx, dEnv, name); err != nil {
-		verr = errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
-		cli.PrintErrln(verr.Verbose())
-		return 1
+		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usagePrt)
 	} else if isBranch {
 		return checkoutKnownBranch(ctx, dEnv, name)
 	}
 
 	tbls, docs, err := actions.GetTblsAndDocDetails(dEnv, args)
 	if err != nil {
-		verr = errhand.BuildDError("error: unable to parse arguments.").AddCause(err).Build()
-		cli.PrintErrln(verr.Verbose())
-		return 1
+		verr := errhand.BuildDError("error: unable to parse arguments.").AddCause(err).Build()
+		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
-	verr = checkoutTablesAndDocs(ctx, dEnv, tbls, docs)
+	verr := checkoutTablesAndDocs(ctx, dEnv, tbls, docs)
 
 	if verr != nil && apr.NArg() == 1 {
 		verr = tryCheckoutNewBranch(ctx, dEnv, name)
 	}
 
-	if verr != nil {
-		cli.PrintErrln(verr.Verbose())
-		return 1
-	}
+	return HandleVErrAndExitCode(verr, usagePrt)
 
-	return 0
 }
 
 func tryCheckoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
