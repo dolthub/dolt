@@ -171,24 +171,13 @@ func mergeBranch(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef) errha
 	cli.Println("Updating", h1.String()+".."+h2.String())
 
 	if ok, err := cm1.CanFastForwardTo(ctx, cm2); ok {
-		verr = executeFFMerge(ctx, dEnv, cm2)
+		return executeFFMerge(ctx, dEnv, cm2)
 	} else if err == doltdb.ErrUpToDate || err == doltdb.ErrIsAhead {
 		cli.Println("Already up to date.")
 		return nil
 	} else {
-		verr = executeMerge(ctx, dEnv, cm1, cm2, dref)
+		return executeMerge(ctx, dEnv, cm1, cm2, dref)
 	}
-
-	if verr != nil {
-		return verr
-	}
-
-	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
-	if err != nil {
-		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
-	}
-
-	return nil
 }
 
 func executeFFMerge(ctx context.Context, dEnv *env.DoltEnv, cm2 *doltdb.Commit) errhand.VerboseError {
@@ -225,6 +214,11 @@ At the moment the best way to fix this is to run:
 
 and take the hash for your current branch and use it for the value for "staged" and "working"`).
 			AddCause(err).Build()
+	}
+
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
 	}
 
 	return nil
@@ -264,8 +258,13 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 		if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
 		} else {
+			err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+			if err != nil {
+				return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+			}
 			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
 			if verr != nil {
+				// Log a new message here to indicate that merge was successful, only staging failed.
 				cli.Println("Unable to stage changes: add and commit to finish merge")
 			}
 		}
