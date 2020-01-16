@@ -157,7 +157,7 @@ func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
 func filterDoltInternalTables(tblNames []string) []string {
 	result := []string{}
 	for _, tbl := range tblNames {
-		if !HasDoltPrefix(tbl) {
+		if tbl != doltdb.DocTableName {
 			result = append(result, tbl)
 		}
 	}
@@ -207,7 +207,7 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 // CreateTable creates a table with the name and schema given.
 func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
 
-	if !doltdb.IsValidTableName(tableName) || HasDoltPrefix(tableName) {
+	if !doltdb.IsValidTableName(tableName) || tableName == doltdb.DocTableName {
 		return fmt.Errorf("Invalid table name: '%v'", tableName)
 	}
 
