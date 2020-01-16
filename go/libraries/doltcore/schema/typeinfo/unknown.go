@@ -15,7 +15,6 @@
 package typeinfo
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -26,6 +25,8 @@ import (
 type unknownImpl struct{}
 
 var _ TypeInfo = (*unknownImpl)(nil)
+
+var UnknownTypeInfo TypeInfo = &unknownImpl{}
 
 // AppliesToValue implements TypeInfo interface.
 func (ti *unknownImpl) AppliesToKind(kind types.NomsKind) error {
@@ -62,8 +63,8 @@ func (ti *unknownImpl) IsValid(v interface{}) bool {
 	return false
 }
 
-// PreferredNomsKind implements TypeInfo interface.
-func (ti *unknownImpl) PreferredNomsKind() types.NomsKind {
+// NomsKind implements TypeInfo interface.
+func (ti *unknownImpl) NomsKind() types.NomsKind {
 	return types.UnknownKind
 }
 
@@ -73,6 +74,6 @@ func (ti *unknownImpl) String() string {
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *unknownImpl) ToSqlType() (sql.Type, error) {
-	return nil, errors.New("unknown type info does not have a relevant SQL type")
+func (ti *unknownImpl) ToSqlType() sql.Type {
+	panic(fmt.Errorf("unknown type info does not have a relevant SQL type"))
 }

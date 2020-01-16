@@ -26,6 +26,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -110,7 +111,9 @@ func addField(ctx context.Context, apr *argparser.ArgParseResults, root *doltdb.
 	}
 
 	//TODO: parse TypeInfo from the command line
-	newTable, err := alterschema.AddColumnToTable(ctx, tbl, tag, newFieldName, newFieldKind, nil, nullable, defaultVal, nil)
+	typeInfo := typeinfo.DefaultTypeInfo(newFieldKind)
+
+	newTable, err := alterschema.AddColumnToTable(ctx, tbl, tag, newFieldName, typeInfo, nullable, defaultVal, nil)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

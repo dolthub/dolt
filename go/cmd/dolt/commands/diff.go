@@ -446,14 +446,8 @@ func tabularSchemaDiff(tableName string, tags []uint64, diffs map[uint64]diff.Sc
 			cli.Println(color.RedString("- " + sql.FmtCol(2, 0, 0, *dff.Old)))
 		case diff.SchDiffColModified:
 			// changed in sch2
-			oldSqlType, err := dff.Old.TypeInfo.ToSqlType()
-			if err != nil {
-				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
-			}
-			newSqlType, err := dff.New.TypeInfo.ToSqlType()
-			if err != nil {
-				return errhand.BuildDError("error: failed to diff schemas").AddCause(err).Build()
-			}
+			oldSqlType := dff.Old.TypeInfo.ToSqlType()
+			newSqlType := dff.New.TypeInfo.ToSqlType()
 
 			n0, t0, pk0 := dff.Old.Name, oldSqlType.String(), dff.Old.IsPartOfPK
 			n1, t1, pk1 := dff.New.Name, newSqlType.String(), dff.New.IsPartOfPK

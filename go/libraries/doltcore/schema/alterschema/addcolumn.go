@@ -19,11 +19,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
-
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -45,17 +44,17 @@ type ColumnOrder struct {
 // table, since we must write a value for each row. If the column is not nullable, a default value must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value, order *ColumnOrder) (*doltdb.Table, error) {
+func AddColumnToTable(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value, order *ColumnOrder) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := validateNewColumn(ctx, tbl, tag, newColName, colKind, typeInfo, nullable, defaultVal); err != nil {
+	if err := validateNewColumn(ctx, tbl, tag, newColName, typeInfo, nullable, defaultVal); err != nil {
 		return nil, err
 	}
 
-	newSchema, err := addColumnToSchema(sch, tag, newColName, colKind, typeInfo, nullable, order)
+	newSchema, err := addColumnToSchema(sch, tag, newColName, typeInfo, nullable, order)
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +112,8 @@ func updateTableWithNewSchema(ctx context.Context, tbl *doltdb.Table, tag uint64
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
-func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, colKind types.NomsKind, typeInfo typeinfo.TypeInfo, nullable Nullable, order *ColumnOrder) (schema.Schema, error) {
-	newCol, err := createColumn(nullable, newColName, tag, colKind, typeInfo)
+func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, order *ColumnOrder) (schema.Schema, error) {
+	newCol, err := createColumn(nullable, newColName, tag, typeInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -142,20 +141,18 @@ func addColumnToSchema(sch schema.Schema, tag uint64, newColName string, colKind
 	return schema.SchemaFromCols(collection), nil
 }
 
-func createColumn(nullable Nullable, newColName string, tag uint64, colKind types.NomsKind, typeInfo typeinfo.TypeInfo) (schema.Column, error) {
+func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typeinfo.TypeInfo) (schema.Column, error) {
 	if nullable {
-		return schema.NewColumnWithTypeInfo(newColName, tag, colKind, false, typeInfo)
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false)
 	} else {
-		return schema.NewColumnWithTypeInfo(newColName, tag, colKind, false, typeInfo, schema.NotNullConstraint{})
+		return schema.NewColumnWithTypeInfo(newColName, tag, typeInfo, false, schema.NotNullConstraint{})
 	}
 }
 
 // validateNewColumn returns an error if the column as specified cannot be added to the schema given.
-func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, colKind types.NomsKind, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value) error {
-	if typeInfo != nil {
-		if err := typeInfo.AppliesToKind(colKind); err != nil {
-			return err
-		}
+func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newColName string, typeInfo typeinfo.TypeInfo, nullable Nullable, defaultVal types.Value) error {
+	if typeInfo == nil {
+		return fmt.Errorf(`typeinfo may not be nil`)
 	}
 
 	sch, err := tbl.GetSchema(ctx)
@@ -190,8 +187,8 @@ func validateNewColumn(ctx context.Context, tbl *doltdb.Table, tag uint64, newCo
 		}
 	}
 
-	if !types.IsNull(defaultVal) && defaultVal.Kind() != colKind {
-		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[colKind])
+	if !types.IsNull(defaultVal) && defaultVal.Kind() != typeInfo.NomsKind() {
+		return fmt.Errorf("Type of default value (%v) doesn't match type of column (%v)", types.KindToString[defaultVal.Kind()], types.KindToString[typeInfo.NomsKind()])
 	}
 
 	return nil

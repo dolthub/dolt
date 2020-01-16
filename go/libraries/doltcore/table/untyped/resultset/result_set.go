@@ -230,7 +230,7 @@ func concatSchemas(srcSchemas ...schema.Schema) (schema.Schema, error) {
 	var itag uint64
 	for _, col := range srcSchemas {
 		err := col.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			newCol, err := schema.NewColumnWithTypeInfo(col.Name, itag, col.Kind, false, col.TypeInfo)
+			newCol, err := schema.NewColumnWithTypeInfo(col.Name, itag, col.TypeInfo, false)
 			if err != nil {
 				return true, err
 			}

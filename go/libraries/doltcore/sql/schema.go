@@ -23,10 +23,7 @@ import (
 // FmtCol converts a column to a string with a given indent space count, name width, and type width.  If nameWidth or
 // typeWidth are 0 or less than the length of the name or type, then the length of the name or type will be used
 func FmtCol(indent, nameWidth, typeWidth int, col schema.Column) string {
-	sqlType, err := col.TypeInfo.ToSqlType()
-	if err != nil {
-		panic(err) // We can default or panic, as this would mean the type has no SQL interface
-	}
+	sqlType := col.TypeInfo.ToSqlType()
 	return FmtColWithNameAndType(indent, nameWidth, typeWidth, col.Name, sqlType.String(), col)
 }
 

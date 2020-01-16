@@ -32,11 +32,11 @@ type encodedColumn struct {
 	Name string `noms:"name" json:"name"`
 
 	// Kind is the type of the field.  See types/noms_kind.go in the liquidata fork for valid values
-	Kind string `noms:"kind" json:"kind"`
+	Kind string `noms:"kind,omitempty" json:"kind,omitempty"`
 
 	IsPartOfPK bool `noms:"is_part_of_pk" json:"is_part_of_pk"`
 
-	TypeInfo encodedTypeInfo `noms:"typeinfo" json:"typeinfo"`
+	TypeInfo encodedTypeInfo `noms:"typeinfo,omitempty" json:"typeinfo,omitempty"`
 
 	Constraints []encodedConstraint `noms:"col_constraints" json:"col_constraints"`
 }
@@ -70,19 +70,27 @@ func encodeColumn(col schema.Column) encodedColumn {
 	return encodedColumn{
 		col.Tag,
 		col.Name,
-		col.KindString(),
+		"",
 		col.IsPartOfPK,
 		encodeTypeInfo(col.TypeInfo),
 		encodeAllColConstraints(col.Constraints)}
 }
 
 func (nfd encodedColumn) decodeColumn() (schema.Column, error) {
-	typeInfo, err := nfd.TypeInfo.decodeTypeInfo()
-	if err != nil {
-		return schema.Column{}, err
+	var typeInfo typeinfo.TypeInfo
+	var err error
+	if nfd.Kind == "" && nfd.TypeInfo.Type != "" { // new format
+		typeInfo, err = nfd.TypeInfo.decodeTypeInfo()
+		if err != nil {
+			return schema.Column{}, err
+		}
+	} else if nfd.Kind != "" && nfd.TypeInfo.Type == "" { // old format
+		typeInfo = typeinfo.DefaultTypeInfo(schema.LwrStrToKind[nfd.Kind])
+	} else {
+		return schema.Column{}, errors.New("cannot decode column due to unknown schema format")
 	}
 	colConstraints := decodeAllColConstraint(nfd.Constraints)
-	return schema.NewColumnWithTypeInfo(nfd.Name, nfd.Tag, schema.LwrStrToKind[nfd.Kind], nfd.IsPartOfPK, typeInfo, colConstraints...)
+	return schema.NewColumnWithTypeInfo(nfd.Name, nfd.Tag, typeInfo, nfd.IsPartOfPK, colConstraints...)
 }
 
 type encodedConstraint struct {

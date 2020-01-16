@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"errors"
 	"math"
 	"strings"
 
@@ -31,12 +32,21 @@ var (
 
 	// LwrStrToKind maps a lowercase string to the noms kind it is referring to
 	LwrStrToKind = make(map[string]types.NomsKind)
+)
 
+var (
 	// InvalidTag is used as an invalid tag
 	InvalidTag uint64 = math.MaxUint64
 
 	// InvalidCol is a Column instance that is returned when there is nothing to return and can be tested against.
-	InvalidCol = NewColumn("invalid", InvalidTag, types.NullKind, false)
+	InvalidCol = Column{
+		"invalid",
+		InvalidTag,
+		types.NullKind,
+		false,
+		typeinfo.UnknownTypeInfo,
+		nil,
+	}
 )
 
 func init() {
@@ -69,7 +79,8 @@ type Column struct {
 
 // NewColumn creates a Column instance with the default type info for the NomsKind
 func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, constraints ...ColConstraint) Column {
-	col, err := NewColumnWithTypeInfo(name, tag, kind, partOfPK, nil, constraints...)
+	typeInfo := typeinfo.DefaultTypeInfo(kind)
+	col, err := NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, constraints...)
 	if err != nil {
 		panic(err)
 	}
@@ -77,29 +88,21 @@ func NewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, cons
 }
 
 // NewColumnWithTypeInfo creates a Column instance with the given type info.
-func NewColumnWithTypeInfo(name string, tag uint64, kind types.NomsKind, partOfPK bool, typeInfo typeinfo.TypeInfo, constraints ...ColConstraint) (Column, error) {
+func NewColumnWithTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...ColConstraint) (Column, error) {
 	for _, c := range constraints {
 		if c == nil {
-			panic("nil passed as a constraint")
+			return Column{}, errors.New("nil passed as a constraint")
 		}
 	}
 
 	if typeInfo == nil {
-		var err error
-		typeInfo, err = typeinfo.DefaultTypeInfo(kind)
-		if err != nil {
-			return Column{}, err
-		}
-	}
-
-	if err := typeInfo.AppliesToKind(kind); err != nil {
-		return Column{}, err
+		return Column{}, errors.New("cannot instantiate column with nil type info")
 	}
 
 	return Column{
 		name,
 		tag,
-		kind,
+		typeInfo.NomsKind(),
 		partOfPK,
 		typeInfo,
 		constraints,
@@ -122,6 +125,7 @@ func (c Column) Equals(other Column) bool {
 		c.Tag == other.Tag &&
 		c.Kind == other.Kind &&
 		c.IsPartOfPK == other.IsPartOfPK &&
+		c.TypeInfo.Equals(other.TypeInfo) &&
 		ColConstraintsAreEqual(c.Constraints, other.Constraints)
 }
 

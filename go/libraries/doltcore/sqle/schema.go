@@ -99,13 +99,7 @@ func SqlSchemaToDoltSchema(sqlSchema sql.Schema) (schema.Schema, error) {
 
 // doltColToSqlCol returns the SQL column corresponding to the dolt column given.
 func doltColToSqlCol(tableName string, col schema.Column) (*sql.Column, error) {
-	sqlType, err := col.TypeInfo.ToSqlType()
-	if err != nil {
-		return nil, err
-	}
-	if err != nil {
-		return nil, err
-	}
+	sqlType := col.TypeInfo.ToSqlType()
 	return &sql.Column{
 		Name:       col.Name,
 		Type:       sqlType,
@@ -128,7 +122,7 @@ func SqlColToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 		return schema.Column{}, err
 	}
 
-	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo.PreferredNomsKind(), col.PrimaryKey, typeInfo, constraints...)
+	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, constraints...)
 }
 
 const tagCommentPrefix = "tag:"

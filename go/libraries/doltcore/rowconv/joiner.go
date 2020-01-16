@@ -73,7 +73,7 @@ func NewJoiner(namedSchemas []NamedSchema, namers map[string]ColNamingFunc) (*Jo
 		allCols.IterInSortedOrder(func(srcTag uint64, col schema.Column) (stop bool) {
 			newColName := namer(col.Name)
 			var newCol schema.Column
-			newCol, err = schema.NewColumnWithTypeInfo(newColName, destTag, col.Kind, false, col.TypeInfo)
+			newCol, err = schema.NewColumnWithTypeInfo(newColName, destTag, col.TypeInfo, false,)
 			if err != nil {
 				return true
 			}
