@@ -547,7 +547,7 @@ teardown() {
      echo updated license > LICENSE.md
      run dolt checkout LICENSE.md invalid
      [ "$status" -eq 1 ]
-     [[ "$output" =~ "table not found" ]] || false
+     [[ "$output" =~ "'invalid' did not match any table(s) known to dolt." ]] || false
      run cat LICENSE.md
      [[ "$output" =~ "updated license" ]] || false
      run cat README.md

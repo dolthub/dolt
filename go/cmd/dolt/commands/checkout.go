@@ -154,12 +154,7 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs []doltdb.DocDetails) errhand.VerboseError {
-	unknown, err := actions.CheckoutTablesAndDocs(ctx, dEnv, tables, docs)
-
-	if unknown != "" {
-		bdr := errhand.BuildDError("")
-		return bdr.AddDetails("error: table not found '%s'", unknown).Build()
-	}
+	err := actions.CheckoutTablesAndDocs(ctx, dEnv, tables, docs)
 
 	if err != nil {
 		if actions.IsRootValUnreachable(err) {

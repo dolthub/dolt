@@ -21,17 +21,17 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 )
 
-func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) (unknown string, err error) {
+func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	tbls, err := AllTables(ctx, roots[WorkingRoot], roots[StagedRoot], roots[HeadRoot])
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	docs := *env.AllValidDocDetails
@@ -40,17 +40,17 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) (unknown string, 
 
 }
 
-func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs []doltdb.DocDetails) (unknown string, err error) {
+func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs []doltdb.DocDetails) error {
 	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdb.DocDetails) (unknown string, err error) {
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdb.DocDetails) (err error) {
 	unknownTbls := []string{}
 
 	currRoot := roots[WorkingRoot]
@@ -60,7 +60,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 	if len(docs) > 0 {
 		currRoot, staged, err = getUpdatedWorkingAndStagedWithDocs(ctx, dEnv, currRoot, staged, head, docs)
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
@@ -71,14 +71,14 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 		tbl, ok, err := staged.GetTable(ctx, tblName)
 
 		if err != nil {
-			return "", err
+			return err
 		}
 
 		if !ok {
 			tbl, ok, err = head.GetTable(ctx, tblName)
 
 			if err != nil {
-				return "", err
+				return err
 			}
 
 			if !ok {
@@ -90,33 +90,48 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 		currRoot, err = currRoot.PutTable(ctx, tblName, tbl)
 
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
 	if len(unknownTbls) > 0 {
-		for _, tbl := range unknownTbls {
-			if has, err := currRoot.HasTable(ctx, tbl); err != nil {
-				return "", err
-			} else if !has {
-				return tbl, doltdb.ErrTableNotFound
-			}
+		// Return table not exist error before RemoveTables, which fails silently if the table is not on the root.
+		err = getTblNotExistError(ctx, currRoot, unknownTbls)
+		if err != nil {
+			return err
 		}
 
 		var err error
 		currRoot, err = currRoot.RemoveTables(ctx, unknownTbls...)
 
 		if err != nil {
-			return "", err
+			return err
 		}
 	}
 
 	err = dEnv.UpdateWorkingRoot(ctx, currRoot)
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	return "", SaveDocsFromDocDetails(dEnv, docs)
+	return SaveDocsFromDocDetails(dEnv, docs)
+}
+
+func getTblNotExistError(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {
+	notExist := []string{}
+	for _, tbl := range unknown {
+		if has, err := currRoot.HasTable(ctx, tbl); err != nil {
+			return err
+		} else if !has {
+			notExist = append(notExist, tbl)
+		}
+	}
+
+	if len(notExist) > 0 {
+		return NewTblNotExistError(notExist)
+	}
+
+	return nil
 }
 
 func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dEnv *env.DoltEnv, working, staged, head *doltdb.RootValue, docDetails []doltdb.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
