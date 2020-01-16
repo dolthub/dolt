@@ -1,4 +1,4 @@
-// Copyright 2019 Liquidata, Inc.
+// Copyright 2019-2020 Liquidata, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,9 +17,12 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
+	"github.com/src-d/go-mysql-server/sql/parse"
+	"github.com/src-d/go-mysql-server/sql/plan"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -265,5 +268,117 @@ func (db *Database) Flush(ctx context.Context) error {
 		}
 		delete(db.tables, name)
 	}
+	return nil
+}
+
+// Implements sql.ViewCreator. Persists the view in the dolt database, so
+// it can exist in a sql session later. Returns sql.ErrExistingView a view
+// with that name already exists.
+func (db *Database) CreateView(ctx *sql.Context, name string, definition string) error {
+	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	exists, err := viewExistsInSchemasTable(ctx, tbl, name)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return sql.ErrExistingView.New(name)
+	}
+
+	// It does not exist; insert it.
+	row := sql.Row{"view", name, definition}
+	inserter := tbl.Inserter(ctx)
+	err = inserter.Insert(ctx, row)
+	if err != nil {
+		return err
+	}
+	return inserter.Close(ctx)
+}
+
+// Implements sql.ViewDropper. Removes a view from persistence in the
+// dolt database. Returns sql.ErrNonExistingView if the view did not
+// exist.
+func (db *Database) DropView(ctx *sql.Context, name string) error {
+	stbl, found, err := db.GetTableInsensitive(ctx, SchemasTableName)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return sql.ErrNonExistingView.New(name)
+	}
+
+	tbl := stbl.(*DoltTable)
+	exists, err := viewExistsInSchemasTable(ctx, tbl, name)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return sql.ErrNonExistingView.New(name)
+	}
+
+	// It exists. delete it from the table.
+	row := sql.Row{"view", name}
+	deleter := tbl.Deleter(ctx)
+	err = deleter.Delete(ctx, row)
+	if err != nil {
+		return err
+	}
+	return deleter.Close(ctx)
+}
+
+// Register SQL schema fragments that are persisted in the given
+// `Database` with the provided `sql.Catalog`. Returns an error if
+// there are I/O issues, but currently silently fails to register some
+// schema fragments if they don't parse, or if registries within the
+// `catalog` return errors.
+func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Database) error {
+	stbl, found, err := db.GetTableInsensitive(ctx, SchemasTableName)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return nil
+	}
+
+	tbl := stbl.(*DoltTable)
+	if err != nil {
+		return err
+	}
+	iter, err := newRowIterator(tbl, ctx)
+	if err != nil {
+		return err
+	}
+	defer iter.Close()
+
+	var parseErrors []error
+
+	vr := catalog.ViewRegistry
+	r, err := iter.Next()
+	for err == nil {
+		if err != nil {
+			break
+		}
+		if r[0] == "view" {
+			name := r[1].(string)
+			definition := r[2].(string)
+			cv, err := parse.Parse(sql.NewContext(ctx), fmt.Sprintf("create view %s as %s", name, definition))
+			if err != nil {
+				parseErrors = append(parseErrors, err)
+			}
+			vr.Register(db.Name(), sql.NewView(name, cv.(*plan.CreateView).Definition))
+		}
+		r, err = iter.Next()
+	}
+	if err != io.EOF {
+		return err
+	}
+
+	if len(parseErrors) > 0 {
+		// TODO: Warning for uncreated views...
+	}
+
 	return nil
 }

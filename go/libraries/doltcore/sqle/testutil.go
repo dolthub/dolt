@@ -52,7 +52,13 @@ func ExecuteSql(dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*
 			return nil, errors.New("Show statements aren't handled")
 		case *sqlparser.Select, *sqlparser.OtherRead:
 			return nil, errors.New("Select statements aren't handled")
-		case *sqlparser.Insert, *sqlparser.DDL:
+		case *sqlparser.Insert:
+			var rowIter sql.RowIter
+			_, rowIter, execErr = engine.Query(sql.NewEmptyContext(), query)
+			if execErr == nil {
+				execErr = drainIter(rowIter)
+			}
+		case *sqlparser.DDL:
 			var rowIter sql.RowIter
 			_, rowIter, execErr = engine.Query(sql.NewEmptyContext(), query)
 			if execErr == nil {

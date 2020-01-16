@@ -16,7 +16,7 @@ package integration_tests
 
 import (
 	"context"
-	"os"
+	"strings"
 	"testing"
 
 	"github.com/src-d/go-mysql-server/sql"
@@ -26,9 +26,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 )
-
-// These tests are slow, working on making them faster. Right now they're skipped unless this env var is set.
-const RunSlowSqlTests = "RUN_SLOW_SQL_TESTS"
 
 // This tests running queries against a modified subset of the stockmarket data set found here:
 // https://beta.dolthub.com/repositories/Liquidata/stock-market
@@ -20165,10 +20162,6 @@ func TestInserts(t *testing.T) {
 }
 
 func TestJoin(t *testing.T) {
-	if _, ok := os.LookupEnv(RunSlowSqlTests); !ok {
-		t.Skip("Skipping slow SQL test. Set", RunSlowSqlTests, "in your env to run them")
-	}
-
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
 
@@ -20182,14 +20175,12 @@ func TestJoin(t *testing.T) {
 
 	rows, err := sqle.ExecuteSelect(root,
 		`select Type, d.Symbol, Country, TradingDate, Open, High, Low, Close, Volume, OpenInt, Name, Sector, IPOYear
-						from daily_summary d join symbols t on d.Symbol = t.Symbol`)
-	// TODO: fix me
-	//order by d.symbol, country, date`)
+						from daily_summary d join symbols t on d.Symbol = t.Symbol order by d.Symbol, Country, TradingDate`)
 	require.NoError(t, err)
 	assert.Equal(t, 5210, len(rows))
 
 	expectedJoinRows, err := sqle.ExecuteSelect(root,
-		`select * from join_result order by symbol, country, date`)
+		`select * from join_result order by symbol, country, TradingDate`)
 	require.NoError(t, err)
 	assertResultRowsEqual(t, expectedJoinRows, rows)
 }
@@ -20228,6 +20219,17 @@ func TestExplain(t *testing.T) {
 	root, err = sqle.ExecuteSql(dEnv, root, createTables)
 	require.NoError(t, err)
 
-	_, err = sqle.ExecuteSelect(root, "explain format = tree select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
+	rows, err := sqle.ExecuteSelect(root, "explain format = tree select * from daily_summary d join symbols t on d.Symbol = t.Symbol")
 	require.NoError(t, err)
+	rowStrings := make([]string, len(rows))
+	for i, row := range rows {
+		rowStrings[i] = row[0].(string)
+	}
+
+	expectedExplain := "IndexedJoin(daily_summary.Symbol = symbols.Symbol)\n" +
+		" ├─ TableAlias(d)\n" +
+		" │   └─ daily_summary\n" +
+		" └─ TableAlias(t)\n" +
+		"     └─ symbols"
+	assert.Equal(t, expectedExplain, strings.Join(rowStrings, "\n"))
 }
