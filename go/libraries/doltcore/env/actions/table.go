@@ -133,30 +133,3 @@ func getTblNotExistError(ctx context.Context, currRoot *doltdb.RootValue, unknow
 
 	return nil
 }
-
-func getUpdatedWorkingAndStagedWithDocs(ctx context.Context, dEnv *env.DoltEnv, working, staged, head *doltdb.RootValue, docDetails []doltdb.DocDetails) (currRoot, stgRoot *doltdb.RootValue, err error) {
-	root := head
-	_, ok, err := staged.GetTable(ctx, doltdb.DocTableName)
-	if err != nil {
-		return nil, nil, err
-	} else if ok {
-		root = staged
-	}
-
-	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, root, docDetails)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	currRoot, err = dEnv.GetUpdatedRootWithDocs(ctx, working, docs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	stgRoot, err = dEnv.GetUpdatedRootWithDocs(ctx, staged, docs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return currRoot, stgRoot, nil
-}
