@@ -344,30 +344,33 @@ func (m Map) isPrimitive() bool {
 	return false
 }
 
+// buffered
 func (m Map) Iterator(ctx context.Context) (MapIterator, error) {
 	return m.IteratorAt(ctx, 0)
 }
 
+// buffered
 func (m Map) IteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
-	cur, err := newCursorAtIndex(ctx, m.orderedSequence, pos)
+	bufCur, err := newBufferedCursorAtIndex(ctx, m.orderedSequence, pos)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &mapIterator{
-		cursor: cur,
+	return &bufferedMapIterator{
+		bufCursor: bufCur,
 	}, nil
 }
 
+// unbuffered
 func (m Map) IteratorFrom(ctx context.Context, key Value) (MapIterator, error) {
-	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+	bufCur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &mapIterator{cursor: cur}, nil
+	return &mapIterator{cursor: bufCur}, nil
 }
 
 type mapIterAllCallback func(key, value Value) error

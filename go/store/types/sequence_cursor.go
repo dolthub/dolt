@@ -63,22 +63,11 @@ func (cur *sequenceCursor) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
 
 	var err error
-
-	if cur.parent.treeLevel() > 3 {
-		cur.seq, err = cur.getChildSequence(ctx)
-	} else {
-		var batch uint64 = 64 * (4 - cur.parent.treeLevel())
-		if (batch + uint64(cur.parent.idx)) >= uint64(cur.parent.seqLen) {
-			batch = uint64(cur.parent.seqLen - cur.parent.idx)
-		}
-		cur.seq, err = cur.parent.seq.getCompositeChildSequence(ctx, uint64(cur.parent.idx), batch)
-	}
+	cur.seq, err = cur.parent.getChildSequence(ctx)
 
 	if err != nil {
 		return err
 	}
-
-	cur.parent.idx += int(batch) - 1
 
 	cur.seqLen = cur.seq.seqLen()
 

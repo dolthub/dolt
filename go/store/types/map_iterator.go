@@ -83,3 +83,57 @@ func (mi *mapIterator) Prev(ctx context.Context) (k, v Value, err error) {
 
 	return mi.currentKey, mi.currentValue, nil
 }
+
+type bufferedMapIterator struct {
+	bufCursor    *bufferedSequenceCursor
+	currentKey   Value
+	currentValue Value
+}
+
+// Next returns the subsequent entries from the Map, starting with the entry at which the iterator
+// was created. If there are no more entries, Next() returns nils.
+func (mi *bufferedMapIterator) Next(ctx context.Context) (k, v Value, err error) {
+	if mi.bufCursor.valid() {
+		item, err := mi.bufCursor.current()
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		entry := item.(mapEntry)
+		mi.currentKey, mi.currentValue = entry.key, entry.value
+		_, err = mi.bufCursor.advance(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		mi.currentKey, mi.currentValue = nil, nil
+	}
+
+	return mi.currentKey, mi.currentValue, nil
+}
+
+// Prev returns the previous entries from the Map, starting with the entry at which the iterator
+// was created. If there are no more entries, prev() returns nils.
+func (mi *bufferedMapIterator) Prev(ctx context.Context) (k, v Value, err error) {
+	if mi.bufCursor.valid() {
+		item, err := mi.bufCursor.current()
+
+		if err != nil {
+			return nil, nil, err
+		}
+
+		entry := item.(mapEntry)
+		mi.currentKey, mi.currentValue = entry.key, entry.value
+		_, err = mi.bufCursor.retreat(ctx)
+
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		mi.currentKey, mi.currentValue = nil, nil
+	}
+
+	return mi.currentKey, mi.currentValue, nil
+}
