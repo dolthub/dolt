@@ -64,7 +64,8 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 	}
 
 	if newBranch, newBranchOk := apr.GetValue(coBranchArg); newBranchOk {
-		return checkoutNewBranch(ctx, dEnv, newBranch, apr)
+		verr := checkoutNewBranch(ctx, dEnv, newBranch, apr)
+		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
 	name := apr.Arg(0)
@@ -73,7 +74,8 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 		verr := errhand.BuildDError("error: unable to determine type of checkout").AddCause(err).Build()
 		return HandleVErrAndExitCode(verr, usagePrt)
 	} else if isBranch {
-		return checkoutExistingBranch(ctx, dEnv, name)
+		verr := checkoutBranch(ctx, dEnv, name)
+		return HandleVErrAndExitCode(verr, usagePrt)
 	}
 
 	tbls, docs, err := actions.GetTblsAndDocDetails(dEnv, args)
@@ -128,7 +130,7 @@ func checkoutNewBranchFromStartPt(ctx context.Context, dEnv *env.DoltEnv, newBra
 	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
-func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string, apr *argparser.ArgParseResults) int {
+func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string, apr *argparser.ArgParseResults) errhand.VerboseError {
 	startPt := "head"
 	if apr.NArg() == 1 {
 		startPt = apr.Arg(0)
@@ -137,16 +139,10 @@ func checkoutNewBranch(ctx context.Context, dEnv *env.DoltEnv, newBranch string,
 	verr := createBranchWithStartPt(ctx, dEnv, newBranch, startPt, false)
 
 	if verr != nil {
-		cli.PrintErrln(verr.Verbose())
-		return 1
+		return verr
 	}
 
-	verr = checkoutBranch(ctx, dEnv, newBranch)
-	if verr != nil {
-		cli.PrintErrln(verr.Verbose())
-		return 1
-	}
-	return 0
+	return checkoutBranch(ctx, dEnv, newBranch)
 }
 
 func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []string, docs []doltdb.DocDetails) errhand.VerboseError {
@@ -170,15 +166,6 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tables []stri
 	}
 
 	return nil
-}
-
-func checkoutExistingBranch(ctx context.Context, dEnv *env.DoltEnv, name string) int {
-	verr := checkoutBranch(ctx, dEnv, name)
-	if verr != nil {
-		cli.PrintErrln(verr.Verbose())
-		return 1
-	}
-	return 0
 }
 
 func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
