@@ -113,12 +113,12 @@ func TestDocDiff(t *testing.T) {
 	root, err := cm.GetRootValue()
 	assert.NoError(t, err)
 
-	docDetails := make([]DocDetails, 2)
-	doc1 := DocDetails{DocPk: LicensePk}
-	doc2 := DocDetails{DocPk: ReadmePk}
-	docDetails[0] = doc1
-	docDetails[1] = doc2
+	docDetails := []DocDetails{
+		{DocPk: LicensePk},
+		{DocPk: ReadmePk},
+	}
 
+	// DocDiff between a root and itself should return no added, modified or removed docs.
 	added, modified, removed, err := root.DocDiff(ctx, root, docDetails)
 	assert.NoError(t, err)
 
@@ -126,15 +126,18 @@ func TestDocDiff(t *testing.T) {
 		t.Error("Bad doc diff when comparing two repos")
 	}
 
+	// Create tbl1 with one license row
 	sch := createTestDocsSchema()
 	licRow := getDocRow(t, sch, LicensePk, types.String("license row"))
 	m, _ := createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{licRow})
 	tbl1, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
+	// Create root2 with tbl1 on it (one doc: license)
 	root2, err := root.PutTable(ctx, DocTableName, tbl1)
 	assert.NoError(t, err)
 
+	// DocDiff between root and root2 should return one added doc, LICENSE.md
 	added, modified, removed, err = root.DocDiff(ctx, root2, docDetails)
 	assert.NoError(t, err)
 
@@ -142,14 +145,17 @@ func TestDocDiff(t *testing.T) {
 		t.Error("Bad table diff after adding a single table")
 	}
 
+	// Create tbl2 with one readme row
 	readmeRow := getDocRow(t, sch, ReadmePk, types.String("readme row"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRow})
 	tbl2, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
+	// Create root3 with tbl2 on it (one doc: readme)
 	root3, err := root.PutTable(ctx, DocTableName, tbl2)
 	assert.NoError(t, err)
 
+	// DocDiff between root2 and root3 should return one removed doc (license) and one added doc (readme).
 	added, modified, removed, err = root2.DocDiff(ctx, root3, docDetails)
 	assert.NoError(t, err)
 
@@ -157,14 +163,17 @@ func TestDocDiff(t *testing.T) {
 		t.Error("Bad table diff after adding a single table")
 	}
 
+	// Create tbl3 with 2 doc rows (readme, license)
 	readmeRowUpdated := getDocRow(t, sch, ReadmePk, types.String("a different readme"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, []row.Row{readmeRowUpdated, licRow})
 	tbl3, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
+	// Create root4 with tbl3 on it (two docs: readme and license)
 	root4, err := root3.PutTable(ctx, DocTableName, tbl3)
 	assert.NoError(t, err)
 
+	// DocDiff between root3 and root4 should return one added doc (license) and one modified doc (readme).
 	added, modified, removed, err = root3.DocDiff(ctx, root4, nil)
 	assert.NoError(t, err)
 
@@ -172,6 +181,7 @@ func TestDocDiff(t *testing.T) {
 		t.Error("Bad table diff after adding a single table")
 	}
 
+	// DocDiff between root4 and root shows 2 remove docs (license, readme)
 	added, modified, removed, err = root4.DocDiff(ctx, root, nil)
 	assert.NoError(t, err)
 
@@ -185,6 +195,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	ddb, _ := LoadDoltDB(ctx, types.Format_7_18, InMemDoltDB)
 	ddb.WriteEmptyRepo(ctx, "billy bob", "bigbillieb@fake.horse")
 
+	// If no tbl/schema is provided, doc NewerText and Value should be nil.
 	doc1 := DocDetails{DocPk: LicensePk}
 	doc1, err := AddNewerTextToDocFromTbl(ctx, nil, nil, doc1)
 	assert.NoError(t, err)
@@ -193,14 +204,14 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, doc1.Value)
 
+	// Create table with no rows
 	sch := createTestDocsSchema()
-
 	rows := []row.Row{}
 	m, _ := createTestRows(t, ddb.ValueReadWriter(), sch, rows)
-
 	tbl, err := createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
+	// If a table doesn't have doc row, doc NewerText and Value should remain nil
 	doc2 := DocDetails{DocPk: LicensePk}
 	doc2, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc2)
 	assert.NoError(t, err)
@@ -209,7 +220,8 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, doc2.Value)
 
-	doc3 := DocDetails{DocPk: LicensePk, NewerText: []byte("Something in newer text field")}
+	// If a table doesn't have doc row, and NewerText and Value are originally non-nil, they should be updated to nil.
+	doc3 := DocDetails{DocPk: LicensePk, NewerText: []byte("Something in newer text field"), Value: types.String("something")}
 	doc3, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc3)
 	assert.NoError(t, err)
 	assert.Nil(t, doc3.NewerText)
@@ -217,11 +229,13 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, doc3.Value)
 
+	// Update tbl to have 2 doc rows, readme and license
 	rows = getDocRows(t, sch, types.String("text in doc_text"))
 	m, _ = createTestRows(t, ddb.ValueReadWriter(), sch, rows)
 	tbl, err = createTestTable(ddb.ValueReadWriter(), sch, m)
 	assert.NoError(t, err)
 
+	// If a table has a doc row, NewerText and Value and should be updated to the `doc_text` value in that row.
 	doc4 := DocDetails{DocPk: LicensePk, NewerText: []byte("Something in newer text field")}
 	doc4, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc4)
 	assert.NoError(t, err)
@@ -230,6 +244,7 @@ func TestAddNewerTextAndValueFromTable(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, types.String("text in doc_text"), doc4.Value)
 
+	// If a table has a doc row, and NewerText and Value are originally non-nil, they should be updated to the `doc_text` value.
 	doc5 := DocDetails{DocPk: LicensePk}
 	doc5, err = AddNewerTextToDocFromTbl(ctx, tbl, &sch, doc5)
 	assert.NoError(t, err)
@@ -248,6 +263,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 
 	emptyRow, err := row.New(types.Format_7_18, sch, row.TaggedValues{})
 
+	// NewerText and DocPk should be nil from an empty row
 	doc1 := DocDetails{}
 	doc1, err = addNewerTextToDocFromRow(ctx, emptyRow, &doc1)
 	assert.NoError(t, err)
@@ -260,7 +276,9 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 		DocNameTag: types.String(LicensePk),
 		DocTextTag: types.String("license!"),
 	})
+	assert.NoError(t, err)
 
+	// NewerText and DocPk should be added to doc from row
 	doc2 := DocDetails{}
 	doc2, err = addNewerTextToDocFromRow(ctx, licenseRow, &doc2)
 	assert.NoError(t, err)
@@ -269,14 +287,14 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, LicensePk, doc2.DocPk)
 
-	doc3 := DocDetails{DocPk: "invalid", NewerText: []byte("something"), Value: types.String("testing")}
+	// When NewerText and DocPk are non-nil, they should be updated from the row provided.
+	doc3 := DocDetails{DocPk: "invalid", NewerText: []byte("something")}
 	doc3, err = addNewerTextToDocFromRow(ctx, licenseRow, &doc3)
 	assert.NoError(t, err)
 	assert.Equal(t, "license!", string(doc3.NewerText))
 	doc3, err = addDocPKToDocFromRow(licenseRow, &doc3)
 	assert.NoError(t, err)
 	assert.Equal(t, LicensePk, doc3.DocPk)
-	assert.Equal(t, types.String("testing"), doc3.Value)
 }
 
 func createTestDocsSchema() schema.Schema {
