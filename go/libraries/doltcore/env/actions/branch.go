@@ -245,7 +245,11 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 
 	err = dEnv.RepoState.Save(dEnv.FS)
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	return SaveTrackedDocsFromWorking(ctx, dEnv)
 }
 
 var emptyHash = hash.Hash{}
@@ -346,6 +350,7 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	}
 
 	rootsWithTable := make([]RootType, 0, len(roots))
+
 	for rt, root := range roots {
 		if has, err := root.HasTable(ctx, table); err != nil {
 			return nil, err
@@ -357,21 +362,9 @@ func RootsWithTable(ctx context.Context, dEnv *env.DoltEnv, table string) (RootT
 	return NewRootTypeSet(rootsWithTable...), nil
 }
 
-func BranchOrTable(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, RootTypeSet, error) {
-	rootsWithTbl, err := RootsWithTable(ctx, dEnv, str)
-
-	if err != nil {
-		return false, nil, err
-	}
-
+func IsBranch(ctx context.Context, dEnv *env.DoltEnv, str string) (bool, error) {
 	dref := ref.NewBranchRef(str)
-	hasRef, err := dEnv.DoltDB.HasRef(ctx, dref)
-
-	if err != nil {
-		return false, nil, err
-	}
-
-	return hasRef, rootsWithTbl, nil
+	return dEnv.DoltDB.HasRef(ctx, dref)
 }
 
 func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb.Commit, error) {

@@ -47,7 +47,11 @@ func Add(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	apr := cli.ParseArgs(ap, args, helpPr)
 
 	if apr.ContainsArg(doltdb.DocTableName) {
-		return HandleDocTableVErrAndExitCode()
+		// Only allow adding the dolt_docs table if it has a conflict to resolve
+		hasConflicts, _ := docCnfsOnWorkingRoot(ctx, dEnv)
+		if !hasConflicts {
+			return HandleDocTableVErrAndExitCode()
+		}
 	}
 
 	allFlag := apr.Contains(allParam)

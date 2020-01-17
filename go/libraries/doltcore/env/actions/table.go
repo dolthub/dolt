@@ -34,27 +34,42 @@ func CheckoutAllTables(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	return checkoutTables(ctx, dEnv, roots, tbls)
+	docs := *env.AllValidDocDetails
+
+	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 
 }
 
-func CheckoutTables(ctx context.Context, dEnv *env.DoltEnv, tbls []string) error {
+func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string, docs []doltdb.DocDetails) error {
 	roots, err := getRoots(ctx, dEnv, WorkingRoot, StagedRoot, HeadRoot)
 
 	if err != nil {
 		return err
 	}
 
-	return checkoutTables(ctx, dEnv, roots, tbls)
+	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 }
 
-func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string) error {
-	var unknown []string
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdb.DocDetails) error {
+	unknownTbls := []string{}
 
 	currRoot := roots[WorkingRoot]
 	staged := roots[StagedRoot]
 	head := roots[HeadRoot]
+
+	if len(docs) > 0 {
+		currRootWithDocs, stagedWithDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, dEnv, currRoot, staged, head, docs)
+		if err != nil {
+			return err
+		}
+		currRoot = currRootWithDocs
+		staged = stagedWithDocs
+	}
+
 	for _, tblName := range tbls {
+		if tblName == doltdb.DocTableName {
+			continue
+		}
 		tbl, ok, err := staged.GetTable(ctx, tblName)
 
 		if err != nil {
@@ -69,7 +84,7 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 			}
 
 			if !ok {
-				unknown = append(unknown, tblName)
+				unknownTbls = append(unknownTbls, tblName)
 				continue
 			}
 		}
@@ -81,14 +96,41 @@ func checkoutTables(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*
 		}
 	}
 
-	if len(unknown) > 0 {
-		var err error
-		currRoot, err = currRoot.RemoveTables(ctx, unknown...)
+	if len(unknownTbls) > 0 {
+		// Return table not exist error before RemoveTables, which fails silently if the table is not on the root.
+		err := validateTablesExist(ctx, currRoot, unknownTbls)
+		if err != nil {
+			return err
+		}
+
+		currRoot, err = currRoot.RemoveTables(ctx, unknownTbls...)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	return dEnv.UpdateWorkingRoot(ctx, currRoot)
+	err := dEnv.UpdateWorkingRoot(ctx, currRoot)
+	if err != nil {
+		return err
+	}
+
+	return SaveDocsFromDocDetails(dEnv, docs)
+}
+
+func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {
+	notExist := []string{}
+	for _, tbl := range unknown {
+		if has, err := currRoot.HasTable(ctx, tbl); err != nil {
+			return err
+		} else if !has {
+			notExist = append(notExist, tbl)
+		}
+	}
+
+	if len(notExist) > 0 {
+		return NewTblNotExistError(notExist)
+	}
+
+	return nil
 }

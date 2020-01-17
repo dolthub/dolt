@@ -454,6 +454,134 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
 }
 
+ @test "dolt checkout <doc> should save the staged docs to the filesystem if the doc has already been added" {
+    echo "this is my license" > LICENSE.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    dolt checkout LICENSE.md
+    [ "$status" -eq 0 ]
+    run cat LICENSE.md
+    [[ "$output" =~ "this is my license" ]] || false
+    run cat README.md
+    [[ "$output" =~ "This is a repository level README" ]] || false
+    
+    
+    echo "testing-modified-doc" > LICENSE.md
+    dolt checkout LICENSE.md
+    [ "$status" -eq 0 ]
+    run cat LICENSE.md
+    [[ "$output" =~ "this is my license" ]] || false
+    run cat README.md
+    [[ "$output" =~ "This is a repository level README" ]] || false
+ }
+
+ @test "dolt checkout <doc> should save the head docs to the filesystem when the doc exists on the head, and has not been staged" {
+    echo "this is my license" > LICENSE.md
+    run dolt add .
+    [ "$status" -eq 0 ]
+    dolt commit -m "committing license and readme"
+    [ "$status" -eq 0 ]
+    echo "this is new" > LICENSE.md
+    dolt checkout LICENSE.md
+    [ "$status" -eq 0 ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    run cat LICENSE.md
+    [[ "$output" =~  "this is my license" ]] || false
+    run cat README.md
+    [[ "$output" =~  "This is a repository level README" ]] || false
+ }
+
+ @test "dolt checkout <doc> should delete the doc from filesystem if it doesn't exist on staged or head roots" {
+    run ls
+    [[ "$output" =~ "README.md" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    run dolt checkout README.md
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "README.md" ]] || false
+    run ls 
+    [[ ! "$output" =~ "README.md" ]] || false
+    [[ "$output" =~ "LICENSE.md" ]] || false
+ }
+
+  @test "dolt checkout <doc> <table> should checkout both doc and table" {
+    run dolt table create -s=`batshelper 1pk5col-ints.schema` test1
+    [ "$status" -eq 0 ]
+    run dolt status
+    run dolt checkout LICENSE.md test1
+    [ "$status" -eq 0 ]
+    run dolt status
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "test1" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    run ls 
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    run cat README.md
+    [[ "$output" =~ "This is a repository level README" ]] || false
+
+
+    echo This is my readme > README.md
+    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
+    [ "$status" -eq 0 ]
+    dolt add .
+    dolt table put-row test2 pk:100
+    [ "$status" -eq 0 ]
+    echo New text in readme > README.md
+    run dolt checkout test2 README.md
+    [ "$status" -eq 0 ]
+    run cat README.md
+    [[ "$output" =~ "This is my readme" ]] || false
+    dolt table select test2
+    [[ ! "$output" =~ "100" ]] || false
+ }
+
+ @test "dolt checkout <doc> <invalid_arg> should return an error and leave doc unchanged" {
+     echo original license text > LICENSE.md
+     dolt add .
+     dolt commit -m "initial doc commit"
+     echo updated license > LICENSE.md
+     run dolt checkout LICENSE.md invalid
+     [ "$status" -eq 1 ]
+     [[ "$output" =~ "'invalid' did not match any table(s) known to dolt." ]] || false
+     run cat LICENSE.md
+     [[ "$output" =~ "updated license" ]] || false
+     run cat README.md
+     [[ "$output" =~ "This is a repository level README" ]] || false
+ }
+
+ @test "dolt checkout <branch> should save docs to the file system, leaving any untacked files" {
+     dolt add LICENSE.md
+     dolt commit -m "license commit"
+     dolt checkout -b test-branch
+     run cat README.md
+     [[ "$output" =~ "This is a repository level README" ]] || false
+     run cat LICENSE.md
+     [[ "$output" =~ "This is a repository level LICENSE" ]] || false
+
+     echo new-license > LICENSE.md
+     rm README.md
+     dolt add .
+     dolt commit -m "updated license"
+
+     dolt checkout master
+     run cat LICENSE.md
+     [[ "$output" =~ "This is a repository level LICENSE" ]] || false
+     run ls
+     [[ ! "$output" =~ "README.md" ]] || false
+
+     dolt checkout test-branch
+     run ls
+     [[ "$output" =~ "LICENSE.md" ]] || false
+     [[ ! "$output" =~ "README.md" ]] || false
+     run cat LICENSE.md
+     [[ "$output" =~ "new-license" ]] || false
+ }
+
 @test "dolt diff shows diffs between working root and file system docs" {
     echo "testing readme" > README.md
     echo "testing license" > LICENSE.md
@@ -672,10 +800,6 @@ teardown() {
     [[ "$output" =~ "Invalid table name: 'dolt_docs'" ]] || false
 }
 
-# @test "dolt diff shows diffs between working root and file system docs" {
-
-# }
-
 @test "dolt branch/merge with conflicts for docs" {
     dolt add .
     dolt commit -m "Committing initial docs"
@@ -687,30 +811,40 @@ teardown() {
     dolt commit -m "Changed README.md on test-a branch"
     dolt checkout test-b
     run cat README.md
-    skip "This does not change the contents of README.md to what is stored on test-b right now. Keeps what is on test-a"
     [[ $output =~ "This is a repository level README" ]] || false
-    [[ !$output =~ "test-a branch" ]] || false
+    [[ ! $output =~ "test-a branch" ]] || false
     echo test-b branch > README.md
     dolt add .
     dolt commit -m "Changed README.md on test-a branch"
     dolt checkout master
+
+    # On successful FF merge, docs match the new working root
     run dolt merge test-a
     [ "$status" -eq 0 ]
     [[ $output =~ "Fast-forward" ]] || false
+    run cat README.md
+    [[ "$output" =~ "test-a branch" ]] || false
+
+    # A merge with conflicts does not change the working root.
+    # If the conflicts are resolved with --ours, the working root and the docs on the filesystem remain the same.
     run dolt merge test-b
-    [ "$status" -eq 1 ]
+    [ "$status" -eq 0 ]
     [[ $output =~ "CONFLICT" ]] || false
+    run cat README.md
+    [[ "$output" =~ "test-a branch" ]] || false
     run dolt conflicts cat dolt_docs
     [ "$status" -eq 0 ]
     [[ $output =~ "test-a branch" ]] || false
     [[ $output =~ "test-b branch" ]] || false
     dolt conflicts resolve dolt_docs --ours
     run cat README.md
-    [[ $output =~ "test-b branch" ]] || false
-    [[ !$output =~ "test-a branch" ]] || false
-    dolt add .
+    [[ ! $output =~ "test-b branch" ]] || false
+    [[ $output =~ "test-a branch" ]] || false
+    # Only allow `dolt add dolt_docs` when dolt_docs is in conflict
+    dolt add dolt_docs
     dolt commit -m "Resolved docs conflict with --ours"
-    # Again but resolve theirs
+
+    # If the conflicts are resolved with --theirs, the working root and the docs on the filesystem are updated.
     dolt branch test-a-again
     dolt branch test-b-again
     dolt checkout test-a-again
@@ -721,11 +855,28 @@ teardown() {
     echo test-b-again branch > README.md
     dolt add .
     dolt commit -m "Changed README.md on test-b-again branch"
+    dolt checkout master
     dolt merge test-a-again
-    run dolt merge test-b-again
-    [ "$status" -eq 1 ]
+    dolt merge test-b-again
     dolt conflicts resolve dolt_docs --theirs
     run cat README.md
-    [[ $output =~ "test-a-again branch" ]] || false
-    [[ !$output =~ "test-b-again branch" ]] || false
+    [[ ! $output =~ "test-a-again branch" ]] || false
+    [[ $output =~ "test-b-again branch" ]] || false
+    dolt add .
+    dolt commit -m "merge test-b-again with fixed conflicts"
+    
+    # A merge with auto-resolved conflicts updates the working root. The docs should match the new working root.
+    dolt checkout test-b-again
+    echo test-b-one-more-time > README.md
+    dolt add .
+    dolt commit -m "test-b-one-more-time"
+    dolt checkout master
+    dolt merge test-b-again
+    run cat README.md
+    [[ "$output" =~ "one-more-time" ]] || false
+    run dolt status
+    echo "output = $output"
+    [[ "$output" =~ "All conflicts fixed" ]] || false
+    [[ "$output" =~ "Changes to be committed:" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
 }

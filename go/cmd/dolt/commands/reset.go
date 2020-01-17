@@ -120,17 +120,6 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		}
 	}
 
-	localDocs, err := env.LoadDocs(dEnv.FS)
-	if err != nil {
-		return errhand.BuildDError("error: failed to read dolt docs from fs").AddCause(err).Build()
-	}
-
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, headRoot, nil)
-	if err != nil {
-		localDocs.Save(dEnv.FS)
-		return errhand.BuildDError("error: failed to update dolt docs from head").AddCause(err).Build()
-	}
-
 	// TODO: update working and staged in one repo_state write.
 	err = dEnv.UpdateWorkingRoot(ctx, newWkRoot)
 
@@ -142,6 +131,11 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	if err != nil {
 		return errhand.BuildDError("error: failed to update the staged tables.").AddCause(err).Build()
+	}
+
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
 	}
 
 	return nil
@@ -184,11 +178,6 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		return verr
 	}
 
-	localDocs, err := env.LoadDocs(dEnv.FS)
-	if err != nil {
-		return errhand.BuildDError("error: failed to read dolt docs from fs").AddCause(err).Build()
-	}
-
 	stagedRoot, err = resetDocs(ctx, dEnv, headRoot, docs)
 	if err != nil {
 		return errhand.BuildDError("error: failed to reset docs").AddCause(err).Build()
@@ -197,7 +186,6 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 	stagedRoot, verr = resetStaged(ctx, dEnv, tables, stagedRoot, headRoot)
 
 	if verr != nil {
-		localDocs.Save(dEnv.FS)
 		return verr
 	}
 

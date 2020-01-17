@@ -121,7 +121,7 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 		}
 	}
 
-	return handleCommitErr(verr, usage)
+	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
@@ -216,6 +216,11 @@ and take the hash for your current branch and use it for the value for "staged" 
 			AddCause(err).Build()
 	}
 
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+	}
+
 	return nil
 }
 
@@ -252,6 +257,16 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 
 		if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+		} else {
+			err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+			if err != nil {
+				return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+			}
+			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
+			if verr != nil {
+				// Log a new message here to indicate that merge was successful, only staging failed.
+				cli.Println("Unable to stage changes: add and commit to finish merge")
+			}
 		}
 	}
 

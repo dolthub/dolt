@@ -124,3 +124,17 @@ func GetTablesInConflict(ctx context.Context, dEnv *env.DoltEnv) (workingInConfl
 
 	return workingInConflict, stagedInConflict, headInConflict, err
 }
+
+func GetDocsInConflict(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, error) {
+	docDetails, err := dEnv.GetAllValidDocDetails()
+	if err != nil {
+		return nil, err
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+}

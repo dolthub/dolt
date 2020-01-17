@@ -538,7 +538,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 
 // DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
 // is not provided, then we compare the docs on the root value to the docDetails provided.
-func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails *[]*DocDetails) (added, modified, removed []string, err error) {
+func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails []DocDetails) (added, modified, removed []string, err error) {
 	oldTbl, oldTblFound, err := root.GetTable(ctx, DocTableName)
 	if err != nil {
 		return nil, nil, nil, err
@@ -553,7 +553,7 @@ func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails
 	}
 
 	if other == nil {
-		detailsWithValues, err := addValuesToDocs(ctx, oldTbl, &oldSch, *docDetails)
+		detailsWithValues, err := addValuesToDocs(ctx, oldTbl, &oldSch, docDetails)
 		if err != nil {
 			return nil, nil, nil, err
 		}
@@ -584,8 +584,8 @@ func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails
 	return a, m, r, nil
 }
 
-func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Schema, newTblFound bool, oldTbl *Table, oldSch schema.Schema, oldTblFound bool) ([]*DocDetails, error) {
-	var docDetailsBtwnRoots []*DocDetails
+func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Schema, newTblFound bool, oldTbl *Table, oldSch schema.Schema, oldTblFound bool) ([]DocDetails, error) {
+	var docDetailsBtwnRoots []DocDetails
 	if newTblFound {
 		newRows, err := newTbl.GetRowData(ctx)
 		if err != nil {
@@ -605,11 +605,11 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Sc
 			if err != nil {
 				return err
 			}
-			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, &updated)
+			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, updated)
 			if err != nil {
 				return err
 			}
-			docDetailsBtwnRoots = append(docDetailsBtwnRoots, &updated)
+			docDetailsBtwnRoots = append(docDetailsBtwnRoots, updated)
 			return nil
 		})
 		if err != nil {
@@ -632,18 +632,17 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Sc
 			if err != nil {
 				return err
 			}
-			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, &updated)
+			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, updated)
 			if err != nil {
 				return err
 			}
-			docWithNewer, err := AddNewerTextToDocFromTbl(ctx, newTbl, &newSch, &updated)
+			updated, err = AddNewerTextToDocFromTbl(ctx, newTbl, &newSch, updated)
 			if err != nil {
 				return err
 			}
-			updated = *docWithNewer
 
 			if updated.Value != nil && updated.NewerText == nil {
-				docDetailsBtwnRoots = append(docDetailsBtwnRoots, &updated)
+				docDetailsBtwnRoots = append(docDetailsBtwnRoots, updated)
 			}
 			return nil
 		})
@@ -654,7 +653,7 @@ func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Sc
 	return docDetailsBtwnRoots, nil
 }
 
-func GetDocDiffsFromDocDetails(ctx context.Context, docDetails []*DocDetails) (added, modified, removed []string) {
+func GetDocDiffsFromDocDetails(ctx context.Context, docDetails []DocDetails) (added, modified, removed []string) {
 	added = []string{}
 	modified = []string{}
 	removed = []string{}
@@ -664,21 +663,21 @@ func GetDocDiffsFromDocDetails(ctx context.Context, docDetails []*DocDetails) (a
 	return added, modified, removed
 }
 
-func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDetails []*DocDetails) ([]*DocDetails, error) {
+func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDetails []DocDetails) ([]DocDetails, error) {
 	if tbl != nil && sch != nil {
 		for i, details := range docDetails {
 			newDetails, err := AddValueToDocFromTbl(ctx, tbl, sch, details)
 			if err != nil {
 				return nil, err
 			}
-			docDetails[i] = &newDetails
+			docDetails[i] = newDetails
 		}
 	}
 	return docDetails, nil
 }
 
 // AddValueToDocFromTbl updates the Value field of a docDetail using the provided table and schema.
-func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail *DocDetails) (DocDetails, error) {
+func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
 			DocNameTag: types.String(docDetail.DocPk),
@@ -694,11 +693,11 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 			docDetail.Value = docValue
 		}
 	}
-	return *docDetail, nil
+	return docDetail, nil
 }
 
 // AddNewerTextToDocFromTbl updates the NewerText field of a docDetail using the provided table and schema.
-func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc *DocDetails) (*DocDetails, error) {
+func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
 	if tbl != nil && sch != nil {
 		pkTaggedVal := row.TaggedValues{
 			DocNameTag: types.String(doc.DocPk),
@@ -706,7 +705,7 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 
 		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
 		if err != nil {
-			return nil, err
+			return DocDetails{}, err
 		}
 		if ok {
 			docValue, _ := docRow.GetColVal(DocTextTag)
