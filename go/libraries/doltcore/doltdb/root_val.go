@@ -691,7 +691,11 @@ func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, d
 		if ok {
 			docValue, _ := docRow.GetColVal(DocTextTag)
 			docDetail.Value = docValue
+		} else {
+			docDetail.Value = nil
 		}
+	} else {
+		docDetail.Value = nil
 	}
 	return docDetail, nil
 }
@@ -719,23 +723,31 @@ func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schem
 	return doc, nil
 }
 
-func addNewerTextToDocFromRow(ctx context.Context, row row.Row, doc *DocDetails) (DocDetails, error) {
-	docValue, _ := row.GetColVal(DocTextTag)
-	docValStr, err := strconv.Unquote(docValue.HumanReadableString())
-	if err != nil {
-		return DocDetails{}, err
+func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
+	docValue, ok := r.GetColVal(DocTextTag)
+	if !ok {
+		doc.NewerText = nil
+	} else {
+		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.NewerText = []byte(docValStr)
 	}
-	doc.NewerText = []byte(docValStr)
 	return *doc, nil
 }
 
 func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
 	colVal, _ := r.GetColVal(DocNameTag)
-	docName, err := strconv.Unquote(colVal.HumanReadableString())
-	if err != nil {
-		return DocDetails{}, err
+	if colVal == nil {
+		doc.DocPk = ""
+	} else {
+		docName, err := strconv.Unquote(colVal.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.DocPk = docName
 	}
-	doc.DocPk = docName
 
 	return *doc, nil
 }
