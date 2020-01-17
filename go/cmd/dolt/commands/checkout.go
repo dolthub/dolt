@@ -93,17 +93,13 @@ func Checkout(ctx context.Context, commandStr string, args []string, dEnv *env.D
 }
 
 func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	var verr errhand.VerboseError
-
 	if ref, refExists, err := getRemoteBranchRef(ctx, dEnv, name); err != nil {
-		verr = errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
+		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 	} else if refExists {
-		verr = checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
+		return checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
 	} else {
-		verr = errhand.BuildDError("error: could not find %s", name).Build()
+		return errhand.BuildDError("error: could not find %s", name).Build()
 	}
-
-	return verr
 }
 
 func getRemoteBranchRef(ctx context.Context, dEnv *env.DoltEnv, name string) (ref.DoltRef, bool, error) {
