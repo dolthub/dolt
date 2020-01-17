@@ -50,7 +50,7 @@ func CheckoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, tbls []string
 	return checkoutTablesAndDocs(ctx, dEnv, roots, tbls, docs)
 }
 
-func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdb.DocDetails) (err error) {
+func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[RootType]*doltdb.RootValue, tbls []string, docs []doltdb.DocDetails) error {
 	unknownTbls := []string{}
 
 	currRoot := roots[WorkingRoot]
@@ -58,10 +58,12 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 	head := roots[HeadRoot]
 
 	if len(docs) > 0 {
-		currRoot, staged, err = getUpdatedWorkingAndStagedWithDocs(ctx, dEnv, currRoot, staged, head, docs)
+		currRootWithDocs, stagedWithDocs, err := getUpdatedWorkingAndStagedWithDocs(ctx, dEnv, currRoot, staged, head, docs)
 		if err != nil {
 			return err
 		}
+		currRoot = currRootWithDocs
+		staged = stagedWithDocs
 	}
 
 	for _, tblName := range tbls {
@@ -96,12 +98,11 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 
 	if len(unknownTbls) > 0 {
 		// Return table not exist error before RemoveTables, which fails silently if the table is not on the root.
-		err = getTblNotExistError(ctx, currRoot, unknownTbls)
+		err := getTblNotExistError(ctx, currRoot, unknownTbls)
 		if err != nil {
 			return err
 		}
 
-		var err error
 		currRoot, err = currRoot.RemoveTables(ctx, unknownTbls...)
 
 		if err != nil {
@@ -109,7 +110,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 		}
 	}
 
-	err = dEnv.UpdateWorkingRoot(ctx, currRoot)
+	err := dEnv.UpdateWorkingRoot(ctx, currRoot)
 	if err != nil {
 		return err
 	}
