@@ -98,7 +98,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 
 	if len(unknownTbls) > 0 {
 		// Return table not exist error before RemoveTables, which fails silently if the table is not on the root.
-		err := getTblNotExistError(ctx, currRoot, unknownTbls)
+		err := validateTablesExist(ctx, currRoot, unknownTbls)
 		if err != nil {
 			return err
 		}
@@ -118,7 +118,7 @@ func checkoutTablesAndDocs(ctx context.Context, dEnv *env.DoltEnv, roots map[Roo
 	return SaveDocsFromDocDetails(dEnv, docs)
 }
 
-func getTblNotExistError(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {
+func validateTablesExist(ctx context.Context, currRoot *doltdb.RootValue, unknown []string) error {
 	notExist := []string{}
 	for _, tbl := range unknown {
 		if has, err := currRoot.HasTable(ctx, tbl); err != nil {
