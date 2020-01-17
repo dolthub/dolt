@@ -51,35 +51,19 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
-// An environment variable to set to get indexed join behavior, currently experimental
-const UseIndexesEnv = "DOLT_USE_INDEXES"
-
 var sqlShortDesc = "Runs a SQL query"
 var sqlLongDesc = `Runs a SQL query you specify. By default, begins an interactive shell to run queries and view the
 results. With the -q option, runs the given query and prints any results, then exits.
 
-THIS FUNCTIONALITY IS EXPERIMENTAL and being intensively developed. Feedback is welcome: 
-dolt-interest@liquidata.co
-
-Reasonably well supported functionality:
-* SELECT statements, including most kinds of joins
-* CREATE TABLE statements
-* ALTER TABLE / DROP TABLE statements
-* UPDATE and DELETE statements
-* Table and column aliases
-* Column functions, e.g. CONCAT
-* ORDER BY and LIMIT clauses
-* GROUP BY
-* Aggregate functions, e.g. SUM 
-
 Known limitations:
-* Some expressions in SELECT statements
-* Subqueries
-* Non-primary indexes
-* Foreign keys
-* Column constraints besides NOT NULL
-* VARCHAR columns are unlimited length; FLOAT, INTEGER columns are 64 bit
-* Performance is very bad for many SELECT statements, especially JOINs
+* No support for creating indexes
+* No support for foreign keys
+* No support for column constraints besides NOT NULL
+* No support for default values
+* Column types aren't always preserved accurately from SQL create table statements. VARCHAR columns are unlimited 
+    length; FLOAT, INTEGER columns are 64 bit
+* Joins can only use indexes for two table joins. Three or more tables in a join query will use a non-indexed
+    join, which is very slow.
 `
 var sqlSynopsis = []string{
 	"",
@@ -561,16 +545,13 @@ func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, db *dsqle.Database) (*
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 
-	// SQL engine still gives buggy results with indexes on
-	if _, ok := os.LookupEnv(UseIndexesEnv); ok {
-		engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
-		err := engine.Init()
-		if err != nil {
-			return nil, err
-		}
+	engine.Catalog.RegisterIndexDriver(dsqle.NewDoltIndexDriver(db))
+	err := engine.Init()
+	if err != nil {
+		return nil, err
 	}
 
-	err := dsqle.RegisterSchemaFragments(sql.NewContext(ctx), engine.Catalog, db)
+	err = dsqle.RegisterSchemaFragments(sql.NewContext(ctx), engine.Catalog, db)
 	if err != nil {
 		return nil, err
 	}
