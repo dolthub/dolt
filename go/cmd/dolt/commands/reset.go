@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
 
@@ -58,6 +59,10 @@ func Reset(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return HandleDocTableVErrAndExitCode()
+	}
 
 	workingRoot, stagedRoot, headRoot, verr := getAllRoots(ctx, dEnv)
 
@@ -107,8 +112,9 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	newWkRoot := headRoot
 	for tblName, tbl := range untrackedTables {
-		newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
-
+		if tblName != doltdb.DocTableName {
+			newWkRoot, err = newWkRoot.PutTable(ctx, tblName, tbl)
+		}
 		if err != nil {
 			return errhand.BuildDError("error: failed to write table back to database").Build()
 		}
@@ -127,7 +133,22 @@ func resetHard(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		return errhand.BuildDError("error: failed to update the staged tables.").AddCause(err).Build()
 	}
 
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs on the filesystem.").AddCause(err).Build()
+	}
+
 	return nil
+}
+
+func removeDocsTbl(tbls []string) []string {
+	var result []string
+	for _, tblName := range tbls {
+		if tblName != doltdb.DocTableName {
+			result = append(result, tblName)
+		}
+	}
+	return result
 }
 
 func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults, stagedRoot, headRoot *doltdb.RootValue) errhand.VerboseError {
@@ -142,13 +163,27 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 		}
 	}
 
-	verr := ValidateTablesWithVErr(tbls, stagedRoot, headRoot)
+	tables, docs, err := actions.GetTblsAndDocDetails(dEnv, tbls)
+	if err != nil {
+		return errhand.BuildDError("error: failed to get all tables").AddCause(err).Build()
+	}
+
+	if len(docs) > 0 {
+		tables = removeDocsTbl(tables)
+	}
+
+	verr := ValidateTablesWithVErr(tables, stagedRoot, headRoot)
 
 	if verr != nil {
 		return verr
 	}
 
-	stagedRoot, verr = resetStaged(ctx, dEnv, tbls, stagedRoot, headRoot)
+	stagedRoot, err = resetDocs(ctx, dEnv, headRoot, docs)
+	if err != nil {
+		return errhand.BuildDError("error: failed to reset docs").AddCause(err).Build()
+	}
+
+	stagedRoot, verr = resetStaged(ctx, dEnv, tables, stagedRoot, headRoot)
 
 	if verr != nil {
 		return verr
@@ -156,6 +191,20 @@ func resetSoft(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseRe
 
 	printNotStaged(ctx, dEnv, stagedRoot)
 	return nil
+}
+
+func resetDocs(ctx context.Context, dEnv *env.DoltEnv, headRoot *doltdb.RootValue, docDetails env.Docs) (newStgRoot *doltdb.RootValue, err error) {
+	docs, err := dEnv.GetDocsWithNewerTextFromRoot(ctx, headRoot, docDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dEnv.PutDocsToWorking(ctx, docs)
+	if err != nil {
+		return nil, err
+	}
+
+	return dEnv.PutDocsToStaged(ctx, docs)
 }
 
 func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootValue) {
@@ -166,21 +215,32 @@ func printNotStaged(ctx context.Context, dEnv *env.DoltEnv, staged *doltdb.RootV
 		return
 	}
 
-	notStaged, err := actions.NewTableDiffs(ctx, working, staged)
-
+	notStagedTbls, err := actions.NewTableDiffs(ctx, working, staged)
 	if err != nil {
 		return
 	}
 
-	if notStaged.NumRemoved+notStaged.NumModified > 0 {
+	notStagedDocs, err := actions.NewDocDiffs(ctx, dEnv, working, nil, nil)
+	if err != nil {
+		return
+	}
+
+	if notStagedTbls.NumRemoved+notStagedTbls.NumModified+notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
 		cli.Println("Unstaged changes after reset:")
 
-		lines := make([]string, 0, notStaged.Len())
-		for _, tblName := range notStaged.Tables {
-			tdt := notStaged.TableToType[tblName]
+		lines := make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
+		for _, tblName := range notStagedTbls.Tables {
+			tdt := notStagedTbls.TableToType[tblName]
 
-			if tdt != actions.AddedTable {
+			if tdt != actions.AddedTable && !sqle.HasDoltPrefix(tblName) {
 				lines = append(lines, fmt.Sprintf("%s\t%s", tblDiffTypeToShortLabel[tdt], tblName))
+			}
+		}
+
+		for _, docName := range notStagedDocs.Docs {
+			ddt := notStagedDocs.DocToType[docName]
+			if ddt != actions.AddedDoc {
+				lines = append(lines, fmt.Sprintf("%s\t%s", docDiffTypeToShortLabel[ddt], docName))
 			}
 		}
 

@@ -23,8 +23,11 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
@@ -43,19 +46,34 @@ func Status(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 
-	stagedDiffs, notStagedDiffs, err := actions.GetTableDiffs(ctx, dEnv)
+	stagedTblDiffs, notStagedTblDiffs, err := actions.GetTableDiffs(ctx, dEnv)
 
 	if err != nil {
-		panic(err) // fix
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
 	}
-
-	workingInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
+	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 
 	if err != nil {
-		panic(err) // fix
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
 	}
 
-	printStatus(dEnv, stagedDiffs, notStagedDiffs, workingInConflict)
+	stagedDocDiffs, notStagedDocDiffs, err := actions.GetDocDiffs(ctx, dEnv)
+
+	if err != nil {
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
+	}
+
+	workingDocsInConflict, err := actions.GetDocsInConflict(ctx, dEnv)
+
+	if err != nil {
+		cli.PrintErrln(toStatusVErr((err)))
+		return 1
+	}
+
+	printStatus(ctx, dEnv, stagedTblDiffs, notStagedTblDiffs, workingTblsInConflict, workingDocsInConflict, stagedDocDiffs, notStagedDocDiffs)
 	return 0
 }
 
@@ -69,6 +87,18 @@ var tblDiffTypeToShortLabel = map[actions.TableDiffType]string{
 	actions.ModifiedTable: "M",
 	actions.RemovedTable:  "D",
 	actions.AddedTable:    "N",
+}
+
+var docDiffTypeToLabel = map[actions.DocDiffType]string{
+	actions.ModifiedDoc: "modified:",
+	actions.RemovedDoc:  "deleted:",
+	actions.AddedDoc:    "new doc:",
+}
+
+var docDiffTypeToShortLabel = map[actions.DocDiffType]string{
+	actions.ModifiedDoc: "M",
+	actions.RemovedDoc:  "D",
+	actions.AddedDoc:    "N",
 }
 
 const (
@@ -93,37 +123,43 @@ const (
   (use "dolt checkout <table>" to discard changes in working directory)`
 
 	untrackedHeader     = `Untracked files:`
-	untrackedHeaderHelp = `  (use "dolt add <table>" to include in what will be committed)`
+	untrackedHeaderHelp = `  (use "dolt add <table|doc>" to include in what will be committed)`
 
 	statusFmt         = "\t%-16s%s"
 	bothModifiedLabel = "both modified:"
 )
 
-func printStagedDiffs(wr io.Writer, staged *actions.TableDiffs, printHelp bool) int {
-	if staged.Len() > 0 {
+func printStagedDiffs(wr io.Writer, stagedTbls *actions.TableDiffs, stagedDocs *actions.DocDiffs, printHelp bool) int {
+	if stagedTbls.Len()+stagedDocs.Len() > 0 {
 		iohelp.WriteLine(wr, stagedHeader)
 
 		if printHelp {
 			iohelp.WriteLine(wr, stagedHeaderHelp)
 		}
 
-		lines := make([]string, 0, staged.Len())
-		for _, tblName := range staged.Tables {
-			tdt := staged.TableToType[tblName]
-			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+		lines := make([]string, 0, stagedTbls.Len()+stagedDocs.Len())
+		for _, tblName := range stagedTbls.Tables {
+			if !sqle.HasDoltPrefix(tblName) {
+				tdt := stagedTbls.TableToType[tblName]
+				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+			}
+		}
+
+		for _, docName := range stagedDocs.Docs {
+			dtt := stagedDocs.DocToType[docName]
+			lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[dtt], docName))
 		}
 
 		iohelp.WriteLine(wr, color.GreenString(strings.Join(lines, "\n")))
-		return len(lines)
 	}
 
 	return 0
 }
 
-func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp bool, linesPrinted int, workingInConflict []string) int {
-	inCnfSet := set.NewStrSet(workingInConflict)
+func printDiffsNotStaged(ctx context.Context, dEnv *env.DoltEnv, wr io.Writer, notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs, printHelp bool, linesPrinted int, workingTblsInConflict []string) int {
+	inCnfSet := set.NewStrSet(workingTblsInConflict)
 
-	if len(workingInConflict) > 0 {
+	if len(workingTblsInConflict) > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
@@ -134,8 +170,8 @@ func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp 
 			iohelp.WriteLine(wr, mergedTableHelp)
 		}
 
-		lines := make([]string, 0, notStaged.Len())
-		for _, tblName := range workingInConflict {
+		lines := make([]string, 0, notStagedTbls.Len())
+		for _, tblName := range workingTblsInConflict {
 			lines = append(lines, fmt.Sprintf(statusFmt, bothModifiedLabel, tblName))
 		}
 
@@ -143,72 +179,145 @@ func printDiffsNotStaged(wr io.Writer, notStaged *actions.TableDiffs, printHelp 
 		linesPrinted += len(lines)
 	}
 
-	if notStaged.NumRemoved+notStaged.NumModified-inCnfSet.Size() > 0 {
+	numRemovedOrModified := notStagedTbls.NumRemoved + notStagedTbls.NumModified + notStagedDocs.NumRemoved + notStagedDocs.NumModified
+	docsInCnf, _ := docCnfsOnWorkingRoot(ctx, dEnv)
+
+	if numRemovedOrModified-inCnfSet.Size() > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
 
-		iohelp.WriteLine(wr, workingHeader)
+		printChanges := !(notStagedTbls.NumRemoved+notStagedTbls.NumModified == 1 && docsInCnf)
 
-		if printHelp {
-			iohelp.WriteLine(wr, workingHeaderHelp)
-		}
+		if printChanges {
+			iohelp.WriteLine(wr, workingHeader)
 
-		lines := make([]string, 0, notStaged.Len())
-		for _, tblName := range notStaged.Tables {
-			tdt := notStaged.TableToType[tblName]
-
-			if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) {
-				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+			if printHelp {
+				iohelp.WriteLine(wr, workingHeaderHelp)
 			}
+
+			lines := getModifiedAndRemovedNotStaged(notStagedTbls, notStagedDocs, inCnfSet)
+
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+			linesPrinted += len(lines)
 		}
 
-		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-		linesPrinted += len(lines)
 	}
 
-	if notStaged.NumAdded > 0 {
+	if notStagedTbls.NumAdded > 0 || notStagedDocs.NumAdded > 0 {
 		if linesPrinted > 0 {
 			cli.Println()
 		}
 
-		iohelp.WriteLine(wr, untrackedHeader)
+		printChanges := !(notStagedTbls.NumAdded == 1 && docsInCnf)
 
-		if printHelp {
-			iohelp.WriteLine(wr, untrackedHeaderHelp)
-		}
+		if printChanges {
+			iohelp.WriteLine(wr, untrackedHeader)
 
-		lines := make([]string, 0, notStaged.Len())
-		for _, tblName := range notStaged.Tables {
-			tdt := notStaged.TableToType[tblName]
-
-			if tdt == actions.AddedTable {
-				lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+			if printHelp {
+				iohelp.WriteLine(wr, untrackedHeaderHelp)
 			}
+
+			lines := getAddedNotStaged(notStagedTbls, notStagedDocs)
+
+			iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
+			linesPrinted += len(lines)
+
 		}
 
-		iohelp.WriteLine(wr, color.RedString(strings.Join(lines, "\n")))
-		linesPrinted += len(lines)
 	}
 
 	return linesPrinted
 }
 
-func printStatus(dEnv *env.DoltEnv, staged, notStaged *actions.TableDiffs, workingInConflict []string) {
+func getModifiedAndRemovedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs, inCnfSet *set.StrSet) (lines []string) {
+	lines = make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
+	for _, tblName := range notStagedTbls.Tables {
+		tdt := notStagedTbls.TableToType[tblName]
+
+		if tdt != actions.AddedTable && !inCnfSet.Contains(tblName) && tblName != doltdb.DocTableName {
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+		}
+	}
+
+	if notStagedDocs.NumRemoved+notStagedDocs.NumModified > 0 {
+		for _, docName := range notStagedDocs.Docs {
+			dtt := notStagedDocs.DocToType[docName]
+
+			if dtt != actions.AddedDoc {
+				lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[dtt], docName))
+			}
+		}
+	}
+	return lines
+}
+
+func getAddedNotStaged(notStagedTbls *actions.TableDiffs, notStagedDocs *actions.DocDiffs) (lines []string) {
+	lines = make([]string, 0, notStagedTbls.Len()+notStagedDocs.Len())
+	for _, tblName := range notStagedTbls.Tables {
+		tdt := notStagedTbls.TableToType[tblName]
+
+		if tdt == actions.AddedTable {
+			lines = append(lines, fmt.Sprintf(statusFmt, tblDiffTypeToLabel[tdt], tblName))
+		}
+	}
+
+	for _, docName := range notStagedDocs.Docs {
+		doct := notStagedDocs.DocToType[docName]
+
+		if doct == actions.AddedDoc {
+			lines = append(lines, fmt.Sprintf(statusFmt, docDiffTypeToLabel[doct], docName))
+		}
+	}
+
+	return lines
+}
+
+func printStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls *actions.TableDiffs, workingTblsInConflict []string, workingDocsInConflict *actions.DocDiffs, stagedDocs, notStagedDocs *actions.DocDiffs) {
 	cli.Printf(branchHeader, dEnv.RepoState.Head.Ref.GetPath())
 
 	if dEnv.RepoState.Merge != nil {
-		if len(workingInConflict) > 0 {
+		if len(workingTblsInConflict) > 0 {
 			cli.Println(unmergedTablesHeader)
 		} else {
 			cli.Println(allMergedHeader)
 		}
 	}
 
-	n := printStagedDiffs(cli.CliOut, staged, true)
-	n = printDiffsNotStaged(cli.CliOut, notStaged, true, n, workingInConflict)
+	n := printStagedDiffs(cli.CliOut, stagedTbls, stagedDocs, true)
+	n = printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, true, n, workingTblsInConflict)
 
 	if dEnv.RepoState.Merge == nil && n == 0 {
 		cli.Println("nothing to commit, working tree clean")
 	}
+}
+
+func toStatusVErr(err error) errhand.VerboseError {
+	switch {
+	case actions.IsRootValUnreachable(err):
+		rt := actions.GetUnreachableRootType(err)
+		bdr := errhand.BuildDError("Unable to read %s.", rt.String())
+		bdr.AddCause(actions.GetUnreachableRootCause(err))
+		return bdr.Build()
+
+	default:
+		return errhand.BuildDError("Unknown error").AddCause(err).Build()
+	}
+}
+
+func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) {
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	docTbl, found, err := workingRoot.GetTable(ctx, doltdb.DocTableName)
+	if err != nil {
+		return false, err
+	}
+	if !found {
+		return false, nil
+	}
+
+	return docTbl.HasConflicts()
 }

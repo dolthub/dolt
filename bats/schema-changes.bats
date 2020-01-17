@@ -116,6 +116,9 @@ teardown() {
 }
 
 @test "adding and dropping column should produce no diff" {
+    # Remove the docs, otherwise they will show up in the diff below. 
+    rm LICENSE.md
+    rm README.md
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     dolt add test
     dolt commit -m "committed table so we can see diffs"

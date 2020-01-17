@@ -53,6 +53,10 @@ func Cp(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	force := apr.Contains(forceParam)
 	working, verr := commands.GetWorkingWithVErr(dEnv)
 	root := working
@@ -104,6 +108,5 @@ func Cp(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv
 			}
 		}
 	}
-
 	return commands.HandleVErrAndExitCode(verr, usage)
 }

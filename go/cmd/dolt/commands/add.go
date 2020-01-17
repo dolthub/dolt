@@ -19,6 +19,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
@@ -44,6 +45,14 @@ func Add(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEn
 	ap.SupportsFlag(allParam, "a", "Stages any and all changes (adds, deletes, and modifications).")
 	helpPr, _ := cli.HelpAndUsagePrinters(commandStr, addShortDesc, addLongDesc, addSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, helpPr)
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		// Only allow adding the dolt_docs table if it has a conflict to resolve
+		hasConflicts, _ := docCnfsOnWorkingRoot(ctx, dEnv)
+		if !hasConflicts {
+			return HandleDocTableVErrAndExitCode()
+		}
+	}
 
 	allFlag := apr.Contains(allParam)
 
@@ -74,8 +83,8 @@ func toAddVErr(err error) errhand.VerboseError {
 
 	case actions.IsTblNotExist(err):
 		tbls := actions.GetTablesForError(err)
-		bdr := errhand.BuildDError("Some of the specified tables were not found")
-		bdr.AddDetails("Unknown tables: %v", tbls)
+		bdr := errhand.BuildDError("Some of the specified tables or docs were not found")
+		bdr.AddDetails("Unknown tables or docs: %v", tbls)
 
 		return bdr.Build()
 
@@ -92,4 +101,8 @@ func toAddVErr(err error) errhand.VerboseError {
 	default:
 		return errhand.BuildDError("Unknown error").AddCause(err).Build()
 	}
+}
+
+func HandleDocTableVErrAndExitCode() int {
+	return HandleVErrAndExitCode(errhand.BuildDError("'%s' is not a valid table name", doltdb.DocTableName).Build(), nil)
 }

@@ -11,6 +11,9 @@ teardown() {
 }
 
 @test "create a table with a schema file and examine repo" {
+    # Remove the docs, because they will show up in the diff below and break the lines[x] assertions. 
+    rm LICENSE.md
+    rm README.md
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false

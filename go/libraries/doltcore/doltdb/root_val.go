@@ -16,8 +16,11 @@ package doltdb
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -25,13 +28,29 @@ import (
 const (
 	ddbRootStructName = "dolt_db_root"
 
-	tablesKey = "tables"
+	tablesKey         = "tables"
+	DocTableName      = "dolt_docs"
+	LicensePk         = "LICENSE.md"
+	ReadmePk          = "README.md"
+	DocPkColumnName   = "doc_name"
+	DocTextColumnName = "doc_text"
+)
+const (
+	DocNameTag = iota
+	DocTextTag
 )
 
 // RootValue defines the structure used inside all Liquidata noms dbs
 type RootValue struct {
 	vrw     types.ValueReadWriter
 	valueSt types.Struct
+}
+
+type DocDetails struct {
+	NewerText []byte
+	DocPk     string
+	Value     types.Value
+	File      string
 }
 
 func NewRootValue(ctx context.Context, vrw types.ValueReadWriter, tables map[string]hash.Hash) (*RootValue, error) {
@@ -78,7 +97,6 @@ func emptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 	if err != nil {
 		return nil, err
 	}
-
 	return newRootFromTblMap(vrw, m)
 }
 
@@ -438,7 +456,6 @@ func (root *RootValue) TableDiff(ctx context.Context, other *RootValue) (added, 
 			}
 		}
 	}
-
 	return added, modified, removed, nil
 }
 
@@ -517,4 +534,233 @@ func (root *RootValue) RemoveTables(ctx context.Context, tables ...string) (*Roo
 	}
 
 	return newRootValue(root.vrw, rootValSt), nil
+}
+
+// DocDiff returns the added, modified and removed docs when comparing a root value with an other (newer) value. If the other value,
+// is not provided, then we compare the docs on the root value to the docDetails provided.
+func (root *RootValue) DocDiff(ctx context.Context, other *RootValue, docDetails []DocDetails) (added, modified, removed []string, err error) {
+	oldTbl, oldTblFound, err := root.GetTable(ctx, DocTableName)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var oldSch schema.Schema
+	if oldTblFound {
+		sch, err := oldTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		oldSch = sch
+	}
+
+	if other == nil {
+		detailsWithValues, err := addValuesToDocs(ctx, oldTbl, &oldSch, docDetails)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		a, m, r := GetDocDiffsFromDocDetails(ctx, detailsWithValues)
+		return a, m, r, nil
+	}
+
+	newTbl, newTblFound, err := other.GetTable(ctx, DocTableName)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var newSch schema.Schema
+	if newTblFound {
+		sch, err := newTbl.GetSchema(ctx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		newSch = sch
+	}
+
+	docDetailsBtwnRoots, err := getDocDetailsBtwnRoots(ctx, newTbl, newSch, newTblFound, oldTbl, oldSch, oldTblFound)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	a, m, r := GetDocDiffsFromDocDetails(ctx, docDetailsBtwnRoots)
+	return a, m, r, nil
+}
+
+func getDocDetailsBtwnRoots(ctx context.Context, newTbl *Table, newSch schema.Schema, newTblFound bool, oldTbl *Table, oldSch schema.Schema, oldTblFound bool) ([]DocDetails, error) {
+	var docDetailsBtwnRoots []DocDetails
+	if newTblFound {
+		newRows, err := newTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		err = newRows.IterAll(ctx, func(key, val types.Value) error {
+			newRow, err := row.FromNoms(newSch, key.(types.Tuple), val.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			doc := DocDetails{}
+			updated, err := addDocPKToDocFromRow(newRow, &doc)
+			if err != nil {
+				return err
+			}
+			updated, err = addNewerTextToDocFromRow(ctx, newRow, &updated)
+			if err != nil {
+				return err
+			}
+			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, updated)
+			if err != nil {
+				return err
+			}
+			docDetailsBtwnRoots = append(docDetailsBtwnRoots, updated)
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if oldTblFound {
+		oldRows, err := oldTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		err = oldRows.IterAll(ctx, func(key, val types.Value) error {
+			oldRow, err := row.FromNoms(oldSch, key.(types.Tuple), val.(types.Tuple))
+			if err != nil {
+				return err
+			}
+			doc := DocDetails{}
+			updated, err := addDocPKToDocFromRow(oldRow, &doc)
+			if err != nil {
+				return err
+			}
+			updated, err = AddValueToDocFromTbl(ctx, oldTbl, &oldSch, updated)
+			if err != nil {
+				return err
+			}
+			updated, err = AddNewerTextToDocFromTbl(ctx, newTbl, &newSch, updated)
+			if err != nil {
+				return err
+			}
+
+			if updated.Value != nil && updated.NewerText == nil {
+				docDetailsBtwnRoots = append(docDetailsBtwnRoots, updated)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return docDetailsBtwnRoots, nil
+}
+
+func GetDocDiffsFromDocDetails(ctx context.Context, docDetails []DocDetails) (added, modified, removed []string) {
+	added = []string{}
+	modified = []string{}
+	removed = []string{}
+	for _, doc := range docDetails {
+		added, modified, removed = appendDocDiffs(added, modified, removed, doc.Value, doc.NewerText, doc.DocPk)
+	}
+	return added, modified, removed
+}
+
+func addValuesToDocs(ctx context.Context, tbl *Table, sch *schema.Schema, docDetails []DocDetails) ([]DocDetails, error) {
+	if tbl != nil && sch != nil {
+		for i, details := range docDetails {
+			newDetails, err := AddValueToDocFromTbl(ctx, tbl, sch, details)
+			if err != nil {
+				return nil, err
+			}
+			docDetails[i] = newDetails
+		}
+	}
+	return docDetails, nil
+}
+
+// AddValueToDocFromTbl updates the Value field of a docDetail using the provided table and schema.
+func AddValueToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, docDetail DocDetails) (DocDetails, error) {
+	if tbl != nil && sch != nil {
+		pkTaggedVal := row.TaggedValues{
+			DocNameTag: types.String(docDetail.DocPk),
+		}
+
+		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
+		if err != nil {
+			return DocDetails{}, err
+		}
+
+		if ok {
+			docValue, _ := docRow.GetColVal(DocTextTag)
+			docDetail.Value = docValue
+		} else {
+			docDetail.Value = nil
+		}
+	} else {
+		docDetail.Value = nil
+	}
+	return docDetail, nil
+}
+
+// AddNewerTextToDocFromTbl updates the NewerText field of a docDetail using the provided table and schema.
+func AddNewerTextToDocFromTbl(ctx context.Context, tbl *Table, sch *schema.Schema, doc DocDetails) (DocDetails, error) {
+	if tbl != nil && sch != nil {
+		pkTaggedVal := row.TaggedValues{
+			DocNameTag: types.String(doc.DocPk),
+		}
+
+		docRow, ok, err := tbl.GetRowByPKVals(ctx, pkTaggedVal, *sch)
+		if err != nil {
+			return DocDetails{}, err
+		}
+		if ok {
+			docValue, _ := docRow.GetColVal(DocTextTag)
+			doc.NewerText = []byte(docValue.(types.String))
+		} else {
+			doc.NewerText = nil
+		}
+	} else {
+		doc.NewerText = nil
+	}
+	return doc, nil
+}
+
+func addNewerTextToDocFromRow(ctx context.Context, r row.Row, doc *DocDetails) (DocDetails, error) {
+	docValue, ok := r.GetColVal(DocTextTag)
+	if !ok {
+		doc.NewerText = nil
+	} else {
+		docValStr, err := strconv.Unquote(docValue.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.NewerText = []byte(docValStr)
+	}
+	return *doc, nil
+}
+
+func addDocPKToDocFromRow(r row.Row, doc *DocDetails) (DocDetails, error) {
+	colVal, _ := r.GetColVal(DocNameTag)
+	if colVal == nil {
+		doc.DocPk = ""
+	} else {
+		docName, err := strconv.Unquote(colVal.HumanReadableString())
+		if err != nil {
+			return DocDetails{}, err
+		}
+		doc.DocPk = docName
+	}
+
+	return *doc, nil
+}
+
+func appendDocDiffs(added, modified, removed []string, olderVal types.Value, newerVal []byte, docPk string) (add, mod, rem []string) {
+	if olderVal == nil && newerVal != nil {
+		added = append(added, docPk)
+	} else if olderVal != nil {
+		if newerVal == nil {
+			removed = append(removed, docPk)
+		} else if olderVal.HumanReadableString() != strconv.Quote(string(newerVal)) {
+			modified = append(modified, docPk)
+		}
+	}
+	return added, modified, removed
 }

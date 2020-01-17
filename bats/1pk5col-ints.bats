@@ -12,6 +12,9 @@ teardown() {
 
 # Create a single primary key table and do stuff
 @test "create a table with a schema file and examine repo" {
+    # Remove the docs, because they will show up in the diff below and break the lines[x] assertions. 
+    rm LICENSE.md
+    rm README.md
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -453,6 +456,9 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "generate a merge conflict and try to roll back using dolt merge --abort" {
+    # L&R must be removed (or added and committed) in order to test merge
+    rm "LICENSE.md" 
+    rm "README.md"
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -645,6 +651,9 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "rm a staged but uncommitted table" {
+    # L&R must be removed (or added and committed) for `nothing to commit` message
+    rm "LICENSE.md"
+    rm "README.md"
     run dolt add test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
