@@ -20,6 +20,19 @@ teardown() {
     run dolt status
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "On branch master" ]
+    [ "${lines[1]}" = "Untracked files:" ]
+    [ "${lines[2]}" = '  (use "dolt add <table|doc>" to include in what will be committed)' ]
+    [[ "${lines[3]}" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
+    [[ "${lines[4]}" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
+    run ls
+    [ "${lines[0]}" = "LICENSE.md" ]
+    [ "${lines[1]}" = "README.md" ]
+    # L&R must be removed (or added and committed) for `nothing to commit` message to display
+    run rm "LICENSE.md"
+    run rm "README.md"
+    run dolt status
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = "On branch master" ]
     [ "${lines[1]}" = "nothing to commit, working tree clean" ]
 }
 
@@ -59,10 +72,15 @@ teardown() {
 @test "dolt diff in new repository" {
     run dolt diff
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    [[ "$output" =~ "diff --dolt a/LICENSE.md b/LICENSE.md" ]] || false
+    [[ "$output" =~ "diff --dolt a/README.md b/README.md" ]] || false
+    [[ "$output" =~ "added doc" ]] || false
 }
 
 @test "dolt commit with nothing added" {
+    # L&R must be removed (or added and committed) in order to test `no changes added to commit` message
+    rm "LICENSE.md"
+    rm "README.md"
     run dolt commit -m "commit"
     [ "$status" -eq 1 ]
     [ "$output" = 'no changes added to commit (use "dolt add")' ]

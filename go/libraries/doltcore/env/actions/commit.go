@@ -52,7 +52,7 @@ func getNameAndEmail(cfg *env.DoltCliConfig) (string, string, error) {
 }
 
 func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.Time, allowEmpty bool) error {
-	staged, notStaged, err := GetTableDiffs(ctx, dEnv)
+	stagedTbls, notStagedTbls, err := GetTableDiffs(ctx, dEnv)
 
 	if msg == "" {
 		return ErrEmptyCommitMessage
@@ -62,8 +62,14 @@ func CommitStaged(ctx context.Context, dEnv *env.DoltEnv, msg string, date time.
 		return err
 	}
 
-	if len(staged.Tables) == 0 && dEnv.RepoState.Merge == nil && !allowEmpty {
-		return NothingStaged{notStaged}
+	_, notStagedDocs, err := GetDocDiffs(ctx, dEnv)
+
+	if err != nil {
+		return err
+	}
+
+	if len(stagedTbls.Tables) == 0 && dEnv.RepoState.Merge == nil && !allowEmpty {
+		return NothingStaged{notStagedTbls, notStagedDocs}
 	}
 
 	name, email, err := getNameAndEmail(dEnv.Config)

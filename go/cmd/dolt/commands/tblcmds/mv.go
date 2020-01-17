@@ -23,6 +23,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 )
@@ -76,6 +77,10 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	if apr.NArg() != 2 {
 		usage()
 		return 1
+	}
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
 	}
 
 	force := apr.Contains(forceParam)

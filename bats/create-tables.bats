@@ -327,8 +327,8 @@ teardown() {
     dolt table create -s=`batshelper 1pk5col-ints.schema` test
     run dolt diff
     [ $status -eq 0 ]
-    [ "${lines[0]}" = "diff --dolt a/test b/test" ]
-    [ "${lines[1]}" = "added table" ]
+    [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
+    [[ "$output" =~ "added table" ]] || false
 }
 
 @test "create a table with null values from csv import" {

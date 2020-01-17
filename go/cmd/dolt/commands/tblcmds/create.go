@@ -83,6 +83,10 @@ func (cmd CreateCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	schVal, verr := readSchema(ctx, apr, dEnv)
 
 	if verr == nil {

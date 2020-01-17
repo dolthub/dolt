@@ -137,7 +137,7 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
 
-	return nil
+	return saveDocsOnResolve(ctx, dEnv)
 }
 
 func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
@@ -154,6 +154,7 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	tblName := args[0]
+
 	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("error: could not read tables").AddCause(err).Build()
 	} else if !has {
@@ -221,5 +222,13 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	valid := len(keysToResolve) - len(invalid) - len(notFound)
 	cli.Println(valid, "rows resolved successfully")
 
+	return saveDocsOnResolve(ctx, dEnv)
+}
+
+func saveDocsOnResolve(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+	err := actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
+	}
 	return nil
 }

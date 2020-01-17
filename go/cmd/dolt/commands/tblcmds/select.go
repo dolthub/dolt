@@ -97,6 +97,10 @@ func (cmd SelectCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {

@@ -78,6 +78,10 @@ func (cmd AddColumnCmd) Exec(ctx context.Context, commandStr string, args []stri
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schAddColShortDesc, schAddColLongDesc, schAddColSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {

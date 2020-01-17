@@ -80,6 +80,10 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	force := apr.Contains(forceParam)
 	working, verr := commands.GetWorkingWithVErr(dEnv)
 	root := working
@@ -131,6 +135,5 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 			}
 		}
 	}
-
 	return commands.HandleVErrAndExitCode(verr, usage)
 }

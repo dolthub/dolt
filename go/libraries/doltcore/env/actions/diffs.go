@@ -38,6 +38,22 @@ type TableDiffs struct {
 	Tables      []string
 }
 
+type DocDiffType int
+
+const (
+	AddedDoc DocDiffType = iota
+	ModifiedDoc
+	RemovedDoc
+)
+
+type DocDiffs struct {
+	NumAdded    int
+	NumModified int
+	NumRemoved  int
+	DocToType   map[string]DocDiffType
+	Docs        []string
+}
+
 func NewTableDiffs(ctx context.Context, newer, older *doltdb.RootValue) (*TableDiffs, error) {
 	added, modified, removed, err := newer.TableDiff(ctx, older)
 
@@ -103,4 +119,88 @@ func GetTableDiffs(ctx context.Context, dEnv *env.DoltEnv) (*TableDiffs, *TableD
 	}
 
 	return stagedDiffs, notStagedDiffs, nil
+}
+
+func NewDocDiffs(ctx context.Context, dEnv *env.DoltEnv, older *doltdb.RootValue, newer *doltdb.RootValue, docDetails []doltdb.DocDetails) (*DocDiffs, error) {
+	var added []string
+	var modified []string
+	var removed []string
+	if older != nil {
+		if newer == nil {
+			a, m, r, err := older.DocDiff(ctx, nil, docDetails)
+			if err != nil {
+				return nil, err
+			}
+			added = a
+			modified = m
+			removed = r
+		} else {
+			a, m, r, err := older.DocDiff(ctx, newer, docDetails)
+			if err != nil {
+				return nil, err
+			}
+			added = a
+			modified = m
+			removed = r
+		}
+	}
+	var docs []string
+	docs = append(docs, added...)
+	docs = append(docs, modified...)
+	docs = append(docs, removed...)
+	sort.Strings(docs)
+
+	docsToType := make(map[string]DocDiffType)
+	for _, nt := range added {
+		docsToType[nt] = AddedDoc
+	}
+
+	for _, nt := range modified {
+		docsToType[nt] = ModifiedDoc
+	}
+
+	for _, nt := range removed {
+		docsToType[nt] = RemovedDoc
+	}
+
+	return &DocDiffs{len(added), len(modified), len(removed), docsToType, docs}, nil
+}
+
+func (nd *DocDiffs) Len() int {
+	return len(nd.Docs)
+}
+
+// GetDocDiffs retrieves staged and unstaged DocDiffs.
+func GetDocDiffs(ctx context.Context, dEnv *env.DoltEnv) (*DocDiffs, *DocDiffs, error) {
+	docDetails, err := dEnv.GetAllValidDocDetails()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	notStagedDocDiffs, err := NewDocDiffs(ctx, dEnv, workingRoot, nil, docDetails)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	stagedRoot, err := dEnv.StagedRoot(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	stagedDocDiffs, err := NewDocDiffs(ctx, dEnv, headRoot, stagedRoot, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return stagedDocDiffs, notStagedDocDiffs, nil
 }

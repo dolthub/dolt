@@ -104,7 +104,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
 	}
 
-	return handleCommitErr(err, usage)
+	return handleCommitErr(ctx, dEnv, err, usage)
 }
 
 // we are more permissive than what is documented.
@@ -134,7 +134,7 @@ func parseDate(dateStr string) (time.Time, error) {
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
 
-func handleCommitErr(err error, usage cli.UsagePrinter) int {
+func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
 	if err == nil {
 		return 0
 	}
@@ -159,8 +159,9 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 	}
 
 	if actions.IsNothingStaged(err) {
-		notStaged := actions.NothingStagedDiffs(err)
-		n := printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
+		notStagedTbls := actions.NothingStagedTblDiffs(err)
+		notStagedDocs := actions.NothingStagedDocsDiffs(err)
+		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -193,17 +194,18 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.Head.Ref
-	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
-	buf := bytes.NewBuffer([]byte{})
+	stagedTblDiffs, notStagedTblDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
 
-	workingInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
-
+	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
-		workingInConflict = []string{}
+		workingTblsInConflict = []string{}
 	}
 
-	n := printStagedDiffs(buf, stagedDiffs, true)
-	n = printDiffsNotStaged(buf, notStagedDiffs, true, n, workingInConflict)
+	stagedDocDiffs, notStagedDocDiffs, _ := actions.GetDocDiffs(ctx, dEnv)
+
+	buf := bytes.NewBuffer([]byte{})
+	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
+	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
 
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"

@@ -22,6 +22,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -125,6 +126,11 @@ var importSynopsis = []string{
 func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
 	if apr.NArg() == 0 || apr.NArg() > 2 {
 		usage()
+		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
+	}
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		cli.PrintErrln(color.RedString("'%s' is not a valid table name", doltdb.DocTableName))
 		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 	}
 
@@ -248,6 +254,10 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 	if mvOpts == nil {
 		return 1
+	}
+
+	if mvOpts.TableName == doltdb.DocTableName {
+		return commands.HandleDocTableVErrAndExitCode()
 	}
 
 	res := executeMove(ctx, dEnv, force, mvOpts)

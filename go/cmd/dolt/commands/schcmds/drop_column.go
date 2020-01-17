@@ -65,6 +65,10 @@ func (cmd DropColumnCmd) Exec(ctx context.Context, commandStr string, args []str
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schDropColShortDesc, schDropColLongDesc, schDropColSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {

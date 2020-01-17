@@ -94,6 +94,10 @@ func (cmd RmRowCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		return 1
 	}
 
+	if rmArgs.TableName == doltdb.DocTableName {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	var root *doltdb.RootValue
 	var tbl *doltdb.Table
 	root, tbl, verr := getRootAndTable(ctx, dEnv, rmArgs.TableName)

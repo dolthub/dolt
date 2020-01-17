@@ -70,6 +70,10 @@ func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		return 1
 	}
 
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
+
 	working, verr := commands.GetWorkingWithVErr(dEnv)
 
 	if verr == nil {

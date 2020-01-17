@@ -10,6 +10,7 @@ require (
 	github.com/abiosoft/readline v0.0.0-20180607040430-155bce2042db
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d
 	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
+	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/araddon/dateparse v0.0.0-20190622164848-0fb0a474d195
 	github.com/armon/go-metrics v0.3.0 // indirect
 	github.com/asaskevich/govalidator v0.0.0-20200108180119-8dad3749fdf3 // indirect
@@ -58,6 +59,7 @@ require (
 	github.com/prometheus/client_golang v1.3.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20190728182440-6a916e37a237 // indirect
 	github.com/rivo/uniseg v0.1.0
+	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shirou/gopsutil v2.19.12+incompatible
 	github.com/shopspring/decimal v0.0.0-20200105231215-408a2507e114
 	github.com/sirupsen/logrus v1.4.2
