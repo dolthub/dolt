@@ -29,6 +29,7 @@ import (
 )
 
 const batchLevel = 2
+const batchSize = uint64(1024)
 
 // bufferedSequenceCursor explores a tree of sequence items.
 type bufferedSequenceCursor struct {
@@ -68,15 +69,16 @@ func (cur *bufferedSequenceCursor) sync(ctx context.Context) error {
 
 	if cur.parent.seq.treeLevel() > batchLevel {
 		cur.seq, err = cur.parent.getChildSequence(ctx)
+		if err != nil {
+			return err
+		}
 		cur.seqLen = cur.seq.seqLen()
 		return nil
 	}
-
-	//var batch uint64 = 64 * (4 - cur.parent.seq.treeLevel())
-	//if (batch + uint64(cur.parent.idx)) >= uint64(cur.parent.seqLen) {
-	//	batch = uint64(cur.parent.seqLen - cur.parent.idx)
-	//}
-	batch := uint64(cur.parent.seqLen - cur.parent.idx)
+	batch := batchSize
+	if batch > uint64(cur.parent.seqLen - cur.parent.idx) {
+		batch = uint64(cur.parent.seqLen - cur.parent.idx)
+	}
 	cur.seq, err = cur.parent.seq.getCompositeChildSequence(ctx, uint64(cur.parent.idx), batch)
 
 	if err != nil {
@@ -287,27 +289,6 @@ func newBufferedCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*b
 	return cur, nil
 }
 
-
-func seekBufCurTo(cur *bufferedSequenceCursor, key orderedKey, lastPositionIfNotFound bool) (bool, error) {
-	return false, nil
-	//seq := cur.seq.(orderedSequence)
-	//
-	//var err error
-	//// Find smallest idx in seq where key(idx) >= key
-	//cur.idx, err = seq.search(key)
-	//
-	//if err != nil {
-	//	return false, err
-	//}
-	//
-	//seqLen := seq.seqLen()
-	//if cur.idx == seqLen && lastPositionIfNotFound {
-	//	d.PanicIfFalse(cur.idx > 0)
-	//	cur.idx--
-	//}
-	//
-	//return cur.idx < seqLen, nil
-}
 
 func advanceBufferedCursorToOffset(cur *bufferedSequenceCursor, idx uint64) (uint64, error) {
 	seq := cur.seq

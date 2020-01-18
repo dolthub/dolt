@@ -344,13 +344,27 @@ func (m Map) isPrimitive() bool {
 	return false
 }
 
-// buffered
 func (m Map) Iterator(ctx context.Context) (MapIterator, error) {
 	return m.IteratorAt(ctx, 0)
 }
 
-// buffered
 func (m Map) IteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
+	cur, err := newCursorAtIndex(ctx, m.orderedSequence, pos)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &mapIterator{
+		cursor: cur,
+	}, nil
+}
+
+func (m Map) BufferedIterator(ctx context.Context) (MapIterator, error) {
+	return m.IteratorAt(ctx, 0)
+}
+
+func (m Map) BufferedIteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
 	bufCur, err := newBufferedCursorAtIndex(ctx, m.orderedSequence, pos)
 
 	if err != nil {
@@ -362,15 +376,14 @@ func (m Map) IteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
 	}, nil
 }
 
-// unbuffered
 func (m Map) IteratorFrom(ctx context.Context, key Value) (MapIterator, error) {
-	bufCur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
+	cur, err := newCursorAtValue(ctx, m.orderedSequence, key, false, false)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &mapIterator{cursor: bufCur}, nil
+	return &mapIterator{cursor: cur}, nil
 }
 
 type mapIterAllCallback func(key, value Value) error

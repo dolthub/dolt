@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/store/util/verbose"
 	"sync"
 	"time"
 
@@ -35,7 +36,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/util/sizecache"
 )
 
-const artificialIODelay = 250 * time.Millisecond
+//const artificialIODelay = 250 * time.Millisecond
+const artificialIODelay = 0 * time.Millisecond
 const logVRWGets = true
 
 // ValueReader is an interface that knows how to read Noms Values, e.g.
@@ -174,10 +176,10 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 
 	if chunk.IsEmpty() {
 		var err error
-		//if logVRWGets {
-		//	verbose.Logger(ctx).Sugar().Warnf("...ReadValue Get(%v)", h)
-		//}
-		//time.Sleep(artificialIODelay)
+		if logVRWGets {
+			verbose.Logger(ctx).Sugar().Warnf("...ReadValue Get(%v)", h)
+		}
+		time.Sleep(artificialIODelay)
 		chunk, err = lvs.cs.Get(ctx, h)
 
 		if err != nil {
@@ -263,10 +265,10 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		ae := atomicerr.New()
 		go func() {
 			defer close(foundChunks)
-			//if logVRWGets {
-			//	verbose.Logger(ctx).Sugar().Warnf("...ReadManyValues GetMany(%v)", remaining)
-			//}
-			//time.Sleep(artificialIODelay)
+			if logVRWGets {
+				verbose.Logger(ctx).Sugar().Warnf("...ReadManyValues GetMany(%v) len=%d", remaining, len(remaining))
+			}
+			time.Sleep(artificialIODelay)
 			err := lvs.cs.GetMany(ctx, remaining, foundChunks)
 			ae.SetIfError(err)
 		}()
