@@ -44,14 +44,17 @@ var tblMvSynopsis = []string{
 
 type MvCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd MvCmd) Name() string {
 	return "mv"
 }
 
+// Description returns a description of the command
 func (cmd MvCmd) Description() string {
 	return "Moves a table"
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MvCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, tblMvShortDesc, tblMvLongDesc, tblMvSynopsis, ap)
@@ -65,10 +68,12 @@ func (cmd MvCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_MV
 }
 
+// Exec executes the command
 func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblMvShortDesc, tblMvLongDesc, tblMvSynopsis, ap)

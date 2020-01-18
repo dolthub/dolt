@@ -38,14 +38,17 @@ var schRenameColSynopsis = []string{
 
 type RenameColumnCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd RenameColumnCmd) Name() string {
 	return "rename-column"
 }
 
+// Description returns a description of the command
 func (cmd RenameColumnCmd) Description() string {
 	return "Renames a column of the specified table."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RenameColumnCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, schRenameColShortDesc, schRenameColLongDesc, schRenameColSynopsis, ap)
@@ -57,10 +60,12 @@ func (cmd RenameColumnCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd RenameColumnCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SCHEMA
 }
 
+// Exec executes the command
 func (cmd RenameColumnCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schRenameColShortDesc, schRenameColLongDesc, schRenameColSynopsis, ap)

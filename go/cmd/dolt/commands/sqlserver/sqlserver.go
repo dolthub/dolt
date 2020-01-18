@@ -49,14 +49,17 @@ var sqlServerSynopsis = []string{
 
 type SqlServerCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SqlServerCmd) Name() string {
 	return "sql-server"
 }
 
+// Description returns a description of the command
 func (cmd SqlServerCmd) Description() string {
 	return "Starts a MySQL-compatible server."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := createArgParser(DefaultServerConfig())
 	return cli.CreateMarkdown(fs, path, commandStr, sqlServerShortDesc, sqlServerLongDesc, sqlServerSynopsis, ap)
@@ -74,10 +77,12 @@ func createArgParser(serverConfig *ServerConfig) *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd SqlServerCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SQL_SERVER
 }
 
+// Exec executes the command
 func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 
 	return SqlServerImpl(ctx, commandStr, args, dEnv, nil)

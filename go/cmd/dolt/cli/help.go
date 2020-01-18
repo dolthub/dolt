@@ -91,14 +91,14 @@ func CreateMarkdown(fs filesys.Filesys, path, commandStr, shortDesc, longDesc st
 	}
 
 	err = iohelp.WriteIfNoErr(wr, []byte("## Description\n\n"), err)
-	err = iohelp.WriteIfNoErr(wr, []byte(handleAngleBrackets(longDesc)+"\n\n"), err)
+	err = iohelp.WriteIfNoErr(wr, []byte(markdownEscape(longDesc)+"\n\n"), err)
 
 	if len(parser.Supported) > 0 || len(parser.ArgListHelp) > 0 {
-		err = iohelp.WriteIfNoErr(wr, []byte("## Options\n\n"), nil)
+		err = iohelp.WriteIfNoErr(wr, []byte("## Options\n\n"), err)
 
 		for _, kvTuple := range parser.ArgListHelp {
 			k, v := kvTuple[0], kvTuple[1]
-			err = iohelp.WriteIfNoErr(wr, []byte("&lt;"+k+"&gt;\n"+v+"\n\n"), nil)
+			err = iohelp.WriteIfNoErr(wr, []byte("&lt;"+k+"&gt;\n"+v+"\n\n"), err)
 		}
 
 		for _, supOpt := range parser.Supported {
@@ -118,11 +118,7 @@ func CreateMarkdown(fs filesys.Filesys, path, commandStr, shortDesc, longDesc st
 		}
 	}
 
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func PrintUsage(commandStr string, synopsis []string, parser *argparser.ArgParser) {
@@ -160,50 +156,13 @@ const (
 
 var bold = color.New(color.Bold)
 
-func handleAngleBrackets(str string) string {
-	var res string
-	var start int
-	var end int
+func markdownEscape(str string) string {
+	str = strings.ReplaceAll(str, "<b>", "**")
+	str = strings.ReplaceAll(str, "</b>", "**")
+	str = strings.ReplaceAll(str, "<", "&lt;")
+	str = strings.ReplaceAll(str, ">", "&gt;")
 
-	curr := str
-
-	for {
-		start = strings.Index(curr, "<")
-		end = strings.Index(curr, ">")
-
-		if start == -1 || end == -1 {
-			break
-		}
-
-		if end < start {
-			res += curr[:end] + "&gt;"
-			curr = curr[end+1:]
-			continue
-		}
-
-		word := curr[start+1 : end]
-		if word == "b" || word == `/b` {
-			res += curr[:end+1]
-			curr = curr[end+1:]
-		} else {
-			res += curr[:start]
-			res += "&lt;"
-			res += curr[start+1 : end]
-			res += "&gt;"
-			curr = curr[end+1:]
-		}
-	}
-
-	if start != -1 {
-		res += curr[:start] + "&lt;"
-		curr = curr[start+1:]
-	}
-
-	if len(curr) != 0 {
-		res += curr
-	}
-
-	return res
+	return str
 }
 
 func embolden(str string) string {

@@ -226,14 +226,17 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 
 type ImportCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ImportCmd) Name() string {
 	return "import"
 }
 
+// Description returns a description of the command
 func (cmd ImportCmd) Description() string {
 	return "Creates, overwrites, replaces, or updates a table from the data in a file."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
@@ -244,10 +247,12 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_IMPORT
 }
 
+// Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	force, mvOpts := parseCreateArgs(ap, commandStr, args)

@@ -44,18 +44,22 @@ var fetchSynopsis = []string{
 
 type FetchCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd FetchCmd) Name() string {
 	return "fetch"
 }
 
+// Description returns a description of the command
 func (cmd FetchCmd) Description() string {
 	return "Update the database from a remote data repository."
 }
 
+// EventType returns the type of the event to log
 func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_FETCH
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
@@ -66,6 +70,7 @@ func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)

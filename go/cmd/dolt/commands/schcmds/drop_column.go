@@ -37,14 +37,17 @@ var schDropColSynopsis = []string{
 
 type DropColumnCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd DropColumnCmd) Name() string {
 	return "drop-column"
 }
 
+// Description returns a description of the command
 func (cmd DropColumnCmd) Description() string {
 	return "Removes a column of the specified table."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd DropColumnCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, schDropColShortDesc, schDropColLongDesc, schDropColSynopsis, ap)
@@ -56,10 +59,12 @@ func (cmd DropColumnCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd DropColumnCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SCHEMA
 }
 
+// Exec executes the command
 func (cmd DropColumnCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schDropColShortDesc, schDropColLongDesc, schDropColSynopsis, ap)

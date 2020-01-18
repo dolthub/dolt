@@ -69,23 +69,28 @@ type SelectArgs struct {
 
 type SelectCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SelectCmd) Name() string {
 	return "select"
 }
 
+// Description returns a description of the command
 func (cmd SelectCmd) Description() string {
 	return "Print a selection of a table."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SelectCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := newArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, selShortDesc, selLongDesc, selSynopsis, ap)
 }
 
+// EventType returns the type of the event to log
 func (cmd SelectCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_SELECT
 }
 
+// Exec executes the command
 func (cmd SelectCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := newArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, selShortDesc, selLongDesc, selSynopsis, ap)

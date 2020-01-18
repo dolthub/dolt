@@ -37,26 +37,33 @@ type DumpDocsCmd struct {
 	DoltCommand cli.SubCommandHandler
 }
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd *DumpDocsCmd) Name() string {
 	return "dump-docs"
 }
 
+// Description returns a description of the command
 func (cmd *DumpDocsCmd) Description() string {
 	return "dumps all documentation in md format to a directory"
 }
 
+// Hidden should return true if this command should be hidden from the help text
 func (cmd *DumpDocsCmd) Hidden() bool {
 	return true
 }
 
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
 func (cmd *DumpDocsCmd) RequiresRepo() bool {
 	return false
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd *DumpDocsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	return nil
 }
 
+// Exec executes the command
 func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(dirParamName, "", "dir", "The directory where the md files should be dumped")
@@ -77,7 +84,7 @@ func (cmd *DumpDocsCmd) Exec(_ context.Context, commandStr string, args []string
 		return 1
 	}
 
-	indexPath := filepath.Join(dirStr, "command_line.md")
+	indexPath := filepath.Join(dirStr, "command_line_index.md")
 	idxWr, err := dEnv.FS.OpenForWrite(indexPath)
 
 	if err != nil {
@@ -123,8 +130,8 @@ func (cmd *DumpDocsCmd) dumpDocs(idxWr io.Writer, dEnv *env.DoltEnv, dirStr, cmd
 				}
 			} else {
 				currCmdStr := cmdStr + " " + curr.Name()
-				filename := strings.Replace(currCmdStr, " ", "_", -1)
-				filename = strings.Replace(filename, "-", "_", -1)
+				filename := strings.ReplaceAll(currCmdStr, " ", "_")
+				filename = strings.ReplaceAll(filename, "-", "_")
 				absPath := filepath.Join(dirStr, filename+".md")
 
 				indexLine := fmt.Sprintf("* [%s](%s)\n", currCmdStr, filename)

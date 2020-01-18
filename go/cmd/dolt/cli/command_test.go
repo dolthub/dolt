@@ -37,45 +37,45 @@ type trackedCommand struct {
 	args        []string
 }
 
-func NewTrackedFunc(name, desc string) *trackedCommand {
+func NewTrackedCommand(name, desc string) *trackedCommand {
 	return &trackedCommand{name, desc, false, "", nil}
 }
 
-func (tf *trackedCommand) wasCalled() bool {
-	return tf.called
+func (cmd *trackedCommand) wasCalled() bool {
+	return cmd.called
 }
 
-func (tf *trackedCommand) Name() string {
-	return tf.name
+func (cmd *trackedCommand) Name() string {
+	return cmd.name
 }
 
-func (tf *trackedCommand) Description() string {
-	return tf.description
+func (cmd *trackedCommand) Description() string {
+	return cmd.description
 }
 
-func (tf *trackedCommand) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+func (cmd *trackedCommand) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	return nil
 }
 
-func (tf *trackedCommand) RequiresRepo() bool {
+func (cmd *trackedCommand) RequiresRepo() bool {
 	return false
 }
 
-func (tf *trackedCommand) Exec(ctx context.Context, cmdStr string, args []string, dEnv *env.DoltEnv) int {
-	tf.called = true
-	tf.cmdStr = cmdStr
-	tf.args = args
+func (cmd *trackedCommand) Exec(ctx context.Context, cmdStr string, args []string, dEnv *env.DoltEnv) int {
+	cmd.called = true
+	cmd.cmdStr = cmdStr
+	cmd.args = args
 	return 0
 }
 
-func (tf *trackedCommand) equalsState(called bool, cmdStr string, args []string) bool {
-	return called == tf.called && cmdStr == tf.cmdStr && reflect.DeepEqual(args, tf.args)
+func (cmd *trackedCommand) equalsState(called bool, cmdStr string, args []string) bool {
+	return called == cmd.called && cmdStr == cmd.cmdStr && reflect.DeepEqual(args, cmd.args)
 }
 
 func TestCommands(t *testing.T) {
-	grandChild1 := NewTrackedFunc("grandchild1", "child2's first child")
+	grandChild1 := NewTrackedCommand("grandchild1", "child2's first child")
 	child2 := NewSubCommandHandler("child2", "second child command", []Command{grandChild1})
-	child1 := NewTrackedFunc("child1", "first child command")
+	child1 := NewTrackedCommand("child1", "first child command")
 	commands := NewSubCommandHandler(appName, "test application", []Command{
 		child1,
 		child2,

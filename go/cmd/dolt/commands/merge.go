@@ -63,14 +63,17 @@ var abortDetails = "Abort the current conflict resolution process, and try to re
 
 type MergeCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd MergeCmd) Name() string {
 	return "merge"
 }
 
+// Description returns a description of the command
 func (cmd MergeCmd) Description() string {
 	return "Merge a branch."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)
@@ -82,10 +85,12 @@ func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_MERGE
 }
 
+// Exec executes the command
 func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)

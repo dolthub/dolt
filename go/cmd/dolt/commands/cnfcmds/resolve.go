@@ -66,19 +66,23 @@ func init() {
 
 type ResolveCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ResolveCmd) Name() string {
 	return "resolve"
 }
 
+// Description returns a description of the command
 func (cmd ResolveCmd) Description() string {
 	return "Removes rows from list of conflicts"
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResolveCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
 }
 
+// EventType returns the type of the event to log
 func (cmd ResolveCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CONF_RESOLVE
 }
@@ -93,6 +97,7 @@ func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resShortDesc, resLongDesc, resSynopsis, ap)

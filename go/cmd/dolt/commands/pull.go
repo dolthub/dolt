@@ -39,14 +39,17 @@ var pullSynopsis = []string{
 
 type PullCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd PullCmd) Name() string {
 	return "pull"
 }
 
+// Description returns a description of the command
 func (cmd PullCmd) Description() string {
 	return "Fetch from a dolt remote data repository and merge."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd PullCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)
@@ -57,10 +60,12 @@ func (cmd PullCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_PULL
 }
 
+// Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pullShortDesc, pullLongDesc, pullSynopsis, ap)

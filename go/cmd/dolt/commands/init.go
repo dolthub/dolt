@@ -44,18 +44,23 @@ var initSynopsis = []string{
 
 type InitCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd InitCmd) Name() string {
 	return "init"
 }
 
+// Description returns a description of the command
 func (cmd InitCmd) Description() string {
 	return "Create an empty Dolt data repository."
 }
 
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
 func (cmd InitCmd) RequiresRepo() bool {
 	return false
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 
@@ -71,6 +76,7 @@ func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)

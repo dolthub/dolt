@@ -81,14 +81,17 @@ const (
 
 type SqlCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SqlCmd) Name() string {
 	return "sql"
 }
 
+// Description returns a description of the command
 func (cmd SqlCmd) Description() string {
 	return "Run a SQL query against tables in repository."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)
@@ -100,10 +103,12 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd SqlCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SQL
 }
 
+// Exec executes the command
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlShortDesc, sqlLongDesc, sqlSynopsis, ap)

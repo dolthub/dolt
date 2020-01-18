@@ -75,14 +75,17 @@ type blameGraph map[hash.Hash]blameInfo
 
 type BlameCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd BlameCmd) Name() string {
 	return "blame"
 }
 
+// Description returns a description of the command
 func (cmd BlameCmd) Description() string {
 	return "Show what revision and author last modified each row of a table."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BlameCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
@@ -93,6 +96,7 @@ func (cmd BlameCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_BLAME
 }
@@ -112,6 +116,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 // changed between the commits. If so, mark it with `new` as the blame origin and continue to the next node without blame.
 //
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
+// Exec executes the command
 func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)

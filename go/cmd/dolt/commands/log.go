@@ -82,18 +82,22 @@ func printDesc(cm *doltdb.CommitMeta) {
 
 type LogCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd LogCmd) Name() string {
 	return "log"
 }
 
+// Description returns a description of the command
 func (cmd LogCmd) Description() string {
 	return "Show commit logs."
 }
 
+// EventType returns the type of the event to log
 func (cmd LogCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_LOG
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LogCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := createLogArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, logShortDesc, logLongDesc, logSynopsis, ap)
@@ -105,6 +109,7 @@ func createLogArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd LogCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	return logWithLoggerFunc(ctx, commandStr, args, dEnv, logToStdOutFunc)
 }

@@ -108,18 +108,22 @@ type importArgs struct {
 
 type ImportCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ImportCmd) Name() string {
 	return "import"
 }
 
+// Description returns a description of the command
 func (cmd ImportCmd) Description() string {
 	return "Creates a new table with an inferred schema."
 }
 
+// EventType returns the type of the event to log
 func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SCHEMA
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, schImportShortDesc, schImportLongDesc, schImportSynopsis, ap)
@@ -143,6 +147,7 @@ func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 }
 
 // Exec implements the import schema command that will take a file and infer it's schema, and then create a table matching that schema.
+// Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schImportShortDesc, schImportLongDesc, schImportSynopsis, ap)

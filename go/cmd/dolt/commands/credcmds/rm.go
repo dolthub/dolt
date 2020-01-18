@@ -34,14 +34,17 @@ var rmSynopsis = []string{"<public_key_as_appears_in_ls>"}
 
 type RmCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd RmCmd) Name() string {
 	return "rm"
 }
 
+// Description returns a description of the command
 func (cmd RmCmd) Description() string {
 	return rmShortDesc
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)
@@ -52,14 +55,18 @@ func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
 func (cmd RmCmd) RequiresRepo() bool {
 	return false
 }
 
+// EventType returns the type of the event to log
 func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CREDS_RM
 }
 
+// Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, rmShortDesc, rmLongDesc, rmSynopsis, ap)

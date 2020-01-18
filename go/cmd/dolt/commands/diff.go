@@ -109,18 +109,22 @@ type diffArgs struct {
 
 type DiffCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd DiffCmd) Name() string {
 	return "diff"
 }
 
+// Description returns a description of the command
 func (cmd DiffCmd) Description() string {
 	return "Diff a table."
 }
 
+// EventType returns the type of the event to log
 func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_DIFF
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
@@ -137,6 +141,7 @@ func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)

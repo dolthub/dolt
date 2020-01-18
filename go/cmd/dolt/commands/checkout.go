@@ -51,14 +51,17 @@ const coBranchArg = "b"
 
 type CheckoutCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd CheckoutCmd) Name() string {
 	return "checkout"
 }
 
+// Description returns a description of the command
 func (cmd CheckoutCmd) Description() string {
 	return "Checkout a branch or overwrite a table from HEAD."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckoutCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, coShortDesc, coLongDesc, coSynopsis, ap)
@@ -70,10 +73,12 @@ func (cmd CheckoutCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CHECKOUT
 }
 
+// Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	helpPrt, usagePrt := cli.HelpAndUsagePrinters(commandStr, coShortDesc, coLongDesc, coSynopsis, ap)

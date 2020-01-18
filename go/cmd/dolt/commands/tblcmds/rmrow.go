@@ -62,14 +62,17 @@ func parseRmRowArgs(ap *argparser.ArgParser, commandStr string, args []string) *
 
 type RmRowCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd RmRowCmd) Name() string {
 	return "rm-row"
 }
 
+// Description returns a description of the command
 func (cmd RmRowCmd) Description() string {
 	return "Remove a row from a table."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmRowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, rmRowShortDesc, rmRowLongDesc, rmRowSynopsis, ap)
@@ -82,10 +85,12 @@ func (cmd RmRowCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd RmRowCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_RM_ROW
 }
 
+// Exec executes the command
 func (cmd RmRowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	rmArgs := parseRmRowArgs(ap, commandStr, args)

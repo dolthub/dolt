@@ -39,38 +39,55 @@ func isHelp(str string) bool {
 
 func hasHelpFlag(args []string) bool {
 	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
+		if isHelp(arg) {
 			return true
 		}
 	}
 	return false
 }
 
+// Command is the interface which defines a Dolt cli command
 type Command interface {
+	// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 	Name() string
+	// Description returns a description of the command
 	Description() string
+	// Exec executes the command
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
+	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
 }
 
+// RepoNotRequiredCommand is an optional interface that commands can implement if the command can be run without
+// the current directory being a valid Dolt data repository.  Any commands not implementing this interface are
+// assumed to require that they be run from a directory containing a Dolt data repository.
 type RepoNotRequiredCommand interface {
+	// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+	// that it be run from within a data repository directory
 	RequiresRepo() bool
 }
 
+// EventMonitoredCommand is an optional interface that can be overridden in order to generate an event which is sent
+// to the metrics system when the command is run
 type EventMonitoredCommand interface {
+	// EventType returns the type of the event to log
 	EventType() eventsapi.ClientEventType
 }
 
+// HiddenCommand is an optional interface that can be overridden so that a command is hidden from the help text
 type HiddenCommand interface {
+	// Hidden should return true if this command should be hidden from the help text
 	Hidden() bool
 }
 
+// SubCommandHandler is a command implementation which holds subcommands which can be called
 type SubCommandHandler struct {
 	name        string
 	description string
 	Subcommands []Command
 }
 
+// NewSubCommandHandler returns a new SubCommandHandler instance
 func NewSubCommandHandler(name, description string, subcommands []Command) SubCommandHandler {
 	return SubCommandHandler{name, description, subcommands}
 }

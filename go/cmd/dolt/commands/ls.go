@@ -37,14 +37,17 @@ var lsSynopsis = []string{
 
 type LsCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd LsCmd) Name() string {
 	return "ls"
 }
 
+// Description returns a description of the command
 func (cmd LsCmd) Description() string {
 	return "List tables in the working set."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
@@ -56,10 +59,12 @@ func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_LS
 }
 
+// Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)

@@ -40,27 +40,34 @@ const (
 
 type SendMetricsCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd SendMetricsCmd) Name() string {
 	return SendMetricsCommand
 }
 
+// Description returns a description of the command
 func (cmd SendMetricsCmd) Description() string {
 	return "Send events logs to server."
 }
 
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
 func (cmd SendMetricsCmd) RequiresRepo() bool {
 	return false
 }
 
+// Hidden should return true if this command should be hidden from the help text
 func (cmd SendMetricsCmd) Hidden() bool {
 	return true
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SendMetricsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	return nil
 }
 
 // Exec is the implementation of the command that flushes the events to the grpc service
+// Exec executes the command
 func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(outputFlag, "o", "Flush events to stdout.")

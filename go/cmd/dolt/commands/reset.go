@@ -57,14 +57,17 @@ var resetSynopsis = []string{
 
 type ResetCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ResetCmd) Name() string {
 	return "reset"
 }
 
+// Description returns a description of the command
 func (cmd ResetCmd) Description() string {
 	return "Remove table changes from the list of staged table changes."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
@@ -77,6 +80,7 @@ func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)

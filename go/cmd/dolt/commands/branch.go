@@ -73,14 +73,17 @@ const (
 
 type BranchCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd BranchCmd) Name() string {
 	return "branch"
 }
 
+// Description returns a description of the command
 func (cmd BranchCmd) Description() string {
 	return "Create, list, edit, delete branches."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
@@ -100,10 +103,12 @@ func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_BRANCH
 }
 
+// Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)

@@ -46,14 +46,17 @@ var bold = color.New(color.Bold)
 
 type ShowCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd ShowCmd) Name() string {
 	return "show"
 }
 
+// Description returns a description of the command
 func (cmd ShowCmd) Description() string {
 	return "Shows the schema of one or more tables."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ShowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)
@@ -66,10 +69,12 @@ func (cmd ShowCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_SCHEMA
 }
 
+// Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblSchemaShortDesc, tblSchemaLongDesc, tblSchemaSynopsis, ap)

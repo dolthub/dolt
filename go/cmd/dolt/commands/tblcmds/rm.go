@@ -37,18 +37,22 @@ var tblRmSynopsis = []string{
 
 type RmCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd RmCmd) Name() string {
 	return "rm"
 }
 
+// Description returns a description of the command
 func (cmd RmCmd) Description() string {
 	return "Deletes a table"
 }
 
+// EventType returns the type of the event to log
 func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_RM
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
@@ -60,6 +64,7 @@ func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)

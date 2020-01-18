@@ -47,14 +47,17 @@ var tblCreateSynopsis = []string{
 
 type CreateCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd CreateCmd) Name() string {
 	return "create"
 }
 
+// Description returns a description of the command
 func (cmd CreateCmd) Description() string {
 	return "Creates or overwrite an existing table with an empty table."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CreateCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, tblCreateShortDesc, tblCreateLongDesc, tblCreateSynopsis, ap)
@@ -69,10 +72,12 @@ func (cmd CreateCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// EventType returns the type of the event to log
 func (cmd CreateCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_CREATE
 }
 
+// Exec executes the command
 func (cmd CreateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblCreateShortDesc, tblCreateLongDesc, tblCreateSynopsis, ap)

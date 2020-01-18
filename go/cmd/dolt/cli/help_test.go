@@ -63,7 +63,7 @@ func TestEmbolden(t *testing.T) {
 	}
 }
 
-func TestInlineQuoteAngleBracketParams(t *testing.T) {
+func TestMarkdownEscape(t *testing.T) {
 	tests := []struct {
 		name     string
 		str      string
@@ -80,13 +80,12 @@ func TestInlineQuoteAngleBracketParams(t *testing.T) {
 		{"Start and end", "<test>", "&lt;test&gt;"},
 		{"Start after end", "this > that, <test>, that < this", "this &gt; that, &lt;test&gt;, that &lt; this"},
 		{"has spaces", "<has spaces>", "&lt;has spaces&gt;"},
-		{"bold tags ignored", "<b>", "<b>"},
-		{"bold close tags ignored", `</b>`, `</b>`},
+		{"bold tags", "regular text, <b>bolt text</b>, more regular", "regular text, **bolt text**, more regular"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			res := handleAngleBrackets(test.str)
+			res := markdownEscape(test.str)
 			assert.Equal(t, test.expected, res)
 		})
 	}

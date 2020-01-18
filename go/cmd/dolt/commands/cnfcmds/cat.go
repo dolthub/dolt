@@ -45,19 +45,23 @@ var catSynopsis = []string{
 
 type CatCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd CatCmd) Name() string {
 	return "cat"
 }
 
+// Description returns a description of the command
 func (cmd CatCmd) Description() string {
 	return "Writes out the table conflicts."
 }
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CatCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
 	ap := cmd.createArgParser()
 	return cli.CreateMarkdown(fs, path, commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
 }
 
+// EventType returns the type of the event to log
 func (cmd CatCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_CONF_CAT
 }
@@ -69,6 +73,7 @@ func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 	return ap
 }
 
+// Exec executes the command
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
