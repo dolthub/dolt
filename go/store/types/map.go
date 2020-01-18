@@ -361,7 +361,7 @@ func (m Map) IteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
 }
 
 func (m Map) BufferedIterator(ctx context.Context) (MapIterator, error) {
-	return m.IteratorAt(ctx, 0)
+	return m.BufferedIteratorAt(ctx, 0)
 }
 
 func (m Map) BufferedIteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {

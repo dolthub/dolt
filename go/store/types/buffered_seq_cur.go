@@ -274,7 +274,13 @@ func newBufferedCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*b
 
 		idx = idx - delta
 
-		cs, err := cur.getChildSequence(ctx)
+		var cs sequence
+		if cur.seq.treeLevel() <= batchLevel && cur.seq.treeLevel() < 0 {
+			cs, err = cur.seq.getCompositeChildSequence(ctx, uint64(cur.idx), uint64(cur.seqLen - cur.idx))
+			cur.idx += cur.seqLen - cur.idx
+		} else {
+			cs, err = cur.getChildSequence(ctx)
+		}
 
 		if err != nil {
 			return nil, err
