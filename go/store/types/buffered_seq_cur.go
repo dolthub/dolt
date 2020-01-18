@@ -28,15 +28,14 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
-const batchLevel = 2
-const batchSize = uint64(1024)
-
 // bufferedSequenceCursor explores a tree of sequence items.
 type bufferedSequenceCursor struct {
 	parent *bufferedSequenceCursor
-	seq    sequence
-	idx    int
-	seqLen int
+	seq    	   sequence
+	idx    	   int
+	seqLen 	   int
+	// determines the buffering behavior by tree level
+	batchSizes []uint64
 }
 
 // newbufferedSequenceCursor creates a bufCursor on seq positioned at idx.
@@ -48,8 +47,8 @@ func newbufferedSequenceCursor(parent *bufferedSequenceCursor, seq sequence, idx
 		idx += seqLen
 		d.PanicIfFalse(idx >= 0)
 	}
-
-	return &bufferedSequenceCursor{parent, seq, idx, seqLen}
+	batchSizes := []uint64{1024, 256, 64, 16, 4}
+	return &bufferedSequenceCursor{parent, seq, idx, seqLen, batchSizes}
 }
 
 func (cur *bufferedSequenceCursor) length() int {
@@ -67,7 +66,9 @@ func (cur *bufferedSequenceCursor) sync(ctx context.Context) error {
 
 	var err error
 
-	if cur.parent.seq.treeLevel() > batchLevel {
+	tl := int(cur.parent.seq.treeLevel())
+	if tl > len(cur.batchSizes) {
+		// no buffering
 		cur.seq, err = cur.parent.getChildSequence(ctx)
 		if err != nil {
 			return err
@@ -75,7 +76,8 @@ func (cur *bufferedSequenceCursor) sync(ctx context.Context) error {
 		cur.seqLen = cur.seq.seqLen()
 		return nil
 	}
-	batch := batchSize
+
+	batch := cur.batchSizes[tl-1]
 	if batch > uint64(cur.parent.seqLen - cur.parent.idx) {
 		batch = uint64(cur.parent.seqLen - cur.parent.idx)
 	}
@@ -275,10 +277,16 @@ func newBufferedCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*b
 		idx = idx - delta
 
 		var cs sequence
-		if cur.seq.treeLevel() <= batchLevel && cur.seq.treeLevel() < 0 {
-			cs, err = cur.seq.getCompositeChildSequence(ctx, uint64(cur.idx), uint64(cur.seqLen - cur.idx))
+		tl := int(cur.seq.treeLevel())
+		if tl <= len(cur.batchSizes) && cur.seq.treeLevel() > 0 {
+			batch := cur.batchSizes[tl-1]
+			if batch > uint64(cur.seqLen - cur.idx) {
+				batch = uint64(cur.seqLen - cur.idx)
+			}
+			cs, err = cur.seq.getCompositeChildSequence(ctx, uint64(cur.idx), batch)
 			cur.idx += cur.seqLen - cur.idx
 		} else {
+			// don't buffer
 			cs, err = cur.getChildSequence(ctx)
 		}
 
