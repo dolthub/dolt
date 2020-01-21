@@ -31,21 +31,19 @@ type bufferedSequenceIterator struct {
 	seq    	   sequence
 	idx    	   int
 	seqLen 	   int
-	// determines the buffering behavior by tree level
-	batchSizes []uint64
+	batchSize uint64
 }
 
 // newbufferedSequenceIterator creates a bufCursor on seq positioned at idx.
 // If idx < 0, count backward from the end of seq.
-func newbufferedSequenceIterator(parent *bufferedSequenceIterator, seq sequence, idx int) *bufferedSequenceIterator {
+func newbufferedSequenceIterator(parent *bufferedSequenceIterator, seq sequence, idx int, batchSize uint64) *bufferedSequenceIterator {
 	d.PanicIfTrue(seq == nil)
 	seqLen := seq.seqLen()
 	if idx < 0 {
 		idx += seqLen
 		d.PanicIfFalse(idx >= 0)
 	}
-	batchSizes := []uint64{1024, 256, 64, 16, 4}
-	return &bufferedSequenceIterator{parent, seq, idx, seqLen, batchSizes}
+	return &bufferedSequenceIterator{parent, seq, idx, seqLen, batchSize}
 }
 
 func (cur *bufferedSequenceIterator) length() int {
@@ -56,31 +54,27 @@ func (cur *bufferedSequenceIterator) length() int {
 // It's called whenever the bufCursor advances/retreats to a different chunk.
 func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
-
 	var err error
 
-	tl := int(cur.parent.seq.treeLevel())
-	if tl > len(cur.batchSizes) {
+	if cur.batchSize > 0 {
+		batch := cur.batchSize
+		if batch > uint64(cur.parent.seqLen-cur.parent.idx) {
+			batch = uint64(cur.parent.seqLen - cur.parent.idx)
+		}
+		cur.seq, err = cur.parent.seq.getCompositeChildSequence(ctx, uint64(cur.parent.idx), batch)
+		if err != nil {
+			return err
+		}
+
+		cur.parent.idx += int(batch) - 1
+	} else {
 		// no buffering
 		cur.seq, err = cur.parent.getChildSequence(ctx)
 		if err != nil {
 			return err
 		}
-		cur.seqLen = cur.seq.seqLen()
-		return nil
 	}
 
-	batch := cur.batchSizes[tl-1]
-	if batch > uint64(cur.parent.seqLen - cur.parent.idx) {
-		batch = uint64(cur.parent.seqLen - cur.parent.idx)
-	}
-	cur.seq, err = cur.parent.seq.getCompositeChildSequence(ctx, uint64(cur.parent.idx), batch)
-
-	if err != nil {
-		return err
-	}
-
-	cur.parent.idx += int(batch) - 1
 	cur.seqLen = cur.seq.seqLen()
 
 	return nil
@@ -217,10 +211,18 @@ func (cur *bufferedSequenceIterator) iter(ctx context.Context, cb cursorIterCall
 // to the next leaf chunk when the bufCursor exhausts the entries in the current chunk.
 func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (*bufferedSequenceIterator, error) {
 	var cur *bufferedSequenceIterator
+	batchSizes := []uint64{1024, 256, 64, 16, 4}
 	for {
-		cur = newbufferedSequenceIterator(cur, seq, 0)
-		delta, err := advanceBufferedCursorToOffset(cur, idx)
+		tl := int(seq.treeLevel())
+		if tl <= len(batchSizes) && tl > 0 {
+			// for sequences at tree level i, buffer batchSizes[i-1]
+			// chunks for child sequences at tree level i-1
+			cur = newbufferedSequenceIterator(cur, seq, 0, batchSizes[tl-1])
+		} else {
+			cur = newbufferedSequenceIterator(cur, seq, 0, 0)
+		}
 
+		delta, err := advanceBufferedCursorToOffset(cur, idx)
 		if err != nil {
 			return nil, err
 		}
@@ -228,9 +230,8 @@ func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 		idx = idx - delta
 
 		var cs sequence
-		tl := int(cur.seq.treeLevel())
-		if tl <= len(cur.batchSizes) && cur.seq.treeLevel() > 0 {
-			batch := cur.batchSizes[tl-1]
+		if cur.batchSize > 0 {
+			batch := cur.batchSize
 			if batch > uint64(cur.seqLen - cur.idx) {
 				batch = uint64(cur.seqLen - cur.idx)
 			}
