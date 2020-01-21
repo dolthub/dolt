@@ -167,16 +167,16 @@ SQL
     dolt sql -q "create view four as select 2+2 as res from dual"
     dolt add .
     dolt commit -m "Checked in a view"
-    run dolt sql "select * from four"
+    run dolt sql -q "select * from four"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 5 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
     run dolt sql -q "select * from dolt_schemas"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "four" ]] || false
-    dolt sql "create view five as select 2+3 as res from dual"
+    dolt sql -q "create view five as select 2+3 as res from dual"
     run dolt sql -q "select * from dolt_schemas"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
