@@ -265,7 +265,7 @@ func (s Set) IteratorAt(ctx context.Context, idx uint64) (SetIterator, error) {
 
 	return &setIterator{
 		sequenceIter: cur,
-		s:      s,
+		s:            s,
 	}, nil
 }
 

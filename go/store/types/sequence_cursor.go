@@ -28,7 +28,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
-
 type sequenceIterator interface {
 	valid() bool
 	current() (sequenceItem, error)

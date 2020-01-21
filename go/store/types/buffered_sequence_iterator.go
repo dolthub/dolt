@@ -23,14 +23,15 @@ package types
 
 import (
 	"context"
+
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
 type bufferedSequenceIterator struct {
-	parent 	   *bufferedSequenceIterator
-	seq    	   sequence
-	idx    	   int
-	seqLen 	   int
+	parent    *bufferedSequenceIterator
+	seq       sequence
+	idx       int
+	seqLen    int
 	batchSize uint64
 }
 
@@ -232,7 +233,7 @@ func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 		var cs sequence
 		if cur.batchSize > 0 {
 			batch := cur.batchSize
-			if batch > uint64(cur.seqLen - cur.idx) {
+			if batch > uint64(cur.seqLen-cur.idx) {
 				batch = uint64(cur.seqLen - cur.idx)
 			}
 			cs, err = cur.seq.getCompositeChildSequence(ctx, uint64(cur.idx), batch)
