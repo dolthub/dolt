@@ -143,7 +143,7 @@ func (l List) WalkValues(ctx context.Context, cb ValueCallback) error {
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(ctx context.Context, idx uint64) (Value, error) {
 	d.PanicIfFalse(idx < l.Len())
-	cur, err := newCursorAtIndex(ctx, l.sequence, idx)
+	cur, err := newSequenceIteratorAtIndex(ctx, l.sequence, idx)
 
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func (l List) isPrimitive() bool {
 // iteration stops.
 func (l List) Iter(ctx context.Context, f func(v Value, index uint64) (stop bool)) error {
 	idx := uint64(0)
-	cur, err := newCursorAtIndex(ctx, l.sequence, idx)
+	cur, err := newSequenceIteratorAtIndex(ctx, l.sequence, idx)
 
 	if err != nil {
 		return err
@@ -355,7 +355,7 @@ func (l List) Iterator(ctx context.Context) (ListIterator, error) {
 // IteratorAt returns a ListIterator starting at index. If index is out of bound the iterator will
 // have reached its end on creation.
 func (l List) IteratorAt(ctx context.Context, index uint64) (ListIterator, error) {
-	cur, err := newCursorAtIndex(ctx, l.sequence, index)
+	cur, err := newSequenceIteratorAtIndex(ctx, l.sequence, index)
 
 	if err != nil {
 		return ListIterator{}, err

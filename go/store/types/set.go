@@ -191,7 +191,7 @@ func (s Set) At(ctx context.Context, idx uint64) (Value, error) {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur, err := newCursorAtIndex(ctx, s.orderedSequence, idx)
+	cur, err := newSequenceIteratorAtIndex(ctx, s.orderedSequence, idx)
 
 	if err != nil {
 		return nil, err
@@ -257,15 +257,15 @@ func (s Set) Iterator(ctx context.Context) (SetIterator, error) {
 }
 
 func (s Set) IteratorAt(ctx context.Context, idx uint64) (SetIterator, error) {
-	cur, err := newCursorAtIndex(ctx, s.orderedSequence, idx)
+	cur, err := newSequenceIteratorAtIndex(ctx, s.orderedSequence, idx)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &setIterator{
-		cursor: cur,
-		s:      s,
+		sequenceIter: cur,
+		s:            s,
 	}, nil
 }
 
@@ -276,7 +276,7 @@ func (s Set) IteratorFrom(ctx context.Context, val Value) (SetIterator, error) {
 		return nil, err
 	}
 
-	return &setIterator{cursor: cur, s: s}, nil
+	return &setIterator{sequenceIter: cur, s: s}, nil
 }
 
 func (s Set) Format() *NomsBinFormat {

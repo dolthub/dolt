@@ -52,20 +52,20 @@ type SetIterator interface {
 
 type setIterator struct {
 	s            Set
-	cursor       *sequenceCursor
+	sequenceIter sequenceIterator
 	currentValue Value
 }
 
 func (si *setIterator) Next(ctx context.Context) (Value, error) {
-	if si.cursor.valid() {
-		item, err := si.cursor.current()
+	if si.sequenceIter.valid() {
+		item, err := si.sequenceIter.current()
 
 		if err != nil {
 			return nil, err
 		}
 
 		si.currentValue = item.(Value)
-		_, err = si.cursor.advance(ctx)
+		_, err = si.sequenceIter.advance(ctx)
 
 		if err != nil {
 			return nil, err
@@ -78,7 +78,7 @@ func (si *setIterator) Next(ctx context.Context) (Value, error) {
 
 func (si *setIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 	d.PanicIfTrue(v == nil)
-	if si.cursor.valid() {
+	if si.sequenceIter.valid() {
 		if cmp, err := compareValue(si.s.format(), v, si.currentValue); err != nil {
 			return nil, err
 		} else if cmp <= 0 {
@@ -86,21 +86,21 @@ func (si *setIterator) SkipTo(ctx context.Context, v Value) (Value, error) {
 		}
 
 		var err error
-		si.cursor, err = newCursorAtValue(ctx, si.s.orderedSequence, v, true, false)
+		si.sequenceIter, err = newCursorAtValue(ctx, si.s.orderedSequence, v, true, false)
 
 		if err != nil {
 			return nil, err
 		}
 
-		if si.cursor.valid() {
-			item, err := si.cursor.current()
+		if si.sequenceIter.valid() {
+			item, err := si.sequenceIter.current()
 
 			if err != nil {
 				return nil, err
 			}
 
 			si.currentValue = item.(Value)
-			_, err = si.cursor.advance(ctx)
+			_, err = si.sequenceIter.advance(ctx)
 
 			if err != nil {
 				return nil, err

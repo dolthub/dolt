@@ -28,6 +28,13 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
+type sequenceIterator interface {
+	valid() bool
+	current() (sequenceItem, error)
+	advance(ctx context.Context) (bool, error)
+	iter(ctx context.Context, cb cursorIterCallback) error
+}
+
 // sequenceCursor explores a tree of sequence items.
 type sequenceCursor struct {
 	parent *sequenceCursor
@@ -242,7 +249,11 @@ func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) erro
 	return nil
 }
 
-// newCursorAtIndex creates a new cursor over seq positioned at idx.
+func newSequenceIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (sequenceIterator, error) {
+	return newCursorAtIndex(ctx, seq, idx)
+}
+
+// newIteratorAtIndex creates a new cursor over seq positioned at idx.
 //
 // Implemented by searching down the tree to the leaf sequence containing idx. Each
 // sequence cursor includes a back pointer to its parent so that it can follow the path
