@@ -30,6 +30,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -54,12 +55,35 @@ var commitSynopsis = []string{
 	"[options]",
 }
 
-func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CommitCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd CommitCmd) Name() string {
+	return "commit"
+}
+
+// Description returns a description of the command
+func (cmd CommitCmd) Description() string {
+	return "Record changes to the repository."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
+}
+
+func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
+	return ap
+}
+
+// Exec executes the command
+func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -81,10 +105,10 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
 	if err == nil {
 		// if the commit was successful, print it out using the log command
-		return Log(ctx, "log", []string{"-n=1"}, dEnv)
+		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
 	}
 
-	return handleCommitErr(err, usage)
+	return handleCommitErr(ctx, dEnv, err, usage)
 }
 
 // we are more permissive than what is documented.
@@ -114,7 +138,7 @@ func parseDate(dateStr string) (time.Time, error) {
 	return time.Time{}, errors.New("error: '" + dateStr + "' is not in a supported format.")
 }
 
-func handleCommitErr(err error, usage cli.UsagePrinter) int {
+func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cli.UsagePrinter) int {
 	if err == nil {
 		return 0
 	}
@@ -139,8 +163,9 @@ func handleCommitErr(err error, usage cli.UsagePrinter) int {
 	}
 
 	if actions.IsNothingStaged(err) {
-		notStaged := actions.NothingStagedDiffs(err)
-		n := printDiffsNotStaged(cli.CliOut, notStaged, false, 0, []string{})
+		notStagedTbls := actions.NothingStagedTblDiffs(err)
+		notStagedDocs := actions.NothingStagedDocsDiffs(err)
+		n := printDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, false, 0, []string{})
 
 		if n == 0 {
 			bdr := errhand.BuildDError(`no changes added to commit (use "dolt add")`)
@@ -173,17 +198,18 @@ func buildInitalCommitMsg(ctx context.Context, dEnv *env.DoltEnv) string {
 	color.NoColor = true
 
 	currBranch := dEnv.RepoState.Head.Ref
-	stagedDiffs, notStagedDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
-	buf := bytes.NewBuffer([]byte{})
+	stagedTblDiffs, notStagedTblDiffs, _ := actions.GetTableDiffs(ctx, dEnv)
 
-	workingInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
-
+	workingTblsInConflict, _, _, err := actions.GetTablesInConflict(ctx, dEnv)
 	if err != nil {
-		workingInConflict = []string{}
+		workingTblsInConflict = []string{}
 	}
 
-	n := printStagedDiffs(buf, stagedDiffs, true)
-	n = printDiffsNotStaged(buf, notStagedDiffs, true, n, workingInConflict)
+	stagedDocDiffs, notStagedDocDiffs, _ := actions.GetDocDiffs(ctx, dEnv)
+
+	buf := bytes.NewBuffer([]byte{})
+	n := printStagedDiffs(buf, stagedTblDiffs, stagedDocDiffs, true)
+	n = printDiffsNotStaged(ctx, dEnv, buf, notStagedTblDiffs, notStagedDocDiffs, true, n, workingTblsInConflict)
 
 	initialCommitMessage := "\n" + "# Please enter the commit message for your changes. Lines starting" + "\n" +
 		"# with '#' will be ignored, and an empty message aborts the commit." + "\n# On branch " + currBranch.GetPath() + "\n#" + "\n"

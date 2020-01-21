@@ -23,12 +23,15 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/rowconv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -48,11 +51,7 @@ type putRowArgs struct {
 	TableName  string
 }
 
-func parsePutRowArgs(commandStr string, args []string) *putRowArgs {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The table being inserted into"
-	ap.ArgListHelp["field_name:field_value"] = "There should be a <field_name>:<field_value> pair for each field " +
-		"that you want set on this row.  If all required fields are not set, then this command will fail."
+func parsePutRowArgs(ap *argparser.ArgParser, commandStr string, args []string) *putRowArgs {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, putRowShortDesc, putRowLongDesc, putRowSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -102,11 +101,50 @@ func parseKVPs(args []string) ([]string, map[string]string, errhand.VerboseError
 	return fieldNames, kvps, nil
 }
 
-func PutRow(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	prArgs := parsePutRowArgs(commandStr, args)
+type PutRowCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd PutRowCmd) Name() string {
+	return "put-row"
+}
+
+// Description returns a description of the command
+func (cmd PutRowCmd) Description() string {
+	return "Add a row to a table."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd PutRowCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, putRowShortDesc, putRowLongDesc, putRowSynopsis, ap)
+}
+
+func (cmd PutRowCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being inserted into"})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{
+		"field_name:field_value",
+		"There should be a <field_name>:<field_value> pair for each field that you want set on this row.  If all " +
+			"required fields are not set, then this command will fail."})
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd PutRowCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_PUT_ROW
+}
+
+// Exec executes the command
+func (cmd PutRowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
+	prArgs := parsePutRowArgs(ap, commandStr, args)
 
 	if prArgs == nil {
 		return 1
+	}
+
+	if prArgs.TableName == doltdb.DocTableName {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Table '%s' is not a valid table name", doltdb.DocTableName).Build(), nil)
 	}
 
 	root, err := dEnv.WorkingRoot(ctx)

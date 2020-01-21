@@ -47,14 +47,13 @@ func ValidatorFromStrList(paramName string, validStrList []string) ValidationFun
 type ArgParser struct {
 	Supported         []*Option
 	NameOrAbbrevToOpt map[string]*Option
-	ArgListHelp       map[string]string
+	ArgListHelp       [][2]string
 }
 
 func NewArgParser() *ArgParser {
 	var supported []*Option
 	nameOrAbbrevToOpt := make(map[string]*Option)
-	argListHelp := make(map[string]string)
-	return &ArgParser{supported, nameOrAbbrevToOpt, argListHelp}
+	return &ArgParser{supported, nameOrAbbrevToOpt, nil}
 }
 
 // Adds support for a new argument with the option given. Options must have a unique name and abbreviated name.

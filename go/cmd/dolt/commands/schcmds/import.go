@@ -27,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
@@ -105,11 +106,33 @@ type importArgs struct {
 	inferArgs *actions.InferenceArgs
 }
 
-// Import is a schema command that will take a file and infer it's schema, and then create a table matching that schema.
-func Import(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ImportCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd ImportCmd) Name() string {
+	return "import"
+}
+
+// Description returns a description of the command
+func (cmd ImportCmd) Description() string {
+	return "Creates a new table with an inferred schema."
+}
+
+// EventType returns the type of the event to log
+func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd ImportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, schImportShortDesc, schImportLongDesc, schImportSynopsis, ap)
+}
+
+func (cmd ImportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "Name of the table to be created."
-	ap.ArgListHelp["file"] = "The file being used to infer the schema."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Name of the table to be created."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being used to infer the schema."})
 	ap.SupportsFlag(createFlag, "c", "Create a table with the schema inferred from the <file> provided.")
 	//ap.SupportsFlag(updateFlag, "u", "Update a table to match the inferred schema of the <file> provided")
 	ap.SupportsFlag(replaceFlag, "r", "Replace a table with a new schema that has the inferred schema from the <file> provided. All previous data will be lost.")
@@ -120,13 +143,23 @@ func Import(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap.SupportsString(mappingParam, "", "mapping-file", "A file that can map a column name in <file> to a new value.")
 	ap.SupportsString(floatThresholdParam, "", "float", "Minimum value at which the fractional component of a value must exceed in order to be considered a float.")
 	ap.SupportsString(delimParam, "", "delimiter", "Specify a delimiter for a csv style file with a non-comma delimiter.")
+	return ap
+}
 
+// Exec implements the import schema command that will take a file and infer it's schema, and then create a table matching that schema.
+// Exec executes the command
+func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schImportShortDesc, schImportLongDesc, schImportSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	if apr.NArg() != 2 {
 		usage()
 		return 1
+	}
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
 	}
 
 	verr := importSchema(ctx, dEnv, apr)

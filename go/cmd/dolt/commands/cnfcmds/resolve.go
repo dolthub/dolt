@@ -17,6 +17,9 @@ package cnfcmds
 import (
 	"context"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -61,12 +64,42 @@ func init() {
 	}
 }
 
-func Resolve(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ResolveCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd ResolveCmd) Name() string {
+	return "resolve"
+}
+
+// Description returns a description of the command
+func (cmd ResolveCmd) Description() string {
+	return "Removes rows from list of conflicts"
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd ResolveCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
+}
+
+// EventType returns the type of the event to log
+func (cmd ResolveCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CONF_RESOLVE
+}
+
+func (cmd ResolveCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."
-	ap.ArgListHelp["key"] = "key(s) of rows within a table whose conflicts have been resolved"
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. When in auto-resolve mode, '.' can be used to resolve all tables."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"key", "key(s) of rows within a table whose conflicts have been resolved"})
 	ap.SupportsFlag("ours", "", "For all conflicts, take the version from our branch and resolve the conflict")
 	ap.SupportsFlag("theirs", "", "Fol all conflicts, take the version from our branch and resolve the conflict")
+
+	return ap
+}
+
+// Exec executes the command
+func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resShortDesc, resLongDesc, resSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -109,7 +142,7 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
 
-	return nil
+	return saveDocsOnResolve(ctx, dEnv)
 }
 
 func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
@@ -126,6 +159,7 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	}
 
 	tblName := args[0]
+
 	if has, err := root.HasTable(ctx, tblName); err != nil {
 		return errhand.BuildDError("error: could not read tables").AddCause(err).Build()
 	} else if !has {
@@ -193,5 +227,13 @@ func manualResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *en
 	valid := len(keysToResolve) - len(invalid) - len(notFound)
 	cli.Println(valid, "rows resolved successfully")
 
+	return saveDocsOnResolve(ctx, dEnv)
+}
+
+func saveDocsOnResolve(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+	err := actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
+	}
 	return nil
 }

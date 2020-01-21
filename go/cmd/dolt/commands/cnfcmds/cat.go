@@ -17,6 +17,9 @@ package cnfcmds
 import (
 	"context"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -40,9 +43,39 @@ var catSynopsis = []string{
 	"[<commit>] <table>...",
 }
 
-func Cat(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CatCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd CatCmd) Name() string {
+	return "cat"
+}
+
+// Description returns a description of the command
+func (cmd CatCmd) Description() string {
+	return "Writes out the table conflicts."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd CatCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
+}
+
+// EventType returns the type of the event to log
+func (cmd CatCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CONF_CAT
+}
+
+func (cmd CatCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "List of tables to be printed. '.' can be used to print conflicts for all tables."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed. '.' can be used to print conflicts for all tables."})
+
+	return ap
+}
+
+// Exec executes the command
+func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, catShortDesc, catLongDesc, catSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	args = apr.Args()

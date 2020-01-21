@@ -18,6 +18,9 @@ import (
 	"context"
 	"fmt"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -44,13 +47,25 @@ var sqlServerSynopsis = []string{
 	"[-H <host>] [-P <port>] [-u <user>] [-p <password>] [-t <timeout>] [-l <loglevel>] [-r]",
 }
 
-func SqlServer(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	return SqlServerImpl(ctx, commandStr, args, dEnv, nil)
+type SqlServerCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd SqlServerCmd) Name() string {
+	return "sql-server"
 }
 
-func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
-	serverConfig := DefaultServerConfig()
+// Description returns a description of the command
+func (cmd SqlServerCmd) Description() string {
+	return "Starts a MySQL-compatible server."
+}
 
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd SqlServerCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := createArgParser(DefaultServerConfig())
+	return cli.CreateMarkdown(fs, path, commandStr, sqlServerShortDesc, sqlServerLongDesc, sqlServerSynopsis, ap)
+}
+
+func createArgParser(serverConfig *ServerConfig) *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(hostFlag, "H", "Host address", fmt.Sprintf("Defines the host address that the server will run on (default `%v`)", serverConfig.Host))
 	ap.SupportsUint(portFlag, "P", "Port", fmt.Sprintf("Defines the port that the server will run on (default `%v`)", serverConfig.Port))
@@ -59,6 +74,24 @@ func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *
 	ap.SupportsInt(timeoutFlag, "t", "Connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.Timeout))
 	ap.SupportsFlag(readonlyFlag, "r", "Disables modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "Log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel))
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd SqlServerCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SQL_SERVER
+}
+
+// Exec executes the command
+func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+
+	return SqlServerImpl(ctx, commandStr, args, dEnv, nil)
+}
+
+func SqlServerImpl(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
+	serverConfig := DefaultServerConfig()
+
+	ap := createArgParser(serverConfig)
 	help, usage := cli.HelpAndUsagePrinters(commandStr, sqlServerShortDesc, sqlServerLongDesc, sqlServerSynopsis, ap)
 
 	apr := cli.ParseArgs(ap, args, help)

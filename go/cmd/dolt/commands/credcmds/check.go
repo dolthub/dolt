@@ -18,6 +18,9 @@ import (
 	"context"
 	"fmt"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -31,10 +34,45 @@ var checkShortDesc = "Check authenticating with a credential keypair against a d
 var checkLongDesc = `Tests calling a doltremoteapi with dolt credentials and reports the authentication result.`
 var checkSynopsis = []string{"[--endpoint doltremoteapi.dolthub.com:443] [--creds <eak95022q3vskvumn2fcrpibdnheq1dtr8t...>]"}
 
-func Check(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CheckCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd CheckCmd) Name() string {
+	return "check"
+}
+
+// Description returns a description of the command
+func (cmd CheckCmd) Description() string {
+	return checkShortDesc
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd CheckCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, checkShortDesc, checkLongDesc, checkSynopsis, ap)
+}
+
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
+func (cmd CheckCmd) RequiresRepo() bool {
+	return false
+}
+
+// EventType returns the type of the event to log
+func (cmd CheckCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CREDS_CHECK
+}
+
+func (cmd CheckCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString("endpoint", "", "", "API endpoint, otherwise taken from config.")
 	ap.SupportsString("creds", "", "", "Public Key ID or Public Key for credentials, otherwise taken from config.")
+	return ap
+}
+
+// Exec executes the command
+func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, lsShortDesc, lsLongDesc, lsSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

@@ -22,6 +22,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -35,6 +36,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -65,7 +67,31 @@ type SelectArgs struct {
 	hideConflicts bool
 }
 
-func Select(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type SelectCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd SelectCmd) Name() string {
+	return "select"
+}
+
+// Description returns a description of the command
+func (cmd SelectCmd) Description() string {
+	return "Print a selection of a table."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd SelectCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := newArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, selShortDesc, selLongDesc, selSynopsis, ap)
+}
+
+// EventType returns the type of the event to log
+func (cmd SelectCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_SELECT
+}
+
+// Exec executes the command
+func (cmd SelectCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := newArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, selShortDesc, selLongDesc, selSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
@@ -74,6 +100,10 @@ func Select(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	if len(args) == 0 {
 		usage()
 		return 1
+	}
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
 	}
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
@@ -129,8 +159,8 @@ func Select(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 
 func newArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "List of tables to be printed."
-	ap.ArgListHelp["column"] = "List of columns to be printed"
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "List of tables to be printed."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"column", "List of columns to be printed"})
 	ap.SupportsString(whereParam, "", "column", "")
 	ap.SupportsInt(limitParam, "", "record_count", "")
 	ap.SupportsFlag(hideConflictsFlag, "", "")

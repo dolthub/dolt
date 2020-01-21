@@ -24,19 +24,21 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/merge"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
 	abortParam = "abort"
 )
 
-var mergeShortDest = "Join two or more development histories together"
+var mergeShortDesc = "Join two or more development histories together"
 var mergeLongDesc = "Incorporates changes from the named commits (since the time their histories diverged from the " +
 	"current branch) into the current branch.\n" +
 	"\n" +
@@ -59,10 +61,39 @@ var abortDetails = "Abort the current conflict resolution process, and try to re
 	"unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before " +
 	"running git merge."
 
-func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type MergeCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd MergeCmd) Name() string {
+	return "merge"
+}
+
+// Description returns a description of the command
+func (cmd MergeCmd) Description() string {
+	return "Merge a branch."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd MergeCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)
+}
+
+func (cmd MergeCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(abortParam, "", abortDetails)
-	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeShortDest, mergeLongDesc, mergeSynopsis, ap)
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd MergeCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_MERGE
+}
+
+// Exec executes the command
+func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
+	help, usage := cli.HelpAndUsagePrinters(commandStr, mergeShortDesc, mergeLongDesc, mergeSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
 	var verr errhand.VerboseError
@@ -121,7 +152,7 @@ func Merge(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 		}
 	}
 
-	return handleCommitErr(verr, usage)
+	return handleCommitErr(ctx, dEnv, verr, usage)
 }
 
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
@@ -216,6 +247,11 @@ and take the hash for your current branch and use it for the value for "staged" 
 			AddCause(err).Build()
 	}
 
+	err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+	}
+
 	return nil
 }
 
@@ -252,6 +288,16 @@ func executeMerge(ctx context.Context, dEnv *env.DoltEnv, cm1, cm2 *doltdb.Commi
 
 		if hasConflicts {
 			cli.Println("Automatic merge failed; fix conflicts and then commit the result.")
+		} else {
+			err = actions.SaveTrackedDocsFromWorking(ctx, dEnv)
+			if err != nil {
+				return errhand.BuildDError("error: failed to update docs to the new working root").AddCause(err).Build()
+			}
+			verr = UpdateStagedWithVErr(dEnv, mergedRoot)
+			if verr != nil {
+				// Log a new message here to indicate that merge was successful, only staging failed.
+				cli.Println("Unable to stage changes: add and commit to finish merge")
+			}
 		}
 	}
 

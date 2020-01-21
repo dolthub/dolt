@@ -17,6 +17,9 @@ package schcmds
 import (
 	"context"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -32,16 +35,48 @@ var schExportSynopsis = []string{
 	"<table> <file>",
 }
 
-func Export(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ExportCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd ExportCmd) Name() string {
+	return "export"
+}
+
+// Description returns a description of the command
+func (cmd ExportCmd) Description() string {
+	return "Exports a table's schema."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, schExportShortDesc, schExportLongDesc, schExportSynopsis, ap)
+}
+
+func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "table whose schema is being exported."
-	ap.ArgListHelp["commit"] = "commit at which point the schema will be displayed."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"commit", "commit at which point the schema will be displayed."})
 	ap.SupportsString(defaultParam, "", "default-value", "If provided all existing rows will be given this value as their default.")
 	ap.SupportsUint(tagParam, "", "tag-number", "The numeric tag for the new column.")
 	ap.SupportsFlag(notNullFlag, "", "If provided rows without a value in this column will be considered invalid.  If rows already exist and not-null is specified then a default value must be provided.")
+	return ap
+}
 
+// EventType returns the type of the event to log
+func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+// Exec executes the command
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schExportShortDesc, schExportLongDesc, schExportSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
+
+	if apr.ContainsArg(doltdb.DocTableName) {
+		return commands.HandleDocTableVErrAndExitCode()
+	}
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)
 

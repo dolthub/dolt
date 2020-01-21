@@ -24,11 +24,13 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
@@ -69,9 +71,27 @@ const (
 	allFlag         = "all"
 )
 
-func Branch(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type BranchCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd BranchCmd) Name() string {
+	return "branch"
+}
+
+// Description returns a description of the command
+func (cmd BranchCmd) Description() string {
+	return "Create, list, edit, delete branches."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd BranchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
+}
+
+func (cmd BranchCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["start-point"] = "A commit that a new branch should point at."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"start-point", "A commit that a new branch should point at."})
 	ap.SupportsFlag(listFlag, "", "List branches")
 	ap.SupportsFlag(forceFlag, "f", branchForceFlagDesc)
 	ap.SupportsFlag(copyFlag, "c", "Create a copy of a branch.")
@@ -80,6 +100,17 @@ func Branch(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap.SupportsFlag(deleteForceFlag, "", "Shortcut for --delete --force.")
 	ap.SupportsFlag(verboseFlag, "v", "When in list mode, show the hash and commit subject line for each head")
 	ap.SupportsFlag(allFlag, "a", "When in list mode, shows remote tracked branches")
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_BRANCH
+}
+
+// Exec executes the command
+func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, branchShortDesc, branchLongDesc, branchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

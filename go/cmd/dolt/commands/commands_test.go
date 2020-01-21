@@ -53,15 +53,15 @@ func createUninitializedEnv() *env.DoltEnv {
 
 func TestCommandsRequireInitializedDir(t *testing.T) {
 	tests := []struct {
-		cmdStr   string
-		args     []string
-		commFunc cli.CommandFunc
+		cmdStr string
+		args   []string
+		comm   cli.Command
 	}{
-		{"dolt config", []string{"-local", "-list"}, Config},
+		{"dolt config", []string{"-local", "-list"}, ConfigCmd{}},
 	}
 
 	dEnv := createUninitializedEnv()
 	for _, test := range tests {
-		test.commFunc(context.Background(), test.cmdStr, test.args, dEnv)
+		test.comm.Exec(context.Background(), test.cmdStr, test.args, dEnv)
 	}
 }

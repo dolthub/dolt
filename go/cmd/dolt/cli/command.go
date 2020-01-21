@@ -23,52 +23,108 @@ import (
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
-// CommandFunc specifies the signature of the functions that will be called based on the command line being executed.
-type CommandFunc func(context.Context, string, []string, *env.DoltEnv) int
-
-// Command represents either a command to be run, or a command that is a parent of a subcommand.
-type Command struct {
-	// Name is what the user will type on the command line in order to execute this command
-	Name string
-	// Desc is a short description of the command
-	Desc string
-	// Func is the CommandFunc that gets called when the user executes this command
-	Func CommandFunc
-	// ReqRepo says whether the command must be executed in an initialized dolt data repository directory.  This should
-	// always be set to false for non leaf commands.
-	ReqRepo bool
-	// Hide says whether to hide this command from help listings (for features that aren't ready to be released publicly).
-	HideFromHelp bool
-	// A client event associated with this command
-	EventType eventsapi.ClientEventType
-}
-
-// MapCommands takes a list of commands and maps them based on the commands name
-func MapCommands(commands []*Command) map[string]*Command {
-	commandMap := make(map[string]*Command, len(commands))
-
-	for _, command := range commands {
-		commandMap[strings.ToLower(command.Name)] = command
+func isHelp(str string) bool {
+	switch {
+	case str == "-h":
+		return true
+	case strings.TrimLeft(str, "- ") == "help":
+		return true
 	}
 
-	return commandMap
+	return false
 }
 
-// GenSubCommandHandler returns a handler function that will handle subcommand processing.
-func GenSubCommandHandler(commands []*Command) CommandFunc {
-	commandMap := MapCommands(commands)
-
-	return func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-		if len(args) < 1 {
-			printUsage(commandStr, commands)
-			return 1
+func hasHelpFlag(args []string) bool {
+	for _, arg := range args {
+		if isHelp(arg) {
+			return true
 		}
+	}
+	return false
+}
 
-		subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
-		if command, ok := commandMap[subCommandStr]; ok {
-			if command.ReqRepo && !hasHelpFlag(args) {
+// Command is the interface which defines a Dolt cli command
+type Command interface {
+	// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+	Name() string
+	// Description returns a description of the command
+	Description() string
+	// Exec executes the command
+	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
+	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+	CreateMarkdown(fs filesys.Filesys, path, commandStr string) error
+}
+
+// RepoNotRequiredCommand is an optional interface that commands can implement if the command can be run without
+// the current directory being a valid Dolt data repository.  Any commands not implementing this interface are
+// assumed to require that they be run from a directory containing a Dolt data repository.
+type RepoNotRequiredCommand interface {
+	// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+	// that it be run from within a data repository directory
+	RequiresRepo() bool
+}
+
+// EventMonitoredCommand is an optional interface that can be overridden in order to generate an event which is sent
+// to the metrics system when the command is run
+type EventMonitoredCommand interface {
+	// EventType returns the type of the event to log
+	EventType() eventsapi.ClientEventType
+}
+
+// HiddenCommand is an optional interface that can be overridden so that a command is hidden from the help text
+type HiddenCommand interface {
+	// Hidden should return true if this command should be hidden from the help text
+	Hidden() bool
+}
+
+// SubCommandHandler is a command implementation which holds subcommands which can be called
+type SubCommandHandler struct {
+	name        string
+	description string
+	Subcommands []Command
+}
+
+// NewSubCommandHandler returns a new SubCommandHandler instance
+func NewSubCommandHandler(name, description string, subcommands []Command) SubCommandHandler {
+	return SubCommandHandler{name, description, subcommands}
+}
+
+func (hc SubCommandHandler) Name() string {
+	return hc.name
+}
+
+func (hc SubCommandHandler) Description() string {
+	return hc.description
+}
+
+func (hc SubCommandHandler) RequiresRepo() bool {
+	return false
+}
+
+func (hc SubCommandHandler) CreateMarkdown(_ filesys.Filesys, _, _ string) error {
+	return nil
+}
+
+func (hc SubCommandHandler) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	if len(args) < 1 {
+		hc.printUsage(commandStr)
+		return 1
+	}
+
+	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
+	for _, cmd := range hc.Subcommands {
+		lwrName := strings.ToLower(cmd.Name())
+
+		if lwrName == subCommandStr {
+			cmdRequiresRepo := true
+			if rnrCmd, ok := cmd.(RepoNotRequiredCommand); ok {
+				cmdRequiresRepo = rnrCmd.RequiresRepo()
+			}
+
+			if cmdRequiresRepo && !hasHelpFlag(args) {
 				if !dEnv.HasDoltDir() {
 					PrintErrln(color.RedString("The current directory is not a valid dolt repository."))
 					PrintErrln("run: dolt init before trying to run this command")
@@ -85,12 +141,12 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 			}
 
 			var evt *events.Event
-			if command.EventType != eventsapi.ClientEventType_TYPE_UNSPECIFIED {
-				evt = events.NewEvent(command.EventType)
+			if evtCmd, ok := cmd.(EventMonitoredCommand); ok {
+				evt = events.NewEvent(evtCmd.EventType())
 				ctx = events.NewContextForEvent(ctx, evt)
 			}
 
-			ret := command.Func(ctx, commandStr+" "+subCommandStr, args[1:], dEnv)
+			ret := cmd.Exec(ctx, commandStr+" "+subCommandStr, args[1:], dEnv)
 
 			if evt != nil {
 				events.GlobalCollector.CloseEventAndAdd(evt)
@@ -98,41 +154,26 @@ func GenSubCommandHandler(commands []*Command) CommandFunc {
 
 			return ret
 		}
-
-		if !isHelp(subCommandStr) {
-			PrintErrln(color.RedString("Unknown Command " + subCommandStr))
-		}
-		printUsage(commandStr, commands)
-		return 1
-	}
-}
-
-func isHelp(str string) bool {
-	switch {
-	case str == "-h":
-		return true
-	case strings.TrimLeft(str, "- ") == "help":
-		return true
 	}
 
-	return false
-}
-
-func hasHelpFlag(args []string) bool {
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			return true
-		}
+	if !isHelp(subCommandStr) {
+		PrintErrln(color.RedString("Unknown Command " + subCommandStr))
 	}
-	return false
+
+	hc.printUsage(commandStr)
+	return 1
 }
 
-func printUsage(commandStr string, commands []*Command) {
+func (hc SubCommandHandler) printUsage(commandStr string) {
 	Println("Valid commands for", commandStr, "are")
 
-	for _, command := range commands {
-		if !command.HideFromHelp {
-			Printf("    %16s - %s\n", command.Name, command.Desc)
+	for _, cmd := range hc.Subcommands {
+		if hiddenCmd, ok := cmd.(HiddenCommand); ok {
+			if hiddenCmd.Hidden() {
+				continue
+			}
 		}
+
+		Printf("    %16s - %s\n", cmd.Name(), cmd.Description())
 	}
 }
