@@ -64,7 +64,7 @@ func (cur *sequenceCursor) getItem(idx int) (sequenceItem, error) {
 	return cur.seq.getItem(idx)
 }
 
-// syncAdvance loads the sequence that the cursor index points to.
+// sync loads the sequence that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *sequenceCursor) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
