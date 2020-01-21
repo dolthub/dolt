@@ -5,6 +5,10 @@ setup() {
     setup_common
     dolt table create -s=`batshelper 1pk5col-ints.schema` test1
     dolt table create -s=`batshelper 1pk5col-ints.schema` test2
+    # L&R must be removed (or added and committed) for
+    # cleanliness of the working directory used in these tests
+    rm "LICENSE.md"
+    rm "README.md"
 }
 
 teardown() {
@@ -28,9 +32,6 @@ teardown() {
 }
 
 @test "modify both tables, commit only one" {
-    # L&R must be removed (or added and committed) for `nothing to commit` message to display
-    rm "LICENSE.md"
-    rm "README.md"
     dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add test1
@@ -54,9 +55,6 @@ teardown() {
 }
 
 @test "dolt add --all and dolt add . adds all changes" {
-    # L&R must be removed (or added and committed) for `Untracked files` message to be missing after dolt add .
-    rm "LICENSE.md"
-    rm "README.md"
     dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
     dolt add --all
@@ -78,9 +76,6 @@ teardown() {
 }
 
 @test "dolt reset . resets all tables" {
-    # L&R must be removed (or added) in order to test reset
-    rm "LICENSE.md"
-    rm "README.md"
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -94,9 +89,6 @@ teardown() {
 }
 
 @test "dolt reset --hard" {
-    # L&R must be removed (or added and committed) in order to test hard reset
-    rm "LICENSE.md"
-    rm "README.md"
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -131,4 +123,22 @@ teardown() {
     [[ ! "$output" =~ "test2" ]] || false
     [[ "$output" =~ file.*test3 ]] || false
     [[ "$output" =~ file.*test4 ]] || false
+}
+
+@test "dolt reset --hard on new tables" {
+    # Per Git, dolt reset --hard on an untracked table should do nothing
+    dolt reset --hard
+    run dolt status
+    [[ "$output" =~ table.*test1 ]] || false
+    [[ "$output" =~ table.*test2 ]] || false
+
+    # Per Git, if you add the table and do git reset --hard, the tables
+    # should be deleted
+    dolt add test1 test2
+    dolt reset --hard
+    run dolt status
+    skip "dolt reset --hard does not delete tracked new tables"
+    [[ ! "$output" =~ table.*test1 ]] || false
+    [[ ! "$output" =~ table.*test2 ]] || false
+    [[ "$output" =~ "nothing to commit" ]] || false
 }
