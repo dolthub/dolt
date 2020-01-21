@@ -164,14 +164,10 @@ SQL
 }
 
 @test "Use a committed view" {
-    dolt sql <<SQL                                                         
-create view four as select 2+2 as res from dual; 
-SQL
+    dolt sql -q "create view four as select 2+2 as res from dual"
     dolt add .
     dolt commit -m "Checked in a view"
-    run dolt sql <<SQL
-select * from four;
-SQL
+    run dolt sql "select * from four"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
@@ -180,9 +176,7 @@ SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ "$output" =~ "four" ]] || false
-    dolt sql <<SQL
-create view five as select 2+3 as res from dual; 
-SQL
+    dolt sql "create view five as select 2+3 as res from dual"
     run dolt sql -q "select * from dolt_schemas"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
