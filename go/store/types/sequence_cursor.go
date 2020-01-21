@@ -32,7 +32,6 @@ type sequenceIterator interface {
 	valid() bool
 	current() (sequenceItem, error)
 	advance(ctx context.Context) (bool, error)
-	retreat(ctx context.Context) (bool, error)
 	iter(ctx context.Context, cb cursorIterCallback) error
 }
 

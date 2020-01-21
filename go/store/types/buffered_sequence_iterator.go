@@ -124,48 +124,6 @@ func (cur *bufferedSequenceIterator) advanceMaybeAllowPastEnd(ctx context.Contex
 	return false, nil
 }
 
-func (cur *bufferedSequenceIterator) retreat(ctx context.Context) (bool, error) {
-	return cur.retreatMaybeAllowBeforeStart(ctx, true)
-}
-
-func (cur *bufferedSequenceIterator) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) (bool, error) {
-	if cur.idx > 0 {
-		cur.idx--
-		return true, nil
-	}
-
-	if cur.idx == -1 {
-		return false, nil
-	}
-
-	d.PanicIfFalse(0 == cur.idx)
-
-	if cur.parent != nil {
-		ok, err := cur.parent.retreatMaybeAllowBeforeStart(ctx, false)
-
-		if err != nil {
-			return false, err
-		}
-
-		if ok {
-			err := cur.sync(ctx)
-
-			if err != nil {
-				return false, err
-			}
-
-			cur.idx = cur.length() - 1
-			return true, nil
-		}
-	}
-
-	if allowBeforeStart {
-		cur.idx--
-	}
-
-	return false, nil
-}
-
 func (cur *bufferedSequenceIterator) iter(ctx context.Context, cb cursorIterCallback) error {
 	for cur.valid() {
 		item, err := cur.current()
