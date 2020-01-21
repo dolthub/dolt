@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 
-	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -28,6 +26,8 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var fetchShortDesc = "Download objects and refs from another repository"
@@ -42,7 +42,36 @@ var fetchSynopsis = []string{
 	"[<remote>] [<refspec> ...]",
 }
 
-func Fetch(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type FetchCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd FetchCmd) Name() string {
+	return "fetch"
+}
+
+// Description returns a description of the command
+func (cmd FetchCmd) Description() string {
+	return "Update the database from a remote data repository."
+}
+
+// EventType returns the type of the event to log
+func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_FETCH
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd FetchCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
+}
+
+func (cmd FetchCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
+// Exec executes the command
+func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := argparser.NewArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, fetchShortDesc, fetchLongDesc, fetchSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)

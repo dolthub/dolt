@@ -30,6 +30,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/editor"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -54,12 +55,35 @@ var commitSynopsis = []string{
 	"[options]",
 }
 
-func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CommitCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd CommitCmd) Name() string {
+	return "commit"
+}
+
+// Description returns a description of the command
+func (cmd CommitCmd) Description() string {
+	return "Record changes to the repository."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd CommitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
+}
+
+func (cmd CommitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(commitMessageArg, "m", "msg", "Use the given <msg> as the commit message.")
 	ap.SupportsFlag(allowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
+	return ap
+}
+
+// Exec executes the command
+func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, commitShortDesc, commitLongDesc, commitSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -81,7 +105,7 @@ func Commit(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	err := actions.CommitStaged(ctx, dEnv, msg, t, apr.Contains(allowEmptyFlag))
 	if err == nil {
 		// if the commit was successful, print it out using the log command
-		return Log(ctx, "log", []string{"-n=1"}, dEnv)
+		return LogCmd{}.Exec(ctx, "log", []string{"-n=1"}, dEnv)
 	}
 
 	return handleCommitErr(ctx, dEnv, err, usage)

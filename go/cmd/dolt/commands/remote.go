@@ -23,16 +23,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/ref"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var ErrInvalidPort = errors.New("invalid port")
@@ -83,16 +83,45 @@ const (
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var credTypes = []string{dbfactory.RoleCS.String(), dbfactory.EnvCS.String(), dbfactory.FileCS.String()}
 
-func Remote(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type RemoteCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd RemoteCmd) Name() string {
+	return "remote"
+}
+
+// Description returns a description of the command
+func (cmd RemoteCmd) Description() string {
+	return "Manage set of tracked repositories."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd RemoteCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, remoteShortDesc, remoteLongDesc, remoteSynopsis, ap)
+}
+
+func (cmd RemoteCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["region"] = "cloud provider region associated with this remote."
-	ap.ArgListHelp["creds-type"] = "credential type.  Valid options are role, env, and file.  See the help section for additional details."
-	ap.ArgListHelp["profile"] = "AWS profile to use."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this remote."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
 	ap.SupportsFlag(verboseFlag, "v", "When printing the list of remotes adds additional details.")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_REMOTE
+}
+
+// Exec executes the command
+func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, remoteShortDesc, remoteLongDesc, remoteSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

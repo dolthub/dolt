@@ -23,12 +23,14 @@ import (
 	"github.com/jedib0t/go-pretty/table"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/hash"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
@@ -71,7 +73,35 @@ func (bi *blameInfo) TimestampString() string {
 // A blame graph is a map of primary key hashes to blameInfo structs
 type blameGraph map[hash.Hash]blameInfo
 
-// Blame implements the `dolt blame` command. Blame annotates each row in the given table with information
+type BlameCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd BlameCmd) Name() string {
+	return "blame"
+}
+
+// Description returns a description of the command
+func (cmd BlameCmd) Description() string {
+	return "Show what revision and author last modified each row of a table."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd BlameCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
+}
+
+func (cmd BlameCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_BLAME
+}
+
+// Exec implements the `dolt blame` command. Blame annotates each row in the given table with information
 // from the revision which last modified the row, optionally starting from a given revision.
 //
 // Blame is computed as follows:
@@ -86,8 +116,9 @@ type blameGraph map[hash.Hash]blameInfo
 // changed between the commits. If so, mark it with `new` as the blame origin and continue to the next node without blame.
 //
 // When all nodes have blame information, stop iterating through commits and print the blame graph.
-func Blame(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
+// Exec executes the command
+func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, blameShortDesc, blameLongDesc, blameSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

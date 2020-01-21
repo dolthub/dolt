@@ -17,6 +17,9 @@ package schcmds
 import (
 	"context"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -32,10 +35,38 @@ var schDropColSynopsis = []string{
 	"<table> <column>",
 }
 
-func DropColumn(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "table(s) whose schema is being displayed."
+type DropColumnCmd struct{}
 
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd DropColumnCmd) Name() string {
+	return "drop-column"
+}
+
+// Description returns a description of the command
+func (cmd DropColumnCmd) Description() string {
+	return "Removes a column of the specified table."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd DropColumnCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, schDropColShortDesc, schDropColLongDesc, schDropColSynopsis, ap)
+}
+
+func (cmd DropColumnCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table(s) whose schema is being displayed."})
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd DropColumnCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_SCHEMA
+}
+
+// Exec executes the command
+func (cmd DropColumnCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, schDropColShortDesc, schDropColLongDesc, schDropColSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

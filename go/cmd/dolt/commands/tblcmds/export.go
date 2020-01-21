@@ -22,10 +22,12 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 )
 
@@ -85,17 +87,7 @@ func validateExportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	return tableName, tableLoc, destLoc
 }
 
-func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOptions) {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The table being exported."
-	ap.ArgListHelp["file"] = "The file being output to."
-	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
-	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
-	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema for the output data.")
-	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
-	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
-	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
-
+func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (bool, *mvdata.MoveOptions) {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, exportShortDesc, exportLongDesc, exportSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 	tableName, tableLoc, fileLoc := validateExportArgs(apr, usage)
@@ -120,8 +112,46 @@ func parseExportArgs(commandStr string, args []string) (bool, *mvdata.MoveOption
 	}
 }
 
-func Export(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-	force, mvOpts := parseExportArgs(commandStr, args)
+type ExportCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd ExportCmd) Name() string {
+	return "export"
+}
+
+// Description returns a description of the command
+func (cmd ExportCmd) Description() string {
+	return "Export a table to a file."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd ExportCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, exportShortDesc, exportLongDesc, exportSynopsis, ap)
+}
+
+func (cmd ExportCmd) createArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table being exported."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "The file being output to."})
+	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the Force flag will allow the target to be overwritten.")
+	ap.SupportsFlag(contOnErrParam, "", "Continue exporting when row export errors are encountered.")
+	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema for the output data.")
+	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
+	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
+	ap.SupportsString(fileTypeParam, "", "file_type", "Explicitly define the type of the file if it can't be inferred from the file extension.")
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_EXPORT
+}
+
+// Exec executes the command
+func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
+	force, mvOpts := parseExportArgs(ap, commandStr, args)
 
 	if mvOpts == nil {
 		return 1

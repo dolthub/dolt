@@ -29,6 +29,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
@@ -41,8 +42,32 @@ before running <b>dolt commit</b>.`
 
 var statusSynopsis = []string{""}
 
-func Status(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type StatusCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd StatusCmd) Name() string {
+	return "status"
+}
+
+// Description returns a description of the command
+func (cmd StatusCmd) Description() string {
+	return "Show the working tree status."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd StatusCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
+}
+
+func (cmd StatusCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	return ap
+}
+
+// Exec executes the command
+func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(commandStr, statusShortDesc, statusLongDesc, statusSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 

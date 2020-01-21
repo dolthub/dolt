@@ -25,6 +25,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -41,12 +42,43 @@ var initSynopsis = []string{
 	"[<options>] [<path>]",
 }
 
-// Init is used by the init command
-func Init(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type InitCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd InitCmd) Name() string {
+	return "init"
+}
+
+// Description returns a description of the command
+func (cmd InitCmd) Description() string {
+	return "Create an empty Dolt data repository."
+}
+
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
+func (cmd InitCmd) RequiresRepo() bool {
+	return false
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd InitCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+
+	return cli.CreateMarkdown(fs, path, commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
+}
+
+func (cmd InitCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(usernameParamName, "", "name", "The name used in commits to this repo. If not provided will be taken from \""+env.UserNameKey+"\" in the global config.")
 	ap.SupportsString(emailParamName, "", "email", "The email address used. If not provided will be taken from \""+env.UserEmailKey+"\" in the global config.")
 	ap.SupportsString(dateParam, "", "date", "Specify the date used in the initial commit. If not specified the current system time is used.")
+
+	return ap
+}
+
+// Exec executes the command
+func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, initShortDesc, initLongDesc, initSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
@@ -116,5 +148,4 @@ func initRepoErrToVerr(err error) errhand.VerboseError {
 	default:
 		return errhand.BuildDError("fatal: " + err.Error()).Build()
 	}
-
 }

@@ -19,6 +19,9 @@ import (
 	"io/ioutil"
 	"os"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -42,12 +45,41 @@ var tblCreateSynopsis = []string{
 	"[-f] -s <schema_file> <table>...",
 }
 
-func Create(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CreateCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd CreateCmd) Name() string {
+	return "create"
+}
+
+// Description returns a description of the command
+func (cmd CreateCmd) Description() string {
+	return "Creates or overwrite an existing table with an empty table."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd CreateCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, tblCreateShortDesc, tblCreateLongDesc, tblCreateSynopsis, ap)
+}
+
+func (cmd CreateCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	//ap.ArgListHelp["field_descriptor"] = fieldDescriptorHelp
-	ap.ArgListHelp["table"] = "name of the table being created."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "name of the table being created."})
 	ap.SupportsFlag(forceParam, "f", "Force table creation if a table with this name already exists by overwriting it. ")
 	ap.SupportsString(outSchemaParam, "s", "schema_file", "The schema the new table should be created with.")
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd CreateCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_CREATE
+}
+
+// Exec executes the command
+func (cmd CreateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblCreateShortDesc, tblCreateLongDesc, tblCreateSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

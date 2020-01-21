@@ -24,6 +24,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
@@ -50,8 +51,31 @@ var cfgSynopsis = []string{
 	"[--global|--local] --unset <name>...",
 }
 
-// Config is used by the config command to allow users to view / edit their global and repository local configurations.
-func Config(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ConfigCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd ConfigCmd) Name() string {
+	return "config"
+}
+
+// Description returns a description of the command
+func (cmd ConfigCmd) Description() string {
+	return "Dolt configuration."
+}
+
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
+func (cmd ConfigCmd) RequiresRepo() bool {
+	return false
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd ConfigCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)
+}
+
+func (cmd ConfigCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(globalParamName, "", "Use global config.")
 	ap.SupportsFlag(localParamName, "", "Use repository local config.")
@@ -59,6 +83,13 @@ func Config(ctx context.Context, commandStr string, args []string, dEnv *env.Dol
 	ap.SupportsFlag(listOperationStr, "", "List the values of all config parameters.")
 	ap.SupportsFlag(getOperationStr, "", "Get the value of one or more config parameters.")
 	ap.SupportsFlag(unsetOperationStr, "", "Unset the value of one or more config paramaters.")
+	return ap
+}
+
+// Exec is used by the config command to allow users to view / edit their global and repository local configurations.
+// Exec executes the command
+func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, cfgShortDesc, cfgLongDesc, cfgSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

@@ -33,6 +33,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/events"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/earl"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/datas"
 )
 
@@ -59,9 +60,38 @@ var pushSynopsis = []string{
 	"[-u | --set-upstream] [<remote>] [<refspec>]",
 }
 
-func Push(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type PushCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd PushCmd) Name() string {
+	return "push"
+}
+
+// Description returns a description of the command
+func (cmd PushCmd) Description() string {
+	return "Push to a dolt remote."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd PushCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
+}
+
+func (cmd PushCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(SetUpstreamFlag, "u", "For every branch that is up to date or successfully pushed, add upstream (tracking) reference, used by argument-less dolt pull and other commands.")
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd PushCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_PUSH
+}
+
+// Exec executes the command
+func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, pushShortDesc, pushLongDesc, pushSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

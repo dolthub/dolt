@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -39,10 +41,34 @@ var addSynopsis = []string{
 	`[<table>...]`,
 }
 
-func Add(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type AddCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd AddCmd) Name() string {
+	return "add"
+}
+
+// Description returns a description of the command
+func (cmd AddCmd) Description() string {
+	return "Add table changes to the list of staged table changes."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd AddCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, addShortDesc, addLongDesc, addSynopsis, ap)
+}
+
+func (cmd AddCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
 	ap.SupportsFlag(allParam, "a", "Stages any and all changes (adds, deletes, and modifications).")
+	return ap
+}
+
+// Exec executes the command
+func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	helpPr, _ := cli.HelpAndUsagePrinters(commandStr, addShortDesc, addLongDesc, addSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, helpPr)
 

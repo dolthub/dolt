@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
@@ -53,10 +55,34 @@ var resetSynopsis = []string{
 	"[--hard | --soft]",
 }
 
-func Reset(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type ResetCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd ResetCmd) Name() string {
+	return "reset"
+}
+
+// Description returns a description of the command
+func (cmd ResetCmd) Description() string {
+	return "Remove table changes from the list of staged table changes."
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd ResetCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
+}
+
+func (cmd ResetCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since <commit> are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
+	return ap
+}
+
+// Exec executes the command
+func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, resetShortDesc, resetLongDesc, resetSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

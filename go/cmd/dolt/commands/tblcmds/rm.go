@@ -17,6 +17,9 @@ package tblcmds
 import (
 	"context"
 
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
@@ -32,9 +35,38 @@ var tblRmSynopsis = []string{
 	"<table>...",
 }
 
-func Rm(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type RmCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd RmCmd) Name() string {
+	return "rm"
+}
+
+// Description returns a description of the command
+func (cmd RmCmd) Description() string {
+	return "Deletes a table"
+}
+
+// EventType returns the type of the event to log
+func (cmd RmCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_TABLE_RM
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd RmCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
+}
+
+func (cmd RmCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["table"] = "The table to remove"
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table to remove"})
+	return ap
+}
+
+// Exec executes the command
+func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, tblRmShortDesc, tblRmLongDesc, tblRmSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

@@ -59,7 +59,31 @@ var cloneSynopsis = []string{
 	"[-remote <remote>] [-branch <branch>]  [--aws-region <region>] [--aws-creds-type <creds-type>] [--aws-creds-file <file>] [--aws-creds-profile <profile>] <remote-url> <new-dir>",
 }
 
-func Clone(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type CloneCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd CloneCmd) Name() string {
+	return "clone"
+}
+
+// Description returns a description of the command
+func (cmd CloneCmd) Description() string {
+	return "Clone from a remote data repository."
+}
+
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
+func (cmd CloneCmd) RequiresRepo() bool {
+	return false
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd CloneCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
+}
+
+func (cmd CloneCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
 	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
@@ -67,6 +91,17 @@ func Clone(ctx context.Context, commandStr string, args []string, dEnv *env.Dolt
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_CLONE
+}
+
+// Exec executes the command
+func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, cloneShortDesc, cloneLongDesc, cloneSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

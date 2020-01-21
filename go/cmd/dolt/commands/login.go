@@ -23,11 +23,13 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	remotesapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/remotesapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 const (
@@ -40,9 +42,44 @@ var loginSynopsis = []string{
 	"[<creds>]",
 }
 
-func Login(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type LoginCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd LoginCmd) Name() string {
+	return "login"
+}
+
+// Description returns a description of the command
+func (cmd LoginCmd) Description() string {
+	return "Login to a dolt remote host."
+}
+
+// RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
+// that it be run from within a data repository directory
+func (cmd LoginCmd) RequiresRepo() bool {
+	return false
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd LoginCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
+}
+
+func (cmd LoginCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp["creds"] = "A specific credential to use for login."
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login."})
+	return ap
+}
+
+// EventType returns the type of the event to log
+func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_LOGIN
+}
+
+// Exec executes the command
+func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, usage := cli.HelpAndUsagePrinters(commandStr, loginShortDesc, loginLongDesc, loginSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 

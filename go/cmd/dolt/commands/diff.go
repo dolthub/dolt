@@ -28,6 +28,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/diff"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
@@ -42,6 +43,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/mathutil"
 	"github.com/liquidata-inc/dolt/go/store/atomicerr"
@@ -105,7 +107,30 @@ type diffArgs struct {
 	where      string
 }
 
-func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+type DiffCmd struct{}
+
+// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+func (cmd DiffCmd) Name() string {
+	return "diff"
+}
+
+// Description returns a description of the command
+func (cmd DiffCmd) Description() string {
+	return "Diff a table."
+}
+
+// EventType returns the type of the event to log
+func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
+	return eventsapi.ClientEventType_DIFF
+}
+
+// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
+func (cmd DiffCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) error {
+	ap := cmd.createArgParser()
+	return cli.CreateMarkdown(fs, path, commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
+}
+
+func (cmd DiffCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(DataFlag, "d", "Show only the data changes, do not show the schema changes (Both shown by default).")
 	ap.SupportsFlag(SchemaFlag, "s", "Show only the schema changes, do not show the data changes (Both shown by default).")
@@ -113,6 +138,12 @@ func Diff(ctx context.Context, commandStr string, args []string, dEnv *env.DoltE
 	ap.SupportsFlag(SQLFlag, "q", "Output diff as a SQL patch file of INSERT / UPDATE / DELETE statements")
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See dolt diff --help for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
+	return ap
+}
+
+// Exec executes the command
+func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
+	ap := cmd.createArgParser()
 	help, _ := cli.HelpAndUsagePrinters(commandStr, diffShortDesc, diffLongDesc, diffSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
 
