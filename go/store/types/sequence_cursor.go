@@ -250,7 +250,7 @@ func (cur *sequenceCursor) iter(ctx context.Context, cb cursorIterCallback) erro
 	return nil
 }
 
-func newIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (sequenceIterator, error) {
+func newSequenceIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (sequenceIterator, error) {
 	return newCursorAtIndex(ctx, seq, idx)
 }
 

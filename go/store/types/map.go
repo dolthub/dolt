@@ -249,7 +249,7 @@ func (m Map) At(ctx context.Context, idx uint64) (key, value Value, err error) {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur, err := newIteratorAtIndex(ctx, m.orderedSequence, idx)
+	cur, err := newSequenceIteratorAtIndex(ctx, m.orderedSequence, idx)
 
 	if err != nil {
 		return nil, nil, err
@@ -349,7 +349,7 @@ func (m Map) Iterator(ctx context.Context) (MapIterator, error) {
 }
 
 func (m Map) IteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
-	cur, err := newIteratorAtIndex(ctx, m.orderedSequence, pos)
+	cur, err := newSequenceIteratorAtIndex(ctx, m.orderedSequence, pos)
 
 	if err != nil {
 		return nil, err

@@ -191,7 +191,7 @@ func (s Set) At(ctx context.Context, idx uint64) (Value, error) {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, s.Len()))
 	}
 
-	cur, err := newIteratorAtIndex(ctx, s.orderedSequence, idx)
+	cur, err := newSequenceIteratorAtIndex(ctx, s.orderedSequence, idx)
 
 	if err != nil {
 		return nil, err
@@ -257,7 +257,7 @@ func (s Set) Iterator(ctx context.Context) (SetIterator, error) {
 }
 
 func (s Set) IteratorAt(ctx context.Context, idx uint64) (SetIterator, error) {
-	cur, err := newIteratorAtIndex(ctx, s.orderedSequence, idx)
+	cur, err := newSequenceIteratorAtIndex(ctx, s.orderedSequence, idx)
 
 	if err != nil {
 		return nil, err

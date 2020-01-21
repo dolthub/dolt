@@ -51,7 +51,7 @@ func (cur *bufferedSequenceIterator) length() int {
 	return cur.seqLen
 }
 
-// syncAdvance loads the sequence that the bufCursor index points to.
+// sync loads the sequence that the bufCursor index points to.
 // It's called whenever the bufCursor advances/retreats to a different chunk.
 func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
@@ -70,7 +70,7 @@ func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 		cur.parent.idx += int(batch) - 1
 	} else {
 		// no buffering
-		cur.seq, err = cur.parent.getChildSequence(ctx)
+		cur.seq, err = cur.parent.seq.getChildSequence(ctx, cur.parent.idx)
 		if err != nil {
 			return err
 		}
@@ -79,10 +79,6 @@ func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 	cur.seqLen = cur.seq.seqLen()
 
 	return nil
-}
-
-func (cur *bufferedSequenceIterator) getChildSequence(ctx context.Context) (sequence, error) {
-	return cur.seq.getChildSequence(ctx, cur.idx)
 }
 
 func (cur *bufferedSequenceIterator) current() (sequenceItem, error) {
@@ -205,7 +201,7 @@ func (cur *bufferedSequenceIterator) iter(ctx context.Context, cb cursorIterCall
 	return nil
 }
 
-// newIteratorAtIndex creates a new bufCursor over seq positioned at idx.
+// newIteratorAtIndex creates a new buffered iterator over seq positioned at idx.
 //
 // Implemented by searching down the tree to the leaf sequence containing idx. Each
 // sequence bufCursor includes a back pointer to its parent so that it can follow the path
@@ -223,7 +219,7 @@ func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 			cur = newbufferedSequenceIterator(cur, seq, 0, 0)
 		}
 
-		delta, err := advanceBufferedCursorToOffset(cur, idx)
+		delta, err := advanceBufferedIteratorToOffset(cur, idx)
 		if err != nil {
 			return nil, err
 		}
@@ -240,7 +236,7 @@ func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 			cur.idx += cur.seqLen - cur.idx
 		} else {
 			// don't buffer
-			cs, err = cur.getChildSequence(ctx)
+			cs, err = cur.seq.getChildSequence(ctx, cur.idx)
 		}
 
 		if err != nil {
@@ -256,16 +252,17 @@ func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 	return cur, nil
 }
 
-func advanceBufferedCursorToOffset(cur *bufferedSequenceIterator, idx uint64) (uint64, error) {
+func advanceBufferedIteratorToOffset(cur *bufferedSequenceIterator, idx uint64) (uint64, error) {
 	seq := cur.seq
 
 	if ms, ok := seq.(metaSequence); ok {
-		// For a meta sequence, advance the bufCursor to the smallest position where idx < seq.cumulativeNumLeaves()
+		// For a meta sequence, advance the buffered iterator
+		// to the smallest position where idx < seq.cumulativeNumLeaves()
 		cur.idx = 0
 		cum := uint64(0)
 
 		seqLen := ms.seqLen()
-		// Advance the bufCursor to the meta-sequence tuple containing idx
+		// advance the buffered iterator to the meta-sequence tuple containing idx
 		for cur.idx < seqLen-1 {
 			numLeaves, err := ms.getNumLeavesAt(cur.idx)
 
