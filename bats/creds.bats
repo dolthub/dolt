@@ -19,8 +19,9 @@ teardown() {
     dolt creds new
     run dolt creds ls
     [ "$status" -eq 0 ]
+    declare -p lines
     [ "${#lines[@]}" -eq 1 ]
-    [[ "${lines[0]}" =~ ^\ \  ]] || false
+    [[ "${lines[0]}" =~ (^\ \ ) ]] || false
 }
 
 @test "ls -v new creds" {
@@ -28,9 +29,10 @@ teardown() {
     dolt creds new
     run dolt creds ls -v
     [ "$status" -eq 0 ]
+    declare -p lines
     [ "${#lines[@]}" -eq 4 ]
-    [[ "${lines[0]}" =~ public\ key ]] || false
-    [[ "${lines[0]}" =~ key\ id ]] || false
+    [[ "${lines[0]}" =~ (public\ key) ]] || false
+    [[ "${lines[0]}" =~ (key\ id) ]] || false
 }
 
 @test "rm removes a cred" {
@@ -38,8 +40,8 @@ teardown() {
     run dolt creds ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
-    words=( ${lines[0]} )
-    dolt creds rm ${words[0]}
+    cred=`echo ${lines[0]} | awk '{print $1}'`
+    dolt creds rm $cred
     run dolt creds ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
