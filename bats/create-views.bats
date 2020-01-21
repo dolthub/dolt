@@ -120,6 +120,10 @@ SQL
     [ "${#lines[@]}" -eq 4 ]
     [[ "${lines[3]}" =~ 'new table:' ]] || false
     [[ "${lines[3]}" =~ ' dolt_schemas' ]] || false
+    run dolt sql -q "select * from dolt_schemas"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "select 2+2 from dual" ]] || false
 }
 
 @test "created view is queryable from next session" {
@@ -157,4 +161,32 @@ SQL
     [[ "${lines[0]}" =~ "table not found: users" ]] || false
     run dolt sql -q 'drop view all_users'
     [ "$status" -eq 0 ]
+}
+
+@test "Use a committed view" {
+    dolt sql -q "create view four as select 2+2 as res from dual"
+    dolt add .
+    dolt commit -m "Checked in a view"
+    run dolt sql -q "select * from four"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "${lines[1]}" =~ ' res ' ]] || false
+    [[ "${lines[3]}" =~ ' 4 ' ]] || false
+    run dolt sql -q "select * from dolt_schemas"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "four" ]] || false
+    dolt sql -q "create view five as select 2+3 as res from dual"
+    run dolt sql -q "select * from dolt_schemas"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    [[ "$output" =~ "five" ]] || false
+    dolt reset --hard
+    run dolt sql -q "select * from dolt_schemas"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ ! "$output" =~ "five" ]] || false
+    run dolt sql -q "select * from five"
+    [ "$status" -eq 1 ]
+    [[ "${lines[0]}" =~ "table not found: five" ]] || false
 }
