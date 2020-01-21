@@ -29,19 +29,19 @@ import (
 
 // ListIterator can be used to efficiently iterate through a Noms List.
 type ListIterator struct {
-	cursor *sequenceCursor
+	sequenceIter sequenceIterator
 }
 
 // Next returns subsequent Values from a List, starting with the index at which the iterator was
 // created. If there are no more Values, Next() returns nil.
 func (li ListIterator) Next(ctx context.Context) (Value, error) {
-	if li.cursor == nil {
+	if li.sequenceIter == nil {
 		d.Panic("Cannot use a nil ListIterator")
 	}
 
 	var out Value
-	if li.cursor.valid() {
-		currItem, err := li.cursor.current()
+	if li.sequenceIter.valid() {
+		currItem, err := li.sequenceIter.current()
 
 		if err != nil {
 			return nil, err
@@ -49,7 +49,7 @@ func (li ListIterator) Next(ctx context.Context) (Value, error) {
 
 		out = currItem.(Value)
 
-		_, err = li.cursor.advance(ctx)
+		_, err = li.sequenceIter.advance(ctx)
 
 		if err != nil {
 			return nil, err

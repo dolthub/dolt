@@ -23,14 +23,11 @@ package types
 
 import (
 	"context"
-	"fmt"
-
 	"github.com/liquidata-inc/dolt/go/store/d"
 )
 
-// bufferedSequenceCursor explores a tree of sequence items.
-type bufferedSequenceCursor struct {
-	parent *bufferedSequenceCursor
+type bufferedSequenceIterator struct {
+	parent 	   *bufferedSequenceIterator
 	seq    	   sequence
 	idx    	   int
 	seqLen 	   int
@@ -38,9 +35,9 @@ type bufferedSequenceCursor struct {
 	batchSizes []uint64
 }
 
-// newbufferedSequenceCursor creates a bufCursor on seq positioned at idx.
+// newbufferedSequenceIterator creates a bufCursor on seq positioned at idx.
 // If idx < 0, count backward from the end of seq.
-func newbufferedSequenceCursor(parent *bufferedSequenceCursor, seq sequence, idx int) *bufferedSequenceCursor {
+func newbufferedSequenceIterator(parent *bufferedSequenceIterator, seq sequence, idx int) *bufferedSequenceIterator {
 	d.PanicIfTrue(seq == nil)
 	seqLen := seq.seqLen()
 	if idx < 0 {
@@ -48,20 +45,16 @@ func newbufferedSequenceCursor(parent *bufferedSequenceCursor, seq sequence, idx
 		d.PanicIfFalse(idx >= 0)
 	}
 	batchSizes := []uint64{1024, 256, 64, 16, 4}
-	return &bufferedSequenceCursor{parent, seq, idx, seqLen, batchSizes}
+	return &bufferedSequenceIterator{parent, seq, idx, seqLen, batchSizes}
 }
 
-func (cur *bufferedSequenceCursor) length() int {
+func (cur *bufferedSequenceIterator) length() int {
 	return cur.seqLen
 }
 
-func (cur *bufferedSequenceCursor) getItem(idx int) (sequenceItem, error) {
-	return cur.seq.getItem(idx)
-}
-
-// sync loads the sequence that the bufCursor index points to.
+// syncAdvance loads the sequence that the bufCursor index points to.
 // It's called whenever the bufCursor advances/retreats to a different chunk.
-func (cur *bufferedSequenceCursor) sync(ctx context.Context) error {
+func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
 
 	var err error
@@ -93,34 +86,24 @@ func (cur *bufferedSequenceCursor) sync(ctx context.Context) error {
 	return nil
 }
 
-// getChildSequence retrieves the child at the current bufCursor position.
-func (cur *bufferedSequenceCursor) getChildSequence(ctx context.Context) (sequence, error) {
+func (cur *bufferedSequenceIterator) getChildSequence(ctx context.Context) (sequence, error) {
 	return cur.seq.getChildSequence(ctx, cur.idx)
 }
 
-// current returns the value at the current bufCursor position
-func (cur *bufferedSequenceCursor) current() (sequenceItem, error) {
+func (cur *bufferedSequenceIterator) current() (sequenceItem, error) {
 	d.PanicIfFalse(cur.valid())
-	return cur.getItem(cur.idx)
+	return cur.seq.getItem(cur.idx)
 }
 
-func (cur *bufferedSequenceCursor) valid() bool {
+func (cur *bufferedSequenceIterator) valid() bool {
 	return cur.idx >= 0 && cur.idx < cur.length()
 }
 
-func (cur *bufferedSequenceCursor) indexInChunk() int {
-	return cur.idx
-}
-
-func (cur *bufferedSequenceCursor) atLastItem() bool {
-	return cur.idx == cur.length()-1
-}
-
-func (cur *bufferedSequenceCursor) advance(ctx context.Context) (bool, error) {
+func (cur *bufferedSequenceIterator) advance(ctx context.Context) (bool, error) {
 	return cur.advanceMaybeAllowPastEnd(ctx, true)
 }
 
-func (cur *bufferedSequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) (bool, error) {
+func (cur *bufferedSequenceIterator) advanceMaybeAllowPastEnd(ctx context.Context, allowPastEnd bool) (bool, error) {
 	if cur.idx < cur.length()-1 {
 		cur.idx++
 		return true, nil
@@ -157,11 +140,11 @@ func (cur *bufferedSequenceCursor) advanceMaybeAllowPastEnd(ctx context.Context,
 	return false, nil
 }
 
-func (cur *bufferedSequenceCursor) retreat(ctx context.Context) (bool, error) {
+func (cur *bufferedSequenceIterator) retreat(ctx context.Context) (bool, error) {
 	return cur.retreatMaybeAllowBeforeStart(ctx, true)
 }
 
-func (cur *bufferedSequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) (bool, error) {
+func (cur *bufferedSequenceIterator) retreatMaybeAllowBeforeStart(ctx context.Context, allowBeforeStart bool) (bool, error) {
 	if cur.idx > 0 {
 		cur.idx--
 		return true, nil
@@ -199,41 +182,9 @@ func (cur *bufferedSequenceCursor) retreatMaybeAllowBeforeStart(ctx context.Cont
 	return false, nil
 }
 
-func (cur *bufferedSequenceCursor) String() string {
-	m, err := newMap(cur.seq.(orderedSequence)).Hash(cur.seq.format())
-
-	if err != nil {
-		return fmt.Sprintf("error: %s", err.Error())
-	}
-
-	if cur.parent == nil {
-		return fmt.Sprintf("%s (%d): %d", m.String(), cur.seq.seqLen(), cur.idx)
-	}
-
-	return fmt.Sprintf("%s (%d): %d -- %s", m.String(), cur.seq.seqLen(), cur.idx, cur.parent.String())
-}
-
-func (cur *bufferedSequenceCursor) compare(other *bufferedSequenceCursor) int {
-	if cur.parent != nil {
-		d.PanicIfFalse(other.parent != nil)
-		p := cur.parent.compare(other.parent)
-		if p != 0 {
-			return p
-		}
-
-	}
-
-	// TODO: It'd be nice here to assert that the two sequences are the same
-	// but there isn't a good way to that at this point because the containing
-	// collection of the sequence isn't available.
-	d.PanicIfFalse(cur.seq.seqLen() == other.seq.seqLen())
-	return cur.idx - other.idx
-}
-
-// iter iterates forward from the current position
-func (cur *bufferedSequenceCursor) iter(ctx context.Context, cb cursorIterCallback) error {
+func (cur *bufferedSequenceIterator) iter(ctx context.Context, cb cursorIterCallback) error {
 	for cur.valid() {
-		item, err := cur.getItem(cur.idx)
+		item, err := cur.current()
 
 		if err != nil {
 			return err
@@ -259,15 +210,15 @@ func (cur *bufferedSequenceCursor) iter(ctx context.Context, cb cursorIterCallba
 	return nil
 }
 
-// newCursorAtIndex creates a new bufCursor over seq positioned at idx.
+// newIteratorAtIndex creates a new bufCursor over seq positioned at idx.
 //
 // Implemented by searching down the tree to the leaf sequence containing idx. Each
 // sequence bufCursor includes a back pointer to its parent so that it can follow the path
 // to the next leaf chunk when the bufCursor exhausts the entries in the current chunk.
-func newBufferedCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*bufferedSequenceCursor, error) {
-	var cur *bufferedSequenceCursor
+func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (*bufferedSequenceIterator, error) {
+	var cur *bufferedSequenceIterator
 	for {
-		cur = newbufferedSequenceCursor(cur, seq, 0)
+		cur = newbufferedSequenceIterator(cur, seq, 0)
 		delta, err := advanceBufferedCursorToOffset(cur, idx)
 
 		if err != nil {
@@ -303,8 +254,7 @@ func newBufferedCursorAtIndex(ctx context.Context, seq sequence, idx uint64) (*b
 	return cur, nil
 }
 
-
-func advanceBufferedCursorToOffset(cur *bufferedSequenceCursor, idx uint64) (uint64, error) {
+func advanceBufferedCursorToOffset(cur *bufferedSequenceIterator, idx uint64) (uint64, error) {
 	seq := cur.seq
 
 	if ms, ok := seq.(metaSequence); ok {

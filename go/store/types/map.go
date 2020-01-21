@@ -249,7 +249,7 @@ func (m Map) At(ctx context.Context, idx uint64) (key, value Value, err error) {
 		panic(fmt.Errorf("out of bounds: %d >= %d", idx, m.Len()))
 	}
 
-	cur, err := newCursorAtIndex(ctx, m.orderedSequence, idx)
+	cur, err := newIteratorAtIndex(ctx, m.orderedSequence, idx)
 
 	if err != nil {
 		return nil, nil, err
@@ -349,14 +349,14 @@ func (m Map) Iterator(ctx context.Context) (MapIterator, error) {
 }
 
 func (m Map) IteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
-	cur, err := newCursorAtIndex(ctx, m.orderedSequence, pos)
+	cur, err := newIteratorAtIndex(ctx, m.orderedSequence, pos)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &mapIterator{
-		cursor: cur,
+		sequenceIter: cur,
 	}, nil
 }
 
@@ -365,14 +365,14 @@ func (m Map) BufferedIterator(ctx context.Context) (MapIterator, error) {
 }
 
 func (m Map) BufferedIteratorAt(ctx context.Context, pos uint64) (MapIterator, error) {
-	bufCur, err := newBufferedCursorAtIndex(ctx, m.orderedSequence, pos)
+	bufCur, err := newBufferedIteratorAtIndex(ctx, m.orderedSequence, pos)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &bufferedMapIterator{
-		bufCursor: bufCur,
+	return &mapIterator{
+		sequenceIter: bufCur,
 	}, nil
 }
 
@@ -383,7 +383,7 @@ func (m Map) IteratorFrom(ctx context.Context, key Value) (MapIterator, error) {
 		return nil, err
 	}
 
-	return &mapIterator{cursor: cur}, nil
+	return &mapIterator{sequenceIter: cur}, nil
 }
 
 type mapIterAllCallback func(key, value Value) error
