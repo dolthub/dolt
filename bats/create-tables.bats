@@ -115,7 +115,6 @@ teardown() {
 
 @test "try to create a table with dolt table import with a bad file name" {
     run dolt table import -c test `batshelper bad.data`
-    skip "This panics right now with: panic: Unsupported table format should have failed before reaching here."
     [ "$status" -eq 1 ]
 }
 
