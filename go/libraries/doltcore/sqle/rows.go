@@ -43,7 +43,7 @@ func newRowIterator(tbl *DoltTable, ctx *sql.Context) (*doltTableRowIter, error)
 		return nil, err
 	}
 
-	mapIter, err := rowData.BufferedIterator(ctx.Context)
+	mapIter, err := rowData.Iterator(ctx.Context)
 
 	if err != nil {
 		return nil, err
