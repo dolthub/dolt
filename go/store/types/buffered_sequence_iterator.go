@@ -184,7 +184,7 @@ func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 				batch = uint64(cur.seqLen - cur.idx)
 			}
 			cs, err = cur.seq.getCompositeChildSequence(ctx, uint64(cur.idx), batch)
-			cur.idx += cur.seqLen - cur.idx
+			cur.idx += int(batch - 1)
 		} else {
 			// don't buffer
 			cs, err = cur.seq.getChildSequence(ctx, cur.idx)
