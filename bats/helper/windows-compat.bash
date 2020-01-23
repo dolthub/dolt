@@ -9,7 +9,8 @@ if [ -d /mnt/c/Windows/System32 ]; then
     if [ ! -d /mnt/c/batstmp ]; then
         mkdir /mnt/c/batstmp
     fi
-    export BATS_TMPDIR=/mnt/c/batstmp
+    BATS_TMPDIR=`TMPDIR=/mnt/c/batstmp mktemp -d -t dolt-bats-tests-XXXXXX`
+    export BATS_TMPDIR
     nativepath() {
         wslpath -w "$1"
     }
