@@ -3,7 +3,18 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt table create -s=`batshelper 2pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk1 BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:1',
+  c1 BIGINT COMMENT 'tag:2',
+  c2 BIGINT COMMENT 'tag:3',
+  c3 BIGINT COMMENT 'tag:4',
+  c4 BIGINT COMMENT 'tag:5',
+  c5 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk1,pk2)
+);
+SQL
 }
 
 teardown() {
@@ -17,7 +28,7 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ pk1[[:space:]]+\|[[:space:]]+pk2[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
     run dolt diff
@@ -33,20 +44,18 @@ teardown() {
 @test "add a row to a two primary table using dolt table put-row" {
     dolt add test
     dolt commit -m "added test table"
-    run dolt table put-row test pk1:0 pk2:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt sql -q "insert into test values (0, 0, 1, 2, 3, 4, 5)"
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+0 ]] || false
 }
 
 @test "add a row where one of the primary keys is different, not both" {
-    dolt table put-row test pk1:0 pk2:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    run dolt table put-row test pk1:0 pk2:1 c1:1 c2:2 c3:3 c4:4 c5:10
+    dolt sql -q "insert into test values (0, 0, 1, 2, 3, 4, 5)"
+    run dolt sql -q "insert into test values (0, 1, 1, 2, 3, 4, 10)"
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully put row." ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
     [[ "$output" =~ \|[[:space:]]+5 ]] || false
@@ -54,11 +63,10 @@ teardown() {
 }
 
 @test "overwrite a row with two primary keys" {
-    dolt table put-row test pk1:0 pk2:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    run dolt table put-row test pk1:0 pk2:0 c1:1 c2:2 c3:3 c4:4 c5:10
+    dolt sql -q "insert into test values (0, 0, 1, 2, 3, 4, 5)"
+    run dolt sql -q "replace into test values (0, 0, 1, 2, 3, 4, 10)"
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully put row." ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
     [[ ! "$output" =~ \|[[:space:]]+5 ]] || false

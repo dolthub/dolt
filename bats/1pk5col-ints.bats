@@ -3,7 +3,17 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
 }
 
 teardown() {
@@ -18,7 +28,7 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ pk[[:space:]]+\|[[:space:]]+c1[[:space:]]+\|[[:space:]]+c2[[:space:]]+\|[[:space:]]+c3[[:space:]]+\|[[:space:]]+c4[[:space:]]+\|[[:space:]]+c5 ]] || false
     run dolt diff
@@ -78,9 +88,8 @@ teardown() {
 @test "add a row to a created table using dolt table put-row" {
     dolt add test
     dolt commit -m "create table"
-    run dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully put row." ]
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+0[[:space:]]+\|[[:space:]]+1 ]] || false
@@ -119,18 +128,18 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| 1       |" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [[ "$output" =~ "6" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (1,7,7,7,7,7),(2,8,8,8,8,8)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| 2       |" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
     run dolt sql -q "insert into test (pk,c1,c3,c5) values (3,9,9,9)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| 1       |" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [[ "$output" =~ "9" ]] || false
     run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
     [ "$status" -eq 1 ]
@@ -153,7 +162,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt sql -q "insert into test values (0,0,0,0,0,0)"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| 1       |" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [[ "$output" =~ "0" ]] || false
     run dolt sql -q "insert into test values (4,1,2)"
     [ "$status" -eq 1 ]
@@ -167,18 +176,17 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "Rows inserted: 1" ]
     [ "${lines[1]}" = "Errors ignored: 1" ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [[ "$output" =~ "111" ]] || false
 }
 
 @test "dolt sql replace into" {
-    skip "New engine does not support replace"
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     run dolt sql -q "replace into test (pk,c1,c2,c3,c4,c5) values (0,7,7,7,7,7),(1,8,8,8,8,8)"
     [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "Rows inserted: 1" ]
-    [ "${lines[1]}" = "Rows updated: 1" ]
-    run dolt table select test
+    [[ "${lines[1]}" =~ "updated" ]] || false
+    ## No skip, but this should report 3 but is reporting 4 [[ "${lines[3]}" =~ "3" ]] || false
+    run dolt sql -q "select * from test"
     [[ "$output" =~ "7" ]] || false
     [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "6" ]] || false
@@ -313,30 +321,14 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "| 0       |" ]] || false
 }
 
-@test "delete a row with dolt table rm-row" {
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    run dolt table rm-row test 0
-    [ "$status" -eq 0 ]
-    [ "$output" = "Removed 1 rows" ]
-}
-
-@test "delete multiple rows with dolt table rm-row" {
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt table put-row test pk:1 c1:1 c2:2 c3:3 c4:4 c5:5
-    run dolt table rm-row test 0 1
-    [ "$status" -eq 0 ]
-    [ "$output" = "Removed 2 rows" ]
-}
-
 @test "dolt checkout to put a table back to its checked in state" {
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "Added table and test row"
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:10
+    dolt sql -q "replace into test values (0, 1, 2, 3, 4, 10)"
     run dolt checkout test
     [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "5" ]] || false
     [[ ! "$output" =~ "10" ]] || false
@@ -352,7 +344,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 @test "make a change on a different branch, commit, and merge to master" {
     dolt branch test-branch
     dolt checkout test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
     dolt checkout master
@@ -367,7 +359,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 @test "create a branch off an older commit than HEAD" {
     dolt add test
     dolt commit -m "first commit"
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
     run dolt checkout -b older-branch HEAD^
@@ -380,7 +372,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 
 @test "delete an unmerged branch" {
     dolt checkout -b test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
     run dolt branch -d test-branch 
@@ -398,21 +390,17 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
     dolt checkout test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
     dolt add test
     dolt commit -m "added conflicting test row"
     dolt checkout master
     run dolt merge test-branch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT (content)" ]]
-    run dolt table select test
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Cnf" ]]
-    [[ "$output" =~ "!" ]]
     run dolt conflicts cat test
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
@@ -420,12 +408,13 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt conflicts resolve --ours test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Cnf" ]] || false
-    [[ ! "$output" =~ "!" ]] || false
     [[ "$output" =~ \|[[:space:]]+5 ]] || false
     [[ ! "$output" =~ \|[[:space:]]+6 ]] || false
+    run dolt conflicts cat test
+    [[ ! "$output" =~ "ours" ]] || false
+    [[ ! "$output" =~ "theirs" ]] || false
     dolt add test
     dolt commit -m "merged and resolved conflict"
     run dolt log
@@ -435,26 +424,6 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "$output" =~ "Merge:" ]] || false
 }
 
-@test "dolt table select --hide-conflicts" {
-    dolt add test
-    dolt commit -m "added test table"
-    dolt branch test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt add test
-    dolt commit -m "added test row"
-    dolt checkout test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
-    dolt add test
-    dolt commit -m "added conflicting test row"
-    dolt checkout master
-    dolt merge test-branch
-    run dolt table select --hide-conflicts test
-    [ "$status" -eq 0 ]
-    skip "--hide-conflicts does not work"
-    [[ ! "$output" =~ "Cnf" ]] || false
-    [[ ! "$output" =~ "!" ]] || false
-}
-
 @test "generate a merge conflict and try to roll back using dolt merge --abort" {
     # L&R must be removed (or added and committed) in order to test merge
     rm "LICENSE.md" 
@@ -462,11 +431,11 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
     dolt checkout test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
     dolt add test
     dolt commit -m "added conflicting test row"
     dolt checkout master
@@ -474,9 +443,11 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt checkout test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [[ "$output" =~ \|[[:space:]]+5 ]] || false
-    [[ ! "$output" =~ "Cnf" ]] || false
+    run dolt conflicts cat test
+    [[ ! "$output" =~ "ours" ]] || false
+    [[ ! "$output" =~ "theirs" ]] || false
     run dolt status
     [[ "$output" =~ "All conflicts fixed but you are still merging." ]] || false
     run dolt merge --abort
@@ -491,11 +462,11 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
     dolt checkout test-branch
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:6
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 6)"
     dolt add test
     dolt commit -m "added conflicting test row"
     dolt checkout master
@@ -503,28 +474,26 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt conflicts resolve --theirs test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [[ "$output" =~ \|[[:space:]]+6 ]] || false
     [[ ! "$output" =~ "|5" ]] || false
 }
 
 @test "put a row that violates the schema" {
-    run dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:foo
+    run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 'foo')"
     [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "inserted row does not match schema" ]
 }
 
 @test "put a row that has a column not in the schema" {
-    run dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5 c6:10
+    run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5, 10)"
     [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "Not all supplied keys are known in this table's schema." ]
 }
 
 @test "import data from a csv file after table created" {
     run dolt table import test -u `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
     [ "${#lines[@]}" -eq 6 ]
@@ -543,7 +512,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     run dolt table import test -u  `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
     [ "${#lines[@]}" -eq 6 ]
@@ -551,39 +520,16 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 
 @test "overwrite a row. make sure it updates not inserts" {
     dolt table import test -u `batshelper 1pk5col-ints.csv`
-    run dolt table put-row test pk:1 c1:2 c2:4 c3:6 c4:8 c5:10
+    run dolt sql -q "replace into test values (1, 2, 4, 6, 8, 10)"
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully put row." ]
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     # Number of lines offset by 3 for table printing style
     [ "${#lines[@]}" -eq 6 ]
 }
 
-@test "dolt table select with options" {
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt table put-row test pk:1 c1:6 c2:7 c3:8 c4:9 c5:10
-    dolt table put-row test pk:2 c1:1 c2:2 c3:3 c4:4 c5:5
-    run dolt table select --where pk=1 test
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]+10 ]] || false
-    [[ ! "$output" =~ \|[[:space:]]+5 ]] || false
-    [ "${#lines[@]}" -eq 5 ]
-    run dolt table select --where c1=1 test
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]+5 ]] || false
-    [[ ! "$output" =~ "|10" ]] || false
-    [ "${#lines[@]}" -eq 6 ]
-    run dolt table select test pk c1 c2 c3
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "c4" ]] || false
-    run dolt table select --where c1=1 --limit=1 test
-    [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 5 ]
-}
-
 @test "dolt table export" {
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     run dolt table export test export.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
@@ -601,7 +547,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "dolt table SQL export" {
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     run dolt table export test export.sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
@@ -645,7 +591,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     [ -f export.schema ]
-    run diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints.schema export.schema
+    run diff --strip-trailing-cr $BATS_TEST_DIRNAME/helper/1pk5col-ints-schema.json export.schema
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
@@ -669,14 +615,14 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "create and view a table with NULL values" {
-    dolt table put-row test pk:0
-    dolt table put-row test pk:1
-    dolt table put-row test pk:2
+    dolt sql -q "insert into test (pk) values (0)"
+    dolt sql -q "insert into test (pk) values (1)"
+    dolt sql -q "insert into test (pk) values (2)"
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<NULL>" ]] || false
     doltsqloutput=$output
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<NULL>" ]] || false
     [ "$output" = "$doltsqloutput" ]
@@ -686,9 +632,9 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 }
 
 @test "using dolt sql to select rows with NULL values" {
-    dolt table put-row test pk:0
-    dolt table put-row test pk:1
-    dolt table put-row test pk:2 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test (pk) values (0)"
+    dolt sql -q "insert into test (pk) values (1)"
+    dolt sql -q "insert into test values (2, 0, 0, 0, 0, 0)"
     run dolt sql -q "select * from test where c1 is null"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]

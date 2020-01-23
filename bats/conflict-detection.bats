@@ -10,17 +10,27 @@ teardown() {
 }
 
 @test "two branches modify different cell different row. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "table created"
     dolt branch change-cell
-    dolt table put-row test pk:0 c1:11 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "replace into test values (0, 11, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "changed pk=0 c1 to 11"
     dolt checkout change-cell
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:11
+    dolt sql -q "replace into test values (1, 1, 1, 1, 1, 11)"
     dolt add test
     dolt commit -m "changed pk=1 c5 to 11"
     dolt checkout master
@@ -36,16 +46,26 @@ teardown() {
 }
 
 @test "two branches modify different cell same row. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "table created"
     dolt branch change-cell
-    dolt table put-row test pk:0 c1:11 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "replace into test values (0, 11, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "changed pk=0 c1 to 11"
     dolt checkout change-cell
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:11
+    dolt sql -q "replace into test values (0, 0, 0, 0, 0, 11)"
     dolt add test
     dolt commit -m "changed pk=0 c5 to 11"
     dolt checkout master
@@ -61,16 +81,26 @@ teardown() {
 }
 
 @test "two branches modify same cell. merge. conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "table created"
     dolt branch change-cell
-    dolt table put-row test pk:0 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql -q "replace into test values (0, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "changed pk=0 all cells to 1"
     dolt checkout change-cell
-    dolt table put-row test pk:0 c1:11 c2:11 c3:11 c4:11 c5:11
+    dolt sql -q "replace into test values (0, 11, 11, 11, 11, 11)"
     dolt add test
     dolt commit -m "changed pk=0 all cells to 11"
     dolt checkout master
@@ -83,15 +113,25 @@ teardown() {
 }
 
 @test "two branches add a different row. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-row
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added pk=0 row"
     dolt checkout add-row
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "added pk=1 row"
     dolt checkout master
@@ -104,15 +144,25 @@ teardown() {
 }
 
 @test "two branches add same row. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-row
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added pk=0 row"
     dolt checkout add-row
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added pk=0 row"
     dolt checkout master
@@ -123,15 +173,35 @@ teardown() {
 }
 
 @test "one branch add table, other modifies table. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-table
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added row"
     dolt checkout add-table
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
+    dolt sql <<SQL
+CREATE TABLE test2 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test2
     dolt commit -m "added new table test2"
     dolt checkout master
@@ -144,15 +214,25 @@ teardown() {
 }
 
 @test "two branches add same column. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
-    dolt schema add-column test c0 int
+    dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added column c0"
     dolt checkout add-column
-    dolt schema add-column test c0 int
+    dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added same column c0"
     dolt checkout master
@@ -163,15 +243,25 @@ teardown() {
 }
 
 @test "two branches add different column. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
-    dolt schema add-column test c0 int
+    dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added column c0"
     dolt checkout add-column
-    dolt schema add-column test c6 int
+    dolt sql -q "alter table test add c6 bigint"
     dolt add test
     dolt commit -m "added column c6"
     dolt checkout master
@@ -183,15 +273,25 @@ teardown() {
 }
 
 @test "two branches add same column, different types. merge. conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-column
-    dolt schema add-column test c0 string
+    dolt sql -q "alter table test add c0 longtext"
     dolt add test
     dolt commit -m "added column c0 as string"
     dolt checkout add-column
-    dolt schema add-column test c0 int
+    dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added column c0 as int"
     dolt checkout master
@@ -202,15 +302,25 @@ teardown() {
 }
 
 @test "two branches delete same column. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch delete-column
-    dolt schema drop-column test c5
+    dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted c45 column"
     dolt checkout delete-column
-    dolt schema drop-column test c5
+    dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted c5 again"
     dolt checkout master
@@ -221,15 +331,25 @@ teardown() {
 }
 
 @test "two branches delete different column. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch delete-column
-    dolt schema drop-column test c5
+    dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted column c5"
     dolt checkout delete-column
-    dolt schema drop-column test c4
+    dolt sql -q "alter table test drop column c4"
     dolt add test
     dolt commit -m "deleted column c4"
     dolt checkout master
@@ -240,15 +360,25 @@ teardown() {
 }
 
 @test "two branches rename same column to same name. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
-    dolt schema rename-column test c5 c0
+    dolt sql -q "alter table test rename column c5 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c0"
     dolt checkout rename-column
-    dolt schema rename-column test c5 c0
+    dolt sql -q "alter table test rename column c5 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c0 again"
     dolt checkout master
@@ -259,15 +389,25 @@ teardown() {
 }
 
 @test "two branches rename same column to different name. merge. conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
-    dolt schema rename-column test c5 c0
+    dolt sql -q "alter table test rename column c5 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c0"
     dolt checkout rename-column
-    dolt schema rename-column test c5 c6
+    dolt sql -q "alter table test rename column c5 to c6"
     dolt add test
     dolt commit -m "renamed c5 to c6"
     dolt checkout master
@@ -280,15 +420,25 @@ teardown() {
 }
 
 @test "two branches rename different column to same name. merge. conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
-    dolt schema rename-column test c5 c0
+    dolt sql -q "alter table test rename column c5 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c0"
     dolt checkout rename-column
-    dolt schema rename-column test c4 c0
+    dolt sql -q "alter table test rename column c4 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c6"
     dolt checkout master
@@ -303,17 +453,49 @@ teardown() {
 # Altering types and properties of the schema are not really supported by the 
 # command line. Have to upload schema files for these next few tests.
 @test "two branches change type of same column to same type. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch change-types
-    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT UNSIGNED COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
-    dolt commit -m "changed c1 to type bool"
+    dolt commit -m "changed c1 to type uint"
     dolt checkout change-types
-    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT UNSIGNED COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
-    dolt commit -m "changed c1 to type bool again"
+    dolt commit -m "changed c1 to type uint again"
     dolt checkout master
     run dolt merge change-types
     [ $status -eq 0 ]
@@ -322,15 +504,47 @@ teardown() {
 }
 
 @test "two branches change type of same column to different type. merge. conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch change-types
-    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT UNSIGNED COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
-    dolt commit -m "changed c1 to type bool"
+    dolt commit -m "changed c1 to type uint"
     dolt checkout change-types
-    dolt table create -f -s=`batshelper 1pk5col-ints-change-type-2.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 DOUBLE COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "changed c1 to type float"
     dolt checkout master
@@ -343,15 +557,47 @@ teardown() {
 }
 
 @test "two branches make same column primary key. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-pk
-    dolt table create -f -s=`batshelper 1pk5col-ints-change-pk-1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk,c1)
+);
+SQL
     dolt add test
     dolt commit -m "made c1 a pk"
     dolt checkout add-pk
-    dolt table create -f -s=`batshelper 1pk5col-ints-change-pk-1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk,c1)
+);
+SQL
     dolt add test
     dolt commit -m "made c1 a pk again"
     dolt checkout master
@@ -362,15 +608,49 @@ teardown() {
 }
 
 @test "two branches add same primary key column. merge. no conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-pk
-    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  pk1 BIGINT NOT NULL COMMENT 'tag:6',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk,pk1)
+);
+SQL
     dolt add test
     dolt commit -m "added pk pk1"
     dolt checkout add-pk
-    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  pk1 BIGINT NOT NULL COMMENT 'tag:6',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk,pk1)
+);
+SQL
     dolt add test
     dolt commit -m "added pk pk1 again"
     dolt checkout master
@@ -381,15 +661,49 @@ teardown() {
 }
 
 @test "two branches make different columns primary key. merge. conflict" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "table created"
     dolt branch add-pk
-    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk1.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  pk1 BIGINT NOT NULL COMMENT 'tag:6',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk,pk1)
+);
+SQL
     dolt add test
     dolt commit -m "added pk pk1"
     dolt checkout add-pk
-    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk2.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:7',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk,pk2)
+);
+SQL
     dolt add test
     dolt commit -m "added pk pk2"
     dolt checkout master
@@ -403,11 +717,32 @@ teardown() {
     dolt branch table1
     dolt branch table2
     dolt checkout table1
-    dolt table create -s=`batshelper 1pk5col-ints.schema` table1
+    dolt sql <<SQL
+CREATE TABLE table1 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add table1
     dolt commit -m "first table"
     dolt checkout table2
-    dolt table create -s=`batshelper 2pk5col-ints.schema` table2
+    dolt sql <<SQL
+CREATE TABLE table2 (
+  pk1 BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:1',
+  c1 BIGINT COMMENT 'tag:2',
+  c2 BIGINT COMMENT 'tag:3',
+  c3 BIGINT COMMENT 'tag:4',
+  c4 BIGINT COMMENT 'tag:5',
+  c5 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk1,pk2)
+);
+SQL
     dolt add table2
     dolt commit -m "second table"
     dolt checkout master

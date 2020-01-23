@@ -3,8 +3,28 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test1
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
+    dolt sql <<SQL
+CREATE TABLE test1 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql <<SQL
+CREATE TABLE test2 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     # L&R must be removed (or added and committed) for
     # cleanliness of the working directory used in these tests
     rm "LICENSE.md"
@@ -32,8 +52,8 @@ teardown() {
 }
 
 @test "modify both tables, commit only one" {
-    dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
+    dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
     dolt add test1
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -55,8 +75,8 @@ teardown() {
 }
 
 @test "dolt add --all and dolt add . adds all changes" {
-    dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
+    dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
     dolt add --all
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
@@ -103,11 +123,31 @@ teardown() {
     dolt add --all
     dolt commit -m "commit file1 and file2"
 
-    dolt table put-row test1 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
-    dolt table put-row test2 pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
+    dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
 
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test3
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test4
+    dolt sql <<SQL
+CREATE TABLE test3 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql <<SQL
+CREATE TABLE test4 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
 
     run dolt status
     [[ "$output" =~ modified.*test1 ]] || false

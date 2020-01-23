@@ -4,7 +4,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 setup() {
     setup_common
     mkdir no-dolt-dir-$$
-	cd no-dolt-dir-$$
+    cd no-dolt-dir-$$
 }
 
 teardown() {
@@ -152,23 +152,13 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     # Check help output for supported commands                                       
     [[ "$output" =~ "import -" ]] || false
     [[ "$output" =~ "export -" ]] || false
-    [[ "$output" =~ "create -" ]] || false
     [[ "$output" =~ "rm -" ]] || false
     [[ "$output" =~ "mv -" ]] || false
     [[ "$output" =~ "cp -" ]] || false
-    [[ "$output" =~ "select -" ]] || false
-    [[ "$output" =~ "put-row -" ]] || false
-    [[ "$output" =~ "rm-row -" ]] || false
 }
 
 @test "dolt table import outside of a dolt repository" {
     run dolt table import
-    [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
-}
-
-@test "dolt table create outside of a dolt repository" {
-    run dolt table create
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
@@ -191,26 +181,8 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }
 
-@test "dolt table select outside of a dolt repository" {
-    run dolt table select
-    [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
-}
-
 @test "dolt schema show outside of a dolt repository" {
     run dolt schema show
-    [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
-}
-
-@test "dolt table put-row outside of a dolt repository" {
-    run dolt table put-row
-    [ "$status" -ne 0 ]
-    [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
-}
-
-@test "dolt table rm-row outside of a dolt repository" {
-    run dolt table rm-row
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "$NOT_VALID_REPO_ERROR" ]
 }

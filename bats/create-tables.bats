@@ -10,41 +10,100 @@ teardown() {
 }
 
 @test "create a single primary key table" {
-    run dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 }
 
 @test "create a two primary key table" {
-    run dolt table create -s=`batshelper 2pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk1 BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:1',
+  c1 BIGINT COMMENT 'tag:2',
+  c2 BIGINT COMMENT 'tag:3',
+  c3 BIGINT COMMENT 'tag:4',
+  c4 BIGINT COMMENT 'tag:5',
+  c5 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk1,pk2)
+);
+SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 }
 
 @test "create a table that uses all supported types" {
-    run dolt table create -s=`batshelper 1pksupportedtypes.schema` test
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    dolt sql <<SQL
+CREATE TABLE test (
+  \`pk\` BIGINT NOT NULL COMMENT 'tag:0',
+  \`int\` BIGINT COMMENT 'tag:1',
+  \`string\` LONGTEXT COMMENT 'tag:2',
+  \`boolean\` BOOLEAN COMMENT 'tag:3',
+  \`float\` DOUBLE COMMENT 'tag:4',
+  \`uint\` BIGINT UNSIGNED COMMENT 'tag:5',
+  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:6',
+  PRIMARY KEY (pk)
+);
+SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 }
 
-@test "create a table that uses unsupported blob type" {
-    run dolt table create -s=`batshelper 1pkunsupportedtypes.schema` test
-    skip "Can create a blob type in schema now but I should not be able to. Also can create a column of type poop that gets converted to type bool."
+@test "create a table that uses unsupported poop type" {
+    run dolt sql <<SQL
+CREATE TABLE test (
+  \`pk\` BIGINT NOT NULL COMMENT 'tag:0',
+  \`int\` BIGINT COMMENT 'tag:1',
+  \`string\` LONGTEXT COMMENT 'tag:2',
+  \`boolean\` BOOLEAN COMMENT 'tag:3',
+  \`float\` DOUBLE COMMENT 'tag:4',
+  \`uint\` BIGINT UNSIGNED COMMENT 'tag:5',
+  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:6',
+  \`blob\` LONGBLOB COMMENT 'tag:7',
+  \`poop\` POOP COMMENT 'tag:8',
+  PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -eq 1 ]
 }
 
 @test "create a repo with two tables" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test1
-    dolt table create -s=`batshelper 2pk5col-ints.schema` test2
+    dolt sql <<SQL
+CREATE TABLE test1 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql <<SQL
+CREATE TABLE test2 (
+  pk1 BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:1',
+  c1 BIGINT COMMENT 'tag:2',
+  c2 BIGINT COMMENT 'tag:3',
+  c3 BIGINT COMMENT 'tag:4',
+  c4 BIGINT COMMENT 'tag:5',
+  c5 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk1,pk2)
+);
+SQL
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test1" ]] || false
@@ -63,7 +122,7 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "employees" ]] || false
-    run dolt table select employees
+    run dolt sql -q "select * from employees"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
     [ "${#lines[@]}" -eq 7 ]
@@ -102,7 +161,7 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
 }
@@ -134,23 +193,43 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
 }
 
 @test "create two table with the same name" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    run dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "already exists." ]] || false
+    [[ "$output" =~ "already exists" ]] || false
 }
 
 @test "create a table from CSV with common column name patterns" {
     run dolt table import -c --pk=UPPERCASE test `batshelper caps-column-names.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "UPPERCASE" ]] || false
 }
@@ -162,7 +241,7 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "employees" ]] || false
-    run dolt table select employees
+    run dolt sql -q "select * from employees"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
     [ "${#lines[@]}" -eq 7 ]
@@ -173,7 +252,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "employees" ]] || false
     [[ "$output" =~ "basketball" ]] || false
-    run dolt table select basketball
+    run dolt sql -q "select * from basketball"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "tim" ]] || false
     [ "${#lines[@]}" -eq 8 ]
@@ -290,24 +369,6 @@ teardown() {
     [ -z "$output" ]
 }
 
-@test "create table with sql and dolt table create table. match success/failure" {
-    run dolt sql -q "CREATE TABLE 1pk (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY(pk))"
-    [ "$status" -eq 1 ]
-    skip "This case needs a lot of work."
-    [ "$output" = "Invalid table name. Table names cannot start with digits." ] 
-    skip "dolt table create should fail on invalid table name" 
-    dolt table create -s=`batshelper 1pk5col-ints.schema` 1pk
-    [ "$status" -eq 1 ]
-    [ "$output" = "Invalid table name. Table names cannot start with digits." ]
-    run dolt sql -q "CREATE TABLE one-pk (pk BIGINT NOT NULL, c1 BIGINT, PRIMARY KEY(pk))"
-    [ "$status" -eq 1 ]
-    skip "Need better error message"
-    [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
-    dolt table create -s=`batshelper 1pk5col-ints.schema` 1pk
-    [ "$status" -eq 1 ]
-    [ "$output" = "Invalid table name. Table names cannot contain dashes." ]
-}
-
 @test "create a table with a mispelled primary key" {
     run dolt sql -q "CREATE TABLE test (pk BIGINT, c1 BIGINT, c2 BIGINT, PRIMARY KEY
 (pk,noexist))"
@@ -323,7 +384,17 @@ teardown() {
 }
 
 @test "dolt diff on a newly created table" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     run dolt diff
     [ $status -eq 0 ]
     [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
@@ -337,7 +408,7 @@ teardown() {
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]
@@ -349,14 +420,14 @@ teardown() {
     [ "${lines[9]}" = "| g  | <NULL>    | <NULL>    |" ]
 }
 
-@test "create a table with null values from csv import with schema file" {
-    run dolt table import -c -s `batshelper empty-strings-null-values.schema` test `batshelper empty-strings-null-values.csv`
+@test "create a table with null values from csv import with json file" {
+    run dolt table import -c -s `batshelper empty-strings-null-values.json` test `batshelper empty-strings-null-values.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 11 ]
     [ "${lines[3]}" = '| a  | ""        | 1         |' ]

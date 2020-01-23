@@ -112,9 +112,8 @@ teardown() {
 }
 
 @test "dolt table select in new repository" {
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -ne 0 ]
-    [ "$output" = "error: unknown table 'test'" ]
 }
 
 @test "dolt table import in a new repository" {
@@ -137,18 +136,6 @@ teardown() {
 
 @test "dolt table cp in a new repository" {
     run dolt table cp
-    [ "$status" -ne 0 ]
-    [[ "${lines[0]}" =~ "usage" ]] || false
-}
-
-@test "dolt table put-row in a new repository" {
-    run dolt table put-row
-    [ "$status" -ne 0 ]
-    [[ "${lines[0]}" =~ "usage" ]] || false
-}
-
-@test "dolt table rm-row in a new repository" {
-    run dolt table rm-row
     [ "$status" -ne 0 ]
     [[ "${lines[0]}" =~ "usage" ]] || false
 }

@@ -18,14 +18,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
 
-var Commands = cli.NewSubCommandHandler("table", "Commands for creating, reading, updating, and deleting tables.", []cli.Command{
+var Commands = cli.NewSubCommandHandler("table", "Commands for copying, renaming, deleting, and exporting tables.", []cli.Command{
 	ImportCmd{},
 	ExportCmd{},
-	CreateCmd{},
 	RmCmd{},
 	MvCmd{},
 	CpCmd{},
-	SelectCmd{},
-	PutRowCmd{},
-	RmRowCmd{},
 })

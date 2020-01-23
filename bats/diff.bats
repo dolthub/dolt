@@ -10,13 +10,23 @@ teardown() {
 }
 
 @test "diff summary comparing working table to last commit" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "table created"
-    dolt table put-row test pk:2 c1:11 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:3 c1:11 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (2, 11, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (3, 11, 0, 0, 0, 0)"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2 Rows Unmodified (100.00%)" ]] || false
@@ -28,7 +38,7 @@ teardown() {
 
     dolt add test
     dolt commit -m "added two rows"
-    dolt table put-row test pk:0 c1:11 c2:0 c3:0 c4:0 c5:6
+    dolt sql -q "replace into test values (0, 11, 0, 0, 0, 6)"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3 Rows Unmodified (75.00%)" ]] || false
@@ -40,7 +50,7 @@ teardown() {
 
     dolt add test
     dolt commit -m "modified first row"
-    dolt table rm-row test 0
+    dolt sql -q "delete from test where pk = 0"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3 Rows Unmodified (75.00%)" ]] || false
@@ -52,13 +62,23 @@ teardown() {
 }
 
 @test "diff summary comparing row with a deleted column and an added column" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "create table"
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "put row"
-    dolt table put-row test pk:0 c1:1 c3:3 c4:4 c5:5
+    dolt sql -q "replace into test (pk, c1, c3, c4, c5) values (0, 1, 3, 4, 5)"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0 Rows Unmodified (0.00%)" ]] || false
@@ -69,7 +89,7 @@ teardown() {
     [[ "$output" =~ "(1 Entry vs 1 Entry)" ]] || false
     dolt add test
     dolt commit -m "row modified"
-    dolt table put-row test pk:0 c1:1 c2:2 c3:3 c4:4 c5:5
+    dolt sql -q "replace into test values (0, 1, 2, 3, 4, 5)"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "0 Rows Unmodified (0.00%)" ]] || false
@@ -82,12 +102,22 @@ teardown() {
 
 @test "diff summary comparing two branches" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "Added one row"
     dolt checkout -b newbranch
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "Added another row"
     run dolt diff --summary newbranch firstbranch 
@@ -104,8 +134,8 @@ teardown() {
     dolt table import -c -s=`batshelper employees-sch.json` employees `batshelper employees-tbl.json`
     dolt add employees
     dolt commit -m "Added employees table with data"
-    dolt schema add-column employees city string
-    dolt table put-row employees id:3 "first name":taylor "last name":bantle title:"software engineer" "start date":"" "end date":"" city:"Santa Monica"
+    dolt sql -q "alter table employees add city longtext"
+    dolt sql -q "insert into employees values (3, 'taylor', 'bantle', 'software engineer', '', '', 'Santa Monica')"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3 Rows Unmodified (100.00%)" ]] || false
@@ -114,7 +144,7 @@ teardown() {
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
     [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
-    dolt table put-row employees id:0 "first name":tim "last name":sehn title:ceo "start date":"2 years ago" "end date":"" city:"Santa Monica"
+    dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2 Rows Unmodified (66.67%)" ]] || false
@@ -126,15 +156,35 @@ teardown() {
 }
 
 @test "diff summary gets summaries for all tables with changes" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
-    dolt table create -s=`batshelper employees-sch.json` employees
-    dolt table put-row employees id:0 "first name":tim "last name":sehn title:ceo "start date":"" "end date":""
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
+    dolt sql -q "insert into employees values (0, 'tim', 'sehn', 'ceo', '', '')"
     dolt add test employees
     dolt commit -m "test tables created"
-    dolt table put-row test pk:2 c1:11 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row employees id:1 "first name":brian "last name":hendriks title:founder "start date":"" "end date":""
+    dolt sql -q "insert into test values (2, 11, 0, 0, 0, 0)"
+    dolt sql -q "insert into employees values (1, 'brian', 'hendriks', 'founder', '', '')"
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "diff --dolt a/test b/test" ]] || false
@@ -146,13 +196,23 @@ teardown() {
 }
 
 @test "diff with where clause" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "table created"
-    dolt table put-row test pk:2 c1:22 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:3 c1:33 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
     run dolt diff --where "pk=2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "22" ]] || false
@@ -162,13 +222,13 @@ teardown() {
     dolt commit -m "added two rows"
 
     dolt checkout -b test1
-    dolt table put-row test pk:4 c1:44 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (4, 44, 0, 0, 0, 0)"
     dolt add .
     dolt commit -m "committed to branch test1"
 
     dolt checkout master
     dolt checkout -b test2
-    dolt table put-row test pk:5 c1:55 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (5, 55, 0, 0, 0, 0)"
     dolt add .
     dolt commit -m "committed to branch test2"
 
@@ -205,13 +265,23 @@ teardown() {
 }
 
 @test "diff with where clause errors" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:1 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "table created"
-    dolt table put-row test pk:2 c1:22 c2:0 c3:0 c4:0 c5:0
-    dolt table put-row test pk:3 c1:33 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
+    dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
     
     run dolt diff --where "poop=0"
     [ "$status" -eq 1 ]

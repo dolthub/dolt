@@ -684,57 +684,6 @@ func prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sq
 	return nil
 }
 
-// Adds some print-handling stages to the pipeline given and runs it, returning any error.
-// Adds null-printing and fixed-width transformers. The schema given is assumed to be untyped (string-typed).
-func runPrintingPipeline(ctx context.Context, nbf *types.NomsBinFormat, p *pipeline.Pipeline, untypedSch schema.Schema) error {
-	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
-	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
-
-	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
-
-	// Redirect output to the CLI
-	cliWr := iohelp.NopWrCloser(cli.CliOut)
-
-	wr, err := tabular.NewTextTableWriter(cliWr, untypedSch)
-
-	if err != nil {
-		return err
-	}
-
-	p.RunAfter(func() { wr.Close(ctx) })
-
-	cliSink := pipeline.ProcFuncForWriter(ctx, wr)
-	p.SetOutput(cliSink)
-
-	p.SetBadRowCallback(func(tff *pipeline.TransformRowFailure) (quit bool) {
-		cli.PrintErrln(color.RedString("error: failed to transform row %s.", row.Fmt(ctx, tff.Row, untypedSch)))
-		return true
-	})
-
-	colNames, err := schema.ExtractAllColNames(untypedSch)
-
-	if err != nil {
-		return err
-	}
-
-	r, err := untyped.NewRowFromTaggedStrings(nbf, untypedSch, colNames)
-
-	if err != nil {
-		return err
-	}
-
-	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, r)
-
-	p.Start()
-	if err := p.Wait(); err != nil {
-		return fmt.Errorf("error processing results: %v", err)
-	}
-
-	return nil
-}
-
 // Checks if the query is a naked delete and then deletes all rows if so. Returns true if it did so, false otherwise.
 func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.Delete) bool {
 	if s.Where == nil && s.Limit == nil && s.Partitions == nil && len(s.TableExprs) == 1 {
