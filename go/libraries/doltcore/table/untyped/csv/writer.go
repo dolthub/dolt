@@ -70,7 +70,11 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 		numCols := allCols.Size()
 		colNames := make([]string, 0, numCols)
 		err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			colNames = append(colNames, col.Name)
+			cn := col.Name
+			if needsQuotes(cn) {
+				cn = quoteString(escapeDoubleQuotes(cn))
+			}
+			colNames = append(colNames, cn)
 			return false, nil
 		})
 
@@ -106,7 +110,11 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 		val, ok := r.GetColVal(tag)
 		if ok && !types.IsNull(val) {
 			if val.Kind() == types.StringKind {
-				colValStrs[i] = string(val.(types.String))
+				s := string(val.(types.String))
+				if needsQuotes(s) {
+					s = quoteString(escapeDoubleQuotes(s))
+				}
+				colValStrs[i] = s
 			} else {
 				var err error
 				colValStrs[i], err = types.EncodedValue(ctx, val)
@@ -144,4 +152,18 @@ func (csvw *CSVWriter) Close(ctx context.Context) error {
 	} else {
 		return errors.New("Already closed.")
 	}
+}
+
+func needsQuotes(s string) bool {
+	return strings.Contains(s, ",") ||
+		   strings.Contains(s, "\"") ||
+		   strings.Contains(s, "\n")
+}
+
+func quoteString(s string) string {
+	return "\"" + s + "\""
+}
+
+func escapeDoubleQuotes(s string) string {
+	return strings.Replace(s, "\"", "\"\"", -1)
 }
