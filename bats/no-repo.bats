@@ -47,9 +47,7 @@ teardown() {
 }
 
 @test "testing dolt version output" {
-    dolt version > version.txt
-    run grep -E "dolt version \d+.\d+.\d+" version.txt
-    [[ "$output" =~ "dolt version " ]] || false
+    dolt version | grep -E "dolt version \d+.\d+.\d+"
 }
 
 
