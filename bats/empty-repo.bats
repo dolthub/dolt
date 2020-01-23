@@ -129,7 +129,7 @@ teardown() {
 }
 
 @test "dolt table rm in a new repository" {
-    run dolt table rm 
+    run dolt table rm
     [ "$status" -ne 0 ]
     [[ "${lines[0]}" =~ "usage" ]] || false
 }

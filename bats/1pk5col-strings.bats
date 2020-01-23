@@ -19,7 +19,7 @@ SQL
 teardown() {
     teardown_common
 }
- 
+
 @test "export a table with a string with commas to csv" {
     run dolt sql -q "insert into test values ('tim', 'is', 'super', 'duper', 'rad', 'a,b,c,d,e')"
     [ "$status" -eq 0 ]
@@ -57,7 +57,7 @@ teardown() {
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     # All row counts are offset by 4 to account for table printing
-    [ "${#lines[@]}" -eq 7 ] 
+    [ "${#lines[@]}" -eq 7 ]
     run dolt sql -q "select * from test where pk='tim'"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 5 ]
@@ -102,7 +102,7 @@ teardown() {
     dolt sql -q "insert into test (pk) values ('brian')"
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
-    # select orders by primary key right now so aaron, brian, tim 
+    # select orders by primary key right now so aaron, brian, tim
     [[ "${lines[4]}" =~ "<NULL>" ]] || false
     [[ ! "${lines[5]}" =~ "<NULL>" ]] || false
     doltselectoutput=$output
@@ -110,7 +110,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<NULL>" ]] || false
     [ "$output" = "$doltselectoutput" ]
-    # Make sure we don't get a table with no spaces because that bug was 
+    # Make sure we don't get a table with no spaces because that bug was
     # generated when making changes to NULL printing
     [[ ! "$output" =~ "|||||" ]] || false
 }

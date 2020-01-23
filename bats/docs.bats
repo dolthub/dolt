@@ -136,7 +136,7 @@ SQL
     [[ "$output" =~ "Untracked files" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     [[ ! "$output" =~ "invalid" ]] || false
-    
+
     run dolt add invalid LICENSE.md
     [ "$status" -eq 1 ]
     run dolt status
@@ -144,7 +144,7 @@ SQL
     [[ "$output" =~ "Untracked files" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ ! "$output" =~ "invalid" ]] || false
-    
+
     run dolt add invalid README.md LICENSE.md
     [ "$status" -eq 1 ]
     run dolt status
@@ -155,7 +155,7 @@ SQL
 }
 
 @test "dolt reset --hard should move doc files to untracked files when there are no doc values on the head commit" {
-    dolt reset --hard 
+    dolt reset --hard
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files" ]] || false
@@ -191,8 +191,8 @@ SQL
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
     run cat README.md
     [ "$output" = readme-text ]
-    
-    
+
+
     echo newLicenseText > LICENSE.md
     dolt sql <<SQL
 CREATE TABLE test (
@@ -228,7 +228,7 @@ SQL
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
-    
+
     dolt add .
     dolt commit -m "initial doc commit"
     echo ~new-text~ > README.md
@@ -243,7 +243,7 @@ SQL
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
     run cat README.md
-    [[ "$output" =~ "~new-text~" ]] 
+    [[ "$output" =~ "~new-text~" ]]
 }
 
 @test "dolt reset --soft should remove docs from staging area" {
@@ -257,8 +257,8 @@ SQL
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
-    
-    
+
+
     dolt add .
     dolt commit -m "initial doc commit"
     echo ~new-text~ > README.md
@@ -269,7 +269,7 @@ SQL
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
     run cat README.md
-    [[ "$output" =~ "~new-text~" ]] 
+    [[ "$output" =~ "~new-text~" ]]
 }
 
 @test "dolt reset should remove docs from staging area" {
@@ -294,22 +294,22 @@ SQL
     [[ "$output" =~ "Changes not staged for commit:" ]] || false
     [[ "$output" =~ ([[:space:]]*modified:[[:space:]]*README.md) ]] || false
     run cat README.md
-    [[ "$output" =~ "~new-text~" ]] 
+    [[ "$output" =~ "~new-text~" ]]
 }
 
 @test "dolt reset <doc> should remove doc from staging area" {
     dolt add LICENSE.md
-    
+
     run dolt reset dolt_docs
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    
+
     dolt reset LICENSE.md
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
-    
+
     dolt add .
     run dolt reset LICENSE.md invalid
     [ "$status" -eq 1 ]
@@ -380,8 +380,8 @@ SQL
     [[ "$output" =~ "this is my license" ]] || false
     run cat README.md
     [[ "$output" =~ "This is a repository level README" ]] || false
-    
-    
+
+
     echo "testing-modified-doc" > LICENSE.md
     dolt checkout LICENSE.md
     run cat LICENSE.md
@@ -413,7 +413,7 @@ SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "README.md" ]] || false
-    run ls 
+    run ls
     [[ ! "$output" =~ "README.md" ]] || false
     [[ "$output" =~ "LICENSE.md" ]] || false
  }
@@ -436,7 +436,7 @@ SQL
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
     [[ "$output" =~ "README.md" ]] || false
-    run ls 
+    run ls
     [[ ! "$output" =~ "LICENSE.md" ]] || false
     [[ "$output" =~ "README.md" ]] || false
     run cat README.md
@@ -642,7 +642,7 @@ SQL
     [[ ! "$output" =~ "dolt_docs" ]] || false
     dolt add .
     dolt commit -m "initial doc commits"
-    
+
     run dolt sql -q "show tables"
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
@@ -732,7 +732,7 @@ SQL
     [[ $output =~ "test-b-again branch" ]] || false
     dolt add .
     dolt commit -m "merge test-b-again with fixed conflicts"
-    
+
     # A merge with auto-resolved conflicts updates the working root. The docs should match the new working root.
     dolt checkout test-b-again
     echo test-b-one-more-time > README.md

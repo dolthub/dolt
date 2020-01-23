@@ -76,7 +76,7 @@ teardown() {
 
 @test "set a user and email and init a repo" {
     dolt config --global --add user.name "bats tester"
-    run dolt init 
+    run dolt init
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Could not determine user.email" ]] || false
     dolt config --global --add user.email "bats-tester@liquidata.co"

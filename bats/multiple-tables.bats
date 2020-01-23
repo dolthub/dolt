@@ -45,7 +45,7 @@ teardown() {
       [ "$status" -eq 0 ]
       [[ "$output" =~ "test1 @ working" ]] || false
       [[ "$output" =~ "test2 @ working" ]] || false
-      run dolt status 
+      run dolt status
       [ "$status" -eq 0 ]
       [[ "$output" =~ "test1" ]] || false
       [[ "$output" =~ "test2" ]] || false
@@ -84,7 +84,7 @@ teardown() {
     run dolt reset test1 test2
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt status 
+    run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
     run dolt add .
@@ -103,7 +103,7 @@ teardown() {
     run dolt reset .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt status 
+    run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
 }
@@ -116,7 +116,7 @@ teardown() {
     run dolt reset .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt status 
+    run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
 

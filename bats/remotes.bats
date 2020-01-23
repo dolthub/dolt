@@ -26,7 +26,7 @@ teardown() {
     run dolt remote add test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
-    run dolt remote -v 
+    run dolt remote -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test-remote" ]] || false
     run dolt remote add test-remote
@@ -65,7 +65,7 @@ teardown() {
     [[ "$output" =~ "unknown remote" ]] || false
     run dolt pull poop
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote" ]] || false    
+    [[ "$output" =~ "unknown remote" ]] || false
 }
 
 @test "push and pull non-master branch from remote" {
@@ -180,7 +180,7 @@ SQL
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
-    run dolt remote -v 
+    run dolt remote -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test-remote" ]] || false
     [[ ! "$output" =~ "origin" ]] || false
@@ -205,7 +205,7 @@ SQL
     run dolt branch -v -a
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remotes/test-remote/poop" ]] || false
-} 
+}
 
 @test "dolt merge with origin/master syntax." {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
@@ -415,7 +415,7 @@ SQL
     # master hasn't been pushed so expect zzz to be the current branch and the string master should not be present
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "aaa" ]] || false    
+    [[ "$output" =~ "aaa" ]] || false
     [[ "$output" =~ "* zzz" ]] || false
     [[ ! "$output" =~ "master" ]] || false
     cd ../..
@@ -427,7 +427,7 @@ SQL
     # master pushed so it should be the current branch.
     run dolt branch
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "aaa" ]] || false    
+    [[ "$output" =~ "aaa" ]] || false
     [[ "$output" =~ "zzz" ]] || false
     [[ "$output" =~ "* master" ]] || false
 }

@@ -188,7 +188,7 @@ SQL
 }
 
 @test "adding and dropping column should produce no diff" {
-    # Remove the docs, otherwise they will show up in the diff below. 
+    # Remove the docs, otherwise they will show up in the diff below.
     rm LICENSE.md
     rm README.md
     dolt sql <<SQL

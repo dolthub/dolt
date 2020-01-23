@@ -20,7 +20,7 @@ teardown() {
     run dolt
     [ "$status" -eq 1 ]
     [ "${lines[0]}" = "Valid commands for dolt are" ]
-    # Check help output for supported commands                                       
+    # Check help output for supported commands
     [[ "$output" =~ "init -" ]] || false
     [[ "$output" =~ "status -" ]] || false
     [[ "$output" =~ "add -" ]] || false
@@ -53,7 +53,7 @@ teardown() {
 }
 
 
-# Tests for dolt commands outside of a dolt repository                               
+# Tests for dolt commands outside of a dolt repository
 NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
 @test "dolt status outside of a dolt repository" {
     run dolt status
@@ -149,7 +149,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     run dolt table
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "Valid commands for dolt table are" ]
-    # Check help output for supported commands                                       
+    # Check help output for supported commands
     [[ "$output" =~ "import -" ]] || false
     [[ "$output" =~ "export -" ]] || false
     [[ "$output" =~ "rm -" ]] || false
@@ -191,7 +191,7 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     run dolt conflicts
     [ "$status" -ne 0 ]
     [ "${lines[0]}" = "Valid commands for dolt conflicts are" ]
-    # Check help output for supported commands                                       
+    # Check help output for supported commands
     [[ "$output" =~ "cat -" ]] || false
     [[ "$output" =~ "resolve -" ]] || false
 }
