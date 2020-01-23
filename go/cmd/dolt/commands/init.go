@@ -22,7 +22,6 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -127,25 +126,4 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 	cli.Println(color.CyanString("Successfully initialized dolt data repository."))
 	return 0
-}
-
-func initRepoErrToVerr(err error) errhand.VerboseError {
-	switch err {
-	case nil:
-		return nil
-
-	case env.ErrPreexistingDoltDir:
-		bdr := errhand.BuildDError("Unable to initialize the current directory.")
-		bdr.AddDetails("Directory already initialized.")
-		return bdr.Build()
-
-	case doltdb.ErrNomsIO:
-		return errhand.BuildDError("fatal: failed to write empty structure").Build()
-
-	case env.ErrStateUpdate:
-		return errhand.BuildDError("fatal: failed to write initial state").Build()
-
-	default:
-		return errhand.BuildDError("fatal: " + err.Error()).Build()
-	}
 }

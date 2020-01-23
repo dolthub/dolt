@@ -3,8 +3,29 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt table create -s=`batshelper 1pk5col-ints.schema` one_pk
-    dolt table create -s=`batshelper 2pk5col-ints.schema` two_pk
+    dolt sql <<SQL
+CREATE TABLE one_pk (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt sql <<SQL
+CREATE TABLE two_pk (
+  pk1 BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:1',
+  c1 BIGINT COMMENT 'tag:2',
+  c2 BIGINT COMMENT 'tag:3',
+  c3 BIGINT COMMENT 'tag:4',
+  c4 BIGINT COMMENT 'tag:5',
+  c5 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk1,pk2)
+);
+SQL
     dolt sql -q "insert into one_pk (pk,c1,c2,c3,c4,c5) values (0,0,0,0,0,0),(1,10,10,10,10,10),(2,20,20,20,20,20),(3,30,30,30,30,30)"
     dolt sql -q "insert into two_pk (pk1,pk2,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0),(0,1,10,10,10,10,10),(1,0,20,20,20,20,20),(1,1,30,30,30,30,30)"
 }

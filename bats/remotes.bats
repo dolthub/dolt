@@ -81,7 +81,17 @@ teardown() {
 
 @test "clone a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -118,7 +128,17 @@ teardown() {
 @test "clone a different branch than master" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt checkout -b test-branch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote test-branch
@@ -138,7 +158,17 @@ teardown() {
 
 @test "call a clone's remote something other than origin" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -184,7 +214,17 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -212,7 +252,17 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -235,7 +285,17 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
@@ -256,12 +316,32 @@ teardown() {
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt push test-remote master
     cd "dolt-repo-clones/test-repo"
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
+    dolt sql <<SQL
+CREATE TABLE test2 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test2
     dolt commit -m "another test commit"
     run dolt pull origin
@@ -271,19 +351,29 @@ teardown() {
 
 @test "generate a merge with a conflict with a remote branch" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "created table"
     dolt push test-remote master
     cd "dolt-repo-clones"
     dolt clone http://localhost:50051/test-org/test-repo
     cd ..
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:0
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "row to generate conflict"
     dolt push test-remote master
     cd "dolt-repo-clones/test-repo"
-    dolt table put-row test pk:0 c1:1 c2:1 c3:1 c4:1 c5:1
+    dolt sql -q "insert into test values (0, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "conflicting row"
     run dolt pull origin
@@ -301,7 +391,17 @@ teardown() {
 
 @test "clone sets your current branch appropriately" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
     dolt checkout -b aaa
@@ -334,7 +434,17 @@ teardown() {
 
 @test "file based remotes" {
     # seed with some data
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
 
@@ -349,7 +459,7 @@ teardown() {
     cd test-repo
 
     # make modifications
-    dolt table put-row test pk:0 c1:0 c2:0 c3:0 c4:0 c5:1
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 1)"
     dolt add test
     dolt commit -m "put row"
 
@@ -367,7 +477,17 @@ teardown() {
 
 @test "multiple remotes" {
     # seed with some data
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "test commit"
 

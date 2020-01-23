@@ -46,7 +46,7 @@ teardown() {
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
     run dolt commit -m "adding license and readme"
-    [ "$status" -eq 0 ]	
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "adding license and readme" ]] || false
     run dolt status
     [ "$status" -eq 0 ]
@@ -74,7 +74,17 @@ teardown() {
     [[ "$output" =~ "Changes to be committed:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
-    dolt table create -s `batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     run dolt status
     [ "$status" -eq 0 ]
@@ -184,7 +194,17 @@ teardown() {
     
     
     echo newLicenseText > LICENSE.md
-    dolt table create -s `batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test LICENSE.md
     dolt reset --hard
     run dolt status
@@ -325,7 +345,17 @@ teardown() {
 
 @test "dolt reset <table> <doc> resets tables and docs from staging area" {
     dolt add .
-    dolt table create -s `batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     run dolt status
     [ "$status" -eq 0 ]
@@ -389,7 +419,17 @@ teardown() {
  }
 
   @test "dolt checkout <doc> <table> should checkout both doc and table" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test1
+    dolt sql <<SQL
+CREATE TABLE test1 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt status
     dolt checkout LICENSE.md test1
     run dolt status
@@ -404,9 +444,19 @@ teardown() {
 
 
     echo This is my readme > README.md
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test2
+    dolt sql <<SQL
+CREATE TABLE test2 (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add .
-    dolt table put-row test2 pk:100
+    dolt sql -q "insert into test2 (pk) values (100)"
     echo New text in readme > README.md
     dolt checkout test2 README.md
     run cat README.md
@@ -542,9 +592,6 @@ teardown() {
     run dolt table cp dolt_docs another_table
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt table create -s=`batshelper 1pk5col-ints.schema` dolt_docs
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt table export dolt_docs test.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
@@ -554,16 +601,7 @@ teardown() {
     run dolt table mv dolt_docs new
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt table put-row dolt_docs doc_name:new doc_text:new
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt table rm dolt_docs
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt table rm-row dolt_docs LICENSE.md
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt table select dolt_docs
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
 }
@@ -571,22 +609,10 @@ teardown() {
 @test "dolt schema * does not allow operations on dolt_docs" {
     dolt add .
     dolt commit -m "First commit of docs"
-    run dolt schema add-column dolt_docs type string
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt schema drop-column dolt_docs doc_text string
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt schema export dolt_docs export.schema
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt schema export dolt_docs export.schema
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt schema import -c --pks=pk dolt_docs `batshelper 1pk5col-ints.csv`
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
-    run dolt schema rename-column dolt_docs doc_text something_else
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
     run dolt schema show dolt_docs

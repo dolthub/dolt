@@ -15,7 +15,7 @@ teardown() {
     [[ "$output" =~ "TEXT" ]] || false
     dolt add test
     dolt commit -m "Added test table"
-    dolt table import -c -f -pk=pk -s=`batshelper 1pk5col-ints.schema` test `batshelper 1pk5col-ints.csv`
+    dolt table import -c -f -pk=pk -s=`batshelper 1pk5col-ints-schema.json` test `batshelper 1pk5col-ints.csv`
     run dolt diff
     skip "This produces a failed to merge schemas error message right now"
     [ "$status" -eq 0 ]
@@ -25,9 +25,19 @@ teardown() {
 }
 
 @test "dolt schema rename column" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-    run dolt schema rename-column test c1 c0
+    run dolt sql -q "alter table test rename column c1 to c0"
     [ "$status" -eq 0 ]
     run dolt schema show test
     [ "$status" -eq 0 ]
@@ -41,13 +51,23 @@ teardown() {
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
     [[ "$output" =~ "\`c0\` BIGINT COMMENT 'tag:1'" ]] || false
     [[ ! "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
-    dolt table select test
+    dolt sql -q "select * from test"
 }
 
 @test "dolt schema delete column" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
-    run dolt schema drop-column test c1
+    run dolt sql -q "alter table test drop column c1"
     [ "$status" -eq 0 ]
     run dolt schema show test
     [ "$status" -eq 0 ]
@@ -60,14 +80,24 @@ teardown() {
     [[ "$output" =~ "\`c5\` BIGINT COMMENT 'tag:5'" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
     [[ ! "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'" ]] || false
-    dolt table select test
+    dolt sql -q "select * from test"
 }
 
 @test "dolt diff on schema changes" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt schema add-column test c0 int
+    dolt sql -q "alter table test add c0 bigint"
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
@@ -89,15 +119,36 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
     [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
-    dolt schema drop-column test c0
+    dolt sql -q "alter table test drop column c0"
     dolt diff
 }
 
 @test "change the primary key. view the schema diff" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt table create -f -s=`batshelper 1pk5col-ints-diff-pk.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (c1)
+);
+SQL
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
@@ -105,10 +156,31 @@ teardown() {
 }
 
 @test "add another primary key. view the schema diff" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt table create -f -s=`batshelper 1pk5col-ints-add-pk.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT NOT NULL COMMENT 'tag:5',
+  PRIMARY KEY (c1,c5)
+);
+SQL
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
@@ -119,31 +191,84 @@ teardown() {
     # Remove the docs, otherwise they will show up in the diff below. 
     rm LICENSE.md
     rm README.md
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt schema add-column test c0 int
-    dolt schema drop-column test c0
+    dolt sql -q "alter table test add c0 bigint"
+    dolt sql -q "alter table test drop column c0"
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
 }
 
 @test "schema diff should show primary keys in output" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt table create -f -s=`batshelper 1pk5col-ints-change-col-name.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  column2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "PRIMARY KEY" ]] || false
 }
 
 @test "add another new primary key column. view the schema diff" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt table create -f -s=`batshelper 1pk5col-ints-add-col-pk.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  c6 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk,c6)
+);
+SQL
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false
@@ -151,10 +276,30 @@ teardown() {
 }
 
 @test "remove a primary key column. view the schema diff" {
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add test
     dolt commit -m "committed table so we can see diffs"
-    dolt table create -f -s=`batshelper 1pk5col-ints-rm-pk-col.schema` test
+    dolt table rm test
+    dolt sql <<SQL
+CREATE TABLE test (
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (c3)
+);
+SQL
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<    PRIMARY KEY (\`pk\`)" ]] || false

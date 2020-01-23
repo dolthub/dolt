@@ -14,7 +14,13 @@ setup_repository() {
     stash_current_dolt_user
     
     set_dolt_user "Thomas Foolery", "bats-1@email.fake"
-    dolt table create -s=`batshelper blame-simple.schema` blame_test
+    dolt sql <<SQL
+CREATE TABLE blame_test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  name LONGTEXT COMMENT 'tag:1',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q "insert into blame_test (pk,name) values (1, \"Tom\")"
     dolt add blame_test
     dolt commit -m "create blame_test table"

@@ -11,7 +11,17 @@ teardown() {
 
 @test "diff sql output reconciles INSERT query" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt table import -u test `batshelper 1pk5col-ints.csv`
     dolt add test
     dolt commit -m "Added one initial row"
@@ -41,7 +51,17 @@ teardown() {
 
 @test "diff sql output reconciles UPDATE query" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt table import -u test `batshelper 1pk5col-ints.csv`
     dolt add test
     dolt commit -m "Added one initial row"
@@ -71,7 +91,17 @@ teardown() {
 
 @test "diff sql output reconciles DELETE query" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt table import -u test `batshelper 1pk5col-ints.csv`
     dolt add test
     dolt commit -m "Added one initial row"
@@ -101,7 +131,17 @@ teardown() {
 
 @test "diff sql output reconciles change to PRIMARY KEY field in row " {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt table import -u test `batshelper 1pk5col-ints.csv`
     dolt add test
     dolt commit -m "Added one initial row"
@@ -132,13 +172,23 @@ teardown() {
 @test "diff sql output reconciles column rename" {
 
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt add .
     dolt commit -m "added row"
 
     dolt checkout -b newbranch
-    dolt schema rename-column test c1 c0
+    dolt sql -q "alter table test rename column c1 to c0"
     dolt add .
     dolt commit -m "renamed column"
 
@@ -162,13 +212,23 @@ teardown() {
 
 @test "diff sql output reconciles DROP column query" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt add .
     dolt commit -m "added row"
 
     dolt checkout -b newbranch
-    dolt schema drop-column test c1
+    dolt sql -q "alter table test drop column c1"
     dolt add .
     dolt commit -m "dropped column"
 
@@ -192,13 +252,23 @@ teardown() {
 
 @test "diff sql output reconciles ADD column query" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt add .
     dolt commit -m "added row"
 
     dolt checkout -b newbranch
-    dolt schema add-column test c0 int
+    dolt sql -q "alter table test add c0 bigint"
     dolt add .
     dolt commit -m "added column"
 
@@ -226,7 +296,17 @@ teardown() {
     rm README.md
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add .
     dolt commit -m "created new table"
 
@@ -255,7 +335,17 @@ teardown() {
     rm README.md
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt sql -q 'insert into test values (2,2,2,2,2,2)'
     dolt sql -q 'insert into test values (3,3,3,3,3,3)'
@@ -283,7 +373,17 @@ teardown() {
 
 @test "diff sql reconciles DROP TABLE" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt add .
     dolt commit -m "setup table"
@@ -313,7 +413,17 @@ teardown() {
 
 @test "diff sql outputs RENAME TABLE if underlying data is unchanged" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt add .
     dolt commit -m "created table"
 
@@ -344,7 +454,17 @@ teardown() {
 
 @test "diff sql reconciles RENAME TABLE with DROP+ADD if data is changed" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     dolt add .
     dolt commit -m "created table"
@@ -379,7 +499,18 @@ teardown() {
 
     dolt checkout -b firstbranch
     dolt checkout -b newbranch
-    dolt table create -s=`batshelper 1pksupportedtypes.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  \`pk\` BIGINT NOT NULL COMMENT 'tag:0',
+  \`int\` BIGINT COMMENT 'tag:1',
+  \`string\` LONGTEXT COMMENT 'tag:2',
+  \`boolean\` BOOLEAN COMMENT 'tag:3',
+  \`float\` DOUBLE COMMENT 'tag:4',
+  \`uint\` BIGINT UNSIGNED COMMENT 'tag:5',
+  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:6',
+  PRIMARY KEY (pk)
+);
+SQL
     # dolt table import -u test `batshelper 1pksupportedtypes.csv`
     dolt add .
     dolt commit -m "created new table"
@@ -405,7 +536,18 @@ teardown() {
 
 @test "sql diff supports all types" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 1pksupportedtypes.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  \`pk\` BIGINT NOT NULL COMMENT 'tag:0',
+  \`int\` BIGINT COMMENT 'tag:1',
+  \`string\` LONGTEXT COMMENT 'tag:2',
+  \`boolean\` BOOLEAN COMMENT 'tag:3',
+  \`float\` DOUBLE COMMENT 'tag:4',
+  \`uint\` BIGINT UNSIGNED COMMENT 'tag:5',
+  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin COMMENT 'tag:6',
+  PRIMARY KEY (pk)
+);
+SQL
     dolt table import -u test `batshelper 1pksupportedtypes.csv`
     dolt add .
     dolt commit -m "create/init table test"
@@ -441,7 +583,18 @@ teardown() {
 
 @test "sql diff supports multiple primary keys" {
     dolt checkout -b firstbranch
-    dolt table create -s=`batshelper 2pk5col-ints.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk1 BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:1',
+  c1 BIGINT COMMENT 'tag:2',
+  c2 BIGINT COMMENT 'tag:3',
+  c3 BIGINT COMMENT 'tag:4',
+  c4 BIGINT COMMENT 'tag:5',
+  c5 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk1,pk2)
+);
+SQL
     dolt table import -u test `batshelper 2pk5col-ints.csv`
     dolt add .
     dolt commit -m "create/init table test"

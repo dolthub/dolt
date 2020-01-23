@@ -35,6 +35,12 @@ var schExportSynopsis = []string{
 	"<table> <file>",
 }
 
+const (
+	defaultParam = "default"
+	tagParam     = "tag"
+	notNullFlag  = "not-null"
+)
+
 type ExportCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command

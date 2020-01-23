@@ -25,13 +25,10 @@ import (
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
-
-const ()
 
 var tblSchemaShortDesc = "Shows the schema of one or more tables."
 var tblSchemaLongDesc = "dolt table schema displays the schema of tables at a given commit.  If no commit is provided the working set will be used." +
@@ -169,17 +166,4 @@ func printTblSchema(ctx context.Context, cmStr string, tblName string, tbl *dolt
 
 	cli.Println(sql.SchemaAsCreateStmt(tblName, sch))
 	return nil
-}
-
-func errToVerboseErr(oldName, newName string, err error) errhand.VerboseError {
-	switch err {
-	case schema.ErrColNameCollision:
-		return errhand.BuildDError("error: A column already exists with the name %s", newName).Build()
-
-	case schema.ErrColNotFound:
-		return errhand.BuildDError("error: Column %s unknown", oldName).Build()
-
-	default:
-		return errhand.BuildDError("error: Failed to alter schema").AddCause(err).Build()
-	}
 }

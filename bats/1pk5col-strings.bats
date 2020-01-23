@@ -3,7 +3,17 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    dolt table create -s=`batshelper 1pk5col-strings.schema` test
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk LONGTEXT NOT NULL COMMENT 'tag:0',
+  c1 LONGTEXT COMMENT 'tag:1',
+  c2 LONGTEXT COMMENT 'tag:2',
+  c3 LONGTEXT COMMENT 'tag:3',
+  c4 LONGTEXT COMMENT 'tag:4',
+  c5 LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
 }
 
 teardown() {
@@ -11,9 +21,8 @@ teardown() {
 }
  
 @test "export a table with a string with commas to csv" {
-    run dolt table put-row test pk:tim c1:is c2:super c3:duper c4:rad c5:"a,b,c,d,e"
+    run dolt sql -q "insert into test values ('tim', 'is', 'super', 'duper', 'rad', 'a,b,c,d,e')"
     [ "$status" -eq 0 ]
-    [ "$output" = "Successfully put row." ]
     run dolt table export test export.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] ||  false
@@ -22,9 +31,9 @@ teardown() {
 }
 
 @test "dolt sql with string comparison operators" {
-    dolt table put-row test pk:tim c1:is c2:super c3:duper c4:rad c5:"fo sho"
-    dolt table put-row test pk:zach c1:is c2:super c3:duper c4:not c5:rad
-    dolt table put-row test pk:this c1:test c2:is c3:a c4:good c5:test
+    dolt sql -q "insert into test values ('tim', 'is', 'super', 'duper', 'rad', 'fo sho')"
+    dolt sql -q "insert into test values ('zach', 'is', 'super', 'duper', 'not', 'rad')"
+    dolt sql -q "insert into test values ('this', 'test', 'is', 'a', 'good', 'test')"
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     # All row counts are offset by 4 to account for table printing
@@ -68,16 +77,16 @@ teardown() {
 }
 
 @test "create and view a table with NULL and empty string values" {
-    dolt table put-row test pk:tim c1:"" c2:"" c3:"" c4:"" c5:""
-    dolt table put-row test pk:aaron
-    dolt table put-row test pk:brian
+    dolt sql -q "insert into test values ('tim', '', '', '', '', '')"
+    dolt sql -q "insert into test (pk) values ('aaron')"
+    dolt sql -q "insert into test (pk) values ('brian')"
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     # select orders by primary key right now so aaron, brian, tim 
     [[ "${lines[4]}" =~ "<NULL>" ]] || false
     [[ ! "${lines[5]}" =~ "<NULL>" ]] || false
     doltselectoutput=$output
-    run dolt table select test
+    run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<NULL>" ]] || false
     [ "$output" = "$doltselectoutput" ]

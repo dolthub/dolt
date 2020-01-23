@@ -180,6 +180,13 @@ func (String) GetMarshalFunc(targetKind NomsKind) (MarshalCallback, error) {
 			}
 			isNegative, decPos, err := parseNumber(s)
 			if err != nil {
+				b, boolErr := strconv.ParseBool(string(s))
+				if boolErr == nil {
+					if b {
+						return Int(1), nil
+					}
+					return Int(0), nil
+				}
 				return Int(0), CreateConversionError(s.Kind(), IntKind, err)
 			}
 			if decPos == 0 || (decPos == 1 && isNegative) {

@@ -10,8 +10,17 @@ teardown() {
 }
 
 @test "replace table using csv" {
-    run dolt table create -s `batshelper 1pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     run dolt table import -r test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
@@ -19,8 +28,17 @@ teardown() {
 }
 
 @test "replace table using csv with wrong schema" {
-    run dolt table create -s `batshelper 1pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     run dolt table import -r test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error replacing table" ]] || false
@@ -28,8 +46,17 @@ teardown() {
 }
 
 @test "replace table using psv" {
-    run dolt table create -s `batshelper 1pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
     run dolt table import -r test `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
@@ -37,8 +64,18 @@ teardown() {
 }
 
 @test "replace table using psv with wrong schema" {
-    run dolt table create -s `batshelper 2pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk1 BIGINT NOT NULL COMMENT 'tag:0',
+  pk2 BIGINT NOT NULL COMMENT 'tag:1',
+  c1 BIGINT COMMENT 'tag:2',
+  c2 BIGINT COMMENT 'tag:3',
+  c3 BIGINT COMMENT 'tag:4',
+  c4 BIGINT COMMENT 'tag:5',
+  c5 BIGINT COMMENT 'tag:6',
+  PRIMARY KEY (pk1,pk2)
+);
+SQL
     run dolt table import -r test `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error replacing table" ]] || false
@@ -46,16 +83,34 @@ teardown() {
 }
 
 @test "replace table using schema with csv" {
-    run dolt table create -s `batshelper 1pk5col-ints.schema` test
-    [ "$status" -eq 0 ]
-    run dolt table import -r -s `batshelper 1pk5col-ints.schema` test `batshelper 1pk5col-ints.csv`
+    dolt sql <<SQL
+CREATE TABLE test (
+  pk BIGINT NOT NULL COMMENT 'tag:0',
+  c1 BIGINT COMMENT 'tag:1',
+  c2 BIGINT COMMENT 'tag:2',
+  c3 BIGINT COMMENT 'tag:3',
+  c4 BIGINT COMMENT 'tag:4',
+  c5 BIGINT COMMENT 'tag:5',
+  PRIMARY KEY (pk)
+);
+SQL
+    run dolt table import -r -s `batshelper 1pk5col-ints-schema.json` test `batshelper 1pk5col-ints.csv`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "schema is not supported for update or replace operations" ]] || false
 }
 
 @test "replace table using json" {
-    run dolt table create -s `batshelper employees-sch.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
     run dolt table import -r employees `batshelper employees-tbl.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
@@ -63,8 +118,17 @@ teardown() {
 }
 
 @test "replace table using json with wrong schema" {
-    run dolt table create -s `batshelper employees-sch-wrong.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first namez\` LONGTEXT COMMENT 'tag:1',
+  \`last namez\` LONGTEXT COMMENT 'tag:2',
+  \`titlez\` LONGTEXT COMMENT 'tag:3',
+  \`start datez\` LONGTEXT COMMENT 'tag:4',
+  \`end datez\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (idz)
+);
+SQL
     run dolt table import -r employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error replacing table" ]] || false
@@ -72,8 +136,17 @@ teardown() {
 }
 
 @test "replace table using schema with json" {
-    run dolt table create -s `batshelper employees-sch-wrong.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first namez\` LONGTEXT COMMENT 'tag:1',
+  \`last namez\` LONGTEXT COMMENT 'tag:2',
+  \`titlez\` LONGTEXT COMMENT 'tag:3',
+  \`start datez\` LONGTEXT COMMENT 'tag:4',
+  \`end datez\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (idz)
+);
+SQL
     run dolt table import -r -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "fatal: schema is not supported for update or replace operations" ]] || false
@@ -106,16 +179,34 @@ teardown() {
 }
 
 @test "replace table with bad json" {
-    run dolt table create -s `batshelper employees-sch.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
     run dolt table import -r employees `batshelper employees-tbl-bad.json`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "An error occurred moving data" ]] || false
 }
 
 @test "replace table using xlsx file" {
-    run dolt table create -s `batshelper employees-sch-2.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first\` LONGTEXT COMMENT 'tag:1',
+  \`last\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
     run dolt table import -r employees `batshelper employees.xlsx`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
@@ -123,8 +214,17 @@ teardown() {
 }
 
 @test "replace table using xlsx file with wrong schema" {
-    run dolt table create -s `batshelper employees-sch.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
     run dolt table import -r employees `batshelper employees.xlsx`
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error replacing table" ]] || false
@@ -152,8 +252,17 @@ teardown() {
 }
 
 @test "replace table with a json with columns in different order" {
-    run dolt table create -s `batshelper employees-sch.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
     run dolt table import -r employees `batshelper employees-tbl-schema-unordered.json`
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
@@ -161,8 +270,17 @@ teardown() {
 }
 
 @test "replace table with a csv with columns in different order" {
-    run dolt table create -s `batshelper employees-sch.json` employees
-    [ "$status" -eq 0 ]
+    dolt sql <<SQL
+CREATE TABLE employees (
+  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`first name\` LONGTEXT COMMENT 'tag:1',
+  \`last name\` LONGTEXT COMMENT 'tag:2',
+  \`title\` LONGTEXT COMMENT 'tag:3',
+  \`start date\` LONGTEXT COMMENT 'tag:4',
+  \`end date\` LONGTEXT COMMENT 'tag:5',
+  PRIMARY KEY (id)
+);
+SQL
     run dolt table import -r employees `batshelper employees-tbl-schema-unordered.csv`
     echo "$output"
     [ "$status" -eq 0 ]
