@@ -47,7 +47,10 @@ teardown() {
 }
 
 @test "testing dolt version output" {
-    dolt version | grep -E "dolt version \d+.\d+.\d+"
+    run dolt version
+    [ "$status" -eq 0 ]
+    regex='dolt version [0-9]+.[0-9]+.[0-9]+'
+    [[ "$output" =~ $regex ]] || false
 }
 
 
