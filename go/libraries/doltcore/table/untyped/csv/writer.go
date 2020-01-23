@@ -15,17 +15,15 @@
 package csv
 
 import (
-	"bufio"
 	"context"
+	"encoding/csv"
 	"errors"
 	"io"
 	"path/filepath"
-	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/iohelp"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
@@ -35,11 +33,10 @@ var WriteBufSize = 256 * 1024
 
 // CSVWriter implements TableWriter.  It writes rows as comma separated string values
 type CSVWriter struct {
-	closer   io.Closer
-	bWr      *bufio.Writer
-	info     *CSVFileInfo
-	delimStr string
-	sch      schema.Schema
+	closer io.Closer
+	csvw   *csv.Writer
+	info   *CSVFileInfo
+	sch    schema.Schema
 }
 
 // OpenCSVWriter creates a file at the given path in the given filesystem and writes out rows based on the Schema,
@@ -62,19 +59,15 @@ func OpenCSVWriter(path string, fs filesys.WritableFS, outSch schema.Schema, inf
 
 // NewCSVWriter writes rows to the given WriteCloser based on the Schema and CSVFileInfo provided
 func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*CSVWriter, error) {
-	bwr := bufio.NewWriterSize(wr, WriteBufSize)
-	delimStr := string(info.Delim)
+	csvw := csv.NewWriter(wr)
+	csvw.Comma = []rune(info.Delim)[0]
 
 	if info.HasHeaderLine {
 		allCols := outSch.GetAllCols()
 		numCols := allCols.Size()
 		colNames := make([]string, 0, numCols)
 		err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cn := col.Name
-			if needsQuotes(cn) {
-				cn = quoteString(escapeDoubleQuotes(cn))
-			}
-			colNames = append(colNames, cn)
+			colNames = append(colNames, col.Name)
 			return false, nil
 		})
 
@@ -83,8 +76,7 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 			return nil, err
 		}
 
-		headerLine := strings.Join(colNames, delimStr)
-		err = iohelp.WriteLine(bwr, headerLine)
+		err = csvw.Write(colNames)
 
 		if err != nil {
 			wr.Close()
@@ -92,7 +84,7 @@ func NewCSVWriter(wr io.WriteCloser, outSch schema.Schema, info *CSVFileInfo) (*
 		}
 	}
 
-	return &CSVWriter{wr, bwr, info, delimStr, outSch}, nil
+	return &CSVWriter{wr, csvw, info, outSch}, nil
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -110,11 +102,7 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 		val, ok := r.GetColVal(tag)
 		if ok && !types.IsNull(val) {
 			if val.Kind() == types.StringKind {
-				s := string(val.(types.String))
-				if needsQuotes(s) {
-					s = quoteString(escapeDoubleQuotes(s))
-				}
-				colValStrs[i] = s
+				colValStrs[i] = string(val.(types.String))
 			} else {
 				var err error
 				colValStrs[i], err = types.EncodedValue(ctx, val)
@@ -133,37 +121,17 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return err
 	}
 
-	rowStr := strings.Join(colValStrs, csvw.delimStr)
-	return iohelp.WriteLine(csvw.bWr, rowStr)
+	return csvw.csvw.Write(colValStrs)
 }
 
 // Close should flush all writes, release resources being held
 func (csvw *CSVWriter) Close(ctx context.Context) error {
 	if csvw.closer != nil {
-		errFl := csvw.bWr.Flush()
+		csvw.csvw.Flush()
 		errCl := csvw.closer.Close()
 		csvw.closer = nil
-
-		if errCl != nil {
-			return errCl
-		}
-
-		return errFl
+		return errCl
 	} else {
 		return errors.New("Already closed.")
 	}
-}
-
-func needsQuotes(s string) bool {
-	return strings.Contains(s, ",") ||
-		   strings.Contains(s, "\"") ||
-		   strings.Contains(s, "\n")
-}
-
-func quoteString(s string) string {
-	return "\"" + s + "\""
-}
-
-func escapeDoubleQuotes(s string) string {
-	return strings.Replace(s, "\"", "\"\"", -1)
 }
