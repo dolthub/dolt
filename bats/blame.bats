@@ -12,7 +12,7 @@ teardown() {
 
 setup_repository() {
     stash_current_dolt_user
-    
+
     set_dolt_user "Thomas Foolery", "bats-1@email.fake"
     dolt sql <<SQL
 CREATE TABLE blame_test (

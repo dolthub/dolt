@@ -15,7 +15,7 @@ teardown() {
 @test "test event flush locking" {
     # copy test event files to appropriate dir
     cp -a $BATS_TEST_DIRNAME/helper/testEvents/* $BATS_TMPDIR/config-$$/.dolt/eventsData/
-    
+
     # kick off two child processes, one should lock the other out of the events dir
     dolt send-metrics -output >file1.txt &
     pid1=$!
@@ -33,7 +33,7 @@ teardown() {
     # get the line count of each output file
     event_count1=`wc -l file1.txt`
     event_count2=`wc -l file2.txt`
-  
+
     if [ $exit_code1 -eq 0 ]; then
       if [ $exit_code2 -eq 0 ]; then
         # we expect for only one output file to contain 4 lines, corresponding to the 4 event files successfully processed

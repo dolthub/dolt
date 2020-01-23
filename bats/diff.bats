@@ -120,7 +120,7 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "Added another row"
-    run dolt diff --summary newbranch firstbranch 
+    run dolt diff --summary newbranch firstbranch
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1 Row Unmodified (100.00%)" ]] || false
     [[ "$output" =~ "1 Row Added (100.00%)" ]] || false
@@ -282,14 +282,14 @@ SQL
     dolt commit -m "table created"
     dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
-    
+
     run dolt diff --where "poop=0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "failed to parse where clause" ]] || false
-    
+
     dolt add test
     dolt commit -m "added two rows"
-    
+
     run dolt diff --where "poop=0"
     skip "Bad where clause not found because the argument parsing logic is only triggered on existance of a diff"
     [ "$status" -eq 1 ]

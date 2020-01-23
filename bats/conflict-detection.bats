@@ -208,7 +208,7 @@ SQL
     run dolt merge add-table
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
-    skip "should have a merge summary section that says 1 table changed" 
+    skip "should have a merge summary section that says 1 table changed"
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
@@ -450,7 +450,7 @@ SQL
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
-# Altering types and properties of the schema are not really supported by the 
+# Altering types and properties of the schema are not really supported by the
 # command line. Have to upload schema files for these next few tests.
 @test "two branches change type of same column to same type. merge. no conflict" {
     dolt sql <<SQL
@@ -551,7 +551,7 @@ SQL
     run dolt merge change-types
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
-    skip "I think changing a type to two different types should throw a conflict" 
+    skip "I think changing a type to two different types should throw a conflict"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }

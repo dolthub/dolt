@@ -131,7 +131,7 @@ SQL
 @test "create a table with json import. no schema." {
     run dolt table import -c employees `batshelper employees-tbl.json`
     [ "$status" -ne 0 ]
-    [ "$output" = "Please specify schema file for .json tables." ] 
+    [ "$output" = "Please specify schema file for .json tables." ]
 }
 
 @test "create a table with json import. bad json." {
@@ -149,7 +149,7 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error creating reader" ]] || false
     skip "Error message mentions valid table file but not invalid schema file"
-    # Be careful here. "employees-sch-bad.json" matches. I think it is because 
+    # Be careful here. "employees-sch-bad.json" matches. I think it is because
     # the command line is somehow in $output. Added " to" to make it fail.
     [[ "$output" =~ "employees-sch-bad.json to" ]] || false
 }
@@ -341,7 +341,7 @@ SQL
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 
-   
+
 @test "create a table using sql with a string" {
     run dolt sql -q "CREATE TABLE test (pk BIGINT NOT NULL, c1 LONGTEXT, PRIMARY KEY (pk))"
     [ "$status" -eq 0 ]

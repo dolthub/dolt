@@ -22,7 +22,7 @@ teardown() {
 
 # Create a single primary key table and do stuff
 @test "create a table with a schema file and examine repo" {
-    # Remove the docs, because they will show up in the diff below and break the lines[x] assertions. 
+    # Remove the docs, because they will show up in the diff below and break the lines[x] assertions.
     rm LICENSE.md
     rm README.md
     run dolt ls
@@ -49,7 +49,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Changes to be committed" ]]
     [[ "$output" =~ "new table:" ]] || false
-    run dolt reset test 
+    run dolt reset test
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt status
@@ -75,7 +75,7 @@ teardown() {
 @test "dolt log with -n specified" {
     dolt add test
     dolt commit -m "first commit"
-    run dolt log 
+    run dolt log
     [ "$status" -eq "0" ]
     [[ "$output" =~ "first commit" ]] || false
     [[ "$output" =~ "Initialize data repository" ]] || false
@@ -375,7 +375,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
     dolt add test
     dolt commit -m "added test row"
-    run dolt branch -d test-branch 
+    run dolt branch -d test-branch
     [ "$status" -ne 0 ]
     [ "$output" = "error: Cannot delete checked out branch 'test-branch'" ]
     dolt checkout master
@@ -426,7 +426,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
 
 @test "generate a merge conflict and try to roll back using dolt merge --abort" {
     # L&R must be removed (or added and committed) in order to test merge
-    rm "LICENSE.md" 
+    rm "LICENSE.md"
     rm "README.md"
     dolt add test
     dolt commit -m "added test table"
@@ -626,7 +626,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "$status" -eq 0 ]
     [[ "$output" =~ "<NULL>" ]] || false
     [ "$output" = "$doltsqloutput" ]
-    # Make sure we don't get a table with no spaces because that bug was 
+    # Make sure we don't get a table with no spaces because that bug was
     # generated when making changes to NULL printing
     [[ ! "$output" =~ "|||||" ]] || false
 }

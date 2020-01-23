@@ -128,7 +128,7 @@ teardown() {
 }
 
 @test "schema import with strings in csv" {
-    # This CSV has queoted integers for the primary key ie "0","foo",... and 
+    # This CSV has queoted integers for the primary key ie "0","foo",... and
     # "1","bar",...
     run dolt schema import -r --keep-types --pks=pk test `batshelper 1pk5col-strings.csv`
     [ "$status" -eq 0 ]
