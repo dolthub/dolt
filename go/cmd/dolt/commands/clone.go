@@ -348,5 +348,11 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
 	}
 
+	err = actions.SaveDocsFromWorking(ctx, dEnv)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
+	}
+
 	return nil
 }
