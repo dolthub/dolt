@@ -16,11 +16,15 @@ package csv
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -43,6 +47,32 @@ type CSVReader struct {
 	sch    schema.Schema
 	isDone bool
 	nbf    *types.NomsBinFormat
+	// Comma is the field delimiter.
+	// It is set to comma (',') by NewReader.
+	// Comma must be a valid rune and must not be \r, \n,
+	// or the Unicode replacement character (0xFFFD).
+	Comma rune
+
+	// numLine is the current line being read in the CSV file.
+	numLine int
+
+	// rawBuffer is a line buffer only used by the readLine method.
+	rawBuffer []byte
+
+	// recordBuffer holds the unescaped fields, one after another.
+	// The fields can be accessed by using the indexes in fieldIndexes.
+	// E.g., For the row `a,"b","c""d",e`, recordBuffer will contain `abc"de`
+	// and fieldIndexes will contain the indexes [1, 2, 5, 6].
+	recordBuffer []byte
+
+	// fieldIndexes is an index of fields inside recordBuffer.
+	// The i'th field ends at offset fieldIndexes[i] in recordBuffer.
+	fieldIndexes []int
+
+	// lastRecord is a record cache and only used when ReuseRecord == true.
+	lastRecord []string
+
+	fieldsPerRecord int
 }
 
 // OpenCSVReader opens a reader at a given path within a given filesys.  The CSVFileInfo should describe the csv file
@@ -57,8 +87,24 @@ func OpenCSVReader(nbf *types.NomsBinFormat, path string, fs filesys.ReadableFS,
 	return NewCSVReader(nbf, r, info)
 }
 
+
+// TODO: incorporate
+//var errInvalidDelim = errors.New("csv: invalid field or comment delimiter")
+//
+func validDelim(r rune) bool {
+	return r != 0 && r != '"' && r != '\r' && r != '\n' && utf8.ValidRune(r) && r != utf8.RuneError
+}
+
 // NewCSVReader creates a CSVReader from a given ReadCloser.  The CSVFileInfo should describe the csv file being read.
 func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) (*CSVReader, error) {
+	if len([]rune(info.Delim)) != 1 {
+		return nil, errors.New(fmt.Sprintf("delimiter %s has invalid length", info.Delim))
+	}
+	delim := []rune(info.Delim)[0]
+	if !validDelim(delim) {
+		return nil, errors.New(fmt.Sprintf("invalid delimiter: %s", string(delim)))
+	}
+
 	br := bufio.NewReaderSize(r, ReadBufSize)
 	colStrs, err := getColHeaders(br, info)
 
@@ -69,7 +115,15 @@ func NewCSVReader(nbf *types.NomsBinFormat, r io.ReadCloser, info *CSVFileInfo) 
 
 	_, sch := untyped.NewUntypedSchema(colStrs...)
 
-	return &CSVReader{r, br, info, sch, false, nbf}, nil
+	return &CSVReader{
+		closer: r,
+		bRd: br,
+		info: info,
+		sch: sch,
+		isDone: false,
+		nbf: nbf,
+		Comma: delim,
+	}, nil
 }
 
 func getColHeaders(br *bufio.Reader, info *CSVFileInfo) ([]string, error) {
@@ -108,27 +162,18 @@ func (csvr *CSVReader) ReadRow(ctx context.Context) (row.Row, error) {
 		return nil, io.EOF
 	}
 
-	var line string
-	var err error
-	isDone := false
-	for line == "" && !isDone && err == nil {
-		line, isDone, err = iohelp.ReadLine(csvr.bRd)
+	colVals, err := csvr.csvReadRecords(nil)
 
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
-	}
-
-	csvr.isDone = isDone
-	line = strings.TrimSpace(line)
-	if line != "" {
-		r, err := csvr.parseRow(line)
-		return r, err
-	} else if err == nil {
+	if err == io.EOF {
+		csvr.isDone = true
 		return nil, io.EOF
 	}
 
-	return nil, err
+	if err != nil {
+		return nil, table.NewBadRow(nil, err.Error())
+	}
+
+	return csvr.makeRow(colVals)
 }
 
 // GetSchema gets the schema of the rows that this reader will return
@@ -153,20 +198,20 @@ func (csvr *CSVReader) Close(ctx context.Context) error {
 	}
 }
 
-func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
-	colVals, err := csvSplitLine(line, csvr.info.Delim, csvr.info.EscapeQuotes)
+func (csvr *CSVReader) makeRow(colVals []*string) (row.Row, error) {
+	allCols :=  csvr.sch.GetAllCols()
 
-	if err != nil {
-		return nil, table.NewBadRow(nil, err.Error())
-	}
-
-	sch := csvr.sch
-	allCols := sch.GetAllCols()
-	numCols := allCols.Size()
-	if len(colVals) != numCols {
+	if len(colVals) != allCols.Size() {
+		var out strings.Builder
+		for _, cv := range colVals {
+			if cv != nil {
+				out.WriteString(*cv)
+			}
+			out.WriteRune(',')
+		}
 		return nil, table.NewBadRow(nil,
-			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", numCols, len(colVals)),
-			fmt.Sprintf("line: '%s'", line),
+			fmt.Sprintf("csv reader's schema expects %d fields, but line only has %d values.", allCols.Size(), len(colVals)),
+			fmt.Sprintf("line: '%s'", out.String()),
 		)
 	}
 
@@ -180,5 +225,199 @@ func (csvr *CSVReader) parseRow(line string) (row.Row, error) {
 		taggedVals[col.Tag] = types.String(*colVals[i])
 	}
 
-	return row.New(csvr.nbf, sch, taggedVals)
+	return row.New(csvr.nbf,  csvr.sch, taggedVals)
+}
+
+// readLine reads the next line (with the trailing endline).
+// If EOF is hit without a trailing endline, it will be omitted.
+// If some bytes were read, then the error is never io.EOF.
+// The result is only valid until the next call to readLine.
+func (csvr *CSVReader) readLine() ([]byte, error) {
+	line, err := csvr.bRd.ReadSlice('\n')
+	if err == bufio.ErrBufferFull {
+		csvr.rawBuffer = append(csvr.rawBuffer[:0], line...)
+		for err == bufio.ErrBufferFull {
+			line, err = csvr.bRd.ReadSlice('\n')
+			csvr.rawBuffer = append(csvr.rawBuffer, line...)
+		}
+		line = csvr.rawBuffer
+	}
+	if len(line) > 0 && err == io.EOF {
+		err = nil
+		// For backwards compatibility, drop trailing \r before EOF.
+		if line[len(line)-1] == '\r' {
+			line = line[:len(line)-1]
+		}
+	}
+	csvr.numLine++
+	// Normalize \r\n to \n on all input lines.
+	if n := len(line); n >= 2 && line[n-2] == '\r' && line[n-1] == '\n' {
+		line[n-2] = '\n'
+		line = line[:n-1]
+	}
+	return line, err
+}
+
+// nextRune returns the next rune in b or utf8.RuneError.
+func nextRune(b []byte) rune {
+	r, _ := utf8.DecodeRune(b)
+	return r
+}
+
+func lengthNL(b []byte) int {
+	if len(b) > 0 && b[len(b)-1] == '\n' {
+		return 1
+	}
+	return 0
+}
+
+func byteLen(s string) int {
+	var l int
+	for _, r := range []rune(s) {
+		l += utf8.RuneLen(r)
+	}
+	return l
+}
+
+func (csvr *CSVReader) csvReadRecords(dst []string) ([]*string, error) {
+
+	// Read line (automatically skipping past empty lines and any comments).
+	var line, fullLine []byte
+	var errRead error
+	for errRead == nil {
+		line, errRead = csvr.readLine()
+		if errRead == nil && len(line) == lengthNL(line) {
+			line = nil
+			continue // Skip empty lines
+		}
+		fullLine = line
+		break
+	}
+	if errRead == io.EOF {
+		return nil, errRead
+	}
+
+	// Parse each field in the record.
+	var err error
+	const quoteLen = len(`"`)
+	commaLen := utf8.RuneLen(csvr.Comma)
+	recLine := csvr.numLine // Starting line for record
+	csvr.recordBuffer = csvr.recordBuffer[:0]
+	csvr.fieldIndexes = csvr.fieldIndexes[:0]
+parseField:
+	for {
+		line = bytes.TrimLeftFunc(line, unicode.IsSpace)
+		if len(line) == 0 || line[0] != '"' {
+			// Non-quoted string field
+			i := bytes.IndexRune(line, csvr.Comma)
+			field := line
+			if i >= 0 {
+				field = field[:i]
+			} else {
+				field = field[:len(field)-lengthNL(field)]
+			}
+			//// Check to make sure a quote does not appear in field.
+			//if !r.LazyQuotes {
+			//	if j := bytes.IndexByte(field, '"'); j >= 0 {
+			//		col := utf8.RuneCount(fullLine[:len(fullLine)-len(line[j:])])
+			//		err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrBareQuote}
+			//		break parseField
+			//	}
+			//}
+			csvr.recordBuffer = append(csvr.recordBuffer, field...)
+			csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+			if i >= 0 {
+				line = line[i+commaLen:]
+				continue parseField
+			}
+			break parseField
+		} else {
+			// Quoted string field
+			line = line[quoteLen:]
+			for {
+				i := bytes.IndexByte(line, '"')
+				if i >= 0 {
+					// Hit next quote.
+					csvr.recordBuffer = append(csvr.recordBuffer, line[:i]...)
+					line = line[i+quoteLen:]
+					switch rn := nextRune(line); {
+					case rn == '"':
+						// `""` sequence (append quote).
+						csvr.recordBuffer = append(csvr.recordBuffer, '"')
+						line = line[quoteLen:]
+					case rn == csvr.Comma:
+						// `",` sequence (end of field).
+						line = line[commaLen:]
+						csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+						continue parseField
+					case lengthNL(line) == len(line):
+						// `"\n` sequence (end of line).
+						csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+						break parseField
+					//case r.LazyQuotes:
+					//	// `"` sequence (bare quote).
+					//	r.recordBuffer = append(r.recordBuffer, '"')
+					default:
+						// `"*` sequence (invalid non-escaped quote).
+						col := utf8.RuneCount(fullLine[:len(fullLine)-len(line)-quoteLen])
+						err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrQuote}
+						break parseField
+					}
+				} else if len(line) > 0 {
+					// Hit end of line (copy all data so far).
+					csvr.recordBuffer = append(csvr.recordBuffer, line...)
+					if errRead != nil {
+						break parseField
+					}
+					line, errRead = csvr.readLine()
+					if errRead == io.EOF {
+						errRead = nil
+					}
+					fullLine = line
+				} else {
+					// Abrupt end of file (EOF or error).
+					//if !r.LazyQuotes && errRead == nil {
+					if errRead == nil {
+						col := utf8.RuneCount(fullLine)
+						err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrQuote}
+						break parseField
+					}
+					csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+					break parseField
+				}
+			}
+		}
+	}
+	if err == nil {
+		err = errRead
+	}
+
+	// Create a single string and create slices out of it.
+	// This pins the memory of the fields together, but allocates once.
+	str := string(csvr.recordBuffer) // Convert to string once to batch allocations
+	dst = dst[:0]
+	if cap(dst) < len(csvr.fieldIndexes) {
+		dst = make([]string, len(csvr.fieldIndexes))
+	}
+	dst = dst[:len(csvr.fieldIndexes)]
+	var preIdx int
+	for i, idx := range csvr.fieldIndexes {
+		dst[i] = str[preIdx:idx]
+		preIdx = idx
+	}
+
+	// Check or update the expected fields per record.
+	if csvr.fieldsPerRecord > 0 {
+		if len(dst) != csvr.fieldsPerRecord && err == nil {
+			err = &csv.ParseError{StartLine: recLine, Line: recLine, Err: csv.ErrFieldCount}
+		}
+	} else if csvr.fieldsPerRecord == 0 {
+		csvr.fieldsPerRecord = len(dst)
+	}
+	out := make([]*string, len(dst))
+	for i := range dst {
+		out[i] = &dst[i]
+	}
+
+	return out, err
 }
