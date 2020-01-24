@@ -30,15 +30,17 @@ import (
 var PersonDB1 = `name, Age, Title
 Bill Billerson, 32, Senior Dufus
 Rob Robertson, 25, "Assistant, Dufus"
+Jack Jackson, 27, 
 John Johnson, 21, "Intern
 Dufus"`
 
 var PersonDB2 = PersonDB1 + "\n"
-var PersonDB3 = strings.Replace(PersonDB2, "\n", "\n\n", 2) // don't replace quoted newline
+var PersonDB3 = strings.Replace(PersonDB2, "\n", "\n\n", 4) // don't replace quoted newline
 
 var PersonDBWithBadRow = `name, Age, Title
 Bill Billerson, 32, Senior Dufus
 Rob Robertson, 25, Dufus
+Jack Jackson, 27, 
 John Johnson, 21`
 
 var PersonDBWithBadRow2 = PersonDBWithBadRow + "\n"
@@ -46,12 +48,14 @@ var PersonDBWithBadRow3 = strings.Replace(PersonDBWithBadRow2, "\n", "\n\n", -1)
 
 var PersonDBWithoutHeaders = `Bill Billerson, 32, Senior Dufus
 Rob Robertson, 25, "Assistant, Dufus"
+Jack Jackson, 27, 
 John Johnson, 21, "Intern
 Dufus"`
 
 var PersonDBDifferentHeaders = `n, a, t
 Bill Billerson, 32, Senior Dufus
 Rob Robertson, 25, "Assistant, Dufus"
+Jack Jackson, 27, 
 John Johnson, 21, "Intern
 Dufus"`
 
@@ -69,11 +73,13 @@ func TestReader(t *testing.T) {
 	goodExpectedRows := []row.Row{
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Assistant, Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jack Jackson", "27"})),
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"John Johnson", "21", "Intern\nDufus"})),
 	}
 	badExpectedRows := []row.Row{
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Bill Billerson", "32", "Senior Dufus"})),
 		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Rob Robertson", "25", "Dufus"})),
+		mustRow(untyped.NewRowFromStrings(types.Format_7_18, sch, []string{"Jack Jackson", "27"})),
 	}
 
 	tests := []struct {
