@@ -103,6 +103,45 @@ SQL
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+    run ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+}
+
+@test "clone a remote with docs" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    echo "license-text" > LICENSE.md
+    echo "readme-text" > README.md
+    dolt add .
+    dolt commit -m "test doc commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    cd test-repo
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test doc commit" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+    run ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    run cat LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "license-text" ]] || false
+    run cat README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "readme-text" ]] || false
 }
 
 @test "clone an empty remote" {
