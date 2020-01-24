@@ -269,19 +269,18 @@ func nextRune(b []byte) rune {
 	return r
 }
 
+func atDelim(line []byte, delim []byte) bool {
+	if len(line) < len(delim) {
+		return false
+	}
+	return bytes.Compare(line[:len(delim)], delim) == 0
+}
+
 func lengthNL(b []byte) int {
 	if len(b) > 0 && b[len(b)-1] == '\n' {
 		return 1
 	}
 	return 0
-}
-
-func byteLen(s string) int {
-	var l int
-	for _, r := range []rune(s) {
-		l += utf8.RuneLen(r)
-	}
-	return l
 }
 
 func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
@@ -306,8 +305,7 @@ func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
 	// Parse each field in the record.
 	var err error
 	const quoteLen = len(`"`)
-	//commaLen := utf8.RuneLen(csvr.delim)
-	commaLen := len(csvr.delim)
+	delimLen := len(csvr.delim)
 	recLine := csvr.numLine // Starting line for record
 	csvr.recordBuffer = csvr.recordBuffer[:0]
 	csvr.fieldIndexes = csvr.fieldIndexes[:0]
@@ -336,7 +334,7 @@ parseField:
 			csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
 			keepString = append(keepString, len(field) != 0)  // discard unquoted empty strings
 			if i >= 0 {
-				line = line[i+commaLen:]
+				line = line[i+delimLen:]
 				continue parseField
 			}
 			break parseField
@@ -349,9 +347,9 @@ parseField:
 					// Hit next quote.
 					csvr.recordBuffer = append(csvr.recordBuffer, line[:i]...)
 					line = line[i+quoteLen:]
-					if bytes.Compare(line[:commaLen], csvr.delim) == 0 {
+					if atDelim(line, csvr.delim){
 						// `"<delim>` sequence (end of field).
-						line = line[commaLen:]
+						line = line[delimLen:]
 						csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
 						keepString = append(keepString, true)
 						continue parseField
