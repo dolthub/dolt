@@ -79,6 +79,40 @@ teardown() {
     [[ "$output" = "up to date" ]] || false
 }
 
+@test "push and pull with docs from remote" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    echo "license-text" > LICENSE.md
+    echo "readme-text" > README.md
+    dolt add .
+    dolt commit -m "test doc commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test doc commit" ]] || false
+
+    cd ../../
+    echo "updated-license" > LICENSE.md
+    dolt add .
+    dolt commit -m "updated license"
+    dolt push test-remote master
+
+    cd dolt-repo-clones/test-repo
+    run dolt pull
+    [[ "$output" =~ "Updating" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "updated license" ]] || false
+    run cat LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "updated-license" ]] || false
+    run cat README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "readme-text" ]] || false
+}
+
 @test "clone a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
