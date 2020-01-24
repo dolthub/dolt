@@ -45,7 +45,6 @@ SQL
 }
 
 @test "update table using csv with newlines" {
-    skip "We currently fail on CSV imports with newlines"
     dolt sql <<SQL
 CREATE TABLE test (
   pk LONGTEXT NOT NULL COMMENT 'tag:0',
