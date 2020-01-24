@@ -22,16 +22,7 @@ Valid commands for dolt are
                 diff - Diff a table.
                blame - Show what revision and author last modified each row of a table.
                merge - Merge a branch.
-              branch - Create, list, edit, delete branches.
-            checkout - Checkout a branch or overwrite a table from HEAD.
-              remote - Manage set of tracked repositories.
-                push - Push to a dolt remote.
-                pull - Fetch from a dolt remote data repository and merge.
-               fetch - Update the database from a remote data repository.
-               clone - Clone from a remote data repository.
-               creds - Commands for managing credentials.
-               login - Login to a dolt remote host.
-             version - Displays the current Dolt cli version.
+
               config - Dolt configuration.
                   ls - List tables in the working set.
               schema - Commands for showing, and modifying table schemas.
@@ -57,13 +48,6 @@ Obtain the appropriate archive for your operating system under [releases](https:
 | 32-bit Windows | dolt-windows-386.tar.gz   |
 
 For Unix systems extract the archive to a directory on in your path, for example (you might have to use `sudo` here):
-
-```
-$ tar -xf /your/download/location/dolt-darwin-amd64.tar.gz -C /usr/local/lib
-$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/dolt /usr/local/bin/dolt
-$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/git-dolt /usr/local/bin/git-dolt
-$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/git-dolt-smudge /usr/local/bin/git-dolt-smudge
-```
 
 ### From Source
 
@@ -136,8 +120,6 @@ $ dolt sql -q 'insert into state_populations (state, population) values
 ("Connecticut", 237946),
 ("Massachusetts", 378787),
 ("South Carolina", 249073),
-("New Hampshire", 141885),
-("Vermont", 85425),
 ("Georgia", 82548),
 ("Pennsylvania", 434373),
 ("Kentucky", 73677),
@@ -165,7 +147,7 @@ Assuming you're satisfied, create a commit as follows:
 ```
 $ dolt add .
 $ dolt commit -m "Add state populations from 1790"
-$ dolt status
+$ dolt status ok
 On branch master
 nothing to commit, working tree clean
 ```
@@ -285,13 +267,13 @@ Once that is succeeded others can clone the repository (assuming you've given th
 
 ## Interesting Datasets to Clone
 
-Just like Git, run `dolt clone Liquidata/word-net` to get a clone from DoltHub of the WordNet repository locally once you have run ```dolt login``` to log in to [DoltHub](https://www.dolthub.com).
+Just like Git, run `dolt clone Liquidata/word-net` to get a clone from DoltHub of the WordNet repository locally once you have run `dolt login` to log in to [DoltHub](https://www.dolthub.com).
 
 - WordNet: https://www.dolthub.com/repositories/Liquidata/word-net
 - ImageNet: https://www.dolthub.com/repositories/Liquidata/image-net
-- Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images  
-- Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements  
-- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays  
+- Google Open Images: https://www.dolthub.com/repositories/Liquidata/open-images
+- Iris Classification: https://www.dolthub.com/repositories/Liquidata/classified-iris-measurements
+- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays
 - IP Address to Country: https://www.dolthub.com/repositories/Liquidata/ip-to-country
 
 ## Other remotes
