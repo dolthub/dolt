@@ -32,6 +32,23 @@ func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
 	return SaveTrackedDocs(ctx, dEnv, workingRoot, workingRoot, localDocs)
 }
 
+// SaveDocsFromWorking saves docs from the working root to the filesystem, and could overwrite untracked docs.
+func SaveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
+	localDocs := dEnv.Docs
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.UpdateFSDocsToRootDocs(ctx, workingRoot, nil)
+	if err != nil {
+		localDocs.Save(dEnv.FS)
+		return err
+	}
+
+	return nil
+}
+
 // SaveTrackedDocs writes the docs from the targetRoot to the filesystem. The working root is used to identify untracked docs, which are left unchanged.
 func SaveTrackedDocs(ctx context.Context, dEnv *env.DoltEnv, workRoot, targetRoot *doltdb.RootValue, localDocs env.Docs) error {
 	docDiffs, err := NewDocDiffs(ctx, dEnv, workRoot, nil, localDocs)

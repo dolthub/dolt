@@ -79,6 +79,40 @@ teardown() {
     [[ "$output" = "up to date" ]] || false
 }
 
+@test "push and pull with docs from remote" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    echo "license-text" > LICENSE.md
+    echo "readme-text" > README.md
+    dolt add .
+    dolt commit -m "test doc commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test doc commit" ]] || false
+
+    cd ../../
+    echo "updated-license" > LICENSE.md
+    dolt add .
+    dolt commit -m "updated license"
+    dolt push test-remote master
+
+    cd dolt-repo-clones/test-repo
+    run dolt pull
+    [[ "$output" =~ "Updating" ]] || false
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "updated license" ]] || false
+    run cat LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "updated-license" ]] || false
+    run cat README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "readme-text" ]] || false
+}
+
 @test "clone a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
@@ -103,6 +137,45 @@ SQL
     run dolt log
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test commit" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+    run ls
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+}
+
+@test "clone a remote with docs" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    echo "license-text" > LICENSE.md
+    echo "readme-text" > README.md
+    dolt add .
+    dolt commit -m "test doc commit"
+    dolt push test-remote master
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+    cd test-repo
+    run dolt log
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test doc commit" ]] || false
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "LICENSE.md" ]] || false
+    [[ ! "$output" =~ "README.md" ]] || false
+    run ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    run cat LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "license-text" ]] || false
+    run cat README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "readme-text" ]] || false
 }
 
 @test "clone an empty remote" {
@@ -205,6 +278,58 @@ SQL
     run dolt branch -v -a
     [ "$status" -eq 0 ]
     [[ "$output" =~ "remotes/test-remote/poop" ]] || false
+}
+
+@test "dolt fetch with docs" {
+    # Initial commit of docs on remote
+    echo "initial-license" > LICENSE.md
+    echo "initial-readme" > README.md
+    dolt add .
+    dolt commit -m "initial doc commit"
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    dolt push test-remote master
+    run dolt fetch test-remote
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run cat README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "initial-readme" ]] || false
+    run cat LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "initial-license" ]] || false
+
+    # Clone the initial docs/repo into dolt-repo-clones/test-repo
+    cd "dolt-repo-clones"
+    run dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    run cat LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "initial-license" ]] || false
+    run cat README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "initial-readme" ]] || false
+    # Change the docs 
+    echo "dolt-repo-clones-license" > LICENSE.md
+    echo "dolt-repo-clones-readme" > README.md
+    dolt add .
+    dolt commit -m "dolt-repo-clones updated docs"
+
+    # Go back to original repo, and change the docs again
+    cd ../../
+    echo "initial-license-updated" > LICENSE.md
+    echo "initial-readme-updated" > README.md
+    dolt add .
+    dolt commit -m "update initial doc values in test-org/test-repo"
+
+    # Go back to dolt-repo-clones/test-repo and fetch the test-remote
+    cd dolt-repo-clones/test-repo
+    run dolt fetch test-remote
+    run cat LICENSE.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt-repo-clones-license" ]] || false
+    run cat README.md
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt-repo-clones-readme" ]] || false
 }
 
 @test "dolt merge with origin/master syntax." {
