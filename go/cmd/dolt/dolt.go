@@ -64,7 +64,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.CloneCmd{},
 	credcmds.Commands,
 	commands.LoginCmd{},
-	commands.VersionCmd{Version},
+	commands.VersionCmd{VersionStr: Version},
 	commands.ConfigCmd{},
 	commands.LsCmd{},
 	schcmds.Commands,
