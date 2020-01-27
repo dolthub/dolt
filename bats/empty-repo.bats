@@ -107,8 +107,8 @@ teardown() {
 
 @test "dolt schema show in new repository" {
     run dolt schema show
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "usage" ]] || false
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
 }
 
 @test "dolt table select in new repository" {
