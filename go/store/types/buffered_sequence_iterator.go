@@ -50,9 +50,9 @@ func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
 	var err error
 
-	if cur.batchSize > 0 {
-		batch := cur.batchSize
-		if batch > uint64(cur.parent.seqLen-cur.parent.idx) {
+	if cur.parent.batchSize > 0 {
+		batch := cur.parent.batchSize
+		if batch > uint64(cur.parent.seqLen - cur.parent.idx) {
 			batch = uint64(cur.parent.seqLen - cur.parent.idx)
 		}
 		cur.seq, err = cur.parent.seq.getCompositeChildSequence(ctx, uint64(cur.parent.idx), batch)
@@ -60,7 +60,7 @@ func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 			return err
 		}
 
-		cur.parent.idx += int(batch) - 1
+		cur.parent.idx += int(batch - 1)
 	} else {
 		// no buffering
 		cur.seq, err = cur.parent.seq.getChildSequence(ctx, cur.parent.idx)
@@ -180,7 +180,7 @@ func newBufferedIteratorAtIndex(ctx context.Context, seq sequence, idx uint64) (
 		var cs sequence
 		if cur.batchSize > 0 {
 			batch := cur.batchSize
-			if batch > uint64(cur.seqLen-cur.idx) {
+			if batch > uint64(cur.seqLen - cur.idx) {
 				batch = uint64(cur.seqLen - cur.idx)
 			}
 			cs, err = cur.seq.getCompositeChildSequence(ctx, uint64(cur.idx), batch)
