@@ -301,10 +301,31 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		for _, brnch := range branches {
 			branch = brnch.GetPath()
 
-			if branch == "master" {
+			if branch == doltdb.MasterBranch {
 				break
 			}
 		}
+	}
+
+	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
+	// the remote.
+	if branch == "" {
+		name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+		email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+
+		if *name == "" {
+			return errhand.BuildDError("error: could not determine user name. run dolt init").Build()
+		} else if *email == "" {
+			return errhand.BuildDError("error: could not determine user name. run dolt init").Build()
+		}
+
+		err = dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, doltdb.CommitNowFunc())
+		if err != nil {
+			return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
+		}
+
+		branch = doltdb.MasterBranch
+		return nil
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
@@ -315,6 +336,7 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	remoteRef := ref.NewRemoteRef(remoteName, branch)
+
 	err = dEnv.DoltDB.FastForward(ctx, remoteRef, cm)
 
 	if err != nil {
@@ -322,19 +344,16 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	}
 
 	rootVal, err := cm.GetRootValue()
-
 	if err != nil {
 		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
 	h, err := rootVal.HashOf()
-
 	if err != nil {
 		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
 	_, err = dEnv.DoltDB.WriteRootValue(ctx, rootVal)
-
 	if err != nil {
 		return errhand.BuildDError("error: could not write root value").AddCause(err).Build()
 	}
@@ -342,14 +361,13 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef(branch)}
 	dEnv.RepoState.Staged = h.String()
 	dEnv.RepoState.Working = h.String()
-	err = dEnv.RepoState.Save(dEnv.FS)
 
+	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
 	}
 
 	err = actions.SaveDocsFromWorking(ctx, dEnv)
-
 	if err != nil {
 		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
 	}
