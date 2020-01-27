@@ -618,6 +618,14 @@ SQL
     run dolt schema show dolt_docs
     [ "$status" -eq 1 ]
     [[ "$output" =~ "'dolt_docs' is not a valid table name" ]] || false
+    run dolt schema show
+    [ "$status" -eq 1 ]
+    dolt table import -c -s `batshelper employees-sch.json` employees `batshelper employees-tbl.json`
+    run dolt schema show
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "employees @ working" ]] || false
+    [[ ! "$output" =~ "dolt_docs" ]] || false
+    [[ ! "$output" =~ "usage: dolt schema show" ]] || false
 }
 
  @test "dolt ls should not show dolt_docs table" {
