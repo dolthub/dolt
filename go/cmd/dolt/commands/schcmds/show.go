@@ -127,8 +127,10 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 				return errhand.BuildDError("unable to get table names.").AddCause(err).Build()
 			}
 
+			tables = commands.RemoveDocsTbl(tables)
 			if len(tables) == 0 {
-				return errhand.BuildDError("").SetPrintUsage().Build()
+				cli.Println("No tables in working set")
+				return nil
 			}
 		}
 
