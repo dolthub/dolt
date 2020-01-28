@@ -50,8 +50,8 @@ func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 	d.PanicIfFalse(cur.parent != nil)
 	var err error
 
-	if cur.batchSize > 0 {
-		batch := cur.batchSize
+	if cur.parent.batchSize > 0 {
+		batch := cur.parent.batchSize
 		if batch > uint64(cur.parent.seqLen-cur.parent.idx) {
 			batch = uint64(cur.parent.seqLen - cur.parent.idx)
 		}
@@ -60,7 +60,7 @@ func (cur *bufferedSequenceIterator) sync(ctx context.Context) error {
 			return err
 		}
 
-		cur.parent.idx += int(batch) - 1
+		cur.parent.idx += int(batch - 1)
 	} else {
 		// no buffering
 		cur.seq, err = cur.parent.seq.getChildSequence(ctx, cur.parent.idx)
