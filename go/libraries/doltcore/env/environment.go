@@ -214,7 +214,7 @@ func (dEnv *DoltEnv) InitRepoWithTime(ctx context.Context, nbf *types.NomsBinFor
 	err = dEnv.configureRepo(doltDir)
 
 	if err == nil {
-		err = dEnv.initDBAndStateWithTime(ctx, nbf, name, email, t)
+		err = dEnv.InitDBAndRepoState(ctx, nbf, name, email, t)
 	}
 
 	if err != nil {
@@ -269,11 +269,20 @@ func (dEnv *DoltEnv) configureRepo(doltDir string) error {
 	return nil
 }
 
-func (dEnv *DoltEnv) initDBAndState(ctx context.Context, nbf *types.NomsBinFormat, name, email string) error {
-	return dEnv.initDBAndStateWithTime(ctx, nbf, name, email, doltdb.CommitNowFunc())
+// Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
+// Writes new repo state with a master branch and current root hash.
+func (dEnv *DoltEnv) InitDBAndRepoState(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
+	err := dEnv.InitDBWithTime(ctx, nbf, name, email, t)
+	if err != nil {
+		return err
+	}
+
+	return dEnv.initializeRepoState(ctx)
 }
 
-func (dEnv *DoltEnv) initDBAndStateWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
+// Inits the dolt DB of this environment with an empty commit at the time given and writes default docs to disk.
+// Does not update repo state.
+func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinFormat, name, email string, t time.Time) error {
 	var err error
 	dEnv.DoltDB, err = doltdb.LoadDoltDB(ctx, nbf, dEnv.urlStr)
 
@@ -282,40 +291,37 @@ func (dEnv *DoltEnv) initDBAndStateWithTime(ctx context.Context, nbf *types.Noms
 	}
 
 	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, name, email, t)
-
 	if err != nil {
 		return doltdb.ErrNomsIO
 	}
 
-	cs, _ := doltdb.NewCommitSpec("HEAD", "master")
+	docs, err := CreateDocs(dEnv.FS)
+	if err != nil {
+		return ErrDocsUpdate
+	}
+	dEnv.Docs = docs
+
+	return nil
+}
+
+// initializeRepoState writes a default repo state to disk, consisting of a master branch and current root hash value.
+func (dEnv *DoltEnv) initializeRepoState(ctx context.Context) error {
+	cs, _ := doltdb.NewCommitSpec("HEAD", doltdb.MasterBranch)
 	commit, _ := dEnv.DoltDB.Resolve(ctx, cs)
 
 	root, err := commit.GetRootValue()
-
 	if err != nil {
 		return err
 	}
 
 	rootHash, err := root.HashOf()
-
 	if err != nil {
 		return err
 	}
 
-	dEnv.RepoState, err = CreateRepoState(dEnv.FS, "master", rootHash)
-
+	dEnv.RepoState, err = CreateRepoState(dEnv.FS, doltdb.MasterBranch, rootHash)
 	if err != nil {
 		return ErrStateUpdate
-	}
-
-	docs, err := CreateDocs(dEnv.FS)
-	if err != nil {
-		return err
-	}
-	dEnv.Docs = docs
-
-	if err != nil {
-		return ErrDocsUpdate
 	}
 
 	return nil

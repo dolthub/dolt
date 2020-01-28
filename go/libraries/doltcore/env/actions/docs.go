@@ -34,14 +34,21 @@ func SaveTrackedDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
 
 // SaveDocsFromWorking saves docs from the working root to the filesystem, and could overwrite untracked docs.
 func SaveDocsFromWorking(ctx context.Context, dEnv *env.DoltEnv) error {
-	localDocs := dEnv.Docs
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = dEnv.UpdateFSDocsToRootDocs(ctx, workingRoot, nil)
+	return SaveDocsFromRoot(ctx, workingRoot, dEnv)
+}
+
+// SaveDocsFromRoot saves docs from the root given to the filesystem, and could overwrite untracked docs.
+func SaveDocsFromRoot(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv) error {
+	localDocs := dEnv.Docs
+
+	err := dEnv.UpdateFSDocsToRootDocs(ctx, root, nil)
 	if err != nil {
+		// If we can't update docs on disk, attempt to revert the change
 		localDocs.Save(dEnv.FS)
 		return err
 	}

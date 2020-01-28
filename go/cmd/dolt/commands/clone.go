@@ -301,10 +301,23 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		for _, brnch := range branches {
 			branch = brnch.GetPath()
 
-			if branch == "master" {
+			if branch == doltdb.MasterBranch {
 				break
 			}
 		}
+	}
+
+	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
+	// the remote.
+	performPull := true
+	if branch == "" {
+		err = initEmptyClonedRepo(dEnv, err, ctx)
+		if err != nil {
+			return nil
+		}
+
+		branch = doltdb.MasterBranch
+		performPull = false
 	}
 
 	cs, _ := doltdb.NewCommitSpec("HEAD", branch)
@@ -314,27 +327,31 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return errhand.BuildDError("error: could not get " + branch).AddCause(err).Build()
 	}
 
-	remoteRef := ref.NewRemoteRef(remoteName, branch)
-	err = dEnv.DoltDB.FastForward(ctx, remoteRef, cm)
-
-	if err != nil {
-		return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
-	}
-
 	rootVal, err := cm.GetRootValue()
-
 	if err != nil {
 		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
-	h, err := rootVal.HashOf()
+	if performPull {
+		remoteRef := ref.NewRemoteRef(remoteName, branch)
 
+		err = dEnv.DoltDB.FastForward(ctx, remoteRef, cm)
+		if err != nil {
+			return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
+		}
+
+		err = actions.SaveDocsFromRoot(ctx, rootVal, dEnv)
+		if err != nil {
+			return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
+		}
+	}
+
+	h, err := rootVal.HashOf()
 	if err != nil {
 		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
 	_, err = dEnv.DoltDB.WriteRootValue(ctx, rootVal)
-
 	if err != nil {
 		return errhand.BuildDError("error: could not write root value").AddCause(err).Build()
 	}
@@ -342,16 +359,30 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	dEnv.RepoState.Head = ref.MarshalableRef{Ref: ref.NewBranchRef(branch)}
 	dEnv.RepoState.Staged = h.String()
 	dEnv.RepoState.Working = h.String()
-	err = dEnv.RepoState.Save(dEnv.FS)
 
+	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
 	}
 
-	err = actions.SaveDocsFromWorking(ctx, dEnv)
+	return nil
+}
 
+// Inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the storage for a repository
+// when we created it on dolthub. If we do that, this code can be removed.
+func initEmptyClonedRepo(dEnv *env.DoltEnv, err error, ctx context.Context) error {
+	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+
+	if *name == "" {
+		return errhand.BuildDError(fmt.Sprintf("error: could not determine user name. run dolt config --global --add %[1]s", env.UserNameKey)).Build()
+	} else if *email == "" {
+		return errhand.BuildDError("error: could not determine email. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
+	}
+
+	err = dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, doltdb.CommitNowFunc())
 	if err != nil {
-		return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
+		return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
 	}
 
 	return nil
