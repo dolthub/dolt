@@ -5,7 +5,7 @@ setup() {
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
-    mkdir remotes-$$/test-org-empty
+    mkdir remotes-$$/empty
     echo remotesrv log available here $BATS_TMPDIR/remotes-$$/remotesrv.log
     remotesrv --http-port 1234 --dir ./remotes-$$ &> ./remotes-$$/remotesrv.log 3>&- &
     cd dolt-repo-$$
@@ -47,6 +47,16 @@ teardown() {
     [[ "$output" =~ "unknown remote poop" ]] || false
 }
 
+@test "push and pull an unknown remote" {
+    dolt remote add test-remote http://localhost:50051/test-org/test-repo
+    run dolt push poop master
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "unknown remote" ]] || false
+    run dolt pull poop
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "unknown remote" ]] || false
+}
+
 @test "push and pull master branch from a remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     run dolt push test-remote master
@@ -56,16 +66,6 @@ teardown() {
     [ "$status" -eq 0 ]
     skip "Should say Already up to date not fast forward"
     [[ "$output" = "up to date" ]] || false
-}
-
-@test "push and pull an unknown remote" {
-    dolt remote add test-remote http://localhost:50051/test-org/test-repo
-    run dolt push poop master
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote" ]] || false
-    run dolt pull poop
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "unknown remote" ]] || false
 }
 
 @test "push and pull non-master branch from remote" {
@@ -88,6 +88,8 @@ teardown() {
     dolt push test-remote master
     cd "dolt-repo-clones"
     run dolt clone http://localhost:50051/test-org/test-repo
+    [ "$status" -eq 0 ]
+    
     cd test-repo
     run dolt log
     [ "$status" -eq 0 ]
@@ -179,15 +181,20 @@ SQL
 }
 
 @test "clone an empty remote" {
-    skip "Cloning an empty remote is busted"
-    run dolt clone localhost:50051/test-org/empty
+    run dolt clone http://localhost:50051/test-org/empty
     [ "$status" -eq 0 ]
     cd empty
     run dolt status
     [ "$status" -eq 0 ]
+    run ls
+    [[ "$output" =~ "LICENSE.md" ]] || false
+    [[ "$output" =~ "README.md" ]] || false
+    run dolt remote -v
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "origin" ]] || false
 }
 
-@test "clone a non-existant remote" {
+@test "clone a non-existent remote" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     cd "dolt-repo-clones"
     run dolt clone foo/bar
