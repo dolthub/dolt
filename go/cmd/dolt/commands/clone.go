@@ -309,22 +309,11 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	// If we couldn't find a branch but the repo cloned successfully, it's empty. Initialize it instead of pulling from
 	// the remote.
-	// This would be unnecessary if we properly initialized the storage for a repository when we created it on dolthub.
-	// If we do that, this code can be removed.
 	performPull := true
 	if branch == "" {
-		name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
-		email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
-
-		if *name == "" {
-			return errhand.BuildDError(fmt.Sprintf("error: could not determine user name. run dolt config --global --add %[1]s", env.UserNameKey)).Build()
-		} else if *email == "" {
-			return errhand.BuildDError("error: could not determine email. run dolt config. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
-		}
-
-		err = dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, doltdb.CommitNowFunc())
+		err = initEmptyClonedRepo(dEnv, err, ctx)
 		if err != nil {
-			return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
+			return nil
 		}
 
 		branch = doltdb.MasterBranch
@@ -374,6 +363,26 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	err = dEnv.RepoState.Save(dEnv.FS)
 	if err != nil {
 		return errhand.BuildDError("error: failed to write repo state").AddCause(err).Build()
+	}
+
+	return nil
+}
+
+// Inits an empty, newly cloned repo. This would be unnecessary if we properly initialized the storage for a repository
+// when we created it on dolthub. If we do that, this code can be removed.
+func initEmptyClonedRepo(dEnv *env.DoltEnv, err error, ctx context.Context) error {
+	name := dEnv.Config.GetStringOrDefault(env.UserNameKey, "")
+	email := dEnv.Config.GetStringOrDefault(env.UserEmailKey, "")
+
+	if *name == "" {
+		return errhand.BuildDError(fmt.Sprintf("error: could not determine user name. run dolt config --global --add %[1]s", env.UserNameKey)).Build()
+	} else if *email == "" {
+		return errhand.BuildDError("error: could not determine email. run dolt config --global --add %[1]s", env.UserEmailKey).Build()
+	}
+
+	err = dEnv.InitDBWithTime(ctx, types.Format_Default, *name, *email, doltdb.CommitNowFunc())
+	if err != nil {
+		return errhand.BuildDError("error: could not initialize repository").AddCause(err).Build()
 	}
 
 	return nil
