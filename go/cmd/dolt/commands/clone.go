@@ -338,6 +338,11 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return errhand.BuildDError("error: could not get " + branch).AddCause(err).Build()
 	}
 
+	rootVal, err := cm.GetRootValue()
+	if err != nil {
+		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
+	}
+
 	if performPull {
 		remoteRef := ref.NewRemoteRef(remoteName, branch)
 
@@ -346,15 +351,10 @@ func cloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 			return errhand.BuildDError("error: could not create remote ref at " + remoteRef.String()).AddCause(err).Build()
 		}
 
-		err = actions.SaveDocsFromWorking(ctx, dEnv)
+		err = actions.SaveDocsFromRoot(ctx, rootVal, dEnv)
 		if err != nil {
 			return errhand.BuildDError("error: failed to update docs on the filesystem").AddCause(err).Build()
 		}
-	}
-
-	rootVal, err := cm.GetRootValue()
-	if err != nil {
-		return errhand.BuildDError("error: could not get the root value of " + branch).AddCause(err).Build()
 	}
 
 	h, err := rootVal.HashOf()
