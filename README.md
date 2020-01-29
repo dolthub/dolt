@@ -45,25 +45,13 @@ These installation instructions assume that you have Go installed, and that `go`
 
 ### From Latest Release
 
-Obtain the appropriate archive for your operating system under [releases](https://github.com/liquidata-inc/dolt/releases):
+To install on Linux or Mac based systems run:
 
-| System         | Archive                   |
-| -------------- | ------------------------- |
-| 64-bit Mac     | dolt-darwin-amd64.tar.gz  |
-| 32-bit Mac     | dolt-darwin-386.tar.gz    |
-| 64-bit Linux   | dolt-linux-amd64.tar.gz   |
-| 32-bit Linux   | dolt-linux-386.tar.gz     |
-| 64-bit Windows | dolt-windows-amd64.tar.gz |
-| 32-bit Windows | dolt-windows-386.tar.gz   |
+```curl -L https://github.com/liquidata-inc/dolt/releases/latest/download/install.sh | bash```
 
-For Unix systems extract the archive to a directory on in your path, for example (you might have to use `sudo` here):
+This will download the latest ```dolt``` release and put it in your ```PATH```.
 
-```
-$ tar -xf /your/download/location/dolt-darwin-amd64.tar.gz -C /usr/local/lib
-$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/dolt /usr/local/bin/dolt
-$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/git-dolt /usr/local/bin/git-dolt
-$ ln -s /usr/local/lib/dolt-darwin-amd64/bin/git-dolt-smudge /usr/local/bin/git-dolt-smudge
-```
+For Windows, locate the latest Microsoft Installer (`.msi` file) in [releases](https://github.com/liquidata-inc/dolt/releases), and run it. This will install the latest dolt. 
 
 ### From Source
 
