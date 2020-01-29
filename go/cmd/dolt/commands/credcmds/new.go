@@ -17,14 +17,16 @@ package credcmds
 import (
 	"context"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/creds"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env/actions"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/config"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 )
 
 var newShortDesc = "Create a new public/private keypair for authenticating with doltremoteapi."
@@ -74,7 +76,32 @@ func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	help, usage := cli.HelpAndUsagePrinters(commandStr, newShortDesc, newLongDesc, newSynopsis, ap)
 	cli.ParseArgs(ap, args, help)
 
-	_, _, verr := actions.NewCredsFile(dEnv)
+	_, newCreds, verr := actions.NewCredsFile(dEnv)
 
-	return commands.HandleVErrAndExitCode(verr, usage)
+	if verr != nil {
+		return commands.HandleVErrAndExitCode(verr, usage)
+	}
+
+	err := updateConfigToUseNewCredIfNoExistingCred(dEnv, newCreds)
+	if err != nil {
+		verr = errhand.BuildDError("error: updating user.creds in dolt config to use new credentials").Build()
+		return commands.HandleVErrAndExitCode(verr, usage)
+	} else {
+		return 0
+	}
+}
+
+func updateConfigToUseNewCredIfNoExistingCred(dEnv *env.DoltEnv, dCreds creds.DoltCreds) error {
+	gcfg, hasGCfg := dEnv.Config.GetConfig(env.GlobalConfig)
+
+	if !hasGCfg {
+		panic("global config not found.  Should create it here if this is a thing.")
+	}
+
+	_, err := gcfg.GetString(env.UserCreds)
+	if err == config.ErrConfigParamNotFound {
+		return gcfg.SetStrings(map[string]string{env.UserCreds: dCreds.KeyIDBase32Str()})
+	} else {
+		return err
+	}
 }
