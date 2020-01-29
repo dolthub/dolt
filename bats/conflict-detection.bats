@@ -318,7 +318,7 @@ SQL
     dolt branch delete-column
     dolt sql -q "alter table test drop column c5"
     dolt add test
-    dolt commit -m "deleted c45 column"
+    dolt commit -m "deleted c5 column"
     dolt checkout delete-column
     dolt sql -q "alter table test drop column c5"
     dolt add test
@@ -344,19 +344,33 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch delete-column
+
+    dolt checkout -b one
     dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted column c5"
-    dolt checkout delete-column
+
+    dolt checkout master
+    dolt checkout -b two
     dolt sql -q "alter table test drop column c4"
     dolt add test
     dolt commit -m "deleted column c4"
-    dolt checkout master
-    run dolt merge delete-column
+
+    run dolt merge one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+
+    dolt schema show
+    run dolt schema show
+    [[ "$output" =~ "test @ working" ]] || false
+    [[ "$output" =~ "CREATE TABLE \`test\` (" ]] || false
+    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'," ]] || false
+    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'," ]] || false
+    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'," ]] || false
+    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'," ]] || false
+    [[ "$output" =~ "PRIMARY KEY (`pk`)" ]] || false
+    [[ "$output" =~ ");" ]] || false
 }
 
 @test "two branches rename same column to same name. merge. no conflict" {
