@@ -80,14 +80,14 @@ func InvertMapping(fm *FieldMapping) *FieldMapping {
 // NewFieldMapping creates a FieldMapping from a source schema, a destination schema, and a map from tags in the source
 // schema to tags in the dest schema.
 func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {
-	srcCols := srcSch.GetAllCols()
 	destCols := destSch.GetAllCols()
+	//srcCols := srcSch.GetAllCols()
 
 	for srcTag, destTag := range srcTagToDestTag {
 		_, destOk := destCols.GetByTag(destTag)
-		_, srcOk := srcCols.GetByTag(srcTag)
+		//_, srcOk := srcCols.GetByTag(destTag)
 
-		if !destOk || !srcOk {
+		if !destOk {
 			return nil, &BadMappingErr{"src tag:" + strconv.FormatUint(srcTag, 10), "dest tag:" + strconv.FormatUint(destTag, 10)}
 		}
 	}
@@ -110,8 +110,12 @@ func NewFieldMappingFromNameMap(srcSch, destSch schema.Schema, inNameToOutName m
 		inCol, inOk := srcCols.GetByName(k)
 		outCol, outOk := destCols.GetByName(v)
 
-		if !inOk || !outOk {
+		if !outOk {
 			return nil, &BadMappingErr{k, v}
+		}
+
+		if !inOk {
+			continue
 		}
 
 		srcToDest[inCol.Tag] = outCol.Tag
