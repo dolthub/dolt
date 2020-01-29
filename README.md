@@ -51,7 +51,7 @@ To install on Linux or Mac based systems run:
 
 This will download the latest ```dolt``` release and put it in your ```PATH```.
 
-For Windows, locate the latest Microsoft Installer (```.msi``` file) in [releases](https://github.com/liquidata-inc/dolt/releases), and run it. This will install the latest dolt. 
+For Windows, locate the latest Microsoft Installer (`.msi` file) in [releases](https://github.com/liquidata-inc/dolt/releases), and run it. This will install the latest dolt. 
 
 ### From Source
 
