@@ -19,9 +19,15 @@ teardown() {
     dolt creds new
     run dolt creds ls
     [ "$status" -eq 0 ]
-    declare -p lines
     [ "${#lines[@]}" -eq 1 ]
-    [[ "${lines[0]}" =~ (^\ \ ) ]] || false
+    [[ "${lines[0]}" =~ (^\*\ ) ]] || false
+    cred=`echo "${lines[0]}" | awk '{print $2}'`
+    dolt creds new
+    run dolt creds ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    # Initially chosen credentials is still the chosen one.
+    [[ "`echo "$output"|grep "$cred"`" =~ (^\*\ ) ]] || false
 }
 
 @test "ls -v new creds" {
@@ -29,7 +35,6 @@ teardown() {
     dolt creds new
     run dolt creds ls -v
     [ "$status" -eq 0 ]
-    declare -p lines
     [ "${#lines[@]}" -eq 4 ]
     [[ "${lines[0]}" =~ (public\ key) ]] || false
     [[ "${lines[0]}" =~ (key\ id) ]] || false
@@ -40,7 +45,7 @@ teardown() {
     run dolt creds ls
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
-    cred=`echo ${lines[0]} | awk '{print $1}'`
+    cred=`echo "${lines[0]}" | awk '{print $2}'`
     dolt creds rm $cred
     run dolt creds ls
     [ "$status" -eq 0 ]
