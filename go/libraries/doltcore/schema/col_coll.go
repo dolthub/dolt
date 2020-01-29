@@ -133,6 +133,21 @@ func (cc *ColCollection) Append(cols ...Column) (*ColCollection, error) {
 	return NewColCollection(allCols...)
 }
 
+// Replace will replace one column of the schema with another.
+func (cc *ColCollection) Replace(old, new Column) (*ColCollection, error) {
+	allCols := make([]Column, 0, len(cc.cols))
+
+	for _, curr := range cc.cols {
+		if curr.Tag == old.Tag {
+			allCols = append(allCols, new)
+		} else {
+			allCols = append(allCols, curr)
+		}
+	}
+
+	return NewColCollection(allCols...)
+}
+
 // Iter iterates over all the columns in the supplied ordering
 func (cc *ColCollection) Iter(cb func(tag uint64, col Column) (stop bool, err error)) error {
 	for _, col := range cc.cols {
