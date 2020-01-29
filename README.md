@@ -45,7 +45,7 @@ These installation instructions assume that you have Go installed, and that `go`
 
 ### From Latest Release
 
-To install on Linux or Mac based susyetms run:
+To install on Linux or Mac based systems run:
 
 ```curl -L https://github.com/liquidata-inc/dolt/releases/latest/download/install.sh | bash```
 
