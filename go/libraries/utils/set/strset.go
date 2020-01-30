@@ -40,8 +40,10 @@ func NewStrSet(items []string) *StrSet {
 }
 
 // Add adds a new item to the set
-func (s *StrSet) Add(item string) {
-	s.items[item] = emptyInstance
+func (s *StrSet) Add(items ...string) {
+	for _, item := range items {
+		s.items[item] = emptyInstance
+	}
 }
 
 // Contains returns true if the item being checked is already in the set.
@@ -88,6 +90,20 @@ func (s *StrSet) Iterate(callBack func(string) (cont bool)) {
 			break
 		}
 	}
+}
+
+// IntersectionAndMissing takes a slice of strings and returns a slice of strings containing the intersection with the
+// set, and a slice of strings for the ones missing from the set.
+func (s *StrSet) IntersectAndMissing(other []string) (intersection []string, missing []string) {
+	for _, str := range other {
+		if s.Contains(str) {
+			intersection = append(intersection, str)
+		} else {
+			missing = append(missing, str)
+		}
+	}
+
+	return intersection, missing
 }
 
 // JoinStrings returns the sorted values from the set concatenated with a given sep
