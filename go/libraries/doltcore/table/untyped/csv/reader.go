@@ -205,12 +205,6 @@ func validDelim(s string) bool {
 		strings.Contains(s, string(0xFFFD))) // Unicode replacement char
 }
 
-// nextRune returns the next rune in b or utf8.RuneError.
-func nextRune(b []byte) rune {
-	r, _ := utf8.DecodeRune(b)
-	return r
-}
-
 func atDelim(line []byte, delim []byte) bool {
 	if len(line) < len(delim) {
 		return false
@@ -230,7 +224,6 @@ func lengthNL(b []byte) int {
 // If some bytes were read, then the error is never io.EOF.
 // The result is only valid until the next call to readLine.
 func (csvr *CSVReader) readLine() ([]byte, error) {
-	// rawBuffer is a line buffer only used by the readLine method.
 	var rawBuffer []byte
 
 	line, err := csvr.bRd.ReadSlice('\n')
@@ -268,7 +261,7 @@ func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
 
 	var keepString []bool
 
-	// Read line (automatically skipping past empty lines and any comments).
+	// Read line (automatically skipping past empty lines).
 	var line, fullLine []byte
 	var errRead error
 	for errRead == nil {
@@ -321,29 +314,28 @@ parseField:
 					// Hit next quote.
 					recordBuffer = append(recordBuffer, line[:i]...)
 					line = line[i+quoteLen:]
-					if atDelim(line, csvr.delim) {
+					nextRune, _ := utf8.DecodeRune(line)
+					switch {
+					case atDelim(line, csvr.delim):
 						// `"<delimiter>` sequence (end of field).
 						line = line[delimLen:]
 						fieldIndexes = append(fieldIndexes, len(recordBuffer))
 						keepString = append(keepString, true)
 						continue parseField
-					} else {
-						switch rn := nextRune(line); {
-						case rn == '"':
-							// `""` sequence (append quote).
-							recordBuffer = append(recordBuffer, '"')
-							line = line[quoteLen:]
-						case lengthNL(line) == len(line):
-							// `"\n` sequence (end of line).
-							fieldIndexes = append(fieldIndexes, len(recordBuffer))
-							keepString = append(keepString, true)
-							break parseField
-						default:
-							// `"*` sequence (invalid non-escaped quote).
-							col := utf8.RuneCount(fullLine[:len(fullLine)-len(line)-quoteLen])
-							err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrQuote}
-							break parseField
-						}
+					case nextRune == '"':
+						// `""` sequence (append quote).
+						recordBuffer = append(recordBuffer, '"')
+						line = line[quoteLen:]
+					case lengthNL(line) == len(line):
+						// `"\n` sequence (end of line).
+						fieldIndexes = append(fieldIndexes, len(recordBuffer))
+						keepString = append(keepString, true)
+						break parseField
+					default:
+						// `"*` sequence (invalid non-escaped quote).
+						col := utf8.RuneCount(fullLine[:len(fullLine)-len(line)-quoteLen])
+						err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrQuote}
+						break parseField
 					}
 				} else if len(line) > 0 {
 					// Hit end of line (copy all data so far).
