@@ -152,7 +152,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	schemaUnion, err := typed.TypedSchemaUnion(tblSchema, mergeTblSchema)
+	ancTblSchema, err := ancTbl.GetSchema(ctx)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	postMergeSchema, err := mergeTableSchema(tblSchema, mergeTblSchema, ancTblSchema)
 
 	if err != nil {
 		return nil, nil, err
@@ -176,13 +182,13 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string) (*doltdb.T
 		return nil, nil, err
 	}
 
-	mergedRowData, conflicts, stats, err := mergeTableData(ctx, schemaUnion, rows, mergeRows, ancRows, merger.vrw)
+	mergedRowData, conflicts, stats, err := mergeTableData(ctx, postMergeSchema, rows, mergeRows, ancRows, merger.vrw)
 
 	if err != nil {
 		return nil, nil, err
 	}
 
-	schUnionVal, err := encoding.MarshalAsNomsValue(ctx, merger.vrw, schemaUnion)
+	schUnionVal, err := encoding.MarshalAsNomsValue(ctx, merger.vrw, postMergeSchema)
 
 	if err != nil {
 		return nil, nil, err
@@ -237,6 +243,36 @@ func stopAndDrain(stop chan<- struct{}, drain <-chan types.ValueChanged) {
 	close(stop)
 	for range drain {
 	}
+}
+
+func mergeTableSchema(sch, mergeSch, ancSch schema.Schema) (schema.Schema, error) {
+	// (sch - ancSch) ∪ (mergeSch - ancSch) ∪ (sch ∩ mergeSch)
+
+	sub, err := typed.TypedColCollectionSubtraction(sch, ancSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	mergeSub, err := typed.TypedColCollectionSubtraction(mergeSch, ancSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	intersection, err := typed.TypedColCollectionIntersection(sch, mergeSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	union, err := typed.TypedColCollUnion(sub, mergeSub, intersection)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return schema.SchemaFromCols(union), nil
 }
 
 func mergeTableData(ctx context.Context, sch schema.Schema, rows, mergeRows, ancRows types.Map, vrw types.ValueReadWriter) (types.Map, types.Map, *MergeStats, error) {

@@ -325,7 +325,7 @@ SQL
     dolt branch delete-column
     dolt sql -q "alter table test drop column c5"
     dolt add test
-    dolt commit -m "deleted c45 column"
+    dolt commit -m "deleted c5 column"
     dolt checkout delete-column
     dolt sql -q "alter table test drop column c5"
     dolt add test
@@ -351,19 +351,32 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch delete-column
+
+    dolt checkout -b one
     dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted column c5"
-    dolt checkout delete-column
+
+    dolt checkout master
+    dolt checkout -b two
     dolt sql -q "alter table test drop column c4"
     dolt add test
     dolt commit -m "deleted column c4"
-    dolt checkout master
-    run dolt merge delete-column
+
+    run dolt merge one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
+
+    run dolt schema show
+    [[ "${lines[0]}" =~ "test @ working" ]] || false
+    [[ "${lines[1]}" =~ "CREATE TABLE \`test\` (" ]] || false
+    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'," ]] || false
+    [[ "${lines[3]}" =~ "\`c1\` BIGINT COMMENT 'tag:1'," ]] || false
+    [[ "${lines[4]}" =~ "\`c2\` BIGINT COMMENT 'tag:2'," ]] || false
+    [[ "${lines[5]}" =~ "\`c3\` BIGINT COMMENT 'tag:3'," ]] || false
+    [[ "${lines[6]}" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+    [[ "${lines[7]}" =~ ");" ]] || false
 }
 
 @test "two branches rename same column to same name. merge. no conflict" {
@@ -407,6 +420,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+    skip "This currently is a failed merge. I think it should be a conflict that you can resolve by modifying the schema. Basically choose a column name for the tag. The data is the same."
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -421,7 +435,6 @@ SQL
     run dolt merge rename-column
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
-    skip "This currently is a failed merge. I think it should be a conflict that you can resolve by modifying the schema. Basically choose a column name for the tag. The data is the same."
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
@@ -438,6 +451,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+    skip "Same as test above. This case needs some thought. My initial instinct was that this generates a tag conflict. Pick one tag and then you have a data conflict because the schemas are the same on both branches."
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -452,7 +466,6 @@ SQL
     run dolt merge rename-column
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
-    skip "Same as test above. This case needs some thought. My initial instinct was that this generates a tag conflict. Pick one tag and then you have a data conflict because the schemas are the same on both branches."
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
@@ -552,13 +565,13 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+    skip "I think changing a type to two different types should throw a conflict"
     dolt add test
     dolt commit -m "changed c1 to type float"
     dolt checkout master
     run dolt merge change-types
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
-    skip "I think changing a type to two different types should throw a conflict"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
