@@ -113,71 +113,23 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	return 1
 }
 
-func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB) errhand.VerboseError {
-	tblNames, err := getUserTableNames(root, ctx)
+func getUserTableNames(root *doltdb.RootValue, ctx context.Context) ([]string, error) {
+	tblNms, err := root.GetTableNames(ctx)
 
 	if err != nil {
-		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
+		return nil, err
 	}
 
-	diffTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltDiffTablePrefix + s })
-	histTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
-
-	systemTables := []string{sqle.LogTableName, doltdb.DocTableName}
-	systemTables = append(systemTables, diffTables...)
-	systemTables = append(systemTables, histTables...)
-
-	cli.Println("System tables:")
-	cli.Println("\t" + strings.Join(systemTables, "\n\t"))
-
-	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
-
-	if err != nil {
-		return errhand.BuildDError("error: failed to read history").AddCause(err).Build()
-	}
-
-	// Need to add system tables that are still queryable for tables that were deleted
-	activeTableSet := set.NewStrSet(tblNames)
-	deletedTableSet := set.NewStrSet([]string{})
-	for {
-		_, cm, err := cmItr.Next(ctx)
-
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return errhand.BuildDError("error: failed to iterate through history").AddCause(err).Build()
+	tblNames := []string{}
+	for _, name := range tblNms {
+		if name != doltdb.DocTableName {
+			tblNames = append(tblNames, name)
 		}
-
-		currRoot, err := cm.GetRootValue()
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to read root from db.").AddCause(err).Build()
-		}
-
-		currTblNames, err := currRoot.GetTableNames(ctx)
-
-		if err != nil {
-			return errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
-		}
-
-		_, missing := activeTableSet.IntersectAndMissing(currTblNames)
-		deletedTableSet.Add(missing...)
 	}
 
-	if deletedTableSet.Size() > 0 {
-		deletedSlice := deletedTableSet.AsSlice()
+	sort.Strings(tblNames)
 
-		diffTables := funcitr.MapStrings(deletedSlice, func(s string) string { return sqle.DoltDiffTablePrefix + s })
-		histTables := funcitr.MapStrings(deletedSlice, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
-
-		systemTables := append(histTables, diffTables...)
-
-		cli.Println()
-		cli.Println("System tables that are on other branches or in the history but not in the current list of tables (still queryable):")
-		cli.Println("\t" + strings.Join(systemTables, "\n\t"))
-	}
-
-	return nil
+	return tblNames, nil
 }
 
 func printTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
@@ -222,21 +174,77 @@ func printTables(ctx context.Context, root *doltdb.RootValue, label string, verb
 	return nil
 }
 
-func getUserTableNames(root *doltdb.RootValue, ctx context.Context) ([]string, error) {
-	tblNms, err := root.GetTableNames(ctx)
+func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB) errhand.VerboseError {
+	tblNames, err := getUserTableNames(root, ctx)
 
 	if err != nil {
-		return nil, err
+		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
 	}
 
-	tblNames := []string{}
-	for _, name := range tblNms {
-		if name != doltdb.DocTableName {
-			tblNames = append(tblNames, name)
+	printWorkingSetSysTables(tblNames)
+
+	return printSysTablesNotInWorkingSet(err, ctx, ddb, tblNames)
+}
+
+func printWorkingSetSysTables(tblNames []string) {
+	diffTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltDiffTablePrefix + s })
+	histTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
+
+	systemTables := []string{sqle.LogTableName, doltdb.DocTableName}
+	systemTables = append(systemTables, diffTables...)
+	systemTables = append(systemTables, histTables...)
+
+	cli.Println("System tables:")
+	cli.Println("\t" + strings.Join(systemTables, "\n\t"))
+}
+
+func printSysTablesNotInWorkingSet(err error, ctx context.Context, ddb *doltdb.DoltDB, tblNames []string) errhand.VerboseError {
+	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read history").AddCause(err).Build()
+	}
+
+	activeTableSet := set.NewStrSet(tblNames)
+	deletedTableSet := set.NewStrSet([]string{})
+	for {
+		_, cm, err := cmItr.Next(ctx)
+
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return errhand.BuildDError("error: failed to iterate through history").AddCause(err).Build()
 		}
+
+		currRoot, err := cm.GetRootValue()
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to read root from db.").AddCause(err).Build()
+		}
+
+		currTblNames, err := currRoot.GetTableNames(ctx)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
+		}
+
+		_, missing := activeTableSet.IntersectAndMissing(currTblNames)
+		deletedTableSet.Add(missing...)
 	}
 
-	sort.Strings(tblNames)
+	if deletedTableSet.Size() > 0 {
+		deletedSlice := deletedTableSet.AsSlice()
+		sort.Strings(deletedSlice)
 
-	return tblNames, nil
+		diffTables := funcitr.MapStrings(deletedSlice, func(s string) string { return sqle.DoltDiffTablePrefix + s })
+		histTables := funcitr.MapStrings(deletedSlice, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
+
+		systemTables := append(histTables, diffTables...)
+
+		cli.Println()
+		cli.Println("System tables that are on other branches or in the history but not in the current list of tables (still queryable):")
+		cli.Println("\t" + strings.Join(systemTables, "\n\t"))
+	}
+
+	return nil
 }
