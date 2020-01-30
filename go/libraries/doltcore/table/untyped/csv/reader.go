@@ -291,7 +291,10 @@ func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
 	rs.recordBuffer = rs.recordBuffer[:0]
 	rs.fieldIndexes = rs.fieldIndexes[:0]
 
-	_, _ = csvr.parseField(&rs)
+	kontinue := true
+	for kontinue {
+		kontinue, err = csvr.parseField(&rs)
+	}
 
 	if err == nil {
 		err = errRead
@@ -335,7 +338,6 @@ func (csvr *CSVReader) parseField(rs *recordState) (kontinue bool, err error) {
 
 	var errRead error
 
-parseField:
 	for {
 		rs.line = bytes.TrimLeftFunc(rs.line, unicode.IsSpace)
 		if len(rs.line) == 0 || rs.line[0] != '"' {
@@ -353,9 +355,11 @@ parseField:
 			rs.keepString = append(rs.keepString, len(field) != 0)
 			if i >= 0 {
 				rs.line = rs.line[i+delimLen:]
-				continue parseField
+				return true, errRead
+				//continue parseField
 			}
-			break parseField
+			return false, errRead
+			// break parseField
 		} else {
 			// Quoted string field
 			rs.line = rs.line[quoteLen:]
@@ -372,7 +376,8 @@ parseField:
 						rs.line = rs.line[delimLen:]
 						rs.fieldIndexes = append(rs.fieldIndexes, len(rs.recordBuffer))
 						rs.keepString = append(rs.keepString, true)
-						continue parseField
+						return true, errRead
+						//continue parseField
 					case nextRune == '"':
 						// `""` sequence (append quote).
 						rs.recordBuffer = append(rs.recordBuffer, '"')
@@ -381,18 +386,21 @@ parseField:
 						// `"\n` sequence (end of line).
 						rs.fieldIndexes = append(rs.fieldIndexes, len(rs.recordBuffer))
 						rs.keepString = append(rs.keepString, true)
-						break parseField
+						return false, errRead
+						//break parseField
 					default:
 						// `"*` sequence (invalid non-escaped quote).
 						col := utf8.RuneCount(rs.fullLine[:len(rs.fullLine)-len(rs.line)-quoteLen])
 						err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrQuote}
-						break parseField
+						return false, errRead
+						// break parseField
 					}
 				} else if len(rs.line) > 0 {
 					// Hit end of line (copy all data so far).
 					rs.recordBuffer = append(rs.recordBuffer, rs.line...)
 					if errRead != nil {
-						break parseField
+						return false, errRead
+						// break parseField
 					}
 					rs.line, errRead = csvr.readLine()
 					if errRead == io.EOF {
@@ -404,13 +412,14 @@ parseField:
 					if errRead == nil {
 						col := utf8.RuneCount(rs.fullLine)
 						err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrQuote}
-						break parseField
+						return false, errRead
+						// break parseField
 					}
 					rs.fieldIndexes = append(rs.fieldIndexes, len(rs.recordBuffer))
-					break parseField
+					return false, errRead
+					//break parseField
 				}
 			}
 		}
 	}
-	return true, nil
 }
