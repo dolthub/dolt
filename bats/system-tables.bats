@@ -10,7 +10,6 @@ teardown() {
 }
 
 @test "Show list of system tables using dolt ls --system or --all" {
-    skip "No way to do this right now"
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
@@ -19,7 +18,7 @@ teardown() {
     [[ "$output" =~ "dolt_log" ]] || false
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
-    dolt commit "Added test table"
+    dolt commit -m "Added test table"
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_history_test" ]] || false
@@ -37,7 +36,6 @@ teardown() {
     dolt table rm test
     dolt add test
     dolt commit -m "Removed test table"
-    skip "not implemented yet"
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
@@ -56,7 +54,6 @@ teardown() {
     dolt add test
     dolt commit -m "Added test table"
     dolt checkout master
-    skip "not implemented yet"
     run dolt ls --system
     [ $status -eq 0 ]
     [[ "$output" =~ "dolt_log" ]] || false
@@ -69,7 +66,7 @@ teardown() {
     [[ "$output" =~ "dolt_diff_test" ]] || false
 
 }
-    
+
 @test "query dolt_log" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
