@@ -37,8 +37,15 @@ const (
 )
 
 var lsShortDesc = "List tables"
-var lsLongDesc = "Lists the tables within a commit.  By default will list the tables in the current working set" +
-	"but if a commit is specified it will list the tables in that commit."
+var lsLongDesc = "By default will list the tables in the current working set but if a commit is specified it will list " +
+	"the tables in that commit.  If the --verbose flag is provided a row count and a hash of the table will also be " +
+	"displayed.\n" +
+	"\n" +
+	"If the --system flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system " +
+	"tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL " +
+	"queries.  To see these tables too you may pass the --verbose flag.\n" +
+	"\n" +
+	"If the --all flag is supplied user and system tables will be printed."
 var lsSynopsis = []string{
 	"[--options][<commit>]",
 }
@@ -102,7 +109,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 		}
 
 		if verr == nil && (apr.Contains(systemFlag) || apr.Contains(allFlag)) {
-			verr = printSystemTables(ctx, root, dEnv.DoltDB)
+			verr = printSystemTables(ctx, root, dEnv.DoltDB, apr.Contains(verboseFlag))
 			cli.Println()
 		}
 
@@ -174,7 +181,7 @@ func printTables(ctx context.Context, root *doltdb.RootValue, label string, verb
 	return nil
 }
 
-func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB) errhand.VerboseError {
+func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
 	tblNames, err := getUserTableNames(root, ctx)
 
 	if err != nil {
@@ -183,7 +190,11 @@ func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.
 
 	printWorkingSetSysTables(tblNames)
 
-	return printSysTablesNotInWorkingSet(err, ctx, ddb, tblNames)
+	if verbose {
+		return printSysTablesNotInWorkingSet(err, ctx, ddb, tblNames)
+	}
+
+	return nil
 }
 
 func printWorkingSetSysTables(tblNames []string) {
@@ -236,13 +247,12 @@ func printSysTablesNotInWorkingSet(err error, ctx context.Context, ddb *doltdb.D
 		deletedSlice := deletedTableSet.AsSlice()
 		sort.Strings(deletedSlice)
 
-		diffTables := funcitr.MapStrings(deletedSlice, func(s string) string { return sqle.DoltDiffTablePrefix + s })
-		histTables := funcitr.MapStrings(deletedSlice, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
+		const ncbPrefix = "(not on current branch) "
+		diffTables := funcitr.MapStrings(deletedSlice, func(s string) string { return ncbPrefix + sqle.DoltDiffTablePrefix + s })
+		histTables := funcitr.MapStrings(deletedSlice, func(s string) string { return ncbPrefix + sqle.DoltHistoryTablePrefix + s })
 
 		systemTables := append(histTables, diffTables...)
 
-		cli.Println()
-		cli.Println("System tables that are on other branches or in the history but not in the current list of tables (still queryable):")
 		cli.Println("\t" + strings.Join(systemTables, "\n\t"))
 	}
 
