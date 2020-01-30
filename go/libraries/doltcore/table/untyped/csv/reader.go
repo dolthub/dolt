@@ -51,8 +51,8 @@ type CSVReader struct {
 	// This parser has been adapted to differentiate between quoted and unquoted
 	// empty strings, and to use multi-rune delimiters. This adaptation removes the
 	// comment feature and the lazyQuotes option
-	delim   []byte
-	numLine int
+	delim           []byte
+	numLine         int
 	fieldsPerRecord int
 }
 
@@ -245,7 +245,7 @@ func (csvr *CSVReader) readLine() ([]byte, error) {
 }
 
 type recordState struct {
-	line		 []byte
+	line []byte
 	// recordBuffer holds the unescaped fields, one after another.
 	// The fields can be accessed by using the indexes in fieldIndexes.
 	// E.g., For the row `a,"b","c""d",e`, recordBuffer will contain `abc"de`
@@ -253,7 +253,6 @@ type recordState struct {
 	recordBuffer []byte
 	fieldIndexes []int
 }
-
 
 func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
 	rs := recordState{}
@@ -303,7 +302,8 @@ func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
 	dst = dst[:len(rs.fieldIndexes)]
 	var preIdx int
 	for i, idx := range rs.fieldIndexes {
-		_, ok := nullString[i]; if ok {
+		_, ok := nullString[i]
+		if ok {
 			dst[i] = nil
 		} else {
 			s := str[preIdx:idx]
@@ -334,7 +334,7 @@ func (csvr *CSVReader) parseField(rs *recordState) (kontinue bool, keep bool, er
 	}
 	rs.recordBuffer = append(rs.recordBuffer, field...)
 	rs.fieldIndexes = append(rs.fieldIndexes, len(rs.recordBuffer))
-	keep = len(field) != 0  // discard unquoted empty strings
+	keep = len(field) != 0 // discard unquoted empty strings
 	if i >= 0 {
 		dl := len(csvr.delim)
 		rs.line = rs.line[i+dl:]
