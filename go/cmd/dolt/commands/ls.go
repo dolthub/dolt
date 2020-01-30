@@ -37,7 +37,7 @@ const (
 )
 
 var lsShortDesc = "List tables"
-var lsLongDesc = "By default will list the tables in the current working set but if a commit is specified it will list " +
+var lsLongDesc = "With no arguments lists the tables in the current working set but if a commit is specified it will list " +
 	"the tables in that commit.  If the --verbose flag is provided a row count and a hash of the table will also be " +
 	"displayed.\n" +
 	"\n" +
@@ -45,9 +45,9 @@ var lsLongDesc = "By default will list the tables in the current working set but
 	"tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL " +
 	"queries.  To see these tables too you may pass the --verbose flag.\n" +
 	"\n" +
-	"If the --all flag is supplied user and system tables will be printed."
+	"If the --all flag is supplied both user and system tables will be printed."
 var lsSynopsis = []string{
-	"[--options][<commit>]",
+	"[--options] [<commit>]",
 }
 
 type LsCmd struct{}
@@ -104,7 +104,7 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	if verr == nil {
 		if !apr.Contains(systemFlag) || apr.Contains(allFlag) {
-			verr = printTables(ctx, root, label, apr.Contains(verboseFlag))
+			verr = printUserTables(ctx, root, label, apr.Contains(verboseFlag))
 			cli.Println()
 		}
 
@@ -112,12 +112,9 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 			verr = printSystemTables(ctx, root, dEnv.DoltDB, apr.Contains(verboseFlag))
 			cli.Println()
 		}
-
-		return 0
 	}
 
-	cli.PrintErrln(verr.Verbose())
-	return 1
+	return HandleVErrAndExitCode(verr, usage)
 }
 
 func getUserTableNames(root *doltdb.RootValue, ctx context.Context) ([]string, error) {
@@ -139,7 +136,7 @@ func getUserTableNames(root *doltdb.RootValue, ctx context.Context) ([]string, e
 	return tblNames, nil
 }
 
-func printTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
+func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
 	tblNames, err := getUserTableNames(root, ctx)
 
 	if err != nil {
