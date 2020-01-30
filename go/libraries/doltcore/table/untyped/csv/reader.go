@@ -53,14 +53,6 @@ type CSVReader struct {
 	// comment feature and the lazyQuotes option
 	delim   []byte
 	numLine int
-	// rawBuffer is a line buffer only used by the readLine method.
-	rawBuffer []byte
-	// recordBuffer holds the unescaped fields, one after another.
-	// The fields can be accessed by using the indexes in fieldIndexes.
-	// E.g., For the row `a,"b","c""d",e`, recordBuffer will contain `abc"de`
-	// and fieldIndexes will contain the indexes [1, 2, 5, 6].
-	recordBuffer    []byte
-	fieldIndexes    []int
 	fieldsPerRecord int
 }
 
@@ -238,14 +230,17 @@ func lengthNL(b []byte) int {
 // If some bytes were read, then the error is never io.EOF.
 // The result is only valid until the next call to readLine.
 func (csvr *CSVReader) readLine() ([]byte, error) {
+	// rawBuffer is a line buffer only used by the readLine method.
+	var rawBuffer []byte
+
 	line, err := csvr.bRd.ReadSlice('\n')
 	if err == bufio.ErrBufferFull {
-		csvr.rawBuffer = append(csvr.rawBuffer[:0], line...)
+		rawBuffer = append(rawBuffer[:0], line...)
 		for err == bufio.ErrBufferFull {
 			line, err = csvr.bRd.ReadSlice('\n')
-			csvr.rawBuffer = append(csvr.rawBuffer, line...)
+			rawBuffer = append(rawBuffer, line...)
 		}
-		line = csvr.rawBuffer
+		line = rawBuffer
 	}
 	if len(line) > 0 && err == io.EOF {
 		err = nil
@@ -264,6 +259,13 @@ func (csvr *CSVReader) readLine() ([]byte, error) {
 }
 
 func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
+	// recordBuffer holds the unescaped fields, one after another.
+	// The fields can be accessed by using the indexes in fieldIndexes.
+	// E.g., For the row `a,"b","c""d",e`, recordBuffer will contain `abc"de`
+	// and fieldIndexes will contain the indexes [1, 2, 5, 6].
+	var recordBuffer    []byte
+	var fieldIndexes    []int
+
 	var keepString []bool
 
 	// Read line (automatically skipping past empty lines and any comments).
@@ -287,8 +289,8 @@ func (csvr *CSVReader) csvReadRecords(dst []*string) ([]*string, error) {
 	const quoteLen = len(`"`)
 	delimLen := len(csvr.delim)
 	recLine := csvr.numLine // Starting line for record
-	csvr.recordBuffer = csvr.recordBuffer[:0]
-	csvr.fieldIndexes = csvr.fieldIndexes[:0]
+	recordBuffer = recordBuffer[:0]
+	fieldIndexes = fieldIndexes[:0]
 parseField:
 	for {
 		line = bytes.TrimLeftFunc(line, unicode.IsSpace)
@@ -301,8 +303,8 @@ parseField:
 			} else {
 				field = field[:len(field)-lengthNL(field)]
 			}
-			csvr.recordBuffer = append(csvr.recordBuffer, field...)
-			csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+			recordBuffer = append(recordBuffer, field...)
+			fieldIndexes = append(fieldIndexes, len(recordBuffer))
 			// discard unquoted empty strings
 			keepString = append(keepString, len(field) != 0)
 			if i >= 0 {
@@ -317,23 +319,23 @@ parseField:
 				i := bytes.IndexByte(line, '"')
 				if i >= 0 {
 					// Hit next quote.
-					csvr.recordBuffer = append(csvr.recordBuffer, line[:i]...)
+					recordBuffer = append(recordBuffer, line[:i]...)
 					line = line[i+quoteLen:]
 					if atDelim(line, csvr.delim) {
 						// `"<delimiter>` sequence (end of field).
 						line = line[delimLen:]
-						csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+						fieldIndexes = append(fieldIndexes, len(recordBuffer))
 						keepString = append(keepString, true)
 						continue parseField
 					} else {
 						switch rn := nextRune(line); {
 						case rn == '"':
 							// `""` sequence (append quote).
-							csvr.recordBuffer = append(csvr.recordBuffer, '"')
+							recordBuffer = append(recordBuffer, '"')
 							line = line[quoteLen:]
 						case lengthNL(line) == len(line):
 							// `"\n` sequence (end of line).
-							csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+							fieldIndexes = append(fieldIndexes, len(recordBuffer))
 							keepString = append(keepString, true)
 							break parseField
 						default:
@@ -345,7 +347,7 @@ parseField:
 					}
 				} else if len(line) > 0 {
 					// Hit end of line (copy all data so far).
-					csvr.recordBuffer = append(csvr.recordBuffer, line...)
+					recordBuffer = append(recordBuffer, line...)
 					if errRead != nil {
 						break parseField
 					}
@@ -361,7 +363,7 @@ parseField:
 						err = &csv.ParseError{StartLine: recLine, Line: csvr.numLine, Column: col, Err: csv.ErrQuote}
 						break parseField
 					}
-					csvr.fieldIndexes = append(csvr.fieldIndexes, len(csvr.recordBuffer))
+					fieldIndexes = append(fieldIndexes, len(recordBuffer))
 					break parseField
 				}
 			}
@@ -373,14 +375,14 @@ parseField:
 
 	// Create a single string and create slices out of it.
 	// This pins the memory of the fields together, but allocates once.
-	str := string(csvr.recordBuffer) // Convert to string once to batch allocations
+	str := string(recordBuffer) // Convert to string once to batch allocations
 	dst = dst[:0]
-	if cap(dst) < len(csvr.fieldIndexes) {
-		dst = make([]*string, len(csvr.fieldIndexes))
+	if cap(dst) < len(fieldIndexes) {
+		dst = make([]*string, len(fieldIndexes))
 	}
-	dst = dst[:len(csvr.fieldIndexes)]
+	dst = dst[:len(fieldIndexes)]
 	var preIdx int
-	for i, idx := range csvr.fieldIndexes {
+	for i, idx := range fieldIndexes {
 		if keepString[i] {
 			s := str[preIdx:idx]
 			dst[i] = &s
