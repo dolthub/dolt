@@ -16,21 +16,20 @@ package commands
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"io"
 	"sort"
 	"strings"
 
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
-
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 )
 
 const (
