@@ -62,7 +62,8 @@ func TypedColCollUnion(colColls ...*schema.ColCollection) (*schema.ColCollection
 func TypedColCollectionIntersection(sch1, sch2 schema.Schema) (*schema.ColCollection, error) {
 	var inter []schema.Column
 	err := sch1.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		_, ok := sch2.GetAllCols().GetByTag(tag); if ok {
+		_, ok := sch2.GetAllCols().GetByTag(tag)
+		if ok {
 			inter = append(inter, col)
 		}
 		return false, nil
@@ -82,7 +83,7 @@ func TypedColCollectionIntersection(sch1, sch2 schema.Schema) (*schema.ColCollec
 func TypedColCollectionSubtraction(leftSch, rightSch schema.Schema) (*schema.ColCollection, error) {
 	var sub []schema.Column
 	err := leftSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		_, ok := rightSch.GetAllCols().GetByTag(tag);
+		_, ok := rightSch.GetAllCols().GetByTag(tag)
 
 		if !ok {
 			sub = append(sub, col)
