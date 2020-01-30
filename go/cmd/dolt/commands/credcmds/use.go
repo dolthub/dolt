@@ -32,7 +32,9 @@ var useShortDesc = "Select an existing dolt credential for authenticating with d
 var useLongDesc = `Selects an existing dolt credential for authenticating with doltremoteapi.
 
 Can be given a credential's public key or key id and will update global dolt
-config to use the credential when interacting with doltremoteapi.`
+config to use the credential when interacting with doltremoteapi.
+
+You can see your available credentials with 'dolt creds ls'.`
 
 var useSynopsis = []string{"<public_key_as_appears_in_ls | public_key_id_as_appears_in_ls"}
 
