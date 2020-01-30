@@ -361,16 +361,15 @@ SQL
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 
-    dolt schema show
     run dolt schema show
-    [[ "$output" =~ "test @ working" ]] || false
-    [[ "$output" =~ "CREATE TABLE \`test\` (" ]] || false
-    [[ "$output" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'," ]] || false
-    [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'," ]] || false
-    [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'," ]] || false
-    [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'," ]] || false
-    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
-    [[ "$output" =~ ");" ]] || false
+    [[ "${lines[0]}" =~ "test @ working" ]] || false
+    [[ "${lines[1]}" =~ "CREATE TABLE \`test\` (" ]] || false
+    [[ "${lines[2]}" =~ "\`pk\` BIGINT NOT NULL COMMENT 'tag:0'," ]] || false
+    [[ "${lines[3]}" =~ "\`c1\` BIGINT COMMENT 'tag:1'," ]] || false
+    [[ "${lines[4]}" =~ "\`c2\` BIGINT COMMENT 'tag:2'," ]] || false
+    [[ "${lines[5]}" =~ "\`c3\` BIGINT COMMENT 'tag:3'," ]] || false
+    [[ "${lines[6]}" =~ "PRIMARY KEY (\`pk\`)" ]] || false
+    [[ "${lines[7]}" =~ ");" ]] || false
 }
 
 @test "two branches rename same column to same name. merge. no conflict" {
