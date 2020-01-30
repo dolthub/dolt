@@ -369,7 +369,7 @@ SQL
     [[ "$output" =~ "\`c1\` BIGINT COMMENT 'tag:1'," ]] || false
     [[ "$output" =~ "\`c2\` BIGINT COMMENT 'tag:2'," ]] || false
     [[ "$output" =~ "\`c3\` BIGINT COMMENT 'tag:3'," ]] || false
-    [[ "$output" =~ "PRIMARY KEY (`pk`)" ]] || false
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
     [[ "$output" =~ ");" ]] || false
 }
 
@@ -414,6 +414,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+    skip "This currently is a failed merge. I think it should be a conflict that you can resolve by modifying the schema. Basically choose a column name for the tag. The data is the same."
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -428,7 +429,6 @@ SQL
     run dolt merge rename-column
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
-    skip "This currently is a failed merge. I think it should be a conflict that you can resolve by modifying the schema. Basically choose a column name for the tag. The data is the same."
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
@@ -445,6 +445,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+    skip
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -559,6 +560,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+    skip
     dolt add test
     dolt commit -m "changed c1 to type float"
     dolt checkout master
