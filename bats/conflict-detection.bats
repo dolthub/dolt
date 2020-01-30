@@ -445,7 +445,7 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
-    skip
+    skip "Same as test above. This case needs some thought. My initial instinct was that this generates a tag conflict. Pick one tag and then you have a data conflict because the schemas are the same on both branches."
     dolt add test
     dolt commit -m "table created"
     dolt branch rename-column
@@ -460,7 +460,6 @@ SQL
     run dolt merge rename-column
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
-    skip "Same as test above. This case needs some thought. My initial instinct was that this generates a tag conflict. Pick one tag and then you have a data conflict because the schemas are the same on both branches."
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
@@ -560,14 +559,13 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
-    skip
+    skip "I think changing a type to two different types should throw a conflict"
     dolt add test
     dolt commit -m "changed c1 to type float"
     dolt checkout master
     run dolt merge change-types
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
-    skip "I think changing a type to two different types should throw a conflict"
     [ $status -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
