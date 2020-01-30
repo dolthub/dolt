@@ -32,16 +32,19 @@ SQL
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "table created"
-    dolt branch change-cell
+
+    dolt checkout -b change-cell-one
     dolt sql -q "replace into test values (0, 11, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "changed pk=0 c1 to 11"
-    dolt checkout change-cell
+
+    dolt checkout master
+    dolt checkout -b change-cell-two
     dolt sql -q "replace into test values (1, 1, 1, 1, 1, 11)"
     dolt add test
     dolt commit -m "changed pk=1 c5 to 11"
-    dolt checkout master
-    run dolt merge change-cell
+
+    run dolt merge change-cell-one
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
@@ -67,16 +70,19 @@ SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "table created"
-    dolt branch change-cell
+
+    dolt checkout -b change-cell-one
     dolt sql -q "replace into test values (0, 11, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "changed pk=0 c1 to 11"
-    dolt checkout change-cell
+
+    dolt checkout master
+    dolt checkout -b change-cell-two
     dolt sql -q "replace into test values (0, 0, 0, 0, 0, 11)"
     dolt add test
     dolt commit -m "changed pk=0 c5 to 11"
-    dolt checkout master
-    run dolt merge change-cell
+
+    run dolt merge change-cell-one
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
@@ -102,16 +108,19 @@ SQL
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "table created"
-    dolt branch change-cell
+
+    dolt checkout -b change-cell-one
     dolt sql -q "replace into test values (0, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "changed pk=0 all cells to 1"
-    dolt checkout change-cell
+
+    dolt checkout master
+    dolt checkout -b change-cell-two
     dolt sql -q "replace into test values (0, 11, 11, 11, 11, 11)"
     dolt add test
     dolt commit -m "changed pk=0 all cells to 11"
-    dolt checkout master
-    run dolt merge change-cell
+
+    run dolt merge change-cell-one
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
     run dolt status
@@ -133,16 +142,19 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-row
+
+    dolt checkout -b add-row-one
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added pk=0 row"
-    dolt checkout add-row
+
+    dolt checkout master
+    dolt checkout -b add-row-two
     dolt sql -q "insert into test values (1, 1, 1, 1, 1, 1)"
     dolt add test
     dolt commit -m "added pk=1 row"
-    dolt checkout master
-    run dolt merge add-row
+
+    run dolt merge add-row-one
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
@@ -164,16 +176,19 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-row
+
+    dolt checkout -b add-row-one
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added pk=0 row"
-    dolt checkout add-row
-    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
-    dolt add test
-    dolt commit -m "added pk=0 row"
+
     dolt checkout master
-    run dolt merge add-row
+    dolt checkout -b add-row-two
+    dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
+    dolt add test
+    dolt commit -m "added pk=0 row"
+
+    run dolt merge add-row-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -193,11 +208,14 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-table
+
+    dolt checkout -b add-table-one
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
     dolt commit -m "added row"
-    dolt checkout add-table
+
+    dolt checkout master
+    dolt checkout -b add-table-two
     dolt sql <<SQL
 CREATE TABLE test2 (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -211,8 +229,8 @@ CREATE TABLE test2 (
 SQL
     dolt add test2
     dolt commit -m "added new table test2"
-    dolt checkout master
-    run dolt merge add-table
+
+    run dolt merge add-table-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     skip "should have a merge summary section that says 1 table changed"
@@ -234,16 +252,19 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-column
+
+    dolt checkout -b add-column-one
     dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added column c0"
-    dolt checkout add-column
+
+    dolt checkout master
+    dolt checkout -b add-column-two
     dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added same column c0"
-    dolt checkout master
-    run dolt merge add-column
+
+    run dolt merge add-column-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -263,16 +284,19 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-column
+
+    dolt checkout -b add-column-one
     dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added column c0"
-    dolt checkout add-column
+
+    dolt checkout master
+    dolt checkout -b add-column-two
     dolt sql -q "alter table test add c6 bigint"
     dolt add test
     dolt commit -m "added column c6"
-    dolt checkout master
-    run dolt merge add-column
+
+    run dolt merge add-column-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ "$output" =~ "1 tables changed" ]] || false
@@ -293,16 +317,19 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-column
+
+    dolt checkout -b add-column-one
     dolt sql -q "alter table test add c0 longtext"
     dolt add test
     dolt commit -m "added column c0 as string"
-    dolt checkout add-column
+
+    dolt checkout master
+    dolt checkout -b add-column-two
     dolt sql -q "alter table test add c0 bigint"
     dolt add test
     dolt commit -m "added column c0 as int"
-    dolt checkout master
-    run dolt merge add-column
+
+    run dolt merge add-column-one
     [ $status -eq 0 ]
     skip "This created two c0 columns with different types and tag numbers. Bug I think."
     [[ "$output" =~ "CONFLICT" ]] || false
@@ -322,16 +349,19 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch delete-column
+
+    dolt checkout -b delete-column-one
     dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted c5 column"
-    dolt checkout delete-column
+
+    dolt checkout master
+    dolt checkout -b delete-column-two
     dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted c5 again"
-    dolt checkout master
-    run dolt merge delete-column
+
+    run dolt merge delete-column-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -352,18 +382,18 @@ SQL
     dolt add test
     dolt commit -m "table created"
 
-    dolt checkout -b one
+    dolt checkout -b delete-column-one
     dolt sql -q "alter table test drop column c5"
     dolt add test
     dolt commit -m "deleted column c5"
 
     dolt checkout master
-    dolt checkout -b two
+    dolt checkout -b delete-column-two
     dolt sql -q "alter table test drop column c4"
     dolt add test
     dolt commit -m "deleted column c4"
 
-    run dolt merge one
+    run dolt merge delete-column-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -393,16 +423,19 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch rename-column
+
+    dolt checkout -b rename-column-one
     dolt sql -q "alter table test rename column c5 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c0"
-    dolt checkout rename-column
+
+    dolt checkout master
+    dolt checkout -b rename-column-two
     dolt sql -q "alter table test rename column c5 to c0"
     dolt add test
     dolt commit -m "renamed c5 to c0 again"
-    dolt checkout master
-    run dolt merge rename-column
+
+    run dolt merge rename-column-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -486,7 +519,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch change-types
+
+    dolt checkout -b change-types-one
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -501,7 +535,9 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "changed c1 to type uint"
-    dolt checkout change-types
+
+    dolt checkout master
+    dolt checkout -b change-types-two
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -516,8 +552,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "changed c1 to type uint again"
-    dolt checkout master
-    run dolt merge change-types
+
+    run dolt merge change-types-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -537,7 +573,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch change-types
+
+    dolt checkout -b change-types-one
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -552,7 +589,9 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "changed c1 to type uint"
-    dolt checkout change-types
+
+    dolt checkout master
+    dolt checkout -b change-types-two
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -568,8 +607,8 @@ SQL
     skip "I think changing a type to two different types should throw a conflict"
     dolt add test
     dolt commit -m "changed c1 to type float"
-    dolt checkout master
-    run dolt merge change-types
+
+    run dolt merge change-types-one
     [ $status -eq 1 ]
     [[ "$output" =~ "Bad merge" ]] || false
     [ $status -eq 0 ]
@@ -590,7 +629,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-pk
+
+    dolt checkout -b add-pk-one
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -605,7 +645,9 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "made c1 a pk"
-    dolt checkout add-pk
+
+    dolt checkout master
+    dolt checkout -b add-pk-two
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -620,8 +662,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "made c1 a pk again"
-    dolt checkout master
-    run dolt merge add-pk
+
+    run dolt merge add-pk-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -641,7 +683,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-pk
+
+    dolt checkout -b add-pk-one
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -657,7 +700,9 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "added pk pk1"
-    dolt checkout add-pk
+
+    dolt checkout master
+    dolt checkout -b add-pk-two
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -673,8 +718,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "added pk pk1 again"
-    dolt checkout master
-    run dolt merge add-pk
+
+    run dolt merge add-pk-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
@@ -694,7 +739,8 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "table created"
-    dolt branch add-pk
+
+    dolt checkout -b add-pk-one
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -710,7 +756,9 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "added pk pk1"
-    dolt checkout add-pk
+
+    dolt checkout master
+    dolt checkout -b add-pk-two
     dolt table rm test
     dolt sql <<SQL
 CREATE TABLE test (
@@ -726,10 +774,11 @@ CREATE TABLE test (
 SQL
     dolt add test
     dolt commit -m "added pk pk2"
-    dolt checkout master
-    run dolt merge add-pk
+
+    dolt merge add-pk-one
+    run dolt merge add-pk-one
     [ $status -eq 0 ]
-    skip "This merges fine right now. Should throw conflict."
+   skip "This merges fine right now. Should throw conflict."
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
