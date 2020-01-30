@@ -87,7 +87,7 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 	}
 
 	// Use the last 12 hex digits of the uuid for the ID.
-	id := uid.String()[23:]
+	id := uid.String()[24:]
 	r, err := newQueryCatalogRow(id, name, query, description)
 	if err != nil {
 		return nil, err
