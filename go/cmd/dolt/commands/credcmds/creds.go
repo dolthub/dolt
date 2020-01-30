@@ -23,7 +23,5 @@ var Commands = cli.NewSubCommandHandler("creds", "Commands for managing credenti
 	RmCmd{},
 	LsCmd{},
 	CheckCmd{},
-	// TODO(aaron): Command to select a credential by public key and update global/repo config
-	// to use it for authentication.
-	//{Name: "use", Desc: useShortDesc, Func: Ls, ReqRepo: false, EventType: eventsapi.ClientEventType_CREDS_USE},
+	UseCmd{},
 })
