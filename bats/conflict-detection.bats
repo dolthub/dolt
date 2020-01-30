@@ -9,6 +9,13 @@ teardown() {
     teardown_common
 }
 
+@test "merge non-existant branch errors" {
+    run dolt merge batmans-parents
+    [ $status -eq 1 ]
+    [[ "$output" =~ "unknown branch" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
+}
+
 @test "two branches modify different cell different row. merge. no conflict" {
     dolt sql <<SQL
 CREATE TABLE test (

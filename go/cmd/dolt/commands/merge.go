@@ -114,8 +114,8 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 		dref, err := dEnv.FindRef(ctx, branchName)
 
 		if err != nil {
-			cli.PrintErrln(color.RedString("unknown branch: %s", branchName))
-			usage()
+			verr := errhand.BuildDError(fmt.Sprintf("unknown branch: %s", branchName)).Build()
+			return HandleVErrAndExitCode(verr, usage)
 		}
 
 		isUnchanged, _ := dEnv.IsUnchangedFromHead(ctx)
