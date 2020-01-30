@@ -78,7 +78,10 @@ var sqlSynopsis = []string{
 const (
 	queryFlag  = "query"
 	formatFlag = "result-format"
-	welcomeMsg = `# Welcome to the DoltSQL shell.
+	saveFlag    = "save"
+	messageFlag = "message"
+	nameFlag    = "name"
+	welcomeMsg  = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
@@ -105,6 +108,9 @@ func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
 	ap.SupportsString(formatFlag, "r", "Result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
+	ap.SupportsFlag(saveFlag, "s", "Used with --query, save the query to the query catalog. Saved queries can be examined in the dolt_query_catalog system table.")
+	ap.SupportsString(nameFlag, "n", "Name to save the query with", "Used with --query and --save, saves the query with the human readable name given. See also --message")
+	ap.SupportsString(messageFlag, "m", "Descriptive message to save the query with", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	return ap
 }
 
@@ -136,6 +142,10 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 	origRoot := root
 
+	_, saveQuery := apr.GetValue(saveFlag)
+	saveMessage := apr.GetValueOrDefault(messageFlag, "")
+	saveName := apr.GetValueOrDefault(nameFlag, "")
+
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
 		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
@@ -147,10 +157,18 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		} else if se.sdb.Root() != origRoot {
 			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
 		} else {
+			if saveQuery {
+				cmd.saveQuery(query, saveName, saveMessage)
+			}
 			return 0
 		}
-	} else if len(args) > 0 {
-		return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build(), usage)
+	} else {
+		if saveQuery {
+			return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: --save is only valid with --query").Build(), usage)
+		}
+		if len(args) > 0 {
+			return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build(), usage)
+		}
 	}
 
 	// Run in either batch mode for piped input, or shell mode for interactive
@@ -196,6 +214,11 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 	default:
 		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
 	}
+}
+
+	// Saves the query given to the catalog with the name and message given.
+func (cmd SqlCmd) saveQuery(query string, name string, message string) {
+	// TODO: implement me
 }
 
 // ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token. It doesn't
