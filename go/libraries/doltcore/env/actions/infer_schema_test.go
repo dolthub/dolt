@@ -16,6 +16,7 @@ package actions
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"math"
 	"strconv"
 	"testing"
@@ -378,6 +379,17 @@ var oneOfEachKindCSVStr = `uuid,int,uint,float,bool,string
 00000000-0000-0000-0000-000000000007,3,9223372036854775810,3.7,FALSE,Even emojis
 00000000-0000-0000-0000-000000000008,4,9223372036854775810,4.8,true,🐈🐈🐈🐈`
 
+var oneOfEachKindWithSomeNilsCSVStr = `uuid,int,uint,float,bool,string
+00000000-0000-0000-0000-000000000000,-4,9223372036854775810,-4.1,true,this is
+00000000-0000-0000-0000-000000000001,-3,9223372036854775810,-3.2,false,a test
+00000000-0000-0000-0000-000000000002,,9223372036854775810,-2.3,TRUE,anything could
+00000000-0000-0000-0000-000000000003,-1,9223372036854775810,-1.4,FALSE,be written
+00000000-0000-0000-0000-000000000004,0,9223372036854775810,0.0,true,in these
+00000000-0000-0000-0000-000000000005,1,9223372036854775810,1.5,false,string
+00000000-0000-0000-0000-000000000006,,9223372036854775810,2.6,TRUE,columns.
+00000000-0000-0000-0000-000000000007,3,9223372036854775810,3.7,FALSE,Even emojis
+00000000-0000-0000-0000-000000000008,4,9223372036854775810,4.8,true,🐈🐈🐈🐈`
+
 var mixUintsAndPositiveInts = `uuid,mix
 00000000-0000-0000-0000-000000000000,9223372036854775810
 00000000-0000-0000-0000-000000000001,0
@@ -400,12 +412,21 @@ var floatsWithTinyFractionalPortion = `uuid,float
 
 func TestInferSchema(t *testing.T) {
 	_, uuidSch := untyped.NewUntypedSchema("uuid")
+
+	updateTestColColl, err := schema.NewColCollection(
+		schema.NewColumn("uuid", 0, types.StringKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("int", 1, types.StringKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("only_in_prev", 2, types.StringKind, false, schema.NotNullConstraint{}),
+	)
+	require.NoError(t, err)
+
 	tests := []struct {
-		name        string
-		csvContents string
-		pkCols      []string
-		infArgs     *InferenceArgs
-		expKinds    map[string]types.NomsKind
+		name         string
+		csvContents  string
+		pkCols       []string
+		infArgs      *InferenceArgs
+		expKinds     map[string]types.NomsKind
+		nullableCols *set.StrSet
 	}{
 		{
 			"one of each kind",
@@ -425,6 +446,7 @@ func TestInferSchema(t *testing.T) {
 				"bool":   types.BoolKind,
 				"string": types.StringKind,
 			},
+			nil,
 		},
 		{
 			"mix uints and positive ints",
@@ -440,6 +462,7 @@ func TestInferSchema(t *testing.T) {
 				"mix":  types.UintKind,
 				"uuid": types.UUIDKind,
 			},
+			nil,
 		},
 		{
 			"floats with zero fractional and float threshold of 0",
@@ -455,6 +478,7 @@ func TestInferSchema(t *testing.T) {
 				"float": types.FloatKind,
 				"uuid":  types.UUIDKind,
 			},
+			nil,
 		},
 		{
 			"floats with zero fractional and float threshold of 0.1",
@@ -470,6 +494,7 @@ func TestInferSchema(t *testing.T) {
 				"float": types.IntKind,
 				"uuid":  types.UUIDKind,
 			},
+			nil,
 		},
 		{
 			"floats with large fractional and float threshold of 1.0",
@@ -485,6 +510,7 @@ func TestInferSchema(t *testing.T) {
 				"float": types.IntKind,
 				"uuid":  types.UUIDKind,
 			},
+			nil,
 		},
 		{
 			"float threshold smaller than some of teh values",
@@ -500,6 +526,7 @@ func TestInferSchema(t *testing.T) {
 				"float": types.FloatKind,
 				"uuid":  types.UUIDKind,
 			},
+			nil,
 		},
 		{
 			"Keep Types",
@@ -515,6 +542,7 @@ func TestInferSchema(t *testing.T) {
 				"float": types.FloatKind,
 				"uuid":  types.StringKind,
 			},
+			nil,
 		},
 		{
 			"pk ordering",
@@ -534,6 +562,29 @@ func TestInferSchema(t *testing.T) {
 				"bool":   types.BoolKind,
 				"string": types.StringKind,
 			},
+			nil,
+		},
+		{
+			"update schema",
+			oneOfEachKindWithSomeNilsCSVStr,
+			[]string{"uuid"},
+			&InferenceArgs{
+				ExistingSch:    schema.SchemaFromCols(updateTestColColl),
+				ColMapper:      IdentityMapper{},
+				FloatThreshold: 0,
+				KeepTypes:      true,
+				Update:         true,
+			},
+			map[string]types.NomsKind{
+				"uuid":         types.StringKind,
+				"int":          types.StringKind,
+				"only_in_prev": types.StringKind,
+				"uint":         types.UintKind,
+				"float":        types.FloatKind,
+				"bool":         types.BoolKind,
+				"string":       types.StringKind,
+			},
+			set.NewStrSet([]string{"int", "only_in_prev"}),
 		},
 	}
 
@@ -560,7 +611,7 @@ func TestInferSchema(t *testing.T) {
 			allCols := sch.GetAllCols()
 			err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				expectedKind, ok := test.expKinds[col.Name]
-				assert.True(t, ok)
+				assert.True(t, ok, "culumn not found: %s", col.Name)
 				assert.Equal(t, expectedKind, col.Kind, "column: %s - expected: %s got: %s", col.Name, expectedKind.String(), col.Kind.String())
 				return false, nil
 			})
@@ -572,6 +623,15 @@ func TestInferSchema(t *testing.T) {
 			for i := 0; i < len(test.pkCols); i++ {
 				col := pkCols.GetByIndex(i)
 				assert.Equal(t, test.pkCols[i], col.Name)
+			}
+
+			if test.nullableCols != nil {
+				err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+					idx := schema.ConstraintOfTypeIndex(col.Constraints, schema.NotNullConstraintType)
+					assert.True(t, idx == -1 == test.nullableCols.Contains(col.Name), "%s unexpected nullability", col.Name)
+					return false, nil
+				})
+				assert.NoError(t, err)
 			}
 		})
 	}
