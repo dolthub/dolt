@@ -27,8 +27,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
-	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var _ sql.Database = (*Database)(nil)
@@ -222,22 +220,7 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 		return err
 	}
 
-	schVal, err := encoding.MarshalAsNomsValue(ctx, db.root.VRW(), doltSch)
-	if err != nil {
-		return err
-	}
-
-	m, err := types.NewMap(ctx, db.root.VRW())
-	if err != nil {
-		return err
-	}
-
-	tbl, err := doltdb.NewTable(ctx, db.root.VRW(), schVal, m)
-	if err != nil {
-		return err
-	}
-
-	newRoot, err := db.root.PutTable(ctx, tableName, tbl)
+	newRoot, err := db.root.CreateEmptyTable(ctx, tableName, doltSch)
 	if err != nil {
 		return err
 	}

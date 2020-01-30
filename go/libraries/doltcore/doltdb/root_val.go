@@ -16,6 +16,7 @@ package doltdb
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"strconv"
 	"strings"
 
@@ -350,6 +351,31 @@ func PutTable(ctx context.Context, root *RootValue, vrw types.ValueReadWriter, t
 	}
 
 	return newRootValue(root.vrw, rootValSt), nil
+}
+
+// Creates an empty table in this root with the name and schema given, returning the new root value.
+func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch schema.Schema) (*RootValue, error) {
+	schVal, err := encoding.MarshalAsNomsValue(ctx, root.VRW(), sch)
+	if err != nil {
+		return nil, err
+	}
+
+	m, err := types.NewMap(ctx, root.VRW())
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, err := NewTable(ctx, root.VRW(), schVal, m)
+	if err != nil {
+		return nil, err
+	}
+
+	newRoot, err := root.PutTable(ctx, tName, tbl)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRoot, nil
 }
 
 // HashOf gets the hash of the root value
