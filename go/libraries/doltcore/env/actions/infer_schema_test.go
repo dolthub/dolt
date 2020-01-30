@@ -16,7 +16,6 @@ package actions
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"math"
 	"strconv"
 	"testing"
@@ -28,6 +27,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 

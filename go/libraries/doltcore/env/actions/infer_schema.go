@@ -17,7 +17,6 @@ package actions
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"math"
 	"strconv"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
