@@ -81,6 +81,8 @@ func (db *Database) Name() string {
 	return db.name
 }
 
+// GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
+// the table name given.
 func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 	if strings.HasPrefix(lwrName, DoltDiffTablePrefix) {
@@ -109,7 +111,7 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return NewLogTable(db.ddb, db.rs), true, nil
 	}
 
-	tableNames, err := db.GetTableNames(ctx)
+	tableNames, err := db.GetAllTableNames(ctx)
 
 	if err != nil {
 		return nil, false, err
@@ -144,18 +146,27 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 	return table, true, nil
 }
 
+// Returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog) are filtered
+// out. This method is used for queries that examine the schema of the database, e.g. show tables. Table name resolution
+// in queries is handled by GetTableInsensitive. Use GetAllTableNames for an unfiltered list of all tables in user
+// space.
 func (db *Database) GetTableNames(ctx context.Context) ([]string, error) {
-	tblNames, err := db.root.GetTableNames(ctx)
+	tblNames, err := db.GetAllTableNames(ctx)
 	if err != nil {
 		return nil, err
 	}
 	return filterDoltInternalTables(tblNames), nil
 }
 
+// Returns all user-space tables, including system tables in user space (e.g. dolt_docs, dolt_query_catalog).
+func (db *Database) GetAllTableNames(ctx context.Context) ([]string, error) {
+	return db.root.GetTableNames(ctx)
+}
+
 func filterDoltInternalTables(tblNames []string) []string {
 	result := []string{}
 	for _, tbl := range tblNames {
-		if tbl != doltdb.DocTableName {
+		if !HasDoltPrefix(tbl) {
 			result = append(result, tbl)
 		}
 	}
