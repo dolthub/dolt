@@ -251,6 +251,21 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "${#lines[@]}" -eq 5 ]
 }
 
+@test "dolt sql select csv output" {
+    dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
+    run dolt sql -q "select c1 as column1, c2 as column2 from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "column1,column2" ]] || false
+    [[ "$output" =~ "1,2" ]] || false
+    [[ "$output" =~ "11,12" ]] || false
+
+    run dolt sql -q "select c1 as column1 from test where c1=1" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'column1' ]] || false
+    [ "${#lines[@]}" -eq 2 ]
+}
+
+
 @test "dolt sql select with inverted where clause" {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "select * from test where 5 > c1"
