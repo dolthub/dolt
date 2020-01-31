@@ -775,10 +775,9 @@ SQL
     dolt add test
     dolt commit -m "added pk pk2"
 
-    dolt merge add-pk-one
     run dolt merge add-pk-one
-    [ $status -eq 0 ]
-   skip "This merges fine right now. Should throw conflict."
+    skip "This merges fine right now. Should throw conflict."
+    [ $status -ne 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
 }
 
