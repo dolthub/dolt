@@ -24,28 +24,40 @@ import (
 )
 
 const (
-	// DoltHistoryTablePrefix is the name prefix for each history table
+	// DoltQueryCatalogTableName is the name of the query catalog table
 	DoltQueryCatalogTableName = "dolt_query_catalog"
 
-	// CommitHashCol is the name of the column containing the commit hash in the result set
+	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
 	QueryCatalogIdCol = "id"
 
-	// CommitterCol is the name of the column containing the committer in the result set
+	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog
+	QueryCatalogOrderCol = "order"
+
+	// QueryCatalogNameCol is the name of the column containing the name of a query in the catalog
 	QueryCatalogNameCol = "name"
 
-	// CommitterCol is the name of the column containing the committer in the result set
-	// TODO: parser won't handle a reserved word here, but it should
+	// QueryCatalogQueryCol is the name of the column containing the query of a catalog entry
+	// TODO: parser won't handle a reserved word here, but it should. Only an issue for create table statements.
 	QueryCatalogQueryCol = "query"
 
-	// CommitDateCol is the name of the column containing the commit date in the result set
+	// QueryCatalogDescriptionCol is the name of the column containing the description of a query in the catalog
 	QueryCatalogDescriptionCol = "description"
 )
 
+const (
+	queryCatalogIdTag uint64 = iota
+	queryCatalogOrderTag
+	queryCatalogNameTag
+	queryCatalogQueryTag
+	queryCatalogDescriptionTag
+)
+
 var queryCatalogCols, _ = schema.NewColCollection(
-	schema.NewColumn(QueryCatalogIdCol, 0, types.StringKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn(QueryCatalogNameCol, 1, types.StringKind, false),
-	schema.NewColumn(QueryCatalogQueryCol, 2, types.StringKind, false),
-	schema.NewColumn(QueryCatalogDescriptionCol, 3, types.StringKind, false),
+	schema.NewColumn(QueryCatalogIdCol, queryCatalogIdTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(QueryCatalogOrderCol, queryCatalogOrderTag, types.UintKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn(QueryCatalogNameCol, queryCatalogNameTag, types.StringKind, false),
+	schema.NewColumn(QueryCatalogQueryCol, queryCatalogQueryTag, types.StringKind, false),
+	schema.NewColumn(QueryCatalogDescriptionCol, queryCatalogDescriptionTag, types.StringKind, false),
 )
 
 var queryCatalogSch = schema.SchemaFromCols(queryCatalogCols)
@@ -86,9 +98,11 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 		return nil, err
 	}
 
+	order := getMaxQueryOrder(data, ctx) + 1
+
 	// Use the last 12 hex digits of the uuid for the ID.
 	id := uid.String()[24:]
-	r, err := newQueryCatalogRow(id, name, query, description)
+	r, err := newQueryCatalogRow(id, order, name, query, description)
 	if err != nil {
 		return nil, err
 	}
@@ -109,11 +123,29 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 	return doltdb.PutTable(ctx, root, root.VRW(), DoltQueryCatalogTableName, newTable)
 }
 
-func newQueryCatalogRow(id, name, query, description string) (row.Row, error) {
+// Returns the largest order entry in the catalog
+func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
+	maxOrder := uint(0)
+	data.IterAll(ctx, func(key, value types.Value) error {
+		r, _ := row.FromNoms(queryCatalogSch, key.(types.Tuple), value.(types.Tuple))
+		orderVal, ok := r.GetColVal(1)
+		if ok {
+			order := uint(orderVal.(types.Uint))
+			if order > maxOrder {
+				maxOrder = order
+			}
+		}
+		return nil
+	})
+	return maxOrder
+}
+
+func newQueryCatalogRow(id string, order uint, name, query, description string) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
-	taggedVals[0] = types.String(id)
-	taggedVals[1] = types.String(name)
-	taggedVals[2] = types.String(query)
-	taggedVals[3] = types.String(description)
+	taggedVals[queryCatalogIdTag] = types.String(id)
+	taggedVals[queryCatalogOrderTag] = types.Uint(order)
+	taggedVals[queryCatalogNameTag] = types.String(name)
+	taggedVals[queryCatalogQueryTag] = types.String(query)
+	taggedVals[queryCatalogDescriptionTag] = types.String(description)
 	return row.New(types.Format_Default, queryCatalogSch, taggedVals)
 }

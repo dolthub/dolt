@@ -146,6 +146,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	saveMessage := apr.GetValueOrDefault(messageFlag, "")
 	saveName := apr.GetValueOrDefault(nameFlag, "")
 
+	err := validateSqlArgs(apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
 		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
@@ -161,13 +166,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage)
 			}
 			return 0
-		}
-	} else {
-		if saveQuery {
-			return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: --save is only valid with --query").Build(), usage)
-		}
-		if len(args) > 0 {
-			return HandleVErrAndExitCode(errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build(), usage)
 		}
 	}
 
@@ -214,6 +212,38 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 	default:
 		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
 	}
+}
+
+func validateSqlArgs(apr *argparser.ArgParseResults) error {
+	_, query := apr.GetValue(queryFlag)
+	_, save := apr.GetValue(saveFlag)
+	_, msg := apr.GetValue(messageFlag)
+	_, name := apr.GetValue(nameFlag)
+
+	if len(apr.Args()) > 0 && !query {
+		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
+	}
+
+	if query {
+		if !save && msg {
+			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q and --save|-s").Build()
+		}
+		if !save && name {
+			return errhand.BuildDError("Invalid Argument: --name|-n is only used with --query|-q and --save|-s").Build()
+		}
+	} else {
+		if save {
+			return errhand.BuildDError("Invalid Argument: --save|-s is only used with --query|-q").Build()
+		}
+		if msg {
+			return errhand.BuildDError("Invalid Argument: --message|-m is only used with --query|-q").Build()
+		}
+		if name {
+			return errhand.BuildDError("Invalid Argument: --name|-n is only used with --query|-q").Build()
+		}
+	}
+
+	return nil
 }
 
 // Saves the query given to the catalog with the name and message given.
