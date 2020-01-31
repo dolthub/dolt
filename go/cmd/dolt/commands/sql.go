@@ -19,8 +19,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"io"
 	"os"
 	"path/filepath"
@@ -43,8 +41,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
@@ -194,7 +194,7 @@ func getFormat(format string) (resultFormat, errhand.VerboseError) {
 	case "csv":
 		return formatCsv, nil
 	default:
-		return formatTabular,  errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
+		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
 	}
 }
 
@@ -590,6 +590,7 @@ func mergeInsertResultIntoStats(rowIter sql.RowIter, s *stats) error {
 }
 
 type resultFormat byte
+
 const (
 	formatTabular resultFormat = iota
 	formatCsv
