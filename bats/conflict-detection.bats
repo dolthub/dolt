@@ -233,7 +233,6 @@ SQL
     run dolt merge add-table-one
     [ $status -eq 0 ]
     [[ "$output" =~ "Updating" ]] || false
-    skip "should have a merge summary section that says 1 table changed"
     [[ "$output" =~ "1 tables changed" ]] || false
     [[ ! "$output" =~ "CONFLICT" ]] || false
 }
