@@ -20,7 +20,7 @@ type CSVFileInfo struct {
 	Delim string
 	// HasHeaderLine says if the csv has a header line which contains the names of the columns
 	HasHeaderLine bool
-	// Columns can be provided if you no the columns and their order in the csv
+	// Columns can be provided if you know the columns and their order in the csv
 	Columns []string
 	// EscapeQuotes says whether quotes should be escaped when parsing the csv
 	EscapeQuotes bool
