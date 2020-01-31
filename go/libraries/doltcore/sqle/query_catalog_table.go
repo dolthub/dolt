@@ -31,7 +31,7 @@ const (
 	QueryCatalogIdCol = "id"
 
 	// QueryCatalogOrderCol is the column containing the order of the queries in the catalog
-	QueryCatalogOrderCol = "order"
+	QueryCatalogOrderCol = "display_order"
 
 	// QueryCatalogNameCol is the name of the column containing the name of a query in the catalog
 	QueryCatalogNameCol = "name"
