@@ -67,12 +67,50 @@ teardown() {
 
 }
 
-@test "query dolt_log" {
+@test "query dolt_log system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Added test table"
     run dolt sql -q "select * from dolt_log"
     [ $status -eq 0 ]
     [[ "$output" =~ "Added test table" ]] || false
+    run dolt sql -q "select * from dolt_log where message !='Added test table'"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "Added test table" ]] || false
 }
 
+@test "query dolt_diff_ system table" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Added test table"
+    dolt sql -q "insert into test values (0,0)"
+    dolt add test
+    dolt commit -m "Added (0,0) row"
+    dolt sql -q	"insert into test values (1,1)"
+    dolt add test
+    dolt commit	-m "Added (1,1) row"
+    run dolt sql -q "select * from dolt_diff_test"
+    [ $status -eq 0 ]
+    skip "This returns no data right now."
+}
+
+@test "query dolt_history_ system table" {
+    dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
+    dolt add test
+    dolt commit -m "Added test table"
+    dolt sql -q	"insert into test values (0,0)"
+    dolt add test
+    dolt commit	-m "Added (0,0) row"
+    dolt sql -q "insert into test values (1,1)"
+    dolt add test
+    dolt commit -m "Added (1,1) row"
+    run dolt sql -q "select * from dolt_history_test"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 7 ]
+    run dolt sql -q "select * from dolt_history_test where pk=1"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    run dolt sql -q "select * from dolt_history_test where pk=0"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+}
