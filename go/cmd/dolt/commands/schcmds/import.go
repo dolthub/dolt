@@ -183,6 +183,14 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		return errhand.BuildDError("error: file '%s' not found.", fileName).Build()
 	}
 
+	if !doltdb.IsValidTableName(tblName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names must match the regular expression:",
+			tblName, doltdb.TableNameRegexStr).Build()
+	} else if doltdb.IsSystemTable(tblName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names beginning with `dolt_` are reserved for internal use",
+			tblName).Build()
+	}
+
 	op := createOp
 	if !apr.ContainsAny(createFlag, updateFlag, replaceFlag) {
 		return errhand.BuildDError("error: missing required parameter.").AddDetails("Must provide exactly one of the operation flags '--create', or '--replace'").SetPrintUsage().Build()

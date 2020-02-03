@@ -160,6 +160,11 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			color.RedString("'%s' is not a valid table name\n", tableName),
 			"table names must match the regular expression:", doltdb.TableNameRegexStr)
 		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
+	} else if doltdb.IsSystemTable(tableName) {
+		cli.PrintErrln(
+			color.RedString("'%s' is not a valid table name\n", tableName),
+			"table names beginning with dolt_ are reserved for internal use")
+		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 	}
 
 	path := ""
