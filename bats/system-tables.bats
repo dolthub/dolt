@@ -86,9 +86,9 @@ teardown() {
     dolt sql -q "insert into test values (0,0)"
     dolt add test
     dolt commit -m "Added (0,0) row"
-    dolt sql -q	"insert into test values (1,1)"
+    dolt sql -q "insert into test values (1,1)"
     dolt add test
-    dolt commit	-m "Added (1,1) row"
+    dolt commit -m "Added (1,1) row"
     run dolt sql -q "select * from dolt_diff_test"
     [ $status -eq 0 ]
     skip "This returns no data right now."
@@ -98,9 +98,9 @@ teardown() {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
     dolt commit -m "Added test table"
-    dolt sql -q	"insert into test values (0,0)"
+    dolt sql -q "insert into test values (0,0)"
     dolt add test
-    dolt commit	-m "Added (0,0) row"
+    dolt commit -m "Added (0,0) row"
     dolt sql -q "insert into test values (1,1)"
     dolt add test
     dolt commit -m "Added (1,1) row"
