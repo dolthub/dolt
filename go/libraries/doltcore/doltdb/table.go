@@ -17,7 +17,9 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"regexp"
+	"strings"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
@@ -36,7 +38,19 @@ const (
 
 	// TableNameRegexStr is the regular expression that valid tables must match.
 	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
+
+	// We reserve all tables that begin with dolt_ for system use.
+	DoltNamespace = "dolt_"
+
+	// DoltQueryCatalogTableName is the name of the query catalog table
+	DoltQueryCatalogTableName = "dolt_query_catalog"
 )
+
+// The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
+// for the purposes of the dolt command line.
+var userSpaceReservedTables = set.NewStrSet([]string{
+	DoltQueryCatalogTableName,
+})
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 
@@ -44,6 +58,18 @@ var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
 	return tableNameRegex.MatchString(name)
+}
+
+// HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace. Users should
+// not be able to create tables in this reserved namespace.
+func HasDoltPrefix(s string) bool {
+	return strings.HasPrefix(s, DoltNamespace)
+}
+
+// IsSystemTable returns whether the table name given is a system table that should not be included in command line
+// output (e.g. dolt status) by default.
+func IsSystemTable(name string) bool {
+	return HasDoltPrefix(name) && !userSpaceReservedTables.Contains(name)
 }
 
 // Table is a struct which holds row data, as well as a reference to it's schema.

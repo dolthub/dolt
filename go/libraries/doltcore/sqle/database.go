@@ -37,8 +37,6 @@ type batchMode bool
 const (
 	batched batchMode = true
 	single  batchMode = false
-
-	DoltNamespace = "dolt_"
 )
 
 // Database implements sql.Database for a dolt DB.
@@ -166,16 +164,11 @@ func (db *Database) GetAllTableNames(ctx context.Context) ([]string, error) {
 func filterDoltInternalTables(tblNames []string) []string {
 	result := []string{}
 	for _, tbl := range tblNames {
-		if !HasDoltPrefix(tbl) {
+		if !doltdb.HasDoltPrefix(tbl) {
 			result = append(result, tbl)
 		}
 	}
 	return result
-}
-
-// HasDoltPrefix returns a boolean whether or not the provided string is prefixed with the DoltNamespace.
-func HasDoltPrefix(s string) bool {
-	return strings.HasPrefix(s, DoltNamespace)
 }
 
 // Root returns the root value for the database.
@@ -215,8 +208,11 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 
 // CreateTable creates a table with the name and schema given.
 func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
+	if doltdb.HasDoltPrefix(tableName) {
+		return fmt.Errorf("Tables beginning with dolt_ are reserved for system use")
+	}
 
-	if !doltdb.IsValidTableName(tableName) || tableName == doltdb.DocTableName {
+	if !doltdb.IsValidTableName(tableName) {
 		return fmt.Errorf("Invalid table name: '%v'", tableName)
 	}
 

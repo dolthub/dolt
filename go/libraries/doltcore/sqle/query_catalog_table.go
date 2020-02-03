@@ -24,9 +24,6 @@ import (
 )
 
 const (
-	// DoltQueryCatalogTableName is the name of the query catalog table
-	DoltQueryCatalogTableName = "dolt_query_catalog"
-
 	// QueryCatalogIdCol is the name of the primary key column of the query catalog table
 	QueryCatalogIdCol = "id"
 
@@ -64,13 +61,13 @@ var queryCatalogSch = schema.SchemaFromCols(queryCatalogCols)
 
 // Creates the query catalog table if it doesn't exist.
 func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
-	_, ok, err := root.GetTable(ctx, DoltQueryCatalogTableName)
+	_, ok, err := root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
 	if err != nil {
 		return nil, err
 	}
 
 	if !ok {
-		return root.CreateEmptyTable(ctx, DoltQueryCatalogTableName, queryCatalogSch)
+		return root.CreateEmptyTable(ctx, doltdb.DoltQueryCatalogTableName, queryCatalogSch)
 	}
 
 	return root, nil
@@ -83,7 +80,7 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 		return nil, err
 	}
 
-	tbl, _, err := root.GetTable(ctx, DoltQueryCatalogTableName)
+	tbl, _, err := root.GetTable(ctx, doltdb.DoltQueryCatalogTableName)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +117,7 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 		return nil, err
 	}
 
-	return doltdb.PutTable(ctx, root, root.VRW(), DoltQueryCatalogTableName, newTable)
+	return doltdb.PutTable(ctx, root, root.VRW(), doltdb.DoltQueryCatalogTableName, newTable)
 }
 
 // Returns the largest order entry in the catalog
