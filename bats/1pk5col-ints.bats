@@ -554,7 +554,7 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [ "${#lines[@]}" -eq 2 ]
     run dolt table export test export.csv
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "Data already exists" ]] || false
+    [[ "$output" =~ "export.csv already exists" ]] || false
     run dolt table export -f test export.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
