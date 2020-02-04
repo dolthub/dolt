@@ -16,6 +16,8 @@ package tblcmds
 
 import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
+	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 )
 
 var Commands = cli.NewSubCommandHandler("table", "Commands for copying, renaming, deleting, and exporting tables.", []cli.Command{
@@ -25,3 +27,14 @@ var Commands = cli.NewSubCommandHandler("table", "Commands for copying, renaming
 	MvCmd{},
 	CpCmd{},
 })
+
+// Validates the given table name for creation as a user table.
+func ValidateTableNameForCreate(tableName string) errhand.VerboseError {
+	if !doltdb.IsValidTableName(tableName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names must match the regular expression: %s",
+			tableName, doltdb.TableNameRegexStr).Build()
+	} else if doltdb.IsSystemTable(tableName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names beginning with dolt_ are reserved for internal use", tableName).Build()
+	}
+	return nil
+}

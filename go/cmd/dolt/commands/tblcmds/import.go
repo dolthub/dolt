@@ -25,7 +25,6 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/commands"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/mvdata"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
@@ -197,11 +196,8 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	}
 
 	tableName := apr.Arg(0)
-	if !doltdb.IsValidTableName(tableName) {
-		return errhand.BuildDError("'%s' is not a valid table name\ntable names must match the regular expression: %s",
-			tableName, doltdb.TableNameRegexStr).Build()
-	} else if doltdb.IsSystemTable(tableName) {
-		return errhand.BuildDError("'%s' is not a valid table name\ntable names beginning with dolt_ are reserved for internal use", tableName).Build()
+	if err := ValidateTableNameForCreate(tableName); err != nil {
+		return err
 	}
 
 	path := ""
