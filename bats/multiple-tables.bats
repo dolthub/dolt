@@ -74,7 +74,7 @@ teardown() {
     [ "${#lines[@]}" -eq 2 ]
 }
 
-@test "dolt add --all and dolt add . adds all changes" {
+@test "dolt add --all, dolt add -A, and dolt add . adds all changes" {
     dolt sql -q "insert into test1 values (0, 1, 2, 3, 4, 5)"
     dolt sql -q "insert into test2 values (0, 1, 2, 3, 4, 5)"
     dolt add --all
@@ -87,6 +87,12 @@ teardown() {
     run dolt status
     [[ ! "$output" =~ "Changes to be committed" ]] || false
     [[ "$output" =~ "Untracked files" ]] || false
+    run dolt add -A
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+    run dolt status
+    [[ "$output" =~ "Changes to be committed" ]] || false
+    [[ ! "$output" =~ "Untracked files" ]] || false
     run dolt add .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
