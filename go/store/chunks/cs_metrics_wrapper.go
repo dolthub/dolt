@@ -14,6 +14,7 @@ type CSMetrics struct {
 	TotalChunkHasChecks  int
 	UniqueChunkHasChecks int
 	UniquePuts           int
+	Delegate             interface{}
 }
 
 // NewCSMetrics creates a CSMetrics instance
@@ -24,6 +25,7 @@ func NewCSMetrics(csMW *CSMetricWrapper) CSMetrics {
 		TotalChunkHasChecks:  csMW.totalChunkHasChecks,
 		UniqueChunkHasChecks: len(csMW.uniqueChunkHasChecks),
 		UniquePuts:           len(csMW.uniquePuts),
+		Delegate:             csMW.cs.Stats(),
 	}
 }
 
