@@ -68,6 +68,11 @@ func TestCreateTable(t *testing.T) {
 			expectedErr: "Invalid table name",
 		},
 		{
+			name:        "Test reserved table name",
+			query:       "create table dolt_table (id int primary key, age int)",
+			expectedErr: "Invalid table name",
+		},
+		{
 			name:        "Test bad table name begins with number",
 			query:       "create table 1testTable (id int primary key, age int)",
 			expectedErr: "syntax error",
@@ -896,6 +901,16 @@ func TestRenameTable(t *testing.T) {
 			name:        "table not found",
 			query:       "rename table notFound to newNowFound",
 			expectedErr: "table not found: notFound",
+		},
+		{
+			name:        "invalid table name",
+			query:       "rename table people to `123`",
+			expectedErr: "Invalid table name",
+		},
+		{
+			name:        "reserved table name",
+			query:       "rename table people to dolt_table",
+			expectedErr: "Invalid table name",
 		},
 		{
 			name:        "table name in use",

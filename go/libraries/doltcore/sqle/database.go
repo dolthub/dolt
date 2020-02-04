@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"gopkg.in/src-d/go-errors.v1"
 	"io"
 	"strings"
 
@@ -29,10 +30,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/alterschema"
 )
 
-var _ sql.Database = (*Database)(nil)
-var _ sql.TableRenamer = (*Database)(nil)
-
 type batchMode bool
+
+var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
+var ErrReservedTableName = errors.NewKind("Invalid table name %s. Table names beginning with `dolt_` are reserved for internal use")
 
 const (
 	batched batchMode = true
@@ -48,6 +49,11 @@ type Database struct {
 	batchMode batchMode
 	tables    map[string]*DoltTable
 }
+
+var _ sql.Database = (*Database)(nil)
+var _ sql.TableDropper = (*Database)(nil)
+var _ sql.TableCreator = (*Database)(nil)
+var _ sql.TableRenamer = (*Database)(nil)
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *env.RepoState) *Database {
@@ -209,11 +215,11 @@ func (db *Database) DropTable(ctx *sql.Context, tableName string) error {
 // CreateTable creates a table with the name and schema given.
 func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.Schema) error {
 	if doltdb.HasDoltPrefix(tableName) {
-		return fmt.Errorf("Tables beginning with dolt_ are reserved for system use")
+		return ErrReservedTableName.New(tableName)
 	}
 
 	if !doltdb.IsValidTableName(tableName) {
-		return fmt.Errorf("Invalid table name: '%v'", tableName)
+		return ErrInvalidTableName.New(tableName)
 	}
 
 	if exists, err := db.root.HasTable(ctx, tableName); err != nil {
@@ -239,6 +245,14 @@ func (db *Database) CreateTable(ctx *sql.Context, tableName string, schema sql.S
 
 // RenameTable implements sql.TableRenamer
 func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
+	if doltdb.HasDoltPrefix(newName) {
+		return ErrReservedTableName.New(newName)
+	}
+
+	if !doltdb.IsValidTableName(newName) {
+		return ErrInvalidTableName.New(newName)
+	}
+
 	root, err := alterschema.RenameTable(ctx, db.Root(), oldName, newName)
 	if err != nil {
 		return err
