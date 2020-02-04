@@ -81,6 +81,24 @@ teardown() {
     [[ "$output" =~ "\`uuid\` LONGTEXT" ]] || false
 }
 
+@test "schema import with invalid names" {
+    run dolt schema import -c --pks=pk 123 `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    run dolt schema import -c --pks=pk dolt_docs `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+    run dolt schema import -c --pks=pk dolt_query_catalog `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+    run dolt schema import -c --pks=pk dolt_reserved `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "not a valid table name" ]] || false
+    [[ "$output" =~ "reserved" ]] || false
+}
+
 @test "schema import with multiple primary keys" {
     run dolt schema import -c --pks=pk1,pk2 test `batshelper 2pk5col-ints.csv`
     [ "$status" -eq 0 ]
