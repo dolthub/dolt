@@ -16,6 +16,7 @@ package dbfactory
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -59,6 +60,5 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, err
 	}
 
-	return datas.NewDatabase(st), nil
-
+	return datas.NewDatabase(chunks.NewCSMetricWrapper(st)), nil
 }

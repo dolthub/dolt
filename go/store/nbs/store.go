@@ -282,7 +282,13 @@ func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 
 	mm := makeManifestManager(fileManifest{dir})
 	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return nbs, nil
 }
 
 func checkDir(dir string) error {
