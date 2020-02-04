@@ -9,21 +9,21 @@ import (
 
 // CSMetrics contains the metrics aggregated by a CSMetricsWrapper
 type CSMetrics struct {
-	totalChunkGets       int
-	uniqueGets           int
-	totalChunkHasChecks  int
-	uniqueChunkHasChecks int
-	uniquePuts           int
+	TotalChunkGets       int
+	UniqueGets           int
+	TotalChunkHasChecks  int
+	UniqueChunkHasChecks int
+	UniquePuts           int
 }
 
 // NewCSMetrics creates a CSMetrics instance
 func NewCSMetrics(csMW *CSMetricWrapper) CSMetrics {
 	return CSMetrics{
-		totalChunkGets:       csMW.totalChunkGets,
-		uniqueGets:           len(csMW.uniqueGets),
-		totalChunkHasChecks:  csMW.totalChunkHasChecks,
-		uniqueChunkHasChecks: len(csMW.uniqueChunkHasChecks),
-		uniquePuts:           len(csMW.uniquePuts),
+		TotalChunkGets:       csMW.totalChunkGets,
+		UniqueGets:           len(csMW.uniqueGets),
+		TotalChunkHasChecks:  csMW.totalChunkHasChecks,
+		UniqueChunkHasChecks: len(csMW.uniqueChunkHasChecks),
+		UniquePuts:           len(csMW.uniquePuts),
 	}
 }
 
@@ -35,7 +35,7 @@ func (csm CSMetrics) String() string {
 		"totalChunkHasChecks":  %d,
 		"uniqueChunkHasChecks": %d,
 		"uniquePuts":           %d,
-	}`, csm.totalChunkGets, csm.uniqueGets, csm.totalChunkHasChecks, csm.uniqueChunkHasChecks, csm.uniquePuts)
+	}`, csm.TotalChunkGets, csm.UniqueGets, csm.TotalChunkHasChecks, csm.UniqueChunkHasChecks, csm.UniquePuts)
 }
 
 // CSMetricWrapper is a ChunkStore implementation that wraps a ChunkStore, and collects metrics on the calls.
@@ -132,7 +132,7 @@ func (csMW *CSMetricWrapper) Commit(ctx context.Context, current, last hash.Hash
 // ChunkStore instance. The type is implementation-dependent, and impls
 // may return nil
 func (csMW *CSMetricWrapper) Stats() interface{} {
-	return
+	return NewCSMetrics(csMW)
 }
 
 // StatsSummary may return a string containing summarized statistics for
