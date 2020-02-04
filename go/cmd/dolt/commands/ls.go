@@ -16,23 +16,38 @@ package commands
 
 import (
 	"context"
+	"io"
 	"sort"
-
-	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"strings"
 
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/errhand"
+	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/argparser"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/funcitr"
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
+)
+
+const (
+	systemFlag = "system"
 )
 
 var lsShortDesc = "List tables"
-var lsLongDesc = "Lists the tables within a commit.  By default will list the tables in the current working set" +
-	"but if a commit is specified it will list the tables in that commit."
+var lsLongDesc = "With no arguments lists the tables in the current working set but if a commit is specified it will list " +
+	"the tables in that commit.  If the --verbose flag is provided a row count and a hash of the table will also be " +
+	"displayed.\n" +
+	"\n" +
+	"If the --system flag is supplied this will show the dolt system tables which are queryable with SQL.  Some system " +
+	"tables can be queried even if they are not in the working set by specifying appropriate parameters in the SQL " +
+	"queries.  To see these tables too you may pass the --verbose flag.\n" +
+	"\n" +
+	"If the --all flag is supplied both user and system tables will be printed."
 var lsSynopsis = []string{
-	"[<commit>]",
+	"[--options] [<commit>]",
 }
 
 type LsCmd struct{}
@@ -56,6 +71,8 @@ func (cmd LsCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) err
 func (cmd LsCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(verboseFlag, "v", "show the hash of the table")
+	ap.SupportsFlag(systemFlag, "s", "show system tables")
+	ap.SupportsFlag(allFlag, "a", "show system tables")
 	return ap
 }
 
@@ -86,16 +103,27 @@ func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 	}
 
 	if verr == nil {
-		verr = printTables(ctx, root, label, apr.Contains(verboseFlag))
-		return 0
+		if !apr.Contains(systemFlag) || apr.Contains(allFlag) {
+			verr = printUserTables(ctx, root, label, apr.Contains(verboseFlag))
+			cli.Println()
+		}
+
+		if verr == nil && (apr.Contains(systemFlag) || apr.Contains(allFlag)) {
+			verr = printSystemTables(ctx, root, dEnv.DoltDB, apr.Contains(verboseFlag))
+			cli.Println()
+		}
 	}
 
-	cli.PrintErrln(verr.Verbose())
-	return 1
+	return HandleVErrAndExitCode(verr, usage)
 }
 
-func printTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
+func getUserTableNames(root *doltdb.RootValue, ctx context.Context) ([]string, error) {
 	tblNms, err := root.GetTableNames(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	tblNames := []string{}
 	for _, name := range tblNms {
 		if name != doltdb.DocTableName {
@@ -103,11 +131,17 @@ func printTables(ctx context.Context, root *doltdb.RootValue, label string, verb
 		}
 	}
 
+	sort.Strings(tblNames)
+
+	return tblNames, nil
+}
+
+func printUserTables(ctx context.Context, root *doltdb.RootValue, label string, verbose bool) errhand.VerboseError {
+	tblNames, err := getUserTableNames(root, ctx)
+
 	if err != nil {
 		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
 	}
-
-	sort.Strings(tblNames)
 
 	if len(tblNames) == 0 {
 		cli.Println("No tables in", label)
@@ -139,6 +173,84 @@ func printTables(ctx context.Context, root *doltdb.RootValue, label string, verb
 		} else {
 			cli.Println("\t", tbl)
 		}
+	}
+
+	return nil
+}
+
+func printSystemTables(ctx context.Context, root *doltdb.RootValue, ddb *doltdb.DoltDB, verbose bool) errhand.VerboseError {
+	tblNames, err := getUserTableNames(root, ctx)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to get tables").AddCause(err).Build()
+	}
+
+	printWorkingSetSysTables(tblNames)
+
+	if verbose {
+		return printSysTablesNotInWorkingSet(err, ctx, ddb, tblNames)
+	}
+
+	return nil
+}
+
+func printWorkingSetSysTables(tblNames []string) {
+	diffTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltDiffTablePrefix + s })
+	histTables := funcitr.MapStrings(tblNames, func(s string) string { return sqle.DoltHistoryTablePrefix + s })
+
+	systemTables := []string{sqle.LogTableName, doltdb.DocTableName}
+	systemTables = append(systemTables, diffTables...)
+	systemTables = append(systemTables, histTables...)
+
+	cli.Println("System tables:")
+	cli.Println("\t" + strings.Join(systemTables, "\n\t"))
+}
+
+func printSysTablesNotInWorkingSet(err error, ctx context.Context, ddb *doltdb.DoltDB, tblNames []string) errhand.VerboseError {
+	cmItr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
+
+	if err != nil {
+		return errhand.BuildDError("error: failed to read history").AddCause(err).Build()
+	}
+
+	activeTableSet := set.NewStrSet(tblNames)
+	deletedTableSet := set.NewStrSet([]string{})
+	for {
+		_, cm, err := cmItr.Next(ctx)
+
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return errhand.BuildDError("error: failed to iterate through history").AddCause(err).Build()
+		}
+
+		currRoot, err := cm.GetRootValue()
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to read root from db.").AddCause(err).Build()
+		}
+
+		currTblNames, err := currRoot.GetTableNames(ctx)
+
+		if err != nil {
+			return errhand.BuildDError("error: failed to read tables").AddCause(err).Build()
+		}
+
+		_, missing := activeTableSet.IntersectAndMissing(currTblNames)
+		deletedTableSet.Add(missing...)
+	}
+
+	if deletedTableSet.Size() > 0 {
+		deletedSlice := deletedTableSet.AsSlice()
+		sort.Strings(deletedSlice)
+
+		const ncbPrefix = "(not on current branch) "
+		diffTables := funcitr.MapStrings(deletedSlice, func(s string) string { return ncbPrefix + sqle.DoltDiffTablePrefix + s })
+		histTables := funcitr.MapStrings(deletedSlice, func(s string) string { return ncbPrefix + sqle.DoltHistoryTablePrefix + s })
+
+		systemTables := append(histTables, diffTables...)
+
+		cli.Println("\t" + strings.Join(systemTables, "\n\t"))
 	}
 
 	return nil

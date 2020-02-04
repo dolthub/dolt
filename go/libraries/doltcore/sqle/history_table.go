@@ -179,7 +179,7 @@ func newRowItrForTableAtCommit(ctx context.Context, h hash.Hash, cm *doltdb.Comm
 		return nil, err
 	}
 
-	tbl, ok, err := root.GetTable(ctx, tblName)
+	tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
 
 	if err != nil {
 		return nil, err

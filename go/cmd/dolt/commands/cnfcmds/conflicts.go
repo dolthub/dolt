@@ -18,7 +18,7 @@ import (
 	"github.com/liquidata-inc/dolt/go/cmd/dolt/cli"
 )
 
-var Commands = cli.NewSubCommandHandler("conflicts", "Send events logs to server.", []cli.Command{
+var Commands = cli.NewSubCommandHandler("conflicts", "Commands for viewing and resolving merge conflicts.", []cli.Command{
 	CatCmd{},
 	ResolveCmd{},
 })

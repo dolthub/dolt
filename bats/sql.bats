@@ -315,3 +315,33 @@ teardown() {
     [ $status -eq 1 ]
     [ "$output" = "table not found: poop" ]
 }
+
+@test "explain simple select query" {
+    run dolt sql -q "explain select * from one_pk"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "plan" ]] || false
+    [[ "$output" =~ "one_pk" ]] || false
+}
+
+@test "explain simple query with where clause" {
+    run dolt sql -q "explain select * from one_pk where pk=0"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Filter" ]] || false
+}
+
+@test "explain simple join" {
+    run dolt sql -q "explain select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "InnerJoin" ]] || false
+}
+
+@test "sql replace count" {
+    skip "right now we always count a replace as a delete and insert when we shouldn't"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v BIGINT);"
+    run dolt sql -q "REPLACE INTO test VALUES (1, 1);"
+    [ $status -eq 0 ]
+    [[ "${lines[3]}" =~ " 1 " ]] || false
+    run dolt sql -q "REPLACE INTO test VALUES (1, 2);"
+    [ $status -eq 0 ]
+    [[ "${lines[3]}" =~ " 2 " ]] || false
+}

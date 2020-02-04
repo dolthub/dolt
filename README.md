@@ -34,8 +34,8 @@ Valid commands for dolt are
              version - Displays the current Dolt cli version.
               config - Dolt configuration.
                   ls - List tables in the working set.
-              schema - Commands for showing, and modifying table schemas.
-               table - Commands for creating, reading, updating, and deleting tables.
+              schema - Commands for showing and importing table schemas.
+               table - Commands for copying, renaming, deleting, and exporting tables.
            conflicts - Commands for viewing and resolving merge conflicts.
 ```
 

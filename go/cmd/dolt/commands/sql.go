@@ -41,8 +41,10 @@ import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	dsql "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql"
 	dsqle "github.com/liquidata-inc/dolt/go/libraries/doltcore/sqle"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/csv"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/table/untyped/tabular"
@@ -70,10 +72,12 @@ Known limitations:
 var sqlSynopsis = []string{
 	"",
 	"-q <query>",
+	"-q <query> -r <result format>",
 }
 
 const (
 	queryFlag  = "query"
+	formatFlag = "result-format"
 	welcomeMsg = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -100,6 +104,7 @@ func (cmd SqlCmd) CreateMarkdown(fs filesys.Filesys, path, commandStr string) er
 func (cmd SqlCmd) createArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(queryFlag, "q", "SQL query to run", "Runs a single query and exits")
+	ap.SupportsString(formatFlag, "r", "Result output format", "How to format result output. Valid values are tabular, csv. Defaults to tabular. ")
 	return ap
 }
 
@@ -121,11 +126,19 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
+	format := formatTabular
+	if formatSr, ok := apr.GetValue(formatFlag); ok {
+		format, verr = getFormat(formatSr)
+		if verr != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(verr), usage)
+		}
+	}
+
 	origRoot := root
 
 	// run a single command and exit
 	if query, ok := apr.GetValue(queryFlag); ok {
-		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
+		se, err := newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -145,7 +158,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	var se *sqlEngine
 	// Windows has a bug where STDIN can't be statted in some cases, see https://github.com/golang/go/issues/33570
 	if (err != nil && osutil.IsWindows) || (fi.Mode()&os.ModeCharDevice) == 0 {
-		se, err = newSqlEngine(ctx, dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
+		se, err = newSqlEngine(ctx, dEnv, dsqle.NewBatchedDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -156,7 +169,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	} else if err != nil {
 		HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 	} else {
-		se, err = newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState))
+		se, err = newSqlEngine(ctx, dEnv, dsqle.NewDatabase("dolt", root, dEnv.DoltDB, dEnv.RepoState), format)
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
@@ -172,6 +185,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	}
 
 	return 0
+}
+
+func getFormat(format string) (resultFormat, errhand.VerboseError) {
+	switch strings.ToLower(format) {
+	case "tabular":
+		return formatTabular, nil
+	case "csv":
+		return formatCsv, nil
+	default:
+		return formatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular,csv").Build()
+	}
 }
 
 // ScanStatements is a split function for a Scanner that returns each SQL statement in the input as a token. It doesn't
@@ -458,7 +482,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 	case *sqlparser.Select, *sqlparser.Insert, *sqlparser.Update, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain:
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
-			err = prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
+			err = se.prettyPrintResults(ctx, se.ddb.ValueReadWriter().Format(), sqlSch, rowIter)
 		}
 		return err
 	case *sqlparser.Delete:
@@ -468,7 +492,7 @@ func processQuery(ctx context.Context, query string, se *sqlEngine) error {
 		}
 		sqlSch, rowIter, err := se.query(ctx, query)
 		if err == nil {
-			err = prettyPrintResults(ctx, se.ddb.Format(), sqlSch, rowIter)
+			err = se.prettyPrintResults(ctx, se.ddb.Format(), sqlSch, rowIter)
 		}
 		return err
 	case *sqlparser.DDL:
@@ -565,14 +589,22 @@ func mergeInsertResultIntoStats(rowIter sql.RowIter, s *stats) error {
 	}
 }
 
+type resultFormat byte
+
+const (
+	formatTabular resultFormat = iota
+	formatCsv
+)
+
 type sqlEngine struct {
-	sdb    *dsqle.Database
-	ddb    *doltdb.DoltDB
-	engine *sqle.Engine
+	sdb          *dsqle.Database
+	ddb          *doltdb.DoltDB
+	engine       *sqle.Engine
+	resultFormat resultFormat
 }
 
 // sqlEngine packages up the context necessary to run sql queries against sqle.
-func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, db *dsqle.Database) (*sqlEngine, error) {
+func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, db *dsqle.Database, format resultFormat) (*sqlEngine, error) {
 	engine := sqle.NewDefault()
 	engine.AddDatabase(db)
 
@@ -587,7 +619,7 @@ func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv, db *dsqle.Database) (*
 		return nil, err
 	}
 
-	return &sqlEngine{db, dEnv.DoltDB, engine}, nil
+	return &sqlEngine{db, dEnv.DoltDB, engine, format}, nil
 }
 
 // Execute a SQL statement and return values for printing.
@@ -597,7 +629,7 @@ func (se *sqlEngine) query(ctx context.Context, query string) (sql.Schema, sql.R
 }
 
 // Pretty prints the output of the new SQL engine
-func prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
+func (se *sqlEngine) prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sql.Schema, rowIter sql.RowIter) error {
 	var chanErr error
 	doltSch, err := dsqle.SqlSchemaToDoltResultSchema(sqlSch)
 	if err != nil {
@@ -635,13 +667,24 @@ func prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sq
 	nullPrinter := nullprinter.NewNullPrinter(untypedSch)
 	p.AddStage(pipeline.NewNamedTransform(nullprinter.NULL_PRINTING_STAGE, nullPrinter.ProcessRow))
 
-	autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
-	p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
+	if se.resultFormat == formatTabular {
+		autoSizeTransform := fwt.NewAutoSizingFWTTransformer(untypedSch, fwt.PrintAllWhenTooLong, 10000)
+		p.AddStage(pipeline.NamedTransform{Name: fwtStageName, Func: autoSizeTransform.TransformToFWT})
+	}
 
 	// Redirect output to the CLI
 	cliWr := iohelp.NopWrCloser(cli.CliOut)
 
-	wr, err := tabular.NewTextTableWriter(cliWr, untypedSch)
+	var wr table.TableWriteCloser
+
+	switch se.resultFormat {
+	case formatTabular:
+		wr, err = tabular.NewTextTableWriter(cliWr, untypedSch)
+	case formatCsv:
+		wr, err = csv.NewCSVWriter(cliWr, untypedSch, csv.NewCSVInfo())
+	default:
+		panic("unimplemented output format type")
+	}
 
 	if err != nil {
 		return err
@@ -670,7 +713,9 @@ func prettyPrintResults(ctx context.Context, nbf *types.NomsBinFormat, sqlSch sq
 	}
 
 	// Insert the table header row at the appropriate stage
-	p.InjectRow(fwtStageName, r)
+	if se.resultFormat == formatTabular {
+		p.InjectRow(fwtStageName, r)
+	}
 
 	p.Start()
 	if err := p.Wait(); err != nil {
@@ -710,7 +755,7 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 					if err != nil {
 						return false
 					}
-					_ = prettyPrintResults(ctx, root.VRW().Format(), sql.Schema{{Name: "updated", Type: sql.Uint64}}, printRowIter)
+					_ = se.prettyPrintResults(ctx, root.VRW().Format(), sql.Schema{{Name: "updated", Type: sql.Uint64}}, printRowIter)
 					se.sdb.SetRoot(newRoot)
 					return true
 				}
