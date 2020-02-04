@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -33,6 +35,36 @@ const skipBrokenInsert = true
 
 func TestExecuteInsert(t *testing.T) {
 	for _, test := range BasicInsertTests {
+		t.Run(test.Name, func(t *testing.T) {
+			testInsertQuery(t, test)
+		})
+	}
+}
+
+var systemTableInsertTests = []InsertTest {
+	{
+		Name: "insert into dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			env.DoltDocsSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		InsertQuery: "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
+		ExpectedErr: "cannot insert into table",
+	},
+	{
+		Name: "insert into dolt_query_catalog",
+		AdditionalSetup: CreateTableFn("dolt_query_catalog",
+			DoltQueryCatalogSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
+		SelectQuery:  "select * from dolt_query_catalog",
+		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
+			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description"))),
+		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+	},
+}
+
+func TestExecuteIntoSystemTables(t *testing.T) {
+	for _, test := range systemTableInsertTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testInsertQuery(t, test)
 		})

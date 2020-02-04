@@ -16,13 +16,21 @@ package env
 
 import (
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 var initialReadme = "This is a repository level README. Either edit it, add it, and commit it, or remove the file."
 var initialLicense = "This is a repository level LICENSE. Either edit it, add it, and commit it, or remove the file."
 
 type Docs []doltdb.DocDetails
+
+var doltDocsColumns, _ = schema.NewColCollection(
+	schema.NewColumn(doltdb.DocPkColumnName, doltdb.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn(doltdb.DocTextColumnName, doltdb.DocTextTag, types.StringKind, false),
+)
+var DoltDocsSchema = schema.SchemaFromCols(doltDocsColumns)
 
 // AllValidDocDetails is a list of all valid docs with static fields DocPk and File. All other DocDetail fields
 // are dynamic and must be added, modified or removed as needed.

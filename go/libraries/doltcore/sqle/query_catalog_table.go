@@ -57,7 +57,7 @@ var queryCatalogCols, _ = schema.NewColCollection(
 	schema.NewColumn(QueryCatalogDescriptionCol, queryCatalogDescriptionTag, types.StringKind, false),
 )
 
-var queryCatalogSch = schema.SchemaFromCols(queryCatalogCols)
+var DoltQueryCatalogSchema = schema.SchemaFromCols(queryCatalogCols)
 
 // Creates the query catalog table if it doesn't exist.
 func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
@@ -67,7 +67,7 @@ func createQueryCatalogIfNotExists(ctx context.Context, root *doltdb.RootValue) 
 	}
 
 	if !ok {
-		return root.CreateEmptyTable(ctx, doltdb.DoltQueryCatalogTableName, queryCatalogSch)
+		return root.CreateEmptyTable(ctx, doltdb.DoltQueryCatalogTableName, DoltQueryCatalogSchema)
 	}
 
 	return root, nil
@@ -105,7 +105,7 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 	}
 
 	me := data.Edit()
-	me.Set(r.NomsMapKey(queryCatalogSch), r.NomsMapValue(queryCatalogSch))
+	me.Set(r.NomsMapKey(DoltQueryCatalogSchema), r.NomsMapValue(DoltQueryCatalogSchema))
 
 	updatedTable, err := me.Map(ctx)
 	if err != nil {
@@ -124,7 +124,7 @@ func NewQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, name, que
 func getMaxQueryOrder(data types.Map, ctx context.Context) uint {
 	maxOrder := uint(0)
 	data.IterAll(ctx, func(key, value types.Value) error {
-		r, _ := row.FromNoms(queryCatalogSch, key.(types.Tuple), value.(types.Tuple))
+		r, _ := row.FromNoms(DoltQueryCatalogSchema, key.(types.Tuple), value.(types.Tuple))
 		orderVal, ok := r.GetColVal(1)
 		if ok {
 			order := uint(orderVal.(types.Uint))
@@ -144,5 +144,5 @@ func newQueryCatalogRow(id string, order uint, name, query, description string) 
 	taggedVals[queryCatalogNameTag] = types.String(name)
 	taggedVals[queryCatalogQueryTag] = types.String(query)
 	taggedVals[queryCatalogDescriptionTag] = types.String(description)
-	return row.New(types.Format_Default, queryCatalogSch, taggedVals)
+	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
 }

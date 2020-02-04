@@ -843,12 +843,7 @@ func updateDocsOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue
 }
 
 func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.RootValue, docDetails []doltdb.DocDetails) (*doltdb.RootValue, error) {
-	typedColColl, _ := schema.NewColCollection(
-		schema.NewColumn(doltdb.DocPkColumnName, doltdb.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
-		schema.NewColumn(doltdb.DocTextColumnName, doltdb.DocTextTag, types.StringKind, false),
-	)
-	sch := schema.SchemaFromCols(typedColColl)
-	imt := table.NewInMemTable(sch)
+	imt := table.NewInMemTable(DoltDocsSchema)
 
 	createTable := false
 	for _, doc := range docDetails {
@@ -859,7 +854,7 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 				doltdb.DocTextTag: types.String(doc.NewerText),
 			}
 
-			docRow, err := row.New(types.Format_7_18, sch, docTaggedVals)
+			docRow, err := row.New(types.Format_7_18, DoltDocsSchema, docTaggedVals)
 			if err != nil {
 				return nil, err
 			}
@@ -872,7 +867,7 @@ func createDocsTableOnRoot(ctx context.Context, dEnv *DoltEnv, root *doltdb.Root
 
 	if createTable {
 		rd := table.NewInMemTableReader(imt)
-		wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), sch)
+		wr := noms.NewNomsMapCreator(context.Background(), dEnv.DoltDB.ValueReadWriter(), DoltDocsSchema)
 
 		_, _, err := table.PipeRows(context.Background(), rd, wr, false)
 		if err != nil {
