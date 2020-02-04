@@ -166,6 +166,24 @@ SQL
     [ "${#lines[@]}" -eq 6 ]
 }
 
+@test "use -f to overwrite data in existing table" {
+    dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
+
+    run dolt table import -c --pk=pk test `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "test already exists. Use -f to overwrite." ]] || false
+
+    run dolt table import -f -c --pk=pk test `batshelper 1pk5col-ints.csv`
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+    run dolt sql -q "select * from test"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+}
+
 @test "try to create a table with a bad csv" {
     run dolt table import -c --pk=pk test `batshelper bad.csv`
     [ "$status" -eq 1 ]
