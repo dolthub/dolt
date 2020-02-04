@@ -16,10 +16,11 @@ package dbfactory
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"net/url"
 	"os"
 	"path/filepath"
+
+	"github.com/liquidata-inc/dolt/go/store/chunks"
 
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
 	"github.com/liquidata-inc/dolt/go/store/datas"
