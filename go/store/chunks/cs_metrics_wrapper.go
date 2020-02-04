@@ -7,6 +7,37 @@ import (
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
 
+// CSMetrics contains the metrics aggregated by a CSMetricsWrapper
+type CSMetrics struct {
+	totalChunkGets       int
+	uniqueGets           int
+	totalChunkHasChecks  int
+	uniqueChunkHasChecks int
+	uniquePuts           int
+}
+
+// NewCSMetrics creates a CSMetrics instance
+func NewCSMetrics(csMW *CSMetricWrapper) CSMetrics {
+	return CSMetrics{
+		totalChunkGets:       csMW.totalChunkGets,
+		uniqueGets:           len(csMW.uniqueGets),
+		totalChunkHasChecks:  csMW.totalChunkHasChecks,
+		uniqueChunkHasChecks: len(csMW.uniqueChunkHasChecks),
+		uniquePuts:           len(csMW.uniquePuts),
+	}
+}
+
+// String prints CSMetrics as JSON with indenting
+func (csm CSMetrics) String() string {
+	return fmt.Sprintf(`{
+		"totalChunkGets":       %d,
+		"uniqueGets":           %d,
+		"totalChunkHasChecks":  %d,
+		"uniqueChunkHasChecks": %d,
+		"uniquePuts":           %d,
+	}`, csm.totalChunkGets, csm.uniqueGets, csm.totalChunkHasChecks, csm.uniqueChunkHasChecks, csm.uniquePuts)
+}
+
 // CSMetricWrapper is a ChunkStore implementation that wraps a ChunkStore, and collects metrics on the calls.
 type CSMetricWrapper struct {
 	totalChunkGets       int
@@ -101,20 +132,14 @@ func (csMW *CSMetricWrapper) Commit(ctx context.Context, current, last hash.Hash
 // ChunkStore instance. The type is implementation-dependent, and impls
 // may return nil
 func (csMW *CSMetricWrapper) Stats() interface{} {
-	return csMW
+	return
 }
 
 // StatsSummary may return a string containing summarized statistics for
 // this ChunkStore. It must return "Unsupported" if this operation is not
 // supported.
 func (csMW *CSMetricWrapper) StatsSummary() string {
-	return fmt.Sprintf(`{
-	"totalChunkGets":       %d,
-	"uniqueGets":           %d,
-	"totalChunkHasChecks":  %d,
-	"uniqueChunkHasChecks": %d,
-	"uniquePuts":           %d,
-}`, csMW.totalChunkGets, len(csMW.uniqueGets), csMW.totalChunkHasChecks, len(csMW.uniqueChunkHasChecks), len(csMW.uniquePuts))
+	return NewCSMetrics(csMW).String()
 }
 
 // Close tears down any resources in use by the implementation. After
