@@ -93,6 +93,7 @@ teardown() {
     run dolt status
     [[ "$output" =~ "Changes to be committed" ]] || false
     [[ ! "$output" =~ "Untracked files" ]] || false
+    dolt reset test1 test2
     run dolt add .
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
