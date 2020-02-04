@@ -123,23 +123,9 @@ var importSynopsis = []string{
 	"-r [--map <file>] [--file-type <type>] <table> <file>",
 }
 
-func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
-	if apr.NArg() == 0 || apr.NArg() > 2 {
-		usage()
-		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-	}
-
-	if apr.ContainsArg(doltdb.DocTableName) {
-		cli.PrintErrln(color.RedString("'%s' is not a valid table name", doltdb.DocTableName))
-		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-	}
-
+func getMoveParameters(apr *argparser.ArgParseResults) (mvdata.MoveOperation, mvdata.TableDataLocation, mvdata.DataLocation, interface{}) {
 	var mvOp mvdata.MoveOperation
-	var srcOpts interface{}
-	if !apr.Contains(createParam) && !apr.Contains(updateParam) && !apr.Contains(replaceParam) {
-		cli.PrintErrln("Must include '-c' for initial table import or -u to update existing table or -r to replace existing table.")
-		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-	} else if apr.Contains(createParam) {
+	if apr.Contains(createParam) {
 		mvOp = mvdata.OverwriteOp
 	} else {
 		if apr.Contains(replaceParam) {
@@ -147,25 +133,9 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		} else {
 			mvOp = mvdata.UpdateOp
 		}
-		if apr.Contains(outSchemaParam) {
-			cli.PrintErrln("fatal:", outSchemaParam+" is not supported for update or replace operations")
-			usage()
-			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-		}
 	}
 
 	tableName := apr.Arg(0)
-	if !doltdb.IsValidTableName(tableName) {
-		cli.PrintErrln(
-			color.RedString("'%s' is not a valid table name\n", tableName),
-			"table names must match the regular expression:", doltdb.TableNameRegexStr)
-		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-	} else if doltdb.IsSystemTable(tableName) {
-		cli.PrintErrln(
-			color.RedString("'%s' is not a valid table name\n", tableName),
-			"table names beginning with dolt_ are reserved for internal use")
-		return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-	}
 
 	path := ""
 	if apr.NArg() > 1 {
@@ -173,17 +143,11 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 	}
 
 	delim, hasDelim := apr.GetValue(delimParam)
-	fType, hasFileType := apr.GetValue(fileTypeParam)
-
-	if hasFileType {
-		if mvdata.DFFromString(fType) == mvdata.InvalidDataFormat {
-			cli.PrintErrln(color.RedString("'%s' is not a valid file type.", fType))
-			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-		}
-	}
+	fType, _ := apr.GetValue(fileTypeParam)
 
 	srcLoc := mvdata.NewDataLocation(path, fType)
 
+	var srcOpts interface{}
 	switch val := srcLoc.(type) {
 	case mvdata.FileDataLocation:
 		if hasDelim {
@@ -193,11 +157,6 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 			}
 
 			srcOpts = mvdata.CsvOptions{Delim: delim}
-		} else if val.Format == mvdata.InvalidDataFormat {
-			cli.PrintErrln(
-				color.RedString("Could not infer type file '%s'\n", path),
-				"File extensions should match supported file types, or should be explicitly defined via the file-type parameter")
-			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
 		}
 
 		if val.Format == mvdata.XlsxFile {
@@ -216,17 +175,64 @@ func validateImportArgs(apr *argparser.ArgParseResults, usage cli.UsagePrinter) 
 		if hasDelim {
 			srcOpts = mvdata.CsvOptions{Delim: delim}
 		}
-
-	case mvdata.TableDataLocation:
-		if hasDelim {
-			cli.PrintErrln(color.RedString("delim is not a valid parameter for this type of file"))
-			return mvdata.InvalidOp, mvdata.TableDataLocation{}, nil, nil
-		}
 	}
 
 	tableLoc := mvdata.TableDataLocation{Name: tableName}
-
 	return mvOp, tableLoc, srcLoc, srcOpts
+}
+
+func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.NArg() == 0 || apr.NArg() > 2 {
+		return errhand.BuildDError("expected 1 or 2 arguments").SetPrintUsage().Build()
+	}
+
+	if !apr.Contains(createParam) && !apr.Contains(updateParam) && !apr.Contains(replaceParam) {
+		return errhand.BuildDError("Must include '-c' for initial table import or -u to update existing table or -r to replace existing table.").Build()
+	} else if apr.Contains(createParam) {
+		// nothing to validate
+	} else {
+		if apr.Contains(outSchemaParam) {
+			return errhand.BuildDError("fatal: "+ outSchemaParam+" is not supported for update or replace operations").Build()
+		}
+	}
+
+	tableName := apr.Arg(0)
+	if !doltdb.IsValidTableName(tableName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names must match the regular expression: %s",
+			tableName, doltdb.TableNameRegexStr).Build()
+	} else if doltdb.IsSystemTable(tableName) {
+		return errhand.BuildDError("'%s' is not a valid table name\ntable names beginning with dolt_ are reserved for internal use", tableName).Build()
+	}
+
+	path := ""
+	if apr.NArg() > 1 {
+		path = apr.Arg(1)
+	}
+
+	_, hasDelim := apr.GetValue(delimParam)
+	fType, hasFileType := apr.GetValue(fileTypeParam)
+
+	if hasFileType {
+		if mvdata.DFFromString(fType) == mvdata.InvalidDataFormat {
+			return errhand.BuildDError("'%s' is not a valid file type.", fType).Build()
+		}
+	}
+
+	srcLoc := mvdata.NewDataLocation(path, fType)
+
+	switch val := srcLoc.(type) {
+	case mvdata.FileDataLocation:
+		if !hasDelim && val.Format == mvdata.InvalidDataFormat {
+			return errhand.BuildDError("Could not infer type file '%s'\nFile extensions should match supported file types, or should be explicitly defined via the file-type parameter", path).Build()
+		}
+
+	case mvdata.TableDataLocation:
+		if hasDelim {
+			return errhand.BuildDError("delim is not a valid parameter for this type of file").Build()
+		}
+	}
+
+	return nil
 }
 
 type ImportCmd struct{}
@@ -260,39 +266,23 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.createArgParser()
-	force, mvOpts := parseCreateArgs(ap, commandStr, args)
 
-	if mvOpts == nil {
-		return 1
-	}
-
-	if mvOpts.TableName == doltdb.DocTableName {
-		return commands.HandleDocTableVErrAndExitCode()
-	}
-
-	res := executeMove(ctx, dEnv, force, mvOpts)
-
-	if res == 0 {
-		cli.PrintErrln(color.CyanString("Import completed successfully."))
-	}
-
-	return res
-}
-
-func parseCreateArgs(ap *argparser.ArgParser, commandStr string, args []string) (bool, *mvdata.MoveOptions) {
 	help, usage := cli.HelpAndUsagePrinters(commandStr, importShortDesc, importLongDesc, importSynopsis, ap)
 	apr := cli.ParseArgs(ap, args, help)
-	moveOp, tableLoc, fileLoc, srcOpts := validateImportArgs(apr, usage)
 
-	if fileLoc == nil || len(tableLoc.Name) == 0 {
-		return false, nil
+	err := validateImportArgs(apr)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(err, usage)
 	}
+
+	moveOp, tableLoc, fileLoc, srcOpts := getMoveParameters(apr)
 
 	schemaFile, _ := apr.GetValue(outSchemaParam)
 	mappingFile, _ := apr.GetValue(mappingFileParam)
 	primaryKey, _ := apr.GetValue(primaryKeyParam)
+	force := apr.Contains(forceParam)
 
-	return apr.Contains(forceParam), &mvdata.MoveOptions{
+	mvOpts := &mvdata.MoveOptions{
 		Operation:   moveOp,
 		ContOnErr:   apr.Contains(contOnErrParam),
 		SchFile:     schemaFile,
@@ -302,6 +292,14 @@ func parseCreateArgs(ap *argparser.ArgParser, commandStr string, args []string) 
 		Dest:        tableLoc,
 		SrcOptions:  srcOpts,
 	}
+
+	res := executeMove(ctx, dEnv, force, mvOpts)
+
+	if res == 0 {
+		cli.PrintErrln(color.CyanString("Import completed successfully."))
+	}
+
+	return res
 }
 
 func createArgParser() *argparser.ArgParser {
