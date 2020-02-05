@@ -29,47 +29,50 @@ type CSMetrics struct {
 	UniqueChunkHasChecks int
 	UniquePuts           int
 	Delegate             interface{}
+	DelegateSummary      string
 }
 
 // NewCSMetrics creates a CSMetrics instance
 func NewCSMetrics(csMW *CSMetricWrapper) CSMetrics {
 	return CSMetrics{
-		TotalChunkGets:       csMW.totalChunkGets,
-		UniqueGets:           len(csMW.uniqueGets),
-		TotalChunkHasChecks:  csMW.totalChunkHasChecks,
-		UniqueChunkHasChecks: len(csMW.uniqueChunkHasChecks),
-		UniquePuts:           len(csMW.uniquePuts),
+		TotalChunkGets:       csMW.TotalChunkGets,
+		UniqueGets:           len(csMW.UniqueGets),
+		TotalChunkHasChecks:  csMW.TotalChunkHasChecks,
+		UniqueChunkHasChecks: len(csMW.UniqueChunkHasChecks),
+		UniquePuts:           len(csMW.UniquePuts),
 		Delegate:             csMW.cs.Stats(),
+		DelegateSummary:      csMW.cs.StatsSummary(),
 	}
 }
 
 // String prints CSMetrics as JSON with indenting
 func (csm CSMetrics) String() string {
 	return fmt.Sprintf(`{
-		"totalChunkGets":       %d,
-		"uniqueGets":           %d,
-		"totalChunkHasChecks":  %d,
-		"uniqueChunkHasChecks": %d,
-		"uniquePuts":           %d,
-	}`, csm.TotalChunkGets, csm.UniqueGets, csm.TotalChunkHasChecks, csm.UniqueChunkHasChecks, csm.UniquePuts)
+	"TotalChunkGets":       %d,
+	"UniqueGets":           %d,
+	"TotalChunkHasChecks":  %d,
+	"UniqueChunkHasChecks": %d,
+	"UniquePuts":           %d,
+	"DelegateSummary":      "%s",
+}`, csm.TotalChunkGets, csm.UniqueGets, csm.TotalChunkHasChecks, csm.UniqueChunkHasChecks, csm.UniquePuts, csm.DelegateSummary)
 }
 
 // CSMetricWrapper is a ChunkStore implementation that wraps a ChunkStore, and collects metrics on the calls.
 type CSMetricWrapper struct {
-	totalChunkGets       int
-	uniqueGets           hash.HashSet
-	totalChunkHasChecks  int
-	uniqueChunkHasChecks hash.HashSet
-	uniquePuts           hash.HashSet
+	TotalChunkGets       int
+	UniqueGets           hash.HashSet
+	TotalChunkHasChecks  int
+	UniqueChunkHasChecks hash.HashSet
+	UniquePuts           hash.HashSet
 	cs                   ChunkStore
 }
 
 // NewCSMetricWrapper returns a new CSMetricWrapper
 func NewCSMetricWrapper(cs ChunkStore) *CSMetricWrapper {
 	return &CSMetricWrapper{
-		uniqueGets:           make(hash.HashSet),
-		uniqueChunkHasChecks: make(hash.HashSet),
-		uniquePuts:           make(hash.HashSet),
+		UniqueGets:           make(hash.HashSet),
+		UniqueChunkHasChecks: make(hash.HashSet),
+		UniquePuts:           make(hash.HashSet),
 		cs:                   cs,
 	}
 }
@@ -77,8 +80,8 @@ func NewCSMetricWrapper(cs ChunkStore) *CSMetricWrapper {
 // Get the Chunk for the value of the hash in the store. If the hash is
 // absent from the store EmptyChunk is returned.
 func (csMW *CSMetricWrapper) Get(ctx context.Context, h hash.Hash) (Chunk, error) {
-	csMW.totalChunkGets++
-	csMW.uniqueGets.Insert(h)
+	csMW.TotalChunkGets++
+	csMW.UniqueGets.Insert(h)
 	return csMW.cs.Get(ctx, h)
 }
 
@@ -86,9 +89,9 @@ func (csMW *CSMetricWrapper) Get(ctx context.Context, h hash.Hash) (Chunk, error
 // |foundChunks| will have been fully sent all chunks which have been
 // found. Any non-present chunks will silently be ignored.
 func (csMW *CSMetricWrapper) GetMany(ctx context.Context, hashes hash.HashSet, foundChunks chan<- *Chunk) error {
-	csMW.totalChunkGets += len(hashes)
+	csMW.TotalChunkGets += len(hashes)
 	for h := range hashes {
-		csMW.uniqueGets.Insert(h)
+		csMW.UniqueGets.Insert(h)
 	}
 	return csMW.cs.GetMany(ctx, hashes, foundChunks)
 }
@@ -96,17 +99,17 @@ func (csMW *CSMetricWrapper) GetMany(ctx context.Context, hashes hash.HashSet, f
 // Returns true iff the value at the address |h| is contained in the
 // store
 func (csMW *CSMetricWrapper) Has(ctx context.Context, h hash.Hash) (bool, error) {
-	csMW.totalChunkHasChecks++
-	csMW.uniqueChunkHasChecks.Insert(h)
+	csMW.TotalChunkHasChecks++
+	csMW.UniqueChunkHasChecks.Insert(h)
 	return csMW.cs.Has(ctx, h)
 }
 
 // Returns a new HashSet containing any members of |hashes| that are
 // absent from the store.
 func (csMW *CSMetricWrapper) HasMany(ctx context.Context, hashes hash.HashSet) (absent hash.HashSet, err error) {
-	csMW.totalChunkHasChecks += len(hashes)
+	csMW.TotalChunkHasChecks += len(hashes)
 	for h := range hashes {
-		csMW.uniqueChunkHasChecks.Insert(h)
+		csMW.UniqueChunkHasChecks.Insert(h)
 	}
 	return csMW.cs.HasMany(ctx, hashes)
 }
@@ -116,7 +119,7 @@ func (csMW *CSMetricWrapper) HasMany(ctx context.Context, hashes hash.HashSet) (
 // to Flush(). Put may be called concurrently with other calls to Put(),
 // Get(), GetMany(), Has() and HasMany().
 func (csMW *CSMetricWrapper) Put(ctx context.Context, c Chunk) error {
-	csMW.uniquePuts.Insert(c.Hash())
+	csMW.UniquePuts.Insert(c.Hash())
 	return csMW.cs.Put(ctx, c)
 }
 
@@ -163,5 +166,5 @@ func (csMW *CSMetricWrapper) StatsSummary() string {
 // Close() concurrently with any other ChunkStore method; behavior is
 // undefined and probably crashy.
 func (csMW *CSMetricWrapper) Close() error {
-	return csMW.Close()
+	return csMW.cs.Close()
 }
