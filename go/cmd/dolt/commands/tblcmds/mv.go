@@ -16,6 +16,7 @@ package tblcmds
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 
 	eventsapi "github.com/liquidata-inc/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/liquidata-inc/dolt/go/libraries/utils/filesys"
@@ -92,6 +93,11 @@ func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	old := apr.Arg(0)
 	new := apr.Arg(1)
+
+	if doltdb.IsSystemTable(old) {
+		return commands.HandleVErrAndExitCode(
+			errhand.BuildDError("error renaming  table %s", old).AddCause(doltdb.ErrSystemTableCannotBeModified).Build(), usage)
+	}
 
 	if verr = ValidateTableNameForCreate(new); verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)

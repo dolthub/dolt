@@ -796,6 +796,12 @@ func (se *sqlEngine) checkThenDeleteAllRows(ctx context.Context, s *sqlparser.De
 				tName := ste.Name.String()
 				table, ok, err := root.GetTable(ctx, tName)
 				if err == nil && ok {
+
+					// Let the SQL engine handle system table deletes to avoid duplicating business logic here
+					if doltdb.HasDoltPrefix(tName) {
+						return false
+					}
+
 					rowData, err := table.GetRowData(ctx)
 					if err != nil {
 						return false

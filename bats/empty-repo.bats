@@ -119,7 +119,7 @@ teardown() {
 @test "dolt table import in a new repository" {
     run dolt table import
     [ "$status" -ne 0 ]
-    [[ "${lines[0]}" =~ "usage" ]] || false
+    [[ "$output" =~ "usage" ]] || false
 }
 
 @test "dolt table export in a new repository" {

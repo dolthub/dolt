@@ -78,6 +78,8 @@ func IsSystemTable(name string) bool {
 	return HasDoltPrefix(name) && !userSpaceReservedTables.Contains(name)
 }
 
+var ErrSystemTableCannotBeModified = errors.New("system tables cannot be dropped or altered")
+
 // Table is a struct which holds row data, as well as a reference to it's schema.
 type Table struct {
 	vrw         types.ValueReadWriter
