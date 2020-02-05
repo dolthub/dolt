@@ -52,7 +52,7 @@ func TestExecuteDeleteSystemTables(t *testing.T) {
 
 var systemTableDeleteTests = []DeleteTest {
 	{
-		Name: "update dolt_docs",
+		Name: "delete dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
 			env.DoltDocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
@@ -60,7 +60,7 @@ var systemTableDeleteTests = []DeleteTest {
 		ExpectedErr: "cannot delete from table",
 	},
 	{
-		Name: "update dolt_query_catalog",
+		Name: "delete dolt_query_catalog",
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
@@ -70,7 +70,7 @@ var systemTableDeleteTests = []DeleteTest {
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
 	{
-		Name: "update dolt_schemas",
+		Name: "delete dolt_schemas",
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			mustGetDoltSchema(SchemasTableSchema()),
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
@@ -80,7 +80,6 @@ var systemTableDeleteTests = []DeleteTest {
 		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
 	},
 }
-
 
 // Tests the given query on a freshly created dataset, asserting that the result has the given schema and rows. If
 // expectedErr is set, asserts instead that the execution returns an error that matches.

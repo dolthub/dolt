@@ -16,6 +16,9 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/store/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,6 +38,49 @@ func TestExecuteReplace(t *testing.T) {
 	for _, test := range BasicReplaceTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testReplaceQuery(t, test)
+		})
+	}
+}
+
+var systemTableReplaceTests = []ReplaceTest {
+	{
+		Name: "replace into dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			env.DoltDocsSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
+		ExpectedErr: "cannot insert into table",
+	},
+	{
+		Name: "replace into dolt_query_catalog",
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
+			DoltQueryCatalogSchema,
+			NewRow(types.String("existingEntry"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+		ReplaceQuery: "replace into dolt_query_catalog (id, display_order, name, query, description) values ('existingEntry', 1, 'example', 'select 1+1 from dual', 'description')",
+		SelectQuery:  "select * from dolt_query_catalog",
+		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
+			NewRow(types.String("existingEntry"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description")),
+		),
+		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+	},
+	{
+		Name: "replace into dolt_schemas",
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
+			mustGetDoltSchema(SchemasTableSchema()),
+			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+		ReplaceQuery: "replace into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 1+1 from dual')",
+		SelectQuery:  "select * from dolt_schemas",
+		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
+			NewRow(types.String("view"), types.String("name"), types.String("select 1+1 from dual")),
+		),
+		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+	},
+}
+
+func TestReplaceIntoSystemTables(t *testing.T) {
+	for _, test := range systemTableInsertTests {
+		t.Run(test.Name, func(t *testing.T) {
+			testInsertQuery(t, test)
 		})
 	}
 }
