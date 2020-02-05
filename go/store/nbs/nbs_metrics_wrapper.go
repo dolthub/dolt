@@ -17,8 +17,9 @@ package nbs
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/store/chunks"
 	"io"
+
+	"github.com/liquidata-inc/dolt/go/store/chunks"
 
 	"github.com/liquidata-inc/dolt/go/store/hash"
 )
