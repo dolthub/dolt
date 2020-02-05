@@ -42,7 +42,6 @@ var tblCpSynopsis = []string{
 	"[-f] [<commit>] <oldtable> <newtable>",
 }
 
-
 type CpCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
@@ -148,4 +147,3 @@ func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEn
 
 	return commands.HandleVErrAndExitCode(commands.UpdateWorkingWithVErr(dEnv, working), usage)
 }
-

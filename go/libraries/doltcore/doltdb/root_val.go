@@ -16,9 +16,10 @@ package doltdb
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 	"strconv"
 	"strings"
+
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema/encoding"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"

@@ -16,16 +16,16 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/store/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -42,14 +42,14 @@ func TestExecuteReplace(t *testing.T) {
 	}
 }
 
-var systemTableReplaceTests = []ReplaceTest {
+var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
 			env.DoltDocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
-		ExpectedErr: "cannot insert into table",
+		ExpectedErr:  "cannot insert into table",
 	},
 	{
 		Name: "replace into dolt_query_catalog",

@@ -32,11 +32,11 @@ import (
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	name     string
-	table    *doltdb.Table
-	sch      schema.Schema
-	sqlSch   sql.Schema
-	db       *Database
+	name   string
+	table  *doltdb.Table
+	sch    schema.Schema
+	sqlSch sql.Schema
+	db     *Database
 }
 
 // WritableDoltTable allows updating, deleting, and inserting new rows. It implements sql.UpdatableTable and friends.

@@ -191,7 +191,7 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 		// nothing to validate
 	} else {
 		if apr.Contains(outSchemaParam) {
-			return errhand.BuildDError("fatal: "+ outSchemaParam+" is not supported for update or replace operations").Build()
+			return errhand.BuildDError("fatal: " + outSchemaParam + " is not supported for update or replace operations").Build()
 		}
 	}
 

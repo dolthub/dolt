@@ -16,13 +16,15 @@ package sqle
 
 import (
 	"context"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
 	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 // Not an exhaustive test of views -- we rely on bats tests for end-to-end verification.

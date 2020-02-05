@@ -76,8 +76,8 @@ var sqlSynopsis = []string{
 }
 
 const (
-	queryFlag  = "query"
-	formatFlag = "result-format"
+	queryFlag   = "query"
+	formatFlag  = "result-format"
 	saveFlag    = "save"
 	messageFlag = "message"
 	nameFlag    = "name"

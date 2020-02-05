@@ -17,13 +17,13 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"io"
 	"strings"
 
 	"github.com/src-d/go-mysql-server/sql"
 	"github.com/src-d/go-mysql-server/sql/parse"
 	"github.com/src-d/go-mysql-server/sql/plan"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"

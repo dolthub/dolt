@@ -17,7 +17,6 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"testing"
 	"time"
 
@@ -26,6 +25,7 @@ import (
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/envtestutils"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
@@ -71,7 +71,7 @@ func TestCaseSensitivity(t *testing.T) {
 	}
 }
 
-var systemTableSelectTests = []SelectTest {
+var systemTableSelectTests = []SelectTest{
 	{
 		Name: "select from dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
@@ -87,7 +87,7 @@ var systemTableSelectTests = []SelectTest {
 		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
-		Query:  "select * from dolt_query_catalog",
+		Query: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
 		),
@@ -98,7 +98,7 @@ var systemTableSelectTests = []SelectTest {
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			mustGetDoltSchema(SchemasTableSchema()),
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
-		Query:  "select * from dolt_schemas",
+		Query: "select * from dolt_schemas",
 		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
 			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
 		),

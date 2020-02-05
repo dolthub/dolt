@@ -17,9 +17,10 @@ package doltdb
 import (
 	"context"
 	"errors"
-	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 	"regexp"
 	"strings"
+
+	"github.com/liquidata-inc/dolt/go/libraries/utils/set"
 
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"

@@ -16,16 +16,16 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/store/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -50,7 +50,7 @@ func TestExecuteUpdateSystemTables(t *testing.T) {
 	}
 }
 
-var systemTableUpdateTests = []UpdateTest {
+var systemTableUpdateTests = []UpdateTest{
 	{
 		Name: "update dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
@@ -65,7 +65,7 @@ var systemTableUpdateTests = []UpdateTest {
 			DoltQueryCatalogSchema,
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		UpdateQuery: "update dolt_query_catalog set display_order = display_order + 1",
-		SelectQuery:  "select * from dolt_query_catalog",
+		SelectQuery: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
 			NewRow(types.String("abc123"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
@@ -76,7 +76,7 @@ var systemTableUpdateTests = []UpdateTest {
 			mustGetDoltSchema(SchemasTableSchema()),
 			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
-		SelectQuery:  "select * from dolt_schemas",
+		SelectQuery: "select * from dolt_schemas",
 		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
 			NewRow(types.String("not a view"), types.String("name"), types.String("select 2+2 from dual")),
 		),

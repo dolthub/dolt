@@ -16,18 +16,18 @@ package sqle
 
 import (
 	"context"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
-	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
-	"github.com/liquidata-inc/dolt/go/store/types"
-	"github.com/src-d/go-mysql-server/sql"
 	"testing"
 
+	"github.com/src-d/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	. "github.com/liquidata-inc/dolt/go/libraries/doltcore/sql/sqltestutil"
+	"github.com/liquidata-inc/dolt/go/store/types"
 )
 
 // Set to the name of a single test to run just that test, useful for debugging
@@ -44,7 +44,7 @@ func TestExecuteInsert(t *testing.T) {
 	}
 }
 
-var systemTableInsertTests = []InsertTest {
+var systemTableInsertTests = []InsertTest{
 	{
 		Name: "insert into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
@@ -59,7 +59,7 @@ var systemTableInsertTests = []InsertTest {
 			DoltQueryCatalogSchema,
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
 		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
-		SelectQuery:  "select * from dolt_query_catalog",
+		SelectQuery: "select * from dolt_query_catalog",
 		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description")),
 			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
@@ -71,7 +71,7 @@ var systemTableInsertTests = []InsertTest {
 		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
 			mustGetDoltSchema(SchemasTableSchema())),
 		InsertQuery: "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
-		SelectQuery:  "select * from dolt_schemas",
+		SelectQuery: "select * from dolt_schemas",
 		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
 			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
 		),

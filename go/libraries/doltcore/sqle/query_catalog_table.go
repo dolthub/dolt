@@ -16,7 +16,9 @@ package sqle
 
 import (
 	"context"
+
 	"github.com/google/uuid"
+
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/row"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
