@@ -331,7 +331,8 @@ func (ddb *DoltDB) Commit(ctx context.Context, valHash hash.Hash, dref ref.DoltR
 		panic("can't commit to ref that isn't branch atm.  will probably remove this.")
 	}
 
-	return ddb.CommitWithParents(ctx, valHash, dref, nil, cm)
+	// TODO: this nil seems wrong
+	return ddb.CommitWithParentSpecs(ctx, valHash, dref, nil, cm)
 }
 
 // FastForward fast-forwards the branch given to the commit given.
@@ -369,9 +370,22 @@ func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *
 	return current.CanFastForwardTo(ctx, new)
 }
 
-// CommitWithParents commits the value hash given to the branch given, using the list of parent hashes given. Returns an
+// CommitWithParentSpecs commits the value hash given to the branch given, using the list of parent hashes given. Returns an
 // error if the value or any parents can't be resolved, or if anything goes wrong accessing the underlying storage.
-func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
+func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCmSpecs []*CommitSpec, cm *CommitMeta) (*Commit, error) {
+	var parentCommits []*Commit
+	for _, parentCmSpec := range parentCmSpecs {
+		cm, err := ddb.Resolve(ctx, parentCmSpec)
+
+		if err != nil {
+			return nil, err
+		}
+		parentCommits = append(parentCommits, cm)
+	}
+	return ddb.CommitWithParentCommits(ctx, valHash, dref, parentCommits, cm)
+}
+
+func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Hash, dref ref.DoltRef, parentCommits []*Commit, cm *CommitMeta) (*Commit, error) {
 	var commitSt types.Struct
 	err := pantoerr.PanicToError("error committing value "+valHash.String(), func() error {
 		val, err := ddb.db.ReadValue(ctx, valHash)
@@ -412,14 +426,8 @@ func (ddb *DoltDB) CommitWithParents(ctx context.Context, valHash hash.Hash, dre
 			}
 		}
 
-		for _, parentCmSpec := range parentCmSpecs {
-			cs, err := ddb.Resolve(ctx, parentCmSpec)
-
-			if err != nil {
-				return err
-			}
-
-			rf, err := types.NewRef(cs.commitSt, ddb.db.Format())
+		for _, cm := range parentCommits {
+			rf, err := types.NewRef(cm.commitSt, ddb.db.Format())
 
 			if err != nil {
 				return err

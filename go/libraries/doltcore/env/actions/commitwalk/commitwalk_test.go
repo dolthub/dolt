@@ -145,7 +145,7 @@ func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash
 		pcs = append(pcs, cs)
 	}
 	bref := ref.NewBranchRef(bn)
-	commit, err := ddb.CommitWithParents(context.Background(), rvh, bref, pcs, cm)
+	commit, err := ddb.CommitWithParentSpecs(context.Background(), rvh, bref, pcs, cm)
 	require.NoError(t, err)
 	return commit
 }
