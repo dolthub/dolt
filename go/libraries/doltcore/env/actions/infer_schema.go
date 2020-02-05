@@ -162,9 +162,9 @@ func (inf *inferrer) inferSchema() (schema.Schema, error) {
 			if inf.impArgs.Update {
 				if nullable {
 					if partOfPK {
-						pkCols = checkNullConstraint(pkCols, existingCol)
+						pkCols = removeNullConstraint(pkCols, existingCol)
 					} else {
-						nonPkCols = checkNullConstraint(nonPkCols, existingCol)
+						nonPkCols = removeNullConstraint(nonPkCols, existingCol)
 					}
 				}
 
@@ -206,14 +206,14 @@ func (inf *inferrer) inferSchema() (schema.Schema, error) {
 
 	pkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if !colNamesSet.Contains(col.Name) {
-			pkCols = checkNullConstraint(pkCols, col)
+			pkCols = removeNullConstraint(pkCols, col)
 		}
 		return false, nil
 	})
 
 	nonPkCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if !colNamesSet.Contains(col.Name) {
-			nonPkCols = checkNullConstraint(nonPkCols, col)
+			nonPkCols = removeNullConstraint(nonPkCols, col)
 		}
 		return false, nil
 	})
@@ -243,7 +243,7 @@ func (inf *inferrer) inferSchema() (schema.Schema, error) {
 	return schema.SchemaFromPKAndNonPKCols(pkColColl, nonPkCols)
 }
 
-func checkNullConstraint(colColl *schema.ColCollection, col schema.Column) *schema.ColCollection {
+func removeNullConstraint(colColl *schema.ColCollection, col schema.Column) *schema.ColCollection {
 	_, ok := colColl.GetByTag(col.Tag)
 	if !ok {
 		return colColl
@@ -252,18 +252,10 @@ func checkNullConstraint(colColl *schema.ColCollection, col schema.Column) *sche
 	constraints := col.Constraints
 	numConstraints := len(constraints)
 	if numConstraints > 0 {
-		notNullConstraintIdx := schema.ConstraintOfTypeIndex(constraints, schema.NotNullConstraintType)
+		notNullConstraintIdx := schema.IndexOfConstraint(constraints, schema.NotNullConstraintType)
 
 		if notNullConstraintIdx != -1 {
-			if notNullConstraintIdx == 0 {
-				constraints = constraints[1:]
-			} else if notNullConstraintIdx == numConstraints-1 {
-				constraints = constraints[:notNullConstraintIdx]
-			} else {
-				constraints[notNullConstraintIdx] = constraints[numConstraints-1]
-				constraints = constraints[:numConstraints-1]
-			}
-
+			constraints = append(constraints[:notNullConstraintIdx], constraints[notNullConstraintIdx+1:]...)
 			newCol := schema.NewColumn(col.Name, col.Tag, col.Kind, col.IsPartOfPK, constraints...)
 			colColl, _ = colColl.Replace(col, newCol)
 		}

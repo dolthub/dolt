@@ -611,7 +611,7 @@ func TestInferSchema(t *testing.T) {
 			allCols := sch.GetAllCols()
 			err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 				expectedKind, ok := test.expKinds[col.Name]
-				assert.True(t, ok, "culumn not found: %s", col.Name)
+				assert.True(t, ok, "column not found: %s", col.Name)
 				assert.Equal(t, expectedKind, col.Kind, "column: %s - expected: %s got: %s", col.Name, expectedKind.String(), col.Kind.String())
 				return false, nil
 			})
@@ -627,7 +627,7 @@ func TestInferSchema(t *testing.T) {
 
 			if test.nullableCols != nil {
 				err = allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-					idx := schema.ConstraintOfTypeIndex(col.Constraints, schema.NotNullConstraintType)
+					idx := schema.IndexOfConstraint(col.Constraints, schema.NotNullConstraintType)
 					assert.True(t, idx == -1 == test.nullableCols.Contains(col.Name), "%s unexpected nullability", col.Name)
 					return false, nil
 				})

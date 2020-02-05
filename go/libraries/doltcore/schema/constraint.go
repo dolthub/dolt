@@ -78,9 +78,9 @@ func (nnc NotNullConstraint) String() string {
 	return "Not null"
 }
 
-// ConstraintOfTypeIndex returns the index in the supplied slice of the first constraint of matching type.  If none are
+// IndexOfConstraint returns the index in the supplied slice of the first constraint of matching type.  If none are
 // found then -1 is returned
-func ConstraintOfTypeIndex(constraints []ColConstraint, constraintType string) int {
+func IndexOfConstraint(constraints []ColConstraint, constraintType string) int {
 	for i, c := range constraints {
 		if c.GetConstraintType() == constraintType {
 			return i

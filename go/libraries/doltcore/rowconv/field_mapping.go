@@ -81,11 +81,9 @@ func InvertMapping(fm *FieldMapping) *FieldMapping {
 // schema to tags in the dest schema.
 func NewFieldMapping(srcSch, destSch schema.Schema, srcTagToDestTag map[uint64]uint64) (*FieldMapping, error) {
 	destCols := destSch.GetAllCols()
-	//srcCols := srcSch.GetAllCols()
 
 	for srcTag, destTag := range srcTagToDestTag {
 		_, destOk := destCols.GetByTag(destTag)
-		//_, srcOk := srcCols.GetByTag(destTag)
 
 		if !destOk {
 			return nil, &BadMappingErr{"src tag:" + strconv.FormatUint(srcTag, 10), "dest tag:" + strconv.FormatUint(destTag, 10)}
