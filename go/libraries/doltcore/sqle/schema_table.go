@@ -15,51 +15,50 @@
 package sqle
 
 import (
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/src-d/go-mysql-server/sql"
 )
-
-const SchemasTableName = "dolt_schemas"
 
 // The fixed schema for the `dolt_schemas` table.
 func SchemasTableSchema() sql.Schema {
 	return []*sql.Column{
 		// Currently: `view`.
-		{Name: "type", Type: sql.Text, Source: LogTableName, PrimaryKey: true},
+		{Name: "type", Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		// The name of the database entity.
-		{Name: "name", Type: sql.Text, Source: LogTableName, PrimaryKey: true},
+		{Name: "name", Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		// The schema fragment associated with the database entity.
 		// For example, the SELECT statement for a CREATE VIEW.
-		{Name: "fragment", Type: sql.Text, Source: LogTableName, PrimaryKey: false},
+		{Name: "fragment", Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}
 }
 
 // Returns the `dolt_schemas` table in `db`, creating it if it does not already exist.
-func GetOrCreateDoltSchemasTable(ctx *sql.Context, db *Database) (*DoltTable, error) {
-	tbl, found, err := db.GetTableInsensitive(ctx, SchemasTableName)
+func GetOrCreateDoltSchemasTable(ctx *sql.Context, db *Database) (*WritableDoltTable, error) {
+	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
 	if found {
-		return tbl.(*DoltTable), nil
+		return tbl.(*WritableDoltTable), nil
 	}
-	err = db.CreateTable(ctx, SchemasTableName, SchemasTableSchema())
+	err = db.CreateTable(ctx, doltdb.SchemasTableName, SchemasTableSchema())
 	if err != nil {
 		return nil, err
 	}
-	tbl, found, err = db.GetTableInsensitive(ctx, SchemasTableName)
+	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
 	if !found {
 		return nil, sql.ErrTableNotFound.New("dolt_schemas")
 	}
-	return tbl.(*DoltTable), nil
+	return tbl.(*WritableDoltTable), nil
 }
 
 // Return `true` if a schema fragment for a view with name `name`
 // exists in `tbl`. `tbl` should be the `dolt_schemas` table in the
 // Database. Returns `false` otherwise.
-func viewExistsInSchemasTable(ctx *sql.Context, tbl *DoltTable, name string) (bool, error) {
+func viewExistsInSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, name string) (bool, error) {
 	row := sql.Row{"view", name}
 	doltLookup, err := SqlRowToDoltRow(tbl.table.Format(), row, tbl.sch)
 	if err != nil {

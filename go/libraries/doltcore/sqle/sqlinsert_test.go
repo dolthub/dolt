@@ -16,8 +16,11 @@ package sqle
 
 import (
 	"context"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
 	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/schema"
 	"github.com/liquidata-inc/dolt/go/store/types"
+	"github.com/src-d/go-mysql-server/sql"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,7 +55,7 @@ var systemTableInsertTests = []InsertTest {
 	},
 	{
 		Name: "insert into dolt_query_catalog",
-		AdditionalSetup: CreateTableFn("dolt_query_catalog",
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
 			DoltQueryCatalogSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		InsertQuery: "insert into dolt_query_catalog (id, display_order, name, query, description) values ('abc123', 1, 'example', 'select 1+1 from dual', 'description')",
@@ -61,9 +64,28 @@ var systemTableInsertTests = []InsertTest {
 			NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 1+1 from dual"), types.String("description"))),
 		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
 	},
+	{
+		Name: "insert into dolt_schemas",
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
+			mustGetDoltSchema(SchemasTableSchema())),
+		InsertQuery: "insert into dolt_schemas (type, name, fragment) values ('view', 'name', 'select 2+2 from dual')",
+		SelectQuery:  "select * from dolt_schemas",
+		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
+			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
+		),
+		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+	},
 }
 
-func TestExecuteIntoSystemTables(t *testing.T) {
+func mustGetDoltSchema(sch sql.Schema) schema.Schema {
+	doltSchema, err := SqlSchemaToDoltSchema(sch)
+	if err != nil {
+		panic(err)
+	}
+	return doltSchema
+}
+
+func TestInsertIntoSystemTables(t *testing.T) {
 	for _, test := range systemTableInsertTests {
 		t.Run(test.Name, func(t *testing.T) {
 			testInsertQuery(t, test)

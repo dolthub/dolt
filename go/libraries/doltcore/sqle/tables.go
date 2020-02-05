@@ -32,20 +32,30 @@ import (
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
-	name   string
-	table  *doltdb.Table
-	sch    schema.Schema
-	sqlSch sql.Schema
-	db     *Database
-	ed     *tableEditor
+	name     string
+	table    *doltdb.Table
+	sch      schema.Schema
+	sqlSch   sql.Schema
+	db       *Database
+}
+
+// WritableDoltTable allows updating, deleting, and inserting new rows.
+type WritableDoltTable struct {
+	DoltTable
+	ed *tableEditor
+}
+
+// AlterableDoltTable allows altering the schema of the table.
+type AlterableDoltTable struct {
+	WritableDoltTable
 }
 
 var _ sql.Table = (*DoltTable)(nil)
-var _ sql.UpdatableTable = (*DoltTable)(nil)
-var _ sql.DeletableTable = (*DoltTable)(nil)
-var _ sql.InsertableTable = (*DoltTable)(nil)
-var _ sql.ReplaceableTable = (*DoltTable)(nil)
-var _ sql.AlterableTable = (*DoltTable)(nil)
+var _ sql.UpdatableTable = (*WritableDoltTable)(nil)
+var _ sql.DeletableTable = (*WritableDoltTable)(nil)
+var _ sql.InsertableTable = (*WritableDoltTable)(nil)
+var _ sql.ReplaceableTable = (*WritableDoltTable)(nil)
+var _ sql.AlterableTable = (*AlterableDoltTable)(nil)
 
 // Implements sql.IndexableTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -112,11 +122,11 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 }
 
 // Inserter implements sql.InsertableTable
-func (t *DoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
+func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return t.getTableEditor()
 }
 
-func (t *DoltTable) getTableEditor() *tableEditor {
+func (t *WritableDoltTable) getTableEditor() *tableEditor {
 	if t.db.batchMode == batched {
 		if t.ed != nil {
 			return t.ed
@@ -127,7 +137,7 @@ func (t *DoltTable) getTableEditor() *tableEditor {
 	return newTableEditor(t)
 }
 
-func (t *DoltTable) flushBatchedEdits(ctx context.Context) error {
+func (t *WritableDoltTable) flushBatchedEdits(ctx context.Context) error {
 	if t.ed != nil {
 		err := t.ed.flush(ctx)
 		t.ed = nil
@@ -137,17 +147,17 @@ func (t *DoltTable) flushBatchedEdits(ctx context.Context) error {
 }
 
 // Deleter implements sql.DeletableTable
-func (t *DoltTable) Deleter(*sql.Context) sql.RowDeleter {
+func (t *WritableDoltTable) Deleter(*sql.Context) sql.RowDeleter {
 	return t.getTableEditor()
 }
 
 // Replacer implements sql.ReplaceableTable
-func (t *DoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+func (t *WritableDoltTable) Replacer(ctx *sql.Context) sql.RowReplacer {
 	return t.getTableEditor()
 }
 
 // Updater implements sql.UpdatableTable
-func (t *DoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
+func (t *WritableDoltTable) Updater(ctx *sql.Context) sql.RowUpdater {
 	return t.getTableEditor()
 }
 

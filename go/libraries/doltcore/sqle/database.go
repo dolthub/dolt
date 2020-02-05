@@ -47,7 +47,7 @@ type Database struct {
 	ddb       *doltdb.DoltDB
 	rs        *env.RepoState
 	batchMode batchMode
-	tables    map[string]*DoltTable
+	tables    map[string]sql.Table
 }
 
 var _ sql.Database = (*Database)(nil)
@@ -63,7 +63,7 @@ func NewDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB, rs *en
 		ddb:       ddb,
 		rs:        rs,
 		batchMode: single,
-		tables:    make(map[string]*DoltTable),
+		tables:    make(map[string]sql.Table),
 	}
 }
 
@@ -76,7 +76,7 @@ func NewBatchedDatabase(name string, root *doltdb.RootValue, ddb *doltdb.DoltDB,
 		ddb:       ddb,
 		rs:        rs,
 		batchMode: batched,
-		tables:    make(map[string]*DoltTable),
+		tables:    make(map[string]sql.Table),
 	}
 }
 
@@ -145,9 +145,18 @@ func (db *Database) GetTableInsensitive(ctx context.Context, tblName string) (sq
 		return nil, false, err
 	}
 
-	table := &DoltTable{name: exactName, table: tbl, sch: sch, db: db}
-	db.tables[exactName] = table
-	return table, true, nil
+	var toReturn sql.Table
+
+	table := DoltTable{name: exactName, table: tbl, sch: sch, db: db}
+	toReturn = &table
+	if !doltdb.HasDoltPrefix(exactName) {
+		toReturn = &AlterableDoltTable{WritableDoltTable{DoltTable: table}}
+	} else if !doltdb.IsSystemTable(exactName) {
+		toReturn = &WritableDoltTable{DoltTable: table}
+	}
+
+	db.tables[exactName] = &table
+	return toReturn, true, nil
 }
 
 // Returns the names of all user tables. System tables in user space (e.g. dolt_docs, dolt_query_catalog) are filtered
@@ -267,8 +276,14 @@ func (db *Database) RenameTable(ctx *sql.Context, oldName, newName string) error
 // Flushes the current batch of outstanding changes and returns any errors.
 func (db *Database) Flush(ctx context.Context) error {
 	for name, table := range db.tables {
-		if err := table.flushBatchedEdits(ctx); err != nil {
-			return err
+		if writable, ok := table.(*WritableDoltTable); ok {
+			if err := writable.flushBatchedEdits(ctx); err != nil {
+				return err
+			}
+		} else if alterable, ok := table.(*AlterableDoltTable); ok {
+			if err := alterable.flushBatchedEdits(ctx); err != nil {
+				return err
+			}
 		}
 		delete(db.tables, name)
 	}
@@ -306,7 +321,7 @@ func (db *Database) CreateView(ctx *sql.Context, name string, definition string)
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db *Database) DropView(ctx *sql.Context, name string) error {
-	stbl, found, err := db.GetTableInsensitive(ctx, SchemasTableName)
+	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}
@@ -314,7 +329,7 @@ func (db *Database) DropView(ctx *sql.Context, name string) error {
 		return sql.ErrNonExistingView.New(name)
 	}
 
-	tbl := stbl.(*DoltTable)
+	tbl := stbl.(*WritableDoltTable)
 	exists, err := viewExistsInSchemasTable(ctx, tbl, name)
 	if err != nil {
 		return err
@@ -339,7 +354,7 @@ func (db *Database) DropView(ctx *sql.Context, name string) error {
 // schema fragments if they don't parse, or if registries within the
 // `catalog` return errors.
 func RegisterSchemaFragments(ctx *sql.Context, catalog *sql.Catalog, db *Database) error {
-	stbl, found, err := db.GetTableInsensitive(ctx, SchemasTableName)
+	stbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return err
 	}

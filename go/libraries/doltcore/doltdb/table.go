@@ -44,12 +44,17 @@ const (
 
 	// DoltQueryCatalogTableName is the name of the query catalog table
 	DoltQueryCatalogTableName = "dolt_query_catalog"
+
+	// SchemasTableName is the name of the dolt schema fragment table
+	SchemasTableName = "dolt_schemas"
 )
 
 // The set of reserved dolt_ tables that should be considered part of user space, like any other user-created table,
-// for the purposes of the dolt command line.
+// for the purposes of the dolt command line. These tables cannot be created or altered explicitly, but can be updated
+// like normal SQL tables.
 var userSpaceReservedTables = set.NewStrSet([]string{
 	DoltQueryCatalogTableName,
+	SchemasTableName,
 })
 
 var tableNameRegex, _ = regexp.Compile(TableNameRegexStr)
