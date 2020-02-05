@@ -16,6 +16,9 @@ package sqle
 
 import (
 	"context"
+	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/doltdb"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -964,4 +967,67 @@ func TestRenameTable(t *testing.T) {
 			assert.ElementsMatch(t, tt.expectedRows, foundRows)
 		})
 	}
+}
+
+func TestAlterSystemTables(t *testing.T) {
+	systemTableNames := []string{"dolt_docs", "dolt_history", "dolt_log", "dolt_diff"}
+	reservedTableNames := []string{"dolt_schemas", "dolt_query_catalog"}
+
+	dEnv := dtestutils.CreateTestEnv()
+	CreateTestDatabase(dEnv, t)
+
+	t.Run("Create", func(t *testing.T) {
+		for _, tableName := range append(systemTableNames, reservedTableNames...) {
+			assertFails(t, dEnv, fmt.Sprintf("create table %s (a int primary key not null)", tableName), "reserved")
+		}
+	})
+
+	dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
+		env.DoltDocsSchema,
+		NewRow(types.String("LICENSE.md"), types.String("A license")))
+	dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
+		DoltQueryCatalogSchema,
+		NewRow(types.String("abc123"), types.Uint(1), types.String("example"), types.String("select 2+2 from dual"), types.String("description")))
+	dtestutils.CreateTestTable(t, dEnv, doltdb.SchemasTableName,
+		mustGetDoltSchema(SchemasTableSchema()),
+		NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual")))
+
+	t.Run("Drop", func(t *testing.T) {
+		for _, tableName := range systemTableNames {
+			assertFails(t, dEnv, fmt.Sprintf("drop table %s", tableName), "reserved")
+		}
+		for _, tableName := range reservedTableNames {
+			assertSucceeds(t, dEnv, fmt.Sprintf("drop table %s", tableName))
+		}
+	})
+
+	t.Run("Rename", func(t *testing.T) {
+		for _, tableName := range systemTableNames {
+			assertFails(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName), "reserved")
+		}
+		for _, tableName := range reservedTableNames {
+			assertSucceeds(t, dEnv, fmt.Sprintf("rename table %s to newname", tableName))
+		}
+	})
+
+	t.Run("Alter", func(t *testing.T) {
+		for _, tableName := range append(systemTableNames, reservedTableNames...) {
+			assertFails(t, dEnv, fmt.Sprintf("alter table %s add column a int", tableName), "reserved")
+		}
+	})
+}
+
+func assertFails(t *testing.T, dEnv *env.DoltEnv, query, expectedErr string) {
+	ctx := context.Background()
+	root, _ := dEnv.WorkingRoot(ctx)
+	_, err := ExecuteSql(dEnv, root, query)
+	require.Error(t, err, query)
+	assert.Contains(t, err.Error(), expectedErr)
+}
+
+func assertSucceeds(t *testing.T, dEnv *env.DoltEnv, query string) {
+	ctx := context.Background()
+	root, _ := dEnv.WorkingRoot(ctx)
+	_, err := ExecuteSql(dEnv, root, query)
+	assert.NoError(t, err, query)
 }
