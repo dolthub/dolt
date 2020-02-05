@@ -59,5 +59,5 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		return nil, err
 	}
 
-	return datas.NewDatabase(nbs.NewTableFileStoreMetricsWrapper(st, st)), nil
+	return datas.NewDatabase(nbs.NewNBSMetricWrapper(st)), nil
 }
