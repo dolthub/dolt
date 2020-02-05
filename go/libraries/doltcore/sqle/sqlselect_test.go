@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/liquidata-inc/dolt/go/libraries/doltcore/env"
 	"testing"
 	"time"
 
@@ -66,6 +67,49 @@ func TestCaseSensitivity(t *testing.T) {
 	for _, tt := range CaseSensitivityTests {
 		t.Run(tt.Name, func(t *testing.T) {
 			testSelectQuery(t, tt)
+		})
+	}
+}
+
+var systemTableSelectTests = []SelectTest {
+	{
+		Name: "select from dolt_docs",
+		AdditionalSetup: CreateTableFn("dolt_docs",
+			env.DoltDocsSchema,
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		Query: "select * from dolt_docs",
+		ExpectedRows: CompressRows(CompressSchema(env.DoltDocsSchema),
+			NewRow(types.String("LICENSE.md"), types.String("A license"))),
+		ExpectedSchema: CompressSchema(env.DoltDocsSchema),
+	},
+	{
+		Name: "select from dolt_query_catalog",
+		AdditionalSetup: CreateTableFn(doltdb.DoltQueryCatalogTableName,
+			DoltQueryCatalogSchema,
+			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description"))),
+		Query:  "select * from dolt_query_catalog",
+		ExpectedRows: CompressRows(DoltQueryCatalogSchema,
+			NewRow(types.String("existingEntry"), types.Uint(2), types.String("example"), types.String("select 2+2 from dual"), types.String("description")),
+		),
+		ExpectedSchema: CompressSchema(DoltQueryCatalogSchema),
+	},
+	{
+		Name: "select from dolt_schemas",
+		AdditionalSetup: CreateTableFn(doltdb.SchemasTableName,
+			mustGetDoltSchema(SchemasTableSchema()),
+			NewRowWithPks([]types.Value{types.String("view"), types.String("name")}, types.String("select 2+2 from dual"))),
+		Query:  "select * from dolt_schemas",
+		ExpectedRows: CompressRows(mustGetDoltSchema(SchemasTableSchema()),
+			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual")),
+		),
+		ExpectedSchema: CompressSchema(mustGetDoltSchema(SchemasTableSchema())),
+	},
+}
+
+func TestSelectSystemTables(t *testing.T) {
+	for _, test := range systemTableSelectTests {
+		t.Run(test.Name, func(t *testing.T) {
+			testSelectQuery(t, test)
 		})
 	}
 }
