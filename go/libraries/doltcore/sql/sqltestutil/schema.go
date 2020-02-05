@@ -103,6 +103,43 @@ func NewRow(colVals ...types.Value) row.Row {
 	return r
 }
 
+// Creates a new row with the values given, using ascending tag numbers starting at 0.
+// Uses the first value as the primary key.
+func NewRowWithPks(pkColVals []types.Value, nonPkVals ...types.Value) row.Row {
+	var cols []schema.Column
+	taggedVals := make(row.TaggedValues)
+	var tag int64
+
+	for _, val := range pkColVals {
+		var constraints []schema.ColConstraint
+		constraints = append(constraints, schema.NotNullConstraint{})
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), true, constraints...))
+		taggedVals[uint64(tag)] = val
+		tag++
+	}
+
+	for _, val := range nonPkVals {
+		cols = append(cols, schema.NewColumn(strconv.FormatInt(tag, 10), uint64(tag), val.Kind(), false))
+		taggedVals[uint64(tag)] = val
+		tag++
+	}
+
+	colColl, err := schema.NewColCollection(cols...)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	sch := schema.SchemaFromCols(colColl)
+
+	r, err := row.New(types.Format_7_18, sch, taggedVals)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
 // Creates a new schema with the pairs of column names and types given, using ascending tag numbers starting at 0.
 // Uses the first column as the primary key.
 func NewSchema(colNamesAndTypes ...interface{}) schema.Schema {
