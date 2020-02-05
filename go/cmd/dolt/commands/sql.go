@@ -163,7 +163,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			return HandleVErrAndExitCode(UpdateWorkingWithVErr(dEnv, se.sdb.Root()), usage)
 		} else {
 			if saveQuery {
-				cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage)
+				return HandleVErrAndExitCode(cmd.saveQuery(context.Background(), se.sdb.Root(), dEnv, query, saveName, saveMessage))
 			}
 			return 0
 		}
@@ -247,10 +247,10 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 }
 
 // Saves the query given to the catalog with the name and message given.
-func (cmd SqlCmd) saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) error {
+func (cmd SqlCmd) saveQuery(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, query string, name string, message string) errhand.VerboseError {
 	newRoot, err := dsqle.NewQueryCatalogEntry(ctx, root, name, query, message)
 	if err != nil {
-		return err
+		return errhand.BuildDError("Couldn't save query").AddCause(err).Build()
 	}
 
 	return UpdateWorkingWithVErr(dEnv, newRoot)
