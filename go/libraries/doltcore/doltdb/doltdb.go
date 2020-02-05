@@ -95,6 +95,10 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 	return &DoltDB{db}, nil
 }
 
+func (ddb *DoltDB) CSMetricsSummary() string {
+	return datas.GetCSStatSummaryForDB(ddb.db)
+}
+
 // WriteEmptyRepo will create initialize the given db with a master branch which points to a commit which has valid
 // metadata for the creation commit, and an empty RootValue.
 func (ddb *DoltDB) WriteEmptyRepo(ctx context.Context, name, email string) error {

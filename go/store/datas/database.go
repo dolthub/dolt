@@ -150,3 +150,8 @@ func CanUsePuller(db Database) bool {
 
 	return ok
 }
+
+func GetCSStatSummaryForDB(db Database) string {
+	cs := db.chunkStore()
+	return cs.StatsSummary()
+}
