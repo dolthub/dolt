@@ -523,6 +523,42 @@ if rows[2] != "9,8,7,6,5,4".split(","):
     [[ "${lines[2]}" =~ "line only has 1 value" ]] || false
 }
 
+@test "import data from a csv file with a bad header" {
+cat <<DELIM > bad.csv
+,c1,c2,c3,c4,c5
+0,1,2,3,4,5
+DELIM
+    run dolt table import test -u bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+    [[ ! "$output" =~ "panic" ]] || false
+
+cat <<DELIM > bad.csv
+pk,c1, ,c3,c4,c5
+0,1,2,3,4,5
+DELIM
+        run dolt table import test -u bad.csv
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+        [[ ! "$output" =~ "panic" ]] || false
+
+cat <<DELIM > bad.csv
+pk,c1,"",c3,c4,c5
+0,1,2,3,4,5
+DELIM
+        run dolt table import test -u bad.csv
+        [ "$status" -eq 1 ]
+        [[ "$output" =~ "bad header line: column cannot be NULL or empty string" ]] || false
+        [[ ! "$output" =~ "panic" ]] || false
+
+cat <<DELIM > bad.csv
+pk,c1," ",c3,c4,c5
+0,1,2,3,4,5
+DELIM
+        run dolt table import test -u bad.csv
+        [ "$status" -eq 0 ]
+}
+
 @test "import data from a psv file after table created" {
     run dolt table import test -u  `batshelper 1pk5col-ints.psv`
     [ "$status" -eq 0 ]
